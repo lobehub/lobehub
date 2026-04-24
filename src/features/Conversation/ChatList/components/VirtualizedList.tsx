@@ -16,9 +16,8 @@ import {
 } from '../../store';
 import {
   CONVERSATION_SPACER_TRANSITION_MS,
-  useConversationSpacer,
-} from '../hooks/useConversationSpacer';
-import { useScrollToUserMessage } from '../hooks/useScrollToUserMessage';
+  useConversationScroll,
+} from '../hooks/useConversationScroll';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
@@ -40,17 +39,25 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const virtuaRef = useRef<VListHandle>(null);
   const didInitialScrollRef = useRef(false);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Second-to-last message is the user turn when sending (user + assistant pair)
+  const isSecondLastMessageFromUser = useConversationStore(
+    dataSelectors.isSecondLastMessageFromUser,
+  );
+
   const {
-    cancelPinMessageIndex,
-    handleScrollOffset,
+    isScrollShrinking,
     isSpacerMessage,
     listData,
+    onScrollOffset,
     registerSpacerNode,
-    scrollShrinking,
-    spacerHeight,
     spacerActive,
-    spacerLayoutVersion,
-  } = useConversationSpacer(dataSource);
+    spacerHeight,
+  } = useConversationScroll({
+    dataSource,
+    isSecondLastMessageFromUser,
+    virtuaRef,
+  });
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
   // Store actions
@@ -89,7 +96,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     // Shrink spacer on scroll up when not streaming
     const ref = virtuaRef.current;
     if (ref) {
-      handleScrollOffset(ref.scrollOffset);
+      onScrollOffset(ref.scrollOffset);
     }
 
     // Check if at bottom
@@ -105,7 +112,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     scrollEndTimerRef.current = setTimeout(() => {
       setScrollState({ isScrolling: false });
     }, 150);
-  }, [activeIndex, checkAtBottom, handleScrollOffset, setActiveIndex, setScrollState]);
+  }, [activeIndex, checkAtBottom, onScrollOffset, setActiveIndex, setScrollState]);
 
   const handleScrollEnd = useCallback(() => {
     setScrollState({ isScrolling: false });
@@ -147,12 +154,6 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     };
   }, [resetVisibleItems]);
 
-  // Get the second-to-last message to check if it's a user message
-  // (When sending a message, user + assistant messages are created as a pair)
-  const displayMessages = useConversationStore(dataSelectors.displayMessages);
-  const secondLastMessage = displayMessages.at(-2);
-  const isSecondLastMessageFromUser = secondLastMessage?.role === 'user';
-
   // Keep currently-streaming items mounted so vlist recycling never triggers
   // Markdown animation replay when the user scrolls them back into view.
   const streamingIndices = useConversationStore(
@@ -181,18 +182,6 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     if (merged.size === streamingIndices.length) return streamingIndices;
     return [...merged].sort((a, b) => a - b);
   }, [dataSource, streamingIndices, selectionMessageIds]);
-
-  // Auto scroll to user message when user sends a new message
-  // Only scroll when 2 new messages are added and second-to-last is from user
-  useScrollToUserMessage({
-    cancelPinMessageIndex,
-    dataSourceLength: dataSource.length,
-    isSecondLastMessageFromUser,
-    scrollShrinking,
-    scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
-    spacerActive,
-    spacerLayoutVersion,
-  });
 
   // Scroll to bottom on initial render
   useEffect(() => {
@@ -225,7 +214,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
             // instantly so virtua's scrollSize updates in a single frame and
             // scrollToIndex can reach the user message without trailing behind
             // a 200ms transition.
-            const shouldAnimate = !scrollShrinking && spacerHeight === 0;
+            const shouldAnimate = !isScrollShrinking && spacerHeight === 0;
             return (
               <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                 <div

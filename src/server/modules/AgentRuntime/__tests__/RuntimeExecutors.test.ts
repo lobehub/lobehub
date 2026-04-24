@@ -3524,4 +3524,254 @@ describe('RuntimeExecutors', () => {
       }
     });
   });
+
+  describe('hooks integration', () => {
+    const createToolState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [],
+      metadata: { agentId: 'agent-123', topicId: 'topic-123' },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    const createToolInstruction = (overrides?: any) => ({
+      payload: {
+        parentMessageId: 'parent-msg',
+        toolCalling: {
+          apiName: 'search_tweets',
+          arguments: '{"query":"test"}',
+          id: 'tc-1',
+          identifier: 'twitter',
+          type: 'default' as const,
+        },
+        ...overrides,
+      },
+      type: 'call_tool' as const,
+    });
+
+    describe('call_tool hooks', () => {
+      it('should dispatch beforeToolCall and afterToolCall hooks', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+
+        const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        await executors.call_tool!(createToolInstruction(), createToolState());
+
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            apiName: 'search_tweets',
+            callIndex: 1,
+            identifier: 'twitter',
+          }),
+        );
+
+        // afterToolCall dispatched via dispatch()
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            apiName: 'search_tweets',
+            identifier: 'twitter',
+            mocked: false,
+            success: true,
+          }),
+          undefined,
+        );
+      });
+
+      it('should skip real execution when beforeToolCall returns mock', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi
+            .fn()
+            .mockResolvedValue({ content: '{"mocked":true}', isMocked: true }),
+        };
+
+        const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        await executors.call_tool!(createToolInstruction(), createToolState());
+
+        // Real tool should NOT have been called
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+
+        // afterToolCall should report mocked: true
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({ mocked: true, success: true }),
+          undefined,
+        );
+
+        // Tool message should be persisted with mock content
+        expect(mockMessageModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: '{"mocked":true}',
+            role: 'tool',
+          }),
+        );
+      });
+
+      it('should dispatch onToolCallError when tool throws', async () => {
+        mockToolExecutionService.executeTool.mockRejectedValue(new Error('Connection refused'));
+
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+
+        const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        await executors.call_tool!(createToolInstruction(), createToolState());
+
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'onToolCallError',
+          expect.objectContaining({
+            apiName: 'search_tweets',
+            error: 'Connection refused',
+            identifier: 'twitter',
+          }),
+          undefined,
+        );
+      });
+
+      it('should derive callIndex from state.usage.tools.byTool', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+
+        const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        // First call: no prior usage → callIndex = 1
+        const state1 = createToolState();
+        await executors.call_tool!(createToolInstruction(), state1);
+
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({ callIndex: 1 }),
+        );
+
+        // Second call: state reflects 1 prior call → callIndex = 2
+        const state2 = createToolState({
+          usage: {
+            ...createMockUsage(),
+            tools: {
+              ...createMockUsage().tools,
+              byTool: [{ calls: 1, errors: 0, name: 'twitter/search_tweets', totalTimeMs: 100 }],
+              totalCalls: 1,
+            },
+          },
+        });
+        await executors.call_tool!(createToolInstruction(), state2);
+
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenLastCalledWith(
+          'op-123',
+          expect.objectContaining({ callIndex: 2 }),
+        );
+      });
+
+      it('should work without hookDispatcher (backward compat)', async () => {
+        const executors = createRuntimeExecutors(ctx); // no hookDispatcher
+        const result = await executors.call_tool!(createToolInstruction(), createToolState());
+
+        expect(result).toBeDefined();
+        expect(mockToolExecutionService.executeTool).toHaveBeenCalled();
+      });
+    });
+
+    describe('compress_context hooks', () => {
+      it('should dispatch beforeCompact and afterCompact hooks', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+
+        const ctxWithHooks = {
+          ...ctx,
+          hookDispatcher: mockDispatcher as any,
+          topicId: 'topic-123',
+        };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        const state = createToolState({ metadata: { agentId: 'agent-123', topicId: 'topic-123' } });
+
+        const instruction = {
+          payload: {
+            currentTokenCount: 5000,
+            messages: [
+              { content: 'hello', id: 'msg-1', role: 'user' },
+              { content: 'hi there', id: 'msg-2', role: 'assistant' },
+            ],
+          },
+          type: 'compress_context' as const,
+        };
+
+        await executors.compress_context!(instruction, state);
+
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'beforeCompact',
+          expect.objectContaining({ tokenCount: 5000 }),
+          undefined,
+        );
+      });
+    });
+
+    describe('request_human_approve hooks', () => {
+      it('should dispatch beforeHumanIntervention hook', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+
+        const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        const state = createToolState({
+          messages: [{ content: '', id: 'asst-1', role: 'assistant' }],
+          status: 'running',
+        });
+
+        const instruction = {
+          pendingToolsCalling: [
+            {
+              apiName: 'post_tweet',
+              arguments: '{}',
+              id: 'tc-1',
+              identifier: 'twitter',
+              type: 'default' as const,
+            },
+          ],
+          type: 'request_human_approve' as const,
+        };
+
+        await executors.request_human_approve!(instruction, state);
+
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'beforeHumanIntervention',
+          expect.objectContaining({
+            pendingTools: [{ apiName: 'post_tweet', identifier: 'twitter' }],
+          }),
+          undefined, // serializedHooks from state.metadata._hooks
+        );
+      });
+    });
+  });
 });

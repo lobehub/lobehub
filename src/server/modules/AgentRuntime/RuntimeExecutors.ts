@@ -39,6 +39,7 @@ import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering'
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
 import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -200,6 +201,7 @@ export interface RuntimeExecutorContext {
   botPlatformContext?: any;
   discordContext?: any;
   evalContext?: EvalContext;
+  hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
   operationId: string;
@@ -1104,6 +1106,23 @@ export const createRuntimeExecutors = (
       };
     }
 
+    if (ctx.hookDispatcher) {
+      ctx.hookDispatcher
+        .dispatch(
+          operationId,
+          'beforeCompact',
+          {
+            messageCount: messagesToCompress.length,
+            operationId,
+            stepIndex,
+            tokenCount: currentTokenCount,
+            userId: ctx.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+    }
+
     try {
       const dbMessages = await ctx.messageModel.query(
         {
@@ -1270,6 +1289,25 @@ export const createRuntimeExecutors = (
         type: 'compression_complete',
       });
 
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'afterCompact',
+            {
+              groupId: compressionResult.messageGroupId,
+              messagesAfter: compressedMessages.length,
+              messagesBefore: messagesToCompress.length,
+              operationId,
+              stepIndex,
+              summary: summaryContent.slice(0, 500),
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
+
       return {
         events,
         newState,
@@ -1294,6 +1332,23 @@ export const createRuntimeExecutors = (
         currentTokenCount,
         error,
       );
+
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'onCompactError',
+            {
+              error: error instanceof Error ? error.message : String(error),
+              operationId,
+              stepIndex,
+              tokenCount: currentTokenCount,
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
 
       events.push({ error, type: 'compression_error' });
 
@@ -1336,12 +1391,22 @@ export const createRuntimeExecutors = (
       type: 'tool_start',
     });
 
+    // payload is { parentMessageId, toolCalling: ChatToolPayload }
+    const chatToolPayload: ChatToolPayload = payload.toolCalling;
+
+    const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
+    const existingToolStats = state.usage?.tools?.byTool?.find((t) => t.name === toolName);
+    const callIndex = (existingToolStats?.calls ?? 0) + 1;
+
+    let parsedArgs: Record<string, any> = {};
     try {
-      // payload is { parentMessageId, toolCalling: ChatToolPayload }
-      const chatToolPayload: ChatToolPayload = payload.toolCalling;
+      parsedArgs =
+        typeof chatToolPayload.arguments === 'string'
+          ? JSON.parse(chatToolPayload.arguments)
+          : (chatToolPayload.arguments ?? {});
+    } catch {}
 
-      const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
-
+    try {
       // Check if this is a client-side function tool — pause instead of executing
       const toolSource =
         state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
@@ -1402,8 +1467,46 @@ export const createRuntimeExecutors = (
         chatToolPayload.executor === 'client' &&
         typeof streamManager.sendToolExecute === 'function';
 
+      let toolCallMocked = false;
+      const hookResult = ctx.hookDispatcher
+        ? await (async () => {
+            // 1. dispatch for observation (webhook in production, local handler logging)
+            ctx
+              .hookDispatcher!.dispatch(
+                operationId,
+                'beforeToolCall',
+                {
+                  apiName: chatToolPayload.apiName,
+                  args: parsedArgs,
+                  callIndex,
+                  identifier: chatToolPayload.identifier,
+                  operationId,
+                  stepIndex,
+                  userId: ctx.userId,
+                },
+                state.metadata?._hooks,
+              )
+              .catch(() => {});
+            // 2. dispatchBeforeToolCall for mock support (local-only)
+            return ctx.hookDispatcher!.dispatchBeforeToolCall(operationId, {
+              apiName: chatToolPayload.apiName,
+              args: parsedArgs,
+              callIndex,
+              identifier: chatToolPayload.identifier,
+              stepIndex,
+            });
+          })()
+        : null;
+
       let execution: { result: ToolExecutionResultResponse; attempts: number };
-      if (canDispatchToClient) {
+      if (hookResult?.isMocked) {
+        log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
+        toolCallMocked = true;
+        execution = {
+          attempts: 0,
+          result: { content: hookResult.content, executionTime: 0, success: true },
+        };
+      } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           operationId,
@@ -1446,6 +1549,28 @@ export const createRuntimeExecutors = (
       const executionResult = execution.result;
       const executionTime = executionResult.executionTime;
       const isSuccess = executionResult.success;
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'afterToolCall',
+            {
+              apiName: chatToolPayload.apiName,
+              args: parsedArgs,
+              callIndex,
+              content: executionResult.content,
+              executionTimeMs: executionTime,
+              identifier: chatToolPayload.identifier,
+              mocked: toolCallMocked,
+              operationId,
+              stepIndex,
+              success: isSuccess,
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
       log(
         `[${operationLogId}] Executing ${toolName} in ${executionTime}ms, result: %O`,
         executionResult,
@@ -1626,6 +1751,26 @@ export const createRuntimeExecutors = (
       // running the agent on a broken conversation chain. See LOBE-7158.
       if (isPersistFatal(error)) throw error;
 
+      if (ctx.hookDispatcher) {
+        ctx.hookDispatcher
+          .dispatch(
+            operationId,
+            'onToolCallError',
+            {
+              apiName: chatToolPayload.apiName,
+              args: parsedArgs,
+              callIndex,
+              error: error instanceof Error ? error.message : String(error),
+              identifier: chatToolPayload.identifier,
+              operationId,
+              stepIndex,
+              userId: ctx.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+      }
+
       // Publish tool execution error event
       await streamManager.publishStreamEvent(operationId, {
         data: formatErrorEventData(error, 'tool_execution'),
@@ -1726,6 +1871,19 @@ export const createRuntimeExecutors = (
           type: 'tool_start',
         });
 
+        const batchToolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
+        const batchExistingStats = state.usage?.tools?.byTool?.find(
+          (t) => t.name === batchToolName,
+        );
+        const batchCallIndex = (batchExistingStats?.calls ?? 0) + 1;
+        let batchParsedArgs: Record<string, any> = {};
+        try {
+          batchParsedArgs =
+            typeof chatToolPayload.arguments === 'string'
+              ? JSON.parse(chatToolPayload.arguments)
+              : (chatToolPayload.arguments ?? {});
+        } catch {}
+
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
           // Build effective manifest map (operation + step-level activations)
@@ -1744,8 +1902,44 @@ export const createRuntimeExecutors = (
             chatToolPayload.executor === 'client' &&
             typeof streamManager.sendToolExecute === 'function';
 
+          let batchToolCallMocked = false;
+          const batchHookResult = ctx.hookDispatcher
+            ? await (async () => {
+                ctx
+                  .hookDispatcher!.dispatch(
+                    operationId,
+                    'beforeToolCall',
+                    {
+                      apiName: chatToolPayload.apiName,
+                      args: batchParsedArgs,
+                      callIndex: batchCallIndex,
+                      identifier: chatToolPayload.identifier,
+                      operationId,
+                      stepIndex,
+                      userId: ctx.userId,
+                    },
+                    state.metadata?._hooks,
+                  )
+                  .catch(() => {});
+                return ctx.hookDispatcher!.dispatchBeforeToolCall(operationId, {
+                  apiName: chatToolPayload.apiName,
+                  args: batchParsedArgs,
+                  callIndex: batchCallIndex,
+                  identifier: chatToolPayload.identifier,
+                  stepIndex,
+                });
+              })()
+            : null;
+
           let execution: { result: ToolExecutionResultResponse; attempts: number };
-          if (canDispatchToClient) {
+          if (batchHookResult?.isMocked) {
+            log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
+            batchToolCallMocked = true;
+            execution = {
+              attempts: 0,
+              result: { content: batchHookResult.content, executionTime: 0, success: true },
+            };
+          } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
             const dispatchResult = await dispatchClientTool(chatToolPayload, {
               operationId,
@@ -1789,6 +1983,28 @@ export const createRuntimeExecutors = (
           const executionResult = execution.result;
           const executionTime = executionResult.executionTime;
           const isSuccess = executionResult.success;
+          if (ctx.hookDispatcher) {
+            ctx.hookDispatcher
+              .dispatch(
+                operationId,
+                'afterToolCall',
+                {
+                  apiName: chatToolPayload.apiName,
+                  args: batchParsedArgs,
+                  callIndex: batchCallIndex,
+                  content: executionResult.content,
+                  executionTimeMs: executionTime,
+                  identifier: chatToolPayload.identifier,
+                  mocked: batchToolCallMocked,
+                  operationId,
+                  stepIndex,
+                  success: isSuccess,
+                  userId: ctx.userId,
+                },
+                state.metadata?._hooks,
+              )
+              .catch(() => {});
+          }
           log(
             `[${operationLogId}] Executed ${toolName} in ${executionTime}ms, success: ${isSuccess}`,
           );
@@ -1874,6 +2090,26 @@ export const createRuntimeExecutors = (
           // the already-deleted parent triggers another FK on the next step.
           if (isPersistFatal(error)) {
             throw error;
+          }
+
+          if (ctx.hookDispatcher) {
+            ctx.hookDispatcher
+              .dispatch(
+                operationId,
+                'onToolCallError',
+                {
+                  apiName: chatToolPayload.apiName,
+                  args: batchParsedArgs,
+                  callIndex: batchCallIndex,
+                  error: error instanceof Error ? error.message : String(error),
+                  identifier: chatToolPayload.identifier,
+                  operationId,
+                  stepIndex,
+                  userId: ctx.userId,
+                },
+                state.metadata?._hooks,
+              )
+              .catch(() => {});
           }
 
           console.error(`[${operationLogId}] Tool execution failed for ${toolName}:`, error);
@@ -2103,6 +2339,25 @@ export const createRuntimeExecutors = (
       stepIndex,
       type: 'step_start',
     });
+
+    if (ctx.hookDispatcher) {
+      ctx.hookDispatcher
+        .dispatch(
+          operationId,
+          'beforeHumanIntervention',
+          {
+            operationId,
+            pendingTools: pendingToolsCalling.map((t: any) => ({
+              apiName: t.apiName,
+              identifier: t.identifier,
+            })),
+            stepIndex,
+            userId: ctx.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+    }
 
     const newState = structuredClone(state);
     newState.lastModified = new Date().toISOString();
