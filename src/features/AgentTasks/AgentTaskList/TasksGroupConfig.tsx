@@ -142,6 +142,19 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       minWidth: undefined,
       label: t('taskList.form.orderCompletedByRecency'),
     },
+    {
+      children: (
+        <Switch
+          checked={!options.hideCompleted}
+          size={'small'}
+          onChange={(checked) => {
+            setOptions((prev) => ({ ...prev, hideCompleted: !checked }));
+          }}
+        />
+      ),
+      minWidth: undefined,
+      label: t('taskList.form.showCompleted'),
+    },
   ];
 
   const panelContent = (

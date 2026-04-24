@@ -20,6 +20,7 @@ const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 const taskListViewOptions = (s: GlobalState) =>
   s.status.taskListViewOptions || {
     groupBy: 'status',
+    hideCompleted: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
     orderDirection: 'asc',

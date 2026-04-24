@@ -211,6 +211,7 @@ export interface SystemStatus {
   taskKanbanHiddenPanelCollapsed?: boolean;
   taskListViewOptions?: {
     groupBy: 'assignee' | 'none' | 'priority' | 'status';
+    hideCompleted: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
@@ -277,6 +278,7 @@ export const INITIAL_STATUS = {
   recentPageSize: 5,
   taskListViewOptions: {
     groupBy: 'status',
+    hideCompleted: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
     orderDirection: 'asc',

@@ -47,6 +47,10 @@ const AgentTasksPage = memo(() => {
     });
   }, [navigate]);
 
+  const handleShowHiddenCompleted = useCallback(() => {
+    setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
+  }, [setViewOptions]);
+
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
@@ -82,7 +86,7 @@ const AgentTasksPage = memo(() => {
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
           {!inlineCollapsed && <CreateTaskInlineEntry />}
-          <TaskList options={viewOptions} />
+          <TaskList options={viewOptions} onShowHiddenCompleted={handleShowHiddenCompleted} />
         </WideScreenContainer>
       )}
     </Flexbox>
