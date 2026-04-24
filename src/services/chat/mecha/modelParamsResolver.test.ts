@@ -334,6 +334,39 @@ describe('resolveModelExtendParams', () => {
         expect(result.reasoning_effort).toBe('high');
       });
     });
+
+    describe('deepseekV4ReasoningEffort param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'deepseekV4ReasoningEffort',
+        ]);
+      });
+
+      it('should set reasoning_effort for deepseek-v4 variant', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            deepseekV4ReasoningEffort: 'max',
+          } as any,
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.reasoning_effort).toBe('max');
+      });
+
+      it('should not set reasoning_effort when deepseekV4ReasoningEffort is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.reasoning_effort).toBeUndefined();
+      });
+    });
   });
 
   describe('text verbosity', () => {

@@ -760,6 +760,18 @@ describe('modelParse', () => {
         expect(results[3][0].reasoning).toBe(true); // Deepseek 'r1'
         expect(results[4][0].reasoning).toBe(true); // Volcengine 'thinking'
       });
+
+      it('should detect v4 keyword for deepseek model capabilities', async () => {
+        // Cover the new 'v4' keyword added to the deepseek config so unknown
+        // model IDs like deepseek-v4-custom still get functionCall + reasoning.
+        const result = await processModelList(
+          [{ id: 'deepseek-v4-custom' }],
+          MODEL_LIST_CONFIGS.deepseek,
+        );
+
+        expect(result[0].functionCall).toBe(true);
+        expect(result[0].reasoning).toBe(true);
+      });
     });
 
     describe('Extended tests for processMultiProviderModelList', () => {
