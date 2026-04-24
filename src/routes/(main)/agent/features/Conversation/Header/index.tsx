@@ -18,25 +18,32 @@ const headerStyles = createStaticStyles(({ css }) => ({
     container-name: agent-conv-header;
     container-type: inline-size;
   `,
-  left: css`
+  leftContent: css`
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-width: 0;
+  `,
+  slotCenter: css`
+    flex: 0 0 auto !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  `,
+  slotLeft: css`
+    overflow: hidden;
+    flex: 1 1 0;
     min-width: 0;
 
-    @container agent-conv-header (min-width: 720px) {
-      max-width: calc(50% - 80px);
+    @container agent-conv-header (max-width: 719px) {
+      flex: 1 1 auto;
     }
   `,
-  viewSwitcher: css`
-    @container agent-conv-header (min-width: 720px) {
-      pointer-events: none;
+  slotRight: css`
+    flex: 1 1 0;
+    min-width: 0;
 
-      position: absolute;
-      inset-block-start: 50%;
-      inset-inline-start: 50%;
-      transform: translate(-50%, -50%);
-
-      & > * {
-        pointer-events: auto;
-      }
+    @container agent-conv-header (max-width: 719px) {
+      flex: 0 0 auto;
     }
   `,
 }));
@@ -50,7 +57,7 @@ const Header = memo(() => {
             allowShrink
             horizontal
             align={'center'}
-            className={headerStyles.left}
+            className={headerStyles.leftContent}
             gap={4}
             style={{ backgroundColor: cssVar.colorBgContainer }}
           >
@@ -60,14 +67,18 @@ const Header = memo(() => {
         }
         right={
           <Flexbox horizontal align={'center'} style={{ backgroundColor: cssVar.colorBgContainer }}>
-            <Flexbox className={headerStyles.viewSwitcher}>
-              <ViewSwitcher />
-            </Flexbox>
             <ShareButton />
             <WorkingPanelToggle />
           </Flexbox>
         }
-      />
+        slotClassNames={{
+          center: headerStyles.slotCenter,
+          left: headerStyles.slotLeft,
+          right: headerStyles.slotRight,
+        }}
+      >
+        <ViewSwitcher />
+      </NavHeader>
     </div>
   );
 });

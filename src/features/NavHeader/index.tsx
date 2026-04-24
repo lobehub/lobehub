@@ -12,6 +12,11 @@ export interface NavHeaderProps extends Omit<FlexboxProps, 'children'> {
   left?: ReactNode;
   right?: ReactNode;
   showTogglePanelButton?: boolean;
+  slotClassNames?: {
+    center?: string;
+    left?: string;
+    right?: string;
+  };
   styles?: {
     center?: CSSProperties;
     left?: CSSProperties;
@@ -20,7 +25,16 @@ export interface NavHeaderProps extends Omit<FlexboxProps, 'children'> {
 }
 
 const NavHeader = memo<NavHeaderProps>(
-  ({ showTogglePanelButton = true, style, children, left, right, styles, ...rest }) => {
+  ({
+    showTogglePanelButton = true,
+    style,
+    children,
+    left,
+    right,
+    slotClassNames,
+    styles,
+    ...rest
+  }) => {
     const expand = useGlobalStore(systemStatusSelectors.showLeftPanel);
 
     const noContent = !left && !right;
@@ -45,6 +59,7 @@ const NavHeader = memo<NavHeaderProps>(
             allowShrink
             horizontal
             align={'center'}
+            className={slotClassNames?.left}
             gap={2}
             justify={'flex-start'}
             style={styles?.left}
@@ -53,11 +68,18 @@ const NavHeader = memo<NavHeaderProps>(
             {left}
           </Flexbox>
           {children && (
-            <Flexbox flex={1} style={styles?.center}>
+            <Flexbox className={slotClassNames?.center} flex={1} style={styles?.center}>
               {children}
             </Flexbox>
           )}
-          <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'} style={styles?.right}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={slotClassNames?.right}
+            gap={2}
+            justify={'flex-end'}
+            style={styles?.right}
+          >
             {right}
           </Flexbox>
         </TooltipGroup>
