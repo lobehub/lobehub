@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  BRIEF_TEMPLATE_FALLBACK_CATEGORIES,
-  briefTemplates,
-  getBriefTemplateById,
-} from './briefTemplate';
+import { BRIEF_TEMPLATE_FALLBACK_CATEGORIES, briefTemplates } from './briefTemplate';
 
 const CRON_FIELDS = 5;
 // Keep in sync with INTEREST_AREAS in lobehub/src/routes/onboarding/config.ts —
@@ -50,10 +46,5 @@ describe('briefTemplates', () => {
     for (const fallback of BRIEF_TEMPLATE_FALLBACK_CATEGORIES) {
       expect(categories.has(fallback), `fallback category ${fallback}`).toBe(true);
     }
-  });
-
-  it('getBriefTemplateById resolves and misses correctly', () => {
-    expect(getBriefTemplateById('daily-topic-pick')?.category).toBe('content-creation');
-    expect(getBriefTemplateById('does-not-exist')).toBeUndefined();
   });
 });

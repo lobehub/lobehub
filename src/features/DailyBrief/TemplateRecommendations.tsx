@@ -20,7 +20,10 @@ import useSWR from 'swr';
 
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
+import { agentCronJobService } from '@/services/agentCronJob';
 import { briefTemplateService } from '@/services/briefTemplate';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -42,23 +45,20 @@ const RECOMMEND_THRESHOLD = 1;
  */
 const useResolvedInterestKeys = (): string[] => {
   const userInterests = useUserStore(userProfileSelectors.interests);
-  const { i18n } = useTranslation('onboarding');
+  const { t } = useTranslation('onboarding');
 
   return useMemo(() => {
     const labelToKey = new Map<string, string>();
     for (const area of INTEREST_AREAS) {
       labelToKey.set(area.key, area.key);
-      const translated = i18n.t(`interests.area.${area.key}`, {
-        defaultValue: '',
-        ns: 'onboarding',
-      });
+      const translated = t(`interests.area.${area.key}`, { defaultValue: '' });
       if (translated) labelToKey.set(translated.trim().toLowerCase(), area.key);
     }
     return userInterests.map((raw) => {
       const k = raw.trim().toLowerCase();
       return labelToKey.get(k) ?? k;
     });
-  }, [userInterests, i18n.language, i18n]);
+  }, [userInterests, t]);
 };
 
 const ICON_BY_CATEGORY: Record<BriefTemplateCategory, LucideIcon> = {
@@ -81,6 +81,7 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   const IconComp = ICON_BY_CATEGORY[template.category] ?? Sparkles;
   // Dynamic key lookups: defaultValue forces t() into its string-returning overload.
@@ -88,13 +89,17 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
   const description = t(`${template.id}.description`, { defaultValue: '' });
 
   const handleCreate = useCallback(async () => {
+    if (!inboxAgentId) return;
     setLoading(true);
     try {
       const prompt = t(`${template.id}.prompt`, { defaultValue: '' });
-      await briefTemplateService.createFromTemplate({
-        prompt,
-        templateId: template.id,
-        title,
+      await agentCronJobService.create({
+        agentId: inboxAgentId,
+        content: prompt,
+        cronPattern: template.cronPattern,
+        enabled: true,
+        name: title,
+        timezone: 'UTC',
       });
       setCreated(true);
       message.success(t('action.create.success'));
@@ -104,7 +109,7 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
     } finally {
       setLoading(false);
     }
-  }, [message, t, template.id, title]);
+  }, [inboxAgentId, message, t, template.cronPattern, template.id, title]);
 
   return (
     <Block
@@ -127,7 +132,7 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
         </Text>
       </Flexbox>
       <Button
-        disabled={created}
+        disabled={created || !inboxAgentId}
         loading={loading}
         size={'small'}
         type={created ? 'default' : 'primary'}

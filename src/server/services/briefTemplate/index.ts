@@ -2,15 +2,7 @@ import {
   BRIEF_TEMPLATE_FALLBACK_CATEGORIES,
   type BriefTemplate,
   briefTemplates,
-  getBriefTemplateById,
-  INBOX_SESSION_ID,
 } from '@lobechat/const';
-import { and, eq } from 'drizzle-orm';
-
-import { AgentModel } from '@/database/models/agent';
-import { AgentCronJobModel } from '@/database/models/agentCronJob';
-import { agentCronJobs } from '@/database/schemas/agentCronJob';
-import type { LobeChatDatabase } from '@/database/type';
 
 export const RECOMMEND_COUNT = 3;
 
@@ -54,10 +46,7 @@ const hasIntersection = (template: BriefTemplate, userInterests: string[]): bool
 const getUtcDateStr = (now: Date): string => now.toISOString().slice(0, 10);
 
 export class BriefTemplateService {
-  constructor(
-    private db: LobeChatDatabase,
-    private userId: string,
-  ) {}
+  constructor(private userId: string) {}
 
   /**
    * Client resolves user.interests (localized labels or raw values) to
@@ -83,38 +72,5 @@ export class BriefTemplateService {
     takeFrom(briefTemplates);
 
     return result;
-  }
-
-  /** Idempotent on (userId, title): re-creating the same template returns the existing cron job. */
-  async createFromTemplate(params: { prompt: string; templateId: string; title: string }) {
-    const template = getBriefTemplateById(params.templateId);
-    if (!template) {
-      throw new Error(`Brief template not found: ${params.templateId}`);
-    }
-
-    const [existing] = await this.db
-      .select()
-      .from(agentCronJobs)
-      .where(and(eq(agentCronJobs.userId, this.userId), eq(agentCronJobs.name, params.title)))
-      .limit(1);
-
-    if (existing) return { alreadyExists: true as const, data: existing };
-
-    const agentModel = new AgentModel(this.db, this.userId);
-    const inbox = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
-    if (!inbox) {
-      throw new Error('Inbox agent unavailable');
-    }
-
-    const cronJobModel = new AgentCronJobModel(this.db, this.userId);
-    const created = await cronJobModel.create({
-      agentId: inbox.id,
-      content: params.prompt,
-      cronPattern: template.cronPattern,
-      name: params.title,
-      timezone: 'UTC',
-    });
-
-    return { alreadyExists: false as const, data: created };
   }
 }

@@ -127,6 +127,3 @@ export const briefTemplates: BriefTemplate[] = [
     interests: ['sales'],
   },
 ];
-
-export const getBriefTemplateById = (id: string): BriefTemplate | undefined =>
-  briefTemplates.find((t) => t.id === id);
