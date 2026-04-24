@@ -3,10 +3,10 @@
 import { type ConversationContext } from '@lobechat/types';
 import { Drawer, Flexbox, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ChatList, ConversationProvider } from '@/features/Conversation';
+import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -42,6 +42,11 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const operationState = useOperationState(context);
 
+  const itemContent = useCallback(
+    (index: number, id: string) => <MessageItem disableEditing id={id} index={index} key={id} />,
+    [],
+  );
+
   return (
     <ConversationProvider
       context={context}
@@ -53,7 +58,7 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
       }}
     >
       <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-        <ChatList />
+        <ChatList disableActionsBar itemContent={itemContent} />
       </Flexbox>
     </ConversationProvider>
   );
@@ -94,6 +99,7 @@ const TopicChatDrawer = memo(() => {
     <Drawer
       destroyOnHidden
       containerMaxWidth={'auto'}
+      mask={false}
       open={open}
       placement={'right'}
       push={false}
@@ -102,6 +108,16 @@ const TopicChatDrawer = memo(() => {
       styles={{
         body: { padding: 0 },
         bodyContent: { height: '100%' },
+        wrapper: {
+          border: 'none',
+          borderRadius: 12,
+          bottom: 12,
+          boxShadow: '0 6px 24px 0 rgba(0, 0, 0, 0.08), 0 2px 6px 0 rgba(0, 0, 0, 0.04)',
+          height: 'auto',
+          overflow: 'hidden',
+          right: 12,
+          top: 12,
+        },
       }}
       onClose={closeTopicDrawer}
     >
