@@ -16,12 +16,13 @@ WeChat uses **polling** mode (long-polling) — no webhook URL or WebSocket setu
 
 WeChat requires a QR code scan to link your account, which is only supported through the LobeHub Web UI:
 
-1. Open your agent in LobeHub → go to the **Channel** configuration page
-2. Select **WeChat** from the platform list
-3. A QR code is displayed — scan it with WeChat to authenticate
-4. Once scanned, credentials are saved automatically and the bot connects
+1. Open your agent in LobeHub
+2. In the left sidebar, click **消息频道** (Message Channel)
+3. Select **WeChat** from the platform list on the right
+4. A QR code is displayed — scan it with WeChat to authenticate
+5. Once scanned, credentials are saved automatically and the bot connects
 
-> CLI-only setup is not supported for WeChat. The \`lh bot connect\` command only starts an already-configured provider and does not perform the QR authentication flow.
+> WeChat cannot be set up via CLI. The \`lh bot connect\` command only starts an already-configured provider and does not perform the QR authentication flow.
 
 ## After Web UI Setup: CLI Operations
 
