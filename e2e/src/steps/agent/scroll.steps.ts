@@ -14,7 +14,6 @@ import { expect } from '@playwright/test';
 
 import { llmMockManager, presetResponses } from '../../mocks/llm';
 import type { CustomWorld } from '../../support/world';
-import { WAIT_TIMEOUT } from '../../support/world';
 
 // How close to the scroll container's bottom is considered "at bottom".
 // Matches (with slack) the product's own AT_BOTTOM_THRESHOLD (300 px).
@@ -78,11 +77,14 @@ async function scrollBy(world: CustomWorld, deltaY: number): Promise<void> {
 
 async function setAutoScrollEnabled(world: CustomWorld, desired: boolean): Promise<void> {
   await world.page.goto('/settings/chat-appearance');
-  await world.page.waitForLoadState('networkidle', { timeout: WAIT_TIMEOUT });
+  // `networkidle` can take a while on the very first compile in dev mode
+  // (Next.js builds the settings route on demand); a generous timeout avoids
+  // flakes when the test suite warms up a cold server.
+  await world.page.waitForLoadState('networkidle', { timeout: 60_000 });
 
   // Match both EN ("Auto-scroll During AI Response") and zh-CN ("AI 回复时自动滚动").
   const title = world.page.getByText(/Auto-scroll During AI Response|AI 回复时自动滚动/);
-  await expect(title).toBeVisible({ timeout: WAIT_TIMEOUT });
+  await expect(title).toBeVisible({ timeout: 45_000 });
 
   // The switch lives inside the same FormGroup as the title.
   const switcher = world.page
@@ -117,7 +119,7 @@ async function setAutoScrollEnabled(world: CustomWorld, desired: boolean): Promi
 
 Given(
   '用户在设置中开启 {string}',
-  { timeout: 30_000 },
+  { timeout: 90_000 },
   async function (this: CustomWorld, _label: string) {
     await setAutoScrollEnabled(this, true);
   },
@@ -125,7 +127,7 @@ Given(
 
 Given(
   '用户在设置中关闭 {string}',
-  { timeout: 30_000 },
+  { timeout: 90_000 },
   async function (this: CustomWorld, _label: string) {
     await setAutoScrollEnabled(this, false);
   },
@@ -187,16 +189,22 @@ When('用户发送一条触发长文输出的消息', async function (this: Cust
   await this.page.waitForTimeout(200);
   await this.page.keyboard.press('Enter');
 
-  // Brief settle so user message and spacer are mounted; we intentionally
-  // return before the stream completes so the caller can manipulate scroll.
-  await this.page.waitForTimeout(400);
+  // Wait long enough for pin's smooth scrollToIndex to finish. Virtua drives
+  // the smooth animation via rAF and would otherwise overwrite a manual
+  // scroll while the animation is still in flight.
+  await this.page.waitForTimeout(1200);
 });
 
 When('用户在流式响应进行中向上滚动 {int} 像素', async function (this: CustomWorld, px: number) {
   const delta = Math.abs(px) || MANUAL_SCROLL_UP_DELTA;
+  // Mouse wheel over the list, more faithful to real-user interaction than
+  // setting `scrollTop` directly. Move the cursor into the list viewport
+  // first — wheel events fire against whatever element is under the cursor.
+  await this.page.mouse.move(640, 400);
+  await this.page.mouse.wheel(0, -delta);
   await scrollBy(this, -delta);
   // Let the onScroll handler run (pin cancel + spacer shrink).
-  await this.page.waitForTimeout(120);
+  await this.page.waitForTimeout(400);
 });
 
 When('等待流式响应结束', { timeout: 30_000 }, async function (this: CustomWorld) {
@@ -244,6 +252,30 @@ After({ tags: '@scroll' }, async function (this: CustomWorld) {
     llmMockManager.resetConfig();
     this.testContext.scrollMockAdjusted = false;
   }
+});
+
+Then('用户消息不应固定在聊天列表顶部', async function (this: CustomWorld) {
+  const rect = await this.page.evaluate(() => {
+    const wrappers = Array.from(document.querySelectorAll('.message-wrapper'));
+    if (wrappers.length < 2) return null;
+    const userWrapper = wrappers.at(-2) as HTMLElement;
+    let scrollParent: HTMLElement | null = userWrapper.parentElement;
+    while (scrollParent) {
+      const style = window.getComputedStyle(scrollParent);
+      if (style.overflowY === 'auto' || style.overflowY === 'scroll') break;
+      scrollParent = scrollParent.parentElement;
+    }
+    if (!scrollParent) return null;
+    const wrapperRect = userWrapper.getBoundingClientRect();
+    const parentRect = scrollParent.getBoundingClientRect();
+    return { delta: wrapperRect.top - parentRect.top };
+  });
+
+  expect(rect).not.toBeNull();
+  // Pin is cancelled: the user message should have been pushed down by the
+  // manual scroll. Anything beyond the "pinned" slack (150 px) means the
+  // anchor was released.
+  expect(Math.abs(rect!.delta)).toBeGreaterThan(150);
 });
 
 Then('用户消息应固定在聊天列表顶部', async function (this: CustomWorld) {

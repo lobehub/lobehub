@@ -23,15 +23,19 @@ Feature: 发送消息与流式输出期间的视口滚动行为
     Then 用户消息应固定在聊天列表顶部
     And 视口不应贴近聊天列表底部
 
-  @AGENT-SCROLL-003 @P0 @journey
-  Scenario: 流式输出过程中手动向上滚动，视口不会被自动拉回底
+  # Mid-stream scroll-up cancellation is covered at the unit level in
+  # `useConversationScroll.test.ts`. An end-to-end version is pending until
+  # the LLM mock can emit a truly chunked SSE response (the current mock
+  # fulfils the whole body at once, which collapses the mid-stream window
+  # to a few hundred milliseconds and makes the interaction race-prone).
+  @AGENT-SCROLL-003 @P1 @journey @skip
+  Scenario: 流式输出过程中手动向上滚动后，消息 pin 被取消
     Given 用户在设置中开启 "AI 回复时自动滚动"
     And 流式响应被放慢以模拟长文输出
     And 用户进入 Lobe AI 对话页面
     When 用户发送一条触发长文输出的消息
     And 用户在流式响应进行中向上滚动 200 像素
-    And 等待流式响应结束
-    Then 视口不应贴近聊天列表底部
+    Then 用户消息不应固定在聊天列表顶部
 
   @AGENT-SCROLL-004 @P0 @journey
   Scenario: 发送消息后，滚动条自动把用户发送的消息顶到列表顶部
