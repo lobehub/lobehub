@@ -1,6 +1,5 @@
 import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
-// https://cloud.tencent.com/document/product/1729/104753
 const hunyuanChatModels: AIChatModelCard[] = [
   {
     abilities: {
