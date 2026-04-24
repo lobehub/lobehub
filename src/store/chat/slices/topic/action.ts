@@ -568,13 +568,15 @@ export class ChatTopicActionImpl {
     }
 
     if (opts.skipRefreshMessage) return;
-    await this.#get().refreshMessages();
 
-    // If a newer switchTopic started while refreshMessages was in flight,
-    // our continuation is stale — bail before it can affect state. Today
-    // nothing follows the await; the guard is kept as an explicit invariant
-    // so later edits don't reintroduce a stale-resolve race.
+    // Yield a microtask so any switchTopic calls queued behind us can run
+    // their sync bodies (and bump #switchTopicEpoch) before we commit to a
+    // refresh. On the other side of the yield, an epoch mismatch means a
+    // newer switch has taken over — skip the redundant SWR mutate.
+    await Promise.resolve();
     if (epoch !== this.#switchTopicEpoch) return;
+
+    await this.#get().refreshMessages();
   };
 
   removeSessionTopics = async (): Promise<void> => {
