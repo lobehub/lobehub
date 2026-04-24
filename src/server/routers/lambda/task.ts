@@ -920,7 +920,7 @@ export const taskRouter = router({
               id: 'task-on-complete',
               type: 'onComplete' as const,
               webhook: {
-                body: { taskId, userId },
+                body: { taskId, taskIdentifier, userId },
                 url: '/api/workflows/task/on-topic-complete',
               },
             },

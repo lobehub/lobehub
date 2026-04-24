@@ -1,7 +1,7 @@
 import { serve, serveMany } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
-import { createWorkflowQstashClient } from './qstashClient';
+import { createWorkflowQstashClient } from '../qstashClient';
 import { hourlyWorkflowHandler, hourlyWorkflowOptions } from './workflows/hourly';
 import { personaUpdateHandler } from './workflows/personaUpdate';
 import { processTopicWorkflow } from './workflows/processTopic';
@@ -9,7 +9,7 @@ import { processTopicsHandler } from './workflows/processTopics';
 import { processUsersHandler } from './workflows/processUsers';
 import { processUserTopicsHandler } from './workflows/processUserTopics';
 
-const app = new Hono().basePath('/api/workflows/memory-user-memory');
+const app = new Hono();
 
 app.post(
   '/call-cron-hourly-analysis',

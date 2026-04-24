@@ -17,7 +17,7 @@ import {
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-import { createWorkflowQstashClient } from '../qstashClient';
+import { createWorkflowQstashClient } from '../../qstashClient';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
