@@ -674,6 +674,30 @@ const hunyuanVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'A single reference photo is sufficient to generate dynamic portrait videos, accurately reproducing facial expressions and body poses, with support for multiple styles such as photorealistic and anime.',
+    displayName: 'YT-Video-HumanActor',
+    enabled: true,
+    id: 'yt-video-humanactor',
+    parameters: {
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p'],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-23',
+    type: 'video',
+  },
+  {
+    description:
       'It generates highly temporally consistent videos from images, suitable for demanding applications such as advertising, film clips, and product showcase videos.',
     displayName: 'YT-Video-2.0',
     enabled: true,

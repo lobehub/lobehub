@@ -2,6 +2,7 @@ import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createHunyuanImage } from './createImage';
 
 export const params = {
   baseURL: 'https://tokenhub.tencentmaas.com/v1',
@@ -46,6 +47,7 @@ export const params = {
       } as any;
     },
   },
+  createImage: createHunyuanImage,
   debug: {
     chatCompletion: () => process.env.DEBUG_HUNYUAN_CHAT_COMPLETION === '1',
   },
