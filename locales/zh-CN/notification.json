@@ -1,5 +1,11 @@
 {
-  "agent_cron_job_failed": "定时任务「{{jobName}}」执行失败：{{errorMessage}}",
+  "agent_cron_job_failed": "定时任务「{{jobName}}」执行失败，点击查看详情。",
+  "agent_cron_job_failed_insufficient_budget": "定时任务「{{jobName}}」因账户额度不足未能执行。请充值或升级套餐以恢复后续运行。",
+  "agent_cron_job_failed_insufficient_budget_title": "定时任务已暂停：额度不足",
+  "agent_cron_job_failed_model_unavailable": "定时任务「{{jobName}}」配置的模型已不可用，请在 Agent 设置中更换模型以恢复后续运行。",
+  "agent_cron_job_failed_model_unavailable_title": "定时任务失败：模型不可用",
+  "agent_cron_job_failed_rate_limit": "定时任务「{{jobName}}」被模型服务限流，系统将在下次计划时间自动重试。",
+  "agent_cron_job_failed_rate_limit_title": "定时任务被限流",
   "agent_cron_job_failed_title": "定时任务执行失败",
   "billboard.learnMore": "了解更多",
   "billboard.menuLabel": "公告",

@@ -1,5 +1,11 @@
 {
-  "agent_cron_job_failed": "Your scheduled task \"{{jobName}}\" failed: {{errorMessage}}",
+  "agent_cron_job_failed": "Your scheduled task \"{{jobName}}\" failed. Open the task to see the full error.",
+  "agent_cron_job_failed_insufficient_budget": "Your scheduled task \"{{jobName}}\" couldn't run because your account is out of credits. Top up or upgrade your plan to resume future runs.",
+  "agent_cron_job_failed_insufficient_budget_title": "Scheduled task paused: insufficient credits",
+  "agent_cron_job_failed_model_unavailable": "The model configured for \"{{jobName}}\" is no longer available. Update the model in the agent settings to resume future runs.",
+  "agent_cron_job_failed_model_unavailable_title": "Scheduled task failed: model unavailable",
+  "agent_cron_job_failed_rate_limit": "Your scheduled task \"{{jobName}}\" hit a rate limit from the model provider. It will automatically try again on the next schedule.",
+  "agent_cron_job_failed_rate_limit_title": "Scheduled task throttled",
   "agent_cron_job_failed_title": "Scheduled task failed",
   "billboard.learnMore": "Learn more",
   "billboard.menuLabel": "Announcements",
