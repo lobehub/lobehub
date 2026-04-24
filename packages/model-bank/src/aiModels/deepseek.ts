@@ -61,17 +61,17 @@ const deepseekChatModels: AIChatModelCard[] = [
       functionCall: true,
       structuredOutput: true,
     },
-    contextWindowTokens: 131_072,
+    contextWindowTokens: 1_000_000,
     // Per official docs: deepseek-chat is now a compatibility alias pointing to
     // the non-thinking mode of deepseek-v4-flash and is slated for deprecation.
-    // Pricing is therefore the same as deepseek-v4-flash, not the former V3.2 rate.
+    // Pricing and sizing mirror deepseek-v4-flash since that is what the endpoint serves.
     description:
       'Compatibility alias for DeepSeek V4 Flash non-thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
-    displayName: 'DeepSeek V3.2 (Legacy alias)',
+    displayName: 'DeepSeek V4 Flash Non-thinking (legacy alias)',
     enabled: true,
     id: 'deepseek-chat',
     legacy: true,
-    maxOutput: 8192,
+    maxOutput: 384_000,
     pricing: {
       currency: 'CNY',
       units: [
@@ -88,16 +88,16 @@ const deepseekChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
-    contextWindowTokens: 131_072,
+    contextWindowTokens: 1_000_000,
     // Per official docs: deepseek-reasoner is now a compatibility alias pointing
     // to the thinking mode of deepseek-v4-flash and is slated for deprecation.
     description:
       'Compatibility alias for DeepSeek V4 Flash thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
-    displayName: 'DeepSeek V3.2 Thinking (Legacy alias)',
+    displayName: 'DeepSeek V4 Flash Thinking (legacy alias)',
     enabled: true,
     id: 'deepseek-reasoner',
     legacy: true,
-    maxOutput: 65_536,
+    maxOutput: 384_000,
     pricing: {
       currency: 'CNY',
       units: [
