@@ -14,6 +14,7 @@ import PriorityLowIcon from './icons/PriorityLowIcon';
 import PriorityMediumIcon from './icons/PriorityMediumIcon';
 import PriorityNoneIcon from './icons/PriorityNoneIcon';
 import PriorityUrgentIcon from './icons/PriorityUrgentIcon';
+import { renderMenuExtra } from './menuExtra';
 
 interface PriorityMeta {
   icon: IconType;
@@ -69,11 +70,12 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     const updateTask = useTaskStore((s) => s.updateTask);
     const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
 
-    const meta = PRIORITY_META[priority ?? 0] ?? PRIORITY_META[0];
+    const currentLevel = priority ?? 0;
+    const meta = PRIORITY_META[currentLevel] ?? PRIORITY_META[0];
 
     const handlePriorityChange = useCallback(
       async (nextPriority: number) => {
-        if (nextPriority === (priority ?? 0)) return;
+        if (nextPriority === currentLevel) return;
         if (onChange) {
           onChange(nextPriority);
           return;
@@ -84,16 +86,18 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
         await refreshTaskList();
         setLoading(false);
       },
-      [onChange, priority, refreshTaskList, taskIdentifier, updateTask],
+      [currentLevel, onChange, refreshTaskList, taskIdentifier, updateTask],
     );
 
     const menuItems = useMemo<MenuProps['items']>(
       () =>
-        Object.entries(PRIORITY_META).map(([key, value]) => {
+        Object.entries(PRIORITY_META).map(([key, value], index) => {
           const level = Number(key);
           const IconRender = value.icon;
           const isUrgentLevel = value.level === 1;
+          const isCurrent = level === currentLevel;
           return {
+            extra: renderMenuExtra(String(index + 1), isCurrent),
             icon: (
               <IconRender
                 color={isUrgentLevel ? cssVar.orange : cssVar.colorTextSecondary}
@@ -108,11 +112,11 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
             },
           };
         }),
-      [handlePriorityChange, t],
+      [currentLevel, handlePriorityChange, t],
     );
 
     const IconRender = meta.icon;
-    const isUrgent = priority === 1;
+    const isUrgent = currentLevel === 1;
 
     const triggerNode = children ? (
       children
@@ -136,7 +140,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
         trigger={['click']}
         menu={{
           items: menuItems,
-          selectedKeys: [String(priority ?? 0)],
+          selectedKeys: [String(currentLevel)],
         }}
       >
         {triggerNode}

@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
 
+import { renderMenuExtra } from './menuExtra';
+
 interface StatusMeta {
   color: string;
   icon: LucideIcon;
@@ -123,9 +125,11 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
 
     const menuItems = useMemo<MenuProps['items']>(
       () =>
-        USER_SELECTABLE_STATUSES.map((key) => {
+        USER_SELECTABLE_STATUSES.map((key, index) => {
           const statusMeta = STATUS_META[key];
+          const isCurrent = key === displayStatus;
           return {
+            extra: renderMenuExtra(String(index + 1), isCurrent),
             icon: <Icon color={statusMeta.color} icon={statusMeta.icon} size={16} />,
             key,
             label: t(`taskDetail.${statusMeta.labelKey}`, { defaultValue: statusMeta.label }),
@@ -135,7 +139,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
             },
           };
         }),
-      [handleStatusChange, t],
+      [displayStatus, handleStatusChange, t],
     );
 
     const triggerNode =
