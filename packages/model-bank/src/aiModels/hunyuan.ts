@@ -61,7 +61,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-23',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort'],
+      extendParams: ['hy3ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -655,20 +655,14 @@ const hunyuanVideoModels: AIVideoModelCard[] = [
     enabled: true,
     id: 'hy-video-1.5',
     parameters: {
-      duration: { default: 5, max: 15, min: 2 },
-      endImageUrl: {
-        default: null,
-      },
       imageUrl: {
         default: null,
       },
       prompt: { default: '' },
       resolution: {
-        default: '1080p',
-        enum: ['720p', '1080p'],
+        default: '720p',
+        enum: ['720p'],
       },
-      seed: { default: null },
-      promptExtend: { default: false },
       watermark: { default: false },
     },
     pricing: {
@@ -685,20 +679,14 @@ const hunyuanVideoModels: AIVideoModelCard[] = [
     enabled: true,
     id: 'yt-video-2.0',
     parameters: {
-      duration: { default: 5, max: 15, min: 2 },
-      endImageUrl: {
-        default: null,
-      },
       imageUrl: {
         default: null,
       },
       prompt: { default: '' },
       resolution: {
-        default: '1080p',
+        default: '720p',
         enum: ['480p', '720p', '1080p'],
       },
-      seed: { default: null },
-      promptExtend: { default: false },
       watermark: { default: false },
     },
     pricing: {

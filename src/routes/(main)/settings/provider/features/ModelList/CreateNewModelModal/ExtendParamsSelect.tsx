@@ -12,6 +12,7 @@ import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/C
 import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok420ReasoningEffortSlider';
+import Hy3ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatio2Select';
 import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
 import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolution2Slider';
@@ -93,6 +94,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'grok4_20ReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint',
+    key: 'hy3ReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint',
     key: 'codexMaxReasoningEffort',
   },
@@ -159,6 +164,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_2ProReasoningEffort: 'reasoningEffort',
   gpt5_2ReasoningEffort: 'reasoningEffort',
   grok4_20ReasoningEffort: 'reasoningEffort',
+  hy3ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
   opus47Effort: 'effort',
   reasoningBudgetToken32k: 'reasoningBudgetToken',
@@ -200,6 +206,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
   grok4_20ReasoningEffort: {
     labelSuffix: ' (Grok 4.20)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
+  hy3ReasoningEffort: {
+    labelSuffix: ' (Hy3-Preview)',
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
@@ -332,6 +343,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
       grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
+      hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="low" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,
