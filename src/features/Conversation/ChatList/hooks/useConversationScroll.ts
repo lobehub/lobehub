@@ -12,6 +12,8 @@ export const CONVERSATION_SPACER_TRANSITION_MS = 200;
 
 const SCROLL_SHRINK_END_DELAY_MS = 150;
 
+// -------- pure helpers --------
+
 export const calculateConversationSpacerHeight = (
   viewportHeight: number,
   userHeight: number,
@@ -62,81 +64,87 @@ const getRenderableTailSignature = (message: UIChatMessage | undefined) => {
   return `${contentLength}:${reasoningLength}:${toolCount}:${message.updatedAt || 0}`;
 };
 
-/**
- * Unified scroll controller for the conversation list. Owns:
- *
- * 1. Bottom spacer that reserves viewport height so the newest user message
- *    can pin to the top of the scrollport.
- * 2. "Pin" state machine that scrolls the user message to top on send and
- *    re-fires while the spacer is still settling (ResizeObserver versions).
- * 3. Shrink-on-scroll-up behavior so the user can reclaim the spacer area.
- *
- * Design notes:
- *
- * - Pin state is a single `{ index, seenActive }` ref, not two hooks with
- *   independent `prevLengthRef`s. Send detection happens once.
- * - `scrollToIndex` is dereffed through `virtuaRef.current` at call time —
- *   never captured. This avoids the race where `virtuaRef.current` is still
- *   null during the effect that detects a send.
- * - Retries are layout-driven, not time-driven: each `spacerLayoutVersion`
- *   bump triggers one `scrollToIndex`. Previous 0/32/96ms fixed delays are
- *   gone — they were brittle around slow measurement and caused pin waves to
- *   fight user scroll.
- */
-export interface UseConversationScrollOptions {
+// ---------------------------------------------------------------------------
+// Sub-hook: spacer layout signal
+// ---------------------------------------------------------------------------
+//
+// Watches the spacer DOM node with a scoped ResizeObserver. Every size change
+// bumps `spacerLayoutVersion`, which the pin controller uses as "layout
+// settled" beats to retry its scroll.
+//
+// A scoped observer (rather than a document-wide selector) is deliberate:
+// ConversationProvider can mount several chat lists simultaneously, and a
+// global selector would attach to another panel's spacer.
+// ---------------------------------------------------------------------------
+const useSpacerLayoutSignal = () => {
+  const [spacerLayoutVersion, setSpacerLayoutVersion] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+
+  const cleanup = useCallback(() => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+  }, []);
+
+  const registerSpacerNode = useCallback(
+    (node: HTMLElement | null) => {
+      cleanup();
+
+      if (!node || typeof ResizeObserver === 'undefined') return;
+
+      const observer = new ResizeObserver(() => {
+        setSpacerLayoutVersion((v) => v + 1);
+      });
+      observer.observe(node);
+      observerRef.current = observer;
+      setSpacerLayoutVersion((v) => v + 1);
+    },
+    [cleanup],
+  );
+
+  useEffect(() => cleanup, [cleanup]);
+
+  return { registerSpacerNode, spacerLayoutVersion };
+};
+
+// ---------------------------------------------------------------------------
+// Sub-hook: spacer height & mount lifecycle
+// ---------------------------------------------------------------------------
+//
+// Owns the spacer's natural height, its mount/unmount timing, and the user-
+// driven shrink reduction. Measures via virtua's item methods when available,
+// falling back to DOM `getBoundingClientRect` otherwise.
+//
+// Also hosts the ResizeObserver for the tracked user/assistant messages so
+// that spacer height stays in sync as those messages grow.
+// ---------------------------------------------------------------------------
+interface UseSpacerHeightArgs {
+  assistantMessageIndexRef: RefObject<number | null>;
   dataSource: string[];
-  isSecondLastMessageFromUser: boolean;
-  virtuaRef: RefObject<VListHandle | null>;
+  getItemOffset: ((index: number) => number) | undefined;
+  getItemSize: ((index: number) => number) | undefined;
+  getViewportSize: (() => number) | undefined;
+  latestAssistantSignature: string;
+  userMessageIndexRef: RefObject<number | null>;
 }
 
-export interface UseConversationScrollResult {
-  /**
-   * True while the user is actively dragging the spacer shorter via scroll-up.
-   * Consumers can use this to disable the spacer's height transition so it
-   * follows the pointer 1:1 instead of animating.
-   */
-  isScrollShrinking: boolean;
-  isSpacerMessage: (id: string) => boolean;
-  listData: string[];
-  onScrollOffset: (scrollOffset: number) => void;
-  registerSpacerNode: (node: HTMLElement | null) => void;
-  spacerActive: boolean;
-  spacerHeight: number;
-}
-
-type PinState = { index: number; seenActive: boolean } | null;
-
-export const useConversationScroll = ({
+const useSpacerHeight = ({
   dataSource,
-  isSecondLastMessageFromUser,
-  virtuaRef,
-}: UseConversationScrollOptions): UseConversationScrollResult => {
-  const displayMessages = useConversationStore(dataSelectors.displayMessages);
-  const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
-  const getItemOffset = useConversationStore((s) => s.virtuaScrollMethods?.getItemOffset);
-  const getItemSize = useConversationStore((s) => s.virtuaScrollMethods?.getItemSize);
-  const getScrollOffset = useConversationStore((s) => s.virtuaScrollMethods?.getScrollOffset);
-  const getViewportSize = useConversationStore((s) => s.virtuaScrollMethods?.getViewportSize);
-
+  getItemOffset,
+  getItemSize,
+  getViewportSize,
+  latestAssistantSignature,
+  userMessageIndexRef,
+  assistantMessageIndexRef,
+}: UseSpacerHeightArgs) => {
   const [naturalHeight, setNaturalHeight] = useState(0);
   const [scrollReduction, setScrollReduction] = useState(0);
   const [mounted, setMounted] = useState(false);
-  const [spacerLayoutVersion, setSpacerLayoutVersion] = useState(0);
-
-  const prevLengthRef = useRef(dataSource.length);
-  const pinRef = useRef<PinState>(null);
-  const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const messagesObserverRef = useRef<ResizeObserver | null>(null);
-  const spacerObserverRef = useRef<ResizeObserver | null>(null);
-  const userMessageIndexRef = useRef<number | null>(null);
-  const assistantMessageIndexRef = useRef<number | null>(null);
 
   const mountedRef = useRef(false);
   mountedRef.current = mounted;
-  const isAIGeneratingRef = useRef(isAIGenerating);
-  isAIGeneratingRef.current = isAIGenerating;
-  const prevScrollOffsetRef = useRef<number | null>(null);
-  const scrollShrinkEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messagesObserverRef = useRef<ResizeObserver | null>(null);
 
   const renderedHeight = Math.max(naturalHeight - scrollReduction, 0);
   const isScrollShrinking = scrollReduction > 0;
@@ -152,15 +160,7 @@ export const useConversationScroll = ({
       userId: userIndex !== null && userIndex >= 0 ? dataSource[userIndex] || null : null,
       userIndex,
     };
-  }, [dataSource]);
-
-  const latestAssistantSignature = (() => {
-    const { assistantId } = getTrackedMessages();
-    if (!assistantId) return '';
-
-    const assistantMessage = displayMessages.find((message) => message.id === assistantId);
-    return getRenderableTailSignature(assistantMessage);
-  })();
+  }, [assistantMessageIndexRef, dataSource, userMessageIndexRef]);
 
   const clearRemoveTimer = useCallback(() => {
     if (removeTimerRef.current) {
@@ -172,11 +172,6 @@ export const useConversationScroll = ({
   const cleanupMessagesObserver = useCallback(() => {
     messagesObserverRef.current?.disconnect();
     messagesObserverRef.current = null;
-  }, []);
-
-  const cleanupSpacerObserver = useCallback(() => {
-    spacerObserverRef.current?.disconnect();
-    spacerObserverRef.current = null;
   }, []);
 
   const scheduleSpacerUnmount = useCallback(() => {
@@ -226,150 +221,7 @@ export const useConversationScroll = ({
     scheduleSpacerUnmount,
   ]);
 
-  const scrollToPinned = useCallback(
-    (reason: string) => {
-      const pin = pinRef.current;
-      if (!pin) return;
-
-      const scrollToIndex = virtuaRef.current?.scrollToIndex;
-      if (!scrollToIndex) {
-        log('scrollToPinned skipped: virtua not ready (%s) index=%d', reason, pin.index);
-        return;
-      }
-
-      log('scrollToPinned (%s) index=%d', reason, pin.index);
-      scrollToIndex(pin.index, { align: 'start', smooth: true });
-    },
-    [virtuaRef],
-  );
-
-  const clearPin = useCallback((reason: string) => {
-    if (!pinRef.current) return;
-    log('clearPin (%s) index=%d', reason, pinRef.current.index);
-    pinRef.current = null;
-  }, []);
-
-  // --- send detection: single source of truth ---
-  useEffect(() => {
-    const newMessageCount = dataSource.length - prevLengthRef.current;
-    prevLengthRef.current = dataSource.length;
-
-    if (newMessageCount !== 2 || !isSecondLastMessageFromUser) return;
-
-    const userMessage = displayMessages.at(-2);
-    const assistantMessage = displayMessages.at(-1);
-    if (userMessage?.role !== 'user' || !assistantMessage) return;
-
-    const userIndex = dataSource.length - 2;
-    const assistantIndex = dataSource.length - 1;
-
-    log('send detected userIndex=%d', userIndex);
-
-    // reset per-turn state
-    setScrollReduction(0);
-    prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
-    userMessageIndexRef.current = userIndex;
-    assistantMessageIndexRef.current = assistantIndex;
-    pinRef.current = { index: userIndex, seenActive: mountedRef.current };
-
-    // Scroll immediately. If virtuaRef isn't ready yet, subsequent
-    // spacerLayoutVersion bumps (mount + measurement) will retry.
-    scrollToPinned('send');
-
-    requestAnimationFrame(() => {
-      updateSpacerHeight();
-    });
-  }, [
-    dataSource,
-    displayMessages,
-    getScrollOffset,
-    isSecondLastMessageFromUser,
-    scrollToPinned,
-    updateSpacerHeight,
-  ]);
-
-  // --- pin re-fire: every time spacer layout settles ---
-  useEffect(() => {
-    const pin = pinRef.current;
-    if (!pin) return;
-
-    if (mounted) {
-      pin.seenActive = true;
-    }
-
-    // After the spacer has been seen mounted and is now gone, the pin window
-    // is closed — user has either scrolled away or we reached the target.
-    if (pin.seenActive && !mounted) {
-      clearPin('spacer unmounted after activation');
-      return;
-    }
-
-    scrollToPinned('spacer layout settle');
-  }, [clearPin, mounted, scrollToPinned, spacerLayoutVersion]);
-
-  // --- onScroll: cancel pin + optionally shrink spacer ---
-  const onScrollOffset = useCallback(
-    (currentScrollOffset: number) => {
-      const prevOffset = prevScrollOffsetRef.current;
-      prevScrollOffsetRef.current = currentScrollOffset;
-
-      const delta = prevOffset === null ? 0 : currentScrollOffset - prevOffset;
-      const { cancelPin, shrinkSpacer } = getConversationSpacerScrollEffect({
-        delta,
-        hasPrevOffset: prevOffset !== null,
-        isAIGenerating: isAIGeneratingRef.current,
-        isMounted: mountedRef.current,
-      });
-
-      if (!cancelPin) return;
-
-      clearPin('user scrolled up');
-
-      if (!shrinkSpacer) return;
-
-      setScrollReduction((prev) => prev + Math.abs(delta));
-
-      if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
-      scrollShrinkEndTimerRef.current = setTimeout(() => {
-        scrollShrinkEndTimerRef.current = null;
-      }, SCROLL_SHRINK_END_DELAY_MS);
-    },
-    [clearPin],
-  );
-
-  // Reset prev scroll offset when generation state flips — avoids stale deltas.
-  useEffect(() => {
-    prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
-  }, [getScrollOffset, isAIGenerating]);
-
-  // Unmount when rendered height reaches zero via scroll reduction.
-  useEffect(() => {
-    if (renderedHeight === 0 && mounted && scrollReduction > 0) {
-      setMounted(false);
-      setScrollReduction(0);
-      prevScrollOffsetRef.current = null;
-    }
-  }, [renderedHeight, mounted, scrollReduction]);
-
-  // Ref callback for the spacer DOM node. Scoped to this list instance
-  // (ConversationProvider supports multiple mounted lists simultaneously).
-  const registerSpacerNode = useCallback(
-    (node: HTMLElement | null) => {
-      cleanupSpacerObserver();
-
-      if (!node || typeof ResizeObserver === 'undefined') return;
-
-      const observer = new ResizeObserver(() => {
-        setSpacerLayoutVersion((v) => v + 1);
-      });
-      observer.observe(node);
-      spacerObserverRef.current = observer;
-      setSpacerLayoutVersion((v) => v + 1);
-    },
-    [cleanupSpacerObserver],
-  );
-
-  // Observe tracked user/assistant messages for height changes.
+  // Observe tracked message heights; keep spacer in sync while assistant grows.
   useEffect(() => {
     const { assistantId, userId } = getTrackedMessages();
 
@@ -398,7 +250,312 @@ export const useConversationScroll = ({
     return cleanupMessagesObserver;
   }, [cleanupMessagesObserver, getTrackedMessages, latestAssistantSignature, updateSpacerHeight]);
 
-  // Recompute spacer height on generation state flips.
+  useEffect(() => {
+    return () => {
+      cleanupMessagesObserver();
+      clearRemoveTimer();
+    };
+  }, [cleanupMessagesObserver, clearRemoveTimer]);
+
+  return {
+    isScrollShrinking,
+    mounted,
+    mountedRef,
+    renderedHeight,
+    setMounted,
+    setScrollReduction,
+    updateSpacerHeight,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Sub-hook: pin controller
+// ---------------------------------------------------------------------------
+//
+// Owns the pin state machine. Pin is "we just sent a message and want the
+// viewport anchored to the user turn until the spacer stops resizing or the
+// user scrolls away."
+//
+// `scrollToPinned` reads `virtuaRef.current?.scrollToIndex` at call time, not
+// during render — this avoids the race where a send effect ran before the
+// ref was attached and silently dropped the scroll.
+// ---------------------------------------------------------------------------
+type PinState = { index: number; seenActive: boolean } | null;
+
+const usePinController = ({ virtuaRef }: { virtuaRef: RefObject<VListHandle | null> }) => {
+  const pinRef = useRef<PinState>(null);
+
+  const scrollToPinned = useCallback(
+    (reason: string) => {
+      const pin = pinRef.current;
+      if (!pin) return;
+
+      const scrollToIndex = virtuaRef.current?.scrollToIndex;
+      if (!scrollToIndex) {
+        log('scrollToPinned skipped: virtua not ready (%s) index=%d', reason, pin.index);
+        return;
+      }
+
+      log('scrollToPinned (%s) index=%d', reason, pin.index);
+      scrollToIndex(pin.index, { align: 'start', smooth: true });
+    },
+    [virtuaRef],
+  );
+
+  const clearPin = useCallback((reason: string) => {
+    if (!pinRef.current) return;
+    log('clearPin (%s) index=%d', reason, pinRef.current.index);
+    pinRef.current = null;
+  }, []);
+
+  return { clearPin, pinRef, scrollToPinned };
+};
+
+// ---------------------------------------------------------------------------
+// Sub-hook: scroll cancel + shrink
+// ---------------------------------------------------------------------------
+//
+// Converts raw scrollOffset deltas into pin cancellation and spacer-shrink
+// actions. Streaming vs. idle behavior is identical about canceling the pin;
+// shrinking only happens after streaming has ended so the spacer doesn't
+// fight the assistant's growth animation.
+// ---------------------------------------------------------------------------
+interface UseScrollShrinkArgs {
+  clearPin: (reason: string) => void;
+  getScrollOffset: (() => number) | undefined;
+  isAIGenerating: boolean;
+  isAIGeneratingRef: RefObject<boolean>;
+  mountedRef: RefObject<boolean>;
+  setScrollReduction: (updater: (prev: number) => number) => void;
+}
+
+const useScrollShrink = ({
+  clearPin,
+  getScrollOffset,
+  isAIGenerating,
+  isAIGeneratingRef,
+  mountedRef,
+  setScrollReduction,
+}: UseScrollShrinkArgs) => {
+  const prevScrollOffsetRef = useRef<number | null>(null);
+  const scrollShrinkEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onScrollOffset = useCallback(
+    (currentScrollOffset: number) => {
+      const prevOffset = prevScrollOffsetRef.current;
+      prevScrollOffsetRef.current = currentScrollOffset;
+
+      const delta = prevOffset === null ? 0 : currentScrollOffset - prevOffset;
+      const { cancelPin, shrinkSpacer } = getConversationSpacerScrollEffect({
+        delta,
+        hasPrevOffset: prevOffset !== null,
+        isAIGenerating: isAIGeneratingRef.current,
+        isMounted: mountedRef.current,
+      });
+
+      if (!cancelPin) return;
+
+      clearPin('user scrolled up');
+
+      if (!shrinkSpacer) return;
+
+      setScrollReduction((prev) => prev + Math.abs(delta));
+
+      if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
+      scrollShrinkEndTimerRef.current = setTimeout(() => {
+        scrollShrinkEndTimerRef.current = null;
+      }, SCROLL_SHRINK_END_DELAY_MS);
+    },
+    [clearPin, isAIGeneratingRef, mountedRef, setScrollReduction],
+  );
+
+  // Seed prev offset on generation flip — avoids stale deltas across streaming boundaries.
+  useEffect(() => {
+    prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
+  }, [getScrollOffset, isAIGenerating]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
+    };
+  }, []);
+
+  return { onScrollOffset, prevScrollOffsetRef };
+};
+
+// ---------------------------------------------------------------------------
+// Main hook
+// ---------------------------------------------------------------------------
+//
+// Design notes:
+//
+// - A single `prevLengthRef` and a single send-detection effect replace the
+//   two legacy hooks (`useConversationSpacer` + `useScrollToUserMessage`)
+//   that each tracked length independently and could disagree across
+//   renders, causing the "send but no scroll" regressions.
+// - `virtuaRef` is passed through, not `scrollToIndex`, so the pin reads the
+//   ref at call time — closing the race where the ref hadn't been attached.
+// - Retries are layout-driven: each `spacerLayoutVersion` bump re-fires
+//   `scrollToIndex` once. The old 0/32/96ms timer fan-out is gone.
+// ---------------------------------------------------------------------------
+export interface UseConversationScrollOptions {
+  dataSource: string[];
+  isSecondLastMessageFromUser: boolean;
+  virtuaRef: RefObject<VListHandle | null>;
+}
+
+export interface UseConversationScrollResult {
+  /**
+   * True while the user is actively dragging the spacer shorter via scroll-up.
+   * Consumers can use this to disable the spacer's height transition so it
+   * follows the pointer 1:1 instead of animating.
+   */
+  isScrollShrinking: boolean;
+  isSpacerMessage: (id: string) => boolean;
+  listData: string[];
+  onScrollOffset: (scrollOffset: number) => void;
+  registerSpacerNode: (node: HTMLElement | null) => void;
+  spacerActive: boolean;
+  spacerHeight: number;
+}
+
+export const useConversationScroll = ({
+  dataSource,
+  isSecondLastMessageFromUser,
+  virtuaRef,
+}: UseConversationScrollOptions): UseConversationScrollResult => {
+  const displayMessages = useConversationStore(dataSelectors.displayMessages);
+  const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
+  const getItemOffset = useConversationStore((s) => s.virtuaScrollMethods?.getItemOffset);
+  const getItemSize = useConversationStore((s) => s.virtuaScrollMethods?.getItemSize);
+  const getScrollOffset = useConversationStore((s) => s.virtuaScrollMethods?.getScrollOffset);
+  const getViewportSize = useConversationStore((s) => s.virtuaScrollMethods?.getViewportSize);
+
+  const isAIGeneratingRef = useRef(isAIGenerating);
+  isAIGeneratingRef.current = isAIGenerating;
+
+  const userMessageIndexRef = useRef<number | null>(null);
+  const assistantMessageIndexRef = useRef<number | null>(null);
+  const prevLengthRef = useRef(dataSource.length);
+
+  const { registerSpacerNode, spacerLayoutVersion } = useSpacerLayoutSignal();
+
+  const latestAssistantSignature = useMemo(() => {
+    const assistantIndex = assistantMessageIndexRef.current;
+    const assistantId =
+      assistantIndex !== null && assistantIndex >= 0 ? dataSource[assistantIndex] : null;
+    if (!assistantId) return '';
+    const assistantMessage = displayMessages.find((message) => message.id === assistantId);
+    return getRenderableTailSignature(assistantMessage);
+  }, [dataSource, displayMessages]);
+
+  const {
+    isScrollShrinking,
+    mounted,
+    mountedRef,
+    renderedHeight,
+    setMounted,
+    setScrollReduction,
+    updateSpacerHeight,
+  } = useSpacerHeight({
+    assistantMessageIndexRef,
+    dataSource,
+    getItemOffset,
+    getItemSize,
+    getViewportSize,
+    latestAssistantSignature,
+    userMessageIndexRef,
+  });
+
+  const { clearPin, pinRef, scrollToPinned } = usePinController({ virtuaRef });
+
+  const { onScrollOffset, prevScrollOffsetRef } = useScrollShrink({
+    clearPin,
+    getScrollOffset,
+    isAIGenerating,
+    isAIGeneratingRef,
+    mountedRef,
+    setScrollReduction,
+  });
+
+  // --- send detection: single source of truth ---
+  useEffect(() => {
+    const newMessageCount = dataSource.length - prevLengthRef.current;
+    prevLengthRef.current = dataSource.length;
+
+    if (newMessageCount !== 2 || !isSecondLastMessageFromUser) return;
+
+    const userMessage = displayMessages.at(-2);
+    const assistantMessage = displayMessages.at(-1);
+    if (userMessage?.role !== 'user' || !assistantMessage) return;
+
+    const userIndex = dataSource.length - 2;
+    const assistantIndex = dataSource.length - 1;
+
+    log('send detected userIndex=%d', userIndex);
+
+    setScrollReduction(() => 0);
+    prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
+    userMessageIndexRef.current = userIndex;
+    assistantMessageIndexRef.current = assistantIndex;
+    pinRef.current = { index: userIndex, seenActive: mountedRef.current };
+
+    // Scroll immediately. If virtuaRef isn't ready yet, the spacerLayoutVersion
+    // bumps that follow mount+measurement will retry.
+    scrollToPinned('send');
+
+    requestAnimationFrame(() => {
+      updateSpacerHeight();
+    });
+  }, [
+    dataSource,
+    displayMessages,
+    getScrollOffset,
+    isSecondLastMessageFromUser,
+    mountedRef,
+    pinRef,
+    prevScrollOffsetRef,
+    scrollToPinned,
+    setScrollReduction,
+    updateSpacerHeight,
+  ]);
+
+  // --- pin re-fire: every time spacer layout settles ---
+  useEffect(() => {
+    const pin = pinRef.current;
+    if (!pin) return;
+
+    if (mounted) {
+      pin.seenActive = true;
+    }
+
+    // Once the spacer has been seen mounted and is now gone, the pin window
+    // closes — either we've reached the target or the user scrolled away.
+    if (pin.seenActive && !mounted) {
+      clearPin('spacer unmounted after activation');
+      return;
+    }
+
+    scrollToPinned('spacer layout settle');
+  }, [clearPin, mounted, pinRef, scrollToPinned, spacerLayoutVersion]);
+
+  // Collapse spacer to unmount once the user has shrunk it to zero.
+  useEffect(() => {
+    if (renderedHeight === 0 && mounted && isScrollShrinking) {
+      setMounted(false);
+      setScrollReduction(() => 0);
+      prevScrollOffsetRef.current = null;
+    }
+  }, [
+    isScrollShrinking,
+    mounted,
+    prevScrollOffsetRef,
+    renderedHeight,
+    setMounted,
+    setScrollReduction,
+  ]);
+
+  // Recompute spacer height when generation state or tail signature flips.
   useEffect(() => {
     if (!mounted) return;
 
@@ -406,15 +563,6 @@ export const useConversationScroll = ({
       updateSpacerHeight();
     });
   }, [isAIGenerating, latestAssistantSignature, mounted, updateSpacerHeight]);
-
-  useEffect(() => {
-    return () => {
-      cleanupMessagesObserver();
-      cleanupSpacerObserver();
-      clearRemoveTimer();
-      if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
-    };
-  }, [cleanupMessagesObserver, cleanupSpacerObserver, clearRemoveTimer]);
 
   const listData = useMemo(
     () => (mounted ? [...dataSource, CONVERSATION_SPACER_ID] : dataSource),
