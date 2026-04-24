@@ -168,7 +168,7 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeAgentId) return;
-          const url = `${appOrigin}/agent/${activeAgentId}?topic=${id}`;
+          const url = `${appOrigin}${SESSION_CHAT_TOPIC_URL(activeAgentId, id)}`;
           navigator.clipboard.writeText(url);
           message.success(t('actions.copyLinkSuccess'));
         },

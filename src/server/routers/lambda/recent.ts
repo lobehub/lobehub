@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { RecentModel } from '@/database/models/recent';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -41,7 +42,7 @@ export const recentRouter = router({
             if (item.routeGroupId) {
               routePath = `/group/${item.routeGroupId}?topic=${item.id}`;
             } else if (item.routeId) {
-              routePath = `/agent/${item.routeId}?topic=${item.id}`;
+              routePath = SESSION_CHAT_TOPIC_URL(item.routeId, item.id);
             } else {
               routePath = '/';
             }
