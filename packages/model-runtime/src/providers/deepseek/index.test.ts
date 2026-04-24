@@ -173,6 +173,127 @@ describe('LobeDeepSeekAI - custom features', () => {
         },
       ]);
     });
+
+    // DeepSeek V4 models default to thinking mode unless thinking.type === 'disabled'.
+    // In thinking mode the API rejects follow-up turns whose assistant messages omit
+    // reasoning_content when tool calls are involved — see index.ts for details.
+    describe('deepseek-v4 thinking mode reasoning_content enforcement', () => {
+      it('should force reasoning_content on v4-flash assistant messages by default', () => {
+        const payload = {
+          messages: [
+            { role: 'user', content: 'Search weather' },
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'search', arguments: '{"q":"weather"}' },
+                },
+              ],
+            },
+          ],
+          model: 'deepseek-v4-flash',
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result.messages[1]).toEqual({
+          role: 'assistant',
+          content: '',
+          reasoning_content: '',
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'search', arguments: '{"q":"weather"}' },
+            },
+          ],
+        });
+      });
+
+      it('should force reasoning_content on v4-pro assistant messages by default', () => {
+        const payload = {
+          messages: [{ role: 'assistant', content: 'hi' }],
+          model: 'deepseek-v4-pro',
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result.messages[0]).toEqual({
+          role: 'assistant',
+          content: 'hi',
+          reasoning_content: '',
+        });
+      });
+
+      it('should force reasoning_content when thinking.type is explicitly enabled', () => {
+        const payload = {
+          messages: [{ role: 'assistant', content: 'hi' }],
+          model: 'deepseek-v4-flash',
+          thinking: { type: 'enabled' },
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result.messages[0]).toEqual({
+          role: 'assistant',
+          content: 'hi',
+          reasoning_content: '',
+        });
+      });
+
+      it('should NOT force reasoning_content when thinking.type is disabled', () => {
+        const payload = {
+          messages: [{ role: 'assistant', content: 'hi' }],
+          model: 'deepseek-v4-flash',
+          thinking: { type: 'disabled' },
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result.messages[0]).toEqual({
+          role: 'assistant',
+          content: 'hi',
+        });
+      });
+
+      it('should preserve existing reasoning_content on v4 assistant messages', () => {
+        const payload = {
+          messages: [
+            {
+              role: 'assistant',
+              content: 'answer',
+              reasoning_content: 'prior reasoning',
+            },
+          ],
+          model: 'deepseek-v4-flash',
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result.messages[0]).toEqual({
+          role: 'assistant',
+          content: 'answer',
+          reasoning_content: 'prior reasoning',
+        });
+      });
+
+      it('should NOT force reasoning_content on non-v4 / non-reasoner models', () => {
+        const payload = {
+          messages: [{ role: 'assistant', content: 'hi' }],
+          model: 'deepseek-chat',
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result.messages[0]).toEqual({
+          role: 'assistant',
+          content: 'hi',
+        });
+      });
+    });
   });
 
   describe('Debug Configuration', () => {

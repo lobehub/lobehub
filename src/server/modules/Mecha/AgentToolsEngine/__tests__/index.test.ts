@@ -475,6 +475,51 @@ describe('createServerAgentToolsEngine', () => {
 
       expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
     });
+
+    it('should disable RemoteDevice in bot conversations when no device auto-activated', () => {
+      // Bot callers (Telegram/Discord/Slack) have no client-executor, so the
+      // legacy rule would auto-enable RemoteDevice, and its systemRole would
+      // hijack the Activator and tell the model to ask the user to open the
+      // desktop app — blocking cloud-tool discovery (e.g. Klavis Gmail).
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        deviceContext: { gatewayConfigured: true },
+        isBotConversation: true,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('should still enable RemoteDevice in bot conversations when a device is auto-activated', () => {
+      // When a device is bound / auto-activated for the bot topic, LocalSystem
+      // takes over the remote proxy anyway — so RemoteDevice stays disabled
+      // (its usual rule), not due to isBotConversation.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        isBotConversation: true,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
   });
 
   describe('LocalSystem + RemoteDevice interaction', () => {

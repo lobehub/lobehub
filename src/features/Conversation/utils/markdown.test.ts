@@ -322,6 +322,35 @@ Content 2 still going`;
 
 <lobeArtifact identifier="generating" type="text/markdown" title="Generating">Content 2 still going`);
   });
+
+  it('should preserve HTML script blocks while flattening artifact markup', () => {
+    const input = `<lobeArtifact identifier="snake-game" type="text/html" title="Snake Game">
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+// Move the snake every frame
+const url = " // keep string content untouched";
+window.snakeStarted = true;
+</script${'\t'}
+ bar>
+</body>
+</html>
+</lobeArtifact>`;
+
+    const output = processWithArtifact(input);
+
+    expect(output).toContain(`<script>
+// Move the snake every frame
+const url = " // keep string content untouched";
+window.snakeStarted = true;
+</script${'\t'}
+ bar>`);
+    expect(output).not.toContain('// Move the snake every framewindow.snakeStarted = true;');
+    expect(output).toContain(
+      '<lobeArtifact identifier="snake-game" type="text/html" title="Snake Game"><!DOCTYPE html><html><body><script>',
+    );
+  });
 });
 
 describe('outer code block removal', () => {

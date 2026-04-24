@@ -16,6 +16,7 @@ import {
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import { CodexFileChangeTracker } from '@/modules/heterogeneousAgent/codexFileChangeTracker';
 import type {
   HeterogeneousAgentImageAttachment,
   HeterogeneousAgentParsedOutput,
@@ -587,18 +588,31 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
       session.process = proc;
       const streamProcessor = driver.createStreamProcessor();
+      const codexFileChangeTracker =
+        session.agentType === 'codex' ? new CodexFileChangeTracker() : undefined;
+      let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
 
       const broadcastParsedOutputs = (parsedOutputs: HeterogeneousAgentParsedOutput[]) => {
-        for (const parsedOutput of parsedOutputs) {
-          if (parsedOutput.agentSessionId) {
-            session.agentSessionId = parsedOutput.agentSessionId;
-          }
+        stdoutBroadcastQueue = stdoutBroadcastQueue
+          .then(async () => {
+            for (const parsedOutput of parsedOutputs) {
+              if (parsedOutput.agentSessionId) {
+                session.agentSessionId = parsedOutput.agentSessionId;
+              }
 
-          this.broadcast('heteroAgentRawLine', {
-            line: parsedOutput.payload,
-            sessionId: session.sessionId,
+              const line = codexFileChangeTracker
+                ? await codexFileChangeTracker.track(parsedOutput.payload)
+                : parsedOutput.payload;
+
+              this.broadcast('heteroAgentRawLine', {
+                line,
+                sessionId: session.sessionId,
+              });
+            }
+          })
+          .catch((error) => {
+            logger.error('Failed to broadcast parsed agent output:', error);
           });
-        }
       };
 
       // Stream stdout events as raw provider payloads to Renderer.
@@ -628,33 +642,37 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       });
 
       proc.on('exit', (code, signal) => {
-        logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
-        session.process = undefined;
+        void stdoutBroadcastQueue.finally(() => {
+          logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
+          session.process = undefined;
 
-        // If *we* killed it (cancel / stop / before-quit), treat the non-zero
-        // exit as a clean shutdown — surfacing it as an error would make a
-        // user-initiated cancel look like an agent failure, and an Electron
-        // shutdown affecting OTHER running CC sessions would pollute their
-        // topics with a misleading "Agent exited with code 143" message.
-        if (session.cancelledByUs) {
-          this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-          resolve();
-          return;
-        }
+          // If *we* killed it (cancel / stop / before-quit), treat the non-zero
+          // exit as a clean shutdown — surfacing it as an error would make a
+          // user-initiated cancel look like an agent failure, and an Electron
+          // shutdown affecting OTHER running CC sessions would pollute their
+          // topics with a misleading "Agent exited with code 143" message.
+          if (session.cancelledByUs) {
+            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+            resolve();
+            return;
+          }
 
-        if (code === 0) {
-          this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-          resolve();
-        } else {
-          const stderrOutput = stderrChunks.join('').trim();
-          const errorMsg = stderrOutput || `Agent exited with code ${code}`;
-          const sessionError = this.getSessionErrorPayload(errorMsg, session);
-          this.broadcast('heteroAgentSessionError', {
-            error: sessionError,
-            sessionId: session.sessionId,
-          });
-          reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
-        }
+          if (code === 0) {
+            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+            resolve();
+          } else {
+            const stderrOutput = stderrChunks.join('').trim();
+            const errorMsg = stderrOutput || `Agent exited with code ${code}`;
+            const sessionError = this.getSessionErrorPayload(errorMsg, session);
+            this.broadcast('heteroAgentSessionError', {
+              error: sessionError,
+              sessionId: session.sessionId,
+            });
+            reject(
+              new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
+            );
+          }
+        });
       });
     });
   }

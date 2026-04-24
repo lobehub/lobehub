@@ -38,6 +38,13 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
+// Mock MarketService to prevent real HTTP requests to market API
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(() => ({
+    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
 let serverDB: LobeChatDatabase;
 let userId: string;
 let testAgentId: string;

@@ -163,6 +163,13 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
   }
 
+  if (
+    modelExtendParams.includes('deepseekV4ReasoningEffort') &&
+    chatConfig.deepseekV4ReasoningEffort
+  ) {
+    extendParams.reasoning_effort = chatConfig.deepseekV4ReasoningEffort;
+  }
+
   if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
   }

@@ -12,6 +12,27 @@ export const calculateConversationSpacerHeight = (
   assistantHeight: number,
 ) => Math.max(Math.round(viewportHeight - userHeight - assistantHeight), 0);
 
+interface ConversationSpacerScrollEffectOptions {
+  delta: number;
+  hasPrevOffset: boolean;
+  isAIGenerating: boolean;
+  isMounted: boolean;
+}
+
+export const getConversationSpacerScrollEffect = ({
+  delta,
+  hasPrevOffset,
+  isAIGenerating,
+  isMounted,
+}: ConversationSpacerScrollEffectOptions) => {
+  const cancelPin = isMounted && hasPrevOffset && delta < 0;
+
+  return {
+    cancelPin,
+    shrinkSpacer: cancelPin && !isAIGenerating,
+  };
+};
+
 const getMessageElement = (messageId: string | null) => {
   if (!messageId) return null;
 
@@ -40,12 +61,14 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
   const getItemOffset = useConversationStore((s) => s.virtuaScrollMethods?.getItemOffset);
   const getItemSize = useConversationStore((s) => s.virtuaScrollMethods?.getItemSize);
+  const getScrollOffset = useConversationStore((s) => s.virtuaScrollMethods?.getScrollOffset);
   const getViewportSize = useConversationStore((s) => s.virtuaScrollMethods?.getViewportSize);
 
   const [naturalHeight, setNaturalHeight] = useState(0);
   const [scrollReduction, setScrollReduction] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [spacerLayoutVersion, setSpacerLayoutVersion] = useState(0);
+  const [cancelPinMessageIndex, setCancelPinMessageIndex] = useState<number | null>(null);
 
   const prevLengthRef = useRef(dataSource.length);
   const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -153,18 +176,28 @@ export const useConversationSpacer = (dataSource: string[]) => {
 
   // Reset prev scroll offset when generation state changes to avoid stale deltas
   useEffect(() => {
-    prevScrollOffsetRef.current = null;
-  }, [isAIGenerating]);
+    prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
+  }, [getScrollOffset, isAIGenerating]);
 
   // Stable scroll handler for shrinking spacer on scroll-up when not streaming
   const handleScrollOffset = useCallback((currentScrollOffset: number) => {
     const prevOffset = prevScrollOffsetRef.current;
     prevScrollOffsetRef.current = currentScrollOffset;
 
-    if (!mountedRef.current || isAIGeneratingRef.current || prevOffset === null) return;
+    const delta = prevOffset === null ? 0 : currentScrollOffset - prevOffset;
+    const { cancelPin, shrinkSpacer } = getConversationSpacerScrollEffect({
+      delta,
+      hasPrevOffset: prevOffset !== null,
+      isAIGenerating: isAIGeneratingRef.current,
+      isMounted: mountedRef.current,
+    });
 
-    const delta = currentScrollOffset - prevOffset;
-    if (delta >= 0) return;
+    if (!cancelPin) return;
+
+    if (userMessageIndexRef.current !== null) {
+      setCancelPinMessageIndex(userMessageIndexRef.current);
+    }
+    if (!shrinkSpacer) return;
 
     setScrollReduction((prev) => prev + Math.abs(delta));
 
@@ -222,15 +255,16 @@ export const useConversationSpacer = (dataSource: string[]) => {
 
     if (newMessageCount !== 2 || userMessage?.role !== 'user' || !assistantMessage) return;
 
+    setCancelPinMessageIndex(null);
     setScrollReduction(0);
-    prevScrollOffsetRef.current = null;
+    prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
     userMessageIndexRef.current = dataSource.length - 2;
     assistantMessageIndexRef.current = dataSource.length - 1;
 
     requestAnimationFrame(() => {
       updateSpacerHeight();
     });
-  }, [dataSource.length, displayMessages, updateSpacerHeight]);
+  }, [dataSource.length, displayMessages, getScrollOffset, updateSpacerHeight]);
 
   useEffect(() => {
     const { assistantId, userId } = getTrackedMessages();
@@ -278,6 +312,7 @@ export const useConversationSpacer = (dataSource: string[]) => {
     isSpacerMessage: (id: string) => id === CONVERSATION_SPACER_ID,
     listData,
     registerSpacerNode,
+    cancelPinMessageIndex,
     scrollShrinking: isScrollShrinking,
     spacerActive: mounted,
     spacerHeight: renderedHeight,

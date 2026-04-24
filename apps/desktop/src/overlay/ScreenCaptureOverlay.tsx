@@ -7,7 +7,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import ChatPanel, { type ChatPanelSelection, type ChatPanelSubmitPayload } from './ChatPanel';
-import { OVERLAY_COPY, OVERLAY_LAYOUT } from './constants';
+import { OVERLAY_COPY, OVERLAY_LAYOUT, OVERLAY_SHORTCUTS } from './constants';
 import * as styles from './overlay.css.ts';
 import { resolveCommittedSelectionRect, shouldHideChatPanel } from './overlaySelectionState';
 import { useDragSelection } from './useDragSelection';
@@ -375,6 +375,7 @@ const ScreenCaptureOverlay = memo(() => {
   });
   const showHover = hoveredWindow && !hasSelections && !isDragging && !committedSelectionRect;
   const showDrag = isDragging && dragRect;
+  const showHint = !hasSelections && !isDragging && !pendingSelectionRect;
 
   return (
     <div
@@ -446,6 +447,22 @@ const ScreenCaptureOverlay = memo(() => {
         onRemoveSelection={removeSelection}
         onSubmit={handleSubmit}
       />
+
+      {showHint && (
+        <div className={styles.hintPill} role="note">
+          <span className={styles.hintPillKey}>{OVERLAY_COPY.hintHoverTrigger}</span>
+          <span className={styles.hintPillDivider}>•</span>
+          <span className={styles.hintPillLabel}>{OVERLAY_COPY.hintSelectWindow}</span>
+          <span className={styles.hintPillGroupDivider} />
+          <span className={styles.hintPillKey}>{OVERLAY_COPY.hintDragTrigger}</span>
+          <span className={styles.hintPillDivider}>•</span>
+          <span className={styles.hintPillLabel}>{OVERLAY_COPY.hintDragRegion}</span>
+          <span className={styles.hintPillGroupDivider} />
+          <span className={styles.hintPillKey}>{OVERLAY_SHORTCUTS.close}</span>
+          <span className={styles.hintPillDivider}>•</span>
+          <span className={styles.hintPillLabel}>{OVERLAY_COPY.hintExit}</span>
+        </div>
+      )}
     </div>
   );
 });

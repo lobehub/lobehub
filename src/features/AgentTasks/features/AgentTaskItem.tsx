@@ -18,6 +18,7 @@ import TaskTriggerTag from './TaskTriggerTag';
 
 interface TaskItemProps {
   task: TaskListItem;
+  variant?: 'compact' | 'default';
 }
 
 const formatTime = (time?: string | Date | null) => {
@@ -40,7 +41,7 @@ type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | '
 const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status) ? (status as TaskStatus) : 'backlog';
 
-const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
+const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(task.identifier);
@@ -60,55 +61,70 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
     if (targetAgentId) navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
   }, [targetAgentId, navigate, task.identifier]);
 
+  const titleRow = (
+    <Flexbox horizontal align={'center'} gap={8}>
+      <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
+      <TaskStatusTag status={status} taskIdentifier={task.identifier} />
+      <Text ellipsis weight={500}>
+        {task.name || task.identifier}
+      </Text>
+      <TaskSubtaskProgressTag
+        currentIdentifier={task.identifier}
+        subtasks={taskDetail?.subtasks}
+        onSubtaskClick={(identifier) => {
+          if (targetAgentId) navigate(`/agent/${targetAgentId}/tasks/${identifier}`);
+        }}
+      />
+    </Flexbox>
+  );
+
+  const metaRow = (
+    <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+      <TaskScheduleConfig
+        currentInterval={taskDetail?.heartbeat?.interval ?? 0}
+        taskId={task.identifier}
+      >
+        <TaskTriggerTag
+          heartbeatInterval={taskDetail?.heartbeat?.interval}
+          schedulePattern={task.schedulePattern}
+          scheduleTimezone={task.scheduleTimezone}
+        />
+      </TaskScheduleConfig>
+      <AssigneeAgentSelector
+        currentAgentId={task.assigneeAgentId}
+        disabled={status === 'running'}
+        taskIdentifier={task.identifier}
+      >
+        <AssigneeAvatar agentId={task.assigneeAgentId} />
+      </AssigneeAgentSelector>
+      {time && (
+        <Text
+          align={'right'}
+          fontSize={12}
+          style={{ whiteSpace: 'nowrap', width: variant === 'compact' ? undefined : 76 }}
+          type={'secondary'}
+        >
+          {time}
+        </Text>
+      )}
+    </Flexbox>
+  );
+
+  if (variant === 'compact') {
+    return (
+      <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
+        {titleRow}
+        <TaskLatestActivity activities={taskDetail?.activities} />
+        {metaRow}
+      </Block>
+    );
+  }
+
   return (
     <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
       <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
-        <Flexbox horizontal align="center" gap={8}>
-          <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
-          <TaskStatusTag status={status} taskIdentifier={task.identifier} />
-          <Text ellipsis weight={500}>
-            {task.name || task.identifier}
-          </Text>
-          <TaskSubtaskProgressTag
-            currentIdentifier={task.identifier}
-            subtasks={taskDetail?.subtasks}
-            onSubtaskClick={(identifier) => {
-              if (targetAgentId) navigate(`/agent/${targetAgentId}/tasks/${identifier}`);
-            }}
-          />
-        </Flexbox>
-        <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-          <TaskScheduleConfig
-            currentInterval={taskDetail?.heartbeat?.interval ?? 0}
-            taskId={task.identifier}
-          >
-            <TaskTriggerTag
-              heartbeatInterval={taskDetail?.heartbeat?.interval}
-              schedulePattern={task.schedulePattern}
-              scheduleTimezone={task.scheduleTimezone}
-            />
-          </TaskScheduleConfig>
-          <AssigneeAgentSelector
-            currentAgentId={task.assigneeAgentId}
-            disabled={status === 'running'}
-            taskIdentifier={task.identifier}
-          >
-            <AssigneeAvatar agentId={task.assigneeAgentId} />
-          </AssigneeAgentSelector>
-          {time && (
-            <Text
-              align={'right'}
-              fontSize={12}
-              type={'secondary'}
-              style={{
-                whiteSpace: 'nowrap',
-                width: 76,
-              }}
-            >
-              {time}
-            </Text>
-          )}
-        </Flexbox>
+        {titleRow}
+        {metaRow}
       </Flexbox>
       <TaskLatestActivity activities={taskDetail?.activities} />
     </Block>

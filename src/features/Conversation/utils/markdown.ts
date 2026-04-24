@@ -1,5 +1,24 @@
 import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 
+const ARTIFACT_TAG_REGEX_GLOBAL =
+  /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
+const HTML_SCRIPT_TAG_REGEX = /<script\b[^>]*>[\S\s]*?<\/script(?:\s[^>]*)?>/gi;
+const SCRIPT_PLACEHOLDER_PREFIX = '____LOBE_ARTIFACT_SCRIPT_BLOCK_';
+
+const removeArtifactLineBreaks = (content: string) => {
+  const scripts: string[] = [];
+  const contentWithoutScripts = content.replaceAll(HTML_SCRIPT_TAG_REGEX, (script) => {
+    const index = scripts.length;
+    scripts.push(script);
+    return `${SCRIPT_PLACEHOLDER_PREFIX}${index}____`;
+  });
+
+  return scripts.reduce(
+    (result, script, index) => result.replace(`${SCRIPT_PLACEHOLDER_PREFIX}${index}____`, script),
+    contentWithoutScripts.replaceAll(/\r?\n|\r/g, ''),
+  );
+};
+
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
  */
@@ -48,11 +67,7 @@ export const processWithArtifact = (input: string = '') => {
 
   // If the input contains `lobeArtifact` tags, replace all line breaks with an empty string
   // Use global regex to handle multiple artifacts in the same message
-  const ARTIFACT_TAG_REGEX_GLOBAL =
-    /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
-  output = output.replaceAll(ARTIFACT_TAG_REGEX_GLOBAL, (match) =>
-    match.replaceAll(/\r?\n|\r/g, ''),
-  );
+  output = output.replaceAll(ARTIFACT_TAG_REGEX_GLOBAL, removeArtifactLineBreaks);
 
   // if not match, check if it's start with <lobeArtifact but not closed
   const regex = /<lobeArtifact\b(?:(?!\/?>)[\s\S])*$/;

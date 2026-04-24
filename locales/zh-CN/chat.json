@@ -105,6 +105,8 @@
   "defaultSession": "自定义助理",
   "desktopNotification.aiReplyCompleted.body": "AI 回复生成完成",
   "desktopNotification.aiReplyCompleted.title": "AI 回复完成",
+  "desktopNotification.humanApprovalRequired.body": "Agent 需要你的批准后才能继续",
+  "desktopNotification.humanApprovalRequired.title": "需要你的批准",
   "dm.placeholder": "你与 {{agentTitle}} 的私信会显示在这里。",
   "dm.tooltip": "发送私信",
   "dm.visibleTo": "仅 {{target}} 可见",

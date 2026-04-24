@@ -105,6 +105,8 @@
   "defaultSession": "Default Agent",
   "desktopNotification.aiReplyCompleted.body": "Agent reply is ready",
   "desktopNotification.aiReplyCompleted.title": "Reply completed",
+  "desktopNotification.humanApprovalRequired.body": "An Agent needs your approval to continue",
+  "desktopNotification.humanApprovalRequired.title": "Approval required",
   "dm.placeholder": "Your private messages with {{agentTitle}} will appear here.",
   "dm.tooltip": "Send a private message",
   "dm.visibleTo": "Visible to {{target}} only",

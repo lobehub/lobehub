@@ -4,11 +4,19 @@ import {
 } from '@lobechat/builtin-tool-claude-code/client';
 import { type RenderDisplayControl } from '@lobechat/types';
 
+import { CodexRenderDisplayControls } from './codex';
+
 // Kept separate from `./renders` so consumers that only need display-control
 // fallbacks (e.g. the tool store selector) don't pull in every builtin tool's
 // render registry — that graph cycles back through `@/store/tool/selectors`.
-const BuiltinRenderDisplayControls: Record<string, Record<string, RenderDisplayControl>> = {
-  [ClaudeCodeIdentifier]: ClaudeCodeRenderDisplayControls,
+const getBuiltinRenderDisplayControls = (): Record<
+  string,
+  Record<string, RenderDisplayControl>
+> => {
+  return {
+    [ClaudeCodeIdentifier]: ClaudeCodeRenderDisplayControls,
+    codex: CodexRenderDisplayControls,
+  };
 };
 
 export const getBuiltinRenderDisplayControl = (
@@ -16,5 +24,5 @@ export const getBuiltinRenderDisplayControl = (
   apiName?: string,
 ): RenderDisplayControl | undefined => {
   if (!identifier || !apiName) return undefined;
-  return BuiltinRenderDisplayControls[identifier]?.[apiName];
+  return getBuiltinRenderDisplayControls()[identifier]?.[apiName];
 };

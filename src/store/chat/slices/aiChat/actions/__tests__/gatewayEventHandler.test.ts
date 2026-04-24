@@ -2,6 +2,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
+import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
 
@@ -10,6 +11,9 @@ vi.mock('@/services/message', () => ({
     getMessages: vi.fn().mockResolvedValue([]),
     updateMessageError: vi.fn().mockResolvedValue({ success: true }),
   },
+}));
+vi.mock('@/store/chat/utils/desktopNotification', () => ({
+  notifyDesktopHumanApprovalRequired: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── Test Helpers ───
@@ -208,6 +212,29 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
       expect(store.replaceMessages).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('step_start', () => {
+    it('should notify desktop when human approval is required', () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('step_start', {
+          pendingToolsCalling: [{ id: 'tool-1' }],
+          phase: 'human_approval',
+          requiresApproval: true,
+        }),
+      );
+
+      expect(notifyDesktopHumanApprovalRequired).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          agentId: 'agent-1',
+          topicId: 'topic-1',
+        }),
+      );
     });
   });
 

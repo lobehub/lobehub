@@ -99,7 +99,9 @@ export default class NotificationCtr extends ControllerModule {
     }
   }
   /**
-   * Show system desktop notification (only when window is hidden)
+   * Show system desktop notification.
+   * By default notifications only appear when the main window is hidden or unfocused.
+   * High-priority callers can pass `force` to surface a banner even while focused.
    */
   @IpcMethod()
   async showDesktopNotification(
@@ -117,12 +119,16 @@ export default class NotificationCtr extends ControllerModule {
       // Check if window is hidden
       const isWindowHidden = this.isMainWindowHidden();
 
-      if (!isWindowHidden) {
+      if (!params.force && !isWindowHidden) {
         logger.debug('Main window is visible, skipping desktop notification');
         return { reason: 'Window is visible', skipped: true, success: true };
       }
 
-      logger.info('Window is hidden, showing desktop notification:', params.title);
+      if (params.requestAttention && isWindowHidden) {
+        this.requestUserAttention();
+      }
+
+      logger.info('Showing desktop notification:', params.title);
 
       const notification = new Notification({
         body: params.body,
@@ -175,6 +181,23 @@ export default class NotificationCtr extends ControllerModule {
         error: error instanceof Error ? error.message : 'Unknown error',
         success: false,
       };
+    }
+  }
+
+  private requestUserAttention(): void {
+    try {
+      const mainWindow = this.app.browserManager.getMainWindow().browserWindow;
+
+      if (mainWindow.isDestroyed()) return;
+
+      if (electronIs.macOS()) {
+        app.dock?.bounce?.('informational');
+        return;
+      }
+
+      mainWindow.flashFrame(true);
+    } catch (error) {
+      logger.error('Failed to request user attention:', error);
     }
   }
 

@@ -171,7 +171,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
               width: COLUMN_WIDTH - 8,
             }}
           >
-            <AgentTaskItem task={activeTask} />
+            <AgentTaskItem task={activeTask} variant="compact" />
           </div>
         ) : null}
       </DragOverlay>

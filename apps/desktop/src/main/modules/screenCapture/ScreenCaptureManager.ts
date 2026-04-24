@@ -11,13 +11,14 @@ import type {
   ScreenCaptureSession,
   ScreenCaptureSubmitParams,
 } from '@lobechat/electron-client-ipc';
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, dialog, screen } from 'electron';
 
 import { BrowsersIdentifiers } from '@/appBrowsers';
 import { preloadDir } from '@/const/dir';
 import { isMac } from '@/const/env';
 import type { App } from '@/core/App';
 import { createLogger } from '@/utils/logger';
+import { getScreenCaptureStatus, requestScreenCaptureAccess } from '@/utils/permissions';
 
 import { captureRect, captureWindow } from './CaptureService';
 import { enumerateWindows } from './WindowSourceService';
@@ -77,6 +78,10 @@ export class ScreenCaptureManager {
   }
 
   async startSession(): Promise<void> {
+    if (!(await this.ensureScreenCaptureAccess())) {
+      return;
+    }
+
     if (this.isActive) {
       logger.warn('Capture session already active');
       this.close();
@@ -265,6 +270,45 @@ export class ScreenCaptureManager {
       filename,
       mimeType: 'image/png',
     });
+  }
+
+  private async ensureScreenCaptureAccess(): Promise<boolean> {
+    if (!isMac) {
+      return true;
+    }
+
+    const status = getScreenCaptureStatus();
+    if (status === 'granted') {
+      return true;
+    }
+
+    const t = this.app.i18n.ns('dialog');
+    const mainWindow = this.app.browserManager.getMainWindow();
+    const parentWindow = mainWindow?.browserWindow?.isVisible?.() ? mainWindow.browserWindow : null;
+    const options = {
+      buttons: [t('screenCaptureAccess.openSettings'), t('screenCaptureAccess.cancel')],
+      cancelId: 1,
+      defaultId: 0,
+      detail: t('screenCaptureAccess.detail'),
+      message: t('screenCaptureAccess.message'),
+      noLink: true,
+      title: t('screenCaptureAccess.title'),
+      type: 'warning' as const,
+    };
+
+    const result = parentWindow
+      ? await dialog.showMessageBox(parentWindow, options)
+      : await dialog.showMessageBox(options);
+
+    if (result.response !== 0) {
+      logger.info(`Screen capture permission prompt dismissed; status=${status}`);
+      return false;
+    }
+
+    logger.info(`Opening screen capture permission settings; status=${status}`);
+    await requestScreenCaptureAccess();
+
+    return false;
   }
 
   private async createOverlayWindow(bounds: Electron.Rectangle): Promise<void> {

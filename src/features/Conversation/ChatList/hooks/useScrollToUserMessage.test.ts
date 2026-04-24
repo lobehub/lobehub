@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useScrollToUserMessage } from './useScrollToUserMessage';
 
 type Props = {
+  cancelPinMessageIndex?: number | null;
   dataSourceLength: number;
   isSecondLastMessageFromUser: boolean;
   scrollShrinking?: boolean;
@@ -15,6 +16,7 @@ const makeRender = (scrollToIndex: ReturnType<typeof vi.fn> | null, initialProps
   renderHook(
     (props: Props) =>
       useScrollToUserMessage({
+        cancelPinMessageIndex: props.cancelPinMessageIndex,
         dataSourceLength: props.dataSourceLength,
         isSecondLastMessageFromUser: props.isSecondLastMessageFromUser,
         scrollShrinking: props.scrollShrinking,
@@ -299,6 +301,78 @@ describe('useScrollToUserMessage', () => {
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
+    });
+
+    it('should stop pinning when user scrolls up during streaming without shrinking the spacer', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = makeRender(scrollToIndex, {
+        dataSourceLength: 2,
+        isSecondLastMessageFromUser: false,
+        spacerActive: false,
+        spacerLayoutVersion: 0,
+      });
+
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 1,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+      scrollToIndex.mockClear();
+
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        cancelPinMessageIndex: 2,
+        spacerActive: true,
+        spacerLayoutVersion: 1,
+      });
+
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        cancelPinMessageIndex: 2,
+        spacerActive: true,
+        spacerLayoutVersion: 2,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(scrollToIndex).not.toHaveBeenCalled();
+    });
+
+    it('should preserve a fresh pin when the cancellation index belongs to the previous turn', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = makeRender(scrollToIndex, {
+        cancelPinMessageIndex: 2,
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 0,
+      });
+
+      rerender({
+        cancelPinMessageIndex: 2,
+        dataSourceLength: 6,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 0,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(scrollToIndex).toHaveBeenCalledTimes(3);
+      expect(scrollToIndex).toHaveBeenNthCalledWith(1, 4, { align: 'start', smooth: true });
     });
 
     it('should scroll without spacer when spacer never mounts (content fills viewport)', () => {
