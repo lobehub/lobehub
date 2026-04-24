@@ -358,7 +358,6 @@ describe('resolveModelExtendParams', () => {
         });
 
         expect(result).toEqual({
-          deepseekReasoningEffort: 'high',
           reasoning_effort: 'high',
           thinking: {
             type: 'enabled',
