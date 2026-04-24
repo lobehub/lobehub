@@ -6,37 +6,37 @@ Connect a WeChat bot to your agent via iLink API.
 
 ## Credentials
 
-No manual credential input is required. Credentials are populated **automatically** after scanning a QR code with WeChat.
+WeChat credentials (bot token) are populated by the **Web UI QR scan flow** — they cannot be set up via CLI alone.
 
 ## Connection Mode
 
 WeChat uses **polling** mode (long-polling) — no webhook URL or WebSocket setup needed.
 
-## Step-by-Step Setup
+## Setup: Use the Web UI
 
-### Step 1: Add the Bot in LobeHub
+WeChat requires a QR code scan to link your account, which is only supported through the LobeHub Web UI:
 
-Run the CLI command to add the WeChat bot without any credentials:
+1. Open your agent in LobeHub → go to the **Channel** configuration page
+2. Select **WeChat** from the platform list
+3. A QR code is displayed — scan it with WeChat to authenticate
+4. Once scanned, credentials are saved automatically and the bot connects
 
-\`\`\`bash
-lh bot add -a <agentId> --platform wechat
-\`\`\`
+> CLI-only setup is not supported for WeChat. The \`lh bot connect\` command only starts an already-configured provider and does not perform the QR authentication flow.
 
-### Step 2: Connect and Scan QR Code
+## After Web UI Setup: CLI Operations
 
-\`\`\`bash
-lh bot connect <botId>
-\`\`\`
-
-After running \`connect\`, a **QR code** is displayed in the terminal. Scan it with your WeChat app to link your account.
-
-### Step 3: Verify Connection
+Once the bot is configured via Web UI, you can use CLI to manage and monitor it:
 
 \`\`\`bash
+# Check bot status
 lh bot list -a <agentId>
-\`\`\`
 
-The bot status should show as **connected**.
+# Reconnect if disconnected
+lh bot connect <botId>
+
+# Send a message
+lh bot message send <botId> --target <conversationId> --message "Hello"
+\`\`\`
 
 ## Limitations
 
@@ -46,8 +46,8 @@ The bot status should show as **connected**.
 
 ## Notes
 
-- WeChat uses iLink Bot API for the integration — no developer portal setup is needed on your side
-- The QR code session expires; if the bot disconnects, re-run \`lh bot connect <botId>\` and scan again
+- WeChat uses iLink Bot API — no developer portal setup is needed
+- The QR code session expires periodically; reconnect via Web UI when it does
 - Default debounce is 5 seconds (higher than other platforms) due to WeChat's polling architecture
 `;
 

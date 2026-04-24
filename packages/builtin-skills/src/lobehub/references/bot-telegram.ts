@@ -33,11 +33,18 @@ Send commands to @BotFather to adjust settings:
 - \`/setdescription\` → set the bot's description shown on the profile page
 - \`/setuserpic\` → set the bot's avatar
 
-### Step 3: Connect via CLI
+### Step 3: Get the Bot's Numeric ID (for --app-id)
+
+The Bot Token has the format \`1234567890:ABCdef...\` — the numeric part before the colon is the bot's ID. Use it as \`--app-id\`.
+
+Alternatively, send \`/mybots\` to @BotFather → select your bot → **API Token** to see the full token again.
+
+### Step 4: Connect via CLI
 
 \`\`\`bash
 lh bot add -a <agentId> \\
   --platform telegram \\
+  --app-id <numericBotId> \\
   --bot-token <botToken>
 
 lh bot test <botId>
@@ -46,11 +53,10 @@ lh bot connect <botId>
 
 ## Notes
 
-- No Application ID is needed — Telegram bots are identified solely by token
+- **App ID** is the numeric bot ID extracted from the token prefix (e.g. token \`987654321:XYZ...\` → app-id \`987654321\`)
 - **Secret Token** (optional): a custom string you define; LobeHub includes it in webhook requests so you can verify they genuinely come from LobeHub — leave blank unless you have a security requirement
 - Telegram does not have native message search; use \`lh bot message read\` with pagination instead
 - If you lose the token, retrieve it by sending \`/token\` (then select your bot) to @BotFather
-- To get the bot's numeric ID, send \`/mybots\` → select bot → **API Token**
 `;
 
 export default content;
