@@ -35,6 +35,7 @@
   "navigation.recentView": "最近访问",
   "navigation.resources": "资源",
   "navigation.settings": "设置",
+  "navigation.tasks": "任务",
   "navigation.unpin": "取消固定",
   "notification.finishChatGeneration": "AI 消息已生成完毕",
   "proxy.auth": "需要认证",

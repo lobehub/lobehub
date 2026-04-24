@@ -61,14 +61,11 @@ const Conversation = memo(() => {
   );
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
-  // Reset task topic when the route agent changes so a stale topicId from
-  // the previous agent does not leak into this agent's messageMapKey.
   useEffect(() => {
     useTaskChatStore.getState().switchTopic(null);
   }, [activeAgentId]);
 
-  const detailMatch = useMatch('/agent/:aid/tasks/:taskId');
-  const isListRoute = !!useMatch('/agent/:aid/tasks');
+  const detailMatch = useMatch('/task/:taskId');
   const viewedTaskId = detailMatch?.params.taskId;
 
   const context = useMemo<ConversationContext>(
@@ -78,13 +75,9 @@ const Conversation = memo(() => {
       scope: 'main',
       topicId: taskTopicId,
       topicTrigger: TopicTrigger.TaskManager,
-      viewedTask: viewedTaskId
-        ? { taskId: viewedTaskId, type: 'detail' }
-        : isListRoute
-          ? { type: 'list' }
-          : undefined,
+      viewedTask: viewedTaskId ? { taskId: viewedTaskId, type: 'detail' } : undefined,
     }),
-    [activeAgentId, taskTopicId, viewedTaskId, isListRoute],
+    [activeAgentId, taskTopicId, viewedTaskId],
   );
 
   const chatKey = messageMapKey(context);

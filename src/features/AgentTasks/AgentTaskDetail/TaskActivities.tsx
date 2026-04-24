@@ -3,7 +3,7 @@ import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Tag, Text } fro
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
-import { BotMessageSquare, CirclePlus, MessageCircle, MessagesSquare } from 'lucide-react';
+import { BotMessageSquare, CircleDot, CirclePlus, MessageCircle } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +21,7 @@ import TopicCard from './TopicCard';
 const ROW_TYPE_ICON = {
   comment: MessageCircle,
   created: CirclePlus,
-  topic: MessagesSquare,
+  topic: CircleDot,
 } as const;
 
 /** Convert a brief-type activity to the BriefItem shape expected by BriefCard. */
@@ -97,7 +97,7 @@ const ActivityRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
   );
 
   return (
-    <Flexbox horizontal align={'center'} gap={8} paddingBlock={4}>
+    <Flexbox horizontal align={'center'} gap={8} paddingBlock={4} paddingInline={9}>
       {isAgent && activity.author?.id ? (
         <AgentProfilePopup
           agent={{ avatar: activity.author.avatar, title: activity.author.name }}
@@ -133,11 +133,13 @@ const TaskActivities = memo(() => {
 
   const items = useMemo(
     () =>
-      activities.map((act, i) => ({
-        activity: act,
-        brief: act.type === 'brief' ? toBriefItem(act) : null,
-        key: act.id ?? `activity-${i}`,
-      })),
+      activities
+        .map((act, i) => ({
+          activity: act,
+          brief: act.type === 'brief' ? toBriefItem(act) : null,
+          key: act.id ?? `activity-${i}`,
+        }))
+        .reverse(),
     [activities],
   );
 
@@ -157,6 +159,7 @@ const TaskActivities = memo(() => {
         }
       >
         <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
+          {activeTaskId && <CommentInput taskId={activeTaskId} />}
           {items.length > 0 ? (
             items.map(({ activity, brief, key }) => {
               if (brief) {
@@ -185,7 +188,6 @@ const TaskActivities = memo(() => {
               style={{ marginTop: 8 }}
             />
           )}
-          {activeTaskId && <CommentInput taskId={activeTaskId} />}
         </Flexbox>
       </AccordionItem>
     </Accordion>

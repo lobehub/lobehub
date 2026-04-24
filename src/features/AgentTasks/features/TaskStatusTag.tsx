@@ -7,9 +7,9 @@ import {
   CircleCheck,
   CircleDashed,
   CircleDot,
-  CirclePause,
   CircleSlash,
   CircleX,
+  HandIcon,
   Loader2Icon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -25,7 +25,7 @@ interface StatusMeta {
   labelKey: string;
 }
 
-const STATUS_META: Record<TaskStatus, StatusMeta> = {
+export const STATUS_META: Record<TaskStatus, StatusMeta> = {
   backlog: {
     color: cssVar.colorTextQuaternary,
     icon: CircleDashed,
@@ -51,20 +51,20 @@ const STATUS_META: Record<TaskStatus, StatusMeta> = {
     labelKey: 'status.failed',
   },
   paused: {
-    color: cssVar.colorWarning,
-    icon: CirclePause,
+    color: cssVar.colorInfo,
+    icon: HandIcon,
     label: 'Paused',
     labelKey: 'status.paused',
   },
   running: {
-    color: cssVar.colorInfo,
+    color: cssVar.colorWarning,
     icon: CircleDot,
     label: 'Running',
     labelKey: 'status.running',
   },
 };
 
-const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
+export const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`

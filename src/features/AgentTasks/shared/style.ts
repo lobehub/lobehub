@@ -39,20 +39,19 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       overflow: visible;
       flex-shrink: 0;
       min-width: auto;
+      margin-inline: 2px;
     }
 
-    .ant-breadcrumb-link {
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      min-width: 0;
-    }
-
+    .ant-breadcrumb-link,
     .ant-breadcrumb-link > a {
       overflow: hidden;
       display: flex;
       align-items: center;
+
       min-width: 0;
+      padding-block: 2px;
+      padding-inline: 6px;
+      border-radius: ${cssVar.borderRadius};
     }
   `,
 
@@ -131,6 +130,22 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       color: ${cssVar.colorText};
+    }
+  `,
+
+  commentInputCard: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgElevated};
+
+    transition: border-color 0.15s ease;
+
+    &:hover,
+    &:focus-within {
+      border-color: ${cssVar.colorBorder};
     }
   `,
 }));

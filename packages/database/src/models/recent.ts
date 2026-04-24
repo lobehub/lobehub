@@ -70,6 +70,7 @@ export class RecentModel {
           NULL as metadata
         FROM ${tasks}
         WHERE ${tasks.createdByUserId} = ${this.userId}
+          AND ${tasks.status} NOT IN ('completed', 'canceled')
       ) AS combined
       ORDER BY updated_at DESC
       LIMIT ${limit}

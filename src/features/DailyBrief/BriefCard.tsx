@@ -7,8 +7,6 @@ import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import Time from '@/routes/(main)/home/features/components/Time';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 import BriefCardActions from './BriefCardActions';
 import BriefCardSummary from './BriefCardSummary';
@@ -54,11 +52,8 @@ interface BriefCardProps {
 const BriefCard = memo<BriefCardProps>(
   ({ brief, enableNavigation = true, onAfterResolve, onAfterAddComment }) => {
     const navigate = useNavigate();
-    const activeAgentId = useAgentStore((s) => s.activeAgentId);
-    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
-    const targetAgentId = brief.agents[0]?.id || activeAgentId || inboxAgentId;
-    const canNavigate = enableNavigation && Boolean(brief.taskId && targetAgentId);
+    const canNavigate = enableNavigation && Boolean(brief.taskId);
 
     return (
       <Block
@@ -74,11 +69,7 @@ const BriefCard = memo<BriefCardProps>(
           className={canNavigate ? styles.clickableHeader : undefined}
           gap={16}
           justify={'space-between'}
-          onClick={
-            canNavigate
-              ? () => navigate(`/agent/${targetAgentId}/tasks/${brief.taskId}`)
-              : undefined
-          }
+          onClick={canNavigate ? () => navigate(`/task/${brief.taskId}`) : undefined}
         >
           <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
             <BriefIcon type={brief.type} />

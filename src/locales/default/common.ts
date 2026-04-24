@@ -188,6 +188,8 @@ export default {
 
   'cmdk.keywords.submitIssue': 'issue bug problem feedback',
 
+  'cmdk.keywords.tasks': 'tasks todo agent kanban',
+
   'cmdk.keywords.usage': 'usage statistics consumption quota',
 
   'cmdk.keywords.video': 'video,generate,seedance,kling',
@@ -268,6 +270,7 @@ export default {
   'cmdk.settings': 'Settings',
   'cmdk.starOnGitHub': 'Star us on GitHub',
   'cmdk.submitIssue': 'Submit Issue',
+  'cmdk.tasks': 'Tasks',
   'cmdk.theme': 'Theme',
   'cmdk.themeAuto': 'Auto',
   'cmdk.themeCurrent': 'Current',
@@ -513,6 +516,7 @@ export default {
   'tab.resource': 'Resources',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
+  'tab.tasks': 'Tasks',
   'tab.video': 'Video',
   'telemetry.allow': 'Allow',
   'telemetry.deny': 'Deny',

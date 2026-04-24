@@ -21,7 +21,7 @@ interface PriorityMeta {
   level: number;
 }
 
-const PRIORITY_META: Record<number, PriorityMeta> = {
+export const PRIORITY_META: Record<number, PriorityMeta> = {
   0: { icon: PriorityNoneIcon, labelKey: 'priority.none', level: 0 },
   1: { icon: PriorityUrgentIcon, labelKey: 'priority.urgent', level: 1 },
   2: { icon: PriorityHighIcon, labelKey: 'priority.high', level: 2 },

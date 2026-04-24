@@ -598,6 +598,25 @@ export const desktopRoutes: RouteObject[] = [
         path: 'tasks',
       },
 
+      // Task detail route (cross-agent entry — resolves by task identifier)
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/task/[taskId]'),
+              'Desktop > Task Detail',
+            ),
+            path: ':taskId',
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/task/_layout'),
+          'Desktop > Task > Layout',
+        ),
+        errorElement: <ErrorBoundary resetPath="/tasks" />,
+        path: 'task',
+      },
+
       // Pages routes
       {
         children: [

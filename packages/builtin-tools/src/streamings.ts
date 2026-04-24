@@ -11,6 +11,10 @@ import {
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
 import {
+  ClaudeCodeIdentifier,
+  ClaudeCodeStreamings,
+} from '@lobechat/builtin-tool-claude-code/client';
+import {
   CloudSandboxManifest,
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
@@ -47,6 +51,7 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
     string,
     BuiltinStreaming
   >,
+  [ClaudeCodeIdentifier]: ClaudeCodeStreamings as Record<string, BuiltinStreaming>,
   [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
     string,

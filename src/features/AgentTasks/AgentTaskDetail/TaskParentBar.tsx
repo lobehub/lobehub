@@ -29,7 +29,6 @@ const TaskParentBar = memo(() => {
   const { t } = useTranslation('chat');
   const navigate = useNavigate();
   const parent = useTaskStore(taskDetailSelectors.activeTaskParent);
-  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const currentIdentifier = useTaskStore(taskDetailSelectors.activeTaskDetail)?.identifier;
 
   const [parentSubtasks, setParentSubtasks] = useState<TaskDetailSubtask[]>([]);
@@ -63,9 +62,7 @@ const TaskParentBar = memo(() => {
         icon={<TaskStatusIcon size={16} status={parentStatus} />}
         size={'small'}
         type={'text'}
-        onClick={() => {
-          if (agentId) navigate(`/agent/${agentId}/tasks/${parent.identifier}`);
-        }}
+        onClick={() => navigate(`/task/${parent.identifier}`)}
       >
         <Text weight={500}>{parent.name}</Text>
       </Button>
@@ -73,9 +70,7 @@ const TaskParentBar = memo(() => {
         <TaskSubtaskProgressTag
           currentIdentifier={currentIdentifier}
           subtasks={parentSubtasks}
-          onSubtaskClick={(identifier) => {
-            if (agentId) navigate(`/agent/${agentId}/tasks/${identifier}`);
-          }}
+          onSubtaskClick={(identifier) => navigate(`/task/${identifier}`)}
         />
       )}
     </Flexbox>

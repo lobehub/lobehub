@@ -395,7 +395,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
         return (
           sanitized || (
             <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
-              基于 Claude Thinking 机制限制，开启后将自动禁用历史消息数限制
+              开启后模型会先进行推理，适合复杂问题。
             </Trans>
           )
         );

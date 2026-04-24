@@ -50,13 +50,22 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
     createTaskModal({
       agentId,
       onCreated: (task) => {
-        const targetAgentId = task.agentId || agentId;
-        if (targetAgentId) {
-          navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
+        if (agentId) {
+          const targetAgentId = task.agentId || agentId;
+          if (targetAgentId) {
+            navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
+            return;
+          }
         }
+
+        navigate(`/task/${task.identifier}`);
       },
     });
   }, [agentId, navigate]);
+
+  const handleShowHiddenCompleted = useCallback(() => {
+    setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
+  }, [setViewOptions]);
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -77,8 +86,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         }
         styles={{
           left: {
-            paddingLeft: 4,
             gap: 8,
+            paddingLeft: 4,
           },
         }}
       />
@@ -93,7 +102,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
           {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} />}
-          <TaskList options={viewOptions} />
+          <TaskList options={viewOptions} onShowHiddenCompleted={handleShowHiddenCompleted} />
         </WideScreenContainer>
       )}
     </Flexbox>

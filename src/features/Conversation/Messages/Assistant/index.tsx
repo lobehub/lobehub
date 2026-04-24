@@ -110,7 +110,7 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
               messageId={id}
             />
           )}
-          {actionBarHolder}
+          {!disableEditing && actionBarHolder}
         </>
       }
       error={

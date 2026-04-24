@@ -40,7 +40,7 @@ const Nav = memo(() => {
   const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
     if (agentId) {
-      // If in agent sub-route, navigate back to agent chat first
+      // If in agent sub-route, navigate back to agent chat first.
       if (isProfileActive || isChannelActive || isTasksActive) {
         router.push(urlJoin('/agent', agentId));
       } else {

@@ -1,19 +1,23 @@
 import type { TaskDetailActivity } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Block,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { MessagesSquare } from 'lucide-react';
+import { CalendarDays, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
 
-const TOPIC_STATUS_COLOR: Record<string, string> = {
-  canceled: cssVar.colorTextSecondary,
-  completed: cssVar.colorSuccess,
-  failed: cssVar.colorError,
-  running: cssVar.colorInfo,
-  timeout: cssVar.colorWarning,
-};
+import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
   const seconds = Math.floor(ms / 1000);
@@ -29,6 +33,7 @@ interface TopicCardProps {
 }
 
 const TopicCard = memo<TopicCardProps>(({ activity }) => {
+  const { t } = useTranslation('chat');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const isRunning = activity.status === 'running';
 
@@ -44,16 +49,32 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     return () => clearInterval(interval);
   }, [isRunning, activity.time]);
 
-  const handleClick = useCallback(() => {
+  const handleOpen = useCallback(() => {
     if (activity.id) openTopicDrawer(activity.id);
   }, [activity.id, openTopicDrawer]);
 
-  const statusColor = TOPIC_STATUS_COLOR[activity.status ?? ''] ?? cssVar.colorTextQuaternary;
-  const timeDisplay = isRunning
-    ? formatDuration(elapsed)
-    : activity.time
-      ? dayjs(activity.time).fromNow()
-      : '';
+  const handleCopyId = useCallback(() => {
+    if (activity.id) void navigator.clipboard.writeText(activity.id);
+  }, [activity.id]);
+
+  const startedAt = activity.time ? dayjs(activity.time).fromNow() : '';
+  const durationText = isRunning ? formatDuration(elapsed) : '';
+
+  const menuItems: DropdownItem[] = [
+    {
+      icon: ExternalLink,
+      key: 'open',
+      label: t('taskDetail.topicMenu.open', { defaultValue: 'Open run' }),
+      onClick: handleOpen,
+    },
+    {
+      disabled: !activity.id,
+      icon: Copy,
+      key: 'copy',
+      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy run ID' }),
+      onClick: handleCopyId,
+    },
+  ];
 
   return (
     <Block
@@ -62,27 +83,52 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       padding={12}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
-      onClick={activity.id ? handleClick : undefined}
+      onClick={activity.id ? handleOpen : undefined}
     >
-      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-        <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
-          <Icon color={cssVar.colorTextDescription} icon={MessagesSquare} size={16} />
+      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <TopicStatusIcon size={16} status={activity.status} />
           <Text ellipsis weight={500}>
             {activity.title}
           </Text>
           {activity.seq != null && (
-            <Text fontSize={12} type={'secondary'}>
+            <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
               #{activity.seq}
             </Text>
           )}
+          {durationText && (
+            <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
+              · {durationText}
+            </Text>
+          )}
         </Flexbox>
+
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-          <Tag size={'small'} style={{ color: statusColor }}>
-            {activity.status ?? 'unknown'}
-          </Tag>
-          <Text fontSize={12} type={'secondary'}>
-            {timeDisplay}
-          </Text>
+          {activity.author && (
+            <Flexbox horizontal align={'center'} gap={6}>
+              {activity.author.avatar && <Avatar avatar={activity.author.avatar} size={20} />}
+              <Text fontSize={12} type={'secondary'}>
+                {activity.author.name}
+              </Text>
+            </Flexbox>
+          )}
+          {startedAt && (
+            <Flexbox horizontal align={'center'} gap={4}>
+              <Icon color={cssVar.colorTextTertiary} icon={CalendarDays} size={12} />
+              <Text fontSize={12} type={'secondary'}>
+                {startedAt}
+              </Text>
+            </Flexbox>
+          )}
+          <DropdownMenu items={menuItems}>
+            <ActionIcon
+              icon={MoreHorizontal}
+              size={'small'}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            />
+          </DropdownMenu>
         </Flexbox>
       </Flexbox>
 
@@ -90,15 +136,6 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         <Text fontSize={13} style={{ color: cssVar.colorTextSecondary, whiteSpace: 'pre-wrap' }}>
           {activity.summary}
         </Text>
-      )}
-
-      {activity.author && (
-        <Flexbox horizontal align={'center'} gap={6}>
-          {activity.author.avatar && <Avatar avatar={activity.author.avatar} size={20} />}
-          <Text fontSize={12} type={'secondary'}>
-            {activity.author.name}
-          </Text>
-        </Flexbox>
       )}
     </Block>
   );

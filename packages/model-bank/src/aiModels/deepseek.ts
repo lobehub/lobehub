@@ -25,7 +25,13 @@ const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['thinking', 'deepseekV4ReasoningEffort'],
+      extendParamOptions: {
+        enableReasoning: {
+          defaultValue: true,
+          includeBudget: false,
+        },
+      },
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -52,7 +58,13 @@ const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['thinking', 'deepseekV4ReasoningEffort'],
+      extendParamOptions: {
+        enableReasoning: {
+          defaultValue: true,
+          includeBudget: false,
+        },
+      },
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -68,7 +80,6 @@ const deepseekChatModels: AIChatModelCard[] = [
     description:
       'Compatibility alias for DeepSeek V4 Flash non-thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
     displayName: 'DeepSeek V3.2 (routes to V4 Flash)',
-    enabled: true,
     id: 'deepseek-chat',
     legacy: true,
     maxOutput: 384_000,
@@ -94,7 +105,6 @@ const deepseekChatModels: AIChatModelCard[] = [
     description:
       'Compatibility alias for DeepSeek V4 Flash thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
     displayName: 'DeepSeek V3.2 Thinking (routes to V4 Flash)',
-    enabled: true,
     id: 'deepseek-reasoner',
     legacy: true,
     maxOutput: 384_000,
