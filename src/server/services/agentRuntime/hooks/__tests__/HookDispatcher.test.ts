@@ -762,4 +762,109 @@ describe('HookDispatcher', () => {
       );
     });
   });
+
+  describe('hooks safety guarantees', () => {
+    it('all observation hooks should not affect execution flow (handler errors are swallowed)', async () => {
+      const observationTypes = [
+        'afterToolCall',
+        'onToolCallError',
+        'beforeCompact',
+        'afterCompact',
+        'onCompactError',
+        'beforeHumanIntervention',
+        'afterHumanIntervention',
+        'onStopByHumanIntervention',
+        'beforeCallAgent',
+        'afterCallAgent',
+        'onCallAgentError',
+      ] as const;
+
+      for (const type of observationTypes) {
+        const throwingHandler = vi.fn().mockRejectedValue(new Error(`${type} hook crashed`));
+        dispatcher.register(operationId, [{ handler: throwingHandler, id: `crash-${type}`, type }]);
+
+        // Should never throw — errors are swallowed
+        await expect(
+          dispatcher.dispatch(operationId, type, makeEvent(), undefined),
+        ).resolves.toBeUndefined();
+      }
+    });
+
+    it('dispatchBeforeToolCall should only work in local mode (in-memory hooks)', async () => {
+      // Register a mock hook
+      dispatcher.register(operationId, [
+        {
+          handler: async (event: any) => {
+            event.mock({ content: '{"mocked":true}' });
+          },
+          id: 'mock-hook',
+          type: 'beforeToolCall',
+        },
+      ]);
+
+      // Local mode: mock works
+      const localResult = await dispatcher.dispatchBeforeToolCall(operationId, {
+        apiName: 'search',
+        args: {},
+        callIndex: 1,
+        identifier: 'twitter',
+        stepIndex: 0,
+      });
+      expect(localResult).toEqual({ content: '{"mocked":true}' });
+
+      // dispatchBeforeToolCall does NOT use serializedHooks — it only reads
+      // from this.hooks (in-memory). In QStash mode where a different worker
+      // executes the step, this.hooks would be empty, so mock cannot fire.
+      // This is by design — mock is local-only.
+      const otherDispatcher = new HookDispatcher();
+      const remoteResult = await otherDispatcher.dispatchBeforeToolCall(operationId, {
+        apiName: 'search',
+        args: {},
+        callIndex: 1,
+        identifier: 'twitter',
+        stepIndex: 0,
+      });
+      expect(remoteResult).toBeNull(); // No hooks registered → no mock
+    });
+
+    it('observation hooks should work in production mode via serializedHooks', async () => {
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+
+      dispatcher.register(operationId, [
+        {
+          handler: vi.fn(),
+          id: 'tool-webhook',
+          type: 'afterToolCall',
+          webhook: { url: 'https://example.com/afterToolCall' },
+        },
+      ]);
+
+      const serialized = dispatcher.getSerializedHooks(operationId);
+
+      await dispatcher.dispatch(
+        operationId,
+        'afterToolCall',
+        {
+          apiName: 'search',
+          args: {},
+          callIndex: 1,
+          content: 'result',
+          executionTimeMs: 100,
+          identifier: 'twitter',
+          mocked: false,
+          operationId,
+          stepIndex: 0,
+          success: true,
+          userId: 'user_test',
+        },
+        serialized,
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://example.com/afterToolCall',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
 });

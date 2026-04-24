@@ -117,6 +117,20 @@ export interface ToolCallHookEvent {
   stepIndex: number;
 }
 
+/**
+ * Event payload for beforeToolCall observation dispatch (webhook/logging).
+ * Same fields as ToolCallHookEvent but without mock() — used for production webhook delivery.
+ */
+export interface BeforeToolCallObservationEvent {
+  apiName: string;
+  args: Record<string, any>;
+  callIndex: number;
+  identifier: string;
+  operationId: string;
+  stepIndex: number;
+  userId?: string;
+}
+
 export interface AfterToolCallHookEvent {
   apiName: string;
   args: Record<string, any>;
@@ -225,6 +239,7 @@ export type AnyHookEvent =
   | BeforeCallAgentHookEvent
   | BeforeCompactHookEvent
   | BeforeHumanInterventionHookEvent
+  | BeforeToolCallObservationEvent
   | CallAgentErrorHookEvent
   | CompactErrorHookEvent
   | StopByHumanInterventionHookEvent

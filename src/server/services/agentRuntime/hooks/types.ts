@@ -18,6 +18,7 @@ export type {
   BeforeCallAgentHookEvent,
   BeforeCompactHookEvent,
   BeforeHumanInterventionHookEvent,
+  BeforeToolCallObservationEvent,
   CallAgentErrorHookEvent,
   CompactErrorHookEvent,
   StopByHumanInterventionHookEvent,

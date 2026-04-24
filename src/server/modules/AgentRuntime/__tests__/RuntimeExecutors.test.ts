@@ -3587,6 +3587,7 @@ describe('RuntimeExecutors', () => {
             mocked: false,
             success: true,
           }),
+          undefined,
         );
       });
 
@@ -3609,6 +3610,7 @@ describe('RuntimeExecutors', () => {
           'op-123',
           'afterToolCall',
           expect.objectContaining({ mocked: true, success: true }),
+          undefined,
         );
 
         // Tool message should be persisted with mock content
@@ -3641,10 +3643,11 @@ describe('RuntimeExecutors', () => {
             error: 'Connection refused',
             identifier: 'twitter',
           }),
+          undefined,
         );
       });
 
-      it('should increment callIndex across multiple calls', async () => {
+      it('should derive callIndex from state.usage.tools.byTool', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
@@ -3652,18 +3655,30 @@ describe('RuntimeExecutors', () => {
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
         const executors = createRuntimeExecutors(ctxWithHooks);
-        const state = createToolState();
 
-        await executors.call_tool!(createToolInstruction(), state);
-        await executors.call_tool!(createToolInstruction(), state);
+        // First call: no prior usage → callIndex = 1
+        const state1 = createToolState();
+        await executors.call_tool!(createToolInstruction(), state1);
 
-        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenNthCalledWith(
-          1,
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({ callIndex: 1 }),
         );
-        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenNthCalledWith(
-          2,
+
+        // Second call: state reflects 1 prior call → callIndex = 2
+        const state2 = createToolState({
+          usage: {
+            ...createMockUsage(),
+            tools: {
+              ...createMockUsage().tools,
+              byTool: [{ calls: 1, errors: 0, name: 'twitter/search_tweets', totalTimeMs: 100 }],
+              totalCalls: 1,
+            },
+          },
+        });
+        await executors.call_tool!(createToolInstruction(), state2);
+
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenLastCalledWith(
           'op-123',
           expect.objectContaining({ callIndex: 2 }),
         );
@@ -3711,6 +3726,7 @@ describe('RuntimeExecutors', () => {
           'op-123',
           'beforeCompact',
           expect.objectContaining({ tokenCount: 5000 }),
+          undefined,
         );
       });
     });
@@ -3751,6 +3767,7 @@ describe('RuntimeExecutors', () => {
           expect.objectContaining({
             pendingTools: [{ apiName: 'post_tweet', identifier: 'twitter' }],
           }),
+          undefined, // serializedHooks from state.metadata._hooks
         );
       });
     });

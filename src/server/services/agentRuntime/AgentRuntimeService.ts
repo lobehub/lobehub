@@ -1603,12 +1603,17 @@ export class AgentRuntimeService {
 
       // Dispatch afterHumanIntervention hook (approved)
       hookDispatcher
-        .dispatch(state.metadata?.operationId ?? '', 'afterHumanIntervention', {
-          action: 'approve',
-          operationId: state.metadata?.operationId ?? '',
-          toolCallId: approvedToolCall.id,
-          userId: state.metadata?.userId || '',
-        })
+        .dispatch(
+          state.metadata?.operationId ?? '',
+          'afterHumanIntervention',
+          {
+            action: 'approve',
+            operationId: state.metadata?.operationId ?? '',
+            toolCallId: approvedToolCall.id,
+            userId: state.metadata?.userId || '',
+          },
+          state.metadata?._hooks,
+        )
         .catch(() => {});
 
       const nextContext: AgentRuntimeContext = {
@@ -1669,13 +1674,18 @@ export class AgentRuntimeService {
 
         // Dispatch afterHumanIntervention hook (rejectAndContinue)
         hookDispatcher
-          .dispatch(state.metadata?.operationId ?? '', 'afterHumanIntervention', {
-            action: 'rejectAndContinue',
-            operationId: state.metadata?.operationId ?? '',
-            rejectionReason,
-            toolCallId: rejectedToolCallId,
-            userId: state.metadata?.userId || '',
-          })
+          .dispatch(
+            state.metadata?.operationId ?? '',
+            'afterHumanIntervention',
+            {
+              action: 'rejectAndContinue',
+              operationId: state.metadata?.operationId ?? '',
+              rejectionReason,
+              toolCallId: rejectedToolCallId,
+              userId: state.metadata?.userId || '',
+            },
+            state.metadata?._hooks,
+          )
           .catch(() => {});
 
         if (newState.pendingToolsCalling.length > 0) {
@@ -1692,12 +1702,17 @@ export class AgentRuntimeService {
 
       // Dispatch onStopByHumanIntervention hook
       hookDispatcher
-        .dispatch(state.metadata?.operationId ?? '', 'onStopByHumanIntervention', {
-          operationId: state.metadata?.operationId ?? '',
-          rejectionReason,
-          toolCallId: rejectedToolCallId,
-          userId: state.metadata?.userId || '',
-        })
+        .dispatch(
+          state.metadata?.operationId ?? '',
+          'onStopByHumanIntervention',
+          {
+            operationId: state.metadata?.operationId ?? '',
+            rejectionReason,
+            toolCallId: rejectedToolCallId,
+            userId: state.metadata?.userId || '',
+          },
+          state.metadata?._hooks,
+        )
         .catch(() => {});
 
       newState.status = 'interrupted';
