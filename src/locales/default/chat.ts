@@ -90,7 +90,7 @@ export default {
     'Let Claude dynamically decide when and how much to think with adaptive thinking mode.',
   'extendParams.enableAdaptiveThinking.title': 'Enable Adaptive Thinking',
   'extendParams.enableReasoning.desc':
-    'Based on the Claude Thinking mechanism limit. <1>Learn more</1>',
+    'Let the model reason before answering. Use it for complex tasks.',
   'extendParams.enableReasoning.title': 'Enable Deep Thinking',
   'extendParams.imageAspectRatio.title': 'Image Aspect Ratio',
   'extendParams.imageResolution.title': 'Image Resolution',

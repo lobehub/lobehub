@@ -123,7 +123,7 @@
   "extendParams.effort.title": "努力程度",
   "extendParams.enableAdaptiveThinking.desc": "启用自适应思维模式，让 Claude 动态决定思考的时机和深度。",
   "extendParams.enableAdaptiveThinking.title": "启用自适应思维",
-  "extendParams.enableReasoning.desc": "基于Claude推理机制的限制。<1>了解更多</1>",
+  "extendParams.enableReasoning.desc": "开启后模型会先进行推理，适合复杂问题。",
   "extendParams.enableReasoning.title": "开启深度思考",
   "extendParams.imageAspectRatio.title": "图片宽高比",
   "extendParams.imageResolution.title": "图片分辨率",
