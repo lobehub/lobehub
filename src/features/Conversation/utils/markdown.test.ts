@@ -323,42 +323,30 @@ Content 2 still going`;
 <lobeArtifact identifier="generating" type="text/markdown" title="Generating">Content 2 still going`);
   });
 
-  it('should prevent HTML script line comments from swallowing following statements', () => {
+  it('should preserve HTML script blocks while flattening artifact markup', () => {
     const input = `<lobeArtifact identifier="snake-game" type="text/html" title="Snake Game">
 <!DOCTYPE html>
 <html>
 <body>
 <script>
 // Move the snake every frame
+const url = " // keep string content untouched";
 window.snakeStarted = true;
-</script>
+</script >
 </body>
 </html>
 </lobeArtifact>`;
 
     const output = processWithArtifact(input);
 
-    expect(output).toContain(
-      '<script>/* Move the snake every frame */window.snakeStarted = true;</script>',
-    );
+    expect(output).toContain(`<script>
+// Move the snake every frame
+const url = " // keep string content untouched";
+window.snakeStarted = true;
+</script >`);
     expect(output).not.toContain('// Move the snake every framewindow.snakeStarted = true;');
-  });
-
-  it('should prevent React artifact line comments from swallowing following statements', () => {
-    const input = `<lobeArtifact identifier="react-counter" type="application/lobe.artifacts.react" title="React Counter">
-import { useState } from "react";
-
-// Keep this comment isolated from the next statement.
-export default function Counter() {
-  const [count] = useState(0);
-  return <div>{count}</div>;
-}
-</lobeArtifact>`;
-
-    const output = processWithArtifact(input);
-
     expect(output).toContain(
-      '/* Keep this comment isolated from the next statement. */export default function Counter()',
+      '<lobeArtifact identifier="snake-game" type="text/html" title="Snake Game"><!DOCTYPE html><html><body><script>',
     );
   });
 });

@@ -2,23 +2,21 @@ import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 
 const ARTIFACT_TAG_REGEX_GLOBAL =
   /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
-const HTML_SCRIPT_TAG_REGEX = /<script\b[^>]*>[\S\s]*?<\/script>/gi;
-const REACT_ARTIFACT_TYPE_REGEX = /type="application\/lobe\.artifacts\.react"/;
-const JS_LINE_COMMENT_REGEX = /(^|[^\S\r\n])\/\/([^\r\n]*)/gm;
-
-const normalizeJsLineComments = (code: string) =>
-  code.replaceAll(JS_LINE_COMMENT_REGEX, (_, prefix: string, comment: string) => {
-    return `${prefix}/*${comment.replaceAll('*/', '* /').trimEnd()} */`;
-  });
+const HTML_SCRIPT_TAG_REGEX = /<script\b[^>]*>[\S\s]*?<\/script\s*>/gi;
+const SCRIPT_PLACEHOLDER_PREFIX = '____LOBE_ARTIFACT_SCRIPT_BLOCK_';
 
 const removeArtifactLineBreaks = (content: string) => {
-  // Artifact cards still rely on flattened tags for Markdown parsing, but flattening JS after
-  // `//` comments comments out the following statement. Convert those comments first.
-  const safeContent = REACT_ARTIFACT_TYPE_REGEX.test(content)
-    ? normalizeJsLineComments(content)
-    : content.replaceAll(HTML_SCRIPT_TAG_REGEX, normalizeJsLineComments);
+  const scripts: string[] = [];
+  const contentWithoutScripts = content.replaceAll(HTML_SCRIPT_TAG_REGEX, (script) => {
+    const index = scripts.length;
+    scripts.push(script);
+    return `${SCRIPT_PLACEHOLDER_PREFIX}${index}____`;
+  });
 
-  return safeContent.replaceAll(/\r?\n|\r/g, '');
+  return scripts.reduce(
+    (result, script, index) => result.replace(`${SCRIPT_PLACEHOLDER_PREFIX}${index}____`, script),
+    contentWithoutScripts.replaceAll(/\r?\n|\r/g, ''),
+  );
 };
 
 /**
