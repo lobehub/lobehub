@@ -1,4 +1,4 @@
-import { Buffer } from 'buffer/';
+import { Buffer } from 'buffer.js';
 import { z } from 'zod';
 
 const unstableCacheFileSchema = z.object({

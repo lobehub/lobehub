@@ -758,6 +758,100 @@ describe('DataSlice', () => {
         );
       });
     });
+
+    it('should preserve newer local message state when fetched data is stale', async () => {
+      const localError = {
+        body: { message: 'Codex CLI was not found' },
+        message: 'Codex CLI was not found',
+        type: 'AgentRuntimeError',
+      } as any;
+
+      vi.mocked(messageService.getMessages).mockResolvedValue([
+        {
+          id: 'msg-1',
+          content: '',
+          role: 'assistant',
+          createdAt: 1000,
+          updatedAt: 1000,
+        },
+      ]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+
+      store.setState({
+        dbMessages: [
+          {
+            id: 'msg-1',
+            content: '',
+            error: localError,
+            role: 'assistant',
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+        ],
+      } as any);
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages[0].error).toEqual(localError);
+        expect(store.getState().dbMessages[0].updatedAt).toBe(2000);
+      });
+    });
+
+    it('should accept fetched message state when server data is newer', async () => {
+      vi.mocked(messageService.getMessages).mockResolvedValue([
+        {
+          id: 'msg-1',
+          content: '',
+          error: {
+            body: { message: 'Persisted error' },
+            message: 'Persisted error',
+            type: 'AgentRuntimeError',
+          } as any,
+          role: 'assistant',
+          createdAt: 1000,
+          updatedAt: 3000,
+        },
+      ]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+
+      store.setState({
+        dbMessages: [
+          {
+            id: 'msg-1',
+            content: '',
+            role: 'assistant',
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+        ],
+      } as any);
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages[0].error).toEqual({
+          body: { message: 'Persisted error' },
+          message: 'Persisted error',
+          type: 'AgentRuntimeError',
+        });
+        expect(store.getState().dbMessages[0].updatedAt).toBe(3000);
+      });
+    });
   });
 
   describe('switchMessageBranch', () => {

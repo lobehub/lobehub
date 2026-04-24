@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { calculateConversationSpacerHeight, CONVERSATION_SPACER_ID } from './useConversationSpacer';
+import {
+  calculateConversationSpacerHeight,
+  CONVERSATION_SPACER_ID,
+  getConversationSpacerScrollEffect,
+} from './useConversationSpacer';
 
 describe('useConversationSpacer helpers', () => {
   it('should calculate the remaining spacer height behind the latest assistant message', () => {
@@ -13,5 +17,33 @@ describe('useConversationSpacer helpers', () => {
 
   it('should keep the reserved spacer id stable', () => {
     expect(CONVERSATION_SPACER_ID).toBe('__conversation_spacer__');
+  });
+
+  it('should cancel pin retries without shrinking the spacer while AI is still streaming', () => {
+    expect(
+      getConversationSpacerScrollEffect({
+        delta: -24,
+        hasPrevOffset: true,
+        isAIGenerating: true,
+        isMounted: true,
+      }),
+    ).toEqual({
+      cancelPin: true,
+      shrinkSpacer: false,
+    });
+  });
+
+  it('should both cancel pin retries and shrink the spacer after streaming stops', () => {
+    expect(
+      getConversationSpacerScrollEffect({
+        delta: -24,
+        hasPrevOffset: true,
+        isAIGenerating: false,
+        isMounted: true,
+      }),
+    ).toEqual({
+      cancelPin: true,
+      shrinkSpacer: true,
+    });
   });
 });

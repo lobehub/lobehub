@@ -1,5 +1,11 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
+import {
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  CODEX_CLI_INSTALL_DOCS_URL,
+  type HeterogeneousAgentSessionError,
+  HeterogeneousAgentSessionErrorCode,
+} from '@lobechat/electron-client-ipc';
 import type {
   HeterogeneousAgentEvent,
   SubagentEventContext,
@@ -7,16 +13,18 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import type {
+  ChatMessageError,
   ChatToolPayload,
   ConversationContext,
   HeterogeneousProviderConfig,
   MessageMapScope,
   UIChatMessage,
 } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ThreadStatus, ThreadType } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
+import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
@@ -46,6 +54,127 @@ const notifyCompletion = async (title: string, body: string) => {
   }
 };
 
+const CLI_AUTH_REQUIRED_PATTERNS = [
+  /failed to authenticate/i,
+  /invalid authentication credentials/i,
+  /authentication[_ ]error/i,
+  /not authenticated/i,
+  /\bunauthorized\b/i,
+  /\b401\b/,
+] as const;
+
+const buildCliAuthRequiredSessionError = (
+  agentType: 'claude-code' | 'codex',
+  rawMessage: string,
+): HeterogeneousAgentSessionError => ({
+  agentType,
+  code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+  docsUrl:
+    agentType === 'claude-code' ? CLAUDE_CODE_CLI_INSTALL_DOCS_URL : CODEX_CLI_INSTALL_DOCS_URL,
+  message:
+    agentType === 'claude-code'
+      ? 'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.'
+      : 'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
+  stderr: rawMessage,
+});
+
+const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
+
+const maybeClassifyCliAuthRequiredError = (
+  error: unknown,
+  agentType?: string,
+): HeterogeneousAgentSessionError | undefined => {
+  if (agentType !== 'claude-code' && agentType !== 'codex') return;
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : typeof error === 'object' &&
+            error &&
+            'message' in error &&
+            typeof error.message === 'string'
+          ? error.message
+          : undefined;
+
+  if (!message || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(message))) return;
+
+  return buildCliAuthRequiredSessionError(agentType, message);
+};
+
+const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageError): boolean => {
+  const errorBody = error.body as
+    | (HeterogeneousAgentSessionError & { clearEchoedContent?: boolean })
+    | undefined;
+  if (
+    !errorBody?.clearEchoedContent &&
+    errorBody?.code !== HeterogeneousAgentSessionErrorCode.AuthRequired
+  ) {
+    return false;
+  }
+
+  const normalizedContent = normalizeErrorText(content);
+  const normalizedRawError = normalizeErrorText(
+    errorBody?.stderr || errorBody?.message || error.message,
+  );
+
+  return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
+};
+
+const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError => {
+  const authRequiredError = maybeClassifyCliAuthRequiredError(error, agentType);
+  if (authRequiredError) {
+    return {
+      body: authRequiredError,
+      message: authRequiredError.message,
+      type: AgentRuntimeErrorType.AgentRuntimeError,
+    };
+  }
+
+  if (
+    typeof error === 'object' &&
+    error &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    ('agentType' in error || 'code' in error || 'docsUrl' in error || 'installCommands' in error)
+  ) {
+    return {
+      body: error as HeterogeneousAgentSessionError,
+      message: error.message,
+      type: AgentRuntimeErrorType.AgentRuntimeError,
+    };
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'Agent execution failed';
+
+  return {
+    body: { message },
+    message,
+    type: AgentRuntimeErrorType.AgentRuntimeError,
+  };
+};
+
+const isRecoverableResumeError = (
+  error: unknown,
+): error is HeterogeneousAgentSessionError & {
+  code:
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound;
+} => {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+
+  return (
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch ||
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound
+  );
+};
+
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
   context: ConversationContext;
@@ -63,6 +192,7 @@ export interface HeterogeneousAgentExecutorParams {
  * Map heterogeneousProvider.command to adapter type key.
  */
 const resolveAdapterType = (config: HeterogeneousProviderConfig): string => {
+  if (config.type) return config.type;
   // Explicit adapterType in config takes priority
   if ((config as any).adapterType) return (config as any).adapterType;
 
@@ -94,7 +224,7 @@ const subscribeBroadcasts = (
   sessionId: string,
   callbacks: {
     onComplete: () => void;
-    onError: (error: string) => void;
+    onError: (error: HeterogeneousAgentSessionError | string) => void;
     onRawLine: (line: any) => void;
   },
 ): (() => void) => {
@@ -108,7 +238,10 @@ const subscribeBroadcasts = (
   const onComplete = (_e: any, data: { sessionId: string }) => {
     if (data.sessionId === sessionId) callbacks.onComplete();
   };
-  const onError = (_e: any, data: { error: string; sessionId: string }) => {
+  const onError = (
+    _e: any,
+    data: { error: HeterogeneousAgentSessionError | string; sessionId: string },
+  ) => {
     if (data.sessionId === sessionId) callbacks.onError(data.error);
   };
 
@@ -915,10 +1048,59 @@ export const executeHeterogeneousAgent = async (
     context,
     operationId,
   });
+  const persistTerminalError = async (
+    messageError: ChatMessageError,
+    options?: { clearContent?: boolean },
+  ) => {
+    get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+    get().completeOperation(operationId);
+
+    if (options?.clearContent) {
+      await messageService
+        .updateMessage(
+          currentAssistantMessageId,
+          { content: '' },
+          {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          },
+        )
+        .catch(console.error);
+    }
+
+    const updateResult = await messageService
+      .updateMessageError(currentAssistantMessageId, messageError, {
+        agentId: context.agentId,
+        groupId: context.groupId,
+        threadId: context.threadId,
+        topicId: context.topicId,
+      })
+      .catch(console.error);
+
+    if (updateResult?.success && updateResult.messages) {
+      get().replaceMessages(updateResult.messages, { context });
+    } else {
+      await get().refreshMessages().catch(console.error);
+    }
+
+    get().internal_dispatchMessage(
+      {
+        id: currentAssistantMessageId,
+        type: 'updateMessage',
+        value: {
+          ...(options?.clearContent ? { content: '' } : {}),
+          error: messageError,
+        },
+      },
+      { operationId },
+    );
+  };
 
   let agentSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
   let completed = false;
+  let fallbackPromise: Promise<void> | undefined;
+  let resumeFallbackTriggered = false;
 
   // Track state for DB persistence (main-agent scope)
   const toolState: ToolPersistenceState = {
@@ -976,6 +1158,41 @@ export const executeHeterogeneousAgent = async (
   // (cleaned up already) or missing in a test stub, treat as not-aborted.
   const abortSignal = get().operations?.[operationId]?.abortController?.signal;
   const isAborted = () => !!abortSignal?.aborted;
+  const updateTopicMetadata = get().updateTopicMetadata;
+  const hasStreamedState = () =>
+    !!accumulatedContent ||
+    !!accumulatedReasoning ||
+    toolState.payloads.length > 0 ||
+    toolMsgIdByCallId.size > 0 ||
+    subagentRuns.size > 0;
+  const clearStaleResumeMetadata = async () => {
+    if (!context.topicId || !updateTopicMetadata) return;
+
+    await updateTopicMetadata(context.topicId, {
+      heteroSessionId: undefined,
+      workingDirectory: workingDirectory ?? '',
+    });
+  };
+  const retryWithoutResume = (error: unknown): boolean => {
+    if (
+      resumeFallbackTriggered ||
+      !resumeSessionId ||
+      !isRecoverableResumeError(error) ||
+      hasStreamedState()
+    ) {
+      return false;
+    }
+
+    resumeFallbackTriggered = true;
+    completed = true;
+    fallbackPromise = (async () => {
+      await clearStaleResumeMetadata().catch(console.error);
+      antdMessage?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
+      await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined });
+    })();
+
+    return true;
+  };
 
   /**
    * Invoked by `ensureSubagentRun` once per lazy Thread creation so the
@@ -1068,7 +1285,7 @@ export const executeHeterogeneousAgent = async (
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: heterogeneousProvider.args,
-      command: heterogeneousProvider.command || 'claude',
+      command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
       cwd: workingDirectory,
       env: heterogeneousProvider.env,
       resumeSessionId,
@@ -1454,8 +1671,17 @@ export const executeHeterogeneousAgent = async (
         // Persist final content + reasoning + model for the last step BEFORE the
         // terminal event triggers fetchAndReplaceMessages. Usage for this step
         // was already written per-turn via the turn_metadata branch.
+        const terminalMessageError =
+          deferredTerminalEvent?.type === 'error'
+            ? toHeterogeneousAgentMessageError(deferredTerminalEvent.data, adapterType)
+            : undefined;
+        const shouldClearTerminalErrorContent =
+          !!terminalMessageError &&
+          shouldSuppressTerminalErrorEcho(accumulatedContent, terminalMessageError);
         const updateValue: Record<string, any> = {};
-        if (accumulatedContent) updateValue.content = accumulatedContent;
+        if (accumulatedContent && !shouldClearTerminalErrorContent) {
+          updateValue.content = accumulatedContent;
+        }
         if (accumulatedReasoning) updateValue.reasoning = { content: accumulatedReasoning };
         if (lastModel) updateValue.model = lastModel;
         if (lastProvider) updateValue.provider = lastProvider;
@@ -1469,15 +1695,21 @@ export const executeHeterogeneousAgent = async (
             .catch(console.error);
         }
 
-        // NOW forward the deferred terminal event — handler will fetchAndReplaceMessages
-        // and pick up the final persisted state.
-        const terminal = deferredTerminalEvent ?? {
-          data: {},
-          stepIndex: 0,
-          timestamp: Date.now(),
-          type: 'agent_runtime_end' as const,
-        };
-        eventHandler(toStreamEvent(terminal, operationId));
+        if (terminalMessageError) {
+          await persistTerminalError(terminalMessageError, {
+            clearContent: shouldClearTerminalErrorContent,
+          });
+        } else {
+          // NOW forward the deferred terminal event — handler will fetchAndReplaceMessages
+          // and pick up the final persisted state.
+          const terminal = deferredTerminalEvent ?? {
+            data: {},
+            stepIndex: 0,
+            timestamp: Date.now(),
+            type: 'agent_runtime_end' as const,
+          };
+          eventHandler(toStreamEvent(terminal, operationId));
+        }
 
         // Signal completion to the user — dock badge + (window-hidden) notification.
         // Skip for aborted runs and for error terminations.
@@ -1491,11 +1723,23 @@ export const executeHeterogeneousAgent = async (
 
       onError: async (error) => {
         if (completed) return;
+        if (retryWithoutResume(error)) return;
         completed = true;
 
         await persistQueue.catch(console.error);
 
-        if (accumulatedContent) {
+        const deferredMessageError =
+          deferredTerminalEvent?.type === 'error'
+            ? toHeterogeneousAgentMessageError(deferredTerminalEvent.data, adapterType)
+            : undefined;
+        const messageError =
+          deferredMessageError || toHeterogeneousAgentMessageError(error, adapterType);
+        const shouldClearTerminalErrorContent = shouldSuppressTerminalErrorEcho(
+          accumulatedContent,
+          messageError,
+        );
+
+        if (accumulatedContent && !shouldClearTerminalErrorContent) {
           await messageService
             .updateMessage(
               currentAssistantMessageId,
@@ -1513,17 +1757,7 @@ export const executeHeterogeneousAgent = async (
         // already marked cancelled and the partial content is persisted above.
         if (isAborted()) return;
 
-        eventHandler(
-          toStreamEvent(
-            {
-              data: { error, message: error },
-              stepIndex: 0,
-              timestamp: Date.now(),
-              type: 'error',
-            },
-            operationId,
-          ),
-        );
+        await persistTerminalError(messageError, { clearContent: shouldClearTerminalErrorContent });
       },
     });
 
@@ -1537,33 +1771,33 @@ export const executeHeterogeneousAgent = async (
     // topic-level binding — pinning the topic to this cwd once the agent has
     // executed here.
     if (adapter.sessionId && context.topicId) {
-      get().updateTopicMetadata(context.topicId, {
+      await updateTopicMetadata?.(context.topicId, {
         heteroSessionId: adapter.sessionId,
         workingDirectory: workingDirectory ?? '',
       });
     }
   } catch (error) {
     if (!completed) {
+      if (retryWithoutResume(error)) {
+        await fallbackPromise;
+        return;
+      }
       completed = true;
       // `sendPrompt` rejects when the CLI exits non-zero, which is how SIGINT
       // lands here too. If the user cancelled, don't surface an error.
       if (isAborted()) return;
-      const errorMsg = error instanceof Error ? error.message : 'Agent execution failed';
-      eventHandler(
-        toStreamEvent(
-          {
-            data: { error: errorMsg, message: errorMsg },
-            stepIndex: 0,
-            timestamp: Date.now(),
-            type: 'error',
-          },
-          operationId,
-        ),
-      );
+      const messageError = toHeterogeneousAgentMessageError(error, adapterType);
+      await persistTerminalError(messageError, {
+        clearContent: shouldSuppressTerminalErrorEcho(accumulatedContent, messageError),
+      });
     }
   } finally {
     unsubscribe?.();
     // Don't stopSession here — keep it alive for multi-turn resume.
     // Session cleanup happens on topic deletion or Electron quit.
+  }
+
+  if (fallbackPromise) {
+    await fallbackPromise;
   }
 };

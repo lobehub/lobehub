@@ -33,7 +33,16 @@ import {
   WebBrowsingManifest,
   WebBrowsingRenders,
 } from '@lobechat/builtin-tool-web-browsing/client';
+import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
 import { type BuiltinRender } from '@lobechat/types';
+
+import { CodexRenders } from './codex';
+
+export interface BuiltinRenderRegistryEntry {
+  apiName: string;
+  identifier: string;
+  render: BuiltinRender;
+}
 
 /**
  * Builtin tools renders registry
@@ -59,7 +68,22 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   // @deprecated backward compat: old messages stored 'lobe-tools' as identifier
   ['lobe-tools']: LobeActivatorRenders as Record<string, BuiltinRender>,
   [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
+  codex: {
+    ...CodexRenders,
+    command_execution: RunCommandRender as BuiltinRender,
+  },
 };
+
+export const listBuiltinRenderEntries = (): BuiltinRenderRegistryEntry[] =>
+  Object.entries(BuiltinToolsRenders).flatMap(([identifier, toolset]) =>
+    Object.entries(toolset)
+      .filter((entry): entry is [string, BuiltinRender] => !!entry[1])
+      .map(([apiName, render]) => ({
+        apiName,
+        identifier,
+        render,
+      })),
+  );
 
 /**
  * Get builtin render component for a specific API

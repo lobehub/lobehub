@@ -1,9 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import { ClaudeCode } from '@lobehub/icons';
+import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
 import { Icon } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from 'antd/es/menu/interface';
 import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,8 +13,8 @@ import useSWRMutation from 'swr/mutation';
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
-import { type CreateAgentParams } from '@/services/agent';
-import { type GroupMemberConfig } from '@/services/chatGroup';
+import type { CreateAgentParams } from '@/services/agent';
+import type { GroupMemberConfig } from '@/services/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -198,25 +198,27 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create a Claude Code agent with ACP provider pre-configured.
+   * Create a heterogeneous agent with CLI provider pre-configured.
    *
    * Bypasses `mutateAgent` so we skip its default /profile redirect —
-   * CC agents land straight on the chat page since their config is fixed.
+   * external CLI agents land straight on the chat page since their config is fixed.
    */
-  const createClaudeCodeAgent = useCallback(
-    async (options?: CreateAgentOptions) => {
+  const createHeterogeneousAgent = useCallback(
+    async (
+      definition: (typeof HETEROGENEOUS_AGENT_CLIENT_CONFIGS)[number],
+      options?: CreateAgentOptions,
+    ) => {
       const result = await storeCreateAgent({
         config: {
           agencyConfig: {
             heterogeneousProvider: {
-              command: 'claude',
-              type: 'claude-code' as const,
+              command: definition.command,
+              type: definition.type,
             },
           },
-          avatar:
-            'https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/claudecode.webp',
+          avatar: definition.avatar,
           systemRole: '',
-          title: 'Claude Code',
+          title: definition.title,
         },
         groupId: options?.groupId,
       });
@@ -253,22 +255,27 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create Claude Code agent menu item (Desktop only)
+   * Create heterogeneous agent menu items (Desktop only)
    */
-  const createClaudeCodeMenuItem = useCallback(
-    (options?: CreateAgentOptions): ItemType | null => {
-      if (!isDesktop || !enableHeterogeneousAgent) return null;
-      return {
-        icon: <ClaudeCode size={'1em'} />,
-        key: 'newClaudeCodeAgent',
-        label: t('newClaudeCodeAgent'),
-        onClick: async (info) => {
-          info.domEvent?.stopPropagation();
-          await createClaudeCodeAgent(options);
-        },
-      };
+  const createHeterogeneousAgentMenuItems = useCallback(
+    (options?: CreateAgentOptions): ItemType[] => {
+      if (!isDesktop || !enableHeterogeneousAgent) return [];
+
+      return HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((definition) => {
+        const AgentIcon = definition.icon;
+
+        return {
+          icon: <AgentIcon size={'1em'} />,
+          key: definition.menuKey,
+          label: t(definition.menuLabelKey),
+          onClick: async (info) => {
+            info.domEvent?.stopPropagation();
+            await createHeterogeneousAgent(definition, options);
+          },
+        };
+      });
     },
-    [t, createClaudeCodeAgent, enableHeterogeneousAgent],
+    [t, createHeterogeneousAgent, enableHeterogeneousAgent],
   );
 
   /**
@@ -362,11 +369,11 @@ export const useCreateMenuItems = () => {
     configMenuItem,
     createAgent,
     createAgentMenuItem,
-    createClaudeCodeAgent,
-    createClaudeCodeMenuItem,
     createEmptyGroup,
     createGroupChatMenuItem,
     createGroupFromTemplate,
+    createHeterogeneousAgent,
+    createHeterogeneousAgentMenuItems,
     createGroupWithMembers,
     createPage,
     createPageMenuItem,

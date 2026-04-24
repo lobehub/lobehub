@@ -10,7 +10,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'MiMo-V2.5-Pro is our most powerful model to date. Across dimensions such as general agent capabilities, complex software engineering, and long-horizon tasks, it can compete head-to-head with leading global agent models (Claude Opus 4.6, GPT-5.4). Compared to the previous generation, MiMo-V2-Pro, it delivers comprehensive improvements across the board.',
+      "MiMo-V2.5-Pro is Xiaomi's most capable flagship model to date, delivering significant improvements in general agentic capabilities, complex software engineering, and long-horizon tasks. It retains the 1T total / 42B active hybrid-attention architecture with a 1M context window, and can sustain complex long-horizon tasks spanning more than a thousand tool calls. Performance on demanding agentic benchmarks (ClawEval, GDPVal, SWE-bench Pro) is comparable to Claude Opus 4.6.",
     displayName: 'MiMo-V2.5 Pro',
     enabled: true,
     id: 'mimo-v2.5-pro',
@@ -47,7 +47,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    releasedAt: '2026-04-23',
+    releasedAt: '2026-04-22',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
@@ -65,7 +65,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'MiMo-V2.5 is a natively multimodal large model designed for agent scenarios. It can see, hear, and read simultaneously, and transform its understanding into actions.',
+      'MiMo-V2.5 is a native omni-modal Agent foundation model that understands images, video, audio, and text in a unified architecture, with a 1M context window. It delivers Pro-level agentic performance at roughly half the inference cost of MiMo-V2.5-Pro, with improved multimodal perception over MiMo-V2-Omni. Its built-in agentic capabilities (browsing, understanding, reasoning, execution) and faster inference make it well-suited to latency-sensitive and multi-step agent frameworks such as OpenClaw.',
     displayName: 'MiMo-V2.5',
     enabled: true,
     id: 'mimo-v2.5',
@@ -102,7 +102,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    releasedAt: '2026-04-23',
+    releasedAt: '2026-04-22',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',

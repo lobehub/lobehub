@@ -5,11 +5,14 @@ import { ScreenCaptureManager } from './ScreenCaptureManager';
 const {
   mockBrowserWindow,
   MockBrowserWindow,
+  mockDialogShowMessageBox,
   mockScreen,
   mockEnumerateWindows,
   mockIsMac,
   mockCaptureWindow,
   mockCaptureRect,
+  mockGetScreenCaptureStatus,
+  mockRequestScreenCaptureAccess,
 } = vi.hoisted(() => {
   const mockBrowserWindow = {
     destroy: vi.fn(),
@@ -37,8 +40,11 @@ const {
     MockBrowserWindow: vi.fn(() => mockBrowserWindow),
     mockCaptureRect: vi.fn(),
     mockCaptureWindow: vi.fn(),
+    mockDialogShowMessageBox: vi.fn(async () => ({ response: 0 })),
     mockEnumerateWindows: vi.fn().mockResolvedValue([]),
+    mockGetScreenCaptureStatus: vi.fn(() => 'granted'),
     mockIsMac: { value: true },
+    mockRequestScreenCaptureAccess: vi.fn(async () => false),
     mockScreen: {
       getCursorScreenPoint: vi.fn(() => ({ x: 10, y: 10 })),
       getDisplayNearestPoint: vi.fn(() => ({
@@ -52,6 +58,9 @@ const {
 
 vi.mock('electron', () => ({
   BrowserWindow: MockBrowserWindow,
+  dialog: {
+    showMessageBox: mockDialogShowMessageBox,
+  },
   screen: mockScreen,
 }));
 
@@ -74,6 +83,11 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+vi.mock('@/utils/permissions', () => ({
+  getScreenCaptureStatus: mockGetScreenCaptureStatus,
+  requestScreenCaptureAccess: mockRequestScreenCaptureAccess,
+}));
+
 vi.mock('./WindowSourceService', () => ({
   enumerateWindows: mockEnumerateWindows,
 }));
@@ -84,21 +98,36 @@ vi.mock('./CaptureService', () => ({
 }));
 
 describe('ScreenCaptureManager', () => {
-  const createApp = () =>
-    ({
+  const createApp = ({ mainWindowVisible = true }: { mainWindowVisible?: boolean } = {}) => {
+    const mainWindow = {
+      browserWindow: {
+        id: 1,
+        isVisible: vi.fn(() => mainWindowVisible),
+      },
+    };
+
+    return {
       browserManager: {
         broadcastToAllWindows: vi.fn(),
         broadcastToWindow: vi.fn(),
+        getMainWindow: vi.fn(() => mainWindow),
         showMainWindow: vi.fn(),
       },
       buildRendererUrl: vi.fn().mockResolvedValue('http://localhost:5173/overlay'),
-    }) as any;
+      i18n: {
+        ns: vi.fn(() => (key: string) => key),
+      },
+    } as any;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockBrowserWindow.isDestroyed.mockReturnValue(false);
+    mockDialogShowMessageBox.mockResolvedValue({ response: 0 });
     mockEnumerateWindows.mockResolvedValue([]);
+    mockGetScreenCaptureStatus.mockReturnValue('granted');
     mockIsMac.value = true;
+    mockRequestScreenCaptureAccess.mockResolvedValue(false);
   });
 
   it('keeps the app in regular mode when showing overlay on macOS', async () => {
@@ -120,6 +149,56 @@ describe('ScreenCaptureManager', () => {
     expect(mockBrowserWindow.show).toHaveBeenCalled();
     expect(mockBrowserWindow.focus).toHaveBeenCalled();
     expect(mockBrowserWindow.moveTop).toHaveBeenCalled();
+  });
+
+  it('blocks quick composer and prompts for permission when screen recording is unavailable', async () => {
+    mockGetScreenCaptureStatus.mockReturnValue('denied');
+    mockDialogShowMessageBox.mockResolvedValue({ response: 0 });
+    const app = createApp();
+    const manager = new ScreenCaptureManager(app);
+
+    await manager.startSession();
+
+    expect(mockDialogShowMessageBox).toHaveBeenCalledWith(
+      app.browserManager.getMainWindow().browserWindow,
+      expect.objectContaining({
+        message: 'screenCaptureAccess.message',
+        title: 'screenCaptureAccess.title',
+      }),
+    );
+    expect(mockRequestScreenCaptureAccess).toHaveBeenCalled();
+    expect(mockEnumerateWindows).not.toHaveBeenCalled();
+    expect(MockBrowserWindow).not.toHaveBeenCalled();
+  });
+
+  it('does not open settings when permission prompt is dismissed', async () => {
+    mockGetScreenCaptureStatus.mockReturnValue('denied');
+    mockDialogShowMessageBox.mockResolvedValue({ response: 1 });
+    const manager = new ScreenCaptureManager(createApp());
+
+    await manager.startSession();
+
+    expect(mockRequestScreenCaptureAccess).not.toHaveBeenCalled();
+    expect(mockEnumerateWindows).not.toHaveBeenCalled();
+    expect(MockBrowserWindow).not.toHaveBeenCalled();
+  });
+
+  it('shows an app-modal prompt when the main window is hidden', async () => {
+    mockGetScreenCaptureStatus.mockReturnValue('denied');
+    const manager = new ScreenCaptureManager(createApp({ mainWindowVisible: false }));
+
+    await manager.startSession();
+
+    expect(mockDialogShowMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'screenCaptureAccess.message',
+        title: 'screenCaptureAccess.title',
+      }),
+    );
+    expect(mockDialogShowMessageBox).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      expect.anything(),
+    );
   });
 
   describe('preview handlers', () => {

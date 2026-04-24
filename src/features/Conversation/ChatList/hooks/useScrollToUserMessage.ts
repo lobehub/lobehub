@@ -4,6 +4,11 @@ const PIN_RETRY_DELAYS = [0, 32, 96];
 
 interface UseScrollToUserMessageOptions {
   /**
+   * Message index whose pending pin should be canceled because the user
+   * manually scrolled up while that reply turn was still active.
+   */
+  cancelPinMessageIndex?: number | null;
+  /**
    * Current data source length (number of messages)
    */
   dataSourceLength: number;
@@ -51,6 +56,7 @@ interface UseScrollToUserMessageOptions {
  * or the user starts scrolling manually.
  */
 export function useScrollToUserMessage({
+  cancelPinMessageIndex = null,
   dataSourceLength,
   isSecondLastMessageFromUser,
   scrollToIndex,
@@ -116,18 +122,24 @@ export function useScrollToUserMessage({
   // fired just before the user scrolled up would still call scrollToIndex at
   // 32/96ms and yank the viewport back down.
   useEffect(() => {
-    if (!spacerActive || scrollShrinking) {
+    const pendingScrollIndex = pendingScrollIndexRef.current;
+    const pinCanceledByUserScroll =
+      pendingScrollIndex !== null && cancelPinMessageIndex === pendingScrollIndex;
+
+    if (!spacerActive || scrollShrinking || pinCanceledByUserScroll) {
       pendingScrollIndexRef.current = null;
       clearPendingPins();
     }
-  }, [spacerActive, scrollShrinking, clearPendingPins]);
+  }, [cancelPinMessageIndex, spacerActive, scrollShrinking, clearPendingPins]);
 
   // Re-scroll whenever the spacer's real layout settles (version bumps) or the
   // spacer becomes active. Skip when user is manually shrinking the spacer.
   useEffect(() => {
-    if (!spacerActive || scrollShrinking) return;
     const index = pendingScrollIndexRef.current;
+    const pinCanceledByUserScroll = index !== null && cancelPinMessageIndex === index;
+
+    if (!spacerActive || scrollShrinking || pinCanceledByUserScroll) return;
     if (index === null) return;
     executeScroll(index);
-  }, [spacerActive, spacerLayoutVersion, scrollShrinking, executeScroll]);
+  }, [cancelPinMessageIndex, spacerActive, spacerLayoutVersion, scrollShrinking, executeScroll]);
 }

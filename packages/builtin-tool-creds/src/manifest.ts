@@ -10,6 +10,23 @@ export const CredsManifest: BuiltinToolManifest = {
   api: [
     {
       description:
+        'Connect a Klavis integration service via OAuth. Use this to authorize access to third-party services managed by the Klavis platform (e.g., Notion, Gmail, Google Calendar, Slack). Check the available Klavis services in the credentials context before calling this.',
+      name: CredsApiName.connectKlavisService,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          service: {
+            description:
+              'The Klavis service identifier to connect (e.g., "notion", "gmail", "google-calendar"). See the available Klavis services list in the credentials context.',
+            type: 'string',
+          },
+        },
+        required: ['service'],
+        type: 'object',
+      } satisfies JSONSchema7,
+    },
+    {
+      description:
         'Initiate OAuth connection flow for a third-party service (e.g., Linear, Microsoft Outlook, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.',
       name: CredsApiName.initiateOAuthConnect,
       parameters: {

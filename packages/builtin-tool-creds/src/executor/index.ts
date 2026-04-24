@@ -1,14 +1,18 @@
-import { getLobehubSkillProviderById } from '@lobechat/const';
+import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { getToolStoreState, useToolStore } from '@/store/tool';
+import { klavisStoreSelectors } from '@/store/tool/selectors';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { CredsIdentifier } from '../manifest';
 import {
+  type ConnectKlavisServiceParams,
   CredsApiName,
   type GetPlaintextCredParams,
   type InitiateOAuthConnectParams,
@@ -21,6 +25,134 @@ const log = debug('lobe-creds:executor');
 class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   readonly identifier = CredsIdentifier;
   protected readonly apiEnum = CredsApiName;
+
+  /**
+   * Connect a Klavis integration service via OAuth
+   * Creates a Klavis server instance and initiates the OAuth flow
+   */
+  connectKlavisService = async (
+    params: ConnectKlavisServiceParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      const { service } = params;
+
+      // Validate service identifier
+      const serverType = getKlavisServerByServerIdentifier(service);
+      if (!serverType) {
+        return {
+          error: {
+            message: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,
+            type: 'UnknownService',
+          },
+          success: false,
+        };
+      }
+
+      // Check if already connected via store
+      const toolState = getToolStoreState();
+      const existingServer = klavisStoreSelectors.getServerByIdentifier(service)(toolState);
+      if (existingServer?.status === KlavisServerStatus.CONNECTED) {
+        return {
+          content: `Already connected to ${serverType.label}. You can use ${serverType.label} tools directly.`,
+          state: {
+            connected: true,
+            identifier: service,
+            serviceName: serverType.label,
+          },
+          success: true,
+        };
+      }
+
+      // Get userId
+      const userId = userProfileSelectors.userId(useUserStore.getState());
+      if (!userId) {
+        return {
+          error: {
+            message: 'User is not authenticated',
+            type: 'MissingUserId',
+          },
+          success: false,
+        };
+      }
+
+      log('[CredsExecutor] connectKlavisService - creating server for:', service);
+
+      // Create Klavis server instance
+      const server = await useToolStore.getState().createKlavisServer({
+        identifier: serverType.identifier,
+        serverName: serverType.serverName,
+        userId,
+      });
+
+      if (!server) {
+        return {
+          error: {
+            message: `Failed to create Klavis server instance for ${serverType.label}`,
+            type: 'CreateServerFailed',
+          },
+          success: false,
+        };
+      }
+
+      // If already authenticated (no OAuth needed)
+      if (server.isAuthenticated) {
+        return {
+          content: `Successfully connected to ${serverType.label}! You can now use ${serverType.label} tools.`,
+          state: {
+            connected: true,
+            identifier: service,
+            serviceName: serverType.label,
+          },
+          success: true,
+        };
+      }
+
+      // OAuth needed — open popup and poll for completion
+      if (server.oauthUrl) {
+        const result = await this.openKlavisOAuthAndWait(server.oauthUrl, server.identifier);
+
+        if (result.success) {
+          return {
+            content: `Successfully connected to ${serverType.label}! You can now use ${serverType.label} tools.`,
+            state: {
+              connected: true,
+              identifier: service,
+              serviceName: serverType.label,
+            },
+            success: true,
+          };
+        }
+
+        return {
+          content: `Authorization was cancelled or timed out for ${serverType.label}. You can try again later.`,
+          state: {
+            connected: false,
+            identifier: service,
+            serviceName: serverType.label,
+          },
+          success: true,
+        };
+      }
+
+      return {
+        error: {
+          message: 'Unexpected server state: no oauthUrl and not authenticated',
+          type: 'UnexpectedState',
+        },
+        success: false,
+      };
+    } catch (error) {
+      log('[CredsExecutor] connectKlavisService - error:', error);
+      return {
+        error: {
+          message: error instanceof Error ? error.message : 'Failed to connect Klavis service',
+          type: 'ConnectKlavisFailed',
+        },
+        success: false,
+      };
+    }
+  };
 
   /**
    * Initiate OAuth connection flow
@@ -170,6 +302,91 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
           }
         },
         5 * 60 * 1000,
+      );
+    });
+  };
+
+  /**
+   * Open Klavis OAuth popup and poll for authorization completion
+   * Unlike Market OAuth which uses postMessage, Klavis OAuth uses polling
+   */
+  private openKlavisOAuthAndWait = (
+    oauthUrl: string,
+    identifier: string,
+  ): Promise<{ success: boolean }> => {
+    return new Promise((resolve) => {
+      const popup = window.open(oauthUrl, '_blank', 'width=600,height=700');
+
+      if (!popup) {
+        resolve({ success: false });
+        return;
+      }
+
+      let resolved = false;
+      // eslint-disable-next-line prefer-const
+      let pollInterval: ReturnType<typeof setInterval>;
+      // eslint-disable-next-line prefer-const
+      let windowCheckInterval: ReturnType<typeof setInterval>;
+
+      const checkConnected = async (): Promise<boolean> => {
+        try {
+          await useToolStore.getState().refreshKlavisServerTools(identifier);
+          const toolState = getToolStoreState();
+          const server = klavisStoreSelectors.getServerByIdentifier(identifier)(toolState);
+          return server?.status === KlavisServerStatus.CONNECTED;
+        } catch {
+          return false;
+        }
+      };
+
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        clearInterval(pollInterval);
+        clearInterval(windowCheckInterval);
+      };
+
+      // Poll for authentication completion every 1s
+      pollInterval = setInterval(async () => {
+        if (resolved) return;
+        if (await checkConnected()) {
+          cleanup();
+          resolve({ success: true });
+        }
+      }, 1000);
+
+      // Monitor popup closure — give a short grace period then treat as cancelled
+      windowCheckInterval = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(windowCheckInterval);
+          if (resolved) return;
+
+          // Grace period: check a few more times after popup closes (4s)
+          // User may have authorized right before closing
+          setTimeout(async () => {
+            if (resolved) return;
+            // One final check
+            if (await checkConnected()) {
+              cleanup();
+              resolve({ success: true });
+            } else {
+              cleanup();
+              resolve({ success: false });
+            }
+          }, 4000);
+        }
+      }, 500);
+
+      // Hard timeout after 2 minutes
+      setTimeout(
+        () => {
+          if (!resolved) {
+            cleanup();
+            if (!popup.closed) popup.close();
+            resolve({ success: false });
+          }
+        },
+        2 * 60 * 1000,
       );
     });
   };

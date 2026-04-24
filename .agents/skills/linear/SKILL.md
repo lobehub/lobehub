@@ -30,6 +30,63 @@ This is NON-NEGOTIABLE. Skipping Linear comments is a workflow violation.
 
 When creating issues with `mcp__linear-server__create_issue`, **MUST add the `claude code` label**.
 
+## Creating Sub-issue Trees
+
+When breaking a parent issue into a tree of sub-issues (e.g., task decomposition for LOBE-xxx), follow these rules — they work around real limitations of the Linear MCP tools.
+
+### 1. ALWAYS prefix titles with an ordering index
+
+The Linear Sub-issues panel displays children by `sortOrder`, which **defaults to newest-first** (most recently created appears on top). Neither parallel nor serial creation will produce the intended top-to-bottom reading order, and the MCP `save_issue` tool does **not expose a `sortOrder` parameter** — you cannot set order at create time.
+
+**Workaround**: encode execution order in the title itself:
+
+```plaintext
+[1]     [db]       add schema fields
+[2]     [db]       new table + repository
+[3]     [service]  business logic layer
+[4]     [api]      REST endpoints
+[4.1]   [sdk]      client SDK wrapper
+[4.1.1] [app]      consumer integration
+[4.1.2] [app]      UI surface
+[4.2]   [ui]       dashboard page
+```
+
+Even when the panel shuffles, the reader can mentally reconstruct the dependency graph at a glance. Dotted numbering `[n.m.k]` should mirror the parent-child nesting so the index and the tree agree.
+
+### 2. Nest sub-issues by logical parent-child, not flat under the root
+
+Linear supports **unlimited sub-issue depth**. A flat list of 8+ siblings under one root is hard to scan. Group by main-subordinate logic:
+
+- Core service → its SDK → SDK consumers
+- Don't create a sibling when a child is more accurate
+
+Use `parentId: "LOBE-xxxx"` at creation (or `save_issue` to move). Moving an issue's parent does not disturb its `blockedBy` relations.
+
+### 3. Sub-issue creation order is dictated by `blockedBy`
+
+`blockedBy` requires the blocker to exist first (you need its LOBE-id). So:
+
+1. **Topologically sort** the DAG — leaves (no deps) first, roots last
+2. Create issues with zero deps in the first wave
+3. Create dependent issues only after collecting the blocker IDs from prior responses
+4. `blockedBy` is **append-only**; passing it again does not overwrite — safe to re-run
+
+### 4. Don't waste rounds trying to parallelize
+
+MCP tool calls in a single message look parallel but execute sequentially on the server, and you still need blocker IDs from earlier responses. Just issue calls in dependency order; optimizing for parallelism gains nothing here.
+
+### 5. Keep each sub-issue description self-contained
+
+Each sub-issue should state:
+
+- Goal (1–2 lines)
+- Key files to touch
+- Concrete changes / acceptance criteria
+- Dependencies (link to blocker issues by `LOBE-xxxx`)
+- Validation steps
+
+The implementer may open only the sub-issue, not the parent — don't rely on context that lives only in the parent description.
+
 ## Completion Comment Format
 
 Every completed issue MUST have a comment summarizing work done:

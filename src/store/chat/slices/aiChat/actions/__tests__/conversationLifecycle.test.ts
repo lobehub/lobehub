@@ -1,3 +1,4 @@
+import type * as LobechatConstModule from '@lobechat/const';
 import { act, renderHook } from '@testing-library/react';
 import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +17,23 @@ import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from '.
 
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
+
+const executeHeterogeneousAgentMock = vi.hoisted(() => vi.fn());
+const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
+
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobechatConstModule>();
+  return {
+    ...actual,
+    get isDesktop() {
+      return mockConstEnv.isDesktop;
+    },
+  };
+});
+
+vi.mock('../heterogeneousAgentExecutor', () => ({
+  executeHeterogeneousAgent: (...args: any[]) => executeHeterogeneousAgentMock(...args),
+}));
 
 // Mock lambdaClient to prevent network requests
 vi.mock('@/libs/trpc/client', () => ({
@@ -46,6 +64,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  executeHeterogeneousAgentMock.mockReset();
+  mockConstEnv.isDesktop = false;
   vi.restoreAllMocks();
 });
 
@@ -721,6 +741,51 @@ describe('ConversationLifecycle actions', () => {
             newAssistantMessage: expect.objectContaining({
               metadata: undefined,
             }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('should not persist the requested model for heterogeneous agents before the CLI reports it', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+            model: 'claude-sonnet-4-6',
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newAssistantMessage: {
+              provider: 'codex',
+            },
           }),
           expect.any(AbortController),
         );

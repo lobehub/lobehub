@@ -61,9 +61,19 @@ function createMessenger(
   const api = new LarkApiClient(config.applicationId, config.credentials.appSecret, domain);
   const chatId = extractChatId(platformThreadId);
   return {
+    addReaction: (messageId, emoji) => api.addReaction(messageId, emoji).then(() => {}),
     createMessage: (content) => api.sendMessage(chatId, content).then(() => {}),
     editMessage: (messageId, content) => api.editMessage(messageId, content).then(() => {}),
+    // Feishu / Lark currently expose no authenticated removeReaction endpoint.
+    // Callers should treat this as a best-effort no-op — step swaps will stack
+    // additions rather than clear the previous emoji.
     removeReaction: () => Promise.resolve(),
+    replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
+      if (prevEmoji === nextEmoji) return;
+      // No remove API upstream — we can only add. Step swaps therefore stack
+      // emoji on the user's message. Final cleanup is a no-op.
+      if (nextEmoji) await api.addReaction(messageId, nextEmoji);
+    },
   };
 }
 

@@ -1,6 +1,6 @@
 import { type ChatContextContent } from '@lobechat/types';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
-import { Buffer } from 'buffer/';
+import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
 import { notification } from '@/components/AntdStaticMethods';

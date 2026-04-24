@@ -9,7 +9,7 @@ interface AssigneeAvatarProps {
   size?: number;
 }
 
-const AssigneeAvatar = memo<AssigneeAvatarProps>(({ agentId, size = 22 }) => {
+const AssigneeAvatar = memo<AssigneeAvatarProps>(({ agentId, size = 18 }) => {
   const displayMeta = useAgentDisplayMeta(agentId);
 
   if (!displayMeta) return null;

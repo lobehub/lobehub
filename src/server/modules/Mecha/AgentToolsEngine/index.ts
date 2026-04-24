@@ -183,8 +183,20 @@ export const createServerAgentToolsEngine = (
         // no specific device is auto-activated yet (user must pick). When
         // the caller itself can execute `executor: 'client'` tools, the
         // proxy is redundant — local-system goes directly to the caller.
+        //
+        // Bot conversations (Telegram/Discord/Slack/…) never have a
+        // client-executor by definition, which would otherwise make
+        // RemoteDevice permanently auto-enabled there. Its systemRole
+        // tells the model to "inform the user to open their desktop
+        // application" when no device is online, overriding the
+        // Activator's own guidance and blocking discovery of cloud tools
+        // (e.g. Klavis Gmail). Keep RemoteDevice discoverable via the
+        // Activator in bot flows, but don't inject it by default.
         [RemoteDeviceManifest.identifier]:
-          hasDeviceProxy && !deviceContext?.autoActivated && !hasClientExecutor,
+          hasDeviceProxy &&
+          !deviceContext?.autoActivated &&
+          !hasClientExecutor &&
+          !isBotConversation,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
       },

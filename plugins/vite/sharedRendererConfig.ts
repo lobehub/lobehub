@@ -143,6 +143,14 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
 
+    isDev && {
+      name: 'lobe-dev-strip-manifest',
+      transformIndexHtml: {
+        order: 'pre' as const,
+        handler: (html: string) => html.replace(/\s*<link\s+rel="manifest"[^>]*>\s*/i, '\n    '),
+      },
+    },
+
     isDev &&
       codeInspectorPlugin({
         bundler: 'vite',

@@ -25,17 +25,24 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   const { openConfigGroupModal } = useAgentModal();
 
   // Create menu items
-  const { createAgentMenuItem, createClaudeCodeMenuItem, createGroupChatMenuItem, isLoading } =
-    useCreateMenuItems();
+  const {
+    createAgentMenuItem,
+    createGroupChatMenuItem,
+    createHeterogeneousAgentMenuItems,
+    isLoading,
+  } = useCreateMenuItems();
 
   const addMenuItems = useMemo(() => {
-    const ccItem = createClaudeCodeMenuItem();
+    const heterogeneousItems = createHeterogeneousAgentMenuItems();
+
     return [
       createAgentMenuItem(),
       createGroupChatMenuItem(),
-      ...(ccItem ? [{ type: 'divider' as const }, ccItem] : []),
+      ...(heterogeneousItems.length > 0
+        ? [{ type: 'divider' as const }, ...heterogeneousItems]
+        : []),
     ];
-  }, [createAgentMenuItem, createClaudeCodeMenuItem, createGroupChatMenuItem]);
+  }, [createAgentMenuItem, createGroupChatMenuItem, createHeterogeneousAgentMenuItems]);
 
   const handleOpenConfigGroupModal = useCallback(() => {
     openConfigGroupModal();

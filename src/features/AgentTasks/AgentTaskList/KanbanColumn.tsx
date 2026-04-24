@@ -10,7 +10,7 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import AgentTaskItem from '../features/AgentTaskItem';
 import TaskStatusIcon from '../features/TaskStatusIcon';
 
-export const COLUMN_WIDTH = 520;
+export const COLUMN_WIDTH = 300;
 
 const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -45,7 +45,7 @@ const DraggableTaskCard = memo<{ task: TaskListItem }>(({ task }) => {
       {...listeners}
       {...attributes}
     >
-      <AgentTaskItem task={task} />
+      <AgentTaskItem task={task} variant="compact" />
     </div>
   );
 });

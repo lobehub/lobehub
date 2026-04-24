@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { chainInputCompletion } from '@lobechat/prompts';
 import { isCommandPressed, merge } from '@lobechat/utils';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
@@ -110,7 +111,9 @@ const InputEditor = memo<{
   const heterogeneousType = useAgentStore(
     (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
   );
-  const heterogeneousName = heterogeneousType === 'claude-code' ? 'Claude Code' : undefined;
+  const heterogeneousName = heterogeneousType
+    ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+    : undefined;
   // Heterogeneous agents (e.g. Claude Code) don't yet support @-assigning to other agents
   const showAgentAssignmentHint =
     !heterogeneousName && categories.some((category) => category.id === 'agent');

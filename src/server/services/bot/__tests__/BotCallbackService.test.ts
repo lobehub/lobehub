@@ -18,6 +18,13 @@ const mockTriggerTyping = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const mockRemoveReaction = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockCreateMessage = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 'new-msg' }));
 const mockUpdateThreadName = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+// Default replaceReaction fans out to removeReaction so existing '👀' assertions
+// keep describing the effective behaviour (step swap / completion clear) end-to-end.
+const mockReplaceReaction = vi.hoisted(() =>
+  vi.fn().mockImplementation(async (messageId: string, prevEmoji: string | null) => {
+    if (prevEmoji) await mockRemoveReaction(messageId, prevEmoji);
+  }),
+);
 
 // Mock PlatformClient's getMessenger
 const mockGetMessenger = vi.hoisted(() =>
@@ -25,6 +32,7 @@ const mockGetMessenger = vi.hoisted(() =>
     createMessage: mockCreateMessage,
     editMessage: mockEditMessage,
     removeReaction: mockRemoveReaction,
+    replaceReaction: mockReplaceReaction,
     triggerTyping: mockTriggerTyping,
     updateThreadName: mockUpdateThreadName,
   })),
@@ -147,11 +155,18 @@ describe('BotCallbackService', () => {
     service = new BotCallbackService(FAKE_DB);
     setupCredentials();
 
+    // vi.clearAllMocks wipes the hoisted default impl; reinstall it so the
+    // replaceReaction spy keeps fanning out to removeReaction.
+    mockReplaceReaction.mockImplementation(async (messageId: string, prevEmoji: string | null) => {
+      if (prevEmoji) await mockRemoveReaction(messageId, prevEmoji);
+    });
+
     // Default: getMessenger returns the main messenger mock
     mockGetMessenger.mockImplementation(() => ({
       createMessage: mockCreateMessage,
       editMessage: mockEditMessage,
       removeReaction: mockRemoveReaction,
+      replaceReaction: mockReplaceReaction,
       triggerTyping: mockTriggerTyping,
       updateThreadName: mockUpdateThreadName,
     }));

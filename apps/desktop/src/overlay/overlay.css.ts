@@ -15,8 +15,7 @@ const overlayTheme = {
     tagText: 'rgba(248, 250, 252, 0.96)',
   },
   font: {
-    system:
-      "'SF Pro Display', 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    system: 'system-ui, sans-serif',
   },
   radius: {
     highlight: '14px',
@@ -160,3 +159,47 @@ export const selection = style([
     boxShadow: vars.shadow.selection,
   },
 ]);
+
+export const hintPill = style([
+  windowTag,
+  {
+    bottom: 24,
+    left: 24,
+    minHeight: 28,
+    padding: '4px 14px',
+    position: 'fixed',
+    userSelect: 'none',
+    zIndex: 20,
+  },
+]);
+
+export const hintPillKey = style({
+  color: vars.color.tagText,
+  flex: 'none',
+  fontSize: 12,
+  fontWeight: 650,
+  letterSpacing: '0.01em',
+});
+
+export const hintPillDivider = style({
+  color: vars.color.tagDivider,
+  flex: 'none',
+  fontSize: 10,
+});
+
+export const hintPillLabel = style({
+  color: vars.color.tagMuted,
+  flex: 'none',
+  fontSize: 12,
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
+});
+
+export const hintPillGroupDivider = style({
+  background: vars.color.tagDivider,
+  flex: 'none',
+  height: 12,
+  margin: '0 4px',
+  opacity: 0.4,
+  width: 1,
+});

@@ -1,4 +1,4 @@
-import { Buffer } from 'buffer/';
+import { Buffer } from 'buffer.js';
 
 export const imageToBase64 = ({
   size,

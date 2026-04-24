@@ -359,7 +359,7 @@ export class ConversationLifecycleActionImpl {
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
-    if (isDesktop && heterogeneousProvider?.type === 'claude-code') {
+    if (isDesktop && heterogeneousProvider) {
       // Resolve cwd up-front so the new topic is bound to a project at
       // creation time. Otherwise the row stays NULL until the post-execution
       // metadata write — which never lands on cancel/error and meanwhile
@@ -379,12 +379,15 @@ export class ConversationLifecycleActionImpl {
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
-        const { model } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
             groupId: operationContext.groupId ?? undefined,
-            newAssistantMessage: { model, provider: 'claude-code' },
+            // External CLIs own model selection and may reroute independently
+            // from the agent's requested model. Persist only the runtime
+            // provider up front; the adapter backfills the actual model later
+            // if the CLI reports it.
+            newAssistantMessage: { provider: heterogeneousProvider.type },
             newTopic: !operationContext.topicId
               ? {
                   metadata: workingDirectory ? { workingDirectory } : undefined,

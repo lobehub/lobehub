@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ClaudeCodeAdapter } from './adapters';
+import { ClaudeCodeAdapter, CodexAdapter } from './adapters';
 import { createAdapter, getPreset, listAgentTypes } from './registry';
 
 describe('registry', () => {
@@ -8,6 +8,11 @@ describe('registry', () => {
     it('creates a ClaudeCodeAdapter for "claude-code"', () => {
       const adapter = createAdapter('claude-code');
       expect(adapter).toBeInstanceOf(ClaudeCodeAdapter);
+    });
+
+    it('creates a CodexAdapter for "codex"', () => {
+      const adapter = createAdapter('codex');
+      expect(adapter).toBeInstanceOf(CodexAdapter);
     });
 
     it('throws for unknown agent type', () => {
@@ -33,6 +38,13 @@ describe('registry', () => {
       expect(args).toContain('sess_abc');
     });
 
+    it('returns preset with exec args for codex', () => {
+      const preset = getPreset('codex');
+      expect(preset.baseArgs).toContain('exec');
+      expect(preset.baseArgs).toContain('--json');
+      expect(preset.promptMode).toBe('stdin');
+    });
+
     it('throws for unknown agent type', () => {
       expect(() => getPreset('nope')).toThrow('Unknown agent type: "nope"');
     });
@@ -42,6 +54,7 @@ describe('registry', () => {
     it('includes claude-code', () => {
       const types = listAgentTypes();
       expect(types).toContain('claude-code');
+      expect(types).toContain('codex');
     });
   });
 });

@@ -29,6 +29,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
+import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
@@ -634,6 +635,15 @@ export class StreamingExecutorActionImpl {
         switch (event.type) {
           case 'done': {
             log('[internal_execAgentRuntime] Received done event');
+            break;
+          }
+
+          case 'human_approve_required': {
+            await notifyDesktopHumanApprovalRequired(this.#get, {
+              agentId,
+              groupId,
+              topicId,
+            });
             break;
           }
 

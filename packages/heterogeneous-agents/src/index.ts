@@ -1,4 +1,5 @@
 export { ClaudeCodeAdapter, claudeCodePreset } from './adapters';
+export { getHeterogeneousAgentConfig, HETEROGENEOUS_AGENT_CONFIGS } from './config';
 export { HETEROGENEOUS_TYPE_LABELS } from './labels';
 export { createAdapter, getPreset, listAgentTypes } from './registry';
 export type {
@@ -7,6 +8,7 @@ export type {
   AgentProcessConfig,
   HeterogeneousAgentEvent,
   HeterogeneousEventType,
+  HeterogeneousTerminalErrorData,
   StreamChunkData,
   StreamChunkType,
   StreamStartData,

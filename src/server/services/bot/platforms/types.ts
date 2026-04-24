@@ -77,9 +77,33 @@ export interface FieldSchema {
  * LobeHub-specific outbound capabilities used by callback and bridge services.
  */
 export interface PlatformMessenger {
+  /**
+   * Add a reaction to a message (optional — platforms without reaction APIs
+   * can omit this). Callers must no-op on platforms that don't implement it.
+   */
+  addReaction?: (messageId: string, emoji: string) => Promise<void>;
   createMessage: (content: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;
+  /**
+   * Transition the bot's reaction on a message from `prevEmoji` to
+   * `nextEmoji`. Either can be `null`: `prev=null` means "nothing was there,
+   * just add", `next=null` means "clear it". Each platform implements this
+   * with the fewest API calls it can:
+   *
+   * - Telegram: single `setMessageReaction` (atomic replace).
+   * - Discord / Slack / Feishu: `addReaction(next)` then `removeReaction(prev)`
+   *   in that order so the user always sees at least one bot reaction during
+   *   the transition.
+   *
+   * Optional — platforms with no reaction API (QQ, WeChat) omit it, and
+   * callers must guard with optional chaining.
+   */
+  replaceReaction?: (
+    messageId: string,
+    prevEmoji: string | null,
+    nextEmoji: string | null,
+  ) => Promise<void>;
   triggerTyping?: () => Promise<void>;
   updateThreadName?: (name: string) => Promise<void>;
 }

@@ -57,7 +57,7 @@ export interface SendMessageServerParams {
      * Message metadata (e.g., isSupervisor for group orchestration)
      */
     metadata?: Record<string, unknown>;
-    model: string;
+    model?: string;
     provider: string;
   };
   /**
