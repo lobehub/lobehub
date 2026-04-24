@@ -3,7 +3,7 @@ import { type FormItemProps } from '@lobehub/ui';
 import { Form } from '@lobehub/ui';
 import { Form as AntdForm, Grid, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
@@ -90,11 +90,14 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
 
     return {
       ...config,
-      ...(typeof enableReasoningInitialValue === 'undefined'
-        ? {}
-        : { enableReasoning: enableReasoningInitialValue }),
+      enableReasoning: enableReasoningInitialValue,
     };
   }, [config, modelExtendParamOptions?.enableReasoning?.defaultValue]);
+
+  useEffect(() => {
+    form.setFieldsValue(initialValues);
+  }, [form, initialValues]);
+
   const enableReasoning =
     AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
   const includeReasoningBudget = modelExtendParamOptions?.enableReasoning?.includeBudget !== false;

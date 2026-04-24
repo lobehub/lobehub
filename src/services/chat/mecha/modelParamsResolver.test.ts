@@ -1,3 +1,4 @@
+import type { LobeAgentChatConfig } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as aiInfraStore from '@/store/aiInfra';
@@ -7,6 +8,10 @@ import { resolveModelExtendParams } from './modelParamsResolver';
 
 describe('resolveModelExtendParams', () => {
   const mockAiInfraStoreState = { someState: true };
+  const createChatConfig = (config: Partial<LobeAgentChatConfig> = {}): LobeAgentChatConfig => ({
+    autoCreateTopicThreshold: 2,
+    ...config,
+  });
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -136,7 +141,7 @@ describe('resolveModelExtendParams', () => {
         );
 
         const result = resolveModelExtendParams({
-          chatConfig: {} as any,
+          chatConfig: createChatConfig(),
           model: 'deepseek-v4-flash',
           provider: 'deepseek',
         });
@@ -157,9 +162,9 @@ describe('resolveModelExtendParams', () => {
         );
 
         const result = resolveModelExtendParams({
-          chatConfig: {
+          chatConfig: createChatConfig({
             enableReasoning: false,
-          } as any,
+          }),
           model: 'deepseek-v4-flash',
           provider: 'deepseek',
         });
@@ -180,9 +185,9 @@ describe('resolveModelExtendParams', () => {
         );
 
         const result = resolveModelExtendParams({
-          chatConfig: {
+          chatConfig: createChatConfig({
             thinking: 'disabled',
-          } as any,
+          }),
           model: 'deepseek-v4-flash',
           provider: 'deepseek',
         });
@@ -203,9 +208,9 @@ describe('resolveModelExtendParams', () => {
         );
 
         const result = resolveModelExtendParams({
-          chatConfig: {
+          chatConfig: createChatConfig({
             thinking: 'enabled',
-          } as any,
+          }),
           model: 'deepseek-v4-flash',
           provider: 'deepseek',
         });
