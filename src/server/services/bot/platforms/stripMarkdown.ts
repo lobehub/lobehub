@@ -6,9 +6,8 @@
  * - Remove syntactic noise (**, `, #, []() etc.)
  * - Keep code block content intact (just remove the fences)
  * - Convert links to "text (url)" format so URLs are still accessible
- * - Convert tables to a readable plain-text layout tuned for mobile chat
- *   (notably WeChat, which has no Markdown/HTML rendering and uses a
- *   proportional font that makes column-aligned ASCII tables unreliable).
+ * - Convert tables to a readable plain-text layout tuned for mobile chat,
+ *   where proportional fonts make column-aligned ASCII tables unreliable.
  */
 
 const CODE_BLOCK_PLACEHOLDER = '\u0000CODEBLOCK_';
@@ -49,8 +48,8 @@ function splitTableRow(row: string): string[] {
  * - 2–3 columns → single-line "- header: value, header: value" records
  * - 4+ columns → multi-line record blocks prefixed with 【N】, one field per line
  *
- * WeChat wraps long single-line messages awkwardly on mobile; splitting wide
- * tables into field-per-line blocks keeps each row scannable.
+ * Mobile chat clients wrap long single-line messages awkwardly; splitting
+ * wide tables into field-per-line blocks keeps each row scannable.
  */
 function formatTableAsText(headers: string[], rows: string[][]): string {
   if (rows.length === 0) return '';
