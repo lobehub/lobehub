@@ -1,4 +1,4 @@
-import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Block, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,7 @@ import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 import TaskTriggerTag from './TaskTriggerTag';
+import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
 interface TaskItemProps {
   task: TaskListItem;
@@ -43,6 +44,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   useFetchTaskDetail(task.identifier);
 
   const taskDetail = useTaskStore((s) => s.taskDetailMap[task.identifier]);
+  const contextMenuItems = useTaskItemContextMenu(task);
   const navigate = useNavigate();
 
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
@@ -123,22 +125,26 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
 
   if (variant === 'compact') {
     return (
-      <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
-        {titleRow}
-        <TaskLatestActivity activities={taskDetail?.activities} />
-        {metaRow}
-      </Block>
+      <ContextMenuTrigger items={contextMenuItems}>
+        <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
+          {titleRow}
+          <TaskLatestActivity activities={taskDetail?.activities} />
+          {metaRow}
+        </Block>
+      </ContextMenuTrigger>
     );
   }
 
   return (
-    <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
-      <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
-        {titleRow}
-        {metaRow}
-      </Flexbox>
-      <TaskLatestActivity activities={taskDetail?.activities} />
-    </Block>
+    <ContextMenuTrigger items={contextMenuItems}>
+      <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
+        <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
+          {titleRow}
+          {metaRow}
+        </Flexbox>
+        <TaskLatestActivity activities={taskDetail?.activities} />
+      </Block>
+    </ContextMenuTrigger>
   );
 });
 

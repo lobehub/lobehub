@@ -25,7 +25,7 @@ interface StatusMeta {
   labelKey: string;
 }
 
-const STATUS_META: Record<TaskStatus, StatusMeta> = {
+export const STATUS_META: Record<TaskStatus, StatusMeta> = {
   backlog: {
     color: cssVar.colorTextQuaternary,
     icon: CircleDashed,
@@ -64,7 +64,7 @@ const STATUS_META: Record<TaskStatus, StatusMeta> = {
   },
 };
 
-const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
+export const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
