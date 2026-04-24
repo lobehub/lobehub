@@ -3,14 +3,13 @@ import { Plus } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors, taskListSelectors } from '@/store/task/selectors';
+import { taskListSelectors } from '@/store/task/selectors';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -24,7 +23,6 @@ import TasksGroupConfig from './TasksGroupConfig';
 const AgentTasksPage = memo(() => {
   const navigate = useNavigate();
   const viewMode = useTaskStore(taskListSelectors.viewMode);
-  const saveStatus = useTaskStore(taskDetailSelectors.taskSaveStatus);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ allAgents: true });
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
@@ -54,12 +52,7 @@ const AgentTasksPage = memo(() => {
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={
-          <>
-            <Breadcrumb />
-            {saveStatus !== 'idle' && <AutoSaveHint saveStatus={saveStatus} />}
-          </>
-        }
+        left={<Breadcrumb />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {inlineCollapsed && (
