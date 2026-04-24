@@ -4,27 +4,20 @@ import {
   closeContextMenu,
   combineKeys,
   copyToClipboard,
-  Flexbox,
   type GenericItemType,
   Hotkey,
   Icon,
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import {
-  BarChart3Icon,
-  CheckIcon,
-  CircleDashedIcon,
-  CopyIcon,
-  LinkIcon,
-  Trash2Icon,
-} from 'lucide-react';
+import { BarChart3Icon, CircleDashedIcon, CopyIcon, LinkIcon, Trash2Icon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useTaskStore } from '@/store/task';
 
+import { renderMenuExtra } from './menuExtra';
 import { PRIORITY_META } from './TaskPriorityTag';
 import { STATUS_META, USER_SELECTABLE_STATUSES } from './TaskStatusTag';
 
@@ -40,18 +33,6 @@ interface TaskContextMenuTarget {
   priority?: number | null;
   status: string;
 }
-
-const renderCheck = () => <Icon color={cssVar.colorTextSecondary} icon={CheckIcon} size={14} />;
-
-const renderExtra = (shortcut: string, isCurrent: boolean) =>
-  isCurrent ? (
-    <Flexbox horizontal align={'center'} gap={6}>
-      {renderCheck()}
-      {shortcut}
-    </Flexbox>
-  ) : (
-    shortcut
-  );
 
 export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
   const { t } = useTranslation(['chat', 'common']);
@@ -85,7 +66,7 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
       const meta = STATUS_META[status];
       const isCurrent = status === currentStatus;
       return {
-        extra: renderExtra(String(index + 1), isCurrent),
+        extra: renderMenuExtra(String(index + 1), isCurrent),
         icon: <Icon color={meta.color} icon={meta.icon} />,
         key: `status-${status}`,
         label: t(`taskDetail.status.${status}`, { defaultValue: meta.label }),
@@ -103,12 +84,12 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
       const isUrgent = level === 1;
       const isCurrent = level === currentPriority;
       return {
-        extra: renderExtra(String(index + 1), isCurrent),
+        extra: renderMenuExtra(String(index + 1), isCurrent),
         icon: (
-          <PriorityIcon color={isUrgent ? cssVar.orange : cssVar.colorTextDescription} size={16} />
+          <PriorityIcon color={isUrgent ? cssVar.orange : cssVar.colorTextSecondary} size={16} />
         ),
         key: `priority-${level}`,
-        label: t(`taskDetail.${meta.labelKey}`, { defaultValue: '' }),
+        label: t(`taskDetail.${meta.labelKey}` as never, { defaultValue: meta.label }),
         onClick: async ({ domEvent }) => {
           domEvent.stopPropagation();
           if (level === currentPriority) return;
@@ -126,12 +107,18 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
         icon: <Icon icon={CircleDashedIcon} />,
         key: 'status',
         label: t('taskList.contextMenu.status'),
+        onTitleMouseEnter: () => {
+          activeSubmenuRef.current = 'status';
+        },
       },
       {
         children: priorityChildren,
         icon: <Icon icon={BarChart3Icon} />,
         key: 'priority',
         label: t('taskList.contextMenu.priority'),
+        onTitleMouseEnter: () => {
+          activeSubmenuRef.current = 'priority';
+        },
       },
       { type: 'divider' },
       {
@@ -183,9 +170,11 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
   ]);
 
   const cleanupRef = useRef<(() => void) | null>(null);
+  const activeSubmenuRef = useRef<'status' | 'priority'>('status');
 
   const onContextMenu = useCallback(() => {
     cleanupRef.current?.();
+    activeSubmenuRef.current = 'status';
 
     const cleanup = () => {
       document.removeEventListener('keydown', keyHandler, true);
@@ -212,11 +201,27 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
       const num = Number.parseInt(event.key, 10);
       if (Number.isNaN(num)) return;
       const idx = num - 1;
-      if (idx < 0 || idx >= USER_SELECTABLE_STATUSES.length) return;
 
+      // Route 1–N to whichever submenu is currently focused (hover defaults to status).
+      if (activeSubmenuRef.current === 'priority') {
+        if (idx < 0 || idx >= PRIORITY_LEVELS.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const nextLevel = PRIORITY_LEVELS[idx];
+        if (nextLevel !== currentPriority) {
+          void (async () => {
+            await updateTask(task.identifier, { priority: nextLevel });
+            await refreshTaskList();
+          })();
+        }
+        closeContextMenu();
+        cleanup();
+        return;
+      }
+
+      if (idx < 0 || idx >= USER_SELECTABLE_STATUSES.length) return;
       event.preventDefault();
       event.stopPropagation();
-
       const nextStatus = USER_SELECTABLE_STATUSES[idx];
       if (nextStatus !== currentStatus) {
         void updateTaskStatus(task.identifier, nextStatus);
@@ -238,7 +243,15 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
     window.addEventListener('contextmenu', contextHandler, true);
 
     cleanupRef.current = cleanup;
-  }, [task.identifier, currentStatus, updateTaskStatus, triggerDelete]);
+  }, [
+    task.identifier,
+    currentStatus,
+    currentPriority,
+    updateTaskStatus,
+    updateTask,
+    refreshTaskList,
+    triggerDelete,
+  ]);
 
   useEffect(() => () => cleanupRef.current?.(), []);
 
