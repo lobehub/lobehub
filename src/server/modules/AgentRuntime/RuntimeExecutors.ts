@@ -951,16 +951,28 @@ export const createRuntimeExecutors = (
           // Sanitize mirrors the DB write above — state.messages flows into the
           // next LLM call payload, so the same poisoning risk applies here.
           // See LOBE-7761.
-          const stateToolCalls =
+          //
+          // Also drop tool_calls whose function.name never resolved to a
+          // non-empty string across all streaming deltas (LOBE-8199): some
+          // providers (NVIDIA NIM with z-ai/glm5, qwen3.5-MoE) open a
+          // tool_call with `name: null` and never supply the real name,
+          // typically when max_tokens is exhausted mid-stream. The tool
+          // executor can't dispatch them (ToolNameResolver filters them out),
+          // so keeping them in state.messages would only poison subsequent
+          // requests — strict providers 400 on nameless tool_calls.
+          const sanitizedToolCalls =
             tool_calls.length > 0
-              ? tool_calls.map((tc) => ({
-                  ...tc,
-                  function: {
-                    ...tc.function,
-                    arguments: sanitizeToolCallArguments(tc.function.arguments),
-                  },
-                }))
-              : undefined;
+              ? tool_calls
+                  .filter((tc) => !!tc.function.name)
+                  .map((tc) => ({
+                    ...tc,
+                    function: {
+                      ...tc.function,
+                      arguments: sanitizeToolCallArguments(tc.function.arguments),
+                    },
+                  }))
+              : [];
+          const stateToolCalls = sanitizedToolCalls.length > 0 ? sanitizedToolCalls : undefined;
 
           newState.messages.push({
             content,
