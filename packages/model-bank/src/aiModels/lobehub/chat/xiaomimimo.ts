@@ -1,5 +1,15 @@
 import type { AIChatModelCard } from '../../../types/aiModel';
 
+// Authoritative pricing + capability + RPM/TPM reference:
+//   https://platform.xiaomimimo.com/docs/pricing  (SPA — fetch via chrome-devtools MCP, not WebFetch)
+// Model detail pages:
+//   https://mimo.xiaomi.com/mimo-v2-5-pro   (URL uses dashes for dots)
+//   https://mimo.xiaomi.com/mimo-v2-5
+// IMPORTANT: Xiaomi's Token Plan (Credits subscription) billing and the
+// per-token API billing are separate. Announcements like "unified 256K/1M
+// Credit multiplier" only affect Token Plan; the per-token API billing still
+// keeps context-tiered pricing (0-256K / 256K-1M). Always cross-check
+// /docs/pricing when updating these rates.
 export const xiaomimimoChatModels: AIChatModelCard[] = [
   {
     abilities: {
