@@ -11,6 +11,7 @@ vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
+  ShikiLobeTheme: {},
 }));
 
 vi.mock('react-router-dom', async () => {
