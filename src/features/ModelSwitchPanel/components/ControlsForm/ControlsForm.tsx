@@ -97,6 +97,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   }, [config, modelExtendParamOptions?.enableReasoning?.defaultValue]);
   const enableReasoning =
     AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
+  const includeReasoningBudget = modelExtendParamOptions?.enableReasoning?.includeBudget !== false;
 
   const screens = Grid.useBreakpoint();
   const isNarrow = !screens.sm;
@@ -157,7 +158,8 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       minWidth: undefined,
       name: 'enableAdaptiveThinking',
     },
-    (enableReasoning || modelExtendParams?.includes('reasoningBudgetToken')) && {
+    ((enableReasoning && includeReasoningBudget) ||
+      modelExtendParams?.includes('reasoningBudgetToken')) && {
       children: <ReasoningTokenSlider />,
       label: t('extendParams.reasoningBudgetToken.title'),
       layout: 'vertical',
