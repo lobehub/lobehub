@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useTaskStore } from '@/store/task';
 
 import { PRIORITY_META } from './TaskPriorityTag';
@@ -44,6 +45,7 @@ const renderCheck = () => <Icon color={cssVar.colorTextSecondary} icon={CheckIco
 export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
   const { t } = useTranslation(['chat', 'common']);
   const { modal, message } = App.useApp();
+  const appOrigin = useAppOrigin();
 
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
   const updateTask = useTaskStore((s) => s.updateTask);
@@ -105,7 +107,7 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
       } as GenericItemType;
     });
 
-    const taskUrl = `${globalThis.location?.origin ?? ''}/task/${task.identifier}`;
+    const taskUrl = `${appOrigin}/task/${task.identifier}`;
 
     return [
       {
@@ -160,6 +162,7 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
     task.identifier,
     currentStatus,
     currentPriority,
+    appOrigin,
     t,
     message,
     updateTaskStatus,
