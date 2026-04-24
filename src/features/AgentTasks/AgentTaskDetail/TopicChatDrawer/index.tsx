@@ -1,8 +1,7 @@
 'use client';
 
 import { type ConversationContext } from '@lobechat/types';
-import { Drawer, Flexbox, Tag, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Drawer, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,14 +13,6 @@ import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
 import TopicStatusIcon from '../TopicStatusIcon';
-
-const TOPIC_STATUS_COLOR: Record<string, string> = {
-  canceled: cssVar.colorTextSecondary,
-  completed: cssVar.colorSuccess,
-  failed: cssVar.colorError,
-  running: cssVar.colorWarning,
-  timeout: cssVar.colorWarning,
-};
 
 interface TopicChatDrawerBodyProps {
   agentId: string;
@@ -77,7 +68,6 @@ const TopicChatDrawer = memo(() => {
 
   const open = !!topicId && !!agentId;
   const status = activity?.status;
-  const statusColor = TOPIC_STATUS_COLOR[status ?? ''] ?? cssVar.colorTextQuaternary;
 
   const title = (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
@@ -89,11 +79,6 @@ const TopicChatDrawer = memo(() => {
         <Text fontSize={12} type={'secondary'}>
           #{activity.seq}
         </Text>
-      )}
-      {status && (
-        <Tag size={'small'} style={{ color: statusColor }}>
-          {status}
-        </Tag>
       )}
     </Flexbox>
   );
