@@ -540,7 +540,8 @@ export default {
   'taskDetail.comment.deleteConfirm.title': 'Delete this comment?',
   'taskDetail.comment.edit': 'Edit',
   'taskDetail.comment.save': 'Save',
-  'taskDetail.commentPlaceholder': 'Leave a comment...',
+  'taskDetail.commentPlaceholder':
+    'Leave feedback to guide the agent — your comments shape the next run...',
   'taskDetail.deleteConfirm.content': 'This action cannot be undone.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',

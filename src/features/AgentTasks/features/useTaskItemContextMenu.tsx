@@ -4,6 +4,7 @@ import {
   closeContextMenu,
   combineKeys,
   copyToClipboard,
+  Flexbox,
   type GenericItemType,
   Hotkey,
   Icon,
@@ -42,6 +43,16 @@ interface TaskContextMenuTarget {
 
 const renderCheck = () => <Icon color={cssVar.colorTextSecondary} icon={CheckIcon} size={14} />;
 
+const renderExtra = (shortcut: string, isCurrent: boolean) =>
+  isCurrent ? (
+    <Flexbox horizontal align={'center'} gap={6}>
+      {shortcut}
+      {renderCheck()}
+    </Flexbox>
+  ) : (
+    shortcut
+  );
+
 export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
   const { t } = useTranslation(['chat', 'common']);
   const { modal, message } = App.useApp();
@@ -74,7 +85,7 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
       const meta = STATUS_META[status];
       const isCurrent = status === currentStatus;
       return {
-        extra: isCurrent ? renderCheck() : String(index + 1),
+        extra: renderExtra(String(index + 1), isCurrent),
         icon: <Icon color={meta.color} icon={meta.icon} />,
         key: `status-${status}`,
         label: t(`taskDetail.status.${status}`, { defaultValue: meta.label }),
@@ -86,13 +97,13 @@ export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemCon
       } as GenericItemType;
     });
 
-    const priorityChildren = PRIORITY_LEVELS.map((level) => {
+    const priorityChildren = PRIORITY_LEVELS.map((level, index) => {
       const meta = PRIORITY_META[level];
       const PriorityIcon = meta.icon;
       const isUrgent = level === 1;
       const isCurrent = level === currentPriority;
       return {
-        extra: isCurrent ? renderCheck() : undefined,
+        extra: renderExtra(String(index + 1), isCurrent),
         icon: (
           <PriorityIcon color={isUrgent ? cssVar.orange : cssVar.colorTextDescription} size={16} />
         ),

@@ -17,7 +17,7 @@ const TOPIC_STATUS_COLOR: Record<string, string> = {
   canceled: cssVar.colorTextSecondary,
   completed: cssVar.colorSuccess,
   failed: cssVar.colorError,
-  running: cssVar.colorInfo,
+  running: cssVar.colorWarning,
   timeout: cssVar.colorWarning,
 };
 

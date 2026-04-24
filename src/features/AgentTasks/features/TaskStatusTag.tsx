@@ -7,9 +7,9 @@ import {
   CircleCheck,
   CircleDashed,
   CircleDot,
-  CirclePause,
   CircleSlash,
   CircleX,
+  HandIcon,
   Loader2Icon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -51,13 +51,13 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
     labelKey: 'status.failed',
   },
   paused: {
-    color: cssVar.colorWarning,
-    icon: CirclePause,
+    color: cssVar.colorInfo,
+    icon: HandIcon,
     label: 'Paused',
     labelKey: 'status.paused',
   },
   running: {
-    color: cssVar.colorInfo,
+    color: cssVar.colorWarning,
     icon: CircleDot,
     label: 'Running',
     labelKey: 'status.running',

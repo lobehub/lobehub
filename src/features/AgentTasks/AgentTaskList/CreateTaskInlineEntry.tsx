@@ -129,7 +129,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         title={t('createTask.collapse')}
         onClick={handleCollapse}
       />
-      <Flexbox style={{ fontSize: 14, minHeight: 120, padding: '12px 40px 0 16px' }}>
+      <Flexbox style={{ fontSize: 14, padding: '12px 40px 0 16px' }}>
         <EditorCanvas
           editor={editor}
           floatingToolbar={false}

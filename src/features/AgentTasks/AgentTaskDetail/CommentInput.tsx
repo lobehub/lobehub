@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useTaskStore } from '@/store/task';
 
+import { styles } from '../shared/style';
+
 const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const editor = useEditor();
@@ -28,7 +30,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   }, [taskId, editor, addComment, submitting]);
 
   return (
-    <Flexbox horizontal align={'center'} gap={8}>
+    <Flexbox horizontal align={'center'} className={styles.commentInputCard} gap={8}>
       <Avatar avatar={userAvatar} size={24} style={{ flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <Editor

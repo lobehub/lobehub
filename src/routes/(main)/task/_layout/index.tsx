@@ -5,6 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 
+import AgentTaskManager from '@/features/AgentTaskManager';
 import { useScenarioEnabledTools } from '@/hooks/useScenarioEnabledTools';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -18,8 +19,11 @@ const TaskDetailLayout = memo(() => {
   }
 
   return (
-    <Flexbox flex={1} height={'100%'} width={'100%'}>
-      <Outlet />
+    <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
+        <Outlet />
+      </Flexbox>
+      <AgentTaskManager />
     </Flexbox>
   );
 });
