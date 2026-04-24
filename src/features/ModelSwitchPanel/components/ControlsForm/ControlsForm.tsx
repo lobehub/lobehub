@@ -1,7 +1,7 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import { type FormItemProps } from '@lobehub/ui';
 import { Form } from '@lobehub/ui';
-import { Grid, Switch } from 'antd';
+import { Form as AntdForm, Grid, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -73,6 +73,8 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   const model = modelProp ?? agentModel;
   const provider = providerProp ?? agentProvider;
   const [form] = Form.useForm();
+  const enableReasoning = AntdForm.useWatch(['enableReasoning'], form);
+
   const config = useAgentStore(
     (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
     isEqual,
