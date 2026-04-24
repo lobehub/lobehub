@@ -53,7 +53,7 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
   paused: {
     color: cssVar.colorInfo,
     icon: HandIcon,
-    label: 'Paused',
+    label: 'Pending review',
     labelKey: 'status.paused',
   },
   running: {
@@ -64,7 +64,12 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
   },
 };
 
-export const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
+export const USER_SELECTABLE_STATUSES: TaskStatus[] = [
+  'backlog',
+  'paused',
+  'completed',
+  'canceled',
+];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
