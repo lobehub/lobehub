@@ -5,21 +5,79 @@ const deepseekChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4 Flash is the cost-efficient member of the V4 family with a 1M context window and hybrid thinking. Thinking mode is on by default and can be toggled via the `thinking` parameter; non-thinking mode is optimized for latency-sensitive workflows.',
+    displayName: 'DeepSeek V4 Flash',
+    enabled: true,
+    id: 'deepseek-v4-flash',
+    maxOutput: 384_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['thinking'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4 Pro is the flagship of the V4 family, optimized for high-intensity reasoning, agentic workflows, and long-horizon planning. Thinking mode is on by default and can be toggled via the `thinking` parameter.',
+    displayName: 'DeepSeek V4 Pro',
+    enabled: true,
+    id: 'deepseek-v4-pro',
+    maxOutput: 384_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['thinking'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       structuredOutput: true,
     },
     contextWindowTokens: 131_072,
+    // Per official docs: deepseek-chat is now a compatibility alias pointing to
+    // the non-thinking mode of deepseek-v4-flash and is slated for deprecation.
+    // Pricing is therefore the same as deepseek-v4-flash, not the former V3.2 rate.
     description:
-      'DeepSeek V3.2 is DeepSeek’s latest general model with a hybrid reasoning architecture and stronger agent capabilities.',
-    displayName: 'DeepSeek V3.2',
-    enabled: true,
+      'Compatibility alias for DeepSeek V4 Flash non-thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
+    displayName: 'DeepSeek V3.2 (Legacy alias)',
+    enabled: false,
     id: 'deepseek-chat',
+    legacy: true,
     maxOutput: 8192,
     pricing: {
       currency: 'CNY',
       units: [
         { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-01',
@@ -31,18 +89,21 @@ const deepseekChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 131_072,
+    // Per official docs: deepseek-reasoner is now a compatibility alias pointing
+    // to the thinking mode of deepseek-v4-flash and is slated for deprecation.
     description:
-      'DeepSeek V3.2 thinking mode outputs a chain-of-thought before the final answer to improve accuracy.',
-    displayName: 'DeepSeek V3.2 Thinking',
-    enabled: true,
+      'Compatibility alias for DeepSeek V4 Flash thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
+    displayName: 'DeepSeek V3.2 Thinking (Legacy alias)',
+    enabled: false,
     id: 'deepseek-reasoner',
+    legacy: true,
     maxOutput: 65_536,
     pricing: {
       currency: 'CNY',
       units: [
         { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-01',
