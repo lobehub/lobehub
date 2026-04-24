@@ -222,6 +222,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-08',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -278,6 +281,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-03-16',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -333,6 +339,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-02-11',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -391,6 +400,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-02',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -416,6 +428,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-20',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -441,6 +456,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-01-27',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -507,6 +525,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-12-02',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -529,6 +550,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-09-23',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
