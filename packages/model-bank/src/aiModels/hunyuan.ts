@@ -6,12 +6,71 @@ const hunyuanChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Hunyuan Hy3 Preview is designed for agent workloads, adopting a Mixture-of-Experts (MoE) architecture with 295B total parameters and 21B activated parameters. It offers three modes within a single model—**no_think** (ultra-fast response), **think_low** (quick reasoning), and **think_high** (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks. It achieves near state-of-the-art performance on coding benchmarks such as SWE-bench Verified, and supports a 256K context window for cross-file code refactoring and long-document analysis. This model is well-suited for developers who require reliable task completion while remaining sensitive to inference cost.',
+    displayName: 'Hy3 preview',
+    enabled: true,
+    id: 'hy3-preview',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.016]': 0.4,
+              '[0.016, 0.032]': 0.6,
+              '[0.032, infinity]': 0.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.016]': 1.2,
+              '[0.016, 0.032]': 1.6,
+              '[0.032, infinity]': 2,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.016]': 4,
+              '[0.016, 0.032]': 6.4,
+              '[0.032, infinity]': 8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 128_000,
     description:
-      'Release Features: The model base has been upgraded from TurboS to **Hunyuan 2.0**, resulting in comprehensive capability improvements. It significantly enhances the model’s ability to follow complex instructions, understand multi-turn and long-form text, handle code, operate as an agent, and perform reasoning tasks.',
-    displayName: 'Tencent HY 2.0 Think',
+      'Specialized in creative content, multi-turn interactions, and practical instruction-following scenarios. Significantly enhanced capabilities in mathematics, coding, and agent-based tasks.',
+    displayName: 'HY 2.0 Think',
     enabled: true,
     id: 'hunyuan-2.0-thinking-20251109',
     maxOutput: 64_000,
@@ -45,23 +104,19 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-11-09',
-    settings: {
-      searchImpl: 'params',
-    },
     type: 'chat',
   },
   {
     abilities: {
       functionCall: true,
-      search: true,
     },
     contextWindowTokens: 128_000,
     description:
-      'Release Features: The model base has been upgraded from TurboS to **Hunyuan 2.0**, resulting in comprehensive capability improvements. It significantly enhances instruction-following, multi-turn and long-form text understanding, literary creation, knowledge accuracy, coding, and reasoning abilities.',
-    displayName: 'Tencent HY 2.0 Instruct',
+      'The model foundation has been comprehensively upgraded, with more robust core capabilities. It achieves top-tier performance in knowledge, mathematics, writing, and reasoning. It also demonstrates excellent performance in instruction following, multi-turn interactions, and long-context comprehension.',
+    displayName: 'HY 2.0 Instruct',
     enabled: true,
     id: 'hunyuan-2.0-instruct-20251111',
-    maxOutput: 16_000,
+    maxOutput: 32_000,
     pricing: {
       currency: 'CNY',
       units: [
@@ -92,423 +147,248 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-11-11',
-    settings: {
-      searchImpl: 'params',
-    },
     type: 'chat',
   },
   {
-    abilities: {
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 256_000,
+    contextWindowTokens: 128_000,
     description:
-      'The first hybrid reasoning model from Hunyuan, upgraded from hunyuan-standard-256K (80B total, 13B active). It defaults to slow thinking and supports fast/slow switching via params or prefixing /no_think. Overall capability is improved over the previous generation, especially in math, science, long-text understanding, and agent tasks.',
-    displayName: 'Hunyuan A13B',
-    enabled: true,
-    id: 'hunyuan-a13b',
+      'For role-playing scenarios, it delivers highly consistent character alignment and exceptionally natural, human-like conversational style. It offers engaging narrative development and progression, along with emotional companionship and fulfillment.',
+    displayName: 'Hunyuan-role',
+    id: 'hunyuan-role-latest',
     maxOutput: 32_000,
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-06-25',
-    settings: {
-      extendParams: ['enableReasoning'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 96_000,
-    description:
-      'Significantly improves the slow-thinking model on hard math, complex reasoning, difficult coding, instruction following, and creative writing quality.',
-    displayName: 'Hunyuan T1',
-    id: 'hunyuan-t1-latest',
-    maxOutput: 64_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-08-22',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 92_000,
-    description:
-      'Greatly improves hard math, logic, and coding, boosts output stability, and enhances long-text capability.',
-    displayName: 'Hunyuan T1 20250711',
-    id: 'hunyuan-t1-20250711',
-    maxOutput: 64_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-11',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 92_000,
-    description:
-      'Improves creative writing and composition, strengthens frontend coding, math, and logic reasoning, and enhances instruction following.',
-    displayName: 'Hunyuan T1 20250529',
-    id: 'hunyuan-t1-20250529',
-    maxOutput: 64_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-05-29',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 92_000,
-    description:
-      'Improves project-level code generation and writing quality, strengthens multi-turn topic understanding and ToB instruction following, improves word-level understanding, and reduces mixed simplified/traditional and Chinese/English output issues.',
-    displayName: 'Hunyuan T1 20250403',
-    id: 'hunyuan-t1-20250403',
-    maxOutput: 64_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-04-03',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 92_000,
-    description:
-      'Builds balanced arts and STEM capabilities with strong long-text information capture. Supports reasoning answers for math, logic, science, and code problems across difficulty levels.',
-    displayName: 'Hunyuan T1 20250321',
-    id: 'hunyuan-t1-20250321',
-    maxOutput: 64_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-03-21',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 256_000,
-    description:
-      'Upgraded to an MoE architecture with a 256k context window, leading many open models across NLP, code, math, and industry benchmarks.',
-    displayName: 'Hunyuan Lite',
-    enabled: true,
-    id: 'hunyuan-lite',
-    maxOutput: 6000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-10-30',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      search: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'Uses improved routing to mitigate load balancing and expert collapse. Achieves 99.9% needle-in-a-haystack on long context. MOE-32K offers strong value while handling long inputs.',
-    displayName: 'Hunyuan Standard',
-    id: 'hunyuan-standard',
-    maxOutput: 2000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-10',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      search: true,
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'Uses improved routing to mitigate load balancing and expert collapse. Achieves 99.9% needle-in-a-haystack on long context. MOE-256K further expands context length and quality.',
-    displayName: 'Hunyuan Standard 256K',
-    id: 'hunyuan-standard-256K',
-    maxOutput: 6000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-10',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      search: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'Hunyuan-large has ~389B total parameters and ~52B activated, the largest and strongest open MoE model in a Transformer architecture.',
-    displayName: 'Hunyuan Large',
-    id: 'hunyuan-large',
-    maxOutput: 4000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-10',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      search: true,
-    },
-    contextWindowTokens: 134_000,
-    description:
-      'Excels at long-document tasks like summarization and QA while also handling general generation. Strong at long-text analysis and generation for complex, detailed content.',
-    displayName: 'Hunyuan Large Longcontext',
-    id: 'hunyuan-large-longcontext',
-    maxOutput: 6000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-12-18',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'General experience improvements across NLP understanding, writing, chat, QA, translation, and domains; more human-like responses, better clarification on ambiguous intent, improved word parsing, higher creative quality and interactivity, and stronger multi-turn conversations.',
-    displayName: 'Hunyuan Turbo',
-    id: 'hunyuan-turbo-latest',
-    maxOutput: 4000,
-    pricing: {
-      currency: 'CNY',
-      units: [
         { name: 'textInput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 9.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-01-10',
-    settings: {
-      searchImpl: 'params',
-    },
+    releasedAt: '2026-03-04',
     type: 'chat',
   },
   {
     abilities: {
       functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'This version boosts instruction scaling for better generalization, significantly improves math/code/logic reasoning, enhances word-level understanding, and improves writing quality.',
-    displayName: 'Hunyuan Turbo 20241223',
-    id: 'hunyuan-turbo-20241223',
-    maxOutput: 4000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-01-10',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 134_000,
-    description:
-      'Excels at long-document tasks like summarization and QA while also handling general generation. Strong at long-text analysis and generation for complex, detailed content.',
-    displayName: 'Hunyuan TurboS LongText 128K',
-    id: 'hunyuan-turbos-longtext-128k-20250325',
-    maxOutput: 6000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-03-25',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    contextWindowTokens: 44_000,
-    description:
-      'The latest Hunyuan TurboS flagship model with stronger reasoning and a better overall experience.',
-    displayName: 'Hunyuan TurboS',
-    id: 'hunyuan-turbos-latest',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-16',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 40_000,
-    description:
-      'A fast-thinking image-to-text model built on the TurboS text base, showing notable improvements over the previous version in fundamental image recognition and image analysis reasoning.',
-    displayName: 'Hunyuan Vision 1.5 Instruct',
-    id: 'hunyuan-vision-1.5-instruct',
-    maxOutput: 16_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-12-17',
-    type: 'chat',
-  },
-  {
-    abilities: {
       reasoning: true,
-      vision: true,
+      structuredOutput: true,
     },
-    contextWindowTokens: 48_000,
+    contextWindowTokens: 200_000,
     description:
-      'Latest t1-vision deep reasoning model with major improvements in VQA, visual grounding, OCR, charts, solving photographed problems, and image-based creation, plus stronger English and low-resource languages.',
-    displayName: 'Hunyuan T1 Vision 20250916',
-    id: 'hunyuan-t1-vision-20250916',
-    maxOutput: 20_000,
+      'GLM-5.1 is Zhipu’s latest flagship model, with significantly enhanced coding capabilities and substantial improvements in long-horizon tasks. It can operate continuously and autonomously for up to 8 hours within a single task, completing a full closed loop from planning and execution to iterative optimization, delivering engineering-grade results. In terms of overall capabilities and coding performance, GLM-5.1 is aligned with Claude Opus 4.6. It demonstrates stronger sustained execution in long-running tasks, complex engineering optimization, and real-world development scenarios, making it an ideal foundation for building autonomous agents and long-horizon coding agents.',
+    displayName: 'GLM-5.1',
+    id: 'glm-5.1',
+    maxOutput: 128_000,
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.3,
+              '[0.032, infinity]': 2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 6,
+              '[0.032, infinity]': 8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 24,
+              '[0.032, infinity]': 28,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
-    releasedAt: '2025-09-16',
+    releasedAt: '2026-04-08',
     type: 'chat',
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'A model deeply optimized for real-world, long-chain agent tasks, with a focus on improving complex instruction decomposition, tool usage, scheduled continuous execution, and long-task stability.',
+    displayName: 'GLM-5-Turbo',
+    id: 'glm-5-turbo',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.2,
+              '[0.032, infinity]': 1.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 5,
+              '[0.032, infinity]': 7,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 22,
+              '[0.032, infinity]': 26,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-03-16',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'GLM-5 is Zhipu’s new-generation flagship foundation model, designed for agentic engineering. It excels at complex systems engineering, long-horizon agent tasks, and programming, achieving state-of-the-art (SOTA) performance among open-source models in both coding and agent capabilities.',
+    displayName: 'GLM-5',
+    id: 'glm-5',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1,
+              '[0.032, infinity]': 1.5,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 4,
+              '[0.032, infinity]': 6,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 18,
+              '[0.032, infinity]': 22,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-02-11',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      vision: true,
       video: true,
-      vision: true,
     },
-    contextWindowTokens: 32_000,
+    contextWindowTokens: 200_000,
     description:
-      'Applicable to video understanding scenarios. Release features: Based on the **Hunyuan Turbos-Vision** video understanding model, supporting fundamental video understanding capabilities such as video description and video content question answering.',
-    displayName: 'Hunyuan Turbos Vision Video',
-    id: 'hunyuan-turbos-vision-video',
-    maxOutput: 8_000,
+      'GLM-5V-Turbo is Zhipu’s first multimodal coding foundation model, designed for vision-based programming tasks. It natively handles multimodal inputs such as images, videos, and text, while excelling in long-horizon planning, complex programming, and action execution. Deeply optimized for agent workflows, it can collaborate seamlessly with agents like Claude Code and OpenClaw.',
+    displayName: 'GLM-5V-Turbo',
+    id: 'glm-5v-turbo',
+    maxOutput: 128_000,
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.2,
+              '[0.032, infinity]': 1.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 5,
+              '[0.032, infinity]': 7,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 22,
+              '[0.032, infinity]': 26,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
-    releasedAt: '2025-07-28',
+    releasedAt: '2026-04-02',
     type: 'chat',
   },
 ];
