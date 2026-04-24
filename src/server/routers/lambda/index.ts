@@ -25,6 +25,7 @@ import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
+import { briefTemplateRouter } from './briefTemplate';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
 import { configRouter } from './config';
@@ -76,6 +77,7 @@ export const lambdaRouter = router({
   agentSignal: agentSignalRouter,
   task: taskRouter,
   brief: briefRouter,
+  briefTemplate: briefTemplateRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,

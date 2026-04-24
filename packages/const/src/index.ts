@@ -1,4 +1,5 @@
 export * from './bot';
+export * from './briefTemplate';
 export * from './currency';
 export * from './desktop';
 export * from './desktopGlobalShortcuts';

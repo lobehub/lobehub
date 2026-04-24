@@ -2,6 +2,7 @@ import agent from './agent';
 import agentGroup from './agentGroup';
 import auth from './auth';
 import authError from './authError';
+import briefTemplate from './briefTemplate';
 import changelog from './changelog';
 import chat from './chat';
 import color from './color';
@@ -48,6 +49,7 @@ const resources = {
   agentGroup,
   auth,
   authError,
+  briefTemplate,
   changelog,
   chat,
   color,
