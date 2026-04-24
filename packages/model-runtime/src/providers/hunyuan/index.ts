@@ -3,6 +3,7 @@ import { ModelProvider } from 'model-bank';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { createHunyuanImage } from './createImage';
+import { createHunyuanVideo } from './createVideo';
 
 export const params = {
   baseURL: 'https://tokenhub.tencentmaas.com/v1',
@@ -48,6 +49,11 @@ export const params = {
     },
   },
   createImage: createHunyuanImage,
+  createVideo: createHunyuanVideo,
+  handlePollVideoStatus: async (inferenceId, options) => {
+    const { pollHunyuanVideoStatus } = await import('./createVideo');
+    return pollHunyuanVideoStatus(inferenceId, options.apiKey || '', options.baseURL || '');
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_HUNYUAN_CHAT_COMPLETION === '1',
   },
