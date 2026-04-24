@@ -560,6 +560,7 @@
   "taskList.orderBy.updatedAt": "更新时间",
   "taskList.title": "任务",
   "taskList.unassigned": "未分配",
+  "taskList.unassignedHint": "未分配时将由 Lobe AI 执行该任务",
   "taskList.view.board": "看板",
   "taskList.view.list": "列表",
   "taskList.viewAll": "查看全部",

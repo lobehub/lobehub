@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Icon, Text } from '@lobehub/ui';
+import { Block, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar, useThemeMode } from 'antd-style';
 import { UserCircle2 } from 'lucide-react';
 import { memo } from 'react';
@@ -28,30 +28,32 @@ const TaskDetailAssignee = memo(() => {
       disabled={status === 'running'}
       taskIdentifier={taskId}
     >
-      <Block
-        clickable
-        horizontal
-        align="center"
-        gap={8}
-        paddingBlock={4}
-        paddingInline={11}
-        style={{ minHeight: 32 }}
-        variant={isDarkMode ? 'filled' : 'outlined'}
-      >
-        {assigneeAgentId ? (
-          <>
-            <AssigneeAvatar agentId={assigneeAgentId} size={20} />
-            <Text weight={500}>{assigneeMeta?.title}</Text>
-          </>
-        ) : (
-          <>
-            <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={18} />
-            <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
-              {t('taskList.unassigned')}
-            </Text>
-          </>
-        )}
-      </Block>
+      <Tooltip title={assigneeAgentId ? undefined : t('taskList.unassignedHint')}>
+        <Block
+          clickable
+          horizontal
+          align="center"
+          gap={8}
+          paddingBlock={4}
+          paddingInline={11}
+          style={{ minHeight: 32 }}
+          variant={isDarkMode ? 'filled' : 'outlined'}
+        >
+          {assigneeAgentId ? (
+            <>
+              <AssigneeAvatar agentId={assigneeAgentId} size={20} />
+              <Text weight={500}>{assigneeMeta?.title}</Text>
+            </>
+          ) : (
+            <>
+              <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={18} />
+              <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+                {t('taskList.unassigned')}
+              </Text>
+            </>
+          )}
+        </Block>
+      </Tooltip>
     </AssigneeAgentSelector>
   );
 });

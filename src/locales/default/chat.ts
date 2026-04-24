@@ -614,6 +614,7 @@ export default {
   'taskList.orderBy.updatedAt': 'Updated at',
   'taskList.title': 'Tasks',
   'taskList.unassigned': 'Unassigned',
+  'taskList.unassignedHint': 'Lobe AI will run this task when no assignee is set',
   'taskList.assigneeSearch.empty': 'No matching agent',
   'taskList.assigneeSearch.placeholder': 'Search agent...',
   'taskList.contextMenu.copyId': 'Copy ID',

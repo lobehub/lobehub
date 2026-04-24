@@ -560,6 +560,7 @@
   "taskList.orderBy.updatedAt": "Updated at",
   "taskList.title": "Tasks",
   "taskList.unassigned": "Unassigned",
+  "taskList.unassignedHint": "Lobe AI will run this task when no assignee is set",
   "taskList.view.board": "Board",
   "taskList.view.list": "List",
   "taskList.viewAll": "View all",
