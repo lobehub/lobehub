@@ -22,7 +22,7 @@ export const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['thinking'],
+      extendParams: ['thinking', 'deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -47,7 +47,7 @@ export const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['thinking'],
+      extendParams: ['thinking', 'deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
