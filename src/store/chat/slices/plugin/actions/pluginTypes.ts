@@ -129,7 +129,7 @@ export class PluginTypesActionImpl {
       );
 
       // Call Tool Store's invokeBuiltinTool
-      console.info('[BuiltinToolCall] invoke:start', {
+      log('[BuiltinToolCall] invoke:start', {
         agentId,
         apiName: payload.apiName,
         documentId,
@@ -157,7 +157,7 @@ export class PluginTypesActionImpl {
           topicId,
         });
 
-      console.info('[BuiltinToolCall] invoke:end', {
+      log('[BuiltinToolCall] invoke:end', {
         apiName: payload.apiName,
         errorType: result.error?.type,
         identifier: payload.identifier,

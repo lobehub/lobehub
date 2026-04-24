@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/editor-runtime';
 import type { BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
+import debug from 'debug';
 
 import type {
   EditTitleState,
@@ -17,6 +18,8 @@ import type {
   ReplaceTextState,
 } from '../types';
 import { PageAgentIdentifier } from '../types';
+
+const log = debug('lobe-page-agent:executor');
 
 /**
  * API enum for Page Agent executor
@@ -128,7 +131,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Initialize a new document from Markdown content
    */
   initPage = async (params: InitDocumentArgs): Promise<BuiltinToolResult> => {
-    console.info('[PageAgentToolCall] initPage:start', {
+    log('[PageAgentToolCall] initPage:start', {
       markdownLength: params.markdown.length,
       runtime: getRuntimeDebugSnapshot(this.runtime),
     });
@@ -145,7 +148,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         rootId: 'root',
       };
 
-      console.info('[PageAgentToolCall] initPage:success', {
+      log('[PageAgentToolCall] initPage:success', {
         nodeCount: result.nodeCount,
         runtime: getRuntimeDebugSnapshot(this.runtime),
         titleExtracted: !!result.extractedTitle,
@@ -176,7 +179,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Edit the page title
    */
   editTitle = async (params: EditTitleArgs): Promise<BuiltinToolResult> => {
-    console.info('[PageAgentToolCall] editTitle:start', {
+    log('[PageAgentToolCall] editTitle:start', {
       runtime: getRuntimeDebugSnapshot(this.runtime),
       titleLength: params.title.length,
     });
@@ -191,7 +194,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         previousTitle: result.previousTitle,
       };
 
-      console.info('[PageAgentToolCall] editTitle:success', {
+      log('[PageAgentToolCall] editTitle:success', {
         runtime: getRuntimeDebugSnapshot(this.runtime),
         titleLength: params.title.length,
       });
@@ -221,7 +224,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Get page content in XML, markdown, or both formats
    */
   getPageContent = async (params: GetPageContentArgs): Promise<BuiltinToolResult> => {
-    console.info('[PageAgentToolCall] getPageContent:start', {
+    log('[PageAgentToolCall] getPageContent:start', {
       format: params.format,
       runtime: getRuntimeDebugSnapshot(this.runtime),
     });
@@ -245,7 +248,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
       // We return the formatted content based on the requested format
       const content = result.markdown || result.xml || '';
 
-      console.info('[PageAgentToolCall] getPageContent:success', {
+      log('[PageAgentToolCall] getPageContent:success', {
         format: params.format,
         markdownLength: result.markdown?.length,
         runtime: getRuntimeDebugSnapshot(this.runtime),
@@ -283,7 +286,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         ? [params.operations]
         : [];
 
-    console.info('[PageAgentToolCall] modifyNodes:start', {
+    log('[PageAgentToolCall] modifyNodes:start', {
       operationActions: operations.map((op) => op.action),
       operationCount: operations.length,
       runtime: getRuntimeDebugSnapshot(this.runtime),
@@ -312,7 +315,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         totalCount: result.totalCount,
       };
 
-      console.info('[PageAgentToolCall] modifyNodes:success', {
+      log('[PageAgentToolCall] modifyNodes:success', {
         runtime: getRuntimeDebugSnapshot(this.runtime),
         successCount: result.successCount,
         totalCount: result.totalCount,
@@ -343,7 +346,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Find and replace text across the document
    */
   replaceText = async (params: ReplaceTextArgs): Promise<BuiltinToolResult> => {
-    console.info('[PageAgentToolCall] replaceText:start', {
+    log('[PageAgentToolCall] replaceText:start', {
       newTextLength: params.newText.length,
       nodeCount: params.nodeIds?.length,
       runtime: getRuntimeDebugSnapshot(this.runtime),
@@ -368,7 +371,7 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         replacementCount: result.replacementCount,
       };
 
-      console.info('[PageAgentToolCall] replaceText:success', {
+      log('[PageAgentToolCall] replaceText:success', {
         modifiedNodeCount: result.modifiedNodeIds.length,
         replacementCount: result.replacementCount,
         runtime: getRuntimeDebugSnapshot(this.runtime),

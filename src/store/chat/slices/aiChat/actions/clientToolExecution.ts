@@ -105,7 +105,7 @@ export class ClientToolExecutionActionImpl {
           topicId: operation?.context?.topicId ?? undefined,
         };
 
-        console.info('[ClientToolCall] execute:start', {
+        log('[ClientToolCall] execute:start', {
           agentId: ctx.agentId,
           apiName,
           documentId: ctx.documentId,
@@ -118,7 +118,7 @@ export class ClientToolExecutionActionImpl {
 
         const result = await invokeExecutor(identifier, apiName, params, ctx);
 
-        console.info('[ClientToolCall] execute:end', {
+        log('[ClientToolCall] execute:end', {
           apiName,
           errorType: result.error?.type,
           identifier,

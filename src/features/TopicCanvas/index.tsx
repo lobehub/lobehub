@@ -4,6 +4,7 @@ import type { IEditor } from '@lobehub/editor';
 import { EditorProvider, useEditor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
+import debug from 'debug';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
@@ -15,6 +16,8 @@ import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-pag
 import { StyleSheet } from '@/utils/styles';
 
 import TitleSection, { type TitleSectionProps } from './TitleSection';
+
+const log = debug('lobe-client:topic-canvas');
 
 const styles = StyleSheet.create({
   contentWrapper: {
@@ -107,7 +110,7 @@ const TopicCanvasPageAgentBridge = memo<
 
   useEffect(() => {
     if (editorReady && pageAgentEditor) {
-      console.info('[TopicCanvas/PageAgentBridge] setEditor', {
+      log('[TopicCanvas/PageAgentBridge] setEditor', {
         dataSourceTypes: getPageAgentEditorSnapshot(editor).dataSourceTypes,
         documentId,
         editorReady,
@@ -117,13 +120,13 @@ const TopicCanvasPageAgentBridge = memo<
     }
 
     return () => {
-      console.info('[TopicCanvas/PageAgentBridge] clearEditor', { documentId });
+      log('[TopicCanvas/PageAgentBridge] clearEditor', { documentId });
       pageAgentRuntime.setEditor(null);
     };
   }, [documentId, editor, editorReady, pageAgentEditor]);
 
   useEffect(() => {
-    console.info('[TopicCanvas/PageAgentBridge] bindDocumentContext', {
+    log('[TopicCanvas/PageAgentBridge] bindDocumentContext', {
       dataSourceTypes: getPageAgentEditorSnapshot(editor).dataSourceTypes,
       documentId,
       hasEditor: !!editor,
@@ -137,7 +140,7 @@ const TopicCanvasPageAgentBridge = memo<
       () => titleRef.current,
     );
     pageAgentRuntime.setBeforeMutateHandler(() => {
-      console.info('[TopicCanvas/PageAgentBridge] beforeMutate', {
+      log('[TopicCanvas/PageAgentBridge] beforeMutate', {
         dataSourceTypes: getPageAgentEditorSnapshot(editor).dataSourceTypes,
         documentId,
         hasEditor: !!editor,
@@ -146,7 +149,7 @@ const TopicCanvasPageAgentBridge = memo<
     });
 
     return () => {
-      console.info('[TopicCanvas/PageAgentBridge] clearDocumentContext', { documentId });
+      log('[TopicCanvas/PageAgentBridge] clearDocumentContext', { documentId });
       pageAgentRuntime.setCurrentDocId(undefined);
       pageAgentRuntime.setTitleHandlers(null, null);
       pageAgentRuntime.setBeforeMutateHandler(null);
@@ -196,7 +199,7 @@ const TopicCanvasBody = memo<TopicCanvasProps>(
         const markReadyWhenAvailable = () => {
           const snapshot = getPageAgentEditorSnapshot(editorInstance);
 
-          console.info('[TopicCanvas] editor:onInit', {
+          log('[TopicCanvas] editor:onInit', {
             ...snapshot,
             documentId,
             retryCount,

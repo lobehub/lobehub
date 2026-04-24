@@ -71,7 +71,7 @@ export class EditorRuntime {
    */
   setEditor(editor: IEditor | null) {
     this.editor = editor;
-    console.info('[EditorRuntime] setEditor', this.getDebugSnapshot());
+    log('[EditorRuntime] setEditor', this.getDebugSnapshot());
   }
 
   /**
@@ -80,7 +80,7 @@ export class EditorRuntime {
   setCurrentDocId(docId: string | undefined) {
     log('Setting current doc ID:', docId);
     this.currentDocId = docId;
-    console.info('[EditorRuntime] setCurrentDocId', this.getDebugSnapshot());
+    log('[EditorRuntime] setCurrentDocId', this.getDebugSnapshot());
   }
 
   /**
@@ -96,7 +96,7 @@ export class EditorRuntime {
    */
   setBeforeMutateHandler(handler: (() => void | Promise<void>) | null) {
     this.beforeMutateHandler = handler;
-    console.info('[EditorRuntime] setBeforeMutateHandler', this.getDebugSnapshot());
+    log('[EditorRuntime] setBeforeMutateHandler', this.getDebugSnapshot());
   }
 
   /**
@@ -105,7 +105,7 @@ export class EditorRuntime {
   setTitleHandlers(setter: ((title: string) => void) | null, getter: (() => string) | null) {
     this.titleSetter = setter;
     this.titleGetter = getter;
-    console.info('[EditorRuntime] setTitleHandlers', this.getDebugSnapshot());
+    log('[EditorRuntime] setTitleHandlers', this.getDebugSnapshot());
   }
 
   /**
@@ -173,7 +173,7 @@ export class EditorRuntime {
    * @returns Raw result with nodeCount and extractedTitle
    */
   async initPage(args: InitDocumentArgs): Promise<InitPageRuntimeResult> {
-    console.info('[EditorRuntime] initPage:start', {
+    log('[EditorRuntime] initPage:start', {
       markdownLength: args.markdown.length,
       snapshot: this.getDebugSnapshot(),
     });
@@ -210,7 +210,7 @@ export class EditorRuntime {
     const nodeCount = jsonState?.children?.length || 0;
 
     const result = { extractedTitle, nodeCount };
-    console.info('[EditorRuntime] initPage:success', {
+    log('[EditorRuntime] initPage:success', {
       nodeCount,
       snapshot: this.getDebugSnapshot(),
       titleExtracted: !!extractedTitle,
@@ -226,7 +226,7 @@ export class EditorRuntime {
    * @returns Raw result with newTitle and previousTitle
    */
   async editTitle(args: EditTitleArgs): Promise<EditTitleRuntimeResult> {
-    console.info('[EditorRuntime] editTitle:start', {
+    log('[EditorRuntime] editTitle:start', {
       snapshot: this.getDebugSnapshot(),
       titleLength: args.title.length,
     });
@@ -243,7 +243,7 @@ export class EditorRuntime {
     setter(args.title);
 
     const result = { newTitle: args.title, previousTitle };
-    console.info('[EditorRuntime] editTitle:success', {
+    log('[EditorRuntime] editTitle:success', {
       snapshot: this.getDebugSnapshot(),
       titleLength: args.title.length,
     });
@@ -258,7 +258,7 @@ export class EditorRuntime {
    * @returns Raw result with document content and metadata
    */
   async getPageContent(args: GetPageContentArgs): Promise<GetPageContentRuntimeResult> {
-    console.info('[EditorRuntime] getPageContent:start', {
+    log('[EditorRuntime] getPageContent:start', {
       format: args.format,
       snapshot: this.getDebugSnapshot(),
     });
@@ -320,7 +320,7 @@ export class EditorRuntime {
         ? [args.operations]
         : [];
 
-    console.info('[EditorRuntime] modifyNodes:start', {
+    log('[EditorRuntime] modifyNodes:start', {
       operationActions: rawOperations.map((op) => op.action),
       operationCount: rawOperations.length,
       snapshot: this.getDebugSnapshot(),
@@ -412,7 +412,7 @@ export class EditorRuntime {
     const totalCount = results.length;
 
     const result = { results, successCount, totalCount };
-    console.info('[EditorRuntime] modifyNodes:success', {
+    log('[EditorRuntime] modifyNodes:success', {
       snapshot: this.getDebugSnapshot(),
       successCount,
       totalCount,
