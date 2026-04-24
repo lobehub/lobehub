@@ -61,7 +61,7 @@ export const deepseekChatModels: AIChatModelCard[] = [
     // Pricing and sizing mirror deepseek-v4-flash since that is what the endpoint serves.
     description:
       'Compatibility alias for DeepSeek V4 Flash non-thinking mode. Slated for deprecation — use DeepSeek V4 Flash instead.',
-    displayName: 'DeepSeek V4 Flash Non-thinking (legacy alias)',
+    displayName: 'DeepSeek V3.2 (routes to V4 Flash)',
     enabled: true,
     id: 'deepseek-chat',
     legacy: true,
@@ -86,7 +86,7 @@ export const deepseekChatModels: AIChatModelCard[] = [
     // points to the thinking mode of deepseek-v4-flash and will be deprecated.
     description:
       'Compatibility alias for DeepSeek V4 Flash thinking mode. Slated for deprecation — use DeepSeek V4 Flash instead.',
-    displayName: 'DeepSeek V4 Flash Thinking (legacy alias)',
+    displayName: 'DeepSeek V3.2 Thinking (routes to V4 Flash)',
     enabled: true,
     id: 'deepseek-reasoner',
     legacy: true,
