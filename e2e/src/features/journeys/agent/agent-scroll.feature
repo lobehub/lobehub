@@ -43,3 +43,15 @@ Feature: 发送消息与流式输出期间的视口滚动行为
     And 用户进入 Lobe AI 对话页面
     When 用户发送一条触发长文输出的消息
     Then 用户消息应固定在聊天列表顶部
+
+  # Regression guard for the memo-staleness issue where the message
+  # ResizeObserver could skip rebinding to the new turn's user/assistant DOM
+  # nodes, making spacer height drift off the second send.
+  @AGENT-SCROLL-005 @P0 @journey
+  Scenario: 连续发送两轮消息后，第二轮用户消息仍固定在顶部
+    Given 流式响应被放慢以模拟长文输出
+    And 用户进入 Lobe AI 对话页面
+    When 用户发送一条触发长文输出的消息
+    And 等待流式响应结束
+    And 用户发送一条触发长文输出的消息
+    Then 用户消息应固定在聊天列表顶部

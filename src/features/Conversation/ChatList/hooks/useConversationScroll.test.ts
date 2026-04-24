@@ -347,4 +347,53 @@ describe('useConversationScroll — pin behavior', () => {
 
     expect(scrollToIndex).toHaveBeenLastCalledWith(4, { align: 'start', smooth: true });
   });
+
+  // Regression: the messages ResizeObserver must rebind to the freshly sent
+  // user + assistant DOM nodes. The earlier memo had `[dataSource,
+  // displayMessages]` deps but read an ref that is updated later inside the
+  // send-detection effect — so the signature could remain stale on the next
+  // render and the observer would never hook the new turn.
+  it('observes the freshly sent user + assistant DOM nodes after a send', async () => {
+    // Render user/assistant nodes with data-message-id so the hook's
+    // document.querySelector('[data-message-id="..."]') can find them.
+    const userEl = document.createElement('div');
+    userEl.setAttribute('data-message-id', userId);
+    const assistantEl = document.createElement('div');
+    assistantEl.setAttribute('data-message-id', assistantId);
+    document.body.append(userEl, assistantEl);
+
+    try {
+      const { rerender } = renderScrollHook({
+        dataSource: [assistantId, 'prev'],
+        isSecondLastMessageFromUser: false,
+      });
+
+      // Grab the observer that was created before the send. It may already
+      // exist (empty deps) or not; either way we reset the "latest" slot so
+      // the post-send observer is the one we inspect.
+      MockResizeObserver.latest = null;
+
+      rerender({
+        dataSource: ['m0', 'm1', userId, assistantId],
+        isSecondLastMessageFromUser: true,
+      });
+
+      // Flush any pending microtasks + rAFs the send effect scheduled.
+      await act(async () => {
+        vi.runAllTimers();
+        await Promise.resolve();
+      });
+
+      const observer = MockResizeObserver.latest as MockResizeObserver | null;
+      expect(observer, 'no ResizeObserver was created for messages').not.toBeNull();
+      const observedIds = observer!.observed.map((el: Element) =>
+        (el as HTMLElement).getAttribute('data-message-id'),
+      );
+      expect(observedIds).toContain(userId);
+      expect(observedIds).toContain(assistantId);
+    } finally {
+      userEl.remove();
+      assistantEl.remove();
+    }
+  });
 });

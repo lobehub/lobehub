@@ -118,13 +118,13 @@ const useSpacerLayoutSignal = () => {
 // that spacer height stays in sync as those messages grow.
 // ---------------------------------------------------------------------------
 interface UseSpacerHeightArgs {
-  assistantMessageIndexRef: RefObject<number | null>;
+  assistantMessageIndex: number | null;
   dataSource: string[];
   getItemOffset: ((index: number) => number) | undefined;
   getItemSize: ((index: number) => number) | undefined;
   getViewportSize: (() => number) | undefined;
   latestAssistantSignature: string;
-  userMessageIndexRef: RefObject<number | null>;
+  userMessageIndex: number | null;
 }
 
 const useSpacerHeight = ({
@@ -133,8 +133,8 @@ const useSpacerHeight = ({
   getItemSize,
   getViewportSize,
   latestAssistantSignature,
-  userMessageIndexRef,
-  assistantMessageIndexRef,
+  userMessageIndex,
+  assistantMessageIndex,
 }: UseSpacerHeightArgs) => {
   const [naturalHeight, setNaturalHeight] = useState(0);
   const [scrollReduction, setScrollReduction] = useState(0);
@@ -150,8 +150,8 @@ const useSpacerHeight = ({
   const isScrollShrinking = scrollReduction > 0;
 
   const getTrackedMessages = useCallback(() => {
-    const userIndex = userMessageIndexRef.current;
-    const assistantIndex = assistantMessageIndexRef.current;
+    const userIndex = userMessageIndex;
+    const assistantIndex = assistantMessageIndex;
 
     return {
       assistantId:
@@ -160,7 +160,7 @@ const useSpacerHeight = ({
       userId: userIndex !== null && userIndex >= 0 ? dataSource[userIndex] || null : null,
       userIndex,
     };
-  }, [assistantMessageIndexRef, dataSource, userMessageIndexRef]);
+  }, [assistantMessageIndex, dataSource, userMessageIndex]);
 
   const clearRemoveTimer = useCallback(() => {
     if (removeTimerRef.current) {
@@ -434,20 +434,25 @@ export const useConversationScroll = ({
   const isAIGeneratingRef = useRef(isAIGenerating);
   isAIGeneratingRef.current = isAIGenerating;
 
-  const userMessageIndexRef = useRef<number | null>(null);
-  const assistantMessageIndexRef = useRef<number | null>(null);
+  // State (not ref) so that downstream memos / effects re-run when a new turn
+  // is pinned. The pin indices are only set from the send-detection effect;
+  // using state keeps the observer & signature in sync on the very next
+  // render rather than waiting for an unrelated dep to change.
+  const [userMessageIndex, setUserMessageIndex] = useState<number | null>(null);
+  const [assistantMessageIndex, setAssistantMessageIndex] = useState<number | null>(null);
   const prevLengthRef = useRef(dataSource.length);
 
   const { registerSpacerNode, spacerLayoutVersion } = useSpacerLayoutSignal();
 
   const latestAssistantSignature = useMemo(() => {
-    const assistantIndex = assistantMessageIndexRef.current;
     const assistantId =
-      assistantIndex !== null && assistantIndex >= 0 ? dataSource[assistantIndex] : null;
+      assistantMessageIndex !== null && assistantMessageIndex >= 0
+        ? dataSource[assistantMessageIndex]
+        : null;
     if (!assistantId) return '';
     const assistantMessage = displayMessages.find((message) => message.id === assistantId);
     return getRenderableTailSignature(assistantMessage);
-  }, [dataSource, displayMessages]);
+  }, [assistantMessageIndex, dataSource, displayMessages]);
 
   const {
     isScrollShrinking,
@@ -458,13 +463,13 @@ export const useConversationScroll = ({
     setScrollReduction,
     updateSpacerHeight,
   } = useSpacerHeight({
-    assistantMessageIndexRef,
+    assistantMessageIndex,
     dataSource,
     getItemOffset,
     getItemSize,
     getViewportSize,
     latestAssistantSignature,
-    userMessageIndexRef,
+    userMessageIndex,
   });
 
   const { clearPin, pinRef, scrollToPinned } = usePinController({ virtuaRef });
@@ -496,8 +501,8 @@ export const useConversationScroll = ({
 
     setScrollReduction(() => 0);
     prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
-    userMessageIndexRef.current = userIndex;
-    assistantMessageIndexRef.current = assistantIndex;
+    setUserMessageIndex(userIndex);
+    setAssistantMessageIndex(assistantIndex);
     pinRef.current = { index: userIndex, seenActive: mountedRef.current };
 
     // Scroll immediately. If virtuaRef isn't ready yet, the spacerLayoutVersion
