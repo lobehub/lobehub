@@ -67,18 +67,10 @@ export async function createHunyuanVideo(
   const requestBody: Record<string, unknown> = {
     model,
     prompt,
+    ...(imageUrl ? { image: { url: imageUrl } } : {}),
     ...(resolution && { resolution }),
-    ...(watermark && { logo_add: watermark }),
+    ...(watermark && { logo_add: watermark === true ? 1 : 0 }),
   };
-
-  if (imageUrl) {
-    // For the yt-video-humanactor model, the API expects the image URL in a different field
-    if (model.toLowerCase().includes('yt-video-humanactor')) {
-      requestBody.image_url = imageUrl;
-    } else {
-      requestBody.image = { url: imageUrl };
-    }
-  }
 
   const submitUrl = `${baseURL}/api/video/submit`;
   log('Submitting Hunyuan video task to: %s', submitUrl);

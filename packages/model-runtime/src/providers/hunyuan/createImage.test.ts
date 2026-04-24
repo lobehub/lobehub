@@ -52,12 +52,8 @@ describe('createHunyuanImage', () => {
       expect(submitBody).toEqual({
         model: 'HY-Image-Lite',
         prompt: '雨中, 竹林, 小路',
-        size: '1024:1024',
+        resolution: '1024:1024',
         rsp_img_type: 'url',
-        extra_body: {
-          logo_add: 0,
-          revise: 0,
-        },
       });
 
       expect(result).toEqual({
@@ -104,12 +100,7 @@ describe('createHunyuanImage', () => {
       expect(submitBody).toEqual({
         model: 'HY-Image-V3.0',
         prompt: '在图片中增加一个橘猫',
-        size: '1024:1024',
-        rsp_img_type: 'url',
-        extra_body: {
-          logo_add: 0,
-          revise: 0,
-        },
+        resolution: '1024:1024',
       });
 
       const queryCall = (fetch as any).mock.calls[1];
@@ -153,7 +144,7 @@ describe('createHunyuanImage', () => {
       const result = await resultPromise;
 
       const submitBody = JSON.parse((fetch as any).mock.calls[0][1].body);
-      expect(submitBody.size).toBe('1024:1024');
+      expect(submitBody.resolution).toBe('1024:1024');
       expect(result.imageUrl).toBe(mockImageUrl);
     });
 
@@ -189,7 +180,7 @@ describe('createHunyuanImage', () => {
       const result = await resultPromise;
 
       const submitBody = JSON.parse((fetch as any).mock.calls[0][1].body);
-      expect(submitBody.size).toBe('1024:768');
+      expect(submitBody.resolution).toBe('1024:768');
       expect(result.imageUrl).toBe(mockImageUrl);
     });
 
@@ -224,7 +215,7 @@ describe('createHunyuanImage', () => {
       await resultPromise;
 
       const submitBody = JSON.parse((fetch as any).mock.calls[0][1].body);
-      expect(submitBody.extra_body.seed).toBe(84445);
+      expect(submitBody.seed).toBe(84445);
     });
 
     it('should handle imageUrls for image-to-image', async () => {

@@ -629,12 +629,12 @@ const hunyuanImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'hy-image-lite',
     parameters: {
-      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      height: { default: 1024, max: 4096, min: 160, step: 1 },
       prompt: {
         default: '',
       },
       seed: { default: null },
-      width: { default: 1024, max: 2048, min: 512, step: 1 },
+      width: { default: 1024, max: 4096, min: 160, step: 1 },
       watermark: { default: false },
     },
     pricing: {
@@ -669,30 +669,6 @@ const hunyuanVideoModels: AIVideoModelCard[] = [
       units: [{ name: 'videoGeneration', rate: 1.5, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-01-06',
-    type: 'video',
-  },
-  {
-    description:
-      'A single reference photo is sufficient to generate dynamic portrait videos, accurately reproducing facial expressions and body poses, with support for multiple styles such as photorealistic and anime.',
-    displayName: 'YT-Video-HumanActor',
-    enabled: true,
-    id: 'yt-video-humanactor',
-    parameters: {
-      imageUrl: {
-        default: null,
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['720p', '1080p'],
-      },
-      watermark: { default: false },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
-    },
-    releasedAt: '2026-01-23',
     type: 'video',
   },
   {

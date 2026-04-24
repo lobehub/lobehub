@@ -77,7 +77,6 @@ describe('createHunyuanVideo', () => {
       params: {
         prompt: 'Test video',
         resolution: '720p',
-        duration: 5,
         watermark: true,
       },
     };
@@ -86,8 +85,7 @@ describe('createHunyuanVideo', () => {
 
     const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
     expect(body.resolution).toBe('720p');
-    expect(body.duration).toBe(5);
-    expect(body.watermark).toBe(true);
+    expect(body.logo_add).toBe(1);
   });
 });
 

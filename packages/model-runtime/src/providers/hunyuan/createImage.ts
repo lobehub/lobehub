@@ -33,20 +33,6 @@ interface HunyuanImageQueryResponse {
   status?: string;
 }
 
-const getStatusName = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    'queued': 'QUEUED',
-    'processing': 'PROCESSING',
-    'completed': 'COMPLETED',
-    'failed': 'FAILED',
-    '1': 'PENDING',
-    '2': 'PROCESSING',
-    '4': 'FAILED',
-    '5': 'COMPLETED',
-  };
-  return statusMap[status] || `UNKNOWN(${status})`;
-};
-
 const normalizeModel = (model: string): string => model?.toLowerCase() ?? '';
 
 const isLiteModel = (model: string): boolean => normalizeModel(model).includes('hy-image-lite');
@@ -76,8 +62,8 @@ export async function createHunyuanImage(
         : params.imageUrl
           ? { images: [params.imageUrl] }
           : {}),
-      revise: params.promptExtend === true ? 1 : 0,
-      logo_add: params.watermark === true ? 1 : 0,
+      ...(params.promptExtend && { revise: params.promptExtend === true ? 1 : 0 }),
+      ...(params.watermark && { logo_add: params.watermark === true ? 1 : 0 }),
       ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
       ...(isLiteModel(model) ? { rsp_img_type: 'url' } : {}),
     };
@@ -206,9 +192,9 @@ export async function createHunyuanImage(
           };
         }
 
-        log('Task status: %s', getStatusName(status));
+        log('Task status: %s', status);
 
-        if (status === 'completed' || status === '5') {
+        if (status === 'completed') {
           if (!taskStatus.data || !Array.isArray(taskStatus.data) || taskStatus.data.length === 0) {
             return {
               error: new Error('Task completed but no images generated'),
@@ -231,7 +217,7 @@ export async function createHunyuanImage(
           };
         }
 
-        if (status === 'failed' || status === '4') {
+        if (status === 'failed') {
           return {
             error: new Error('Task failed'),
             status: 'failed',
