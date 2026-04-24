@@ -9,7 +9,7 @@ export const params = {
   baseURL: 'https://tokenhub.tencentmaas.com/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { frequency_penalty, model, presence_penalty, ...rest } = payload;
+      const { model, ...rest } = payload;
 
       // Transform reasoning object to reasoning_content string for multi-turn conversations
       const messages = payload.messages.map((message: any) => {
@@ -42,6 +42,7 @@ export const params = {
       return {
         ...rest,
         frequency_penalty: undefined,
+        stream: rest.stream ?? true,
         messages,
         model,
         presence_penalty: undefined,
