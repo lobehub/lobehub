@@ -8,7 +8,7 @@ const deepseekChatModels: AIChatModelCard[] = [
       reasoning: true,
       structuredOutput: true,
     },
-    contextWindowTokens: 1_000_000,
+    contextWindowTokens: 1_048_576,
     description:
       'DeepSeek V4 Flash is DeepSeek’s fast 1M-context flagship model, supporting both non-thinking and thinking modes with strong agent capabilities.',
     displayName: 'DeepSeek V4 Flash',
@@ -36,7 +36,7 @@ const deepseekChatModels: AIChatModelCard[] = [
       reasoning: true,
       structuredOutput: true,
     },
-    contextWindowTokens: 1_000_000,
+    contextWindowTokens: 1_048_576,
     description:
       'DeepSeek V4 Pro is DeepSeek’s most capable 1M-context flagship model, supporting both non-thinking and thinking modes for advanced reasoning and tool use.',
     displayName: 'DeepSeek V4 Pro',

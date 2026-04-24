@@ -27,8 +27,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   compressionModelId?: string;
   deepseekReasoningEffort?: 'none' | 'high' | 'max';
 
-  deepseekV4ReasoningEffort?: 'high' | 'max';
-
   /**
    * Disable context caching
    */
