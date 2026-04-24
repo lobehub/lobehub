@@ -1,11 +1,12 @@
 import { type BriefTemplate, type BriefTemplateCategory } from '@lobechat/const';
 import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { App, Divider } from 'antd';
+import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import {
   Briefcase,
   Code,
   GraduationCap,
+  Lightbulb,
   type LucideIcon,
   Megaphone,
   Package,
@@ -17,12 +18,19 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { briefTemplateService } from '@/services/briefTemplate';
+import { useBriefStore } from '@/store/brief';
+import { briefListSelectors } from '@/store/brief/selectors';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { recommendStyles, styles } from './style';
+
+const RECOMMEND_THRESHOLD = 1;
 
 /**
  * onboarding stores localized labels in `user.interests` (e.g. "内容创作",
@@ -131,34 +139,38 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
   );
 });
 
-const TemplateRecommendations = memo<{ enabled: boolean }>(({ enabled }) => {
+const TemplateRecommendations = memo(() => {
   const { t } = useTranslation('briefTemplate');
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
+  const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
+  useFetchBriefs(isLogin && !!enableAgentTask);
+
+  const briefs = useBriefStore(briefListSelectors.briefs);
+  const isInit = useBriefStore(briefListSelectors.isBriefsInit);
+
   const interestKeys = useResolvedInterestKeys();
   const swrKey = [...interestKeys].sort().join(',');
+
+  const enabled = isLogin && !!enableAgentTask && isInit && briefs.length <= RECOMMEND_THRESHOLD;
 
   const { data, isLoading } = useSWR(
     enabled ? ['briefTemplate.listDailyRecommend', swrKey] : null,
     async () => briefTemplateService.listDailyRecommend(interestKeys),
   );
 
+  if (!enabled || isLoading) return null;
   const templates = data?.data ?? [];
-  if (isLoading || templates.length === 0) return null;
+  if (templates.length === 0) return null;
 
   return (
-    <Flexbox gap={12}>
-      <Divider style={{ margin: '4px 0' }} />
-      <Text fontSize={14} weight={600}>
-        {t('section.title')}
-      </Text>
-      <Text fontSize={12} style={{ color: cssVar.colorTextDescription }}>
-        {t('section.description')}
-      </Text>
+    <GroupBlock icon={Lightbulb} title={t('section.title')}>
       <Flexbox gap={8}>
         {templates.map((tmpl) => (
           <TemplateCard key={tmpl.id} template={tmpl} />
         ))}
       </Flexbox>
-    </Flexbox>
+    </GroupBlock>
   );
 });
 

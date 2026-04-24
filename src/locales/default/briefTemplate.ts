@@ -46,8 +46,7 @@ export default {
     'Every morning at 9:00, give me 10 tech-stack updates: GitHub Trending, notable open-source releases from big companies, and new releases from repos in my stack.',
   'oss-intel-daily.title': 'Open-source intel daily',
 
-  'section.description': 'Recommended based on your interests. Tap to add as a scheduled task.',
-  'section.title': 'Try following tasks',
+  'section.title': 'Try these tasks',
 
   'user-feedback-daily.description':
     'Each morning, aggregate feedback from all channels (stores, social, support) into top 20 items, sorted by sentiment and theme.',

@@ -12,9 +12,6 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import BriefCard from './BriefCard';
-import TemplateRecommendations from './TemplateRecommendations';
-
-const RECOMMEND_THRESHOLD = 1;
 
 const DailyBrief = memo(() => {
   const { t } = useTranslation('home');
@@ -29,11 +26,7 @@ const DailyBrief = memo(() => {
 
   if (!enableAgentTask) return null;
   if (!isInit) return null;
-
-  const showBriefs = briefs.length > 0;
-  const showRecommend = briefs.length <= RECOMMEND_THRESHOLD;
-
-  if (!showBriefs && !showRecommend) return null;
+  if (briefs.length === 0) return null;
 
   return (
     <GroupBlock
@@ -46,14 +39,11 @@ const DailyBrief = memo(() => {
         </Button>
       }
     >
-      {showBriefs && (
-        <Flexbox gap={12}>
-          {briefs.map((brief) => (
-            <BriefCard brief={brief} key={brief.id} />
-          ))}
-        </Flexbox>
-      )}
-      {showRecommend && <TemplateRecommendations enabled={isInit} />}
+      <Flexbox gap={12}>
+        {briefs.map((brief) => (
+          <BriefCard brief={brief} key={brief.id} />
+        ))}
+      </Flexbox>
     </GroupBlock>
   );
 });
