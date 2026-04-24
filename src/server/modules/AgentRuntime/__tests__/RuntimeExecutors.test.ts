@@ -3594,7 +3594,9 @@ describe('RuntimeExecutors', () => {
       it('should skip real execution when beforeToolCall returns mock', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue({ content: '{"mocked":true}' }),
+          dispatchBeforeToolCall: vi
+            .fn()
+            .mockResolvedValue({ content: '{"mocked":true}', isMocked: true }),
         };
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };

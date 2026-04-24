@@ -1610,7 +1610,7 @@ export class AgentRuntimeService {
             action: 'approve',
             operationId: state.metadata?.operationId ?? '',
             toolCallId: approvedToolCall.id,
-            userId: state.metadata?.userId || '',
+            userId: state.metadata?.userId,
           },
           state.metadata?._hooks,
         )
@@ -1682,7 +1682,7 @@ export class AgentRuntimeService {
               operationId: state.metadata?.operationId ?? '',
               rejectionReason,
               toolCallId: rejectedToolCallId,
-              userId: state.metadata?.userId || '',
+              userId: state.metadata?.userId,
             },
             state.metadata?._hooks,
           )
@@ -1709,7 +1709,7 @@ export class AgentRuntimeService {
             operationId: state.metadata?.operationId ?? '',
             rejectionReason,
             toolCallId: rejectedToolCallId,
-            userId: state.metadata?.userId || '',
+            userId: state.metadata?.userId,
           },
           state.metadata?._hooks,
         )

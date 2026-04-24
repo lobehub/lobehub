@@ -1115,7 +1115,7 @@ export const createRuntimeExecutors = (
             operationId,
             stepIndex,
             tokenCount: currentTokenCount,
-            userId: ctx.userId || '',
+            userId: ctx.userId,
           },
           state.metadata?._hooks,
         )
@@ -1300,7 +1300,7 @@ export const createRuntimeExecutors = (
               operationId,
               stepIndex,
               summary: summaryContent.slice(0, 500),
-              userId: ctx.userId || '',
+              userId: ctx.userId,
             },
             state.metadata?._hooks,
           )
@@ -1342,7 +1342,7 @@ export const createRuntimeExecutors = (
               operationId,
               stepIndex,
               tokenCount: currentTokenCount,
-              userId: ctx.userId || '',
+              userId: ctx.userId,
             },
             state.metadata?._hooks,
           )
@@ -1467,42 +1467,43 @@ export const createRuntimeExecutors = (
         typeof streamManager.sendToolExecute === 'function';
 
       let toolCallMocked = false;
-      let mockResult: { content: string } | null = null;
-      if (ctx.hookDispatcher) {
-        // 1. dispatch for observation (webhook in production, local handler logging)
-        ctx.hookDispatcher
-          .dispatch(
-            operationId,
-            'beforeToolCall',
-            {
+      const hookResult = ctx.hookDispatcher
+        ? await (async () => {
+            // 1. dispatch for observation (webhook in production, local handler logging)
+            ctx
+              .hookDispatcher!.dispatch(
+                operationId,
+                'beforeToolCall',
+                {
+                  apiName: chatToolPayload.apiName,
+                  args: parsedArgs,
+                  callIndex,
+                  identifier: chatToolPayload.identifier,
+                  operationId,
+                  stepIndex,
+                  userId: ctx.userId,
+                },
+                state.metadata?._hooks,
+              )
+              .catch(() => {});
+            // 2. dispatchBeforeToolCall for mock support (local-only)
+            return ctx.hookDispatcher!.dispatchBeforeToolCall(operationId, {
               apiName: chatToolPayload.apiName,
               args: parsedArgs,
               callIndex,
               identifier: chatToolPayload.identifier,
-              operationId,
               stepIndex,
-              userId: ctx.userId || '',
-            },
-            state.metadata?._hooks,
-          )
-          .catch(() => {});
-        // 2. dispatchBeforeToolCall for mock support (local-only)
-        mockResult = await ctx.hookDispatcher.dispatchBeforeToolCall(operationId, {
-          apiName: chatToolPayload.apiName,
-          args: parsedArgs,
-          callIndex,
-          identifier: chatToolPayload.identifier,
-          stepIndex,
-        });
-      }
+            });
+          })()
+        : null;
 
       let execution: { result: ToolExecutionResultResponse; attempts: number };
-      if (mockResult) {
+      if (hookResult?.isMocked) {
         log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
         toolCallMocked = true;
         execution = {
           attempts: 0,
-          result: { content: mockResult.content, executionTime: 0, success: true },
+          result: { content: hookResult.content, executionTime: 0, success: true },
         };
       } else if (canDispatchToClient) {
         log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
@@ -1561,7 +1562,7 @@ export const createRuntimeExecutors = (
               operationId,
               stepIndex,
               success: isSuccess,
-              userId: ctx.userId || '',
+              userId: ctx.userId,
             },
             state.metadata?._hooks,
           )
@@ -1760,7 +1761,7 @@ export const createRuntimeExecutors = (
               identifier: chatToolPayload.identifier,
               operationId,
               stepIndex,
-              userId: ctx.userId || '',
+              userId: ctx.userId,
             },
             state.metadata?._hooks,
           )
@@ -1899,42 +1900,41 @@ export const createRuntimeExecutors = (
             typeof streamManager.sendToolExecute === 'function';
 
           let batchToolCallMocked = false;
-          let batchMockResult: { content: string } | null = null;
-          if (ctx.hookDispatcher) {
-            // 1. dispatch for observation (webhook in production)
-            ctx.hookDispatcher
-              .dispatch(
-                operationId,
-                'beforeToolCall',
-                {
+          const batchHookResult = ctx.hookDispatcher
+            ? await (async () => {
+                ctx
+                  .hookDispatcher!.dispatch(
+                    operationId,
+                    'beforeToolCall',
+                    {
+                      apiName: chatToolPayload.apiName,
+                      args: batchParsedArgs,
+                      callIndex: batchCallIndex,
+                      identifier: chatToolPayload.identifier,
+                      operationId,
+                      stepIndex,
+                      userId: ctx.userId,
+                    },
+                    state.metadata?._hooks,
+                  )
+                  .catch(() => {});
+                return ctx.hookDispatcher!.dispatchBeforeToolCall(operationId, {
                   apiName: chatToolPayload.apiName,
                   args: batchParsedArgs,
                   callIndex: batchCallIndex,
                   identifier: chatToolPayload.identifier,
-                  operationId,
                   stepIndex,
-                  userId: ctx.userId || '',
-                },
-                state.metadata?._hooks,
-              )
-              .catch(() => {});
-            // 2. dispatchBeforeToolCall for mock support (local-only)
-            batchMockResult = await ctx.hookDispatcher.dispatchBeforeToolCall(operationId, {
-              apiName: chatToolPayload.apiName,
-              args: batchParsedArgs,
-              callIndex: batchCallIndex,
-              identifier: chatToolPayload.identifier,
-              stepIndex,
-            });
-          }
+                });
+              })()
+            : null;
 
           let execution: { result: ToolExecutionResultResponse; attempts: number };
-          if (batchMockResult) {
+          if (batchHookResult?.isMocked) {
             log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
             batchToolCallMocked = true;
             execution = {
               attempts: 0,
-              result: { content: batchMockResult.content, executionTime: 0, success: true },
+              result: { content: batchHookResult.content, executionTime: 0, success: true },
             };
           } else if (canDispatchToClient) {
             log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
@@ -1994,7 +1994,7 @@ export const createRuntimeExecutors = (
                   operationId,
                   stepIndex,
                   success: isSuccess,
-                  userId: ctx.userId || '',
+                  userId: ctx.userId,
                 },
                 state.metadata?._hooks,
               )
@@ -2100,7 +2100,7 @@ export const createRuntimeExecutors = (
                   identifier: chatToolPayload.identifier,
                   operationId,
                   stepIndex,
-                  userId: ctx.userId || '',
+                  userId: ctx.userId,
                 },
                 state.metadata?._hooks,
               )
@@ -2347,7 +2347,7 @@ export const createRuntimeExecutors = (
               identifier: t.identifier,
             })),
             stepIndex,
-            userId: ctx.userId || '',
+            userId: ctx.userId,
           },
           state.metadata?._hooks,
         )
