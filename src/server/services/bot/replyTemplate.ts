@@ -214,8 +214,17 @@ type SystemStrings = {
   error: string;
   errorWithDetails: (details: string) => string;
   errorWithId: (operationId: string) => string;
+  groupRejectedAllowlist: string;
+  groupRejectedDisabled: string;
   inlineError: (message: string) => string;
   processing: string;
+  /**
+   * Generic "user is not on the allowlist" copy used when the global
+   * `allowFrom` gate rejects an inbound non-DM event. Delivered via
+   * ephemeral (Slack) or as an out-of-band DM (Discord/Telegram fallback),
+   * so the wording avoids "direct messages" — the sender did not try to DM.
+   */
+  senderRejected: string;
   stoppedDefault: string;
   toolsCallingHeader: (count: number, time: string) => string;
 };
@@ -234,8 +243,14 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     errorWithDetails: (details) =>
       `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent Execution Failed**\nOperation ID: \`${operationId}\``,
+    groupRejectedAllowlist:
+      "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
+    groupRejectedDisabled:
+      "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
     inlineError: (message) => `**Error**: ${message}`,
     processing: 'Processing...',
+    senderRejected:
+      "Sorry, you aren't authorized to interact with this bot. Please contact the bot's owner if you need access.",
     stoppedDefault: 'Execution stopped.',
     toolsCallingHeader: (count, time) => `> total **${count}** tools calling ${time}\n\n`,
   },
@@ -249,8 +264,11 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     error: '**Agent 执行失败**',
     errorWithDetails: (details) => `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
+    groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
+    groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
     inlineError: (message) => `**错误**：${message}`,
     processing: '处理中…',
+    senderRejected: '抱歉，您没有与该机器人交互的权限。如需访问请联系机器人管理员。',
     stoppedDefault: '执行已停止。',
     toolsCallingHeader: (count, time) => `> 共 **${count}** 次工具调用 ${time}\n\n`,
   },
@@ -309,6 +327,30 @@ export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): 
 export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotReplyLocale): string {
   const strings = getSystemStrings(lng);
   return reason === 'disabled' ? strings.dmRejectedDisabled : strings.dmRejectedAllowlist;
+}
+
+/**
+ * Render the system message shown when an inbound non-DM event was blocked
+ * by Group Policy. Same disabled-vs-allowlist split as
+ * {@link renderDmRejected} so the sender can pivot (try DM, ask the owner).
+ */
+export function renderGroupRejected(
+  reason: 'disabled' | 'allowlist',
+  lng?: BotReplyLocale,
+): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.groupRejectedDisabled : strings.groupRejectedAllowlist;
+}
+
+/**
+ * Render the system message shown when the **global `allowFrom`** gate
+ * rejected the sender of a non-DM event (group / channel / thread). The
+ * notice is delivered out-of-band — ephemerally on Slack, via DM fallback
+ * on Discord/Telegram — so the copy intentionally avoids "direct messages"
+ * (the sender did not try to DM, they @-mentioned in a group).
+ */
+export function renderSenderRejected(lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).senderRejected;
 }
 
 // ==================== Dispatcher ====================

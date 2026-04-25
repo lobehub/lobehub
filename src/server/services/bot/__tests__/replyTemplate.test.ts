@@ -8,8 +8,10 @@ import {
   renderError,
   renderErrorWithDetails,
   renderFinalReply,
+  renderGroupRejected,
   renderInlineError,
   renderLLMGenerating,
+  renderSenderRejected,
   renderStart,
   renderStepProgress,
   renderStopped,
@@ -380,6 +382,40 @@ describe('replyTemplate', () => {
     it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
       expect(renderDmRejected('disabled', 'zh-CN')).toContain('不接受私信');
       expect(renderDmRejected('allowlist', 'zh-CN')).toContain('没有私信该机器人的权限');
+    });
+  });
+
+  // ==================== renderGroupRejected ====================
+
+  describe('renderGroupRejected', () => {
+    it('renders disabled and allowlist English copy', () => {
+      expect(renderGroupRejected('disabled')).toContain("doesn't respond in groups or channels");
+      expect(renderGroupRejected('allowlist')).toContain("isn't enabled in this channel");
+    });
+
+    it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
+      expect(renderGroupRejected('disabled', 'zh-CN')).toContain('不在群组或频道中响应');
+      expect(renderGroupRejected('allowlist', 'zh-CN')).toContain('未在此频道启用');
+    });
+  });
+
+  // ==================== renderSenderRejected ====================
+
+  describe('renderSenderRejected', () => {
+    it("uses generic 'interact with this bot' phrasing — never 'direct messages'", () => {
+      // The notice is shown out-of-band when a user @-mentioned in a
+      // group; saying "you aren't authorized to send direct messages"
+      // would misdescribe what the user actually did.
+      const en = renderSenderRejected();
+      expect(en).toContain("aren't authorized");
+      expect(en).toContain('interact with this bot');
+      expect(en).not.toContain('direct messages');
+    });
+
+    it('renders Chinese copy when locale is zh-CN, also avoiding DM phrasing', () => {
+      const zh = renderSenderRejected('zh-CN');
+      expect(zh).toContain('交互的权限');
+      expect(zh).not.toContain('私信');
     });
   });
 

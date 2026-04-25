@@ -210,27 +210,43 @@ LobeHub 支持两种 Slack 连接模式：
   同时确保在 **OAuth & Permissions** → **Bot Token Scopes** 中添加 `commands` 权限，并在 **Interactivity & Shortcuts** 中启用 Interactivity，将 Request URL 设为相同的 Webhook URL。
 </Steps>
 
-## 私信策略
+## 接入策略
 
-Slack 的私信限定在 workspace 内，因此 LobeHub 默认对 Slack **开放** 私信 — workspace 内任何成员都可以私信机器人。如需收紧，可以在 **高级设置** 调整 **私信策略 (DM Policy)**：
+两个独立的策略控制入站消息，默认都为 **开放**。
 
-- **开放 (Open)（默认）** — workspace 内任何成员都可以私信机器人。
-- **白名单 (Allowlist)** — 只有列在 **允许的用户 ID** 里的 Slack 成员可以私信。打开用户资料 → 点击 `⋮` → **复制成员 ID**（以 `U` 开头）。
+### 允许的用户 ID（全局）
+
+填入 **允许的用户 ID** 后，**所有**入站消息（私信和频道 `@提及`）都必须来自列表里的 Slack 成员 ID。留空则不做用户级过滤。打开用户资料 → 点击 `⋮` → **复制成员 ID**（以 `U` 开头）。
+
+### 私信策略
+
+- **开放 (Open)（默认）** — workspace 内任何成员都可以私信机器人（若设置了全局白名单则受其约束）。
+- **白名单 (Allowlist)** — 私信需要发送者在 **允许的用户 ID** 里。和 `Open` 的差别在白名单为空时：`Allowlist` 模式**全部拒绝**。
 - **禁用 (Disabled)** — 机器人忽略所有私信，只在频道里被 `@提及` 时回复。
 
-私信策略只影响私信，频道里的 `@提及` 不受影响。跨平台细节见 [渠道概览](/docs/usage/channels/overview#direct-message-policy)。
+### 群组策略
+
+控制机器人会在哪些 Slack 频道里响应。
+
+- **开放 (Open)（默认）** — 在机器人加入的任何频道里被 `@` 都响应。
+- **白名单 (Allowlist)** — 只在 **允许的频道 ID** 列出的频道里响应。打开频道详情面板，底部能看到频道 ID（以 `C` 开头）。
+- **禁用 (Disabled)** — 忽略所有频道流量，机器人只接受私信。
+
+跨平台细节见 [渠道概览](/docs/usage/channels/overview#direct-message-policy)。
 
 ## 配置参考
 
-| 字段             | 是否必需          | 描述                                               |
-| -------------- | ------------- | ------------------------------------------------ |
-| **应用 ID**      | 是             | 您的 Slack 应用 ID                                   |
-| **Bot Token**  | 是             | Bot User OAuth Token（`xoxb-...`）                 |
-| **签名密钥**       | 是             | 用于验证来自 Slack 的请求                                 |
-| **应用级别 Token** | 仅 Socket Mode | 应用级别 Token（`xapp-...`），用于 WebSocket 连接           |
-| **连接模式**       | 否             | `websocket` 或 `webhook`（默认：`webhook`）            |
-| **私信策略**       | 否             | `open`（默认）、`allowlist` 或 `disabled` — 控制谁可以私信机器人 |
-| **允许的用户 ID**   | 否             | 逗号或空格分隔的 Slack 成员 ID。仅在私信策略为白名单时生效               |
+| 字段             | 是否必需          | 描述                                                  |
+| -------------- | ------------- | --------------------------------------------------- |
+| **应用 ID**      | 是             | 您的 Slack 应用 ID                                      |
+| **Bot Token**  | 是             | Bot User OAuth Token（`xoxb-...`）                    |
+| **签名密钥**       | 是             | 用于验证来自 Slack 的请求                                    |
+| **应用级别 Token** | 仅 Socket Mode | 应用级别 Token（`xapp-...`），用于 WebSocket 连接              |
+| **连接模式**       | 否             | `websocket` 或 `webhook`（默认：`webhook`）               |
+| **允许的用户 ID**   | 否             | 逗号或空格分隔的 Slack 成员 ID。全局闸门 — 私信和频道 @ 都受其约束           |
+| **私信策略**       | 否             | `open`（默认）、`allowlist` 或 `disabled` — 控制谁可以私信机器人    |
+| **群组策略**       | 否             | `open`（默认）、`allowlist` 或 `disabled` — 控制机器人在哪些频道中响应 |
+| **允许的频道 ID**   | 否             | 逗号或空格分隔的 Slack 频道 ID（以 `C` 开头）。仅在群组策略为白名单时使用        |
 
 ## 故障排除
 

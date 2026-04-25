@@ -213,27 +213,43 @@ Use this method if your Slack app already has Event Subscriptions configured wit
   Also ensure you add the `commands` scope under **OAuth & Permissions** → **Bot Token Scopes**, and enable **Interactivity & Shortcuts** with the same Webhook URL as the Request URL.
 </Steps>
 
-## Direct Message Policy
+## Access Policies
 
-Slack DMs are scoped to the workspace, so by default LobeHub **opens** DM handling for Slack — anyone in the workspace can DM the bot. Adjust **DM Policy** in **Advanced Settings** to tighten this:
+Two independent policies gate inbound traffic. Both default to **Open**.
 
-- **Open (default)** — Any workspace member can DM the bot.
-- **Allowlist** — Only the Slack member IDs you list in **Allowed User IDs** can DM the bot. Open a user's profile → click `⋮` → **Copy member ID** (the ID starts with `U`).
+### Allowed User IDs (global)
+
+A populated **Allowed User IDs** field is a global gate — DMs *and* channel `@mentions` are restricted to listed Slack member IDs. Empty means "no user-level filter". Open a user's profile → click `⋮` → **Copy member ID** (starts with `U`).
+
+### DM Policy
+
+- **Open (default)** — Any workspace member can DM the bot (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
 - **Disabled** — The bot ignores all DMs and only replies to channel `@mentions`.
 
-DM Policy only governs DMs. Channel `@mentions` are unaffected. See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+### Group Policy
+
+Controls which Slack channels the bot will respond in.
+
+- **Open (default)** — Respond to `@mentions` in any channel the bot has been added to.
+- **Allowlist** — Respond only in channels whose ID is in **Allowed Channel IDs**. Open the channel's About panel to copy the channel ID (starts with `C`).
+- **Disabled** — Ignore all channel traffic; the bot only responds to DMs.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
 
 ## Configuration Reference
 
-| Field                | Required         | Description                                                                            |
-| -------------------- | ---------------- | -------------------------------------------------------------------------------------- |
-| **Application ID**   | Yes              | Your Slack app's ID                                                                    |
-| **Bot Token**        | Yes              | Bot User OAuth Token (`xoxb-...`)                                                      |
-| **Signing Secret**   | Yes              | Used to verify requests from Slack                                                     |
-| **App-Level Token**  | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection                                  |
-| **Connection Mode**  | No               | `websocket` or `webhook` (default: `webhook`)                                          |
-| **DM Policy**        | No               | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot            |
-| **Allowed User IDs** | No               | Comma- or whitespace-separated Slack member IDs. Only used when DM Policy is Allowlist |
+| Field                   | Required         | Description                                                                                            |
+| ----------------------- | ---------------- | ------------------------------------------------------------------------------------------------------ |
+| **Application ID**      | Yes              | Your Slack app's ID                                                                                    |
+| **Bot Token**           | Yes              | Bot User OAuth Token (`xoxb-...`)                                                                      |
+| **Signing Secret**      | Yes              | Used to verify requests from Slack                                                                     |
+| **App-Level Token**     | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection                                                  |
+| **Connection Mode**     | No               | `websocket` or `webhook` (default: `webhook`)                                                          |
+| **Allowed User IDs**    | No               | Comma- or whitespace-separated Slack member IDs. Global gate — applies to DMs and channel @mentions    |
+| **DM Policy**           | No               | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                            |
+| **Group Policy**        | No               | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                     |
+| **Allowed Channel IDs** | No               | Comma- or whitespace-separated Slack channel IDs (start with `C`). Used when Group Policy is Allowlist |
 
 ## Troubleshooting
 

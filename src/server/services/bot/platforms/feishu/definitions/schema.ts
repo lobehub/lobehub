@@ -5,7 +5,13 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
-import { displayToolCallsField, makeDmField, userIdField } from '../../const';
+import {
+  allowFromField,
+  displayToolCallsField,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  userIdField,
+} from '../../const';
 import type { FieldSchema } from '../../types';
 import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
 
@@ -104,7 +110,9 @@ export const sharedSchema: FieldSchema[] = [
         type: 'number',
       },
       userIdField,
-      makeDmField({ policy: 'open' }),
+      makeDmPolicyField({ policy: 'open' }),
+      ...makeGroupPolicyFields({ policy: 'open' }),
+      allowFromField,
     ],
     type: 'object',
   },

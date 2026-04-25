@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  allowFromField,
   extractDmSettings,
+  extractGroupSettings,
+  extractUserAllowlist,
   getBotReplyLocale,
   getStepReactionEmoji,
-  makeDmField,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
   normalizeBotReplyLocale,
+  shouldAllowSender,
   shouldHandleDm,
+  shouldHandleGroup,
   THINKING_REACTION_EMOJI,
   WORKING_REACTION_EMOJI,
 } from '../const';
@@ -79,103 +85,264 @@ describe('getStepReactionEmoji', () => {
   });
 });
 
-describe('makeDmField', () => {
-  it('produces a dm settings group with the supplied default policy', () => {
-    const field = makeDmField({ policy: 'open' });
+describe('makeDmPolicyField', () => {
+  it('produces a flat dmPolicy field with the supplied default policy and three modes', () => {
+    const field = makeDmPolicyField({ policy: 'open' });
 
-    expect(field.key).toBe('dm');
-    expect(field.type).toBe('object');
-
-    const properties = field.properties ?? [];
-    const policy = properties.find((p) => p.key === 'policy');
-    const allowFrom = properties.find((p) => p.key === 'allowFrom');
-
-    expect(policy?.default).toBe('open');
-    expect(policy?.enum).toEqual(['open', 'allowlist', 'disabled']);
-    expect(allowFrom?.visibleWhen).toEqual({ field: 'policy', value: 'allowlist' });
+    expect(field.key).toBe('dmPolicy');
+    expect(field.type).toBe('string');
+    expect(field.default).toBe('open');
+    expect(field.enum).toEqual(['open', 'allowlist', 'disabled']);
   });
 
-  it('supports the Discord-style opt-in default (disabled)', () => {
-    const field = makeDmField({ policy: 'disabled' });
-    const properties = field.properties ?? [];
-    expect(properties.find((p) => p.key === 'policy')?.default).toBe('disabled');
+  it('supports the per-platform default override (e.g. opt-in disabled)', () => {
+    const field = makeDmPolicyField({ policy: 'disabled' });
+    expect(field.default).toBe('disabled');
+  });
+});
+
+describe('allowFromField', () => {
+  it('is a flat top-level user-id allowlist that is always visible (global gate)', () => {
+    expect(allowFromField.key).toBe('allowFrom');
+    expect(allowFromField.type).toBe('string');
+    // Always visible — applies globally to DM and group, no visibleWhen gate.
+    expect(allowFromField.visibleWhen).toBeUndefined();
+  });
+});
+
+describe('makeGroupPolicyFields', () => {
+  it('produces a [groupPolicy, groupAllowFrom] pair with the supplied default', () => {
+    const fields = makeGroupPolicyFields({ policy: 'open' });
+    expect(fields).toHaveLength(2);
+
+    const [policy, allowFrom] = fields;
+    expect(policy.key).toBe('groupPolicy');
+    expect(policy.default).toBe('open');
+    expect(policy.enum).toEqual(['open', 'allowlist', 'disabled']);
+
+    expect(allowFrom.key).toBe('groupAllowFrom');
+    expect(allowFrom.visibleWhen).toEqual({ field: 'groupPolicy', value: 'allowlist' });
   });
 });
 
 describe('extractDmSettings', () => {
-  it('defaults to open when policy is missing or invalid', () => {
-    // In production `mergeWithDefaults` always injects `dm.policy` from the
+  it('defaults to open when dmPolicy is missing or invalid', () => {
+    // In production `mergeWithDefaults` always injects `dmPolicy` from the
     // platform schema, so this branch is only a safety net for malformed
     // settings — we land on the most permissive valid policy.
-    expect(extractDmSettings(undefined)).toEqual({ allowFrom: [], policy: 'open' });
-    expect(extractDmSettings({})).toEqual({ allowFrom: [], policy: 'open' });
-    expect(extractDmSettings({ dm: {} })).toEqual({ allowFrom: [], policy: 'open' });
+    expect(extractDmSettings(undefined)).toEqual({ policy: 'open' });
+    expect(extractDmSettings({})).toEqual({ policy: 'open' });
+    expect(extractDmSettings({ dmPolicy: 'mystery' })).toEqual({ policy: 'open' });
   });
 
-  it('normalizes an unknown policy back to open', () => {
-    const result = extractDmSettings({ dm: { policy: 'mystery' } });
-    expect(result.policy).toBe('open');
+  it('reads the flat dmPolicy field (not legacy nested settings.dm.policy)', () => {
+    expect(extractDmSettings({ dmPolicy: 'disabled' })).toEqual({ policy: 'disabled' });
+    expect(extractDmSettings({ dmPolicy: 'allowlist' })).toEqual({ policy: 'allowlist' });
+    // Regression: the original bug stored disabled at `settings.dm.policy` but
+    // never read it back. The new shape is flat; nested `dm.policy` is ignored.
+    expect(extractDmSettings({ dm: { policy: 'disabled' } })).toEqual({ policy: 'open' });
+  });
+});
+
+describe('extractUserAllowlist', () => {
+  it('returns an empty list when allowFrom is missing or empty', () => {
+    expect(extractUserAllowlist(undefined)).toEqual({ ids: [] });
+    expect(extractUserAllowlist({})).toEqual({ ids: [] });
+    expect(extractUserAllowlist({ allowFrom: '' })).toEqual({ ids: [] });
   });
 
-  it('parses a comma- and whitespace-separated allowFrom into a trimmed array', () => {
-    const result = extractDmSettings({
-      dm: {
-        allowFrom: '  alice-id, bob-id\n  carol-id  ',
-        policy: 'allowlist',
-      },
+  it('parses comma- and whitespace-separated user IDs', () => {
+    expect(extractUserAllowlist({ allowFrom: '  alice, bob\n  carol  ' })).toEqual({
+      ids: ['alice', 'bob', 'carol'],
     });
-    expect(result.allowFrom).toEqual(['alice-id', 'bob-id', 'carol-id']);
   });
 
-  it('accepts an allowFrom already provided as an array', () => {
-    const result = extractDmSettings({
-      dm: {
-        allowFrom: ['alice-id', ' bob-id ', ''],
-        policy: 'allowlist',
-      },
+  it('accepts an array form already', () => {
+    expect(extractUserAllowlist({ allowFrom: ['alice', ' bob ', ''] })).toEqual({
+      ids: ['alice', 'bob'],
     });
-    expect(result.allowFrom).toEqual(['alice-id', 'bob-id']);
+  });
+});
+
+describe('extractGroupSettings', () => {
+  it('defaults to open when groupPolicy is missing or invalid', () => {
+    expect(extractGroupSettings(undefined)).toEqual({ allowFrom: [], policy: 'open' });
+    expect(extractGroupSettings({})).toEqual({ allowFrom: [], policy: 'open' });
+    expect(extractGroupSettings({ groupPolicy: 'mystery' })).toEqual({
+      allowFrom: [],
+      policy: 'open',
+    });
+  });
+
+  it('parses groupAllowFrom into a trimmed array of channel IDs', () => {
+    expect(
+      extractGroupSettings({
+        groupAllowFrom: 'channel-1, channel-2\n  channel-3',
+        groupPolicy: 'allowlist',
+      }),
+    ).toEqual({
+      allowFrom: ['channel-1', 'channel-2', 'channel-3'],
+      policy: 'allowlist',
+    });
+  });
+});
+
+describe('shouldAllowSender (global user allowlist)', () => {
+  const empty = { ids: [] as string[] };
+  const aliceAndBob = { ids: ['alice-id', 'bob-id'] };
+
+  it('passes any sender when the allowlist is empty (no global filter)', () => {
+    expect(shouldAllowSender({ authorUserId: 'anyone', userAllowlist: empty })).toBe(true);
+    expect(shouldAllowSender({ authorUserId: undefined, userAllowlist: empty })).toBe(true);
+  });
+
+  it('passes senders in the populated allowlist', () => {
+    expect(shouldAllowSender({ authorUserId: 'alice-id', userAllowlist: aliceAndBob })).toBe(true);
+  });
+
+  it('blocks senders outside the populated allowlist', () => {
+    expect(shouldAllowSender({ authorUserId: 'carol-id', userAllowlist: aliceAndBob })).toBe(false);
+  });
+
+  it('fails closed for a missing user id when the allowlist is populated', () => {
+    expect(shouldAllowSender({ authorUserId: undefined, userAllowlist: aliceAndBob })).toBe(false);
   });
 });
 
 describe('shouldHandleDm', () => {
-  const open = { allowFrom: [] as string[], policy: 'open' as const };
-  const disabled = { allowFrom: [] as string[], policy: 'disabled' as const };
-  const allowlist = {
-    allowFrom: ['alice-id', 'bob-id'],
-    policy: 'allowlist' as const,
-  };
+  const open = { policy: 'open' as const };
+  const disabled = { policy: 'disabled' as const };
+  const allowlist = { policy: 'allowlist' as const };
+  const emptyUserAllowlist = { ids: [] as string[] };
+  const aliceAndBob = { ids: ['alice-id', 'bob-id'] };
 
   it('lets non-DM threads pass unconditionally', () => {
-    expect(shouldHandleDm({ authorUserId: undefined, dmSettings: disabled, isDM: false })).toBe(
-      true,
-    );
+    expect(
+      shouldHandleDm({
+        authorUserId: undefined,
+        dmSettings: disabled,
+        isDM: false,
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe(true);
   });
 
   it('blocks DMs when disabled', () => {
-    expect(shouldHandleDm({ authorUserId: 'alice-id', dmSettings: disabled, isDM: true })).toBe(
-      false,
-    );
+    expect(
+      shouldHandleDm({
+        authorUserId: 'alice-id',
+        dmSettings: disabled,
+        isDM: true,
+        userAllowlist: aliceAndBob,
+      }),
+    ).toBe(false);
   });
 
-  it('allows DMs under the open policy', () => {
-    expect(shouldHandleDm({ authorUserId: 'anyone', dmSettings: open, isDM: true })).toBe(true);
+  it('allows DMs under the open policy regardless of allowlist contents', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: 'anyone',
+        dmSettings: open,
+        isDM: true,
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe(true);
+    // The global gate (shouldAllowSender) is the runtime filter for `open`;
+    // shouldHandleDm itself does not re-check it.
+    expect(
+      shouldHandleDm({
+        authorUserId: 'anyone',
+        dmSettings: open,
+        isDM: true,
+        userAllowlist: aliceAndBob,
+      }),
+    ).toBe(true);
   });
 
-  it('allows DMs from allowlisted senders', () => {
-    expect(shouldHandleDm({ authorUserId: 'alice-id', dmSettings: allowlist, isDM: true })).toBe(
+  it('allows DMs in allowlist mode when the sender is on the list', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: 'alice-id',
+        dmSettings: allowlist,
+        isDM: true,
+        userAllowlist: aliceAndBob,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects DMs in allowlist mode when the sender is NOT on the list', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: 'carol-id',
+        dmSettings: allowlist,
+        isDM: true,
+        userAllowlist: aliceAndBob,
+      }),
+    ).toBe(false);
+  });
+
+  it('fails closed in allowlist mode when allowFrom is empty (no DMs)', () => {
+    // This is the only behavioural difference from `open`: `open` would
+    // pass anyone here, `allowlist` rejects everyone.
+    expect(
+      shouldHandleDm({
+        authorUserId: 'alice-id',
+        dmSettings: allowlist,
+        isDM: true,
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe(false);
+  });
+
+  it('fails closed when the allowlisted policy sees a missing user id', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: undefined,
+        dmSettings: allowlist,
+        isDM: true,
+        userAllowlist: aliceAndBob,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('shouldHandleGroup', () => {
+  const open = { allowFrom: [] as string[], policy: 'open' as const };
+  const disabled = { allowFrom: [] as string[], policy: 'disabled' as const };
+  const allowlist = { allowFrom: ['channel-1', 'channel-2'], policy: 'allowlist' as const };
+
+  it('lets DM threads pass unconditionally', () => {
+    expect(shouldHandleGroup({ channelId: undefined, groupSettings: disabled, isDM: true })).toBe(
       true,
     );
   });
 
-  it('rejects DMs from senders outside the allowlist', () => {
-    expect(shouldHandleDm({ authorUserId: 'carol-id', dmSettings: allowlist, isDM: true })).toBe(
-      false,
+  it('blocks group traffic when disabled', () => {
+    expect(
+      shouldHandleGroup({ channelId: 'channel-1', groupSettings: disabled, isDM: false }),
+    ).toBe(false);
+  });
+
+  it('allows group traffic under the open policy', () => {
+    expect(shouldHandleGroup({ channelId: 'any-channel', groupSettings: open, isDM: false })).toBe(
+      true,
     );
   });
 
-  it('fails closed when an allowlisted provider sees a missing user id', () => {
-    expect(shouldHandleDm({ authorUserId: undefined, dmSettings: allowlist, isDM: true })).toBe(
+  it('allows group traffic from channels in the allowlist', () => {
+    expect(
+      shouldHandleGroup({ channelId: 'channel-1', groupSettings: allowlist, isDM: false }),
+    ).toBe(true);
+  });
+
+  it('rejects group traffic from channels outside the allowlist', () => {
+    expect(
+      shouldHandleGroup({ channelId: 'channel-9', groupSettings: allowlist, isDM: false }),
+    ).toBe(false);
+  });
+
+  it('fails closed when the allowlisted policy sees a missing channel id', () => {
+    expect(shouldHandleGroup({ channelId: undefined, groupSettings: allowlist, isDM: false })).toBe(
       false,
     );
   });

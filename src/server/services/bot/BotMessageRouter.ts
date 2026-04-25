@@ -18,19 +18,27 @@ import {
   buildRuntimeKey,
   type DmSettings,
   extractDmSettings,
+  extractGroupSettings,
+  extractUserAllowlist,
   getBotReplyLocale,
+  type GroupSettings,
   normalizeBotReplyLocale,
   type PlatformClient,
   type PlatformDefinition,
   platformRegistry,
   resolveBotProviderConfig,
+  shouldAllowSender,
   shouldHandleDm,
+  shouldHandleGroup,
+  type UserAllowlist,
 } from './platforms';
 import {
   renderCommandReply,
   renderDmRejected,
   renderError,
+  renderGroupRejected,
   renderInlineError,
+  renderSenderRejected,
 } from './replyTemplate';
 
 const log = debug('lobe-server:bot:message-router');
@@ -412,6 +420,8 @@ export class BotMessageRouter {
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls !== false;
     const dmSettings: DmSettings = extractDmSettings(info.settings);
+    const groupSettings: GroupSettings = extractGroupSettings(info.settings);
+    const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
     const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
 
     /**
@@ -428,9 +438,21 @@ export class BotMessageRouter {
     };
 
     /**
+     * Global user-level gate. Applied **before** any per-scope policy so a
+     * populated `allowFrom` restricts every inbound surface (DMs, group
+     * @mentions, threads) to listed users. Empty list = no filter.
+     */
+    const passesGlobalAllowlist = (message: { author?: { userId?: string } }): boolean =>
+      shouldAllowSender({
+        authorUserId: message.author?.userId,
+        userAllowlist,
+      });
+
+    /**
      * Gate inbound events on DM policy. Non-DM threads pass through — their
-     * @mention / subscribed-message rules apply unchanged. DM threads are
-     * blocked when disabled, and filtered by allowlist when configured.
+     * group-policy / @mention rules apply instead. DM threads are blocked
+     * when disabled, and filtered against the global `allowFrom` user list
+     * when set to `allowlist`.
      */
     const passesDmPolicy = (
       thread: { isDM?: boolean },
@@ -440,7 +462,51 @@ export class BotMessageRouter {
         authorUserId: message.author?.userId,
         dmSettings,
         isDM: thread.isDM === true,
+        userAllowlist,
       });
+
+    /**
+     * Gate inbound events on group policy. DM threads pass through — they
+     * are governed by `passesDmPolicy` instead. Non-DM threads are blocked
+     * when disabled, and filtered against `groupAllowFrom` (channel / group
+     * / chat IDs) when set to `allowlist`.
+     */
+    const passesGroupPolicy = (thread: { channelId?: string; isDM?: boolean }): boolean =>
+      shouldHandleGroup({
+        channelId: thread.channelId,
+        groupSettings,
+        isDM: thread.isDM === true,
+      });
+
+    /**
+     * Handle a sender that the global `allowFrom` rejected. Posts the
+     * notice in the same thread the inbound event arrived on, mirroring
+     * `notifyGroupRejected` / `notifyDmRejected` rather than escalating
+     * to ephemeral / out-of-band DM.
+     *
+     * - DM scope: uses the DM-allowlist copy ("you aren't authorized to
+     *   send direct messages…") since the sender is on the DM surface.
+     * - Group scope: uses the generic `senderRejected` copy that avoids
+     *   "direct messages" — the sender @-mentioned in a group, not in a
+     *   DM. On Discord this lands inside the auto-created reply thread,
+     *   so it doesn't pollute the parent channel; on Telegram / Slack /
+     *   Feishu it's visible to the group, which is consistent with how
+     *   `notifyGroupRejected` already handles policy-driven rejections.
+     */
+    const handleSenderRejected = async (
+      thread: { isDM?: boolean; post: (text: string) => Promise<unknown> },
+      replyLocale: BotReplyLocale,
+    ): Promise<void> => {
+      const text =
+        thread.isDM === true
+          ? renderDmRejected('allowlist', replyLocale)
+          : renderSenderRejected(replyLocale);
+      try {
+        await thread.post(text);
+      } catch (error) {
+        log('handleSenderRejected: failed to post rejection notice: %O', error);
+      }
+    };
 
     /**
      * Post a one-line system reply telling the sender why their DM was
@@ -459,6 +525,23 @@ export class BotMessageRouter {
         await thread.post(renderDmRejected(dmSettings.policy, replyLocale));
       } catch (error) {
         log('notifyDmRejected: failed to post rejection notice: %O', error);
+      }
+    };
+
+    /**
+     * Same shape as `notifyDmRejected`, for group / channel rejection. The
+     * @mention is public, so the rejection is too — operators get UX
+     * feedback that their bot is configured to a smaller scope.
+     */
+    const notifyGroupRejected = async (
+      thread: { post: (text: string) => Promise<unknown> },
+      replyLocale: BotReplyLocale,
+    ): Promise<void> => {
+      if (groupSettings.policy === 'open') return;
+      try {
+        await thread.post(renderGroupRejected(groupSettings.policy, replyLocale));
+      } catch (error) {
+        log('notifyGroupRejected: failed to post rejection notice: %O', error);
       }
     };
 
@@ -490,6 +573,31 @@ export class BotMessageRouter {
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
       const replyLocale = detectReplyLocale(message);
       if (await tryDispatch(thread, message.text, replyLocale)) return;
+
+      if (!passesGlobalAllowlist(message)) {
+        log(
+          'onNewMention: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
+          agentId,
+          platform,
+          thread.id,
+          message.author.userName,
+        );
+        await handleSenderRejected(thread, replyLocale);
+        return;
+      }
+
+      if (!passesGroupPolicy(thread)) {
+        log(
+          'onNewMention: group blocked by policy, agent=%s, platform=%s, thread=%s, channel=%s, policy=%s',
+          agentId,
+          platform,
+          thread.id,
+          thread.channelId,
+          groupSettings.policy,
+        );
+        await notifyGroupRejected(thread, replyLocale);
+        return;
+      }
 
       if (!passesDmPolicy(thread, message)) {
         log(
@@ -578,6 +686,31 @@ export class BotMessageRouter {
           message.author.userName,
           thread.id,
         );
+        return;
+      }
+
+      if (!passesGlobalAllowlist(message)) {
+        log(
+          'onSubscribedMessage: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
+          agentId,
+          platform,
+          thread.id,
+          message.author.userName,
+        );
+        await handleSenderRejected(thread, replyLocale);
+        return;
+      }
+
+      if (!passesGroupPolicy(thread)) {
+        log(
+          'onSubscribedMessage: group blocked by policy, agent=%s, platform=%s, thread=%s, channel=%s, policy=%s',
+          agentId,
+          platform,
+          thread.id,
+          thread.channelId,
+          groupSettings.policy,
+        );
+        await notifyGroupRejected(thread, replyLocale);
         return;
       }
 
@@ -671,6 +804,17 @@ export class BotMessageRouter {
         if (thread.isDM !== true) return;
 
         const replyLocale = detectReplyLocale(message);
+
+        if (!passesGlobalAllowlist(message)) {
+          log(
+            'onNewMessage (%s catch-all): sender blocked by allowFrom, thread=%s, author=%s',
+            platform,
+            thread.id,
+            message.author.userName,
+          );
+          await handleSenderRejected(thread, replyLocale);
+          return;
+        }
 
         if (!passesDmPolicy(thread, message)) {
           log(

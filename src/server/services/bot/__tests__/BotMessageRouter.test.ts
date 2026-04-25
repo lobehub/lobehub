@@ -151,8 +151,15 @@ vi.mock('../platforms', () => ({
     return 'en-US';
   },
   extractDmSettings: (settings: Record<string, unknown> | null | undefined) => {
-    const dm = (settings?.dm ?? {}) as Record<string, unknown>;
-    const raw = dm.allowFrom;
+    const rawPolicy = settings?.dmPolicy as string | undefined;
+    const policy =
+      rawPolicy === 'allowlist' || rawPolicy === 'open' || rawPolicy === 'disabled'
+        ? rawPolicy
+        : 'open';
+    return { policy };
+  },
+  extractGroupSettings: (settings: Record<string, unknown> | null | undefined) => {
+    const raw = settings?.groupAllowFrom;
     const allowFrom =
       typeof raw === 'string'
         ? raw
@@ -165,28 +172,65 @@ vi.mock('../platforms', () => ({
               .map((s) => s.trim())
               .filter(Boolean)
           : [];
-    const rawPolicy = dm.policy as string | undefined;
+    const rawPolicy = settings?.groupPolicy as string | undefined;
     const policy =
       rawPolicy === 'allowlist' || rawPolicy === 'open' || rawPolicy === 'disabled'
         ? rawPolicy
         : 'open';
     return { allowFrom, policy };
   },
+  extractUserAllowlist: (settings: Record<string, unknown> | null | undefined) => {
+    const raw = settings?.allowFrom;
+    const ids =
+      typeof raw === 'string'
+        ? raw
+            .split(/[\s,]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : Array.isArray(raw)
+          ? raw
+              .map(String)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+    return { ids };
+  },
   mergeWithDefaults: mockMergeWithDefaults,
   platformRegistry: {
     getPlatform: mockGetPlatform,
   },
   resolveBotProviderConfig: mockResolveBotProviderConfig,
+  shouldAllowSender: (params: {
+    authorUserId: string | undefined;
+    userAllowlist: { ids: string[] };
+  }) => {
+    if (params.userAllowlist.ids.length === 0) return true;
+    if (!params.authorUserId) return false;
+    return params.userAllowlist.ids.includes(params.authorUserId);
+  },
   shouldHandleDm: (params: {
     authorUserId: string | undefined;
-    dmSettings: { allowFrom: string[]; policy: 'allowlist' | 'disabled' | 'open' };
+    dmSettings: { policy: 'allowlist' | 'disabled' | 'open' };
     isDM: boolean;
+    userAllowlist: { ids: string[] };
   }) => {
     if (!params.isDM) return true;
     if (params.dmSettings.policy === 'disabled') return false;
     if (params.dmSettings.policy === 'open') return true;
     if (!params.authorUserId) return false;
-    return params.dmSettings.allowFrom.includes(params.authorUserId);
+    if (params.userAllowlist.ids.length === 0) return false;
+    return params.userAllowlist.ids.includes(params.authorUserId);
+  },
+  shouldHandleGroup: (params: {
+    channelId: string | undefined;
+    groupSettings: { allowFrom: string[]; policy: 'allowlist' | 'disabled' | 'open' };
+    isDM: boolean;
+  }) => {
+    if (params.isDM) return true;
+    if (params.groupSettings.policy === 'disabled') return false;
+    if (params.groupSettings.policy === 'open') return true;
+    if (!params.channelId) return false;
+    return params.groupSettings.allowFrom.includes(params.channelId);
   },
 }));
 
@@ -327,7 +371,7 @@ describe('BotMessageRouter', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'tg-123',
-          settings: { dm: { policy: 'open' } },
+          settings: { dmPolicy: 'open' },
         }),
       ]);
 
@@ -345,7 +389,7 @@ describe('BotMessageRouter', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-123',
-          settings: { dm: { policy: 'disabled' } },
+          settings: { dmPolicy: 'disabled' },
         }),
       ]);
 
@@ -370,7 +414,7 @@ describe('BotMessageRouter', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
-          settings: settings ?? { dm: { policy: 'open' } },
+          settings: settings ?? { dmPolicy: 'open' },
         }),
       ]);
       const router = new BotMessageRouter();
@@ -464,7 +508,7 @@ describe('BotMessageRouter', () => {
     });
 
     it('should block DM follow-ups when DM is disabled and notify the sender', async () => {
-      const handler = await loadSubscribedHandler({ dm: { policy: 'disabled' } });
+      const handler = await loadSubscribedHandler({ dmPolicy: 'disabled' });
       const thread = makeThread({ isDM: true });
       const message = makeMessage({ isMention: false, text: 'hi' });
 
@@ -477,7 +521,8 @@ describe('BotMessageRouter', () => {
 
     it('should block DM follow-ups for users outside the allowlist and notify the sender', async () => {
       const handler = await loadSubscribedHandler({
-        dm: { allowFrom: 'bob-id, carol-id', policy: 'allowlist' },
+        allowFrom: 'bob-id, carol-id',
+        dmPolicy: 'allowlist',
       });
       const thread = makeThread({ isDM: true });
       const message = makeMessage({ isMention: false, text: 'hi', userId: 'alice-id' });
@@ -491,7 +536,8 @@ describe('BotMessageRouter', () => {
 
     it('should pass DM follow-ups for users on the allowlist', async () => {
       const handler = await loadSubscribedHandler({
-        dm: { allowFrom: 'alice-id, bob-id', policy: 'allowlist' },
+        allowFrom: 'alice-id, bob-id',
+        dmPolicy: 'allowlist',
       });
       const thread = makeThread({ isDM: true });
       const message = makeMessage({ isMention: false, text: 'hi', userId: 'alice-id' });
@@ -502,7 +548,7 @@ describe('BotMessageRouter', () => {
     });
 
     it('should not affect group @-mentions when DM is disabled', async () => {
-      const handler = await loadSubscribedHandler({ dm: { policy: 'disabled' } });
+      const handler = await loadSubscribedHandler({ dmPolicy: 'disabled' });
       const thread = makeThread({ isDM: false });
       const message = makeMessage({ isMention: true, text: '@bot hi' });
 
@@ -517,7 +563,7 @@ describe('BotMessageRouter', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
-          settings: settings ?? { dm: { policy: 'open' } },
+          settings: settings ?? { dmPolicy: 'open' },
         }),
       ]);
       const router = new BotMessageRouter();
@@ -531,7 +577,7 @@ describe('BotMessageRouter', () => {
     }
 
     it('should allow group @-mentions regardless of DM policy', async () => {
-      const handler = await loadMentionHandler({ dm: { policy: 'disabled' } });
+      const handler = await loadMentionHandler({ dmPolicy: 'disabled' });
       const thread = {
         id: 'telegram:group-1',
         isDM: false,
@@ -549,7 +595,7 @@ describe('BotMessageRouter', () => {
     });
 
     it('should block @-mentions inside DMs when DM is disabled and notify the sender', async () => {
-      const handler = await loadMentionHandler({ dm: { policy: 'disabled' } });
+      const handler = await loadMentionHandler({ dmPolicy: 'disabled' });
       const thread = {
         id: 'discord:@me:channel-1',
         isDM: true,
@@ -570,7 +616,8 @@ describe('BotMessageRouter', () => {
 
     it('should block DM @-mentions from users outside the allowlist and notify the sender', async () => {
       const handler = await loadMentionHandler({
-        dm: { allowFrom: 'bob-id', policy: 'allowlist' },
+        allowFrom: 'bob-id',
+        dmPolicy: 'allowlist',
       });
       const thread = {
         id: 'discord:@me:channel-1',
@@ -596,7 +643,7 @@ describe('BotMessageRouter', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
-          settings: settings ?? { dm: { policy: 'open' } },
+          settings: settings ?? { dmPolicy: 'open' },
         }),
       ]);
       const router = new BotMessageRouter();
@@ -616,12 +663,12 @@ describe('BotMessageRouter', () => {
     }
 
     it('should not register the DM catch-all when DM is disabled', async () => {
-      const handler = await loadDmCatchAllHandler({ dm: { policy: 'disabled' } });
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'disabled' });
       expect(handler).toBeNull();
     });
 
     it('should register the DM catch-all when DM is enabled', async () => {
-      const handler = await loadDmCatchAllHandler({ dm: { policy: 'open' } });
+      const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' });
       expect(handler).not.toBeNull();
     });
 
@@ -663,7 +710,8 @@ describe('BotMessageRouter', () => {
 
     it('should block DM messages blocked by the allowlist and notify the sender', async () => {
       const handler = await loadDmCatchAllHandler({
-        dm: { allowFrom: 'bob-id', policy: 'allowlist' },
+        allowFrom: 'bob-id',
+        dmPolicy: 'allowlist',
       });
       if (!handler) throw new Error('expected catch-all to be registered');
       const thread = {
@@ -681,6 +729,346 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+    });
+  });
+
+  describe('group policy', () => {
+    /**
+     * Returns the registered onSubscribedMessage and onNewMention handlers so
+     * group-policy assertions can drive each entry point with the same
+     * fixture.
+     */
+    async function loadHandlers(settings: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const sub = mockOnSubscribedMessage.mock.calls.at(-1);
+      const mention = mockOnNewMention.mock.calls.at(-1);
+      if (!sub || !mention) throw new Error('handlers not registered');
+      return {
+        mention: mention[0] as (thread: any, message: any, ctx?: any) => Promise<void>,
+        subscribed: sub[0] as (thread: any, message: any, ctx?: any) => Promise<void>,
+      };
+    }
+
+    function makeGroupThread(channelId: string) {
+      return {
+        channelId,
+        id: `telegram:${channelId}`,
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+    }
+
+    function makeMentionMessage() {
+      return {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: true,
+        text: '@bot hi',
+      };
+    }
+
+    it('blocks @-mentions in groups when group policy is disabled and notifies the sender', async () => {
+      const { subscribed } = await loadHandlers({ groupPolicy: 'disabled' });
+      const thread = makeGroupThread('channel-1');
+
+      await subscribed(thread, makeMentionMessage());
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("doesn't respond in groups or channels");
+    });
+
+    it('blocks @-mentions on the new-mention path when group policy is disabled', async () => {
+      const { mention } = await loadHandlers({ groupPolicy: 'disabled' });
+      const thread = makeGroupThread('channel-1');
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("doesn't respond in groups or channels");
+    });
+
+    it('allows @-mentions in channels listed in groupAllowFrom', async () => {
+      const { subscribed } = await loadHandlers({
+        groupAllowFrom: 'channel-1, channel-2',
+        groupPolicy: 'allowlist',
+      });
+      const thread = makeGroupThread('channel-1');
+
+      await subscribed(thread, makeMentionMessage());
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks @-mentions in channels outside groupAllowFrom and notifies the sender', async () => {
+      const { subscribed } = await loadHandlers({
+        groupAllowFrom: 'channel-1',
+        groupPolicy: 'allowlist',
+      });
+      const thread = makeGroupThread('channel-9');
+
+      await subscribed(thread, makeMentionMessage());
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("isn't enabled in this channel");
+    });
+
+    it('does not affect DMs when group policy is disabled', async () => {
+      const { subscribed } = await loadHandlers({ groupPolicy: 'disabled' });
+      const thread = {
+        channelId: 'dm-channel',
+        id: 'telegram:dm',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await subscribed(thread, {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: false,
+        text: 'hi in DM',
+      });
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('global allowFrom (user-level identity gate)', () => {
+    /**
+     * Real-world bug report: DM Policy=Allowlist, allowFrom=[me], Group
+     * Policy=Open. A non-allowlisted user @-mentioned the bot in a server
+     * channel and the bot still tried to process — because the old
+     * implementation only consumed allowFrom under `dmPolicy='allowlist'`
+     * and isDM=true. Lock in: a populated allowFrom blocks every inbound
+     * surface — DMs and group @mentions alike.
+     */
+    async function loadHandlers(settings: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const sub = mockOnSubscribedMessage.mock.calls.at(-1);
+      const mention = mockOnNewMention.mock.calls.at(-1);
+      if (!sub || !mention) throw new Error('handlers not registered');
+      return {
+        mention: mention[0] as (thread: any, message: any, ctx?: any) => Promise<void>,
+        subscribed: sub[0] as (thread: any, message: any, ctx?: any) => Promise<void>,
+      };
+    }
+
+    it('blocks a non-allowlisted sender in a group and posts the generic notice in-thread', async () => {
+      const { mention } = await loadHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+        isMention: true,
+        text: '@bot hello',
+      };
+
+      await mention(thread, message);
+
+      // Bot must not handle the message...
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      // ...but must notify the sender in-thread with the generic
+      // "interact with this bot" copy. On Discord the post lands in the
+      // auto-created reply thread, so it does not pollute the parent
+      // channel; on other platforms it lands in the same group/thread
+      // the @mention came from, mirroring notifyGroupRejected.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+      expect(thread.post.mock.calls[0][0]).toContain('interact with this bot');
+      // The generic copy intentionally avoids "direct messages" — the
+      // sender did not try to DM, they @-mentioned in a group.
+      expect(thread.post.mock.calls[0][0]).not.toContain('direct messages');
+    });
+
+    it('blocks a non-allowlisted sender in a DM (with notification)', async () => {
+      const { mention } = await loadHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = {
+        id: 'telegram:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await mention(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+    });
+
+    it('lets allowlisted senders through in a group', async () => {
+      const { mention } = await loadHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await mention(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks subscribed-thread non-allowlisted senders in groups with the generic notice', async () => {
+      const { subscribed } = await loadHandlers({
+        allowFrom: 'alice-id',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await subscribed(thread, {
+        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+        isMention: true,
+        text: '@bot hi',
+      });
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain('interact with this bot');
+    });
+
+    it('with empty allowFrom acts as no-op, all senders allowed', async () => {
+      const { mention } = await loadHandlers({
+        allowFrom: '',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+      });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, {
+        author: { isBot: false, userId: 'random-user', userName: 'random' },
+        isMention: true,
+        text: '@bot hi',
+      });
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('regression: nested settings.dm.policy is ignored', () => {
+    /**
+     * Original bug: the form persisted `settings.dmPolicy` (flat) but the
+     * router read `settings.dm.policy` (nested), so every saved policy
+     * silently fell back to `'open'` and DMs were never blocked. Lock that
+     * direction in: the *flat* key is authoritative; the legacy nested
+     * shape is dead.
+     */
+    it('a saved dmPolicy=disabled at the flat key blocks DMs end-to-end', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings: { dmPolicy: 'disabled' } }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const lastCall = mockOnNewMention.mock.calls.at(-1);
+      if (!lastCall) throw new Error('onNewMention was not registered');
+      const handler = lastCall[0] as (thread: any, message: any, ctx?: any) => Promise<void>;
+
+      const thread = {
+        id: 'telegram:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      await handler(thread, {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: true,
+        text: '@bot hi',
+      });
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("isn't accepting direct messages");
+    });
+
+    it('a legacy nested settings.dm.policy=disabled is IGNORED and DMs pass through', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({
+          applicationId: 'app-1',
+          // Pre-bug-fix shape — nested object the form never actually wrote
+          // to. extractDmSettings doesn't read this; policy falls back to
+          // 'open', so the DM goes through.
+          settings: { dm: { policy: 'disabled' } },
+        }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const lastCall = mockOnNewMention.mock.calls.at(-1);
+      if (!lastCall) throw new Error('onNewMention was not registered');
+      const handler = lastCall[0] as (thread: any, message: any, ctx?: any) => Promise<void>;
+
+      const thread = {
+        id: 'telegram:dm-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      await handler(thread, {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: true,
+        text: '@bot hi',
+      });
+
+      // Nested shape is dead → policy resolved as 'open' → DM goes through.
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
     });
   });
 
@@ -705,7 +1093,7 @@ describe('BotMessageRouter', () => {
     }
 
     it('passes the sender platform locale into the bridge call', async () => {
-      const handler = await loadHandler({ dm: { policy: 'open' } });
+      const handler = await loadHandler({ dmPolicy: 'open' });
       const thread = {
         id: 'telegram:chat-1',
         isDM: true,
@@ -726,7 +1114,7 @@ describe('BotMessageRouter', () => {
     });
 
     it('falls back to the platform default locale when the sender locale is missing', async () => {
-      const handler = await loadHandler({ dm: { policy: 'open' } });
+      const handler = await loadHandler({ dmPolicy: 'open' });
       const thread = {
         id: 'telegram:chat-1',
         isDM: true,
@@ -746,7 +1134,7 @@ describe('BotMessageRouter', () => {
     });
 
     it('uses the sender locale for the DM rejection notice copy', async () => {
-      const handler = await loadHandler({ dm: { policy: 'disabled' } });
+      const handler = await loadHandler({ dmPolicy: 'disabled' });
       const thread = {
         id: 'telegram:chat-1',
         isDM: true,

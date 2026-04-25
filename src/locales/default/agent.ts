@@ -134,9 +134,18 @@ export default {
   'channel.dmPolicyAllowlist': 'Allowlist',
   'channel.dmPolicyDisabled': 'Disabled',
   'channel.dmPolicyOpen': 'Open',
-  'channel.dmAllowFrom': 'Allowed User IDs',
-  'channel.dmAllowFromHint':
-    'Comma- or whitespace-separated platform user IDs permitted to DM the bot. Only used when DM Policy is Allowlist.',
+  'channel.allowFrom': 'Allowed User IDs',
+  'channel.allowFromHint':
+    'Comma- or whitespace-separated platform user IDs. When populated, only these users can interact with the bot — in DMs and group @mentions alike. Leave empty to allow all users.',
+  'channel.groupPolicy': 'Group Policy',
+  'channel.groupPolicyHint':
+    'Control where the bot responds in groups, channels, and threads (DMs are governed by DM Policy)',
+  'channel.groupPolicyAllowlist': 'Allowlist',
+  'channel.groupPolicyDisabled': 'Disabled',
+  'channel.groupPolicyOpen': 'Open',
+  'channel.groupAllowFrom': 'Allowed Channel IDs',
+  'channel.groupAllowFromHint':
+    'Comma- or whitespace-separated channel / group / chat IDs the bot may respond in. Only used when Group Policy is Allowlist.',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',

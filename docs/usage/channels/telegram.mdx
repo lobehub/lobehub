@@ -93,25 +93,41 @@ To use the bot in Telegram groups:
   **About Group Privacy Mode:** Telegram bots have privacy mode enabled by default, which means they only receive messages that @mention the bot, reply to the bot, or contain /commands. If you change the privacy mode setting after creating the bot, you **must remove and re-add the bot to the group** for the new setting to take effect in that group.
 </Callout>
 
-## Direct Message Policy
+## Access Policies
 
-Telegram bots are typically used 1:1, so by default LobeHub **opens** DM handling for Telegram. Adjust **DM Policy** in **Advanced Settings** to restrict access:
+Two independent policies gate inbound traffic. Both default to **Open**.
 
-- **Open (default)** — Anyone on Telegram can DM the bot.
-- **Allowlist** — Only the Telegram user IDs you list in **Allowed User IDs** can DM the bot. To grab a user's numeric ID, ask them to message [@userinfobot](https://t.me/userinfobot), or read the `from.id` field from the bot's incoming update.
+### Allowed User IDs (global)
+
+A populated **Allowed User IDs** field acts as a global gate — DMs *and* group `@mentions` are restricted to listed Telegram numeric user IDs. Empty means "no user-level filter". Grab a user's numeric ID via [@userinfobot](https://t.me/userinfobot), or read the `from.id` field from the bot's incoming update.
+
+### DM Policy
+
+- **Open (default)** — Anyone on Telegram can DM the bot (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
 - **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
 
-DM Policy only governs DMs. Group `@mentions` are unaffected. See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+### Group Policy
+
+Controls which Telegram groups / channels the bot will respond in.
+
+- **Open (default)** — Respond in any group / channel the bot has been added to.
+- **Allowlist** — Respond only in chats whose ID is listed in **Allowed Channel IDs**. Forward a message from the chat to [@userinfobot](https://t.me/userinfobot) to grab the chat ID (group IDs are negative).
+- **Disabled** — Ignore all group traffic; the bot only responds to DMs.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
 
 ## Configuration Reference
 
-| Field                    | Required | Description                                                                                     |
-| ------------------------ | -------- | ----------------------------------------------------------------------------------------------- |
-| **Bot Token**            | Yes      | API token from BotFather                                                                        |
-| **Bot User ID**          | Auto     | Automatically derived from the bot token                                                        |
-| **Webhook Secret Token** | No       | Optional secret for verifying webhook requests                                                  |
-| **DM Policy**            | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                     |
-| **Allowed User IDs**     | No       | Comma- or whitespace-separated Telegram numeric user IDs. Only used when DM Policy is Allowlist |
+| Field                    | Required | Description                                                                                                    |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------- |
+| **Bot Token**            | Yes      | API token from BotFather                                                                                       |
+| **Bot User ID**          | Auto     | Automatically derived from the bot token                                                                       |
+| **Webhook Secret Token** | No       | Optional secret for verifying webhook requests                                                                 |
+| **Allowed User IDs**     | No       | Comma- or whitespace-separated Telegram numeric user IDs. Global gate — applies to DMs and group @mentions     |
+| **DM Policy**            | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                                    |
+| **Group Policy**         | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds in groups                                |
+| **Allowed Channel IDs**  | No       | Comma- or whitespace-separated Telegram chat IDs (group IDs are negative). Used when Group Policy is Allowlist |
 
 ## Troubleshooting
 

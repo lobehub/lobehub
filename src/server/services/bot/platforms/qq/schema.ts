@@ -1,6 +1,12 @@
 import { MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
-import { displayToolCallsField, makeDmField, userIdField } from '../const';
+import {
+  allowFromField,
+  displayToolCallsField,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  userIdField,
+} from '../const';
 import type { FieldSchema } from '../types';
 import { DEFAULT_QQ_CONNECTION_MODE } from './const';
 
@@ -76,7 +82,9 @@ export const schema: FieldSchema[] = [
       },
       displayToolCallsField,
       userIdField,
-      makeDmField({ policy: 'open' }),
+      makeDmPolicyField({ policy: 'open' }),
+      ...makeGroupPolicyFields({ policy: 'open' }),
+      allowFromField,
     ],
     type: 'object',
   },

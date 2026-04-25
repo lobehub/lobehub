@@ -5,7 +5,14 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
-import { displayToolCallsField, makeDmField, serverIdField, userIdField } from '../const';
+import {
+  allowFromField,
+  displayToolCallsField,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  serverIdField,
+  userIdField,
+} from '../const';
 import type { FieldSchema } from '../types';
 import { DEFAULT_SLACK_CONNECTION_MODE, MAX_SLACK_HISTORY_LIMIT } from './const';
 
@@ -105,7 +112,9 @@ export const schema: FieldSchema[] = [
       },
       serverIdField,
       userIdField,
-      makeDmField({ policy: 'open' }),
+      makeDmPolicyField({ policy: 'open' }),
+      ...makeGroupPolicyFields({ policy: 'open' }),
+      allowFromField,
     ],
     type: 'object',
   },
