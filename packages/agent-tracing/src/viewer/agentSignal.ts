@@ -109,7 +109,7 @@ const readNumber = (value: Record<string, unknown>, key: string) => {
 const collectStepAgentSignalEvents = (step: StepSnapshot): AgentTracingAgentSignalEvent[] => {
   const stepEvents = step.events ?? [];
 
-  return stepEvents.flatMap((event) => {
+  return stepEvents.flatMap<AgentTracingAgentSignalEvent>((event) => {
     if (!AGENT_SIGNAL_EVENT_TYPES.has(event.type as never)) return [];
     if (!isRecord(event.data)) return [];
 
