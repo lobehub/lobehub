@@ -92,10 +92,11 @@ export class BotCallbackService {
 
     const entry = platformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
+    const replyLocale = getBotReplyLocale(platform);
 
     if (type === 'step') {
       if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
-        await this.handleStep(body, messenger, progressMessageId, client);
+        await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
       }
       // Swap the user-message reaction to match the current step type (tool
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
@@ -116,7 +117,7 @@ export class BotCallbackService {
         messenger,
         progressMessageId ?? '',
         client,
-        getBotReplyLocale(platform),
+        replyLocale,
         charLimit,
         canEdit,
       );
@@ -183,27 +184,31 @@ export class BotCallbackService {
     messenger: PlatformMessenger,
     progressMessageId: string,
     client: PlatformClient,
+    replyLocale: BotReplyLocale,
   ): Promise<void> {
     if (!body.shouldContinue) return;
 
-    const msgBody = renderStepProgress({
-      content: body.content,
-      elapsedMs: body.elapsedMs,
-      executionTimeMs: body.executionTimeMs ?? 0,
-      lastContent: body.lastLLMContent,
-      lastToolsCalling: body.lastToolsCalling,
-      reasoning: body.reasoning,
-      stepType: body.stepType ?? ('call_llm' as const),
-      thinking: body.thinking ?? false,
-      toolsCalling: body.toolsCalling,
-      toolsResult: body.toolsResult,
-      totalCost: body.totalCost ?? 0,
-      totalInputTokens: body.totalInputTokens ?? 0,
-      totalOutputTokens: body.totalOutputTokens ?? 0,
-      totalSteps: body.totalSteps ?? 0,
-      totalTokens: body.totalTokens ?? 0,
-      totalToolCalls: body.totalToolCalls,
-    });
+    const msgBody = renderStepProgress(
+      {
+        content: body.content,
+        elapsedMs: body.elapsedMs,
+        executionTimeMs: body.executionTimeMs ?? 0,
+        lastContent: body.lastLLMContent,
+        lastToolsCalling: body.lastToolsCalling,
+        reasoning: body.reasoning,
+        stepType: body.stepType ?? ('call_llm' as const),
+        thinking: body.thinking ?? false,
+        toolsCalling: body.toolsCalling,
+        toolsResult: body.toolsResult,
+        totalCost: body.totalCost ?? 0,
+        totalInputTokens: body.totalInputTokens ?? 0,
+        totalOutputTokens: body.totalOutputTokens ?? 0,
+        totalSteps: body.totalSteps ?? 0,
+        totalTokens: body.totalTokens ?? 0,
+        totalToolCalls: body.totalToolCalls,
+      },
+      replyLocale,
+    );
 
     const stats: UsageStats = {
       elapsedMs: body.elapsedMs,

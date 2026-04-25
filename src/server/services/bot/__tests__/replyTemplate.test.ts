@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { RenderStepParams } from '../replyTemplate';
 import {
   formatTokens,
+  renderCommandReply,
   renderDmRejected,
   renderError,
+  renderErrorWithDetails,
   renderFinalReply,
+  renderInlineError,
   renderLLMGenerating,
   renderStart,
   renderStepProgress,
@@ -377,6 +380,84 @@ describe('replyTemplate', () => {
     it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
       expect(renderDmRejected('disabled', 'zh-CN')).toContain('不接受私信');
       expect(renderDmRejected('allowlist', 'zh-CN')).toContain('没有私信该机器人的权限');
+    });
+  });
+
+  // ==================== renderInlineError / renderErrorWithDetails ====================
+
+  describe('renderInlineError', () => {
+    it('formats a compact **Error** line in English by default', () => {
+      expect(renderInlineError('boom')).toBe('**Error**: boom');
+    });
+
+    it('uses Chinese copy when locale is zh-CN', () => {
+      expect(renderInlineError('boom', 'zh-CN')).toBe('**错误**：boom');
+    });
+  });
+
+  describe('renderErrorWithDetails', () => {
+    it('embeds the raw detail block in English by default', () => {
+      const out = renderErrorWithDetails('stack trace');
+      expect(out).toContain('Agent Execution Failed');
+      expect(out).toContain('Details:');
+      expect(out).toContain('stack trace');
+    });
+
+    it('embeds the raw detail block with Chinese label when locale is zh-CN', () => {
+      const out = renderErrorWithDetails('stack trace', 'zh-CN');
+      expect(out).toContain('Agent 执行失败');
+      expect(out).toContain('详细信息');
+      expect(out).toContain('stack trace');
+    });
+  });
+
+  // ==================== renderCommandReply ====================
+
+  describe('renderCommandReply', () => {
+    it('returns the English copy for each command key by default', () => {
+      expect(renderCommandReply('cmdNewReset')).toContain('Conversation reset');
+      expect(renderCommandReply('cmdStopNotActive')).toContain('No active execution');
+      expect(renderCommandReply('cmdStopRequested')).toBe('Stop requested.');
+      expect(renderCommandReply('cmdStopUnable')).toContain('Unable to stop');
+    });
+
+    it('returns the Chinese copy when locale is zh-CN', () => {
+      expect(renderCommandReply('cmdNewReset', 'zh-CN')).toContain('对话已重置');
+      expect(renderCommandReply('cmdStopNotActive', 'zh-CN')).toContain('没有正在执行');
+      expect(renderCommandReply('cmdStopRequested', 'zh-CN')).toBe('已发出停止请求。');
+      expect(renderCommandReply('cmdStopUnable', 'zh-CN')).toContain('无法停止');
+    });
+  });
+
+  // ==================== renderStepProgress locale ====================
+
+  describe('renderStepProgress locale', () => {
+    it('uses Chinese "处理中…" placeholder in zh-CN', () => {
+      const out = renderStepProgress(makeParams({ stepType: 'call_llm' }), 'zh-CN');
+      expect(out).toContain('处理中…');
+      expect(out).not.toContain('Processing...');
+    });
+
+    it('uses Chinese tools-calling header in zh-CN', () => {
+      const out = renderStepProgress(
+        makeParams({
+          stepType: 'call_tool',
+          totalToolCalls: 3,
+          elapsedMs: 1500,
+        }),
+        'zh-CN',
+      );
+      expect(out).toContain('共 **3** 次工具调用');
+    });
+  });
+
+  // ==================== renderStart locale ====================
+
+  describe('renderStart locale', () => {
+    it('returns a Chinese ack phrase when locale is zh-CN', () => {
+      // The zh fallback list is small and flat — every entry is non-Latin.
+      const phrase = renderStart('hi', { lng: 'zh-CN' });
+      expect(/[\u4E00-\u9FFF]/.test(phrase)).toBe(true);
     });
   });
 

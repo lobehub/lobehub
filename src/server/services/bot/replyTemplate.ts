@@ -108,12 +108,15 @@ function formatCompletedTools(
 
 export { formatDuration, formatTokens } from './platforms';
 
-function renderProgressHeader(params: { elapsedMs?: number; totalToolCalls?: number }): string {
+function renderProgressHeader(
+  params: { elapsedMs?: number; totalToolCalls?: number },
+  lng?: BotReplyLocale,
+): string {
   const { elapsedMs, totalToolCalls } = params;
   if (!totalToolCalls || totalToolCalls <= 0) return '';
 
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
-  return `> total **${totalToolCalls}** tools calling ${time}\n\n`;
+  return getSystemStrings(lng).toolsCallingHeader(totalToolCalls, time);
 }
 
 // ==================== 1. Start ====================
@@ -126,10 +129,10 @@ export const renderStart = getExtremeAck;
  * LLM step just finished. Returns the message body (no usage stats).
  * Stats are handled separately via `PlatformClient.formatReply`.
  */
-export function renderLLMGenerating(params: RenderStepParams): string {
+export function renderLLMGenerating(params: RenderStepParams, lng?: BotReplyLocale): string {
   const { content, elapsedMs, lastContent, reasoning, toolsCalling, totalToolCalls } = params;
   const displayContent = (content || lastContent)?.trim();
-  const header = renderProgressHeader({ elapsedMs, totalToolCalls });
+  const header = renderProgressHeader({ elapsedMs, totalToolCalls }, lng);
 
   // Sub-state: LLM decided to call tools → show content + pending tool calls (○)
   if (toolsCalling && toolsCalling.length > 0) {
@@ -149,7 +152,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
     return `${header}${displayContent}`;
   }
 
-  return `${header}${EMOJI_THINKING} Processing...`;
+  return `${header}${EMOJI_THINKING} ${getSystemStrings(lng).processing}`;
 }
 
 // ==================== 3. Tool Executing ====================
@@ -158,9 +161,10 @@ export function renderLLMGenerating(params: RenderStepParams): string {
  * Tool step just finished, LLM is next.
  * Returns the message body (no usage stats).
  */
-export function renderToolExecuting(params: RenderStepParams): string {
+export function renderToolExecuting(params: RenderStepParams, lng?: BotReplyLocale): string {
   const { elapsedMs, lastContent, lastToolsCalling, toolsResult, totalToolCalls } = params;
-  const header = renderProgressHeader({ elapsedMs, totalToolCalls });
+  const header = renderProgressHeader({ elapsedMs, totalToolCalls }, lng);
+  const processing = `${EMOJI_THINKING} ${getSystemStrings(lng).processing}`;
 
   const parts: string[] = [];
 
@@ -170,9 +174,9 @@ export function renderToolExecuting(params: RenderStepParams): string {
 
   if (lastToolsCalling && lastToolsCalling.length > 0) {
     parts.push(formatCompletedTools(lastToolsCalling, toolsResult));
-    parts.push(`${EMOJI_THINKING} Processing...`);
+    parts.push(processing);
   } else {
-    parts.push(`${EMOJI_THINKING} Processing...`);
+    parts.push(processing);
   }
 
   return parts.join('\n\n');
@@ -201,29 +205,54 @@ export function renderFinalReply(content: string): string {
  * through this map.
  */
 type SystemStrings = {
+  cmdNewReset: string;
+  cmdStopNotActive: string;
+  cmdStopRequested: string;
+  cmdStopUnable: string;
   dmRejectedAllowlist: string;
   dmRejectedDisabled: string;
   error: string;
+  errorWithDetails: (details: string) => string;
   errorWithId: (operationId: string) => string;
+  inlineError: (message: string) => string;
+  processing: string;
   stoppedDefault: string;
+  toolsCallingHeader: (count: number, time: string) => string;
 };
 
 const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
   'en-US': {
+    cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
+    cmdStopNotActive: 'No active execution to stop.',
+    cmdStopRequested: 'Stop requested.',
+    cmdStopUnable: 'Unable to stop the current execution.',
     dmRejectedAllowlist:
       "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.",
     dmRejectedDisabled:
       "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
     error: '**Agent Execution Failed**',
+    errorWithDetails: (details) =>
+      `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent Execution Failed**\nOperation ID: \`${operationId}\``,
+    inlineError: (message) => `**Error**: ${message}`,
+    processing: 'Processing...',
     stoppedDefault: 'Execution stopped.',
+    toolsCallingHeader: (count, time) => `> total **${count}** tools calling ${time}\n\n`,
   },
   'zh-CN': {
+    cmdNewReset: '对话已重置，下一条消息会开启新话题。',
+    cmdStopNotActive: '当前没有正在执行的任务可以停止。',
+    cmdStopRequested: '已发出停止请求。',
+    cmdStopUnable: '无法停止当前执行。',
     dmRejectedAllowlist: '抱歉，您没有私信该机器人的权限。如需访问请联系机器人管理员。',
     dmRejectedDisabled: '该机器人不接受私信。请在共享频道或群组里 @它来联系。',
     error: '**Agent 执行失败**',
+    errorWithDetails: (details) => `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
+    inlineError: (message) => `**错误**：${message}`,
+    processing: '处理中…',
     stoppedDefault: '执行已停止。',
+    toolsCallingHeader: (count, time) => `> 共 **${count}** 次工具调用 ${time}\n\n`,
   },
 };
 
@@ -242,6 +271,37 @@ export function renderStopped(message?: string, lng?: BotReplyLocale): string {
 }
 
 /**
+ * Verbose error template used when we want to surface the underlying error
+ * message verbatim (typically for stale-topic or FK violations where the raw
+ * detail helps the operator diagnose the failure).
+ */
+export function renderErrorWithDetails(details: string, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).errorWithDetails(details);
+}
+
+/**
+ * Compact `**Error**: …` line used as a last-resort handler-level fallback
+ * when an unexpected exception escapes the bridge / catch-all path.
+ */
+export function renderInlineError(message: string, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).inlineError(message);
+}
+
+export type CommandReplyKey =
+  | 'cmdNewReset'
+  | 'cmdStopNotActive'
+  | 'cmdStopRequested'
+  | 'cmdStopUnable';
+
+/**
+ * Render a slash-command response (e.g. `/new`, `/stop`). Centralized so the
+ * command handlers don't each carry their own English literal.
+ */
+export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng)[key];
+}
+
+/**
  * Render the system message shown to a sender whose DM was blocked by the
  * channel's DM Policy. We split disabled vs allowlist so the user can act on
  * the answer (e.g. ping in a channel instead, or ask the owner for access).
@@ -257,9 +317,9 @@ export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotRepl
  * Dispatch to the correct template based on step state.
  * Returns message body only — caller handles stats via platform.
  */
-export function renderStepProgress(params: RenderStepParams): string {
+export function renderStepProgress(params: RenderStepParams, lng?: BotReplyLocale): string {
   if (params.stepType === 'call_llm') {
-    return renderLLMGenerating(params);
+    return renderLLMGenerating(params, lng);
   }
-  return renderToolExecuting(params);
+  return renderToolExecuting(params, lng);
 }

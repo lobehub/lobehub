@@ -26,7 +26,12 @@ import {
   resolveBotProviderConfig,
   shouldHandleDm,
 } from './platforms';
-import { renderDmRejected, renderError } from './replyTemplate';
+import {
+  renderCommandReply,
+  renderDmRejected,
+  renderError,
+  renderInlineError,
+} from './replyTemplate';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -76,6 +81,11 @@ interface CommandContext {
   /** Text after the command name (e.g. "/new foo" → "foo"). */
   args: string;
   post: (text: string) => Promise<any>;
+  /** Locale to use for any system-generated reply text. Plumbed in by the
+   *  caller — text-based commands derive it per-message via the platform's
+   *  `extractAuthorLocale`, native slash commands fall back to the platform
+   *  default since their event shape doesn't always carry user locale. */
+  replyLocale: BotReplyLocale;
   setState: (state: Record<string, any>, opts?: { replace?: boolean }) => Promise<any>;
   threadId: string;
 }
@@ -462,6 +472,7 @@ export class BotMessageRouter {
         setState: (s: Record<string, any>, o?: { replace?: boolean }) => Promise<any>;
       },
       text: string | undefined,
+      replyLocale: BotReplyLocale,
     ): Promise<boolean> => {
       const sanitized = client.sanitizeUserInput?.(text ?? '') ?? text;
       const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
@@ -469,6 +480,7 @@ export class BotMessageRouter {
       await result.command.handler({
         args: result.args,
         post: (t) => thread.post(t),
+        replyLocale,
         setState: (s, o) => thread.setState(s, o),
         threadId: thread.id,
       });
@@ -476,9 +488,8 @@ export class BotMessageRouter {
     };
 
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
-      if (await tryDispatch(thread, message.text)) return;
-
       const replyLocale = detectReplyLocale(message);
+      if (await tryDispatch(thread, message.text, replyLocale)) return;
 
       if (!passesDmPolicy(thread, message)) {
         log(
@@ -545,7 +556,8 @@ export class BotMessageRouter {
 
     bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
       if (message.author.isBot === true) return;
-      if (await tryDispatch(thread, message.text)) return;
+      const replyLocale = detectReplyLocale(message);
+      if (await tryDispatch(thread, message.text, replyLocale)) return;
 
       // Group / channel / thread policy: only respond when the bot is @-mentioned.
       // DMs are 1:1 conversations, so every message is implicitly addressed to the bot.
@@ -568,8 +580,6 @@ export class BotMessageRouter {
         );
         return;
       }
-
-      const replyLocale = detectReplyLocale(message);
 
       if (!passesDmPolicy(thread, message)) {
         log(
@@ -636,7 +646,10 @@ export class BotMessageRouter {
     });
 
     // Register slash command handlers (native + text-based)
-    this.registerCommands(bot, commands, client);
+    this.registerCommands(bot, commands, client, {
+      detectFromMessage: detectReplyLocale,
+      fallback: fallbackReplyLocale,
+    });
 
     // DM catch-all: only registered when DM handling is enabled. For mixed
     // platforms (e.g. Slack/Discord with both DMs and group channels), the
@@ -715,7 +728,7 @@ export class BotMessageRouter {
           log('onNewMessage: unhandled error from handleMention: %O', error);
           try {
             const errMsg = error instanceof Error ? error.message : String(error);
-            await thread.post(`**Error**: ${errMsg}`);
+            await thread.post(renderInlineError(errMsg, replyLocale));
           } catch {
             // best-effort notification
           }
@@ -747,7 +760,7 @@ export class BotMessageRouter {
         handler: async (ctx) => {
           log('command /new: agent=%s, platform=%s', agentId, platform);
           await ctx.setState({ topicId: undefined }, { replace: true });
-          await ctx.post('Conversation reset. Your next message will start a new topic.');
+          await ctx.post(renderCommandReply('cmdNewReset', ctx.replyLocale));
         },
         name: 'new',
       },
@@ -757,7 +770,7 @@ export class BotMessageRouter {
           log('command /stop: agent=%s, platform=%s', agentId, platform);
           const isActive = AgentBridgeService.isThreadActive(ctx.threadId);
           if (!isActive) {
-            await ctx.post('No active execution to stop.');
+            await ctx.post(renderCommandReply('cmdStopNotActive', ctx.replyLocale));
             return;
           }
           const operationId = AgentBridgeService.getActiveOperationId(ctx.threadId);
@@ -767,21 +780,21 @@ export class BotMessageRouter {
               const result = await aiAgentService.interruptTask({ operationId });
               if (!result.success) {
                 log('command /stop: runtime interrupt rejected for operationId=%s', operationId);
-                await ctx.post('Unable to stop the current execution.');
+                await ctx.post(renderCommandReply('cmdStopUnable', ctx.replyLocale));
                 return;
               }
               AgentBridgeService.clearActiveThread(ctx.threadId);
               log('command /stop: interrupted operationId=%s', operationId);
             } catch (error) {
               log('command /stop: interruptTask failed: %O', error);
-              await ctx.post('Unable to stop the current execution.');
+              await ctx.post(renderCommandReply('cmdStopUnable', ctx.replyLocale));
               return;
             }
           } else {
             AgentBridgeService.requestStop(ctx.threadId);
             log('command /stop: queued deferred stop for thread=%s', ctx.threadId);
           }
-          await ctx.post('Stop requested.');
+          await ctx.post(renderCommandReply('cmdStopRequested', ctx.replyLocale));
         },
         name: 'stop',
       },
@@ -813,13 +826,26 @@ export class BotMessageRouter {
    * To add a new command, add an entry to `buildCommands()` — it will be
    * automatically registered on all platforms.
    */
-  private registerCommands(bot: Chat<any>, commands: BotCommand[], client: PlatformClient): void {
+  private registerCommands(
+    bot: Chat<any>,
+    commands: BotCommand[],
+    client: PlatformClient,
+    locale: {
+      detectFromMessage: (message: { author?: unknown }) => BotReplyLocale;
+      fallback: BotReplyLocale;
+    },
+  ): void {
     // --- Native slash commands (Slack, Discord) ---
     for (const cmd of commands) {
       bot.onSlashCommand(`/${cmd.name}`, async (event) => {
         await cmd.handler({
           args: event.text,
           post: (text) => event.channel.post(text),
+          // Native slash-command events don't carry a Chat SDK Message, so
+          // there's no per-sender locale field to read; use the channel
+          // default. Telegram/Feishu/etc. dispatch via the text-based path
+          // below, which DOES have per-message locale.
+          replyLocale: locale.fallback,
           setState: (state, opts) => event.channel.setState(state, opts),
           threadId: event.channel.id,
         });
@@ -842,6 +868,7 @@ export class BotMessageRouter {
       await result.command.handler({
         args: result.args,
         post: (text) => thread.post(text),
+        replyLocale: locale.detectFromMessage(message),
         setState: (state, opts) => thread.setState(state, opts),
         threadId: thread.id,
       });

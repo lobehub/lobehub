@@ -25,6 +25,7 @@ import {
 import { clearReactionState, saveReactionState } from './reactionState';
 import {
   renderError,
+  renderErrorWithDetails,
   renderFinalReply,
   renderStart,
   renderStepProgress,
@@ -602,7 +603,7 @@ export class AgentBridgeService {
 
         log('handleSubscribedMessage error: %O', error);
         try {
-          await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
+          await thread.post(renderErrorWithDetails(errMsg, replyLocale));
         } catch (postError) {
           log('handleSubscribedMessage: failed to post error message: %O', postError);
         }
@@ -712,7 +713,9 @@ export class AgentBridgeService {
     } else {
       await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
       try {
-        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+        progressMessage = await thread.post(
+          renderStart(userMessage.text, { lng: replyLocale, timezone }),
+        );
       } catch (error) {
         log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
       }
@@ -1030,24 +1033,27 @@ export class AgentBridgeService {
 
                 if (!event.shouldContinue || !progressMessage || displayToolCalls === false) return;
 
-                const msgBody = renderStepProgress({
-                  content: event.content,
-                  elapsedMs: event.elapsedMs ?? getElapsedMs(),
-                  executionTimeMs: event.executionTimeMs ?? 0,
-                  lastContent: event.lastLLMContent,
-                  lastToolsCalling: event.lastToolsCalling,
-                  reasoning: event.reasoning,
-                  stepType: (event.stepType as 'call_llm' | 'call_tool') ?? 'call_llm',
-                  thinking: event.thinking ?? false,
-                  toolsCalling: event.toolsCalling,
-                  toolsResult: event.toolsResult,
-                  totalCost: event.totalCost ?? 0,
-                  totalInputTokens: event.totalInputTokens ?? 0,
-                  totalOutputTokens: event.totalOutputTokens ?? 0,
-                  totalSteps: event.totalSteps ?? 0,
-                  totalTokens: event.totalTokens ?? 0,
-                  totalToolCalls: event.totalToolCalls ?? 0,
-                });
+                const msgBody = renderStepProgress(
+                  {
+                    content: event.content,
+                    elapsedMs: event.elapsedMs ?? getElapsedMs(),
+                    executionTimeMs: event.executionTimeMs ?? 0,
+                    lastContent: event.lastLLMContent,
+                    lastToolsCalling: event.lastToolsCalling,
+                    reasoning: event.reasoning,
+                    stepType: (event.stepType as 'call_llm' | 'call_tool') ?? 'call_llm',
+                    thinking: event.thinking ?? false,
+                    toolsCalling: event.toolsCalling,
+                    toolsResult: event.toolsResult,
+                    totalCost: event.totalCost ?? 0,
+                    totalInputTokens: event.totalInputTokens ?? 0,
+                    totalOutputTokens: event.totalOutputTokens ?? 0,
+                    totalSteps: event.totalSteps ?? 0,
+                    totalTokens: event.totalTokens ?? 0,
+                    totalToolCalls: event.totalToolCalls ?? 0,
+                  },
+                  replyLocale,
+                );
 
                 const stats = {
                   elapsedMs: event.elapsedMs ?? getElapsedMs(),
