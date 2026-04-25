@@ -35,8 +35,8 @@ export interface DmSettings {
  * Build a platform-specific DM settings group. A single `policy` enum decides
  * everything: `disabled` ignores DMs entirely, `open` accepts any sender, and
  * `allowlist` reveals an `allowFrom` input that whitelists specific user IDs.
- * Discord defaults to `disabled` (opt-in); Slack/Telegram/Feishu/QQ default
- * to `open` (opt-out).
+ * All platforms default to `open` so the bot stays reachable out of the box;
+ * operators tighten this per-channel from the UI.
  */
 export function makeDmField(defaults: { policy: DmPolicy }): FieldSchema {
   return {

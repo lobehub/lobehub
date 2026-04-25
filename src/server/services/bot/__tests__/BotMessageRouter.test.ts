@@ -443,7 +443,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
     });
 
-    it('should block DM follow-ups when DM is disabled', async () => {
+    it('should block DM follow-ups when DM is disabled and notify the sender', async () => {
       const handler = await loadSubscribedHandler({ dm: { policy: 'disabled' } });
       const thread = makeThread({ isDM: true });
       const message = makeMessage({ isMention: false, text: 'hi' });
@@ -451,9 +451,11 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("isn't accepting direct messages");
     });
 
-    it('should block DM follow-ups for users outside the allowlist', async () => {
+    it('should block DM follow-ups for users outside the allowlist and notify the sender', async () => {
       const handler = await loadSubscribedHandler({
         dm: { allowFrom: 'bob-id, carol-id', policy: 'allowlist' },
       });
@@ -463,6 +465,8 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
     });
 
     it('should pass DM follow-ups for users on the allowlist', async () => {
@@ -524,7 +528,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 
-    it('should block @-mentions inside DMs when DM is disabled', async () => {
+    it('should block @-mentions inside DMs when DM is disabled and notify the sender', async () => {
       const handler = await loadMentionHandler({ dm: { policy: 'disabled' } });
       const thread = {
         id: 'discord:@me:channel-1',
@@ -540,9 +544,11 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("isn't accepting direct messages");
     });
 
-    it('should block DM @-mentions from users outside the allowlist', async () => {
+    it('should block DM @-mentions from users outside the allowlist and notify the sender', async () => {
       const handler = await loadMentionHandler({
         dm: { allowFrom: 'bob-id', policy: 'allowlist' },
       });
@@ -560,6 +566,8 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
     });
   });
 
@@ -633,7 +641,7 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
 
-    it('should block DM messages blocked by the allowlist', async () => {
+    it('should block DM messages blocked by the allowlist and notify the sender', async () => {
       const handler = await loadDmCatchAllHandler({
         dm: { allowFrom: 'bob-id', policy: 'allowlist' },
       });
@@ -651,6 +659,8 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleMention).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
     });
   });
 });

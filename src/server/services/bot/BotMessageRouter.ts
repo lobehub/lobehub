@@ -23,7 +23,7 @@ import {
   resolveBotProviderConfig,
   shouldHandleDm,
 } from './platforms';
-import { renderError } from './replyTemplate';
+import { renderDmRejected, renderError } from './replyTemplate';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -415,6 +415,25 @@ export class BotMessageRouter {
         isDM: thread.isDM === true,
       });
 
+    /**
+     * Post a one-line system reply telling the sender why their DM was
+     * dropped. Best-effort — a transient platform error must never bubble
+     * back into the handler since the message is informational, not part of
+     * the agent flow.
+     */
+    const notifyDmRejected = async (thread: {
+      post: (text: string) => Promise<unknown>;
+    }): Promise<void> => {
+      // 'open' should never reach here, but guard anyway so we never post the
+      // wrong copy if shouldHandleDm grows another false branch.
+      if (dmSettings.policy === 'open') return;
+      try {
+        await thread.post(renderDmRejected(dmSettings.policy));
+      } catch (error) {
+        log('notifyDmRejected: failed to post rejection notice: %O', error);
+      }
+    };
+
     /** Try dispatching a text command. Returns true if handled.
      *  Strips platform mention artifacts (e.g. Slack's `<@U123>`) before
      *  checking so that "@bot /new" correctly resolves to the /new command. */
@@ -450,6 +469,7 @@ export class BotMessageRouter {
           message.author.userName,
           dmSettings.policy,
         );
+        await notifyDmRejected(thread);
         return;
       }
 
@@ -537,6 +557,7 @@ export class BotMessageRouter {
           message.author.userName,
           dmSettings.policy,
         );
+        await notifyDmRejected(thread);
         return;
       }
 
@@ -619,6 +640,7 @@ export class BotMessageRouter {
             thread.id,
             message.author.userName,
           );
+          await notifyDmRejected(thread);
           return;
         }
 

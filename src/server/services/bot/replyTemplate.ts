@@ -199,6 +199,18 @@ export function renderStopped(message = 'Execution stopped.'): string {
   return message;
 }
 
+/**
+ * Render the system message shown to a sender whose DM was blocked by the
+ * channel's DM Policy. We split disabled vs allowlist so the user can act on
+ * the answer (e.g. ping in a channel instead, or ask the owner for access).
+ */
+export function renderDmRejected(reason: 'disabled' | 'allowlist'): string {
+  if (reason === 'disabled') {
+    return "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.";
+  }
+  return "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.";
+}
+
 // ==================== Dispatcher ====================
 
 /**

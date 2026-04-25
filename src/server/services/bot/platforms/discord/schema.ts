@@ -89,7 +89,7 @@ export const schema: FieldSchema[] = [
       },
       serverIdField,
       userIdField,
-      makeDmField({ policy: 'disabled' }),
+      makeDmField({ policy: 'open' }),
     ],
     type: 'object',
   },

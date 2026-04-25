@@ -85,14 +85,7 @@ When **Allowlist** is selected, an additional **Allowed User IDs** field appears
 
 ### Per-platform defaults
 
-| Platform      | Default policy | Why                                                                                               |
-| ------------- | -------------- | ------------------------------------------------------------------------------------------------- |
-| Discord       | **Disabled**   | Discord bots can be DM'd by anyone in any shared server, so the bot is opt-in for DMs.            |
-| Slack         | **Open**       | Slack DMs are scoped to a workspace, so it is safe to default-allow team members.                 |
-| Telegram      | **Open**       | Telegram bots are typically used 1:1 — defaulting to Open keeps the bot reachable out of the box. |
-| QQ            | **Open**       | Same rationale as Telegram.                                                                       |
-| Feishu / Lark | **Open**       | Feishu/Lark apps are scoped to a tenant, so DMs are default-allowed.                              |
-| WeChat        | n/a            | The WeChat integration is DM-only by design and does not expose a DM Policy.                      |
+Every supported platform defaults to **Open** so the bot stays reachable out of the box. Tighten this per-channel via **Allowlist** or **Disabled** when you want a private bot. WeChat does not expose this setting because the WeChat integration is DM-only by design.
 
 ### Finding a user's platform ID
 

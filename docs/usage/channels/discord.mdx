@@ -123,11 +123,13 @@ Back in LobeHub's channel settings for Discord, click **Test Connection** to ver
 
 ## Direct Message Policy
 
-Discord bots can be DM'd by anyone who shares a server with them, so by default LobeHub **disables** DM handling for Discord. To allow DMs, open **Advanced Settings** in the channel form and change **DM Policy**:
+By default LobeHub **opens** DM handling for Discord — anyone who shares a server with the bot can DM it. Adjust **DM Policy** in **Advanced Settings** if you want to restrict DM access:
 
-- **Disabled (default)** — The bot ignores all DMs. It only responds to `@mentions` in shared servers.
-- **Open** — Anyone who shares a server with the bot can DM it.
+- **Open (default)** — Anyone who shares a server with the bot can DM it.
 - **Allowlist** — Only the Discord user IDs you list in **Allowed User IDs** can DM the bot. Right-click a user → **Copy User ID** (Developer Mode must be enabled in **Settings → Advanced**) to grab an ID.
+- **Disabled** — The bot ignores all DMs. It only responds to `@mentions` in shared servers.
+
+> Discord bots can be reached by anyone in any shared server, so consider switching to **Allowlist** or **Disabled** if your bot is meant to be private.
 
 DM Policy only governs DMs. Server-channel `@mentions` are unaffected. See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
 
@@ -138,7 +140,7 @@ DM Policy only governs DMs. Server-channel `@mentions` are unaffected. See the [
 | **Application ID**   | Yes      | Your Discord application's ID                                                          |
 | **Bot Token**        | Yes      | Authentication token for your Discord bot                                              |
 | **Public Key**       | Yes      | Used to verify interaction requests from Discord                                       |
-| **DM Policy**        | No       | `disabled` (default), `open`, or `allowlist` — who is allowed to DM the bot            |
+| **DM Policy**        | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot            |
 | **Allowed User IDs** | No       | Comma- or whitespace-separated Discord user IDs. Only used when DM Policy is Allowlist |
 
 ## Troubleshooting
