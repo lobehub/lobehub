@@ -234,13 +234,21 @@ export class ConversationLifecycleActionImpl {
     if (!message && !hasFile) return;
 
     // ━━━ Message Queue: enqueue if agent is currently running ━━━
-    // Check if there's a running execAgentRuntime operation in the current context.
-    // If so, enqueue the message instead of starting a new operation.
+    // Check if there's a running agent-runtime operation in the current context.
+    // If so, enqueue the message instead of starting a new operation. Covers both
+    // Client mode (`execAgentRuntime`) and the heterogeneous agent / CC path
+    // (`execHeterogeneousAgent`) — without the latter, a follow-up send during a
+    // CC turn would spawn a second `claude` process in parallel.
     const currentContextKey = messageMapKey(operationContext);
     const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
     const runningAgentOp = contextOpIds
       .map((id) => this.#get().operations[id])
-      .find((op) => op && op.type === 'execAgentRuntime' && op.status === 'running');
+      .find(
+        (op) =>
+          op &&
+          (op.type === 'execAgentRuntime' || op.type === 'execHeterogeneousAgent') &&
+          op.status === 'running',
+      );
 
     if (runningAgentOp) {
       this.#get().enqueueMessage(

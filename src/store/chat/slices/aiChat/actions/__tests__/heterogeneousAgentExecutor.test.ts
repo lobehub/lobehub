@@ -111,11 +111,15 @@ function createMockStore(overrides: Record<string, any> = {}) {
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
+    drainQueuedMessages: vi.fn(() => []),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
+    markUnreadCompleted: vi.fn(),
+    operations: {} as Record<string, any>,
     refreshMessages: vi.fn(async () => {}),
     refreshThreads: vi.fn(async () => {}),
     replaceMessages: vi.fn(),
+    sendMessage: vi.fn(async () => {}),
     startOperation: vi.fn(() => {
       subOpCounter += 1;
       return {
