@@ -107,6 +107,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       welcome_suggest: true,
       knowledge_base: false,
       rag_eval: true,
+      agent_self_iteration: true,
       agent_onboarding: true,
       agent_page: true,
       market: true,
@@ -132,6 +133,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       showWelcomeSuggest: true,
       enableKnowledgeBase: false,
       enableRAGEval: true,
+      enableAgentSelfIteration: true,
       enableAgentOnboarding: true,
       enableAgentPage: true,
       showMarket: true,
@@ -146,6 +148,7 @@ describe('mapFeatureFlagsEnvToState', () => {
     const userId = 'user-123';
     const config = {
       edit_agent: ['user-123', 'user-456'],
+      agent_self_iteration: ['user-123'],
       agent_onboarding: ['user-123'],
       agent_page: ['user-123'],
       create_session: ['user-789'],
@@ -157,6 +160,7 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.isAgentEditable).toBe(true); // user-123 is in allowlist
 
+    expect(mappedState.enableAgentSelfIteration).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentOnboarding).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentPage).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableKnowledgeBase).toBe(true); // user-123 is in allowlist
@@ -177,6 +181,7 @@ describe('mapFeatureFlagsEnvToState', () => {
 
   it('should return false for array flags when no user ID provided', () => {
     const config = {
+      agent_self_iteration: ['user-1'],
       agent_onboarding: ['user-1'],
       agent_page: ['user-1'],
       edit_agent: ['user-123', 'user-456'],
@@ -185,6 +190,7 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     const mappedState = mapFeatureFlagsEnvToState(config);
 
+    expect(mappedState.enableAgentSelfIteration).toBe(false);
     expect(mappedState.enableAgentOnboarding).toBe(false);
     expect(mappedState.enableAgentPage).toBe(false);
     expect(mappedState.isAgentEditable).toBe(false);
@@ -194,6 +200,7 @@ describe('mapFeatureFlagsEnvToState', () => {
     const userId = 'user-123';
     const config = {
       edit_agent: ['user-123'],
+      agent_self_iteration: ['user-123'],
       agent_onboarding: ['user-123'],
       agent_page: ['user-123'],
       create_session: true,
@@ -207,6 +214,7 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.isAgentEditable).toBe(true);
 
+    expect(mappedState.enableAgentSelfIteration).toBe(true);
     expect(mappedState.enableAgentOnboarding).toBe(true);
     expect(mappedState.enableAgentPage).toBe(true);
     expect(mappedState.showAiImage).toBe(false);

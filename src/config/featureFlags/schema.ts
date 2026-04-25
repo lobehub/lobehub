@@ -30,6 +30,7 @@ export const FeatureFlagsSchema = z.object({
   rag_eval: FeatureFlagValue.optional(),
 
   // internal flag
+  agent_self_iteration: FeatureFlagValue.optional(),
   agent_onboarding: FeatureFlagValue.optional(),
   agent_page: FeatureFlagValue.optional(),
   agent_task: FeatureFlagValue.optional(),
@@ -79,6 +80,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   knowledge_base: true,
   rag_eval: false,
 
+  agent_self_iteration: isDev,
   agent_onboarding: isDev,
   agent_page: isDev,
   agent_task: isDev,
@@ -113,6 +115,7 @@ export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string
 
     enableKnowledgeBase: evaluateFeatureFlag(config.knowledge_base, userId),
     enableRAGEval: evaluateFeatureFlag(config.rag_eval, userId),
+    enableAgentSelfIteration: evaluateFeatureFlag(config.agent_self_iteration, userId),
     enableAgentOnboarding: evaluateFeatureFlag(config.agent_onboarding, userId),
     enableAgentPage: evaluateFeatureFlag(config.agent_page, userId),
     enableAgentTask: evaluateFeatureFlag(config.agent_task, userId),

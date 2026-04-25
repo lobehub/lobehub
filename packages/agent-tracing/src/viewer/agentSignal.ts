@@ -108,10 +108,11 @@ const readNumber = (value: Record<string, unknown>, key: string) => {
 
 const collectStepAgentSignalEvents = (step: StepSnapshot): AgentTracingAgentSignalEvent[] => {
   const stepEvents = step.events ?? [];
+  const collected: AgentTracingAgentSignalEvent[] = [];
 
-  return stepEvents.flatMap<AgentTracingAgentSignalEvent>((event) => {
-    if (!AGENT_SIGNAL_EVENT_TYPES.has(event.type as never)) return [];
-    if (!isRecord(event.data)) return [];
+  for (const event of stepEvents) {
+    if (!AGENT_SIGNAL_EVENT_TYPES.has(event.type as never)) continue;
+    if (!isRecord(event.data)) continue;
 
     const shared = {
       stepIndex: step.stepIndex,
@@ -119,59 +120,59 @@ const collectStepAgentSignalEvents = (step: StepSnapshot): AgentTracingAgentSign
     };
 
     if (event.type === 'agent_signal.source') {
-      return [
-        {
-          ...shared,
-          chainId: readString(event.data, 'chainId'),
-          rootSourceId: readString(event.data, 'rootSourceId'),
-          scopeKey: readString(event.data, 'scopeKey'),
-          sourceId: readString(event.data, 'sourceId'),
-          sourceType: readString(event.data, 'sourceType'),
-          type: 'agent_signal.source',
-        } satisfies AgentTracingAgentSignalSourceEvent,
-      ];
+      collected.push({
+        ...shared,
+        chainId: readString(event.data, 'chainId'),
+        rootSourceId: readString(event.data, 'rootSourceId'),
+        scopeKey: readString(event.data, 'scopeKey'),
+        sourceId: readString(event.data, 'sourceId'),
+        sourceType: readString(event.data, 'sourceType'),
+        type: 'agent_signal.source',
+      } satisfies AgentTracingAgentSignalSourceEvent);
+
+      continue;
     }
 
     if (event.type === 'agent_signal.signal') {
-      return [
-        {
-          ...shared,
-          parentNodeId: readString(event.data, 'parentNodeId'),
-          signalId: readString(event.data, 'signalId'),
-          signalType: readString(event.data, 'signalType'),
-          sourceId: readString(event.data, 'sourceId'),
-          type: 'agent_signal.signal',
-        } satisfies AgentTracingAgentSignalSignalEvent,
-      ];
+      collected.push({
+        ...shared,
+        parentNodeId: readString(event.data, 'parentNodeId'),
+        signalId: readString(event.data, 'signalId'),
+        signalType: readString(event.data, 'signalType'),
+        sourceId: readString(event.data, 'sourceId'),
+        type: 'agent_signal.signal',
+      } satisfies AgentTracingAgentSignalSignalEvent);
+
+      continue;
     }
 
     if (event.type === 'agent_signal.action') {
-      return [
-        {
-          ...shared,
-          actionId: readString(event.data, 'actionId'),
-          actionType: readString(event.data, 'actionType'),
-          parentNodeId: readString(event.data, 'parentNodeId'),
-          signalId: readString(event.data, 'signalId'),
-          type: 'agent_signal.action',
-        } satisfies AgentTracingAgentSignalActionEvent,
-      ];
-    }
-
-    return [
-      {
+      collected.push({
         ...shared,
         actionId: readString(event.data, 'actionId'),
-        attemptCurrent: readNumber(event.data, 'attemptCurrent'),
-        attemptStatus: readString(event.data, 'attemptStatus'),
-        detail: readString(event.data, 'detail'),
-        errorCode: readString(event.data, 'errorCode'),
-        runId: readString(event.data, 'runId'),
-        status: readString(event.data, 'status'),
-        type: 'agent_signal.result',
-      } satisfies AgentTracingAgentSignalResultEvent,
-    ];
-  });
+        actionType: readString(event.data, 'actionType'),
+        parentNodeId: readString(event.data, 'parentNodeId'),
+        signalId: readString(event.data, 'signalId'),
+        type: 'agent_signal.action',
+      } satisfies AgentTracingAgentSignalActionEvent);
+
+      continue;
+    }
+
+    collected.push({
+      ...shared,
+      actionId: readString(event.data, 'actionId'),
+      attemptCurrent: readNumber(event.data, 'attemptCurrent'),
+      attemptStatus: readString(event.data, 'attemptStatus'),
+      detail: readString(event.data, 'detail'),
+      errorCode: readString(event.data, 'errorCode'),
+      runId: readString(event.data, 'runId'),
+      status: readString(event.data, 'status'),
+      type: 'agent_signal.result',
+    } satisfies AgentTracingAgentSignalResultEvent);
+  }
+
+  return collected;
 };
 
 /**

@@ -1,4 +1,7 @@
 export default {
+  'features.agentSelfIteration.desc':
+    'Allow the assistant to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
+  'features.agentSelfIteration.title': 'Agent Self-iteration',
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
