@@ -1,3 +1,6 @@
+import { DEFAULT_LANG } from '@/const/locale';
+import { type Locales, normalizeLocale } from '@/locales/resources';
+
 import type { FieldSchema } from './types';
 
 export const displayToolCallsField: FieldSchema = {
@@ -21,6 +24,64 @@ export const userIdField: FieldSchema = {
   label: 'channel.userId',
   type: 'string',
 };
+
+// ---------- Bot reply locale ----------
+
+/**
+ * Locale used for **system-generated** bot reply text (errors, stopped notices,
+ * DM rejection). Aliased to the project-wide `Locales` so adding a new IM
+ * platform language doesn't drift from the rest of the codebase. Agent
+ * conversation content is produced by the LLM and follows the user's language
+ * naturally — this only governs the small set of static strings the bot
+ * itself emits.
+ *
+ * Picked per-platform since each platform has a primary audience: Chinese
+ * platforms (Feishu / QQ / WeChat) ship Chinese strings, the rest ship
+ * English. Languages without an entry in the system-string dictionary
+ * gracefully fall back to `DEFAULT_LANG` ('en-US') at render time.
+ */
+export type BotReplyLocale = Locales;
+
+const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
+  discord: 'en-US',
+  feishu: 'zh-CN',
+  lark: 'en-US',
+  qq: 'zh-CN',
+  slack: 'en-US',
+  telegram: 'en-US',
+  wechat: 'zh-CN',
+};
+
+export function getBotReplyLocale(platform: string | undefined): BotReplyLocale {
+  if (!platform) return DEFAULT_LANG;
+  return PLATFORM_REPLY_LOCALES[platform] ?? DEFAULT_LANG;
+}
+
+/**
+ * Coerce a platform-reported locale string to one of the project `Locales`.
+ *
+ * Different IM platforms emit different shapes for the same tag:
+ * - Telegram: lowercase BCP 47 (`pt-br`, `zh-hans`)
+ * - Discord / Slack: mixed case (`pt-BR`, `zh-CN`)
+ * - Feishu / Lark: underscored (`zh_CN`)
+ *
+ * We re-format to `lang-REGION` and then defer to the project's
+ * `normalizeLocale` so the resulting value sits inside `Locales`. Returns
+ * `undefined` for falsy input so the caller can fall back to a platform
+ * default; non-empty strings always produce a value (English when nothing
+ * else matches).
+ */
+export function normalizeBotReplyLocale(
+  raw: string | undefined | null,
+): BotReplyLocale | undefined {
+  if (!raw) return undefined;
+  const parts = raw.replaceAll('_', '-').split('-');
+  const formatted =
+    parts.length === 1
+      ? parts[0].toLowerCase()
+      : `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+  return normalizeLocale(formatted);
+}
 
 // ---------- DM (Direct Message) strategy ----------
 

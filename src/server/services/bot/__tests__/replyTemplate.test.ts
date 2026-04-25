@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { RenderStepParams } from '../replyTemplate';
 import {
   formatTokens,
+  renderDmRejected,
   renderError,
   renderFinalReply,
   renderLLMGenerating,
   renderStart,
   renderStepProgress,
+  renderStopped,
   renderToolExecuting,
   splitMessage,
   summarizeOutput,
@@ -335,6 +337,46 @@ describe('replyTemplate', () => {
 
     it('should fall back to a generic header when no operation id is provided', () => {
       expect(renderError()).toBe('**Agent Execution Failed**');
+    });
+
+    it('renders Chinese copy when locale is zh-CN', () => {
+      expect(renderError(undefined, 'zh-CN')).toBe('**Agent 执行失败**');
+      expect(renderError('op-1', 'zh-CN')).toContain('Agent 执行失败');
+      expect(renderError('op-1', 'zh-CN')).toContain('op-1');
+    });
+
+    it('falls back to English for locales without a translated dictionary', () => {
+      expect(renderError(undefined, 'ja-JP')).toBe('**Agent Execution Failed**');
+    });
+  });
+
+  // ==================== renderStopped ====================
+
+  describe('renderStopped', () => {
+    it('returns the default English message when no message is supplied', () => {
+      expect(renderStopped()).toBe('Execution stopped.');
+    });
+
+    it('returns the default Chinese message when locale is zh-CN', () => {
+      expect(renderStopped(undefined, 'zh-CN')).toBe('执行已停止。');
+    });
+
+    it('passes through an explicit message regardless of locale', () => {
+      expect(renderStopped('Stopped by user.', 'zh-CN')).toBe('Stopped by user.');
+    });
+  });
+
+  // ==================== renderDmRejected ====================
+
+  describe('renderDmRejected', () => {
+    it('renders disabled and allowlist English copy', () => {
+      expect(renderDmRejected('disabled')).toContain("isn't accepting direct messages");
+      expect(renderDmRejected('allowlist')).toContain("aren't authorized");
+    });
+
+    it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
+      expect(renderDmRejected('disabled', 'zh-CN')).toContain('不接受私信');
+      expect(renderDmRejected('allowlist', 'zh-CN')).toContain('没有私信该机器人的权限');
     });
   });
 

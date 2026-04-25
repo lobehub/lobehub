@@ -14,8 +14,9 @@ import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
-import type { PlatformClient } from './platforms';
+import type { BotReplyLocale, PlatformClient } from './platforms';
 import {
+  getBotReplyLocale,
   getStepReactionEmoji,
   platformRegistry,
   RECEIVED_REACTION_EMOJI,
@@ -100,6 +101,12 @@ interface BridgeHandlerOpts {
   charLimit?: number;
   client?: PlatformClient;
   displayToolCalls?: boolean;
+  /**
+   * Locale for system-generated reply text (errors, stopped notice, etc.).
+   * Picked per platform — see `getBotReplyLocale`. When omitted we fall back
+   * to inferring from `botContext.platform`, then to English.
+   */
+  replyLocale?: BotReplyLocale;
 }
 
 /** Snapshot of the emoji currently applied to a given user message. */
@@ -313,11 +320,21 @@ export class AgentBridgeService {
     error?: unknown;
     operationId?: string;
     progressMessage?: SentMessage;
+    replyLocale?: BotReplyLocale;
     stopped?: boolean;
     thread: Thread<ThreadState>;
     userMessage: Message;
   }): Promise<void> {
-    const { client, error, operationId, progressMessage, stopped, thread, userMessage } = params;
+    const {
+      client,
+      error,
+      operationId,
+      progressMessage,
+      replyLocale,
+      stopped,
+      thread,
+      userMessage,
+    } = params;
     const errorMessage =
       error instanceof Error ? error.message : error ? String(error) : 'Agent execution failed';
 
@@ -331,7 +348,9 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
-    const errorContent = stopped ? renderStopped(errorMessage) : renderError(operationId);
+    const errorContent = stopped
+      ? renderStopped(errorMessage, replyLocale)
+      : renderError(operationId, replyLocale);
 
     if (progressMessage) {
       try {
@@ -354,6 +373,15 @@ export class AgentBridgeService {
   }
 
   /**
+   * Resolve the locale to use for system-generated reply text. Prefers the
+   * caller-provided value (passed in by BotMessageRouter), falls back to a
+   * platform-derived default so legacy callers still get the right copy.
+   */
+  private resolveReplyLocale(opts: BridgeHandlerOpts): BotReplyLocale {
+    return opts.replyLocale ?? getBotReplyLocale(opts.botContext?.platform);
+  }
+
+  /**
    * Handle a new @mention — start a fresh conversation.
    */
   async handleMention(
@@ -362,6 +390,7 @@ export class AgentBridgeService {
     opts: BridgeHandlerOpts,
   ): Promise<void> {
     const { agentId, botContext, charLimit, displayToolCalls } = opts;
+    const replyLocale = this.resolveReplyLocale(opts);
 
     log(
       'handleMention: agentId=%s, user=%s, text=%s, attachments=%d',
@@ -419,6 +448,7 @@ export class AgentBridgeService {
           charLimit,
           client,
           displayToolCalls,
+          replyLocale,
           trigger: RequestTrigger.Bot,
         });
         queueHandoffSucceeded = queueMode;
@@ -432,7 +462,7 @@ export class AgentBridgeService {
       } catch (error) {
         log('handleMention error: %O', error);
         try {
-          await thread.post(renderError());
+          await thread.post(renderError(undefined, replyLocale));
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -456,6 +486,7 @@ export class AgentBridgeService {
     opts: BridgeHandlerOpts,
   ): Promise<void> {
     const { agentId, botContext, charLimit, displayToolCalls } = opts;
+    const replyLocale = this.resolveReplyLocale(opts);
     const threadState = await thread.state;
     const topicId = threadState?.topicId;
 
@@ -547,6 +578,7 @@ export class AgentBridgeService {
           charLimit,
           client: opts.client,
           displayToolCalls,
+          replyLocale,
           topicId,
           trigger: RequestTrigger.Bot,
         });
@@ -600,6 +632,7 @@ export class AgentBridgeService {
       charLimit?: number;
       client?: PlatformClient;
       displayToolCalls?: boolean;
+      replyLocale: BotReplyLocale;
       topicId?: string;
       trigger?: string;
     },
@@ -625,6 +658,7 @@ export class AgentBridgeService {
       charLimit,
       client,
       displayToolCalls,
+      replyLocale,
       topicId,
       trigger,
     } = opts;
@@ -728,6 +762,7 @@ export class AgentBridgeService {
         files,
         progressMessage,
         prompt,
+        replyLocale,
         topicId,
         trigger,
         webhookBody,
@@ -748,6 +783,7 @@ export class AgentBridgeService {
       gatewayConnectionId,
       progressMessage,
       prompt,
+      replyLocale,
       topicId,
       trigger,
       userMessage,
@@ -772,6 +808,7 @@ export class AgentBridgeService {
       files?: any;
       progressMessage?: SentMessage;
       prompt: string;
+      replyLocale: BotReplyLocale;
       topicId?: string;
       trigger?: string;
       webhookBody: Record<string, unknown>;
@@ -787,6 +824,7 @@ export class AgentBridgeService {
       files,
       progressMessage,
       prompt,
+      replyLocale,
       topicId,
       trigger,
       webhookBody,
@@ -854,6 +892,7 @@ export class AgentBridgeService {
         client,
         error,
         progressMessage,
+        replyLocale,
         stopped: isAbortError(error),
         thread,
         userMessage,
@@ -867,6 +906,7 @@ export class AgentBridgeService {
         error: result.error,
         operationId: result.operationId,
         progressMessage,
+        replyLocale,
         thread,
         userMessage,
       });
@@ -917,6 +957,7 @@ export class AgentBridgeService {
       gatewayConnectionId?: string;
       progressMessage?: SentMessage;
       prompt: string;
+      replyLocale: BotReplyLocale;
       topicId?: string;
       trigger?: string;
       userMessage?: Message;
@@ -935,6 +976,7 @@ export class AgentBridgeService {
       files,
       gatewayConnectionId,
       prompt,
+      replyLocale,
       topicId,
       trigger,
       userMessage,
@@ -1045,7 +1087,7 @@ export class AgentBridgeService {
                     errorMsg,
                   );
                   try {
-                    const errorText = renderError(event.operationId);
+                    const errorText = renderError(event.operationId, replyLocale);
                     if (progressMessage) {
                       await progressMessage.edit(errorText);
                     } else {
@@ -1061,7 +1103,7 @@ export class AgentBridgeService {
                 if (reason === 'interrupted') {
                   if (progressMessage) {
                     try {
-                      await progressMessage.edit(renderStopped());
+                      await progressMessage.edit(renderStopped(undefined, replyLocale));
                     } catch {
                       // ignore edit failure
                     }
@@ -1174,7 +1216,7 @@ export class AgentBridgeService {
 
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderError(result.operationId));
+                await progressMessage.edit(renderError(result.operationId, replyLocale));
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
               }
@@ -1212,7 +1254,7 @@ export class AgentBridgeService {
           if (isAbortError(error)) {
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderStopped(error.message));
+                await progressMessage.edit(renderStopped(error.message, replyLocale));
               } catch (editError) {
                 log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
               }
@@ -1236,7 +1278,7 @@ export class AgentBridgeService {
 
           if (progressMessage) {
             try {
-              await progressMessage.edit(renderError());
+              await progressMessage.edit(renderError(undefined, replyLocale));
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);
             }

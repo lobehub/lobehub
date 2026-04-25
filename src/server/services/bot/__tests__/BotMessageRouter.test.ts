@@ -108,6 +108,7 @@ const mockGetPlatform = vi.hoisted(() =>
         createClient: vi.fn().mockReturnValue({
           applicationId: 'mock-app',
           createAdapter: mockCreateAdapter,
+          extractAuthorLocale: (msg: any) => msg?.raw?.from?.language_code,
           extractChatId: (id: string) => id.split(':')[1],
           getMessenger: () => ({
             createMessage: vi.fn(),
@@ -130,6 +131,25 @@ const mockGetPlatform = vi.hoisted(() =>
 
 vi.mock('../platforms', () => ({
   buildRuntimeKey: (platform: string, appId: string) => `${platform}:${appId}`,
+  getBotReplyLocale: (platform: string | undefined): string => {
+    if (platform === 'feishu' || platform === 'qq' || platform === 'wechat') return 'zh-CN';
+    return 'en-US';
+  },
+  normalizeBotReplyLocale: (raw: string | undefined | null): string | undefined => {
+    if (!raw) return undefined;
+    const parts = raw.replaceAll('_', '-').split('-');
+    const formatted =
+      parts.length === 1
+        ? parts[0].toLowerCase()
+        : `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+    // Keep this in sync with the project `normalizeLocale` for the cases we test:
+    // - exact match returns as-is
+    // - 'zh-CN' / 'pt-BR' / 'en-US' are project locales
+    // - unknown → 'en-US'
+    const known = new Set(['en-US', 'zh-CN', 'zh-TW', 'pt-BR', 'ja-JP', 'ko-KR', 'fr-FR']);
+    if (known.has(formatted)) return formatted;
+    return 'en-US';
+  },
   extractDmSettings: (settings: Record<string, unknown> | null | undefined) => {
     const dm = (settings?.dm ?? {}) as Record<string, unknown>;
     const raw = dm.allowFrom;
@@ -661,6 +681,91 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+    });
+  });
+
+  describe('per-message reply locale auto-detect', () => {
+    /**
+     * Boot the router so its handler registration runs, then return the
+     * `onSubscribedMessage` handler — the easiest entry point to drive a
+     * locale-detected DM rejection without mocking the bridge call.
+     */
+    async function loadHandler(settings: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const lastCall = mockOnSubscribedMessage.mock.calls.at(-1);
+      if (!lastCall) throw new Error('onSubscribedMessage was not registered');
+      return lastCall[0] as (thread: any, message: any, ctx?: any) => Promise<void>;
+    }
+
+    it('passes the sender platform locale into the bridge call', async () => {
+      const handler = await loadHandler({ dm: { policy: 'open' } });
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: false,
+        raw: { from: { language_code: 'pt-br' } },
+        text: 'olá',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+      // pt-br → pt-BR via the project normalizeLocale
+      expect(mockHandleSubscribedMessage.mock.calls[0][2].replyLocale).toBe('pt-BR');
+    });
+
+    it('falls back to the platform default locale when the sender locale is missing', async () => {
+      const handler = await loadHandler({ dm: { policy: 'open' } });
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: false,
+        raw: {}, // no language_code → use platform default (en-US for Telegram)
+        text: 'hi',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+      expect(mockHandleSubscribedMessage.mock.calls[0][2].replyLocale).toBe('en-US');
+    });
+
+    it('uses the sender locale for the DM rejection notice copy', async () => {
+      const handler = await loadHandler({ dm: { policy: 'disabled' } });
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: false,
+        // Chinese-speaking user on Telegram (default en-US) — copy should
+        // follow the sender, not the platform default.
+        raw: { from: { language_code: 'zh-cn' } },
+        text: '你好',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain('该机器人不接受私信');
     });
   });
 });

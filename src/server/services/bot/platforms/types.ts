@@ -142,6 +142,19 @@ export interface PlatformClient {
   /** Create a Chat SDK adapter config for inbound message handling. */
   createAdapter: () => Record<string, any>;
 
+  /**
+   * Read the inbound message author's preferred language from the platform
+   * payload (e.g. Telegram's `from.language_code`, Discord's `user.locale`).
+   * Returns the raw platform string — caller is responsible for normalizing
+   * it against the project `Locales` set. Return `undefined` when the
+   * platform doesn't expose locale or the field is empty so the caller can
+   * fall back to the platform default.
+   *
+   * Optional — platforms that don't expose user locale (QQ / WeChat) omit
+   * this method.
+   */
+  extractAuthorLocale?: (message: Message) => string | undefined;
+
   /** Extract the chat/channel ID from a composite platformThreadId. */
   extractChatId: (platformThreadId: string) => string;
 

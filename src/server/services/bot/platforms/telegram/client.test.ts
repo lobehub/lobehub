@@ -352,3 +352,21 @@ describe('TelegramWebhookClient.extractFiles', () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe('TelegramWebhookClient.extractAuthorLocale', () => {
+  it('returns the language_code from raw.from when present', () => {
+    const client = createClient();
+    expect(
+      client.extractAuthorLocale!(makeMessage({ raw: { from: { language_code: 'pt-br' } } })),
+    ).toBe('pt-br');
+  });
+
+  it('returns undefined when raw.from is missing or has no language_code', () => {
+    const client = createClient();
+    expect(client.extractAuthorLocale!(makeMessage({ raw: {} }))).toBeUndefined();
+    expect(client.extractAuthorLocale!(makeMessage({ raw: { from: {} } }))).toBeUndefined();
+    expect(
+      client.extractAuthorLocale!(makeMessage({ raw: { from: { language_code: '' } } })),
+    ).toBeUndefined();
+  });
+});

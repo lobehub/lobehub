@@ -1,6 +1,6 @@
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
-import { formatDuration } from './platforms';
+import { type BotReplyLocale, formatDuration } from './platforms';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
 // because bot-callback webhooks send via DiscordPlatformClient directly
@@ -188,15 +188,57 @@ export function renderFinalReply(content: string): string {
   return content.trimEnd();
 }
 
-export function renderError(operationId?: string): string {
-  if (operationId) {
-    return `**Agent Execution Failed**\nOperation ID: \`${operationId}\``;
-  }
-  return `**Agent Execution Failed**`;
+// ==================== System message strings ====================
+
+/**
+ * Static strings emitted by the bot itself (errors, stopped notices, DM
+ * rejection). Keyed by IETF locale so it lines up with the project-wide
+ * `Locales` set; new platform languages can be added by dropping in another
+ * entry without touching the type. A missing locale falls back to `en-US`
+ * at lookup time, so we never silently render `undefined`.
+ *
+ * Agent conversation content is produced by the LLM and is not routed
+ * through this map.
+ */
+type SystemStrings = {
+  dmRejectedAllowlist: string;
+  dmRejectedDisabled: string;
+  error: string;
+  errorWithId: (operationId: string) => string;
+  stoppedDefault: string;
+};
+
+const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
+  'en-US': {
+    dmRejectedAllowlist:
+      "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.",
+    dmRejectedDisabled:
+      "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
+    error: '**Agent Execution Failed**',
+    errorWithId: (operationId) => `**Agent Execution Failed**\nOperation ID: \`${operationId}\``,
+    stoppedDefault: 'Execution stopped.',
+  },
+  'zh-CN': {
+    dmRejectedAllowlist: '抱歉，您没有私信该机器人的权限。如需访问请联系机器人管理员。',
+    dmRejectedDisabled: '该机器人不接受私信。请在共享频道或群组里 @它来联系。',
+    error: '**Agent 执行失败**',
+    errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
+    stoppedDefault: '执行已停止。',
+  },
+};
+
+const DEFAULT_REPLY_LOCALE: BotReplyLocale = 'en-US';
+
+const getSystemStrings = (lng: BotReplyLocale = DEFAULT_REPLY_LOCALE): SystemStrings =>
+  SYSTEM_STRINGS[lng] ?? SYSTEM_STRINGS[DEFAULT_REPLY_LOCALE]!;
+
+export function renderError(operationId?: string, lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return operationId ? strings.errorWithId(operationId) : strings.error;
 }
 
-export function renderStopped(message = 'Execution stopped.'): string {
-  return message;
+export function renderStopped(message?: string, lng?: BotReplyLocale): string {
+  return message ?? getSystemStrings(lng).stoppedDefault;
 }
 
 /**
@@ -204,11 +246,9 @@ export function renderStopped(message = 'Execution stopped.'): string {
  * channel's DM Policy. We split disabled vs allowlist so the user can act on
  * the answer (e.g. ping in a channel instead, or ask the owner for access).
  */
-export function renderDmRejected(reason: 'disabled' | 'allowlist'): string {
-  if (reason === 'disabled') {
-    return "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.";
-  }
-  return "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.";
+export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.dmRejectedDisabled : strings.dmRejectedAllowlist;
 }
 
 // ==================== Dispatcher ====================

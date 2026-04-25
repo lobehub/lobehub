@@ -9,8 +9,13 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
-import type { PlatformClient, PlatformMessenger, UsageStats } from './platforms';
-import { getStepReactionEmoji, platformRegistry, resolveBotProviderConfig } from './platforms';
+import type { BotReplyLocale, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
+import {
+  getBotReplyLocale,
+  getStepReactionEmoji,
+  platformRegistry,
+  resolveBotProviderConfig,
+} from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
   renderError,
@@ -111,6 +116,7 @@ export class BotCallbackService {
         messenger,
         progressMessageId ?? '',
         client,
+        getBotReplyLocale(platform),
         charLimit,
         canEdit,
       );
@@ -226,6 +232,7 @@ export class BotCallbackService {
     messenger: PlatformMessenger,
     progressMessageId: string,
     client: PlatformClient,
+    replyLocale: BotReplyLocale,
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
@@ -237,7 +244,7 @@ export class BotCallbackService {
         operationId,
         errorMessage,
       );
-      const errorText = renderError(operationId);
+      const errorText = renderError(operationId, replyLocale);
       try {
         if (canEdit && progressMessageId) {
           await messenger.editMessage(progressMessageId, errorText);
@@ -251,7 +258,7 @@ export class BotCallbackService {
     }
 
     if (reason === 'interrupted') {
-      const stoppedText = renderStopped(errorMessage || 'Execution stopped.');
+      const stoppedText = renderStopped(errorMessage, replyLocale);
       try {
         await messenger.createMessage(stoppedText);
       } catch (error) {

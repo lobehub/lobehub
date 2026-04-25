@@ -2,12 +2,62 @@ import { describe, expect, it } from 'vitest';
 
 import {
   extractDmSettings,
+  getBotReplyLocale,
   getStepReactionEmoji,
   makeDmField,
+  normalizeBotReplyLocale,
   shouldHandleDm,
   THINKING_REACTION_EMOJI,
   WORKING_REACTION_EMOJI,
 } from '../const';
+
+describe('normalizeBotReplyLocale', () => {
+  it('returns undefined for empty / nullish input so callers fall back', () => {
+    expect(normalizeBotReplyLocale(undefined)).toBeUndefined();
+    expect(normalizeBotReplyLocale(null)).toBeUndefined();
+    expect(normalizeBotReplyLocale('')).toBeUndefined();
+  });
+
+  it('normalizes Telegram-style lowercase to project Locales', () => {
+    expect(normalizeBotReplyLocale('pt-br')).toBe('pt-BR');
+    expect(normalizeBotReplyLocale('zh-cn')).toBe('zh-CN');
+    expect(normalizeBotReplyLocale('en')).toBe('en-US');
+  });
+
+  it('normalizes Feishu-style underscore to project Locales', () => {
+    expect(normalizeBotReplyLocale('zh_CN')).toBe('zh-CN');
+    expect(normalizeBotReplyLocale('en_US')).toBe('en-US');
+  });
+
+  it('passes through Discord/Slack-style mixed case unchanged', () => {
+    expect(normalizeBotReplyLocale('en-US')).toBe('en-US');
+    expect(normalizeBotReplyLocale('zh-CN')).toBe('zh-CN');
+  });
+
+  it('falls back to en-US when the input is not a project locale', () => {
+    expect(normalizeBotReplyLocale('xx-yy')).toBe('en-US');
+  });
+});
+
+describe('getBotReplyLocale', () => {
+  it('returns zh-CN for Chinese-first platforms', () => {
+    expect(getBotReplyLocale('feishu')).toBe('zh-CN');
+    expect(getBotReplyLocale('qq')).toBe('zh-CN');
+    expect(getBotReplyLocale('wechat')).toBe('zh-CN');
+  });
+
+  it('returns en-US for English-first platforms', () => {
+    expect(getBotReplyLocale('discord')).toBe('en-US');
+    expect(getBotReplyLocale('slack')).toBe('en-US');
+    expect(getBotReplyLocale('telegram')).toBe('en-US');
+    expect(getBotReplyLocale('lark')).toBe('en-US');
+  });
+
+  it('falls back to en-US for unknown or missing platforms', () => {
+    expect(getBotReplyLocale(undefined)).toBe('en-US');
+    expect(getBotReplyLocale('mystery-platform')).toBe('en-US');
+  });
+});
 
 describe('getStepReactionEmoji', () => {
   it('returns working emoji after call_llm that queued pending tool calls (tools about to run)', () => {

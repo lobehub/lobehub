@@ -10,12 +10,15 @@ import { telegram } from './telegram/definition';
 import { wechat } from './wechat/definition';
 
 export {
+  type BotReplyLocale,
   displayToolCallsField,
   type DmPolicy,
   type DmSettings,
   extractDmSettings,
+  getBotReplyLocale,
   getStepReactionEmoji,
   makeDmField,
+  normalizeBotReplyLocale,
   RECEIVED_REACTION_EMOJI,
   serverIdField,
   shouldHandleDm,

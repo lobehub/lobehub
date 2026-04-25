@@ -14,9 +14,12 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from './AgentBridgeService';
 import {
   type BotPlatformRuntimeContext,
+  type BotReplyLocale,
   buildRuntimeKey,
   type DmSettings,
   extractDmSettings,
+  getBotReplyLocale,
+  normalizeBotReplyLocale,
   type PlatformClient,
   type PlatformDefinition,
   platformRegistry,
@@ -399,6 +402,20 @@ export class BotMessageRouter {
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls !== false;
     const dmSettings: DmSettings = extractDmSettings(info.settings);
+    const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
+
+    /**
+     * Resolve the reply locale for a single inbound event. Prefer the
+     * sender's platform-reported locale (e.g. Telegram's
+     * `from.language_code`) so a Brazilian Telegram user sees Portuguese,
+     * even though Telegram's channel-level default is English. Fall back to
+     * the platform default when the platform doesn't expose a locale or the
+     * value is empty.
+     */
+    const detectReplyLocale = (message: { author?: unknown }): BotReplyLocale => {
+      const detected = normalizeBotReplyLocale(client.extractAuthorLocale?.(message as any));
+      return detected ?? fallbackReplyLocale;
+    };
 
     /**
      * Gate inbound events on DM policy. Non-DM threads pass through — their
@@ -421,14 +438,15 @@ export class BotMessageRouter {
      * back into the handler since the message is informational, not part of
      * the agent flow.
      */
-    const notifyDmRejected = async (thread: {
-      post: (text: string) => Promise<unknown>;
-    }): Promise<void> => {
+    const notifyDmRejected = async (
+      thread: { post: (text: string) => Promise<unknown> },
+      replyLocale: BotReplyLocale,
+    ): Promise<void> => {
       // 'open' should never reach here, but guard anyway so we never post the
       // wrong copy if shouldHandleDm grows another false branch.
       if (dmSettings.policy === 'open') return;
       try {
-        await thread.post(renderDmRejected(dmSettings.policy));
+        await thread.post(renderDmRejected(dmSettings.policy, replyLocale));
       } catch (error) {
         log('notifyDmRejected: failed to post rejection notice: %O', error);
       }
@@ -460,6 +478,8 @@ export class BotMessageRouter {
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
       if (await tryDispatch(thread, message.text)) return;
 
+      const replyLocale = detectReplyLocale(message);
+
       if (!passesDmPolicy(thread, message)) {
         log(
           'onNewMention: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
@@ -469,7 +489,7 @@ export class BotMessageRouter {
           message.author.userName,
           dmSettings.policy,
         );
-        await notifyDmRejected(thread);
+        await notifyDmRejected(thread, replyLocale);
         return;
       }
 
@@ -511,11 +531,12 @@ export class BotMessageRouter {
           charLimit,
           client,
           displayToolCalls,
+          replyLocale,
         });
       } catch (error) {
         log('onNewMention: unhandled error from handleMention: %O', error);
         try {
-          await thread.post(renderError());
+          await thread.post(renderError(undefined, replyLocale));
         } catch {
           // best-effort notification
         }
@@ -548,6 +569,8 @@ export class BotMessageRouter {
         return;
       }
 
+      const replyLocale = detectReplyLocale(message);
+
       if (!passesDmPolicy(thread, message)) {
         log(
           'onSubscribedMessage: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
@@ -557,7 +580,7 @@ export class BotMessageRouter {
           message.author.userName,
           dmSettings.policy,
         );
-        await notifyDmRejected(thread);
+        await notifyDmRejected(thread, replyLocale);
         return;
       }
 
@@ -600,11 +623,12 @@ export class BotMessageRouter {
           charLimit,
           client,
           displayToolCalls,
+          replyLocale,
         });
       } catch (error) {
         log('onSubscribedMessage: unhandled error from handleSubscribedMessage: %O', error);
         try {
-          await thread.post(renderError());
+          await thread.post(renderError(undefined, replyLocale));
         } catch {
           // best-effort notification
         }
@@ -633,6 +657,8 @@ export class BotMessageRouter {
         // would hijack every non-mention message in shared threads.
         if (thread.isDM !== true) return;
 
+        const replyLocale = detectReplyLocale(message);
+
         if (!passesDmPolicy(thread, message)) {
           log(
             'onNewMessage (%s catch-all): DM blocked by allowFrom list, thread=%s, author=%s',
@@ -640,7 +666,7 @@ export class BotMessageRouter {
             thread.id,
             message.author.userName,
           );
-          await notifyDmRejected(thread);
+          await notifyDmRejected(thread, replyLocale);
           return;
         }
 
@@ -683,6 +709,7 @@ export class BotMessageRouter {
             charLimit,
             client,
             displayToolCalls,
+            replyLocale,
           });
         } catch (error) {
           log('onNewMessage: unhandled error from handleMention: %O', error);
