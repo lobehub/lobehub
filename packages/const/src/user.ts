@@ -13,7 +13,6 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     topic: true,
   },
   lab: {
-    enableHeterogeneousAgent: false,
     enableInputMarkdown: true,
   },
   topicGroupMode: 'byTime',
