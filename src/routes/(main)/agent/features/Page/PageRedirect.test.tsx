@@ -31,7 +31,7 @@ vi.mock('@/features/TopicCanvas/useAutoCreateTopicDocument', () => ({
 }));
 
 vi.mock('@/store/serverConfig', () => ({
-  featureFlagsSelectors: (state: { featureFlags: { enableAgentPage: boolean } }) =>
+  featureFlagsSelectors: (state: { featureFlags: { enableAgentTask: boolean } }) =>
     state.featureFlags,
   useServerConfigStore: (selector: (state: unknown) => unknown) =>
     useServerConfigStoreMock(selector),
@@ -52,7 +52,7 @@ describe('PageRedirect', () => {
 
     useServerConfigStoreMock.mockImplementation((selector) =>
       selector({
-        featureFlags: { enableAgentPage: true },
+        featureFlags: { enableAgentTask: true },
         serverConfigInit: true,
       }),
     );
@@ -88,11 +88,11 @@ describe('PageRedirect', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it('redirects back to chat when the agent page feature is disabled', async () => {
+  it('redirects back to chat when the agent task feature is disabled', async () => {
     useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_test' });
     useServerConfigStoreMock.mockImplementation((selector) =>
       selector({
-        featureFlags: { enableAgentPage: false },
+        featureFlags: { enableAgentTask: false },
         serverConfigInit: true,
       }),
     );

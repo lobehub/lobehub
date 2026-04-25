@@ -11,24 +11,24 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 const PageRedirect = memo(() => {
   const { aid, topicId } = useParams<{ aid?: string; topicId?: string }>();
   const navigate = useNavigate();
-  const enableAgentPage = useServerConfigStore((s) => featureFlagsSelectors(s).enableAgentPage);
+  const enableAgentTask = useServerConfigStore((s) => featureFlagsSelectors(s).enableAgentTask);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
 
   const { documentId } = useAutoCreateTopicDocument(
-    enableAgentPage ? topicId : undefined,
-    enableAgentPage ? aid : undefined,
+    enableAgentTask ? topicId : undefined,
+    enableAgentTask ? aid : undefined,
   );
 
   useEffect(() => {
-    if (!aid || !topicId || !serverConfigInit || enableAgentPage) return;
+    if (!aid || !topicId || !serverConfigInit || enableAgentTask) return;
 
     navigate(SESSION_CHAT_TOPIC_URL(aid, topicId), { replace: true });
-  }, [aid, topicId, serverConfigInit, enableAgentPage, navigate]);
+  }, [aid, topicId, serverConfigInit, enableAgentTask, navigate]);
 
   useEffect(() => {
-    if (!aid || !topicId || !documentId || !enableAgentPage) return;
+    if (!aid || !topicId || !documentId || !enableAgentTask) return;
     navigate(`/agent/${aid}/${topicId}/page/${documentId}`, { replace: true });
-  }, [aid, topicId, documentId, enableAgentPage, navigate]);
+  }, [aid, topicId, documentId, enableAgentTask, navigate]);
 
   return <BrandTextLoading debugId={'PageRedirect'} />;
 });

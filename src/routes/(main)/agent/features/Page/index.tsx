@@ -23,12 +23,12 @@ const TITLE_SAVE_DEBOUNCE = 500;
 const TopicPage = memo(() => {
   const { aid, topicId, docId } = useParams<{ aid?: string; docId?: string; topicId?: string }>();
   const navigate = useNavigate();
-  const enableAgentPage = useServerConfigStore((s) => featureFlagsSelectors(s).enableAgentPage);
+  const enableAgentTask = useServerConfigStore((s) => featureFlagsSelectors(s).enableAgentTask);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
 
   const { documentId: topicDocumentId } = useAutoCreateTopicDocument(
-    enableAgentPage ? topicId : undefined,
-    enableAgentPage ? aid : undefined,
+    enableAgentTask ? topicId : undefined,
+    enableAgentTask ? aid : undefined,
   );
 
   const [titleDraft, setTitleDraft] = useState<string | undefined>();
@@ -44,19 +44,19 @@ const TopicPage = memo(() => {
   const isInvalidDoc = Boolean(docId && !isDocLoading && (documentError || documentMeta == null));
 
   useEffect(() => {
-    if (!aid || !topicId || !serverConfigInit || enableAgentPage) return;
+    if (!aid || !topicId || !serverConfigInit || enableAgentTask) return;
 
     navigate(SESSION_CHAT_TOPIC_URL(aid, topicId), { replace: true });
-  }, [aid, topicId, serverConfigInit, enableAgentPage, navigate]);
+  }, [aid, topicId, serverConfigInit, enableAgentTask, navigate]);
 
   useEffect(() => {
     if (!aid || !topicId) return;
-    if (!enableAgentPage) return;
+    if (!enableAgentTask) return;
     if (!isInvalidDoc) return;
     if (!topicDocumentId) return;
     if (topicDocumentId === docId) return;
     navigate(`/agent/${aid}/${topicId}/page/${topicDocumentId}`, { replace: true });
-  }, [aid, topicId, docId, enableAgentPage, isInvalidDoc, topicDocumentId, navigate]);
+  }, [aid, topicId, docId, enableAgentTask, isInvalidDoc, topicDocumentId, navigate]);
 
   useEffect(() => {
     setTitleDraft(undefined);

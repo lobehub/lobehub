@@ -50,7 +50,7 @@ const ViewSwitcher = memo(() => {
   const location = useLocation();
   const params = useParams<{ aid?: string; topicId?: string }>();
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const enableAgentPage = useServerConfigStore((s) => featureFlagsSelectors(s).enableAgentPage);
+  const enableAgentTask = useServerConfigStore((s) => featureFlagsSelectors(s).enableAgentTask);
 
   const aid = params.aid;
   const topicId = params.topicId ?? activeTopicId ?? undefined;
@@ -115,7 +115,7 @@ const ViewSwitcher = memo(() => {
     }
   };
 
-  if (!topicId || !enableAgentPage) return null;
+  if (!topicId || !enableAgentTask) return null;
 
   return (
     <Segmented
