@@ -21,7 +21,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
-  const params = useParams<{ aid?: string; topicId?: string }>();
+  const params = useParams();
   const agentId = params.aid;
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
@@ -35,23 +35,12 @@ const Nav = memo(() => {
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
 
-  // Treat anything past `/agent/:aid` (or `/agent/:aid/:topicId` when on a topic
-  // route) as a sub-route — covers /profile, /channel, /page, /cron/:cronId,
-  // /:topicId/page/:docId, etc. without enumerating each one.
-  const agentBasePath = agentId
-    ? params.topicId
-      ? urlJoin('/agent', agentId, params.topicId)
-      : urlJoin('/agent', agentId)
-    : undefined;
-  const isInAgentSubRoute =
-    !!agentBasePath &&
-    pathname.startsWith(agentBasePath) &&
-    pathname !== agentBasePath &&
-    pathname !== `${agentBasePath}/`;
-
   const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
-    if (isInAgentSubRoute && agentId) {
+    // Always navigate to the bare agent chat URL — drops any sub-route
+    // (/profile, /channel, /page, /cron/:cronId, …) and any `:topicId`
+    // segment so the new topic isn't conflated with the previous URL.
+    if (agentId) {
       router.push(urlJoin('/agent', agentId));
     }
     mutate();
