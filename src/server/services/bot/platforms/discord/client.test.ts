@@ -178,4 +178,41 @@ describe('DiscordGatewayClient', () => {
       expect(result).toBeUndefined();
     });
   });
+
+  describe('extractAuthorLocale', () => {
+    const makeMessage = (overrides: Record<string, unknown>) =>
+      ({
+        attachments: [],
+        id: 'msg-1',
+        text: '',
+        ...overrides,
+      }) as any;
+
+    it('returns the user locale from an INTERACTION_CREATE payload', () => {
+      const client = createClient();
+      expect(
+        client.extractAuthorLocale!(
+          makeMessage({ raw: { locale: 'pt-BR', guild_locale: 'en-US' } }),
+        ),
+      ).toBe('pt-BR');
+    });
+
+    it('falls back to guild_locale when the user-level field is missing', () => {
+      const client = createClient();
+      expect(client.extractAuthorLocale!(makeMessage({ raw: { guild_locale: 'zh-CN' } }))).toBe(
+        'zh-CN',
+      );
+    });
+
+    it('returns undefined for plain MESSAGE_CREATE payloads (Discord does not expose user locale there)', () => {
+      const client = createClient();
+      expect(
+        client.extractAuthorLocale!(
+          makeMessage({ raw: { author: { id: '123', username: 'alice' } } }),
+        ),
+      ).toBeUndefined();
+      expect(client.extractAuthorLocale!(makeMessage({ raw: {} }))).toBeUndefined();
+      expect(client.extractAuthorLocale!(makeMessage({}))).toBeUndefined();
+    });
+  });
 });
