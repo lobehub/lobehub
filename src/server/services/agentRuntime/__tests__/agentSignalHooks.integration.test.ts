@@ -232,7 +232,10 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
     expect(savedSnapshot.steps[0].events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'agent_signal.source' }),
-        expect.objectContaining({ type: 'agent_signal.signal' }),
+        expect.objectContaining({
+          data: expect.objectContaining({ sourceId: 'op-1:complete:done' }),
+          type: 'agent_signal.source',
+        }),
       ]),
     );
   });
@@ -330,12 +333,6 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
         expect.objectContaining({
           data: expect.objectContaining({ sourceId: 'op-1:complete:done' }),
           type: 'agent_signal.source',
-        }),
-        expect.objectContaining({
-          data: expect.objectContaining({
-            sourceId: 'op-1:complete:done',
-          }),
-          type: 'agent_signal.signal',
         }),
       ]),
     );
