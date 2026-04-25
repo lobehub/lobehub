@@ -27,6 +27,7 @@ export interface ResumeApprovalParam {
 export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: {
+    documentId?: string | null;
     groupId?: string | null;
     scope?: string | null;
     sessionId?: string;

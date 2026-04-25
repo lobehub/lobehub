@@ -27,6 +27,7 @@ import {
 } from '../Contexts/message-action-context';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
+import type { WorkflowExpandLevel } from './components/WorkflowCollapse';
 
 const EditState = dynamic(() => import('./components/EditState'), {
   ssr: false,
@@ -39,7 +40,7 @@ const actionBarHolder = (
   />
 );
 interface GroupMessageProps {
-  defaultWorkflowExpanded?: boolean;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
   disableEditing?: boolean;
   id: string;
   index: number;
@@ -47,7 +48,7 @@ interface GroupMessageProps {
 }
 
 const GroupMessage = memo<GroupMessageProps>(
-  ({ defaultWorkflowExpanded, id, index, disableEditing }) => {
+  ({ defaultWorkflowExpandLevel, id, index, disableEditing }) => {
     // Get message and actionsConfig from ConversationStore
     const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
@@ -164,7 +165,7 @@ const GroupMessage = memo<GroupMessageProps>(
             blocks={children}
             content={lastAssistantMsg?.content}
             contentId={contentId}
-            defaultWorkflowExpanded={defaultWorkflowExpanded}
+            defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
             disableEditing={disableEditing}
             id={id}
             messageIndex={index}

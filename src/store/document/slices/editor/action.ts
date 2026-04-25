@@ -180,7 +180,9 @@ export class EditorActionImpl {
         return;
       }
 
-      // Save document
+      // Preserve diff nodes (pending review) through the save path.
+      // Normalization only happens when the user explicitly clicks Accept/Reject
+      // in DiffAllToolbar, which mutates editor state before calling performSave.
       const result = await documentService.updateDocument({
         content: currentContent,
         editorData: JSON.stringify(currentEditorData),

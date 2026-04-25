@@ -1,8 +1,4 @@
-import type {
-  RuntimeConfigProvider,
-  RuntimeConfigSelector,
-  VersionedSnapshot,
-} from '../types';
+import type { RuntimeConfigProvider, RuntimeConfigSelector, VersionedSnapshot } from '../types';
 
 export class CompositeRuntimeConfigProvider<T> implements RuntimeConfigProvider<T> {
   domain: RuntimeConfigProvider<T>['domain'];

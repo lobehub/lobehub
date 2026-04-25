@@ -544,6 +544,7 @@ export const createRuntimeExecutors = (
           evalContext: ctx.evalContext,
           forceFinish: state.forceFinish,
           historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
+          initialContext: (state as any).initialContext?.initialContext,
           knowledge: {
             fileContents: agentConfig.files
               ?.filter((f: { enabled?: boolean | null }) => f.enabled === true)
@@ -940,26 +941,24 @@ export const createRuntimeExecutors = (
           // ===== 2. Then accumulate to AgentState =====
           const newState = structuredClone(state);
 
-          // Carry the persisted DB id so downstream executors (notably
-          // `request_human_approve`) can look up the parent assistant from
-          // `state.messages` without an extra DB round-trip. Without the id
-          // the lookup at `request_human_approve` (which filters on `m.id`)
-          // falls through to a DB query; when human-approve fires on the
-          // fresh LLM turn, both code paths miss and the op errors with
-          // "No assistant message found as parent for pending tool messages".
-          // Sanitize mirrors the DB write above — state.messages flows into the
-          // next LLM call payload, so the same poisoning risk applies here.
-          // See LOBE-7761.
-          const stateToolCalls =
+          // state.messages flows into the next LLM call payload, so entries
+          // must be safe for strict-provider history replay:
+          //   - drop tool_calls with empty name (undispatchable, and strict
+          //     providers 400 on nameless entries)
+          //   - coerce malformed JSON `arguments` to valid JSON
+          const sanitizedToolCalls =
             tool_calls.length > 0
-              ? tool_calls.map((tc) => ({
-                  ...tc,
-                  function: {
-                    ...tc.function,
-                    arguments: sanitizeToolCallArguments(tc.function.arguments),
-                  },
-                }))
-              : undefined;
+              ? tool_calls
+                  .filter((tc) => !!tc.function.name)
+                  .map((tc) => ({
+                    ...tc,
+                    function: {
+                      ...tc.function,
+                      arguments: sanitizeToolCallArguments(tc.function.arguments),
+                    },
+                  }))
+              : [];
+          const stateToolCalls = sanitizedToolCalls.length > 0 ? sanitizedToolCalls : undefined;
 
           newState.messages.push({
             content,
@@ -1526,7 +1525,9 @@ export const createRuntimeExecutors = (
             toolExecutionService.executeTool(chatToolPayload, {
               activeDeviceId: state.metadata?.activeDeviceId,
               agentId: state.metadata?.agentId,
+              documentId: state.metadata?.documentId,
               memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
+              scope: state.metadata?.scope,
               serverDB: ctx.serverDB,
               taskId: state.metadata?.taskId,
               toolManifestMap: effectiveManifestMap,
@@ -1958,7 +1959,9 @@ export const createRuntimeExecutors = (
                 toolExecutionService.executeTool(chatToolPayload, {
                   activeDeviceId: state.metadata?.activeDeviceId,
                   agentId: state.metadata?.agentId,
+                  documentId: state.metadata?.documentId,
                   memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
+                  scope: state.metadata?.scope,
                   serverDB: ctx.serverDB,
                   taskId: state.metadata?.taskId,
                   toolManifestMap: batchManifestMap,

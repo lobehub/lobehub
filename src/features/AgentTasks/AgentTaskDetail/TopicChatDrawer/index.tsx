@@ -37,7 +37,15 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
   const operationState = useOperationState(context);
 
   const itemContent = useCallback(
-    (index: number, id: string) => <MessageItem disableEditing id={id} index={index} key={id} />,
+    (index: number, id: string) => (
+      <MessageItem
+        disableEditing
+        defaultWorkflowExpandLevel="full"
+        id={id}
+        index={index}
+        key={id}
+      />
+    ),
     [],
   );
 

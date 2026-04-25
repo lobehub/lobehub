@@ -161,7 +161,14 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       log('disableTools is true, returning empty plugins');
       return [];
     }
-    return isSubTask ? pluginIds.filter((id) => id !== 'lobe-gtd') : pluginIds;
+
+    let nextPluginIds = pluginIds;
+
+    if (ctx.scope !== 'page') {
+      nextPluginIds = nextPluginIds.filter((id) => id !== PageAgentIdentifier);
+    }
+
+    return isSubTask ? nextPluginIds.filter((id) => id !== 'lobe-gtd') : nextPluginIds;
   };
 
   const agentStoreState = getAgentStoreState();

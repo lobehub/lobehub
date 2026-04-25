@@ -77,6 +77,10 @@ export interface EditorState {
    * Editor state from useEditorState hook
    */
   editorState: LobehubEditorState | undefined;
+  /**
+   * Last notebook document opened from each topic.
+   */
+  lastActiveTopicDocumentIdByTopicId: Record<string, string>;
 }
 
 /**
@@ -103,4 +107,5 @@ export const initialEditorState: EditorState = {
   documents: {},
   editor: undefined,
   editorState: undefined,
+  lastActiveTopicDocumentIdByTopicId: {},
 };

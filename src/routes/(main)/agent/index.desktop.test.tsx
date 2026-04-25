@@ -3,7 +3,7 @@
  */
 import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState as initialChatState } from '@/store/chat/initialState';
@@ -78,10 +78,10 @@ vi.mock('./features/TelemetryNotification', () => ({
   default: () => <div data-testid="telemetry-notification" />,
 }));
 
-const SearchProbe = () => {
+const LocationProbe = () => {
   const location = useLocation();
 
-  return <div data-testid="search-probe">{location.search}</div>;
+  return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>;
 };
 
 describe('Agent desktop topic popup guard', () => {
@@ -99,21 +99,32 @@ describe('Agent desktop topic popup guard', () => {
   });
 
   afterEach(() => {
-    useChatStore.setState(initialChatState, false);
-    vi.runOnlyPendingTimers();
+    act(() => {
+      useChatStore.setState(initialChatState, false);
+      vi.runOnlyPendingTimers();
+    });
     vi.useRealTimers();
   });
 
-  it('keeps the topic query synchronized while the popup guard is visible', async () => {
+  it('keeps the topic route synchronized while the popup guard is visible', async () => {
     render(
-      <MemoryRouter initialEntries={['/agent/agent-1?topic=popup-topic']}>
-        <SearchProbe />
-        <ChatPage />
+      <MemoryRouter initialEntries={['/agent/agent-1/popup-topic']}>
+        <Routes>
+          <Route
+            path="/agent/:aid/:topicId"
+            element={
+              <>
+                <LocationProbe />
+                <ChatPage />
+              </>
+            }
+          />
+        </Routes>
       </MemoryRouter>,
     );
 
     expect(screen.getByTestId('topic-popup-guard')).toBeInTheDocument();
-    expect(screen.getByTestId('search-probe')).toHaveTextContent('?topic=popup-topic');
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/agent/agent-1/popup-topic');
 
     act(() => {
       useChatStore.setState({ activeTopicId: 'other-topic' });
@@ -127,6 +138,6 @@ describe('Agent desktop topic popup guard', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId('search-probe')).toHaveTextContent('?topic=other-topic');
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/agent/agent-1/other-topic');
   });
 });

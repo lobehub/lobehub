@@ -214,7 +214,7 @@ export class TaskService {
           status: t.status,
           summary: handoff?.summary,
           time: toISO(t.createdAt),
-          title: handoff?.title || UNTITLED_TOPIC_TITLE,
+          title: handoff?.title || t.title || UNTITLED_TOPIC_TITLE,
           type: 'topic' as const,
         };
       }),

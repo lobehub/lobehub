@@ -15,8 +15,7 @@ export interface DockResult {
   top: number;
 }
 
-const clamp = (v: number, lo: number, hi: number): number =>
-  Math.max(lo, Math.min(hi, v));
+const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
 export function computeDockPosition({
   rect,

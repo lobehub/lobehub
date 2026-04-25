@@ -71,6 +71,7 @@
   "macOS.services": "服務",
   "macOS.unhide": "全部顯示",
   "tray.open": "打開 {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "退出",
   "tray.show": "顯示 {{appName}}",
   "view.forceReload": "強制重新載入",
@@ -86,6 +87,5 @@
   "window.minimize": "最小化",
   "window.title": "視窗",
   "window.toggleFullscreen": "切換全螢幕",
-  "window.zoom": "縮放",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "縮放"
 }

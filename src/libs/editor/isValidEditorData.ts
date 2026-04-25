@@ -2,5 +2,10 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 export const isValidEditorData = (value: unknown): value is Record<string, unknown> => {
-  return isObject(value) && Object.keys(value).length > 0;
+  if (!isObject(value)) return false;
+
+  const root = value.root;
+  if (!isObject(root)) return false;
+
+  return root.type === 'root' && Array.isArray(root.children) && root.children.length > 0;
 };

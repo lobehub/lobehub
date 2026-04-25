@@ -60,10 +60,18 @@ describe('AgentDocumentService', () => {
   it('should revalidate agent documents after removeDocument', async () => {
     await agentDocumentService.removeDocument({
       agentId: 'agent-1',
+      documentId: 'page-doc-1',
       id: 'doc-1',
+      topicId: 'topic-1',
     });
 
     expect(mutate).toHaveBeenCalledWith(['agent-documents', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['agent-documents-list', 'agent-1']);
+    expect(mutate).toHaveBeenCalledWith(['workspace-agent-document-editor', 'agent-1', 'doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['page-document-meta', 'page-doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['pageDetail', 'page-doc-1']);
+    expect(mutate).toHaveBeenCalledWith(['pageDocuments']);
+    expect(mutate).toHaveBeenCalledWith(['SWR_USE_FETCH_NOTEBOOK_DOCUMENTS', 'topic-1']);
   });
 
   it('should revalidate agent documents after updateLoadRule', async () => {

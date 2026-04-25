@@ -25,30 +25,33 @@ const ChatPage = memo(() => {
   // When the same topic is already hosted in a popup window, avoid
   // rendering a second (out-of-sync) instance here — guide the user back
   // to the popup instead.
-  if (activeTopicId && popup) {
-    return (
+  const pageContent =
+    activeTopicId && popup ? (
       <>
-        <ChatHydration />
         <PageTitle />
         <TopicInPopupGuard popup={popup} />
       </>
+    ) : (
+      <>
+        <PageTitle />
+        <Flexbox
+          horizontal
+          height={'100%'}
+          style={{ overflow: 'hidden', position: 'relative' }}
+          width={'100%'}
+        >
+          <Conversation />
+          <Portal />
+          <AgentWorkingSidebar />
+        </Flexbox>
+        <TelemetryNotification mobile={false} />
+      </>
     );
-  }
 
   return (
     <>
-      <PageTitle />
-      <Flexbox
-        horizontal
-        height={'100%'}
-        style={{ overflow: 'hidden', position: 'relative' }}
-        width={'100%'}
-      >
-        <Conversation />
-        <Portal />
-        <AgentWorkingSidebar />
-      </Flexbox>
-      <TelemetryNotification mobile={false} />
+      <ChatHydration />
+      {pageContent}
     </>
   );
 });

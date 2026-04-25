@@ -1,5 +1,8 @@
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 
 import { AiAgentService } from '../index';
 
@@ -209,5 +212,47 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.systemRole).toBe('');
+  });
+
+  it('should inject page-agent runtime for regular agents in page scope', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: { enableHistoryCount: true },
+      id: 'agent-custom',
+      model: 'gpt-4',
+      plugins: ['lobe-agent-documents'],
+      provider: 'openai',
+      systemRole: 'Custom role.',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      appContext: {
+        documentId: 'docs-1',
+        scope: 'page',
+        topicId: 'topic-1',
+      },
+      prompt: 'Rewrite this page',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.appContext).toMatchObject({
+      documentId: 'docs-1',
+      scope: 'page',
+    });
+    expect(callArgs.agentConfig.plugins).toEqual([PageAgentIdentifier, 'lobe-agent-documents']);
+    expect(callArgs.agentConfig.chatConfig.enableHistoryCount).toBe(false);
+    expect(callArgs.agentConfig.systemRole).toContain('Custom role.');
+    expect(callArgs.agentConfig.systemRole).toContain(
+      'You are a helpful document (page) editing assistant',
+    );
+
+    expect(createServerAgentToolsEngine).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        agentConfig: expect.objectContaining({
+          plugins: [PageAgentIdentifier, 'lobe-agent-documents'],
+        }),
+      }),
+    );
   });
 });

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import DotsLoading from '@/components/DotsLoading';
 import RingLoadingIcon from '@/components/RingLoading';
+import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -93,7 +94,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   // Construct href for cmd+click support
   const href = useMemo(() => {
     if (!activeAgentId || !id) return undefined;
-    return `/agent/${activeAgentId}?topic=${id}`;
+    return SESSION_CHAT_TOPIC_URL(activeAgentId, id);
   }, [activeAgentId, id]);
 
   const [editing, isLoading] = useChatStore((s) => [
@@ -105,7 +106,17 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     id ? operationSelectors.isTopicUnreadCompleted(id) : () => false,
   );
 
-  const { focusTopicPopup, navigateToTopic, isInAgentSubRoute } = useTopicNavigation();
+  const {
+    focusTopicPopup,
+    navigateToTopic,
+    isInAgentSubRoute,
+    isInTopicContextRoute,
+    routeTopicId,
+  } = useTopicNavigation();
+  const isRouteTopicActive = Boolean(id && routeTopicId === id && isInTopicContextRoute);
+  const isTopicActive = Boolean(
+    (active || isRouteTopicActive) && !threadId && (!isInAgentSubRoute || isRouteTopicActive),
+  );
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
@@ -138,7 +149,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
       void navigateToTopic(id, { skipPopupFocus: true });
       return;
     }
-    const reference = pluginRegistry.parseUrl(`/agent/${activeAgentId}`, `topic=${id}`);
+    const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
+    const reference = pluginRegistry.parseUrl(url, '');
     if (reference) {
       addTab(reference);
       void navigateToTopic(id);
@@ -166,7 +178,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   if (!id) {
     return (
       <NavItem
-        active={active && !isInAgentSubRoute}
+        active={Boolean(active && !isInAgentSubRoute && !isInTopicContextRoute)}
         icon={
           isLoading ? (
             <RingLoadingIcon
@@ -201,7 +213,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
-        active={active && !threadId && !isInAgentSubRoute}
+        active={isTopicActive}
         contextMenuItems={dropdownMenu}
         disabled={editing}
         href={href}
@@ -240,7 +252,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         onDoubleClick={() => void handleDoubleClick()}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
-      {active && (
+      {isTopicActive && (
         <Suspense
           fallback={
             <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>

@@ -42,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
 interface ColumnDef {
   droppable: boolean;
   key: string;
-  targetStatus: 'backlog' | 'completed' | null;
+  targetStatus: 'backlog' | 'canceled' | 'completed' | null;
 }
 
 const COLUMNS: ColumnDef[] = [
@@ -50,6 +50,7 @@ const COLUMNS: ColumnDef[] = [
   { droppable: false, key: 'running', targetStatus: null },
   { droppable: false, key: 'needsInput', targetStatus: null },
   { droppable: true, key: 'done', targetStatus: 'completed' },
+  { droppable: true, key: 'canceled', targetStatus: 'canceled' },
 ];
 
 const optimisticMoveTask = (
@@ -71,12 +72,16 @@ const optimisticMoveTask = (
   });
 };
 
-const KanbanBoard = memo(() => {
+interface KanbanBoardProps {
+  agentId?: string;
+}
+
+const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const navigate = useNavigate();
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  useFetchTaskGroupList({ allAgents: true });
+  useFetchTaskGroupList({ agentId, allAgents: !agentId });
 
   const taskGroups = useTaskStore(taskListSelectors.taskGroups);
   const isInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
@@ -133,12 +138,21 @@ const KanbanBoard = memo(() => {
 
   const handleCreateTask = useCallback(() => {
     createTaskModal({
+      agentId,
       onCreated: (task) => {
+        if (agentId) {
+          const targetAgentId = task.agentId || agentId;
+          if (targetAgentId) {
+            navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
+            return;
+          }
+        }
+
         navigate(`/task/${task.identifier}`);
       },
       showInlineToggle: false,
     });
-  }, [navigate]);
+  }, [agentId, navigate]);
 
   const handleHideColumn = useCallback(
     (columnKey: string) => {

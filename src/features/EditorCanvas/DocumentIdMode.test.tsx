@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DocumentIdMode from './DocumentIdMode';
@@ -94,5 +94,36 @@ describe('DocumentIdMode', () => {
     expect(handleContentChangeStore).toHaveBeenCalledTimes(1);
     expect(performSave).toHaveBeenCalledWith('doc-1', undefined, { saveSource: 'manual' });
     expect(flushSave).not.toHaveBeenCalled();
+  });
+
+  it('should call external onInit after document hydration', async () => {
+    const onInit = vi.fn();
+    const editor = {
+      getLexicalEditor: vi.fn(() => ({})),
+    } as any;
+
+    render(<DocumentIdMode documentId="doc-1" editor={editor} onInit={onInit} />);
+
+    await waitFor(() => {
+      expect(onEditorInit).toHaveBeenCalledWith(editor);
+      expect(onInit).toHaveBeenCalledWith(editor);
+    });
+  });
+
+  it('should pass topicId into document fetching options', () => {
+    const editor = {
+      getLexicalEditor: vi.fn(() => ({})),
+    } as any;
+
+    render(
+      <DocumentIdMode documentId="doc-1" editor={editor} sourceType="notebook" topicId="topic-1" />,
+    );
+
+    expect(useFetchDocument).toHaveBeenCalledWith('doc-1', {
+      autoSave: true,
+      editor,
+      sourceType: 'notebook',
+      topicId: 'topic-1',
+    });
   });
 });

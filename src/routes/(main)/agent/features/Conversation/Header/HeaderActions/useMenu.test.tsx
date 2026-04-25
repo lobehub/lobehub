@@ -45,6 +45,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('react-router-dom', () => ({
   useLocation: useLocationMock,
+  useParams: () => ({}),
 }));
 
 vi.mock('@/store/chat/selectors', () => ({

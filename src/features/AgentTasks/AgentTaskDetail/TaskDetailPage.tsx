@@ -60,7 +60,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
         right={<ToggleRightPanelButton hideWhenExpanded />}
         left={
           <>
-            <Breadcrumb taskId={taskId} />
+            <Breadcrumb agentId={agentId} taskId={taskId} />
             <TaskDetailHeaderActions />
             {saveStatus === 'saving' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
           </>

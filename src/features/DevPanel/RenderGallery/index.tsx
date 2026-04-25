@@ -23,8 +23,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   card: css`
     overflow: hidden;
+
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 20px;
+
     background: ${cssVar.colorBgContainer};
     box-shadow: ${cssVar.boxShadowSecondary};
   `,
@@ -34,26 +36,32 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   cardHeader: css`
     gap: 10px;
     padding: 16px;
-    border-bottom: 1px solid ${cssVar.colorBorderSecondary};
-    background:
-      linear-gradient(180deg, ${cssVar.colorFillQuaternary} 0%, ${cssVar.colorBgContainer} 100%);
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    background: linear-gradient(
+      180deg,
+      ${cssVar.colorFillQuaternary} 0%,
+      ${cssVar.colorBgContainer} 100%
+    );
   `,
   code: css`
     overflow: auto;
+
     max-height: 280px;
     margin: 0;
     padding: 12px;
     border-radius: 12px;
+
     font-size: 12px;
     line-height: 1.55;
     color: ${cssVar.colorTextSecondary};
+
     background: ${cssVar.colorFillQuaternary};
   `,
   fixtureSummary: css`
     cursor: pointer;
+    user-select: none;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-    user-select: none;
   `,
   group: css`
     gap: 16px;
@@ -89,10 +97,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-class RenderBoundary extends Component<
-  { children: ReactNode },
-  { error?: Error | undefined }
-> {
+class RenderBoundary extends Component<{ children: ReactNode }, { error?: Error | undefined }> {
   constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { error: undefined };

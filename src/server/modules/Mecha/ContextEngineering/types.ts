@@ -16,7 +16,7 @@ import type {
   UserMemoryData,
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
-import type { UIChatMessage } from '@lobechat/types';
+import type { RuntimeInitialContext, UIChatMessage } from '@lobechat/types';
 
 /**
  * Model capability checker functions for server-side
@@ -44,6 +44,8 @@ export interface ServerKnowledgeConfig {
  * Tools configuration for server context engineering
  */
 export interface ServerToolsConfig {
+  /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
+  disabledToolIdentifiers?: string[];
   /** Tool manifests with systemRole and API definitions */
   manifests?: LobeToolManifest[];
   /** Enabled tool IDs (kept for compatibility) */
@@ -107,6 +109,8 @@ export interface ServerMessagesEngineParams {
   historySummary?: string;
   /** Input template */
   inputTemplate?: string;
+  /** Initial runtime context captured at operation start */
+  initialContext?: RuntimeInitialContext;
   // ========== Knowledge ==========
   /** Knowledge configuration */
   knowledge?: ServerKnowledgeConfig;

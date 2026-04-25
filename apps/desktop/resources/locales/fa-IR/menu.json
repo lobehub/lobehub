@@ -71,6 +71,7 @@
   "macOS.services": "خدمات",
   "macOS.unhide": "نمایش همه",
   "tray.open": "باز کردن {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "خروج",
   "tray.show": "نمایش {{appName}}",
   "view.forceReload": "بارگذاری اجباری",
@@ -86,6 +87,5 @@
   "window.minimize": "کوچک کردن",
   "window.title": "پنجره",
   "window.toggleFullscreen": "تغییر به حالت تمام صفحه",
-  "window.zoom": "زوم",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "زوم"
 }

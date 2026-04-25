@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 
 import { mutate } from '@/libs/swr';
 import { documentService } from '@/services/document';
+import { documentSWRKeys } from '@/services/document/swrKeys';
 
 /**
  * Returns a callback to prefetch page/document data into the SWR cache.
@@ -12,12 +13,12 @@ export const usePrefetchPage = () => {
     if (!documentId) return;
 
     // Prefetch individual document content (for the editor)
-    mutate(['document/editor', documentId], documentService.getDocumentById(documentId), {
+    mutate(documentSWRKeys.editor(documentId), documentService.getDocumentById(documentId), {
       revalidate: false,
     });
 
     // Prefetch page documents list (for the sidebar)
-    mutate(['pageDocuments'], documentService.getPageDocuments(), {
+    mutate(documentSWRKeys.pageDocuments(), documentService.getPageDocuments(), {
       revalidate: false,
     });
   }, []);

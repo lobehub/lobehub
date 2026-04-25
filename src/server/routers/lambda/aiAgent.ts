@@ -137,6 +137,7 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        documentId: z.string().optional().nullable(),
         groupId: z.string().optional().nullable(),
         scope: z.string().optional().nullable(),
         sessionId: z.string().optional(),

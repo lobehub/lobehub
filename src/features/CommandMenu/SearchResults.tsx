@@ -18,6 +18,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { useImageStore } from '@/store/image';
@@ -73,7 +74,7 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'topic': {
           if (result.agentId) {
-            navigate(`/agent/${result.agentId}?topic=${result.id}`);
+            navigate(SESSION_CHAT_TOPIC_URL(result.agentId, result.id));
           } else {
             navigate(`/chat?topic=${result.id}`);
           }
@@ -82,7 +83,7 @@ const SearchResults = memo<SearchResultsProps>(
         case 'message': {
           // Navigate to the topic/agent where the message is
           if (result.topicId && result.agentId) {
-            navigate(`/agent/${result.agentId}?topic=${result.topicId}#${result.id}`);
+            navigate(`${SESSION_CHAT_TOPIC_URL(result.agentId, result.topicId)}#${result.id}`);
           } else if (result.topicId) {
             navigate(`/chat?topic=${result.topicId}#${result.id}`);
           } else if (result.agentId) {

@@ -71,6 +71,7 @@
   "macOS.services": "Hizmetler",
   "macOS.unhide": "Hepsini Göster",
   "tray.open": "{{appName}}'i Aç",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Çık",
   "tray.show": "{{appName}}'i Göster",
   "view.forceReload": "Zorla Yenile",
@@ -86,6 +87,5 @@
   "window.minimize": "Küçült",
   "window.title": "Pencere",
   "window.toggleFullscreen": "Tam Ekrana Geç",
-  "window.zoom": "Yakınlaştır",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "Yakınlaştır"
 }

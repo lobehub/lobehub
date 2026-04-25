@@ -37,6 +37,7 @@ export interface AgentDocument {
   deleteReason: string | null;
   description: string | null;
   documentId: string;
+  editorData: Record<string, any> | null;
   filename: string;
   id: string;
   metadata: Record<string, any> | null;

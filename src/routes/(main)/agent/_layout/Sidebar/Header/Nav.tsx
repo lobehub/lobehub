@@ -2,12 +2,13 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { MessageSquarePlusIcon, RadioTowerIcon, SearchIcon } from 'lucide-react';
+import { ListTodoIcon, MessageSquarePlusIcon, RadioTowerIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { SESSION_CHAT_URL } from '@/const/url';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
@@ -26,8 +27,9 @@ const Nav = memo(() => {
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
   const isChannelActive = pathname.includes('/channel');
+  const isTasksActive = pathname.includes('/tasks');
   const router = useQueryRoute();
-  const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
+  const { isAgentEditable, enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const hideProfile = !isAgentEditable;
@@ -37,10 +39,15 @@ const Nav = memo(() => {
 
   const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
-    // If in agent sub-route, navigate back to agent chat first
-    if ((isProfileActive || isChannelActive) && agentId) {
-      router.push(urlJoin('/agent', agentId));
+    if (agentId) {
+      // If in agent sub-route, navigate back to agent chat first.
+      if (isProfileActive || isChannelActive || isTasksActive) {
+        router.push(urlJoin('/agent', agentId));
+      } else {
+        router.push(SESSION_CHAT_URL(agentId));
+      }
     }
+
     mutate();
   };
 
@@ -77,6 +84,17 @@ const Nav = memo(() => {
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
             router.push(urlJoin('/agent', agentId!, 'channel'));
+          }}
+        />
+      )}
+      {enableAgentTask && (
+        <NavItem
+          active={isTasksActive}
+          icon={ListTodoIcon}
+          title={t('tab.tasks')}
+          onClick={() => {
+            switchTopic(null, { skipRefreshMessage: true });
+            router.push(urlJoin('/agent', agentId!, 'tasks'));
           }}
         />
       )}

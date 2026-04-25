@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { getTopmostWindowAtPoint } from './useWindowHighlight';
 
-const createWindow = (
-  overrides: Partial<ScreenCaptureWindowInfo>,
-): ScreenCaptureWindowInfo => ({
+const createWindow = (overrides: Partial<ScreenCaptureWindowInfo>): ScreenCaptureWindowInfo => ({
   appName: 'Test App',
   bounds: { height: 300, width: 400, x: 1000, y: 200 },
   order: 0,

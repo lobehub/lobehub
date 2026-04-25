@@ -162,9 +162,9 @@ export interface PlatformClient {
    * Transform outbound Markdown content into a format the platform can render.
    * Called before `formatReply` and `splitMessage`.
    *
-   * Platforms that don't support Markdown (e.g. WeChat, QQ) should strip
-   * formatting to plain text. Platforms with native Markdown support can
-   * omit this method — the content is passed through as-is.
+   * Platforms that don't support Markdown (e.g. QQ) should strip formatting
+   * to plain text. Platforms with native Markdown support can omit this
+   * method — the content is passed through as-is.
    */
   formatMarkdown?: (markdown: string) => string;
 

@@ -63,10 +63,30 @@ export class PluginTypesActionImpl {
       const operation = operationId ? this.#get().operations[operationId] : undefined;
       const context = operationId ? { operationId } : undefined;
 
-      // Get agent ID, group ID, and topic ID from operation context
-      let agentId = operation?.context?.agentId;
-      let groupId = operation?.context?.groupId;
-      const topicId = operation?.context?.topicId;
+      let rootRuntimeOperationId: string | undefined;
+      let rootRuntimeOperationContext = operation?.context;
+      if (operationId) {
+        let currentOp = operation;
+        while (currentOp) {
+          if (AI_RUNTIME_OPERATION_TYPES.includes(currentOp.type)) {
+            rootRuntimeOperationId = currentOp.id;
+            rootRuntimeOperationContext = currentOp.context;
+            break;
+          }
+          // Move up to parent operation
+          const parentId = currentOp.parentOperationId;
+          currentOp = parentId ? this.#get().operations[parentId] : undefined;
+        }
+      }
+
+      // Get agent ID, group ID, topic ID, and page scope from operation context.
+      // Prefer the concrete tool operation; fall back to the runtime root for
+      // legacy operations created before child context inheritance was complete.
+      let agentId = operation?.context?.agentId ?? rootRuntimeOperationContext?.agentId;
+      let groupId = operation?.context?.groupId ?? rootRuntimeOperationContext?.groupId;
+      const documentId = operation?.context?.documentId ?? rootRuntimeOperationContext?.documentId;
+      const scope = operation?.context?.scope ?? rootRuntimeOperationContext?.scope;
+      const topicId = operation?.context?.topicId ?? rootRuntimeOperationContext?.topicId;
 
       // For agent-builder tools, inject activeAgentId from store if not in context
       // This is needed because AgentBuilderProvider uses a separate scope for messages
@@ -89,22 +109,6 @@ export class PluginTypesActionImpl {
       // Get group orchestration callbacks if available (for group management tools)
       const groupOrchestration = this.#get().getGroupOrchestrationCallbacks?.();
 
-      // Find root execAgentRuntime operation for registering afterCompletion callbacks
-      // Navigate up the operation tree to find the root runtime operation
-      let rootRuntimeOperationId: string | undefined;
-      if (operationId) {
-        let currentOp = operation;
-        while (currentOp) {
-          if (AI_RUNTIME_OPERATION_TYPES.includes(currentOp.type)) {
-            rootRuntimeOperationId = currentOp.id;
-            break;
-          }
-          // Move up to parent operation
-          const parentId = currentOp.parentOperationId;
-          currentOp = parentId ? this.#get().operations[parentId] : undefined;
-        }
-      }
-
       // Create registerAfterCompletion function that registers callback to root runtime operation
       const registerAfterCompletion = rootRuntimeOperationId
         ? (callback: Parameters<typeof registerAfterCompletionCallback>[1]) => {
@@ -125,19 +129,42 @@ export class PluginTypesActionImpl {
       );
 
       // Call Tool Store's invokeBuiltinTool
+      log('[BuiltinToolCall] invoke:start', {
+        agentId,
+        apiName: payload.apiName,
+        documentId,
+        identifier: payload.identifier,
+        messageId: id,
+        operationId,
+        rootRuntimeOperationId,
+        scope,
+        topicId,
+      });
+
       const result = await useToolStore
         .getState()
         .invokeBuiltinTool(payload.identifier, payload.apiName, params, {
           agentId,
+          documentId,
           groupId,
           groupOrchestration,
           messageId: id,
           operationId,
           registerAfterCompletion,
+          scope,
           signal: operation?.abortController?.signal,
           stepContext,
           topicId,
         });
+
+      log('[BuiltinToolCall] invoke:end', {
+        apiName: payload.apiName,
+        errorType: result.error?.type,
+        identifier: payload.identifier,
+        messageId: id,
+        operationId,
+        success: result.success,
+      });
 
       // When error exists but content is empty, backfill error message into content
       const content = result.content || result.error?.message || '';

@@ -51,6 +51,12 @@ const routePatterns: RoutePattern[] = [
 
   // Agent/Chat routes - use dynamic title for specific chat names
   {
+    icon: pageIcon,
+    test: (p) => /^\/agent\/[^/]+\/tpc_[^/]+\/page$/.test(p),
+    titleKey: 'navigation.page',
+    useDynamicTitle: true,
+  },
+  {
     icon: MessageSquare,
     test: (p) => p.startsWith('/agent/'),
     titleKey: 'navigation.chat',

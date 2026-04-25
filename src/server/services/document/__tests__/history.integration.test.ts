@@ -57,6 +57,36 @@ const createTestDocument = async (content: string, editorData?: Record<string, a
   return doc;
 };
 
+const createValidEditorData = (text: string) => ({
+  root: {
+    children: [
+      {
+        children: [
+          {
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text,
+            type: 'text',
+            version: 1,
+          },
+        ],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        type: 'paragraph',
+        version: 1,
+      },
+    ],
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+});
+
 describe('DocumentHistoryService', () => {
   describe('createHistory & listDocumentHistory', () => {
     it('should create history entries and list them with head included', async () => {
@@ -435,7 +465,8 @@ describe('DocumentHistoryService', () => {
 
   describe('getDocumentHistoryItem', () => {
     it('should resolve head as current document state', async () => {
-      const doc = await createTestDocument('Head content', { blocks: [] });
+      const editorData = createValidEditorData('Head content');
+      const doc = await createTestDocument('Head content', editorData);
 
       const result = await historyService.getDocumentHistoryItem({
         documentId: doc.id,
@@ -444,7 +475,7 @@ describe('DocumentHistoryService', () => {
 
       expect(result.id).toBe('head');
       expect(result.isCurrent).toBe(true);
-      expect(result.editorData).toEqual({ blocks: [] });
+      expect(result.editorData).toEqual(editorData);
       expect(result.saveSource).toBe('system');
     });
 
@@ -538,7 +569,8 @@ describe('DocumentHistoryService', () => {
 
   describe('compareDocumentHistoryItems', () => {
     it('should compare a history item against head', async () => {
-      const doc = await createTestDocument('Current', { current: true });
+      const currentEditorData = createValidEditorData('Current');
+      const doc = await createTestDocument('Current', currentEditorData);
 
       await historyService.createHistory({
         documentId: doc.id,
@@ -559,7 +591,7 @@ describe('DocumentHistoryService', () => {
       });
 
       expect(result.from.editorData).toEqual({ old: true });
-      expect(result.to.editorData).toEqual({ current: true });
+      expect(result.to.editorData).toEqual(currentEditorData);
       expect(result.to.isCurrent).toBe(true);
     });
   });

@@ -13,7 +13,7 @@ const BUILTIN_SLUG_SET = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 const AgentIdSync = () => {
   const useStoreUpdater = createStoreUpdater(useAgentStore);
   const useChatStoreUpdater = createStoreUpdater(useChatStore);
-  const params = useParams<{ aid?: string }>();
+  const params = useParams<{ aid?: string; topicId?: string }>();
   const [searchParams] = useSearchParams();
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
@@ -54,7 +54,7 @@ const AgentIdSync = () => {
       useChatStore.getState().clearPortalStack();
 
       // Preserve topic if the URL already carries one (e.g. tab navigation)
-      const topicFromUrl = searchParamsRef.current.get('topic');
+      const topicFromUrl = params.topicId ?? searchParamsRef.current.get('topic');
 
       if (!topicFromUrl) {
         useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });

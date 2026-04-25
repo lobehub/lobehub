@@ -39,12 +39,19 @@ const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
   ease: [0.4, 0, 0.2, 1],
 } as const;
 
+export type WorkflowExpandLevel = 'collapsed' | 'semi' | 'full';
+
 interface WorkflowCollapseProps {
   /** Assistant group message id (for generation state) */
   assistantMessageId: string;
   blocks: RenderableAssistantContentBlock[];
-  /** Default expansion state while the workflow is still streaming. Pending intervention always expands. */
-  defaultStreamingExpanded?: boolean;
+  /**
+   * Fixed default expand level. When set, overrides the built-in auto
+   * behavior (expand while streaming, collapse after completion) for both
+   * the initial state and resets. Users can still toggle locally.
+   * Undefined = legacy auto behavior. Pending intervention still forces open.
+   */
+  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
   disableEditing?: boolean;
   workflowChromeComplete?: boolean;
 }
@@ -115,7 +122,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
   ({
     assistantMessageId,
     blocks,
-    defaultStreamingExpanded = true,
+    defaultWorkflowExpandLevel,
     disableEditing,
     workflowChromeComplete = false,
   }) => {
@@ -145,11 +152,14 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       [blocks],
     );
     const durationText = totalWorkflowMs > 0 ? formatReasoningDuration(totalWorkflowMs) : undefined;
-    const streamingDefaultExpanded = defaultStreamingExpanded || pendingInterventionPresent;
+    const hasExternalDefault = defaultWorkflowExpandLevel !== undefined;
+    const streamingInitialLevel: WorkflowExpandLevel = defaultWorkflowExpandLevel ?? 'semi';
+    const completionInitialLevel: WorkflowExpandLevel = defaultWorkflowExpandLevel ?? 'collapsed';
 
-    const [expandLevel, setExpandLevel] = useState<'collapsed' | 'semi' | 'full'>(() =>
-      !allComplete && streamingDefaultExpanded ? 'semi' : 'collapsed',
-    );
+    const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() => {
+      if (hasExternalDefault) return defaultWorkflowExpandLevel;
+      return allComplete ? 'collapsed' : 'semi';
+    });
     const userOpenedRef = useRef(false);
     const prevCompleteRef = useRef(allComplete);
 
@@ -159,14 +169,14 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
       if (!allComplete && wasComplete) {
         userOpenedRef.current = false;
-        setExpandLevel(streamingDefaultExpanded ? 'semi' : 'collapsed');
+        setExpandLevel(streamingInitialLevel);
         return;
       }
 
       if (allComplete && !wasComplete && !userOpenedRef.current && allTools.length > 0) {
-        setExpandLevel('collapsed');
+        setExpandLevel(completionInitialLevel);
       }
-    }, [allComplete, allTools.length, streamingDefaultExpanded]);
+    }, [allComplete, allTools.length, streamingInitialLevel, completionInitialLevel]);
 
     const streaming = !allComplete;
     const forceExpanded = streaming && pendingInterventionPresent;

@@ -1,6 +1,5 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
-import { NotebookIdentifier } from '@lobechat/builtin-tool-notebook';
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { buildTaskRunPrompt } from '@lobechat/prompts';
 import type {
@@ -887,11 +886,14 @@ export const taskRouter = router({
         const db = ctx.serverDB;
         const userId = ctx.userId;
 
-        // Task execution always injects: Task skill (auto-activated) + Notebook tool (for document output)
-        // Conditionally inject Brief tool based on checkpoint/review config
+        // Task execution auto-injects the Task skill. The legacy Notebook tool
+        // has been deprecated and is no longer injected — document output now
+        // flows through the agent-documents tool, which is enabled via the
+        // agent config (see INBOX runtime / createEnableChecker).
+        // Conditionally inject Brief tool based on checkpoint/review config.
         const checkpoint = model.getCheckpointConfig(task);
         const reviewConfig = model.getReviewConfig(task);
-        const pluginIds = [TaskSkillIdentifier, NotebookIdentifier];
+        const pluginIds = [TaskSkillIdentifier];
         if (!reviewConfig?.enabled && checkpoint.onAgentRequest !== false) {
           pluginIds.push(BriefIdentifier);
         }

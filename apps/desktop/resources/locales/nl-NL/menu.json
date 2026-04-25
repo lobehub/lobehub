@@ -71,6 +71,7 @@
   "macOS.services": "Diensten",
   "macOS.unhide": "Toon alles",
   "tray.open": "Open {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Afsluiten",
   "tray.show": "Toon {{appName}}",
   "view.forceReload": "Forceer herladen",
@@ -86,6 +87,5 @@
   "window.minimize": "Minimaliseren",
   "window.title": "Venster",
   "window.toggleFullscreen": "Schakel volledig scherm in/uit",
-  "window.zoom": "Inzoomen",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "Inzoomen"
 }

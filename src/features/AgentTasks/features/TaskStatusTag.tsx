@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
 
+import { renderMenuExtra } from './menuExtra';
+
 interface StatusMeta {
   color: string;
   icon: LucideIcon;
@@ -53,7 +55,7 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
   paused: {
     color: cssVar.colorInfo,
     icon: HandIcon,
-    label: 'Paused',
+    label: 'Pending review',
     labelKey: 'status.paused',
   },
   running: {
@@ -64,7 +66,12 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
   },
 };
 
-export const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
+export const USER_SELECTABLE_STATUSES: TaskStatus[] = [
+  'backlog',
+  'paused',
+  'completed',
+  'canceled',
+];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
@@ -118,9 +125,11 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
 
     const menuItems = useMemo<MenuProps['items']>(
       () =>
-        USER_SELECTABLE_STATUSES.map((key) => {
+        USER_SELECTABLE_STATUSES.map((key, index) => {
           const statusMeta = STATUS_META[key];
+          const isCurrent = key === displayStatus;
           return {
+            extra: renderMenuExtra(String(index + 1), isCurrent),
             icon: <Icon color={statusMeta.color} icon={statusMeta.icon} size={16} />,
             key,
             label: t(`taskDetail.${statusMeta.labelKey}`, { defaultValue: statusMeta.label }),
@@ -130,7 +139,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
             },
           };
         }),
-      [handleStatusChange, t],
+      [displayStatus, handleStatusChange, t],
     );
 
     const triggerNode =

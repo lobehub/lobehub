@@ -8,6 +8,7 @@ import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
+import { useTaskStore } from '../../store';
 import type { TaskDetailDispatch } from './reducer';
 import { taskDetailReducer } from './reducer';
 
@@ -28,6 +29,20 @@ export interface TaskUpdatePayload {
 }
 
 const FETCH_TASK_DETAIL_KEY = 'fetchTaskDetail';
+const TASK_DETAIL_POLL_INTERVAL = 10_000;
+
+// Poll while the task itself or any topic activity is still in flight, so the
+// UI picks up status transitions (running → completed/failed) without needing
+// a manual refresh. Returns false once everything settles so SWR stops polling.
+const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
+  if (!detail) return false;
+  if (detail.status === 'running' || detail.status === 'pending') return true;
+  return (
+    detail.activities?.some(
+      (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
+    ) ?? false
+  );
+};
 
 type Setter = StoreSetter<TaskStore>;
 
@@ -228,11 +243,19 @@ export class TaskDetailSliceActionImpl {
   };
 
   useFetchTaskDetail = (taskId?: string) => {
+    // Drive polling from a reactive boolean. SWR's function-form refreshInterval
+    // is a trap here: it's only re-evaluated after a timer fires, so if the first
+    // call (with undefined cache data) returns 0, no timer is ever scheduled and
+    // polling never starts — even once real data arrives.
+    const shouldPoll = useTaskStore((s) => {
+      const detail = taskId ? s.taskDetailMap[taskId] : undefined;
+      return hasInFlightActivity(detail);
+    });
+
     return useClientDataSWR(
       taskId ? [FETCH_TASK_DETAIL_KEY, taskId] : null,
-      async ([, id]: [string, string]) => {
-        return this.fetchTaskDetail(id);
-      },
+      async ([, id]: [string, string]) => this.fetchTaskDetail(id),
+      { refreshInterval: shouldPoll ? TASK_DETAIL_POLL_INTERVAL : 0 },
     );
   };
 

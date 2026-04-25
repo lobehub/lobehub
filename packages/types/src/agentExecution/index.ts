@@ -5,6 +5,8 @@ import type { ChatTopic } from '../topic';
  * Application context for message storage
  */
 export interface ExecAgentAppContext {
+  /** Current document ID for page-scoped conversations */
+  documentId?: string | null;
   /** Group ID for group chat */
   groupId?: string | null;
   /** Scope identifier */

@@ -123,7 +123,7 @@ const HiddenColumnsPanel = memo<HiddenColumnsPanelProps>(
             <div className={styles.collapsedHeader}>
               <Icon icon={PanelRightOpen} size={16} />
               <Text className={styles.verticalLabel} type={'secondary'}>
-                {title} · {columns.length}
+                {title}
               </Text>
             </div>
           </Tooltip>

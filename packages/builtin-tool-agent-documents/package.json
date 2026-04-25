@@ -9,9 +9,6 @@
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
-  "dependencies": {
-    "@lobechat/markdown-patch": "workspace:*"
-  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },

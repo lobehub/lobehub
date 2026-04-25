@@ -30,7 +30,7 @@
   "builtins.lobe-agent-documents.apiName.createDocument": "Create document",
   "builtins.lobe-agent-documents.apiName.editDocument": "Edit document",
   "builtins.lobe-agent-documents.apiName.listDocuments": "List documents",
-  "builtins.lobe-agent-documents.apiName.patchDocument": "Patch document",
+  "builtins.lobe-agent-documents.apiName.modifyNodes": "Modify document",
   "builtins.lobe-agent-documents.apiName.readDocument": "Read document",
   "builtins.lobe-agent-documents.apiName.readDocumentByFilename": "Read document by filename",
   "builtins.lobe-agent-documents.apiName.removeDocument": "Remove document",

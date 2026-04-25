@@ -332,7 +332,7 @@ Content 2 still going`;
 // Move the snake every frame
 const url = " // keep string content untouched";
 window.snakeStarted = true;
-</script	
+</script${'\t'}
  bar>
 </body>
 </html>

@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { type IEditor } from '@lobehub/editor';
+import type { IEditor } from '@lobehub/editor';
 import {
   ReactImagePlugin,
   ReactLinkPlugin,
@@ -32,6 +32,39 @@ const STATIC_PLUGINS = [
   ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
   ReactTablePlugin,
 ];
+
+const EDITOR_INIT_DATA_SOURCE_TYPES = ['json', 'markdown'] as const;
+const EDITOR_INIT_RETRY_LIMIT = 30;
+const EDITOR_INIT_RETRY_INTERVAL = 16;
+
+interface InspectableEditor extends IEditor {
+  dataTypeMap?: Map<string, unknown> | Record<string, unknown>;
+}
+
+const getEditorDataSourceTypes = (editor: InspectableEditor): string[] => {
+  const dataTypeMap = editor.dataTypeMap;
+
+  if (!dataTypeMap) return [];
+
+  if (dataTypeMap instanceof Map) {
+    return [...dataTypeMap.keys()].sort();
+  }
+
+  return Object.keys(dataTypeMap).sort();
+};
+
+const isEditorInitReady = (editor: IEditor) => {
+  const inspectableEditor = editor as InspectableEditor;
+  const dataSourceTypes = getEditorDataSourceTypes(inspectableEditor);
+
+  return {
+    dataSourceTypes,
+    hasLexicalEditor: !!editor.getLexicalEditor?.(),
+    isReady:
+      !!editor.getLexicalEditor?.() &&
+      EDITOR_INIT_DATA_SOURCE_TYPES.every((type) => dataSourceTypes.includes(type)),
+  };
+};
 
 export interface InternalEditorProps extends EditorCanvasProps {
   /**
@@ -134,6 +167,51 @@ const InternalEditor = memo<InternalEditorProps>(
       };
     }, [editor]);
 
+    const onInitRef = useRef(onInit);
+    const initializedEditorRef = useRef<IEditor | null>(null);
+
+    useEffect(() => {
+      onInitRef.current = onInit;
+    }, [onInit]);
+
+    useEffect(() => {
+      if (!onInit) return;
+
+      let retryCount = 0;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let disposed = false;
+
+      const notifyWhenReady = () => {
+        if (disposed) return;
+
+        const snapshot = isEditorInitReady(editor);
+
+        if (snapshot.isReady) {
+          if (initializedEditorRef.current !== editor) {
+            initializedEditorRef.current = editor;
+            onInitRef.current?.(editor);
+          }
+
+          return;
+        }
+
+        if (retryCount >= EDITOR_INIT_RETRY_LIMIT) {
+          console.warn('[InternalEditor] onInit delayed because editor is not ready:', snapshot);
+          return;
+        }
+
+        retryCount += 1;
+        timer = setTimeout(notifyWhenReady, EDITOR_INIT_RETRY_INTERVAL);
+      };
+
+      notifyWhenReady();
+
+      return () => {
+        disposed = true;
+        if (timer) clearTimeout(timer);
+      };
+    }, [editor, onInit]);
+
     // Use refs for stable references across re-renders
     const previousDocumentSnapshotRef = useRef<unknown>(undefined);
     const onContentChangeRef = useRef(onContentChange);
@@ -191,7 +269,6 @@ const InternalEditor = memo<InternalEditorProps>(
             paddingBottom: 32,
             ...style,
           }}
-          onInit={onInit}
         />
       </div>
     );

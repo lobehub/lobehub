@@ -15,6 +15,13 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             description: 'Document content in markdown or plain text.',
             type: 'string',
           },
+          target: {
+            default: 'agent',
+            description:
+              'Where to create the document. Use currentTopic to associate it with the current topic; defaults to agent-scoped documents.',
+            enum: ['agent', 'currentTopic'],
+            type: 'string',
+          },
           title: {
             description: 'Document title.',
             type: 'string',
@@ -26,10 +33,17 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read an existing agent document by ID (similar intent to cat/read operation). Use this before edits or deletes when needed.',
+        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs.',
       name: AgentDocumentsApiName.readDocument,
       parameters: {
         properties: {
+          format: {
+            default: 'xml',
+            description:
+              'The format to return. Use "xml" for node-level edits, "markdown" for plain text, or "both". Defaults to "xml".',
+            enum: ['xml', 'markdown', 'both'],
+            type: 'string',
+          },
           id: {
             description: 'Target document ID.',
             type: 'string',
@@ -41,7 +55,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Edit an existing agent document content by ID. Use this for content changes, not title rename. Prefer patchDocument for small edits.',
+        'Edit an existing agent document content by ID. Use this for full-content replacement, not title rename. Prefer modifyNodes for targeted content edits.',
       name: AgentDocumentsApiName.editDocument,
       parameters: {
         properties: {
@@ -60,41 +74,64 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Apply byte-exact SEARCH/REPLACE hunks to an existing agent document by ID. Preferred over editDocument for small edits because it avoids resending the full document. Each hunk's search must match the current document exactly (whitespace, punctuation, casing). If the search appears multiple times, add surrounding context to make it unique or set replaceAll=true. On failure (HUNK_NOT_FOUND / HUNK_AMBIGUOUS), adjust and retry; fall back to editDocument only for structural rewrites that touch most of the file.",
-      name: AgentDocumentsApiName.patchDocument,
+        'Perform LiteXML node operations (insert, modify, remove) on an agent document by ID. Use this for content edits after reading the document in XML format.',
+      name: AgentDocumentsApiName.modifyNodes,
       parameters: {
         properties: {
-          hunks: {
-            description: 'Ordered list of SEARCH/REPLACE hunks applied sequentially.',
-            items: {
-              additionalProperties: false,
-              properties: {
-                replace: {
-                  description: 'Replacement text; may be empty to delete the matched region.',
-                  type: 'string',
-                },
-                replaceAll: {
-                  description:
-                    'Replace every occurrence of search. Defaults to false; leave unset unless you explicitly want a global replace.',
-                  type: 'boolean',
-                },
-                search: {
-                  description: 'Byte-exact substring to locate in the current document.',
-                  type: 'string',
-                },
-              },
-              required: ['search', 'replace'],
-              type: 'object',
-            },
-            minItems: 1,
-            type: 'array',
-          },
           id: {
             description: 'Target document ID.',
             type: 'string',
           },
+          operations: {
+            description:
+              'Array of node operations. For insert, provide beforeId or afterId plus LiteXML without an id. For modify, provide LiteXML with existing node IDs. For remove, provide the node id.',
+            items: {
+              oneOf: [
+                {
+                  properties: {
+                    action: { const: 'insert', type: 'string' },
+                    beforeId: { description: 'ID of the node to insert before.', type: 'string' },
+                    litexml: { description: 'LiteXML node to insert.', type: 'string' },
+                  },
+                  required: ['action', 'beforeId', 'litexml'],
+                  type: 'object',
+                },
+                {
+                  properties: {
+                    action: { const: 'insert', type: 'string' },
+                    afterId: { description: 'ID of the node to insert after.', type: 'string' },
+                    litexml: { description: 'LiteXML node to insert.', type: 'string' },
+                  },
+                  required: ['action', 'afterId', 'litexml'],
+                  type: 'object',
+                },
+                {
+                  properties: {
+                    action: { const: 'modify', type: 'string' },
+                    litexml: {
+                      description:
+                        'LiteXML string or array of strings with existing node IDs to update.',
+                      oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+                    },
+                  },
+                  required: ['action', 'litexml'],
+                  type: 'object',
+                },
+                {
+                  properties: {
+                    action: { const: 'remove', type: 'string' },
+                    id: { description: 'ID of the node to remove.', type: 'string' },
+                  },
+                  required: ['action', 'id'],
+                  type: 'object',
+                },
+              ],
+            },
+            minItems: 1,
+            type: 'array',
+          },
         },
-        required: ['id', 'hunks'],
+        required: ['id', 'operations'],
         type: 'object',
       },
     },
@@ -151,20 +188,35 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List all agent documents. Returns document id, filename, and title for each document.',
+        'List agent documents. Defaults to all agent documents; use target=currentTopic to list documents associated with the current topic.',
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
-        properties: {},
+        properties: {
+          target: {
+            default: 'agent',
+            description:
+              'Which document set to list. currentTopic filters to documents associated with the current topic.',
+            enum: ['agent', 'currentTopic'],
+            type: 'string',
+          },
+        },
         required: [],
         type: 'object',
       },
     },
     {
       description:
-        'Read an existing agent document by its filename (similar intent to cat by filename). Use when you know the filename but not the id.',
+        'Read an existing agent document by its filename. Prefer XML format before node-level edits because XML includes stable node IDs.',
       name: AgentDocumentsApiName.readDocumentByFilename,
       parameters: {
         properties: {
+          format: {
+            default: 'xml',
+            description:
+              'The format to return. Use "xml" for node-level edits, "markdown" for plain text, or "both". Defaults to "xml".',
+            enum: ['xml', 'markdown', 'both'],
+            type: 'string',
+          },
           filename: {
             description: 'Target document filename.',
             type: 'string',

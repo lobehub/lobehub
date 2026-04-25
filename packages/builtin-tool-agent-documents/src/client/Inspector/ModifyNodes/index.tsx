@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { PatchDocumentArgs, PatchDocumentState } from '../../../types';
+import type { ModifyDocumentNodesArgs, ModifyDocumentNodesState } from '../../../types';
 
-export const PatchDocumentInspector = memo<
-  BuiltinInspectorProps<PatchDocumentArgs, PatchDocumentState>
+export const ModifyNodesInspector = memo<
+  BuiltinInspectorProps<ModifyDocumentNodesArgs, ModifyDocumentNodesState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
   const id = args?.id || partialArgs?.id;
@@ -18,7 +18,7 @@ export const PatchDocumentInspector = memo<
   if (isArgumentsStreaming && !id) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent-documents.apiName.patchDocument')}</span>
+        <span>{t('builtins.lobe-agent-documents.apiName.modifyNodes')}</span>
       </div>
     );
   }
@@ -30,12 +30,12 @@ export const PatchDocumentInspector = memo<
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{t('builtins.lobe-agent-documents.apiName.patchDocument')}: </span>
+      <span>{t('builtins.lobe-agent-documents.apiName.modifyNodes')}: </span>
       {id && <span className={highlightTextStyles.primary}>{id}</span>}
     </div>
   );
 });
 
-PatchDocumentInspector.displayName = 'PatchDocumentInspector';
+ModifyNodesInspector.displayName = 'ModifyNodesInspector';
 
-export default PatchDocumentInspector;
+export default ModifyNodesInspector;
