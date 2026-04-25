@@ -75,30 +75,26 @@ export class TaskLifecycleService {
         );
       }
 
-      // 3. Auto-review (if configured)
-      if (currentTask && topicId && lastAssistantContent) {
-        await this.runAutoReview(
-          taskId,
-          taskIdentifier,
-          topicId,
-          lastAssistantContent,
-          currentTask,
-        );
-      }
+      // 3. Auto-review (if configured) — Judge is the trusted accept signal:
+      //    when review passes, runAutoReview itself transitions the task to 'completed'.
+      //    Returns true if it terminated the task (completed/paused for retry/etc.).
+      const reviewTerminated =
+        currentTask && topicId && lastAssistantContent
+          ? await this.runAutoReview(
+              taskId,
+              taskIdentifier,
+              topicId,
+              lastAssistantContent,
+              currentTask,
+            )
+          : false;
 
-      // 4. Check if agent delivered a result brief → auto-complete
-      //    If the latest brief is type 'result' and no review is configured, complete the task
-      const reviewConfig = currentTask ? this.taskModel.getReviewConfig(currentTask) : null;
-      if (!reviewConfig?.enabled) {
-        const briefs = await this.briefModel.findByTaskId(taskId);
-        const latestBrief = briefs[0]; // sorted by createdAt desc
-        if (latestBrief?.type === 'result') {
-          await this.taskModel.updateStatus(taskId, 'completed', { error: null });
-          return;
-        }
-      }
+      if (reviewTerminated) return;
 
-      // 5. Checkpoint — pause for user review
+      // 4. Default: pause for user review.
+      //    A 'result' brief from the agent is a *proposal* of completion — the user
+      //    must explicitly approve via the brief action to transition to 'completed'.
+      //    Auto-complete only happens via the Judge path above.
       if (currentTask && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
         await this.taskModel.updateStatus(taskId, 'paused', { error: null });
       }
@@ -176,7 +172,13 @@ export class TaskLifecycleService {
 
   /**
    * Run auto-review if configured.
-   * @returns true if auto-retry is in progress (caller should skip pause)
+   *
+   * Acts as a "Judge" accept signal: when review passes the task transitions to
+   * `completed` here; when it fails, the task is paused for retry or human action.
+   *
+   * @returns true if this method terminated the task lifecycle (caller should not
+   *          additionally pause/transition); false if review wasn't configured or
+   *          a non-terminal path was taken.
    */
   private async runAutoReview(
     taskId: string,
@@ -184,9 +186,9 @@ export class TaskLifecycleService {
     topicId: string,
     content: string,
     currentTask: any,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const reviewConfig = this.taskModel.getReviewConfig(currentTask);
-    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return;
+    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return false;
 
     try {
       const topicLinks = await this.taskTopicModel.findByTaskId(taskId);
@@ -227,7 +229,9 @@ export class TaskLifecycleService {
           title: `${taskIdentifier} review passed`,
           type: 'result',
         });
-        return;
+        // Judge is a trusted accept signal — complete the task directly.
+        await this.taskModel.updateStatus(taskId, 'completed', { error: null });
+        return true;
       }
 
       if (reviewConfig.autoRetry && iteration < reviewConfig.maxIterations) {
@@ -241,7 +245,7 @@ export class TaskLifecycleService {
 
         // Pause so the webhook / polling loop can pick up and re-run
         await this.taskModel.updateStatus(taskId, 'paused', { error: null });
-        return;
+        return true;
       }
 
       // Max iterations reached
@@ -257,8 +261,11 @@ export class TaskLifecycleService {
         title: `${taskIdentifier} review failed — needs attention`,
         type: 'decision',
       });
+      await this.taskModel.updateStatus(taskId, 'paused', { error: null });
+      return true;
     } catch (e) {
       console.warn('[TaskLifecycle] auto-review failed:', e);
+      return false;
     }
   }
 }

@@ -31,10 +31,12 @@ describe('BriefService', () => {
   const mockBriefModel = {
     list: vi.fn(),
     listUnresolved: vi.fn(),
+    resolve: vi.fn(),
   };
 
   const mockTaskModel = {
     getTreeAgentIdsForTaskIds: vi.fn(),
+    updateStatus: vi.fn(),
   };
 
   beforeEach(() => {
@@ -163,6 +165,89 @@ describe('BriefService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].agents).toEqual([]);
       expect(mockBriefModel.listUnresolved).toHaveBeenCalled();
+    });
+  });
+
+  describe('resolve', () => {
+    it('should complete the task when approving a result brief', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue({
+        id: 'b1',
+        taskId: 'task-1',
+        type: 'result',
+      });
+
+      const brief = await service.resolve('b1', { action: 'approve' });
+
+      expect(brief).toEqual({ id: 'b1', taskId: 'task-1', type: 'result' });
+      expect(mockBriefModel.resolve).toHaveBeenCalledWith('b1', { action: 'approve' });
+      expect(mockTaskModel.updateStatus).toHaveBeenCalledWith('task-1', 'completed', {
+        error: null,
+      });
+    });
+
+    it('should complete the task when force-approving a decision brief', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue({
+        id: 'b2',
+        taskId: 'task-2',
+        type: 'decision',
+      });
+
+      await service.resolve('b2', { action: 'approve' });
+
+      expect(mockTaskModel.updateStatus).toHaveBeenCalledWith('task-2', 'completed', {
+        error: null,
+      });
+    });
+
+    it('should not change task status for non-approve actions', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue({
+        id: 'b3',
+        taskId: 'task-3',
+        type: 'result',
+      });
+
+      await service.resolve('b3', { action: 'feedback', comment: 'tweak the tone' });
+
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('should not change task status when approving a non-result/decision brief', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue({
+        id: 'b4',
+        taskId: 'task-4',
+        type: 'insight',
+      });
+
+      await service.resolve('b4', { action: 'approve' });
+
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('should not change task status when brief has no taskId', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue({
+        id: 'b5',
+        taskId: null,
+        type: 'result',
+      });
+
+      await service.resolve('b5', { action: 'approve' });
+
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('should return null and skip task update when brief is not found', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue(null);
+
+      const result = await service.resolve('missing', { action: 'approve' });
+
+      expect(result).toBeNull();
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
     });
   });
 });
