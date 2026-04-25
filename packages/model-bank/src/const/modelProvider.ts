@@ -19,6 +19,7 @@ export enum ModelProvider {
   DeepSeek = 'deepseek',
   Fal = 'fal',
   FireworksAI = 'fireworksai',
+  FuturMix = 'futurmix',
   GiteeAI = 'giteeai',
   Github = 'github',
   GithubCopilot = 'githubcopilot',
