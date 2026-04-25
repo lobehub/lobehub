@@ -23,9 +23,6 @@ import AgentChannelPage from '@/routes/(main)/agent/channel';
 import AgentCronDetailPage from '@/routes/(main)/agent/cron/[cronId]';
 import AgentPageRedirectPage from '@/routes/(main)/agent/page';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
-import AgentTasksPage from '@/routes/(main)/agent/tasks';
-import AgentTasksLayout from '@/routes/(main)/agent/tasks/_layout';
-import AgentTaskDetailPage from '@/routes/(main)/agent/tasks/[taskId]';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
 import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
@@ -148,20 +145,6 @@ export const desktopRoutes: RouteObject[] = [
               {
                 element: <AgentChannelPage />,
                 path: 'channel',
-              },
-              {
-                children: [
-                  {
-                    element: <AgentTasksPage />,
-                    index: true,
-                  },
-                  {
-                    element: <AgentTaskDetailPage />,
-                    path: ':taskId',
-                  },
-                ],
-                element: <AgentTasksLayout />,
-                path: 'tasks',
               },
             ],
             element: <DesktopChatLayout />,

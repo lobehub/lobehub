@@ -91,29 +91,6 @@ export const desktopRoutes: RouteObject[] = [
                 ),
                 path: 'channel',
               },
-              {
-                children: [
-                  {
-                    element: dynamicElement(
-                      () => import('@/routes/(main)/agent/tasks'),
-                      'Desktop > Chat > Tasks',
-                    ),
-                    index: true,
-                  },
-                  {
-                    element: dynamicElement(
-                      () => import('@/routes/(main)/agent/tasks/[taskId]'),
-                      'Desktop > Chat > Task Detail',
-                    ),
-                    path: ':taskId',
-                  },
-                ],
-                element: dynamicLayout(
-                  () => import('@/routes/(main)/agent/tasks/_layout'),
-                  'Desktop > Chat > Tasks > Layout',
-                ),
-                path: 'tasks',
-              },
             ],
             element: dynamicLayout(
               () => import('@/routes/(main)/agent/_layout'),
