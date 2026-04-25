@@ -68,6 +68,23 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
   [NotebookManifest.identifier]: NotebookStreamings as Record<string, BuiltinStreaming>,
 };
 
+export interface BuiltinStreamingRegistryEntry {
+  apiName: string;
+  identifier: string;
+  streaming: BuiltinStreaming;
+}
+
+export const listBuiltinStreamingEntries = (): BuiltinStreamingRegistryEntry[] =>
+  Object.entries(BuiltinToolStreamings).flatMap(([identifier, toolset]) =>
+    Object.entries(toolset)
+      .filter((entry): entry is [string, BuiltinStreaming] => !!entry[1])
+      .map(([apiName, streaming]) => ({
+        apiName,
+        identifier,
+        streaming,
+      })),
+  );
+
 /**
  * Get builtin streaming component for a specific API
  * @param identifier - Tool identifier (e.g., 'lobe-code-interpreter')

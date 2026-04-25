@@ -56,8 +56,12 @@ const customToolsets: Record<
       { description: 'Find files by glob pattern.', name: 'Glob' },
       { description: 'Search file contents.', name: 'Grep' },
       { description: 'Read file content.', name: 'Read' },
+      { description: 'Schedule when to resume work.', name: 'ScheduleWakeup' },
       { description: 'Run a Claude Code skill.', name: 'Skill' },
+      { description: 'Read output from a background task.', name: 'TaskOutput' },
+      { description: 'Stop a background task.', name: 'TaskStop' },
       { description: 'Track todo progress.', name: 'TodoWrite' },
+      { description: 'Look up deferred tools by name or keyword.', name: 'ToolSearch' },
       { description: 'Write a new file.', name: 'Write' },
     ],
     meta: {
@@ -65,7 +69,7 @@ const customToolsets: Record<
       title: 'Claude Code',
     },
   },
-  codex: {
+  'codex': {
     api: [
       { description: 'Run a shell command in Codex.', name: 'command_execution' },
       { description: 'Preview Codex file change summaries.', name: 'file_change' },
@@ -74,6 +78,47 @@ const customToolsets: Record<
     meta: {
       description: 'Codex-specific render previews and shared command cards.',
       title: 'Codex',
+    },
+  },
+  'lobe-page-agent': {
+    api: [
+      { description: 'Initialize a new document with markdown content.', name: 'initPage' },
+      { description: 'Edit the title of the current document.', name: 'editTitle' },
+      { description: 'Read the structured XML content of the page.', name: 'getPageContent' },
+      { description: 'Insert, modify, or remove document nodes.', name: 'modifyNodes' },
+      { description: 'Find-and-replace text across the document.', name: 'replaceText' },
+    ],
+    meta: {
+      description: 'Page Agent inspector previews for document operations.',
+      title: 'Page Agent',
+    },
+  },
+  'lobe-tools': {
+    api: [{ description: 'Activate a builtin tool (legacy alias).', name: 'activateSkill' }],
+    meta: {
+      description: 'Deprecated alias of Tools Activator kept for legacy messages.',
+      title: 'Lobe Tools (legacy)',
+    },
+  },
+  'lobe-user-interaction': {
+    api: [
+      { description: 'Render an inline question card with form fields.', name: 'askUserQuestion' },
+    ],
+    meta: {
+      description: 'User Interaction intervention previews.',
+      title: 'User Interaction',
+    },
+  },
+  'lobe-web-onboarding': {
+    api: [
+      {
+        description: 'Save the agent identity collected during web onboarding.',
+        name: 'saveUserQuestion',
+      },
+    ],
+    meta: {
+      description: 'Web onboarding intervention previews.',
+      title: 'Web Onboarding',
     },
   },
 };
@@ -262,9 +307,24 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     content:
       "1  import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';\n2  export interface BuiltinRenderRegistryEntry { ... }",
   },
+  [keyOf(ClaudeCodeIdentifier, 'ScheduleWakeup')]: {
+    args: {
+      delaySeconds: 1200,
+      reason: 'Recheck the failing build once dependencies finish installing.',
+    },
+  },
   [keyOf(ClaudeCodeIdentifier, 'Skill')]: {
     args: { skill: 'codebase-search' },
     content: 'Use ripgrep first, then open only the relevant files to keep context sharp.',
+  },
+  [keyOf(ClaudeCodeIdentifier, 'TaskOutput')]: {
+    args: { block: false, task_id: 'task-build-2025-04-25', timeout_ms: 8000 },
+    content:
+      '✅  Vite: compile and bundle finished (200) http://localhost:9876/\nDebug Proxy: https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http://localhost:9876',
+  },
+  [keyOf(ClaudeCodeIdentifier, 'TaskStop')]: {
+    args: { task_id: 'task-build-2025-04-25' },
+    content: 'Background task stopped (exit code 0).',
   },
   [keyOf(ClaudeCodeIdentifier, 'TodoWrite')]: {
     args: {
@@ -286,6 +346,10 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
+  },
+  [keyOf(ClaudeCodeIdentifier, 'ToolSearch')]: {
+    args: { max_results: 5, query: 'select:Read,Edit,Grep' },
+    content: 'Loaded 3 deferred tool schemas: Read, Edit, Grep.',
   },
   [keyOf(ClaudeCodeIdentifier, 'Write')]: {
     args: {
@@ -487,7 +551,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
   [keyOf('lobe-cloud-sandbox', 'editLocalFile')]: {
     args: { path: '/sandbox/src/routes/devtools.tsx' },
     pluginState: {
-      diffText: '@@ -1,2 +1,3 @@\n export const devtools = true;\n+export const previews = true;\n',
+      diffText:
+        '--- a/sandbox/src/routes/devtools.tsx\n+++ b/sandbox/src/routes/devtools.tsx\n@@ -1,2 +1,3 @@\n export const devtools = true;\n+export const previews = true;\n',
       linesAdded: 1,
       linesDeleted: 0,
       replacements: 1,
@@ -760,7 +825,7 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     args: { path: '/workspace/src/spa/router/desktopRouter.config.tsx' },
     pluginState: {
       diffText:
-        "@@ -1,3 +1,7 @@\n export const desktopRoutes = [\n+  {\n+    path: 'devtools',\n+  },\n ];\n",
+        "--- a/workspace/src/spa/router/desktopRouter.config.tsx\n+++ b/workspace/src/spa/router/desktopRouter.config.tsx\n@@ -1,3 +1,7 @@\n export const desktopRoutes = [\n+  {\n+    path: 'devtools',\n+  },\n ];\n",
     },
   },
   [keyOf('lobe-local-system', 'listLocalFiles')]: {
@@ -1047,6 +1112,99 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
           url: 'https://linear.example.com/issue/LOBE-8114',
         },
       ],
+    },
+  },
+
+  [keyOf('lobe-page-agent', 'initPage')]: {
+    args: {
+      markdown:
+        '# Devtools Render Gallery\n\nA development-only preview surface for every builtin tool render.\n\n- Inspector previews mirror the chat title bar.\n- Body segments switch between Render, Streaming, Placeholder, and Intervention.\n',
+    },
+    pluginState: { nodeCount: 6 },
+  },
+  [keyOf('lobe-page-agent', 'editTitle')]: {
+    args: { title: 'Devtools Render Gallery — Builtin Tool Previews' },
+    pluginState: { previousTitle: 'Devtools Render Gallery' },
+  },
+  [keyOf('lobe-page-agent', 'getPageContent')]: {
+    args: {},
+    pluginState: { nodeCount: 12 },
+    content:
+      '<doc><heading id="h-1">Devtools Render Gallery</heading><para id="p-1">Preview every registered builtin tool component.</para></doc>',
+  },
+  [keyOf('lobe-page-agent', 'modifyNodes')]: {
+    args: {
+      operations: [
+        { afterId: 'h-1', kind: 'insertAfter', xml: '<para>Updated description.</para>' },
+        {
+          id: 'p-2',
+          kind: 'modify',
+          xml: '<para id="p-2">Now mentions Segmented body tabs.</para>',
+        },
+        { id: 'p-3', kind: 'remove' },
+      ],
+    },
+    pluginState: { applied: 3 },
+  },
+  [keyOf('lobe-page-agent', 'replaceText')]: {
+    args: {
+      isRegex: false,
+      newText: 'Body segments',
+      replaceAll: true,
+      searchText: 'Body section',
+    },
+    pluginState: { replacements: 2 },
+  },
+
+  [keyOf('lobe-tools', 'activateSkill')]: {
+    args: { skill: 'lobe-image-generator' },
+    content: 'Activated skill: lobe-image-generator (legacy alias path).',
+    pluginState: {
+      activatedTools: ['lobe-image-generator'],
+      notFound: [],
+    },
+  },
+
+  [keyOf('lobe-user-interaction', 'askUserQuestion')]: {
+    args: {
+      question: {
+        description:
+          'Help us tailor the next reply. Pick the rendering surface you want previewed.',
+        fields: [
+          {
+            key: 'surface',
+            kind: 'select',
+            label: 'Preview surface',
+            options: [
+              { label: 'Render', value: 'render' },
+              { label: 'Streaming', value: 'streaming' },
+              { label: 'Placeholder', value: 'placeholder' },
+              { label: 'Intervention', value: 'intervention' },
+            ],
+            placeholder: 'Choose one',
+            required: true,
+          },
+          {
+            key: 'note',
+            kind: 'textarea',
+            label: 'Optional note',
+            placeholder: 'Anything to call out about the preview?',
+          },
+        ],
+        id: 'devtools-preview-question',
+        mode: 'form',
+        prompt: 'Which builtin tool surface should we focus the next preview iteration on?',
+      },
+    },
+  },
+
+  [keyOf('lobe-web-onboarding', 'saveUserQuestion')]: {
+    args: {
+      agentEmoji: '🧪',
+      agentName: 'Devtools Tester',
+      fullName: 'Arvin',
+      interests: ['observability', 'dev-tools', 'agent-runtime'],
+      responseLanguage: 'en-US',
     },
   },
 };

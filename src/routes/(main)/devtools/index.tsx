@@ -1,3 +1,3 @@
 'use client';
 
-export { default } from '@/features/DevPanel/RenderGallery';
+export { default } from '@/features/DevPanel/RenderGallery/IndexPage';

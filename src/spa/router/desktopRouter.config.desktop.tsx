@@ -46,7 +46,9 @@ import CommunityListModelLayout from '@/routes/(main)/community/(list)/model/_la
 import CommunityListProviderPage from '@/routes/(main)/community/(list)/provider';
 import CommunityListSkillPage from '@/routes/(main)/community/(list)/skill';
 import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_layout';
-import DevtoolsPage from '@/routes/(main)/devtools';
+import DevtoolsIndexPage from '@/routes/(main)/devtools';
+import DevtoolsLayout from '@/routes/(main)/devtools/_layout';
+import DevtoolsToolPage from '@/routes/(main)/devtools/[identifier]';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -511,15 +513,6 @@ export const desktopRoutes: RouteObject[] = [
         path: 'page',
       },
 
-      ...(isDev
-        ? [
-            {
-              element: <DevtoolsPage />,
-              path: 'devtools',
-            },
-          ]
-        : []),
-
       // Default route - home page (handled by persistent layout)
       {
         index: true,
@@ -548,6 +541,21 @@ export const desktopRoutes: RouteObject[] = [
     element: <ShareTopicLayout />,
     path: '/share/t',
   },
+
+  // Devtools route (outside main layout, dev-only)
+  ...(isDev
+    ? [
+        {
+          children: [
+            { element: <DevtoolsIndexPage />, index: true },
+            { element: <DevtoolsToolPage />, path: ':identifier' },
+          ],
+          element: <DevtoolsLayout />,
+          errorElement: <ErrorBoundary />,
+          path: '/devtools',
+        },
+      ]
+    : []),
 ];
 
 // Desktop onboarding route (Electron only in .desktop.tsx)
