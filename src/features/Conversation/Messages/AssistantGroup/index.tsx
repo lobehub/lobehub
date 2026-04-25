@@ -27,7 +27,7 @@ import {
 } from '../Contexts/message-action-context';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
-import type { WorkflowExpandLevel } from './components/WorkflowCollapse';
+import type { WorkflowExpandLevelDefault } from './components/WorkflowCollapse';
 
 const EditState = dynamic(() => import('./components/EditState'), {
   ssr: false,
@@ -40,7 +40,7 @@ const actionBarHolder = (
   />
 );
 interface GroupMessageProps {
-  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   id: string;
   index: number;

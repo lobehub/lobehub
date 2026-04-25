@@ -17,7 +17,7 @@ import {
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import type { RenderableAssistantContentBlock } from './types';
-import WorkflowCollapse, { type WorkflowExpandLevel } from './WorkflowCollapse';
+import WorkflowCollapse, { type WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -33,7 +33,7 @@ interface GroupChildrenProps {
   blocks: AssistantContentBlock[];
   content?: string;
   contentId?: string;
-  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   id: string;
   messageIndex: number;

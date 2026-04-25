@@ -78,7 +78,10 @@ const Conversation = memo(() => {
           position: 'relative',
         }}
       >
-        <ChatList welcome={<AgentHome />} />
+        <ChatList
+          defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
+          welcome={<AgentHome />}
+        />
       </Flexbox>
       <TodoProgress />
       {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}

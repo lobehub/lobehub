@@ -41,20 +41,36 @@ const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
 
 export type WorkflowExpandLevel = 'collapsed' | 'semi' | 'full';
 
+/** Per-phase initial level. Pass an object when streaming and completion
+ *  should differ — e.g. heterogeneous agents want full while streaming but
+ *  still collapse once a turn finishes. A plain string applies to both. */
+export type WorkflowExpandLevelDefault =
+  | WorkflowExpandLevel
+  | { completion?: WorkflowExpandLevel; streaming?: WorkflowExpandLevel };
+
 interface WorkflowCollapseProps {
   /** Assistant group message id (for generation state) */
   assistantMessageId: string;
   blocks: RenderableAssistantContentBlock[];
   /**
    * Fixed default expand level. When set, overrides the built-in auto
-   * behavior (expand while streaming, collapse after completion) for both
-   * the initial state and resets. Users can still toggle locally.
+   * behavior (expand while streaming, collapse after completion) for the
+   * initial state and resets. Users can still toggle locally.
+   * Pass an object to override only one phase (e.g. `{ streaming: 'full' }`).
    * Undefined = legacy auto behavior. Pending intervention still forces open.
    */
-  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   workflowChromeComplete?: boolean;
 }
+
+const resolveExpandDefaults = (
+  raw: WorkflowExpandLevelDefault | undefined,
+): { completion?: WorkflowExpandLevel; streaming?: WorkflowExpandLevel } => {
+  if (raw === undefined) return {};
+  if (typeof raw === 'string') return { completion: raw, streaming: raw };
+  return raw;
+};
 
 const collectTools = (blocks: RenderableAssistantContentBlock[]): ChatToolPayloadWithResult[] => {
   return blocks.flatMap((b) => b.tools ?? []);
@@ -152,14 +168,16 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       [blocks],
     );
     const durationText = totalWorkflowMs > 0 ? formatReasoningDuration(totalWorkflowMs) : undefined;
-    const hasExternalDefault = defaultWorkflowExpandLevel !== undefined;
-    const streamingInitialLevel: WorkflowExpandLevel = defaultWorkflowExpandLevel ?? 'semi';
-    const completionInitialLevel: WorkflowExpandLevel = defaultWorkflowExpandLevel ?? 'collapsed';
+    const { streaming: streamingDefault, completion: completionDefault } = useMemo(
+      () => resolveExpandDefaults(defaultWorkflowExpandLevel),
+      [defaultWorkflowExpandLevel],
+    );
+    const streamingInitialLevel: WorkflowExpandLevel = streamingDefault ?? 'semi';
+    const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'collapsed';
 
-    const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() => {
-      if (hasExternalDefault) return defaultWorkflowExpandLevel;
-      return allComplete ? 'collapsed' : 'semi';
-    });
+    const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
+      allComplete ? completionInitialLevel : streamingInitialLevel,
+    );
     const userOpenedRef = useRef(false);
     const prevCompleteRef = useRef(allComplete);
 
