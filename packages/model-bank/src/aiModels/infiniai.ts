@@ -7,6 +7,55 @@ const infiniaiChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Flash is a Mixture-of-Experts (MoE) language model in the DeepSeek V4 series designed for high throughput and deployment efficiency. With ~284B total parameters and ~13B active parameters per token, it supports up to 1M tokens context window. Compared to the flagship version, the Flash variant emphasizes inference cost, response speed, and deployment friendliness, making it suitable for large-scale online services and cost-sensitive applications. The V4 series adopts a hybrid attention architecture to improve long context efficiency, and the Flash version retains the long context, reasoning, and coding capabilities of the V4 series with a smaller active parameter scale.',
+    displayName: 'DeepSeek V4 Flash',
+    id: 'deepseek-v4-flash',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Pro is the flagship Mixture-of-Experts (MoE) language model in the DeepSeek V4 series. With ~1.6T total parameters and ~49B active parameters per token, it supports up to 1M tokens context window. This model targets high-complexity scenarios such as complex reasoning, code generation, long context understanding, and agent workflows, making it suitable as a production task model requiring higher capability ceilings. The V4 series adopts a hybrid attention architecture to improve long context efficiency, allowing trade-offs between speed and inference depth based on task complexity.',
+    displayName: 'DeepSeek V4 Pro',
+    enabled: true,
+    id: 'deepseek-v4-pro',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
