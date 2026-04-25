@@ -25,18 +25,10 @@ const TitleTags = memo(() => {
   }
 
   return (
-    <Flexbox
-      allowShrink
-      horizontal
-      align={'center'}
-      gap={8}
-      style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}
-    >
+    <Flexbox allowShrink horizontal align={'center'} gap={8}>
       <span
         style={{
           color: cssVar.colorText,
-          display: 'block',
-          flex: '1 1 auto',
           fontSize: 14,
           fontWeight: 600,
           marginLeft: 8,

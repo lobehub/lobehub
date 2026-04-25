@@ -11,6 +11,7 @@ const useParamsMock = vi.hoisted(() => vi.fn());
 const useNavigateMock = vi.hoisted(() => vi.fn());
 const useClientDataSWRMock = vi.hoisted(() => vi.fn());
 const useAutoCreateTopicDocumentMock = vi.hoisted(() => vi.fn());
+const useServerConfigStoreMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-router-dom', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -54,6 +55,13 @@ vi.mock('@/store/notebook/action', () => ({
 
 vi.mock('@/features/TopicCanvas/useAutoCreateTopicDocument', () => ({
   useAutoCreateTopicDocument: (...args: unknown[]) => useAutoCreateTopicDocumentMock(...args),
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  featureFlagsSelectors: (state: { featureFlags: { enableAgentPage: boolean } }) =>
+    state.featureFlags,
+  useServerConfigStore: (selector: (state: unknown) => unknown) =>
+    useServerConfigStoreMock(selector),
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -118,6 +126,7 @@ describe('Topic page route', () => {
     useAutoCreateTopicDocumentMock.mockReset();
     useNavigateMock.mockReset();
     useParamsMock.mockReset();
+    useServerConfigStoreMock.mockReset();
 
     useClientDataSWRMock.mockReturnValue({ data: null, error: undefined, isLoading: false });
     useAutoCreateTopicDocumentMock.mockReturnValue({
@@ -125,6 +134,12 @@ describe('Topic page route', () => {
       documentId: undefined,
       isLoading: false,
     });
+    useServerConfigStoreMock.mockImplementation((selector) =>
+      selector({
+        featureFlags: { enableAgentPage: true },
+        serverConfigInit: true,
+      }),
+    );
   });
 
   it('renders FloatingChatPanel with route topic context', () => {
@@ -176,6 +191,29 @@ describe('Topic page route', () => {
         replace: true,
       }),
     );
+  });
+
+  it('redirects back to chat when the agent page feature is disabled', async () => {
+    useParamsMock.mockReturnValue({
+      aid: 'agt_test',
+      docId: 'doc_test',
+      topicId: 'tpc_test',
+    });
+    useServerConfigStoreMock.mockImplementation((selector) =>
+      selector({
+        featureFlags: { enableAgentPage: false },
+        serverConfigInit: true,
+      }),
+    );
+
+    render(<TopicPage />);
+
+    await waitFor(() =>
+      expect(useNavigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_test', {
+        replace: true,
+      }),
+    );
+    expect(useAutoCreateTopicDocumentMock).toHaveBeenCalledWith(undefined, undefined);
   });
 
   it('returns null when aid or topicId is missing', () => {

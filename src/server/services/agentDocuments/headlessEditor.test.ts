@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { applyLiteXMLOperations, exportEditorDataSnapshot } from './headlessEditor';
+import { isValidEditorData } from '@/libs/editor/isValidEditorData';
+
+import {
+  applyLiteXMLOperations,
+  createMarkdownEditorSnapshot,
+  exportEditorDataSnapshot,
+} from './headlessEditor';
 
 const hasNodeType = (value: unknown, type: string): boolean => {
   if (!value || typeof value !== 'object') return false;
@@ -25,6 +31,13 @@ const getSpanId = (litexml: string, text: string): string => {
 };
 
 describe('agent document headless editor', () => {
+  it('should create a valid empty snapshot for whitespace-only markdown', async () => {
+    const snapshot = await createMarkdownEditorSnapshot(' \n ');
+
+    expect(snapshot.content).toBe('');
+    expect(isValidEditorData(snapshot.editorData)).toBe(true);
+  });
+
   it('should apply LiteXML operations and persist diff nodes for later human review', async () => {
     const initial = await exportEditorDataSnapshot({
       fallbackContent: 'Original',

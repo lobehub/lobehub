@@ -9,6 +9,7 @@ import PageRedirect from './PageRedirect';
 const navigateMock = vi.hoisted(() => vi.fn());
 const useAutoCreateTopicDocumentMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
+const useServerConfigStoreMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-router-dom', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -29,11 +30,32 @@ vi.mock('@/features/TopicCanvas/useAutoCreateTopicDocument', () => ({
   useAutoCreateTopicDocument: useAutoCreateTopicDocumentMock,
 }));
 
+vi.mock('@/store/serverConfig', () => ({
+  featureFlagsSelectors: (state: { featureFlags: { enableAgentPage: boolean } }) =>
+    state.featureFlags,
+  useServerConfigStore: (selector: (state: unknown) => unknown) =>
+    useServerConfigStoreMock(selector),
+}));
+
 describe('PageRedirect', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     useAutoCreateTopicDocumentMock.mockReset();
     useParamsMock.mockReset();
+    useServerConfigStoreMock.mockReset();
+
+    useAutoCreateTopicDocumentMock.mockReturnValue({
+      document: undefined,
+      documentId: undefined,
+      isLoading: false,
+    });
+
+    useServerConfigStoreMock.mockImplementation((selector) =>
+      selector({
+        featureFlags: { enableAgentPage: true },
+        serverConfigInit: true,
+      }),
+    );
   });
 
   it('redirects to the page created for an empty topic', async () => {
@@ -64,5 +86,24 @@ describe('PageRedirect', () => {
     render(<PageRedirect />);
 
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('redirects back to chat when the agent page feature is disabled', async () => {
+    useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_test' });
+    useServerConfigStoreMock.mockImplementation((selector) =>
+      selector({
+        featureFlags: { enableAgentPage: false },
+        serverConfigInit: true,
+      }),
+    );
+
+    render(<PageRedirect />);
+
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_test', {
+        replace: true,
+      }),
+    );
+    expect(useAutoCreateTopicDocumentMock).toHaveBeenCalledWith(undefined, undefined);
   });
 });

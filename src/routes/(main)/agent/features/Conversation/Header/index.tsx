@@ -23,28 +23,14 @@ const headerStyles = createStaticStyles(({ css }) => ({
     flex: 1 1 auto;
     min-width: 0;
   `,
-  slotCenter: css`
-    flex: 0 0 auto !important;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-  `,
   slotLeft: css`
     overflow: hidden;
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
-
-    @container agent-conv-header (max-width: 719px) {
-      flex: 1 1 auto;
-    }
   `,
   slotRight: css`
-    flex: 1 1 0;
+    flex: 0 0 auto;
     min-width: 0;
-
-    @container agent-conv-header (max-width: 719px) {
-      flex: 0 0 auto;
-    }
   `,
 }));
 
@@ -66,19 +52,22 @@ const Header = memo(() => {
           </Flexbox>
         }
         right={
-          <Flexbox horizontal align={'center'} style={{ backgroundColor: cssVar.colorBgContainer }}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={4}
+            style={{ backgroundColor: cssVar.colorBgContainer }}
+          >
+            <ViewSwitcher />
             <ShareButton />
             <WorkingPanelToggle />
           </Flexbox>
         }
         slotClassNames={{
-          center: headerStyles.slotCenter,
           left: headerStyles.slotLeft,
           right: headerStyles.slotRight,
         }}
-      >
-        <ViewSwitcher />
-      </NavHeader>
+      />
     </div>
   );
 });
