@@ -34,21 +34,44 @@ const timeIntentSelectorEnum = [
   'range',
 ] as const;
 
-const searchMemoryTimeIntentSchema: JSONSchema7 = {
+const searchMemoryTimeIntentInnerSchema: JSONSchema7 = {
   additionalProperties: false,
   properties: {
     anchor: {
-      description:
-        'Anchor for relativeDay. Supports the legacy string values "today" and "yesterday", or another timeIntent object such as { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }.',
-      oneOf: [
+      description: 'When nested as a relativeDay anchor, only "today" or "yesterday" is allowed.',
+      enum: ['today', 'yesterday'],
+      type: 'string',
+    },
+    date: { format: 'date-time', type: 'string' },
+    end: { format: 'date-time', type: 'string' },
+    month: { maximum: 12, minimum: 1, type: 'integer' },
+    offsetDays: { type: 'integer' },
+    selector: {
+      enum: [...timeIntentSelectorEnum],
+      type: 'string',
+    },
+    start: { format: 'date-time', type: 'string' },
+    year: { maximum: 9999, minimum: 1970, type: 'integer' },
+  },
+  required: ['selector'],
+  type: 'object',
+};
+
+const searchMemoryTimeIntentSchema: JSONSchema7 = {
+  additionalProperties: false,
+  description:
+    'Optional calendar-friendly time selector that the server always resolves into an exact createdAt timeRange. Prefer this for prompts like "December 2025", "last month", or "yesterday".',
+  properties: {
+    anchor: {
+      anyOf: [
         {
           enum: ['today', 'yesterday'],
           type: 'string',
         },
-        {
-          $ref: '#/definitions/searchMemoryTimeIntent',
-        },
+        searchMemoryTimeIntentInnerSchema,
       ],
+      description:
+        'Anchor for relativeDay. Use the string "today"/"yesterday", or a non-recursive timeIntent object such as { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }.',
     },
     date: { format: 'date-time', type: 'string' },
     end: { format: 'date-time', type: 'string' },
@@ -73,9 +96,6 @@ export const MemoryManifest: BuiltinToolManifest = {
       name: MemoryApiName.searchUserMemory,
       parameters: {
         additionalProperties: false,
-        definitions: {
-          searchMemoryTimeIntent: searchMemoryTimeIntentSchema,
-        },
         properties: {
           categories: {
             description: 'Optional memory categories to constrain retrieval.',
@@ -116,11 +136,7 @@ export const MemoryManifest: BuiltinToolManifest = {
             items: { type: 'string' },
             type: 'array',
           },
-          timeIntent: {
-            description:
-              'Optional calendar-friendly time selector that the server always resolves into an exact createdAt timeRange. Prefer this for prompts like "December 2025", "last month", or "yesterday".',
-            allOf: [{ $ref: '#/definitions/searchMemoryTimeIntent' }],
-          },
+          timeIntent: searchMemoryTimeIntentSchema,
           timeRange: {
             additionalProperties: false,
             description:
