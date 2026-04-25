@@ -50,6 +50,20 @@ export default {
   'channel.feishu.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
+  'channel.line.description':
+    'Connect this assistant to LINE Messaging API for direct and group chats.',
+  'channel.line.destinationUserId': 'Destination User ID',
+  'channel.line.destinationUserIdHint':
+    "The bot's destination user ID (starts with `U`, 33 chars total). Find it in the LINE Developers Console under Messaging API → Bot info, or in the response of the /v2/bot/info endpoint.",
+  'channel.line.destinationUserIdPlaceholder': 'e.g. U1234567890abcdef1234567890abcdef',
+  'channel.line.channelAccessToken': 'Channel Access Token',
+  'channel.line.channelAccessTokenHint':
+    'Long-lived token issued under the Messaging API tab. Token will be encrypted and stored securely.',
+  'channel.line.channelSecret': 'Channel Secret',
+  'channel.line.channelSecretHint':
+    'From the Basic settings tab. Required — used to verify X-Line-Signature on every inbound webhook.',
+  'channel.line.webhookManualSetup':
+    'LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click "Verify", and enable "Use webhook".',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',
