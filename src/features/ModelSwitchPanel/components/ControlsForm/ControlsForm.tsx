@@ -73,7 +73,6 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   const model = modelProp ?? agentModel;
   const provider = providerProp ?? agentProvider;
   const [form] = Form.useForm();
-  const enableReasoning = AntdForm.useWatch(['enableReasoning'], form);
 
   const config = useAgentStore(
     (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
@@ -100,7 +99,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
     form.setFieldsValue(initialValues);
   }, [form, initialValues]);
 
-  const enableReasoning =
+  const enableReasoningValue =
     AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
   const includeReasoningBudget = modelExtendParamOptions?.enableReasoning?.includeBudget !== false;
 
@@ -164,7 +163,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       minWidth: undefined,
       name: 'enableAdaptiveThinking',
     },
-    ((enableReasoning && includeReasoningBudget) ||
+    ((enableReasoningValue && includeReasoningBudget) ||
       modelExtendParams?.includes('reasoningBudgetToken')) && {
       children: <ReasoningTokenSlider />,
       label: t('extendParams.reasoningBudgetToken.title'),
