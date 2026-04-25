@@ -1109,4 +1109,44 @@ describe('topic action', () => {
       expect(summaryTopicTitleSpy).toHaveBeenCalledWith(topicId, messages);
     });
   });
+
+  describe('internal_updateTopics', () => {
+    it('should preserve excludeStatuses/excludeTriggers from existing topicDataMap entry', () => {
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      // Seed the entry as the SWR onData handler would, with filter fields.
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              excludeStatuses: ['completed'],
+              excludeTriggers: ['cron', 'eval'],
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [{ id: 'topic-1', title: 'old' } as ChatTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      // Simulate the post-sendMessage write-back which previously dropped filters.
+      act(() => {
+        result.current.internal_updateTopics(agentId, {
+          items: [{ id: 'topic-2', title: 'new' } as ChatTopic],
+          pageSize: 20,
+          total: 2,
+        });
+      });
+
+      const next = useChatStore.getState().topicDataMap[key];
+      expect(next.excludeStatuses).toEqual(['completed']);
+      expect(next.excludeTriggers).toEqual(['cron', 'eval']);
+      expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
+    });
+  });
 });

@@ -762,6 +762,13 @@ export class ChatTopicActionImpl {
           ...this.#get().topicDataMap,
           [key]: {
             currentPage,
+            // Carry filter fields forward so subsequent reads (e.g. the
+            // sendMessageInServer `topicFilter` helper) keep seeing the
+            // filter the SWR fetch was using; otherwise the next request
+            // forgets to exclude completed/cron topics until SWR
+            // revalidates.
+            excludeStatuses: currentData?.excludeStatuses,
+            excludeTriggers: currentData?.excludeTriggers,
             hasMore: items.length >= pageSize,
             isExpandingPageSize: false,
             isLoadingMore: false,
