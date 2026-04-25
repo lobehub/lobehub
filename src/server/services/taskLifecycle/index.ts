@@ -222,14 +222,19 @@ export class TaskLifecycleService {
       });
 
       if (reviewResult.passed) {
+        // Judge is a trusted accept signal — the brief is created already-resolved
+        // (no actionable buttons in the UI) and the task transitions to 'completed'.
+        const now = new Date();
         await this.briefModel.create({
           priority: 'info',
+          resolvedAction: 'auto-judge-pass',
+          resolvedAt: now,
+          readAt: now,
           summary: `Review passed (score: ${reviewResult.overallScore}%, iteration: ${iteration}). ${content.slice(0, 150)}`,
           taskId,
           title: `${taskIdentifier} review passed`,
           type: 'result',
         });
-        // Judge is a trusted accept signal — complete the task directly.
         await this.taskModel.updateStatus(taskId, 'completed', { error: null });
         return true;
       }
@@ -248,7 +253,9 @@ export class TaskLifecycleService {
         return true;
       }
 
-      // Max iterations reached
+      // Max iterations reached — surface the (failed) result for human accept/retry.
+      // Type is `result` so the user's `approve` action is treated as a terminal
+      // accept signal (force-pass) by BriefService.resolve.
       await this.briefModel.create({
         actions: [
           { key: 'retry', label: '🔄 重试', type: 'resolve' as const },
@@ -259,7 +266,7 @@ export class TaskLifecycleService {
         summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
         taskId,
         title: `${taskIdentifier} review failed — needs attention`,
-        type: 'decision',
+        type: 'result',
       });
       await this.taskModel.updateStatus(taskId, 'paused', { error: null });
       return true;

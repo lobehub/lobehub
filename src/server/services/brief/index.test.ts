@@ -186,7 +186,7 @@ describe('BriefService', () => {
       });
     });
 
-    it('should complete the task when force-approving a decision brief', async () => {
+    it('should NOT complete the task when approving a decision brief (mid-execution checkpoint)', async () => {
       const service = new BriefService(db, userId);
       mockBriefModel.resolve.mockResolvedValue({
         id: 'b2',
@@ -196,9 +196,9 @@ describe('BriefService', () => {
 
       await service.resolve('b2', { action: 'approve' });
 
-      expect(mockTaskModel.updateStatus).toHaveBeenCalledWith('task-2', 'completed', {
-        error: null,
-      });
+      // decision briefs are non-terminal checkpoints — approving must not complete
+      // the task or resume/continue flows break.
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
     });
 
     it('should not change task status for non-approve actions', async () => {
@@ -214,7 +214,7 @@ describe('BriefService', () => {
       expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
     });
 
-    it('should not change task status when approving a non-result/decision brief', async () => {
+    it('should not change task status when approving a non-result brief', async () => {
       const service = new BriefService(db, userId);
       mockBriefModel.resolve.mockResolvedValue({
         id: 'b4',

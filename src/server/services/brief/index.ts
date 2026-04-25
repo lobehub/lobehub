@@ -63,11 +63,17 @@ export class BriefService {
   /**
    * Resolve a brief and propagate accept signals to the task lifecycle.
    *
-   * 'approve' on a `result` brief is the user-issued accept signal that completes
-   * the task (the agent's result brief alone is only a *proposal* of completion).
-   * 'approve' on a `decision` brief (review max-iterations force-pass) carries the
-   * same semantics. Other actions (feedback / retry / acknowledge) do not transition
-   * task status here — retry triggers re-execution via a separate flow.
+   * Terminal accept rule: `approve` on a `result` brief completes the task. The
+   * `result` type is the only brief that carries terminal-deliverable semantics
+   * — the agent's `result` brief is a *proposal* of completion that the user
+   * accepts here (and the review max-iterations force-pass also surfaces a
+   * `result` brief for the same reason).
+   *
+   * `decision` briefs are non-terminal checkpoints (mid-execution approvals
+   * like "should I proceed with X?") — approving them must NOT move the task to
+   * `completed`, otherwise resume/continue flows break. Other actions
+   * (feedback / retry / acknowledge) likewise do not transition task status
+   * here; retry triggers re-execution via a separate flow.
    */
   async resolve(
     id: string,
@@ -76,11 +82,7 @@ export class BriefService {
     const brief = await this.briefModel.resolve(id, options);
     if (!brief) return null;
 
-    if (
-      options?.action === 'approve' &&
-      brief.taskId &&
-      (brief.type === 'result' || brief.type === 'decision')
-    ) {
+    if (options?.action === 'approve' && brief.taskId && brief.type === 'result') {
       await this.taskModel.updateStatus(brief.taskId, 'completed', { error: null });
     }
 
