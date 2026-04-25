@@ -122,13 +122,35 @@ export const buildGoogleMessage = async (
   // Handle assistant messages with tool_calls
   if (!!message.tool_calls) {
     return {
-      parts: message.tool_calls.map<Part>((tool) => ({
-        functionCall: {
-          args: safeParseJSON(tool.function.arguments)!,
-          name: tool.function.name,
-        },
-        thoughtSignature: tool.thoughtSignature,
-      })),
+      parts: message.tool_calls.map<Part>((tool) => {
+        const parsed = safeParseJSON(tool.function.arguments);
+        // Gemini's functionCall.args requires a plain object, same as
+        // Anthropic's tool_use.input. Models occasionally emit malformed JSON
+        // whose top-level shape ends up as an array / null / primitive — fall
+        // back to {} to keep the request valid.
+        const isPlainObject = !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+        if (parsed !== undefined && !isPlainObject) {
+          console.warn(
+            '[google] functionCall.args fallback to {} — parsed arguments is not a plain object',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              name: tool.function.name,
+              parsedType: Array.isArray(parsed)
+                ? 'array'
+                : parsed === null
+                  ? 'null'
+                  : typeof parsed,
+            },
+          );
+        }
+        return {
+          functionCall: {
+            args: isPlainObject ? (parsed as Record<string, unknown>) : {},
+            name: tool.function.name,
+          },
+          thoughtSignature: tool.thoughtSignature,
+        };
+      }),
       role: 'model',
     };
   }

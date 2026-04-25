@@ -178,7 +178,30 @@ export const buildAnthropicMessage = async (
             ...(message.tool_calls.map((tool) => {
               let input: Record<string, unknown> = {};
               try {
-                input = JSON.parse(tool.function.arguments);
+                const parsed = JSON.parse(tool.function.arguments);
+                // Anthropic requires tool_use.input to be a plain object.
+                // Models occasionally emit malformed JSON whose top-level shape
+                // is an array / null / primitive (e.g. unescaped quotes inside
+                // a long string arg make the parser re-segment the payload).
+                // Degrade to {} instead of letting Anthropic 400 the whole
+                // request.
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                  input = parsed;
+                } else {
+                  console.warn(
+                    '[anthropic] tool_use.input fallback to {} — parsed arguments is not a plain object',
+                    {
+                      argumentsLength: tool.function.arguments?.length,
+                      id: tool.id,
+                      name: tool.function.name,
+                      parsedType: Array.isArray(parsed)
+                        ? 'array'
+                        : parsed === null
+                          ? 'null'
+                          : typeof parsed,
+                    },
+                  );
+                }
               } catch (error) {
                 // Surface the failure instead of silently falling back to `{}`.
                 // Bad arguments should be sanitized upstream (context-engine

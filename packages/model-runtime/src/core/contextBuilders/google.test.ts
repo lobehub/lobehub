@@ -288,6 +288,41 @@ describe('google contextBuilders', () => {
       });
     });
 
+    it('warns and falls back to empty args when tool_call arguments parse to a JSON array', async () => {
+      // LOBE-8201 — same defense as Anthropic: model emits malformed JSON whose
+      // top-level shape is an array, would otherwise break Gemini schema.
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const message = {
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: '[{"content":"a"},{"content":"b"}]',
+              name: 'writeLocalFile',
+            },
+            id: 'call_array',
+            type: 'function',
+          },
+        ],
+      } as OpenAIChatMessage;
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [
+          {
+            functionCall: { args: {}, name: 'writeLocalFile' },
+          },
+        ],
+        role: 'model',
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('functionCall.args fallback to {}'),
+        expect.objectContaining({ name: 'writeLocalFile', parsedType: 'array' }),
+      );
+      consoleWarnSpy.mockRestore();
+    });
+
     it('should correctly convert function call message with thoughtSignature', async () => {
       const message = {
         role: 'assistant',

@@ -308,6 +308,68 @@ describe('anthropicHelpers', () => {
       consoleErrorSpy.mockRestore();
     });
 
+    it('warns and falls back to empty input when tool_call arguments parse to a JSON array', async () => {
+      // LOBE-8201 — model emitted long writeLocalFile args containing many
+      // unescaped quotes, which JSON.parse re-segmented into a top-level array.
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const message: OpenAIChatMessage = {
+        content: 'fix:',
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call_array',
+            type: 'function',
+            function: {
+              name: 'writeLocalFile',
+              arguments: '[{"content":"a"},{"content":"b"}]',
+            },
+          },
+        ],
+      };
+
+      const result = await buildAnthropicMessage(message);
+
+      expect(result!.content).toEqual([
+        { text: 'fix:', type: 'text' },
+        { id: 'call_array', input: {}, name: 'writeLocalFile', type: 'tool_use' },
+      ]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('tool_use.input fallback to {}'),
+        expect.objectContaining({
+          id: 'call_array',
+          name: 'writeLocalFile',
+          parsedType: 'array',
+        }),
+      );
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('warns and falls back to empty input when tool_call arguments parse to null', async () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const message: OpenAIChatMessage = {
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call_null',
+            type: 'function',
+            function: { name: 'noop', arguments: 'null' },
+          },
+        ],
+      };
+
+      const result = await buildAnthropicMessage(message);
+
+      expect(result!.content).toEqual([
+        { id: 'call_null', input: {}, name: 'noop', type: 'tool_use' },
+      ]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('tool_use.input fallback to {}'),
+        expect.objectContaining({ id: 'call_null', parsedType: 'null' }),
+      );
+      consoleWarnSpy.mockRestore();
+    });
+
     it('should correctly convert function message', async () => {
       const message: OpenAIChatMessage = {
         content: 'def hello(name):\n  return f"Hello {name}"',
