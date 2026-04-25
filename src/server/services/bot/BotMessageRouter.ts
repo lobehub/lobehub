@@ -15,10 +15,13 @@ import { AgentBridgeService } from './AgentBridgeService';
 import {
   type BotPlatformRuntimeContext,
   buildRuntimeKey,
+  type DmSettings,
+  extractDmSettings,
   type PlatformClient,
   type PlatformDefinition,
   platformRegistry,
   resolveBotProviderConfig,
+  shouldHandleDm,
 } from './platforms';
 import { renderError } from './replyTemplate';
 
@@ -395,6 +398,22 @@ export class BotMessageRouter {
     const bridge = new AgentBridgeService(serverDB, userId);
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls !== false;
+    const dmSettings: DmSettings = extractDmSettings(info.settings);
+
+    /**
+     * Gate inbound events on DM policy. Non-DM threads pass through — their
+     * @mention / subscribed-message rules apply unchanged. DM threads are
+     * blocked when disabled, and filtered by allowlist when configured.
+     */
+    const passesDmPolicy = (
+      thread: { isDM?: boolean },
+      message: { author?: { userId?: string } },
+    ): boolean =>
+      shouldHandleDm({
+        authorUserId: message.author?.userId,
+        dmSettings,
+        isDM: thread.isDM === true,
+      });
 
     /** Try dispatching a text command. Returns true if handled.
      *  Strips platform mention artifacts (e.g. Slack's `<@U123>`) before
@@ -421,6 +440,18 @@ export class BotMessageRouter {
 
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
       if (await tryDispatch(thread, message.text)) return;
+
+      if (!passesDmPolicy(thread, message)) {
+        log(
+          'onNewMention: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
+          agentId,
+          platform,
+          thread.id,
+          message.author.userName,
+          dmSettings.policy,
+        );
+        return;
+      }
 
       log(
         'onNewMention raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -497,6 +528,18 @@ export class BotMessageRouter {
         return;
       }
 
+      if (!passesDmPolicy(thread, message)) {
+        log(
+          'onSubscribedMessage: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
+          agentId,
+          platform,
+          thread.id,
+          message.author.userName,
+          dmSettings.policy,
+        );
+        return;
+      }
+
       log(
         'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
         agentId,
@@ -550,14 +593,34 @@ export class BotMessageRouter {
     // Register slash command handlers (native + text-based)
     this.registerCommands(bot, commands, client);
 
-    // Register onNewMessage handler based on platform config
-    const dmEnabled = info.settings?.dm?.enabled ?? false;
-    if (dmEnabled) {
+    // DM catch-all: only registered when DM handling is enabled. For mixed
+    // platforms (e.g. Slack/Discord with both DMs and group channels), the
+    // handler itself restricts routing to DM threads that satisfy the policy —
+    // otherwise the `/./` regex would match every group message and hijack
+    // non-mention traffic. Group @-mentions keep going through `onNewMention`.
+    if (dmSettings.policy !== 'disabled') {
       bot.onNewMessage(/./, async (thread, message, context?: MessageContext) => {
         if (message.author.isBot === true) return;
 
         // Skip text-based slash commands — already handled by registerCommands
         if (BotMessageRouter.dispatchTextCommand(message.text, commands)) return;
+
+        // The catch-all exists solely to handle DMs on mention-less platforms
+        // (Telegram, WeChat, …) and on mixed platforms where the DM flow should
+        // not require an @-mention. Group / channel traffic is already handled
+        // by onNewMention + onSubscribedMessage; if we let it through here we
+        // would hijack every non-mention message in shared threads.
+        if (thread.isDM !== true) return;
+
+        if (!passesDmPolicy(thread, message)) {
+          log(
+            'onNewMessage (%s catch-all): DM blocked by allowFrom list, thread=%s, author=%s',
+            platform,
+            thread.id,
+            message.author.userName,
+          );
+          return;
+        }
 
         log(
           'onNewMessage raw (%s catch-all): agent=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',

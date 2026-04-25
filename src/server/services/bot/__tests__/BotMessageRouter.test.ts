@@ -130,11 +130,44 @@ const mockGetPlatform = vi.hoisted(() =>
 
 vi.mock('../platforms', () => ({
   buildRuntimeKey: (platform: string, appId: string) => `${platform}:${appId}`,
+  extractDmSettings: (settings: Record<string, unknown> | null | undefined) => {
+    const dm = (settings?.dm ?? {}) as Record<string, unknown>;
+    const raw = dm.allowFrom;
+    const allowFrom =
+      typeof raw === 'string'
+        ? raw
+            .split(/[\s,]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : Array.isArray(raw)
+          ? raw
+              .map(String)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+    const rawPolicy = dm.policy as string | undefined;
+    const policy =
+      rawPolicy === 'allowlist' || rawPolicy === 'open' || rawPolicy === 'disabled'
+        ? rawPolicy
+        : 'open';
+    return { allowFrom, policy };
+  },
   mergeWithDefaults: mockMergeWithDefaults,
   platformRegistry: {
     getPlatform: mockGetPlatform,
   },
   resolveBotProviderConfig: mockResolveBotProviderConfig,
+  shouldHandleDm: (params: {
+    authorUserId: string | undefined;
+    dmSettings: { allowFrom: string[]; policy: 'allowlist' | 'disabled' | 'open' };
+    isDM: boolean;
+  }) => {
+    if (!params.isDM) return true;
+    if (params.dmSettings.policy === 'disabled') return false;
+    if (params.dmSettings.policy === 'open') return true;
+    if (!params.authorUserId) return false;
+    return params.dmSettings.allowFrom.includes(params.authorUserId);
+  },
 }));
 
 // ==================== Helpers ====================
@@ -270,11 +303,11 @@ describe('BotMessageRouter', () => {
       expect(mockOnSubscribedMessage).toHaveBeenCalled();
     });
 
-    it('should register onNewMessage when dm.enabled is true', async () => {
+    it('should register onNewMessage when DM policy is not disabled', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'tg-123',
-          settings: { dm: { enabled: true } },
+          settings: { dm: { policy: 'open' } },
         }),
       ]);
 
@@ -288,8 +321,13 @@ describe('BotMessageRouter', () => {
       expect(mockOnNewMessage).toHaveBeenCalledTimes(2);
     });
 
-    it('should NOT register DM onNewMessage when dm is not enabled', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-123' })]);
+    it('should NOT register DM onNewMessage when DM policy is disabled', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({
+          applicationId: 'app-123',
+          settings: { dm: { policy: 'disabled' } },
+        }),
+      ]);
 
       const router = new BotMessageRouter();
       const handler = router.getWebhookHandler('telegram', 'app-123');
@@ -308,8 +346,13 @@ describe('BotMessageRouter', () => {
      * `onSubscribedMessage` handler that was registered with the Chat SDK
      * so tests can invoke it directly with synthetic thread/message objects.
      */
-    async function loadSubscribedHandler() {
-      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-1' })]);
+    async function loadSubscribedHandler(settings?: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({
+          applicationId: 'app-1',
+          settings: settings ?? { dm: { policy: 'open' } },
+        }),
+      ]);
       const router = new BotMessageRouter();
       const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
@@ -330,12 +373,15 @@ describe('BotMessageRouter', () => {
       };
     }
 
-    function makeMessage(overrides: Partial<{ isMention: boolean; text: string }> = {}) {
+    function makeMessage(
+      overrides: Partial<{ isMention: boolean; text: string; userId: string }> = {},
+    ) {
+      const { userId = 'alice-id', ...rest } = overrides;
       return {
-        author: { isBot: false, userName: 'alice' },
+        author: { isBot: false, userId, userName: 'alice' },
         isMention: false,
         text: 'hello there',
-        ...overrides,
+        ...rest,
       };
     }
 
@@ -387,7 +433,7 @@ describe('BotMessageRouter', () => {
       const handler = await loadSubscribedHandler();
       const thread = makeThread({ isDM: false });
       const message = {
-        author: { isBot: true, userName: 'other-bot' },
+        author: { isBot: true, userId: 'other-bot-id', userName: 'other-bot' },
         isMention: true,
         text: '@bot hi',
       };
@@ -395,6 +441,216 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should block DM follow-ups when DM is disabled', async () => {
+      const handler = await loadSubscribedHandler({ dm: { policy: 'disabled' } });
+      const thread = makeThread({ isDM: true });
+      const message = makeMessage({ isMention: false, text: 'hi' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should block DM follow-ups for users outside the allowlist', async () => {
+      const handler = await loadSubscribedHandler({
+        dm: { allowFrom: 'bob-id, carol-id', policy: 'allowlist' },
+      });
+      const thread = makeThread({ isDM: true });
+      const message = makeMessage({ isMention: false, text: 'hi', userId: 'alice-id' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should pass DM follow-ups for users on the allowlist', async () => {
+      const handler = await loadSubscribedHandler({
+        dm: { allowFrom: 'alice-id, bob-id', policy: 'allowlist' },
+      });
+      const thread = makeThread({ isDM: true });
+      const message = makeMessage({ isMention: false, text: 'hi', userId: 'alice-id' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not affect group @-mentions when DM is disabled', async () => {
+      const handler = await loadSubscribedHandler({ dm: { policy: 'disabled' } });
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: true, text: '@bot hi' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('onNewMention DM policy', () => {
+    async function loadMentionHandler(settings?: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({
+          applicationId: 'app-1',
+          settings: settings ?? { dm: { policy: 'open' } },
+        }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const lastCall = mockOnNewMention.mock.calls.at(-1);
+      if (!lastCall) throw new Error('onNewMention was not registered');
+      return lastCall[0] as (thread: any, message: any, ctx?: any) => Promise<void>;
+    }
+
+    it('should allow group @-mentions regardless of DM policy', async () => {
+      const handler = await loadMentionHandler({ dm: { policy: 'disabled' } });
+      const thread = {
+        id: 'telegram:group-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('should block @-mentions inside DMs when DM is disabled', async () => {
+      const handler = await loadMentionHandler({ dm: { policy: 'disabled' } });
+      const thread = {
+        id: 'discord:@me:channel-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
+    it('should block DM @-mentions from users outside the allowlist', async () => {
+      const handler = await loadMentionHandler({
+        dm: { allowFrom: 'bob-id', policy: 'allowlist' },
+      });
+      const thread = {
+        id: 'discord:@me:channel-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onNewMessage DM catch-all', () => {
+    async function loadDmCatchAllHandler(settings?: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({
+          applicationId: 'app-1',
+          settings: settings ?? { dm: { policy: 'open' } },
+        }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      // The catch-all is the onNewMessage registration with the /./ pattern.
+      // The first onNewMessage registration is for text-based slash commands
+      // with a specific command regex.
+      const catchAllCall = mockOnNewMessage.mock.calls.find((call) => {
+        const pattern = call[0];
+        return pattern instanceof RegExp && pattern.source === '.';
+      });
+      if (!catchAllCall) return null;
+      return catchAllCall[1] as (thread: any, message: any, ctx?: any) => Promise<void>;
+    }
+
+    it('should not register the DM catch-all when DM is disabled', async () => {
+      const handler = await loadDmCatchAllHandler({ dm: { policy: 'disabled' } });
+      expect(handler).toBeNull();
+    });
+
+    it('should register the DM catch-all when DM is enabled', async () => {
+      const handler = await loadDmCatchAllHandler({ dm: { policy: 'open' } });
+      expect(handler).not.toBeNull();
+    });
+
+    it('should ignore non-DM threads in the catch-all', async () => {
+      const handler = await loadDmCatchAllHandler();
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:group-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'hello from a group',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
+    it('should handle DM messages through the catch-all', async () => {
+      const handler = await loadDmCatchAllHandler();
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'hi in a DM',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('should block DM messages blocked by the allowlist', async () => {
+      const handler = await loadDmCatchAllHandler({
+        dm: { allowFrom: 'bob-id', policy: 'allowlist' },
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        text: 'hi in a DM',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
     });
   });
 });

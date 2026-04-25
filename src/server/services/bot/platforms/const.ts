@@ -22,6 +22,115 @@ export const userIdField: FieldSchema = {
   type: 'string',
 };
 
+// ---------- DM (Direct Message) strategy ----------
+
+export type DmPolicy = 'open' | 'allowlist' | 'disabled';
+
+export interface DmSettings {
+  allowFrom: string[];
+  policy: DmPolicy;
+}
+
+/**
+ * Build a platform-specific DM settings group. A single `policy` enum decides
+ * everything: `disabled` ignores DMs entirely, `open` accepts any sender, and
+ * `allowlist` reveals an `allowFrom` input that whitelists specific user IDs.
+ * Discord defaults to `disabled` (opt-in); Slack/Telegram/Feishu/QQ default
+ * to `open` (opt-out).
+ */
+export function makeDmField(defaults: { policy: DmPolicy }): FieldSchema {
+  return {
+    key: 'dm',
+    label: 'channel.dm',
+    properties: [
+      {
+        key: 'policy',
+        default: defaults.policy,
+        description: 'channel.dmPolicyHint',
+        enum: ['open', 'allowlist', 'disabled'],
+        enumLabels: [
+          'channel.dmPolicyOpen',
+          'channel.dmPolicyAllowlist',
+          'channel.dmPolicyDisabled',
+        ],
+        label: 'channel.dmPolicy',
+        type: 'string',
+      },
+      {
+        key: 'allowFrom',
+        default: '',
+        description: 'channel.dmAllowFromHint',
+        label: 'channel.dmAllowFrom',
+        placeholder: 'user_id_1, user_id_2',
+        type: 'string',
+        visibleWhen: { field: 'policy', value: 'allowlist' },
+      },
+    ],
+    type: 'object',
+  };
+}
+
+const DM_POLICIES: ReadonlySet<DmPolicy> = new Set(['open', 'allowlist', 'disabled']);
+
+/**
+ * Parse `settings.dm` into the runtime DmSettings shape. Callers always pass
+ * settings that have been through `mergeWithDefaults`, so `dm.policy` is
+ * present in production. The `'open'` fallback only kicks in if a value
+ * outside the enum somehow makes it in.
+ *
+ * `allowFrom` is stored as a comma / newline / whitespace-separated string
+ * in the UI; we split it here so the hot path in the router is a set lookup.
+ */
+export function extractDmSettings(
+  settings: Record<string, unknown> | null | undefined,
+): DmSettings {
+  const dm = (settings?.dm ?? {}) as Record<string, unknown>;
+  const rawPolicy = dm.policy as string | undefined;
+  const policy: DmPolicy = DM_POLICIES.has(rawPolicy as DmPolicy)
+    ? (rawPolicy as DmPolicy)
+    : 'open';
+
+  const rawAllowFrom = dm.allowFrom;
+  const allowFrom: string[] =
+    typeof rawAllowFrom === 'string'
+      ? rawAllowFrom
+          .split(/[\s,]+/)
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : Array.isArray(rawAllowFrom)
+        ? rawAllowFrom
+            .map(String)
+            .map((id) => id.trim())
+            .filter(Boolean)
+        : [];
+
+  return { allowFrom, policy };
+}
+
+/**
+ * Gate inbound DM handling against the user-configured policy.
+ *
+ * - Non-DM threads short-circuit to `true`: DM policy never blocks @mentions
+ *   in public channels / groups — those are governed by the mention logic.
+ * - `policy='disabled'` → block all DMs.
+ * - `policy='open'` → allow any sender.
+ * - `policy='allowlist'` → allow only senders whose platform user ID is in
+ *   the configured list. A missing `authorUserId` fails closed.
+ */
+export function shouldHandleDm(params: {
+  authorUserId: string | undefined;
+  dmSettings: DmSettings;
+  isDM: boolean;
+}): boolean {
+  const { authorUserId, dmSettings, isDM } = params;
+  if (!isDM) return true;
+  if (dmSettings.policy === 'disabled') return false;
+  if (dmSettings.policy === 'open') return true;
+  // allowlist
+  if (!authorUserId) return false;
+  return dmSettings.allowFrom.includes(authorUserId);
+}
+
 // ---------- Step-aware reactions ----------
 
 /**

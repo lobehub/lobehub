@@ -129,13 +129,14 @@ export default {
   'channel.debounceMsHint':
     'How long to wait for additional messages before dispatching to the agent (ms)',
   'channel.dm': 'Direct Messages',
-  'channel.dmEnabled': 'Enable DMs',
-  'channel.dmEnabledHint': 'Allow the bot to receive and respond to direct messages',
   'channel.dmPolicy': 'DM Policy',
   'channel.dmPolicyHint': 'Control who can send direct messages to the bot',
   'channel.dmPolicyAllowlist': 'Allowlist',
   'channel.dmPolicyDisabled': 'Disabled',
   'channel.dmPolicyOpen': 'Open',
+  'channel.dmAllowFrom': 'Allowed User IDs',
+  'channel.dmAllowFromHint':
+    'Comma- or whitespace-separated platform user IDs permitted to DM the bot. Only used when DM Policy is Allowlist.',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',

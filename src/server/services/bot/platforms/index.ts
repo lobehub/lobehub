@@ -11,9 +11,14 @@ import { wechat } from './wechat/definition';
 
 export {
   displayToolCallsField,
+  type DmPolicy,
+  type DmSettings,
+  extractDmSettings,
   getStepReactionEmoji,
+  makeDmField,
   RECEIVED_REACTION_EMOJI,
   serverIdField,
+  shouldHandleDm,
   THINKING_REACTION_EMOJI,
   userIdField,
   WORKING_REACTION_EMOJI,
