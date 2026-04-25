@@ -639,18 +639,25 @@ export class AgentBridgeService {
     },
   ): Promise<{ reply: string; topicId: string }> {
     // Resolve bot platform context from platform registry
-    let botPlatformContext:
+    const platformDef = opts.botContext?.platform
+      ? platformRegistry.getPlatform(opts.botContext.platform)
+      : undefined;
+    const botPlatformContext:
       | { platformName: string; supportsMarkdown: boolean; warnings?: string[] }
-      | undefined;
-    if (opts.botContext?.platform) {
-      const platformDef = platformRegistry.getPlatform(opts.botContext.platform);
-      if (platformDef) {
-        botPlatformContext = {
+      | undefined = platformDef
+      ? {
           platformName: platformDef.name,
           supportsMarkdown: platformDef.supportsMarkdown !== false,
-        };
-      }
-    }
+        }
+      : undefined;
+    // Whether we can edit a previously-posted message in place. When false
+    // (QQ/WeChat today), the chat-adapter falls editMessage back to postMessage,
+    // so each step/completion edit surfaces as a NEW message — leaving the
+    // placeholder stranded and the final reply duplicated. We still post an ack
+    // so the user gets immediate feedback, but skip tracking it as
+    // `progressMessage` so downstream hooks post the final reply fresh instead
+    // of editing the placeholder.
+    const supportsMessageEdit = platformDef?.supportsMessageEdit !== false;
 
     const {
       agentId,
@@ -710,6 +717,18 @@ export class AgentBridgeService {
           log('executeWithWebhooks: gateway provider lookup failed: %O', err);
         }
       }
+    } else if (!supportsMessageEdit) {
+      // Edit-incapable platform (QQ today): the user still wants immediate
+      // feedback that we received their message, but every "edit" the
+      // adapter performs surfaces as a NEW message. So fire-and-forget the
+      // ack here without tracking it as `progressMessage` — afterStep/onComplete
+      // will see `progressMessage === undefined` and correctly post the final
+      // reply as its own message instead of editing.
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+      await safeSideEffect(
+        () => thread.post(renderStart(userMessage.text, { lng: replyLocale, timezone })),
+        'post ack (no-edit platform)',
+      );
     } else {
       await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
       try {
