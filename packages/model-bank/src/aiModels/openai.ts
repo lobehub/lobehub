@@ -28,6 +28,104 @@ export const openaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_050_000,
+    description: 'GPT-5.5 is our newest frontier model for the most complex professional work.',
+    displayName: 'GPT-5.5',
+    enabled: true,
+    id: 'gpt-5.5',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.272]': 5,
+              '[0.272, infinity]': 10,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.272]': 0.5,
+              '[0.272, infinity]': 1,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.272]': 30,
+              '[0.272, infinity]': 45,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description:
+      'GPT-5.5 pro uses more compute to think harder and provide consistently better answers.',
+    displayName: 'GPT-5.5 Pro',
+    id: 'gpt-5.5-pro',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          rate: 30,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          rate: 180,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['gpt5_2ProReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
     description:
       'GPT-5.5 is the frontier model for the most complex professional work, coding, and agentic tasks.',
     displayName: 'GPT-5.5',
@@ -232,7 +330,6 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       "GPT-5.4 nano is OpenAI's cheapest GPT-5.4-class model for simple high-volume tasks.",
     displayName: 'GPT-5.4 nano',
-    enabled: true,
     id: 'gpt-5.4-nano',
     maxOutput: 128_000,
     pricing: {
