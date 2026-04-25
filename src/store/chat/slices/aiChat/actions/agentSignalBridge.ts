@@ -3,6 +3,8 @@ import type {
   AgentSignalSourceType,
 } from '@/server/services/agentSignal/sourceTypes';
 import { agentSignalService } from '@/services/agentSignal';
+import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
+import { getUserStoreState } from '@/store/user/store';
 
 type ClientAgentSignalSourceType = Extract<AgentSignalSourceType, `client.${string}`>;
 
@@ -19,6 +21,30 @@ export interface ClientAgentSignalSourceEvent<TSourceType extends ClientAgentSig
 
 const createSourceId = (sourceType: string, timestamp: number) => {
   return `${sourceType}:${timestamp}:${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const shouldEmitClientAgentSignalSourceEvent = () => {
+  const serverConfigStore =
+    typeof window === 'undefined' ? undefined : window.global_serverConfigStore;
+  const serverConfigState = serverConfigStore?.getState();
+
+  if (
+    serverConfigState?.serverConfigInit &&
+    serverConfigState.featureFlags.enableAgentSelfIteration !== true
+  ) {
+    return false;
+  }
+
+  const userState = getUserStoreState();
+
+  if (
+    preferenceSelectors.isPreferenceInit(userState) &&
+    labPreferSelectors.enableAgentSelfIteration(userState) !== true
+  ) {
+    return false;
+  }
+
+  return true;
 };
 
 /**
@@ -39,6 +65,8 @@ export const emitClientAgentSignalSourceEvent = async <
 >(
   input: ClientAgentSignalSourceEvent<TSourceType>,
 ) => {
+  if (!shouldEmitClientAgentSignalSourceEvent()) return undefined;
+
   const timestamp = input.timestamp ?? Date.now();
 
   try {
