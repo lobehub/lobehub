@@ -124,7 +124,7 @@ describe('ModelRuntimeOnClient', () => {
       it('Azure provider: with apiKey and endpoint', async () => {
         await mockProviderKeyVaults(ModelProvider.Azure, {
           apiKey: 'user-azure-key',
-          endpoint: 'user-azure-endpoint',
+          endpoint: 'https://user-azure.openai.azure.com',
         });
 
         const runtime = await initializeWithClientStore({
@@ -133,6 +133,7 @@ describe('ModelRuntimeOnClient', () => {
         });
         expect(runtime).toBeInstanceOf(ModelRuntime);
         expect(runtime['_runtime']).toBeInstanceOf(LobeAzureOpenAI);
+        expect(runtime['_runtime'].baseURL).toBe('https://user-azure.openai.azure.com/openai/v1');
       });
 
       it('Google provider: with apiKey', async () => {

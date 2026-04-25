@@ -29,9 +29,10 @@ const specialProviders = [
     id: ModelProvider.Azure,
     payload: {
       apiKey: 'user-azure-key',
-      baseURL: 'user-azure-endpoint',
+      baseURL: 'https://user-azure.openai.azure.com',
       apiVersion: '2024-06-01',
     },
+    runtimeBaseURL: 'https://user-azure.openai.azure.com/openai/v1',
   },
   {
     id: ModelProvider.AzureAI,
@@ -58,7 +59,7 @@ const specialProviders = [
   },
 ];
 
-const testRuntime = (providerId: string, payload?: any) => {
+const testRuntime = (providerId: string, payload?: any, runtimeBaseURL?: string) => {
   describe(`${providerId} provider runtime`, () => {
     it('should initialize correctly', async () => {
       const jwtPayload: ClientSecretPayload = { apiKey: 'user-key', ...payload };
@@ -68,7 +69,7 @@ const testRuntime = (providerId: string, payload?: any) => {
       expect(runtime['_runtime']).toBeInstanceOf(providerRuntimeMap[providerId]);
 
       if (payload?.baseURL) {
-        expect(runtime['_runtime'].baseURL).toBe(payload.baseURL);
+        expect(runtime['_runtime'].baseURL).toBe(runtimeBaseURL ?? payload.baseURL);
       }
     });
   });
@@ -93,7 +94,9 @@ describe('ModelRuntime', () => {
       testRuntime(provider);
     });
 
-    specialProviders.forEach(({ id, payload }) => testRuntime(id, payload));
+    specialProviders.forEach(({ id, payload, runtimeBaseURL }) =>
+      testRuntime(id, payload, runtimeBaseURL),
+    );
   });
 
   describe('ModelRuntime chat method', () => {
