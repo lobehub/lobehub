@@ -17,6 +17,8 @@ const azureSearchContextSize = process.env.OPENAI_SEARCH_CONTEXT_SIZE;
 const isAzureReasoningModel = (model: string) =>
   model.includes('gpt-5') || model.includes('o1') || model.includes('o3');
 
+const supportsImageInputFidelity = (model: string) => /^gpt-image-1(?:$|[-.])/.test(model);
+
 const transformAzureSystemMessages = (messages: ChatStreamPayload['messages'], model: string) =>
   messages.map((message) => ({
     ...message,
@@ -136,10 +138,15 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
         : payload.text;
 
       if (isAzureReasoningModel(model)) {
+        const reasoning = payload.reasoning
+          ? { ...payload.reasoning, summary: 'auto' }
+          : { summary: 'auto' };
+
         return pruneReasoningPayload({
           ...rest,
           messages: updatedMessages,
           model,
+          reasoning,
           stream: payload.stream ?? true,
           text: responseText,
           tools: azureTools as any,
@@ -207,10 +214,14 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
       if (userInput.size === 'auto') delete userInput.size;
 
+      // gpt-image-2 rejects input_fidelity because it is always high fidelity by default.
+      // Keep the parameter limited to the gpt-image-1 family, matching OpenAI-compatible runtime.
+      const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
+
       const azureImageOptions: Record<string, any> = {
         model,
         n: 1,
-        ...(isImageEdit ? { input_fidelity: 'high' } : {}),
+        ...(shouldUseInputFidelity ? { input_fidelity: 'high' } : {}),
         ...userInput,
       };
 

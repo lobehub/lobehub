@@ -99,6 +99,7 @@ describe('LobeAzureOpenAI', () => {
           enabledSearch: true,
           messages: [{ role: 'user', content: "Search for today's OpenAI news." }],
           model: 'gpt-5.4',
+          reasoning_effort: 'medium',
           stream: true,
           top_p: 0.9,
           verbosity: 'high',
@@ -110,6 +111,7 @@ describe('LobeAzureOpenAI', () => {
 
         expect(createCall.input).toBeDefined();
         expect(createCall.model).toBe('gpt-5.4');
+        expect(createCall.reasoning).toEqual({ effort: 'medium', summary: 'auto' });
         expect(createCall.store).toBe(false);
         expect(createCall.stream).toBe(true);
         expect(createCall.text).toEqual({ verbosity: 'high' });
@@ -481,6 +483,27 @@ describe('LobeAzureOpenAI', () => {
       expect(editSpy).toHaveBeenCalledTimes(1);
       const arg = vi.mocked(editSpy).mock.calls[0][0] as any;
       expect(arg).not.toHaveProperty('size');
+      expect(arg).toHaveProperty('input_fidelity', 'high');
+      expect(res).toEqual({ imageUrl: url });
+    });
+
+    it('should not send input_fidelity for gpt-image-2 edit requests', async () => {
+      const url = 'https://example.com/gpt-image-2-edited.png';
+      const editSpy = vi
+        .spyOn(instance['client'].images, 'edit')
+        .mockResolvedValue({ data: [{ url }] } as any);
+
+      const helpers = await import('../../core/contextBuilders/openai');
+      vi.spyOn(helpers, 'convertImageUrlToFile').mockResolvedValue({} as any);
+
+      const res = await instance.createImage({
+        model: 'gpt-image-2',
+        params: { prompt: 'edit', imageUrl: 'https://example.com/in.png' },
+      });
+
+      expect(editSpy).toHaveBeenCalledTimes(1);
+      const arg = vi.mocked(editSpy).mock.calls[0][0] as any;
+      expect(arg).not.toHaveProperty('input_fidelity');
       expect(res).toEqual({ imageUrl: url });
     });
 
