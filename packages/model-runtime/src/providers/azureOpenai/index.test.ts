@@ -133,6 +133,53 @@ describe('LobeAzureOpenAI', () => {
         );
       });
 
+      it('should use deploymentName for Azure Responses API requests while keeping logical model for pricing', async () => {
+        const mockProdStream = new ReadableStream() as any;
+        const mockDebugStream = new ReadableStream() as any;
+        const mockPricing = { units: [] };
+
+        instance = new LobeAzureOpenAI({
+          apiKey: 'test_key',
+          baseURL: 'https://test.openai.azure.com/',
+          id: 'lobehub',
+        });
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
+          new ReadableStream() as any,
+        );
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
+          tee: () => [mockProdStream, mockDebugStream],
+        } as any);
+        vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
+        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+
+        await instance.chat({
+          deploymentName: 'prod-gpt-54',
+          messages: [{ role: 'user', content: 'Hello' }],
+          model: 'gpt-5.4',
+          stream: true,
+        } as any);
+
+        expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
+
+        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+        expect(createCall.model).toBe('prod-gpt-54');
+        expect(createCall.reasoning).toEqual({ summary: 'auto' });
+        expect(createCall.deploymentName).toBeUndefined();
+
+        expect(streamsModule.OpenAIResponsesStream).toHaveBeenCalledWith(
+          mockProdStream,
+          expect.objectContaining({
+            payload: {
+              model: 'gpt-5.4',
+              pricing: mockPricing,
+              provider: 'lobehub',
+            },
+          }),
+        );
+      });
+
       it('should strip unsupported params for Azure reasoning models and include usage in stream options', async () => {
         const mockProdStream = new ReadableStream() as any;
         const mockDebugStream = new ReadableStream() as any;

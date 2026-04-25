@@ -72,10 +72,16 @@ const maskSensitiveUrl = (url: string) => {
 const BaseAzureOpenAI = createOpenAICompatibleRuntime({
   chatCompletion: {
     handlePayload: (payload) => {
-      const { enabledSearch, model, ...rest } = payload;
+      const { deploymentName, enabledSearch, model, ...rest } = payload;
+      const requestModel = deploymentName ?? model;
 
       if (responsesAPIModels.has(model) || enabledSearch) {
-        return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
+        return {
+          ...rest,
+          apiMode: 'responses',
+          enabledSearch,
+          model: requestModel,
+        } as ChatStreamPayload;
       }
 
       const updatedMessages = transformAzureSystemMessages(payload.messages, model);
@@ -114,7 +120,7 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
         ...otherParams,
         ...supportedSamplingParams,
         messages: updatedMessages as OpenAI.Chat.ChatCompletionMessageParam[],
-        model,
+        model: requestModel,
         reasoning_effort: compatibleReasoningEffort as 'low' | 'medium' | 'high' | undefined,
         stream: model.includes('o1') ? false : (payload.stream ?? true),
       } as any;
@@ -128,7 +134,8 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.Azure,
   responses: {
     handlePayload: (payload) => {
-      const { enabledSearch, model, tools, verbosity, ...rest } = payload;
+      const { deploymentName, enabledSearch, model, tools, verbosity, ...rest } = payload;
+      const requestModel = deploymentName ?? model;
       const updatedMessages = transformAzureSystemMessages(payload.messages, model);
       const azureTools = appendAzureSearchTool(tools, enabledSearch);
       const responseText = verbosity
@@ -145,7 +152,7 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
         return pruneReasoningPayload({
           ...rest,
           messages: updatedMessages,
-          model,
+          model: requestModel,
           reasoning,
           stream: payload.stream ?? true,
           text: responseText,
@@ -156,7 +163,7 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
       return {
         ...rest,
         messages: updatedMessages,
-        model,
+        model: requestModel,
         text: responseText,
         tools: azureTools,
       } as ChatStreamPayload;
@@ -179,7 +186,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
     try {
       return await super.chat(payload, options);
     } catch (error) {
-      throw this.attachDeploymentId(error, payload.model);
+      throw this.attachDeploymentId(error, payload.deploymentName ?? payload.model);
     }
   }
 
