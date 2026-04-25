@@ -16,7 +16,11 @@ describe('getConversationChatInputUiState', () => {
     });
   });
 
-  it('restores the send button once the user starts a follow-up during loading', () => {
+  it('keeps the stop button visible while the user types a follow-up during loading', () => {
+    // Regression: flipping to Send the moment the composer had any text read
+    // as "agent finished" and made queued sends look like fresh sends. Stop
+    // must stay up for the whole loading window — Enter still enqueues, and
+    // the QueueTray exposes Send-now per item.
     expect(
       getConversationChatInputUiState({
         isInputEmpty: false,
@@ -25,7 +29,7 @@ describe('getConversationChatInputUiState', () => {
     ).toEqual({
       placeholderVariant: 'default',
       showSendMenu: false,
-      showStopButton: false,
+      showStopButton: true,
     });
   });
 
