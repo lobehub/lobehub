@@ -5,10 +5,8 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import { UserMemoryModel } from '@/database/models/userMemory';
-import {
-  type AgentSignalExecutionContext,
-  type AgentSignalSourceEnvelope,
-} from '@/server/services/agentSignal';
+import { type AgentSignalSourceEnvelope } from '@/server/services/agentSignal';
+import { projectAgentSignalObservability } from '@/server/services/agentSignal/observability/projector';
 import { createAgentSignalRuntime } from '@/server/services/agentSignal/runtime/AgentSignalRuntime';
 import {
   defineActionHandler,
@@ -19,7 +17,10 @@ import {
 import { emitSourceEvent } from '@/server/services/agentSignal/sources';
 import type { AgentSignalSourceType } from '@/server/services/agentSignal/sourceTypes';
 import type { AgentSignalSourceEventStore } from '@/server/services/agentSignal/store/types';
-import { runAgentSignalWorkflow } from '@/server/workflows/agentSignal/run';
+import {
+  runAgentSignalWorkflow,
+  type RunAgentSignalWorkflowDeps,
+} from '@/server/workflows/agentSignal/run';
 import { uuid } from '@/utils/uuid';
 
 interface WorkflowScenarioCase {
@@ -122,161 +123,167 @@ const createInMemorySourceEventStore = (): AgentSignalSourceEventStore => {
   };
 };
 
-const executeSourceEventWithTestPolicies = async (
-  sourceEvent: AgentSignalSourceEnvelope,
-  context: AgentSignalExecutionContext,
-  store: AgentSignalSourceEventStore,
-) => {
-  const emission = await emitSourceEvent(sourceEvent, { store });
-  if (emission.deduped) return emission;
-
-  const runtime = await createAgentSignalRuntime({
-    policies: [
-      defineAgentSignalHandlers([
-        defineSourceHandler('agent.user.message', {
-          async handle(source) {
-            const intents = Array.isArray(source.payload.intents)
-              ? source.payload.intents.filter(
-                  (intent): intent is string => typeof intent === 'string',
-                )
-              : [];
-            const memoryPayload =
-              source.payload.memoryPayload &&
-              typeof source.payload.memoryPayload === 'object' &&
-              !Array.isArray(source.payload.memoryPayload)
-                ? (source.payload.memoryPayload as Record<string, unknown>)
-                : undefined;
-
-            if (!intents.includes('memory') || !memoryPayload) return;
-
-            return {
-              signals: [
-                createSignal({
-                  payload: { memoryPayload },
-                  signalType: 'signal.memory.request',
-                  source,
-                }),
-              ],
-              status: 'dispatch',
-            } as const;
-          },
-          id: 'test-source-memory-request',
-        }),
-        defineSignalHandler('signal.memory.request', {
-          async handle(signal) {
-            const memoryPayload =
-              signal.payload.memoryPayload &&
-              typeof signal.payload.memoryPayload === 'object' &&
-              !Array.isArray(signal.payload.memoryPayload)
-                ? (signal.payload.memoryPayload as Record<string, unknown>)
-                : undefined;
-
-            if (!memoryPayload) return;
-
-            return {
-              actions: [
-                createAction({
-                  actionType: 'action.memory.persist',
-                  payload: { memoryPayload },
-                  signal,
-                }),
-              ],
-              status: 'dispatch',
-            } as const;
-          },
-          id: 'test-signal-memory-request',
-        }),
-        defineActionHandler('action.memory.persist', {
-          async handle(action) {
-            const memoryPayload =
-              action.payload.memoryPayload &&
-              typeof action.payload.memoryPayload === 'object' &&
-              !Array.isArray(action.payload.memoryPayload)
-                ? (action.payload.memoryPayload as Record<string, unknown>)
-                : undefined;
-            const identity =
-              memoryPayload?.identity &&
-              typeof memoryPayload.identity === 'object' &&
-              !Array.isArray(memoryPayload.identity)
-                ? (memoryPayload.identity as Record<string, unknown>)
-                : undefined;
-            const base =
-              memoryPayload?.base &&
-              typeof memoryPayload.base === 'object' &&
-              !Array.isArray(memoryPayload.base)
-                ? (memoryPayload.base as Record<string, unknown>)
-                : undefined;
-
-            if (identity?.description && identity.type) {
-              await new UserMemoryModel(context.db, context.userId).addIdentityEntry({
-                base: {
-                  details: typeof base?.content === 'string' ? base.content : undefined,
-                  summary:
-                    typeof identity.description === 'string' ? identity.description : undefined,
-                  title:
-                    typeof identity.description === 'string' ? identity.description : undefined,
-                },
-                identity: {
-                  description:
-                    typeof identity.description === 'string' ? identity.description : undefined,
-                  tags: Array.isArray(identity.tags)
-                    ? identity.tags.filter((tag): tag is string => typeof tag === 'string')
-                    : undefined,
-                  type: typeof identity.type === 'string' ? identity.type : undefined,
-                },
-              });
-            }
-
-            return {
-              actionId: action.actionId,
-              attempt: {
-                completedAt: sourceEvent.timestamp + 2,
-                current: 1,
-                startedAt: sourceEvent.timestamp + 1,
-                status: 'succeeded',
-              },
-              detail: 'memory persisted',
-              status: 'applied',
-            } as const;
-          },
-          id: 'test-action-memory-persist',
-        }),
-      ]),
-    ],
-  });
-
-  const runtimeResult = await runtime.emitNormalized(emission.source);
-  const trace =
-    runtimeResult.status === 'completed'
-      ? runtimeResult.trace
-      : {
-          actions: [],
-          results: [],
-          signals: [],
-          source: emission.source,
-        };
-
+const normalizeSourceEvent = (sourceEvent: AgentSignalSourceEnvelope) => {
   return {
-    ...emission,
-    orchestration: {
-      actions: trace.actions,
-      emittedSignals: trace.signals,
-      observability: {
-        actionCounts: {},
-        actionStats: [],
-        resultCounts: {},
-        signalCounts: {},
-        source: {
-          scopeKey: emission.source.scopeKey,
-          sourceId: emission.source.sourceId,
-          sourceType: emission.source.sourceType,
-        },
+    payload: sourceEvent.payload,
+    scopeKey: sourceEvent.scopeKey ?? `test-scope:${sourceEvent.sourceId}`,
+    sourceId: sourceEvent.sourceId,
+    sourceType: sourceEvent.sourceType,
+    timestamp: sourceEvent.timestamp ?? Date.now(),
+  };
+};
+
+const createExecuteSourceEventWithTestPolicies = (
+  store: AgentSignalSourceEventStore,
+): NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> => {
+  return async (sourceEvent, context) => {
+    const normalizedSourceEvent = normalizeSourceEvent(sourceEvent);
+    const emission = await emitSourceEvent(normalizedSourceEvent, { store });
+    if (emission.deduped) return emission;
+
+    const runtime = await createAgentSignalRuntime({
+      policies: [
+        defineAgentSignalHandlers([
+          defineSourceHandler('agent.user.message', {
+            async handle(source) {
+              const intents = Array.isArray(source.payload.intents)
+                ? source.payload.intents.filter(
+                    (intent): intent is string => typeof intent === 'string',
+                  )
+                : [];
+              const memoryPayload =
+                source.payload.memoryPayload &&
+                typeof source.payload.memoryPayload === 'object' &&
+                !Array.isArray(source.payload.memoryPayload)
+                  ? (source.payload.memoryPayload as Record<string, unknown>)
+                  : undefined;
+
+              if (!intents.includes('memory') || !memoryPayload) return;
+
+              return {
+                signals: [
+                  createSignal({
+                    payload: { memoryPayload },
+                    signalType: 'signal.memory.request',
+                    source,
+                  }),
+                ],
+                status: 'dispatch',
+              } as const;
+            },
+            id: 'test-source-memory-request',
+          }),
+          defineSignalHandler('signal.memory.request', {
+            async handle(signal) {
+              const memoryPayload =
+                signal.payload.memoryPayload &&
+                typeof signal.payload.memoryPayload === 'object' &&
+                !Array.isArray(signal.payload.memoryPayload)
+                  ? (signal.payload.memoryPayload as Record<string, unknown>)
+                  : undefined;
+
+              if (!memoryPayload) return;
+
+              return {
+                actions: [
+                  createAction({
+                    actionType: 'action.memory.persist',
+                    payload: { memoryPayload },
+                    signal,
+                  }),
+                ],
+                status: 'dispatch',
+              } as const;
+            },
+            id: 'test-signal-memory-request',
+          }),
+          defineActionHandler('action.memory.persist', {
+            async handle(action) {
+              const memoryPayload =
+                action.payload.memoryPayload &&
+                typeof action.payload.memoryPayload === 'object' &&
+                !Array.isArray(action.payload.memoryPayload)
+                  ? (action.payload.memoryPayload as Record<string, unknown>)
+                  : undefined;
+              const identity =
+                memoryPayload?.identity &&
+                typeof memoryPayload.identity === 'object' &&
+                !Array.isArray(memoryPayload.identity)
+                  ? (memoryPayload.identity as Record<string, unknown>)
+                  : undefined;
+              const base =
+                memoryPayload?.base &&
+                typeof memoryPayload.base === 'object' &&
+                !Array.isArray(memoryPayload.base)
+                  ? (memoryPayload.base as Record<string, unknown>)
+                  : undefined;
+
+              if (identity?.description && identity.type) {
+                await new UserMemoryModel(context.db, context.userId).addIdentityEntry({
+                  base: {
+                    details: typeof base?.content === 'string' ? base.content : undefined,
+                    summary:
+                      typeof identity.description === 'string' ? identity.description : undefined,
+                    title:
+                      typeof identity.description === 'string' ? identity.description : undefined,
+                  },
+                  identity: {
+                    description:
+                      typeof identity.description === 'string' ? identity.description : undefined,
+                    tags: Array.isArray(identity.tags)
+                      ? identity.tags.filter((tag): tag is string => typeof tag === 'string')
+                      : undefined,
+                    type: typeof identity.type === 'string' ? identity.type : undefined,
+                  },
+                });
+              }
+
+              return {
+                actionId: action.actionId,
+                attempt: {
+                  completedAt: normalizedSourceEvent.timestamp + 2,
+                  current: 1,
+                  startedAt: normalizedSourceEvent.timestamp + 1,
+                  status: 'succeeded',
+                },
+                detail: 'memory persisted',
+                status: 'applied',
+              } as const;
+            },
+            id: 'test-action-memory-persist',
+          }),
+        ]),
+      ],
+    });
+
+    const runtimeResult = await runtime.emitNormalized(emission.source);
+    const trace =
+      runtimeResult.status === 'completed'
+        ? runtimeResult.trace
+        : {
+            actions: [],
+            results: [],
+            signals: [],
+            source: emission.source,
+          };
+
+    return {
+      ...emission,
+      orchestration: {
+        actions: trace.actions,
+        emittedSignals: trace.signals,
+        observability: projectAgentSignalObservability({
+          actions: trace.actions,
+          results: trace.results,
+          signals: trace.signals,
+          source: trace.source,
+        }),
+        plans: [],
+        results: trace.results,
+        runtimeResult,
       },
-      plans: [],
-      results: trace.results,
-      runtimeResult,
-    },
-  } as const;
+    } as const;
+  };
 };
 
 const assertScenarioSideEffects = async (input: {
@@ -350,6 +357,7 @@ describe('runAgentSignalWorkflow integration', () => {
       const userId = `eval_${uuid()}`;
       const topicId = `topic_${uuid()}`;
       const sourceEventStore = createInMemorySourceEventStore();
+      const executeSourceEvent = createExecuteSourceEventWithTestPolicies(sourceEventStore);
 
       await db.insert(users).values({ id: userId });
 
@@ -370,10 +378,7 @@ describe('runAgentSignalWorkflow integration', () => {
           createScenarioPayload(testCase, { agentId: agent.id, topicId, userId }),
         ),
         {
-          executeSourceEvent: (
-            sourceEvent: AgentSignalSourceEnvelope,
-            context: AgentSignalExecutionContext,
-          ) => executeSourceEventWithTestPolicies(sourceEvent, context, sourceEventStore),
+          executeSourceEvent,
           getDb: async () => db,
         },
       );
