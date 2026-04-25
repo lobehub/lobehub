@@ -174,19 +174,32 @@ By connecting a Feishu channel to your LobeHub agent, team members can interact 
 
 Back in LobeHub's channel settings, click **Test Connection** to verify the credentials. Then find your bot in Feishu by searching its name and send it a message to confirm it responds.
 
+## Direct Message Policy
+
+Feishu apps are scoped to a tenant, so LobeHub **opens** DM handling for Feishu by default — anyone in the tenant who can see the bot can DM it. Adjust **DM Policy** in **Advanced Settings**:
+
+- **Open (default)** — Any tenant member can DM the bot.
+- **Allowlist** — Only the Feishu user IDs you list in **Allowed User IDs** can DM the bot. Use the `open_id` from the event payload, or the **User ID** displayed in the Feishu Developer Portal.
+- **Disabled** — The bot ignores all DMs and only responds to chat-group `@mentions`.
+
+DM Policy only governs DMs. Group `@mentions` are unaffected. See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field                      | Required | Description                                                     |
-| -------------------------- | -------- | --------------------------------------------------------------- |
-| **App ID**                 | Yes      | Your Feishu app's App ID (`cli_xxx`)                            |
-| **App Secret**             | Yes      | Your Feishu app's App Secret                                    |
-| **Verification Token**     | No       | Verifies webhook event source (recommended)                     |
-| **Encrypt Key**            | No       | Decrypts encrypted event payloads                               |
-| **Event Subscription URL** | —        | Auto-generated after saving; paste into Feishu Developer Portal |
+| Field                      | Required | Description                                                                                   |
+| -------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| **App ID**                 | Yes      | Your Feishu app's App ID (`cli_xxx`)                                                          |
+| **App Secret**             | Yes      | Your Feishu app's App Secret                                                                  |
+| **Verification Token**     | No       | Verifies webhook event source (recommended)                                                   |
+| **Encrypt Key**            | No       | Decrypts encrypted event payloads                                                             |
+| **Event Subscription URL** | —        | Auto-generated after saving; paste into Feishu Developer Portal                               |
+| **DM Policy**              | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                   |
+| **Allowed User IDs**       | No       | Comma- or whitespace-separated Feishu `open_id` values. Only used when DM Policy is Allowlist |
 
 ## Troubleshooting
 
 - **Event Subscription URL verification failed:** Ensure you saved the configuration in LobeHub first, and the URL was copied correctly.
 - **Bot not responding:** Verify the app is published and approved, the bot capability is enabled, and the `im.message.receive_v1` event is subscribed.
+- **Bot ignores DMs:** Open **Advanced Settings** in LobeHub and check **DM Policy**. If it is `Disabled`, switch to `Open` or `Allowlist`. If it is `Allowlist`, confirm the sender's `open_id` is listed in **Allowed User IDs**.
 - **Permission errors:** Confirm all required permissions are added and approved in the Developer Portal.
 - **Test Connection failed:** Double-check the App ID and App Secret.

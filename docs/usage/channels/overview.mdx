@@ -21,21 +21,21 @@ tags:
 
 Channels allow you to connect your LobeHub agents to external messaging platforms. Once connected, users can interact with your AI assistant directly in the chat apps they already use — no need to visit LobeHub.
 
-> [!NOTE]
+> \[!NOTE]
 >
 > WeChat currently requires an active subscription. If you are using the community edition without a subscription, the WeChat channel option may not appear in the Channels settings yet.
 
 ## Supported Platforms
 
-| Platform                                   | Description                                                     |
-| ------------------------------------------ | --------------------------------------------------------------- |
-| [Discord](/docs/usage/channels/discord)    | Connect to Discord servers for channel chat and direct messages |
-| [Slack](/docs/usage/channels/slack)        | Connect to Slack for channel and direct message conversations   |
-| [Telegram](/docs/usage/channels/telegram)  | Connect to Telegram for private and group conversations         |
-| [QQ](/docs/usage/channels/qq)              | Connect to QQ for group chats and direct messages               |
+| Platform                                   | Description                                                                                   |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| [Discord](/docs/usage/channels/discord)    | Connect to Discord servers for channel chat and direct messages                               |
+| [Slack](/docs/usage/channels/slack)        | Connect to Slack for channel and direct message conversations                                 |
+| [Telegram](/docs/usage/channels/telegram)  | Connect to Telegram for private and group conversations                                       |
+| [QQ](/docs/usage/channels/qq)              | Connect to QQ for group chats and direct messages                                             |
 | [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for private and group chats (requires an active subscription) |
-| [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)      |
-| [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)  |
+| [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)                                    |
+| [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)                                |
 
 ## How It Works
 
@@ -70,3 +70,34 @@ Text messages are supported across all platforms. Some features vary by platform
 | Group chats            | Yes     | Yes   | Yes      | Yes | Yes    | Yes     | Yes     |
 | Reactions              | Yes     | Yes   | Yes      | No  | No     | Partial | Partial |
 | Image/file attachments | Yes     | Yes   | Yes      | Yes | No     | Yes     | Yes     |
+
+## Direct Message Policy
+
+For platforms that support both group and 1:1 conversations (Discord, Slack, Telegram, QQ, Feishu, Lark), each channel has a **DM Policy** under **Advanced Settings** that controls who is allowed to start a private conversation with the bot. This setting only affects DMs — group `@mentions` are always governed by the bot being mentioned and are not blocked by DM Policy.
+
+| Policy        | Behavior                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Open**      | Any user on the platform can DM the bot. Best for public-facing assistants.                                   |
+| **Allowlist** | Only users whose platform user ID is listed in **Allowed User IDs** can DM the bot. Everyone else is ignored. |
+| **Disabled**  | The bot ignores all DMs entirely. Use this when the bot should only reply in shared channels via `@mention`.  |
+
+When **Allowlist** is selected, an additional **Allowed User IDs** field appears. Enter platform user IDs separated by commas, whitespace, or newlines — for example `123456789, 987654321` on Telegram or `U01ABCXYZ, U02DEFUVW` on Slack.
+
+### Per-platform defaults
+
+| Platform      | Default policy | Why                                                                                               |
+| ------------- | -------------- | ------------------------------------------------------------------------------------------------- |
+| Discord       | **Disabled**   | Discord bots can be DM'd by anyone in any shared server, so the bot is opt-in for DMs.            |
+| Slack         | **Open**       | Slack DMs are scoped to a workspace, so it is safe to default-allow team members.                 |
+| Telegram      | **Open**       | Telegram bots are typically used 1:1 — defaulting to Open keeps the bot reachable out of the box. |
+| QQ            | **Open**       | Same rationale as Telegram.                                                                       |
+| Feishu / Lark | **Open**       | Feishu/Lark apps are scoped to a tenant, so DMs are default-allowed.                              |
+| WeChat        | n/a            | The WeChat integration is DM-only by design and does not expose a DM Policy.                      |
+
+### Finding a user's platform ID
+
+- **Discord** — Enable Developer Mode in user settings, right-click the user, and choose **Copy User ID**.
+- **Slack** — Open the user's profile → click the `⋮` menu → **Copy member ID** (starts with `U`).
+- **Telegram** — Ask the user to message [@userinfobot](https://t.me/userinfobot), or read `from.id` from the bot's incoming update.
+- **QQ** — Use the `tiny_id` from the OpenAPI event payload (the public-facing QQ number is not guaranteed to be the platform ID).
+- **Feishu / Lark** — Use the `open_id` from the event payload, or the **User ID** displayed in the developer portal.

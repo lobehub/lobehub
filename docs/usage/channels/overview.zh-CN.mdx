@@ -20,21 +20,21 @@ tags:
 
 渠道功能允许您将 LobeHub 代理连接到外部消息平台。一旦连接，用户可以直接在他们已经使用的聊天应用中与您的 AI 助手互动，无需访问 LobeHub。
 
-> [!NOTE]
+> \[!NOTE]
 >
 > 微信渠道目前需要有效订阅。如果您使用的是没有订阅的社区版，**渠道**设置中可能暂时不会显示微信选项。
 
 ## 支持的平台
 
-| 平台                                        | 描述                         |
-| ----------------------------------------- | -------------------------- |
-| [Discord](/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信  |
-| [Slack](/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话        |
-| [Telegram](/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话     |
-| [QQ](/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信             |
+| 平台                                        | 描述                                 |
+| ----------------------------------------- | ---------------------------------- |
+| [Discord](/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信          |
+| [Slack](/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话                |
+| [Telegram](/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话             |
+| [QQ](/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信                     |
 | [微信](/docs/usage/channels/wechat)         | 通过 iLink Bot 连接到微信，用于私聊和群聊（需要有效订阅） |
-| [飞书](/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）          |
-| [Lark](/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）       |
+| [飞书](/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）                  |
+| [Lark](/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）               |
 
 ## 工作原理
 
@@ -69,3 +69,34 @@ tags:
 | 群组聊天      | 是       | 是     | 是        | 是  | 是  | 是    | 是    |
 | 表情反应      | 是       | 是     | 是        | 否  | 否  | 部分支持 | 部分支持 |
 | 图片 / 文件附件 | 是       | 是     | 是        | 是  | 否  | 是    | 是    |
+
+## 私信策略
+
+对于同时支持群聊和 1:1 私聊的平台（Discord、Slack、Telegram、QQ、飞书、Lark），每个渠道在 **高级设置** 里都有一个 **私信策略 (DM Policy)**，用来控制谁可以与机器人发起私聊。该设置只影响私信 — 群聊里的 `@提及` 始终由 "是否被 @" 决定，不受私信策略限制。
+
+| 策略                  | 行为                                      |
+| ------------------- | --------------------------------------- |
+| **开放 (Open)**       | 平台上的任何用户都可以私信机器人，适合面向所有人开放的助手。          |
+| **白名单 (Allowlist)** | 只有在 **允许的用户 ID** 列表里的用户可以私信机器人，其他人会被忽略。 |
+| **禁用 (Disabled)**   | 机器人会忽略所有私信。适合那种 " 只在群里被 `@` 时才回复 " 的场景。 |
+
+选择 **白名单** 时会出现 **允许的用户 ID** 字段，使用逗号、空格或换行分隔平台用户 ID — 比如 Telegram 的 `123456789, 987654321`，或 Slack 的 `U01ABCXYZ, U02DEFUVW`。
+
+### 各平台默认值
+
+| 平台        | 默认策略              | 原因                                       |
+| --------- | ----------------- | ---------------------------------------- |
+| Discord   | **禁用 (Disabled)** | Discord 机器人可能被任意共享服务器里的用户私信，因此默认 opt-in。 |
+| Slack     | **开放 (Open)**     | Slack 私信限定在 workspace 内，默认放行同事是安全的。      |
+| Telegram  | **开放 (Open)**     | Telegram 机器人天然以 1:1 私聊为主，默认开放保证开箱即用。     |
+| QQ        | **开放 (Open)**     | 同 Telegram 的考虑。                          |
+| 飞书 / Lark | **开放 (Open)**     | 飞书 / Lark 应用绑定在租户内，私信默认放行。               |
+| 微信        | 不适用               | 微信集成本身就是 DM 模式，没有 DM 策略选项。               |
+
+### 如何获取用户的平台 ID
+
+- **Discord** — 在用户设置里开启开发者模式，右键用户头像选 **复制用户 ID**。
+- **Slack** — 打开用户资料 → 点击 `⋮` 菜单 → **复制成员 ID**（以 `U` 开头）。
+- **Telegram** — 让用户私信 [@userinfobot](https://t.me/userinfobot)，或者从机器人收到的 update 里读 `from.id`。
+- **QQ** — 使用 OpenAPI 事件 payload 里的 `tiny_id`（用户对外可见的 QQ 号不一定就是平台 ID）。
+- **飞书 / Lark** — 使用事件 payload 里的 `open_id`，或开发者后台显示的 **User ID**。

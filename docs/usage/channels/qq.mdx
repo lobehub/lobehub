@@ -140,13 +140,25 @@ To use the bot in QQ groups:
 2. @mention the bot in a message to trigger a response
 3. The bot will reply in the group conversation
 
+## Direct Message Policy
+
+LobeHub **opens** DM handling for QQ by default. Adjust **DM Policy** in **Advanced Settings** if you want to restrict 1:1 access:
+
+- **Open (default)** — Any QQ user who shares context with the bot can DM it.
+- **Allowlist** — Only the QQ users you list in **Allowed User IDs** can DM the bot. Use the platform `tiny_id` from the OpenAPI event payload — the visible QQ number is not always the same as the platform ID.
+- **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
+
+DM Policy only governs DMs. Group `@mentions` are unaffected. See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field               | Required | Description                                                                             |
-| ------------------- | -------- | --------------------------------------------------------------------------------------- |
-| **Application ID**  | Yes      | Your bot's App ID from QQ Open Platform                                                 |
-| **App Secret**      | Yes      | Your bot's App Secret from QQ Open Platform                                             |
-| **Connection Mode** | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration |
+| Field                | Required | Description                                                                               |
+| -------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| **Application ID**   | Yes      | Your bot's App ID from QQ Open Platform                                                   |
+| **App Secret**       | Yes      | Your bot's App Secret from QQ Open Platform                                               |
+| **Connection Mode**  | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration   |
+| **DM Policy**        | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot               |
+| **Allowed User IDs** | No       | Comma- or whitespace-separated QQ `tiny_id` values. Only used when DM Policy is Allowlist |
 
 ## Limitations
 
