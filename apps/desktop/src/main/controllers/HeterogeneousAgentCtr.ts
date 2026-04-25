@@ -453,6 +453,15 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }): Promise<CliTraceSession | undefined> {
     if (!this.shouldTraceCliOutput) return;
 
+    // Don't materialize the cwd via mkdir — if the caller passed a stale or
+    // typo'd path, we want spawn() to fail loudly instead of silently running
+    // the agent in an empty auto-created directory.
+    try {
+      await access(cwd);
+    } catch {
+      return;
+    }
+
     const createdAt = new Date();
     const rootDir = path.join(cwd, CLI_TRACE_DIR);
     const agentDir = path.join(rootDir, this.sanitizeTracePathSegment(session.agentType));

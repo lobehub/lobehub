@@ -571,6 +571,21 @@ describe('HeterogeneousAgentCtr', () => {
       }
     });
 
+    it('skips trace creation (and never auto-creates the cwd) when the cwd is missing', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      const missingCwd = path.join(appStoragePath, 'does-not-exist');
+
+      try {
+        await runSendPrompt('trace this run', { cwd: missingCwd });
+
+        await expect(access(missingCwd)).rejects.toThrow();
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
     it('captures the Codex thread id from json output for later resume', async () => {
       const { ctr, sessionId } = await runSendPrompt('hello', {}, [
         `${JSON.stringify({ thread_id: 'thread_codex_123', type: 'thread.started' })}\n`,
