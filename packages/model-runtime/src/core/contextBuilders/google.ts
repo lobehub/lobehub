@@ -124,12 +124,29 @@ export const buildGoogleMessage = async (
     return {
       parts: message.tool_calls.map<Part>((tool) => {
         const parsed = safeParseJSON(tool.function.arguments);
-        // Gemini's functionCall.args requires a plain object, same as
-        // Anthropic's tool_use.input. Models occasionally emit malformed JSON
-        // whose top-level shape ends up as an array / null / primitive — fall
-        // back to {} to keep the request valid.
-        const isPlainObject = !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
-        if (parsed !== undefined && !isPlainObject) {
+        // Gemini's functionCall.args requires a plain object, same constraint
+        // as Anthropic's tool_use.input. See anthropic.ts for the full
+        // recovery rationale.
+        let args: Record<string, unknown> = {};
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          args = parsed as Record<string, unknown>;
+        } else if (
+          Array.isArray(parsed) &&
+          parsed.length > 0 &&
+          parsed[0] &&
+          typeof parsed[0] === 'object' &&
+          !Array.isArray(parsed[0])
+        ) {
+          args = parsed[0] as Record<string, unknown>;
+          console.warn(
+            '[google] functionCall.args recovered from array — parsed arguments was wrapped in []',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              arrayLength: parsed.length,
+              name: tool.function.name,
+            },
+          );
+        } else if (parsed !== undefined) {
           console.warn(
             '[google] functionCall.args fallback to {} — parsed arguments is not a plain object',
             {
@@ -144,10 +161,7 @@ export const buildGoogleMessage = async (
           );
         }
         return {
-          functionCall: {
-            args: isPlainObject ? (parsed as Record<string, unknown>) : {},
-            name: tool.function.name,
-          },
+          functionCall: { args, name: tool.function.name },
           thoughtSignature: tool.thoughtSignature,
         };
       }),

@@ -288,9 +288,9 @@ describe('google contextBuilders', () => {
       });
     });
 
-    it('warns and falls back to empty args when tool_call arguments parse to a JSON array', async () => {
-      // LOBE-8201 — same defense as Anthropic: model emits malformed JSON whose
-      // top-level shape is an array, would otherwise break Gemini schema.
+    it('recovers functionCall.args from element[0] when arguments parse to an array', async () => {
+      // LOBE-8201 — same defense as Anthropic: prefer partial recovery from
+      // element[0] over total loss when malformed JSON parses to an array.
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const message = {
         role: 'assistant',
@@ -311,14 +311,17 @@ describe('google contextBuilders', () => {
       expect(converted).toEqual({
         parts: [
           {
-            functionCall: { args: {}, name: 'writeLocalFile' },
+            functionCall: { args: { content: 'a' }, name: 'writeLocalFile' },
           },
         ],
         role: 'model',
       });
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('functionCall.args fallback to {}'),
-        expect.objectContaining({ name: 'writeLocalFile', parsedType: 'array' }),
+        expect.stringContaining('functionCall.args recovered from array'),
+        expect.objectContaining({
+          arrayLength: 2,
+          name: 'writeLocalFile',
+        }),
       );
       consoleWarnSpy.mockRestore();
     });
