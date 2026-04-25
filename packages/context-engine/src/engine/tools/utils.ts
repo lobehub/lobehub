@@ -17,6 +17,22 @@ export const generateToolName = (
 };
 
 /**
+ * Ensure object-typed tool parameters carry an explicit `required` array.
+ *
+ * Why: JSON Schema permits omitting `required` when nothing is required, but
+ * some OpenAI-compatible upstreams (bailian, glm/zhipu) reject the field when
+ * it arrives as `null` after intermediate proxies normalize the missing key.
+ * Emitting `required: []` keeps the wire format consistent for strict providers.
+ */
+export const normalizeToolParameters = (
+  parameters: Record<string, any> | undefined,
+): Record<string, any> | undefined => {
+  if (!parameters || parameters.type !== 'object') return parameters;
+  if (Array.isArray(parameters.required)) return parameters;
+  return { ...parameters, required: [] };
+};
+
+/**
  * Convert a tool manifest into LLM-compatible UniformTool definitions
  */
 export function generateToolsFromManifest(manifest: LobeToolManifest): UniformTool[] {
@@ -24,7 +40,7 @@ export function generateToolsFromManifest(manifest: LobeToolManifest): UniformTo
     function: {
       description: api.description,
       name: new ToolNameResolver().generate(manifest.identifier, api.name, manifest.type),
-      parameters: api.parameters,
+      parameters: normalizeToolParameters(api.parameters),
     },
     type: 'function' as const,
   }));
