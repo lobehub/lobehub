@@ -3,6 +3,8 @@ import { encode } from 'gpt-tokenizer';
 import type { ExecutionSnapshot, SnapshotSummary, StepSnapshot } from '../types';
 import { reconstructMessages } from '../utils/reconstruct';
 
+export { analyzeAgentSignal, renderAgentSignal } from './agentSignal';
+
 /**
  * Resolve messages for a step, supporting both legacy (full) and incremental (delta) formats.
  */
