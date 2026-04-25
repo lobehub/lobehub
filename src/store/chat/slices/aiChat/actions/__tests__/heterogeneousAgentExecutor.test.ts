@@ -977,6 +977,73 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
     });
 
+    it('should prefer Codex JSONL terminal errors over stderr status session errors', async () => {
+      const codexModelError =
+        "The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.";
+      const rawCodexError = JSON.stringify({
+        error: {
+          message: codexModelError,
+          type: 'invalid_request_error',
+        },
+        status: 400,
+        type: 'error',
+      });
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', codexThreadStarted());
+      ipc.emitRawLine('ipc-sess-1', codexTurnStarted());
+      ipc.emitRawLine('ipc-sess-1', { message: rawCodexError, type: 'error' });
+      ipc.emitRawLine('ipc-sess-1', {
+        error: { message: rawCodexError },
+        type: 'turn.failed',
+      });
+      ipc.emitError('ipc-sess-1', 'Agent exited with code 1');
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise.catch(() => {});
+      await flush();
+
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        {
+          body: expect.objectContaining({
+            agentType: 'codex',
+            clearEchoedContent: true,
+            message: codexModelError,
+            stderr: rawCodexError,
+          }),
+          message: codexModelError,
+          type: 'AgentRuntimeError',
+        },
+        expect.any(Object),
+      );
+      expect(mockUpdateMessageError).not.toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: 'Reading prompt from stdin...' }),
+        expect.any(Object),
+      );
+      expect(mockUpdateMessageError).not.toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: 'Agent exited with code 1' }),
+        expect.any(Object),
+      );
+    });
+
     it('should persist and dispatch structured cli-not-found errors when sendPrompt rejects', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);

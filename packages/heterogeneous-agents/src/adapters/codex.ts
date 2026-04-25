@@ -2,6 +2,7 @@ import type {
   AgentCLIPreset,
   AgentEventAdapter,
   HeterogeneousAgentEvent,
+  HeterogeneousTerminalErrorData,
   StepCompleteData,
   ToolCallPayload,
   ToolResultData,
@@ -331,6 +332,56 @@ const getEventModel = (raw: any): string | undefined => {
   return candidates.find((candidate): candidate is string => typeof candidate === 'string');
 };
 
+const getStringValue = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value : undefined;
+
+const parseMaybeJsonError = (value: string): string => {
+  try {
+    const parsed = JSON.parse(value);
+    return (
+      getStringValue(parsed?.error?.message) ||
+      getStringValue(parsed?.message) ||
+      getStringValue(parsed?.error) ||
+      value
+    );
+  } catch {
+    return value;
+  }
+};
+
+const getCodexTerminalErrorMessage = (raw: any): string => {
+  const rawMessage =
+    getStringValue(raw?.message) ||
+    getStringValue(raw?.error?.message) ||
+    getStringValue(raw?.error) ||
+    getStringValue(raw?.result);
+
+  if (rawMessage) return parseMaybeJsonError(rawMessage);
+
+  if (raw?.error && typeof raw.error === 'object') {
+    return (
+      getStringValue(raw.error.message) ||
+      getStringValue(raw.error.type) ||
+      JSON.stringify(raw.error)
+    );
+  }
+
+  return 'Codex execution failed';
+};
+
+const getCodexTerminalErrorStderr = (raw: any): string | undefined => {
+  const rawMessage =
+    getStringValue(raw?.message) ||
+    getStringValue(raw?.error?.message) ||
+    getStringValue(raw?.error) ||
+    getStringValue(raw?.result);
+
+  return (
+    rawMessage ||
+    (raw?.error && typeof raw.error === 'object' ? JSON.stringify(raw.error) : undefined)
+  );
+};
+
 export const codexPreset: AgentCLIPreset = {
   baseArgs: ['exec', '--json', '--skip-git-repo-check', '--full-auto'],
   promptMode: 'stdin',
@@ -348,6 +399,7 @@ export class CodexAdapter implements AgentEventAdapter {
   private stepToolCallIds = new Set<string>();
   private started = false;
   private stepIndex = 0;
+  private terminalErrorEmitted = false;
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -366,6 +418,10 @@ export class CodexAdapter implements AgentEventAdapter {
       }
       case 'turn.completed': {
         return this.handleTurnCompleted(raw);
+      }
+      case 'error':
+      case 'turn.failed': {
+        return this.handleTerminalError(raw);
       }
       case 'item.started': {
         return this.handleItemStarted(raw.item);
@@ -406,6 +462,25 @@ export class CodexAdapter implements AgentEventAdapter {
     };
 
     return [this.makeEvent('step_complete', data)];
+  }
+
+  private handleTerminalError(raw: any): HeterogeneousAgentEvent[] {
+    if (this.terminalErrorEmitted) return [];
+
+    this.terminalErrorEmitted = true;
+    const data: HeterogeneousTerminalErrorData = {
+      agentType: CODEX_IDENTIFIER,
+      clearEchoedContent: true,
+      message: getCodexTerminalErrorMessage(raw),
+      stderr: getCodexTerminalErrorStderr(raw),
+    };
+
+    const events: HeterogeneousAgentEvent[] = this.started
+      ? [this.makeEvent('stream_end', {})]
+      : [];
+    events.push(this.makeEvent('error', data));
+
+    return events;
   }
 
   private handleSessionConfigured(raw: any): HeterogeneousAgentEvent[] {

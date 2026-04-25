@@ -21,7 +21,7 @@ const buildCodexOptionArgs = async ({
   const imageArgs = imagePaths.flatMap((filePath) => ['--image', filePath]);
   const autoExecutionArgs = hasAnyFlag(args, CODEX_AUTO_EXECUTION_FLAGS) ? [] : ['--full-auto'];
 
-  return [...CODEX_REQUIRED_ARGS, ...autoExecutionArgs, ...imageArgs, ...args];
+  return [...CODEX_REQUIRED_ARGS, ...autoExecutionArgs, ...args, ...imageArgs];
 };
 
 export const codexDriver: HeterogeneousAgentDriver = {
@@ -37,7 +37,7 @@ export const codexDriver: HeterogeneousAgentDriver = {
     return {
       args: resumeSessionId
         ? ['exec', 'resume', ...optionArgs, resumeSessionId, '-']
-        : ['exec', ...optionArgs, '-'],
+        : ['exec', ...optionArgs],
       stdinPayload: prompt,
     };
   },
