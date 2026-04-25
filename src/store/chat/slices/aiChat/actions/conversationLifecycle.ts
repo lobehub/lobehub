@@ -46,6 +46,7 @@ import { useUserMemoryStore } from '@/store/userMemory';
 
 import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
+import { AI_RUNTIME_OPERATION_TYPES } from '../../operation/types';
 import {
   type CommandSendOverrides,
   hasNonActionContent,
@@ -235,20 +236,15 @@ export class ConversationLifecycleActionImpl {
 
     // ━━━ Message Queue: enqueue if agent is currently running ━━━
     // Check if there's a running agent-runtime operation in the current context.
-    // If so, enqueue the message instead of starting a new operation. Covers both
-    // Client mode (`execAgentRuntime`) and the heterogeneous agent / CC path
-    // (`execHeterogeneousAgent`) — without the latter, a follow-up send during a
-    // CC turn would spawn a second `claude` process in parallel.
+    // If so, enqueue the message instead of starting a new operation. Covers all
+    // three runtime paths (`AI_RUNTIME_OPERATION_TYPES`) — Client, heterogeneous
+    // agent / CC, and Gateway — so a follow-up send never spawns a parallel
+    // `claude` process or a second server-side run.
     const currentContextKey = messageMapKey(operationContext);
     const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
     const runningAgentOp = contextOpIds
       .map((id) => this.#get().operations[id])
-      .find(
-        (op) =>
-          op &&
-          (op.type === 'execAgentRuntime' || op.type === 'execHeterogeneousAgent') &&
-          op.status === 'running',
-      );
+      .find((op) => op && AI_RUNTIME_OPERATION_TYPES.includes(op.type) && op.status === 'running');
 
     if (runningAgentOp) {
       this.#get().enqueueMessage(
