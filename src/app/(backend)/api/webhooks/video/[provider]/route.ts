@@ -231,6 +231,7 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       await chargeAfterGenerate({
         computePriceParams: {
           generateAudio: (batch?.config as RuntimeVideoGenParams)?.generateAudio,
+          resolution: (batch?.config as RuntimeVideoGenParams)?.resolution,
         },
         latency: duration,
         metadata: {

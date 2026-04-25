@@ -52,7 +52,8 @@ export class CreateVideoActionImpl {
       'requiresImageUrl' in endImageUrlSchema &&
       endImageUrlSchema.requiresImageUrl &&
       parameters.endImageUrl &&
-      !parameters.imageUrl
+      !parameters.imageUrl &&
+      !parameters.imageUrls?.length
     ) {
       message.warning({
         content: t('generation.validation.endFrameRequiresStartFrame', { ns: 'video' }),
