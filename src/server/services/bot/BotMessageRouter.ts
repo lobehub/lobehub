@@ -9,6 +9,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
@@ -443,6 +444,25 @@ export class BotMessageRouter {
       }
 
       const merged = BotMessageRouter.mergeSkippedMessages(message, context);
+      void emitAgentSignalSourceEvent(
+        {
+          payload: {
+            agentId,
+            applicationId,
+            platform,
+            message: merged.text,
+            platformThreadId: thread.id,
+          },
+          sourceId: merged.id,
+          sourceType: 'bot.message.merged',
+        },
+        {
+          agentId,
+          db: serverDB,
+          userId,
+        },
+        { ignoreError: true },
+      );
 
       log(
         'onNewMention: agent=%s, platform=%s, author=%s, thread=%s, merged=%d, mergedAttachments=%d',
@@ -518,6 +538,25 @@ export class BotMessageRouter {
       }
 
       const merged = BotMessageRouter.mergeSkippedMessages(message, context);
+      void emitAgentSignalSourceEvent(
+        {
+          payload: {
+            agentId,
+            applicationId,
+            platform,
+            message: merged.text,
+            platformThreadId: thread.id,
+          },
+          sourceId: merged.id,
+          sourceType: 'bot.message.merged',
+        },
+        {
+          agentId,
+          db: serverDB,
+          userId,
+        },
+        { ignoreError: true },
+      );
 
       log(
         'onSubscribedMessage: agent=%s, platform=%s, author=%s, thread=%s, merged=%d, mergedAttachments=%d',
@@ -580,6 +619,25 @@ export class BotMessageRouter {
         }
 
         const merged = BotMessageRouter.mergeSkippedMessages(message, context);
+        void emitAgentSignalSourceEvent(
+          {
+            payload: {
+              agentId,
+              applicationId,
+              platform,
+              message: merged.text,
+              platformThreadId: thread.id,
+            },
+            sourceId: merged.id,
+            sourceType: 'bot.message.merged',
+          },
+          {
+            agentId,
+            db: serverDB,
+            userId,
+          },
+          { ignoreError: true },
+        );
 
         log(
           'onNewMessage (%s catch-all): agent=%s, author=%s, thread=%s, text=%s, mergedAttachments=%d',

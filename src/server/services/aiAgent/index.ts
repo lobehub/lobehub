@@ -62,6 +62,7 @@ import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/a
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
@@ -1286,6 +1287,24 @@ export class AiAgentService {
         });
     if (userMessageRecord) {
       log('execAgent: created user message %s', userMessageRecord.id);
+      await enqueueAgentSignalSourceEvent(
+        {
+          payload: {
+            agentId: resolvedAgentId,
+            message: prompt,
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+            trigger,
+            messageId: userMessageRecord.id,
+          },
+          sourceId: userMessageRecord.id,
+          sourceType: 'agent.user.message',
+        },
+        {
+          agentId: resolvedAgentId,
+          userId: this.userId,
+        },
+      );
     }
 
     // 14. Create assistant message placeholder in database

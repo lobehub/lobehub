@@ -69,7 +69,7 @@ describe('Hooks integration — afterStep event carries step presentation data',
     const coordinator = (service as any).coordinator;
 
     // Simulate a running operation with afterStep hooks in metadata
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [{ content: 'Hello', role: 'user' }],
@@ -170,7 +170,7 @@ describe('Hooks integration — afterStep event carries step presentation data',
     const service = createService();
     const coordinator = (service as any).coordinator;
 
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [],
@@ -258,7 +258,7 @@ describe('Hooks integration — onComplete event for early-terminal states', () 
     const service = createService();
     const coordinator = (service as any).coordinator;
 
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [
@@ -303,7 +303,7 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
     const service = createService();
     const coordinator = (service as any).coordinator;
 
-    coordinator.loadAgentState.mockResolvedValue({
+    vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [],
