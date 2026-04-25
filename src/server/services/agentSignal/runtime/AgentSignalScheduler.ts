@@ -37,6 +37,9 @@ export interface AgentSignalSchedulerHandler<TNode extends RuntimeNode = Runtime
   id: string;
 }
 
+export type AgentSignalSchedulerHandle<TNode extends RuntimeNode = RuntimeNode> =
+  AgentSignalSchedulerHandler<TNode>['handle'];
+
 /** Handler results accepted by the generalized runtime host. */
 export type AgentSignalSchedulerHandlerResult = ExecutorResult | RuntimeProcessorResult;
 

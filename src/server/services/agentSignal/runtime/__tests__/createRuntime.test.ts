@@ -41,8 +41,10 @@ describe('createAgentSignalRuntime', () => {
     const runtime = await createAgentSignalRuntime({
       policies: [
         defineAgentSignalHandlers([
-          defineSourceHandler('source.user.message', {
-            async handle(source, context) {
+          defineSourceHandler(
+            'source.user.message',
+            'test-source-handler',
+            async (source, context) => {
               handled.push(`source:${context.scopeKey}`);
 
               return {
@@ -56,10 +58,11 @@ describe('createAgentSignalRuntime', () => {
                 status: 'dispatch',
               } as const;
             },
-            id: 'test-source-handler',
-          }),
-          defineSignalHandler('signal.memory.request', {
-            async handle(signal, context) {
+          ),
+          defineSignalHandler(
+            'signal.memory.request',
+            'test-signal-handler',
+            async (signal, context) => {
               handled.push(`signal:${context.scopeKey}`);
 
               return {
@@ -73,10 +76,11 @@ describe('createAgentSignalRuntime', () => {
                 status: 'dispatch',
               } as const;
             },
-            id: 'test-signal-handler',
-          }),
-          defineActionHandler('action.memory.persist', {
-            async handle(action, context) {
+          ),
+          defineActionHandler(
+            'action.memory.persist',
+            'test-action-handler',
+            async (action, context) => {
               handled.push(`action:${context.scopeKey}`);
 
               return {
@@ -86,8 +90,7 @@ describe('createAgentSignalRuntime', () => {
                 status: 'applied',
               } as const;
             },
-            id: 'test-action-handler',
-          }),
+          ),
         ]),
       ],
     });

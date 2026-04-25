@@ -11,13 +11,15 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/server';
 import type { LobeChatDatabase } from '@/database/type';
-import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { AgentSignalWorkflow } from '@/server/workflows/agentSignal';
 
 import { isAgentSignalEnabledForUser } from './featureGate';
 import { projectAgentSignalObservability } from './observability/projector';
 import { persistAgentSignalObservability } from './observability/store';
-import { createDefaultAgentSignalPolicies } from './policies/groups/default';
+import {
+  createDefaultAgentSignalPolicies,
+  type CreateDefaultAgentSignalPoliciesOptions,
+} from './policies';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 import { AgentSignalScopeKey } from './scopeKey';
@@ -77,6 +79,7 @@ export interface QueuedAgentSignalEmissionResult {
 }
 
 interface ExecuteAgentSignalSourceEventOptions extends AgentSignalEmitOptions {
+  policyOptions?: Partial<CreateDefaultAgentSignalPoliciesOptions>;
   runtimeGuardBackend?: RuntimeGuardBackend;
   store?: AgentSignalSourceEventStore;
 }
@@ -182,11 +185,19 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
     const runtime = await createAgentSignalRuntime({
       guardBackend: options.runtimeGuardBackend,
       policies: createDefaultAgentSignalPolicies({
-        agentDocument: {
-          service: new AgentDocumentsService(context.db, context.userId),
+        feedbackDomainJudge: {
+          db: context.db,
+          ...options.policyOptions?.feedbackDomainJudge,
+          userId: context.userId,
+        },
+        feedbackSatisfactionJudge: {
+          db: context.db,
+          ...options.policyOptions?.feedbackSatisfactionJudge,
+          userId: context.userId,
         },
         userMemory: {
           db: context.db,
+          ...options.policyOptions?.userMemory,
           userId: context.userId,
         },
       }),
@@ -347,6 +358,10 @@ export const emitAgentSignalSourceEventWithStore = async <
   input: AgentSignalSourceEventInput<TSourceType>,
   context: AgentSignalExecutionContext,
   store: AgentSignalSourceEventStore,
+  options: Pick<ExecuteAgentSignalSourceEventOptions, 'policyOptions'> = {},
 ): Promise<DedupedSourceEventResult | GeneratedAgentSignalEmissionResult | undefined> => {
-  return executeAgentSignalSourceEventCore(input, context, { store });
+  return executeAgentSignalSourceEventCore(input, context, {
+    policyOptions: options.policyOptions,
+    store,
+  });
 };
