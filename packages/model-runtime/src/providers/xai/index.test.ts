@@ -120,6 +120,39 @@ describe('LobeXAI - custom features', () => {
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
       expect(createCall.tools).toEqual([{ type: 'web_search' }, { type: 'x_search' }]);
     });
+
+    it('should strip reasoning_effort for models that do not support it', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-4.20-0309-reasoning',
+        reasoning_effort: 'high',
+      } as any);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.reasoning).toBeUndefined();
+    });
+
+    it('should strip reasoning_effort for grok-4.20-beta-0309-reasoning', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-4.20-beta-0309-reasoning',
+        reasoning_effort: 'medium',
+      } as any);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.reasoning).toBeUndefined();
+    });
+
+    it('should preserve reasoning_effort for grok-3-mini', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-3-mini',
+        reasoning_effort: 'low',
+      } as any);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.reasoning).toEqual({ effort: 'low' });
+    });
   });
 
   describe('models', () => {

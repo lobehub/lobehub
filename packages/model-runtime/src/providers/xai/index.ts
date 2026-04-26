@@ -18,17 +18,33 @@ const xaiPenaltySupportedModels = new Set([
   'grok-4-1-fast-non-reasoning',
 ]);
 
-const pruneUnsupportedReasoningParameters = (payload: ChatStreamPayload) => {
-  if (xaiPenaltySupportedModels.has(payload.model)) return payload;
+// Only these models support reasoning_effort via the Responses API reasoning.effort field.
+// All other xAI models reject this parameter with a 400 error.
+// https://docs.x.ai/developers/model-capabilities/text/reasoning
+const xaiReasoningEffortSupportedModels = new Set([
+  'grok-3-mini',
+  'grok-4.20-multi-agent-beta-0309',
+]);
 
-  return {
-    ...payload,
-    // xAI reasoning models reject these parameters:
-    // https://docs.x.ai/developers/model-capabilities/text/reasoning
-    frequency_penalty: undefined,
-    presence_penalty: undefined,
-    stop: undefined,
-  } as ChatStreamPayload;
+const pruneUnsupportedReasoningParameters = (payload: ChatStreamPayload) => {
+  const pruned = xaiPenaltySupportedModels.has(payload.model)
+    ? payload
+    : ({
+        ...payload,
+        // xAI reasoning models reject these parameters:
+        // https://docs.x.ai/developers/model-capabilities/text/reasoning
+        frequency_penalty: undefined,
+        presence_penalty: undefined,
+        stop: undefined,
+      } as ChatStreamPayload);
+
+  if (xaiReasoningEffortSupportedModels.has(payload.model)) return pruned;
+
+  // Strip reasoning_effort for models that don't support it to avoid 400 errors.
+  // reasoning_effort may be present when users have it configured in agent params
+  // and switch to a model that does not support it.
+  const { reasoning_effort: _, ...rest } = pruned as any;
+  return rest as ChatStreamPayload;
 };
 
 export const LobeXAI = createOpenAICompatibleRuntime({
