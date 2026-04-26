@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
@@ -34,10 +35,7 @@ export async function processBackgroundVideoPolling(
     asyncTaskId,
     generationBatchId,
     generationId,
-    generationTopicId,
     inferenceId,
-    model,
-    prechargeResult,
     provider,
     userId,
   } = params;
@@ -107,10 +105,17 @@ export async function processBackgroundVideoPolling(
     log('Background video polling error for task: %s', asyncTaskId, error);
 
     const asyncTaskModel = new AsyncTaskModel(db, userId);
+    const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+      error,
+      provider,
+      userId,
+    });
     await asyncTaskModel.update(asyncTaskId, {
       error: new AsyncTaskError(
         AsyncTaskErrorType.ServerError,
-        'Background polling failed: ' + (error instanceof Error ? error.message : 'Unknown error'),
+        providerContentPolicyMessage ??
+          'Background polling failed: ' +
+            (error instanceof Error ? error.message : 'Unknown error'),
       ),
       status: AsyncTaskStatus.Error,
     });

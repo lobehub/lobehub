@@ -10,6 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
 
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
@@ -283,10 +284,18 @@ export const videoRouter = router({
     } catch (e) {
       console.error('Failed to submit video generation task:', e);
 
+      const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+        error: e,
+        provider,
+        userId,
+      });
       await asyncTaskModel.update(asyncTaskId, {
         error: new AsyncTaskError(
-          AsyncTaskErrorType.TaskTriggerError,
-          'Failed to submit video task: ' + (e instanceof Error ? e.message : 'Unknown error'),
+          providerContentPolicyMessage
+            ? AsyncTaskErrorType.ServerError
+            : AsyncTaskErrorType.TaskTriggerError,
+          providerContentPolicyMessage ??
+            'Failed to submit video task: ' + (e instanceof Error ? e.message : 'Unknown error'),
         ),
         status: AsyncTaskStatus.Error,
       });
