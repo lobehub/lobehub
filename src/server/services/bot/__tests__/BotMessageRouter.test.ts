@@ -129,6 +129,31 @@ const mockGetPlatform = vi.hoisted(() =>
   }),
 );
 
+// Mirrors the real `parseIdList` in ../platforms/const.ts: accepts the new
+// `[{ id, name? }]` shape plus the legacy string / string[] shapes that
+// existing data on disk may still be in.
+const parseAllowlistMock = vi.hoisted(() => (raw: unknown): string[] => {
+  if (typeof raw === 'string') {
+    return raw
+      .split(/[\s,]+/)
+      .map((id) => id.trim())
+      .filter(Boolean);
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map((entry) => {
+        if (typeof entry === 'string') return entry.trim();
+        if (entry && typeof entry === 'object' && 'id' in entry) {
+          const id = (entry as { id?: unknown }).id;
+          return typeof id === 'string' ? id.trim() : '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+  return [];
+});
+
 vi.mock('../platforms', () => ({
   buildRuntimeKey: (platform: string, appId: string) => `${platform}:${appId}`,
   getBotReplyLocale: (platform: string | undefined): string => {
@@ -159,19 +184,7 @@ vi.mock('../platforms', () => ({
     return { policy };
   },
   extractGroupSettings: (settings: Record<string, unknown> | null | undefined) => {
-    const raw = settings?.groupAllowFrom;
-    const allowFrom =
-      typeof raw === 'string'
-        ? raw
-            .split(/[\s,]+/)
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : Array.isArray(raw)
-          ? raw
-              .map(String)
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : [];
+    const allowFrom = parseAllowlistMock(settings?.groupAllowFrom);
     const rawPolicy = settings?.groupPolicy as string | undefined;
     const policy =
       rawPolicy === 'allowlist' || rawPolicy === 'open' || rawPolicy === 'disabled'
@@ -180,19 +193,7 @@ vi.mock('../platforms', () => ({
     return { allowFrom, policy };
   },
   extractUserAllowlist: (settings: Record<string, unknown> | null | undefined) => {
-    const raw = settings?.allowFrom;
-    const explicit =
-      typeof raw === 'string'
-        ? raw
-            .split(/[\s,]+/)
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : Array.isArray(raw)
-          ? raw
-              .map(String)
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : [];
+    const explicit = parseAllowlistMock(settings?.allowFrom);
     if (explicit.length === 0) return { ids: [] };
     const operatorId = (settings?.userId as string | undefined)?.trim();
     if (!operatorId || explicit.includes(operatorId)) return { ids: explicit };

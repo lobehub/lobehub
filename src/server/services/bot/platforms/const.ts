@@ -164,14 +164,38 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
  * because it forced operators who only wanted to scope group @mentions to
  * also flip DM mode, which is misleading. Always-visible matches the
  * field's actual semantics.
+ *
+ * Stored as `Array<{ id, name? }>` so the operator can label each entry
+ * (e.g. `name: '产品同事 Ada'`) and recognise IDs months later. The runtime
+ * only consults `id` — see {@link parseIdList} for the back-compat parser
+ * that still accepts the legacy comma-separated string and bare string[].
  */
 export const allowFromField: FieldSchema = {
   key: 'allowFrom',
-  default: '',
+  default: [],
   description: 'channel.allowFromHint',
   label: 'channel.allowFrom',
-  placeholder: 'user_id_1, user_id_2',
-  type: 'string',
+  type: 'array',
+  items: {
+    key: 'item',
+    label: '',
+    type: 'object',
+    properties: [
+      {
+        key: 'id',
+        label: 'channel.allowFromIdLabel',
+        placeholder: 'channel.allowFromIdPlaceholder',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'name',
+        label: 'channel.allowFromNameLabel',
+        placeholder: 'channel.allowFromNamePlaceholder',
+        type: 'string',
+      },
+    ],
+  },
 };
 
 /**
@@ -200,20 +224,50 @@ export function makeGroupPolicyFields(defaults: { policy: GroupPolicy }): FieldS
     },
     {
       key: 'groupAllowFrom',
-      default: '',
+      default: [],
       description: 'channel.groupAllowFromHint',
       label: 'channel.groupAllowFrom',
-      placeholder: 'channel_id_1, channel_id_2',
-      type: 'string',
+      type: 'array',
+      items: {
+        key: 'item',
+        label: '',
+        type: 'object',
+        properties: [
+          {
+            key: 'id',
+            label: 'channel.groupAllowFromIdLabel',
+            placeholder: 'channel.groupAllowFromIdPlaceholder',
+            required: true,
+            type: 'string',
+          },
+          {
+            key: 'name',
+            label: 'channel.groupAllowFromNameLabel',
+            placeholder: 'channel.groupAllowFromNamePlaceholder',
+            type: 'string',
+          },
+        ],
+      },
       visibleWhen: { field: 'groupPolicy', value: 'allowlist' },
     },
   ];
 }
 
 /**
- * Split a comma / newline / whitespace-separated string (or array) of IDs
- * into a trimmed, non-empty array. Shared by `extractUserAllowlist` and
- * `extractGroupSettings` so allowlist parsing stays consistent.
+ * Pull the platform IDs out of an allowlist value, regardless of which
+ * historical shape it has on disk. Three shapes are all valid input:
+ *
+ * 1. `Array<{ id, name? }>` — current shape produced by the channel form,
+ *    where `name` is an operator-facing label and `id` is what the runtime
+ *    matches against. Only `id` is returned.
+ * 2. `string[]` — legacy shape used briefly during the dm/group policy
+ *    rollout, before names existed.
+ * 3. `string` — original shape: comma / newline / whitespace-separated IDs
+ *    pasted into a single text field.
+ *
+ * Empty / missing IDs are dropped. The caller (gating in `BotMessageRouter`)
+ * never sees the names — those exist purely so the operator can recognise
+ * each entry on the settings page.
  */
 function parseIdList(raw: unknown): string[] {
   if (typeof raw === 'string') {
@@ -224,8 +278,14 @@ function parseIdList(raw: unknown): string[] {
   }
   if (Array.isArray(raw)) {
     return raw
-      .map(String)
-      .map((id) => id.trim())
+      .map((entry) => {
+        if (typeof entry === 'string') return entry.trim();
+        if (entry && typeof entry === 'object' && 'id' in entry) {
+          const id = (entry as { id?: unknown }).id;
+          return typeof id === 'string' ? id.trim() : '';
+        }
+        return '';
+      })
       .filter(Boolean);
   }
   return [];

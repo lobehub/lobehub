@@ -102,11 +102,21 @@ describe('makeDmPolicyField', () => {
 });
 
 describe('allowFromField', () => {
-  it('is a flat top-level user-id allowlist that is always visible (global gate)', () => {
+  it('is an object list (id + optional name) so operators can label entries', () => {
     expect(allowFromField.key).toBe('allowFrom');
-    expect(allowFromField.type).toBe('string');
+    expect(allowFromField.type).toBe('array');
+    // Default is an empty array — empty means "no user-level filter".
+    expect(allowFromField.default).toEqual([]);
     // Always visible — applies globally to DM and group, no visibleWhen gate.
     expect(allowFromField.visibleWhen).toBeUndefined();
+
+    expect(allowFromField.items?.type).toBe('object');
+    const props = allowFromField.items?.properties ?? [];
+    const keys = props.map((p) => p.key);
+    expect(keys).toEqual(['id', 'name']);
+    // Only `id` is required — `name` is just a reminder for the operator.
+    expect(props.find((p) => p.key === 'id')?.required).toBe(true);
+    expect(props.find((p) => p.key === 'name')?.required).toBeFalsy();
   });
 });
 
@@ -121,6 +131,10 @@ describe('makeGroupPolicyFields', () => {
     expect(policy.enum).toEqual(['open', 'allowlist', 'disabled']);
 
     expect(allowFrom.key).toBe('groupAllowFrom');
+    expect(allowFrom.type).toBe('array');
+    expect(allowFrom.default).toEqual([]);
+    expect(allowFrom.items?.type).toBe('object');
+    expect((allowFrom.items?.properties ?? []).map((p) => p.key)).toEqual(['id', 'name']);
     expect(allowFrom.visibleWhen).toEqual({ field: 'groupPolicy', value: 'allowlist' });
   });
 });
@@ -149,18 +163,50 @@ describe('extractUserAllowlist', () => {
     expect(extractUserAllowlist(undefined)).toEqual({ ids: [] });
     expect(extractUserAllowlist({})).toEqual({ ids: [] });
     expect(extractUserAllowlist({ allowFrom: '' })).toEqual({ ids: [] });
+    expect(extractUserAllowlist({ allowFrom: [] })).toEqual({ ids: [] });
   });
 
-  it('parses comma- and whitespace-separated user IDs', () => {
+  it('reads the new object-list shape, dropping name from the runtime view', () => {
+    expect(
+      extractUserAllowlist({
+        allowFrom: [
+          { id: 'alice', name: 'Alice — PM' },
+          { id: 'bob', name: 'Bob' },
+        ],
+      }),
+    ).toEqual({ ids: ['alice', 'bob'] });
+  });
+
+  it('tolerates entries without a name (name is optional)', () => {
+    expect(extractUserAllowlist({ allowFrom: [{ id: 'alice' }, { id: 'bob' }] })).toEqual({
+      ids: ['alice', 'bob'],
+    });
+  });
+
+  it('drops object entries with empty / missing id (require id, fail closed)', () => {
+    expect(
+      extractUserAllowlist({
+        allowFrom: [{ id: '   ' }, { id: 'bob' }, { name: 'no-id' } as { id?: string }],
+      }),
+    ).toEqual({ ids: ['bob'] });
+  });
+
+  it('still parses the legacy comma / whitespace string (back-compat for stored data)', () => {
     expect(extractUserAllowlist({ allowFrom: '  alice, bob\n  carol  ' })).toEqual({
       ids: ['alice', 'bob', 'carol'],
     });
   });
 
-  it('accepts an array form already', () => {
+  it('still parses the legacy bare string[] form', () => {
     expect(extractUserAllowlist({ allowFrom: ['alice', ' bob ', ''] })).toEqual({
       ids: ['alice', 'bob'],
     });
+  });
+
+  it('handles a mixed legacy/new array (string and object entries together)', () => {
+    expect(
+      extractUserAllowlist({ allowFrom: ['alice', { id: 'bob', name: 'Bob' }, '  '] }),
+    ).toEqual({ ids: ['alice', 'bob'] });
   });
 
   it('does NOT inject userId when allowFrom is empty (preserves no-filter semantics)', () => {
@@ -168,22 +214,34 @@ describe('extractUserAllowlist', () => {
     // implicitly turn the bot into a private one. Existing operators who
     // pre-date allowFrom rely on that.
     expect(extractUserAllowlist({ userId: 'alice' })).toEqual({ ids: [] });
+    expect(extractUserAllowlist({ allowFrom: [], userId: 'alice' })).toEqual({ ids: [] });
   });
 
-  it('implicitly merges userId into a populated allowFrom (anti-lockout)', () => {
-    expect(extractUserAllowlist({ allowFrom: 'bob, carol', userId: 'alice' })).toEqual({
-      ids: ['bob', 'carol', 'alice'],
-    });
+  it('implicitly merges userId into a populated allowFrom (anti-lockout, object-list shape)', () => {
+    expect(
+      extractUserAllowlist({
+        allowFrom: [
+          { id: 'bob', name: 'Bob' },
+          { id: 'carol', name: 'Carol' },
+        ],
+        userId: 'alice',
+      }),
+    ).toEqual({ ids: ['bob', 'carol', 'alice'] });
   });
 
-  it('does not duplicate userId when it is already in allowFrom', () => {
-    expect(extractUserAllowlist({ allowFrom: 'alice, bob', userId: 'alice' })).toEqual({
-      ids: ['alice', 'bob'],
-    });
+  it('does not duplicate userId when it is already in the object-list allowFrom', () => {
+    expect(
+      extractUserAllowlist({
+        allowFrom: [{ id: 'alice', name: 'me' }, { id: 'bob' }],
+        userId: 'alice',
+      }),
+    ).toEqual({ ids: ['alice', 'bob'] });
   });
 
   it('ignores a blank userId string', () => {
-    expect(extractUserAllowlist({ allowFrom: 'bob', userId: '   ' })).toEqual({ ids: ['bob'] });
+    expect(extractUserAllowlist({ allowFrom: [{ id: 'bob' }], userId: '   ' })).toEqual({
+      ids: ['bob'],
+    });
   });
 });
 
@@ -197,7 +255,22 @@ describe('extractGroupSettings', () => {
     });
   });
 
-  it('parses groupAllowFrom into a trimmed array of channel IDs', () => {
+  it('reads the new object-list shape, returning ids only', () => {
+    expect(
+      extractGroupSettings({
+        groupAllowFrom: [
+          { id: 'channel-1', name: '#ops' },
+          { id: 'channel-2', name: '#friends' },
+        ],
+        groupPolicy: 'allowlist',
+      }),
+    ).toEqual({
+      allowFrom: ['channel-1', 'channel-2'],
+      policy: 'allowlist',
+    });
+  });
+
+  it('still parses the legacy comma / whitespace string (back-compat)', () => {
     expect(
       extractGroupSettings({
         groupAllowFrom: 'channel-1, channel-2\n  channel-3',
