@@ -1,5 +1,5 @@
 import { type TaskTemplate, type TaskTemplateCategory } from '@lobechat/const';
-import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import {
@@ -13,6 +13,7 @@ import {
   Palette,
   PenSquare,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,10 +74,11 @@ const ICON_BY_CATEGORY: Record<TaskTemplateCategory, LucideIcon> = {
 };
 
 interface TaskTemplateCardProps {
+  onDismiss: (templateId: string) => void;
   template: TaskTemplate;
 }
 
-const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template }) => {
+const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) => {
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
@@ -112,9 +114,15 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template }) => {
     }
   }, [inboxAgentId, message, t, template.cronPattern, template.id, title]);
 
+  const handleDismiss = useCallback(() => {
+    if (loading || created) return;
+    onDismiss(template.id);
+  }, [created, loading, onDismiss, template.id]);
+
   return (
     <Block
       horizontal
+      align={'center'}
       className={styles.card}
       gap={12}
       padding={12}
@@ -141,12 +149,20 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template }) => {
       >
         {loading ? t('action.creating') : t('action.createButton')}
       </Button>
+      <ActionIcon
+        className={`${styles.dismissBtn} task-template-dismiss`}
+        icon={X}
+        size={'small'}
+        title={t('action.dismiss.tooltip')}
+        onClick={handleDismiss}
+      />
     </Block>
   );
 });
 
 const TaskTemplates = memo(() => {
   const { t } = useTranslation('taskTemplate');
+  const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
   const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
@@ -160,9 +176,29 @@ const TaskTemplates = memo(() => {
 
   const enabled = isLogin && !!enableAgentTask && isInit && briefs.length <= RECOMMEND_THRESHOLD;
 
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, mutate } = useSWR(
     enabled ? ['taskTemplate.listDailyRecommend', swrKey] : null,
     async () => taskTemplateService.listDailyRecommend(interestKeys),
+  );
+
+  const handleDismiss = useCallback(
+    async (templateId: string) => {
+      // Optimistic remove — leave a gap until next refresh per LOBE-8187.
+      mutate(
+        (current) =>
+          current ? { ...current, data: current.data.filter((t) => t.id !== templateId) } : current,
+        false,
+      );
+      try {
+        await taskTemplateService.dismiss(templateId);
+      } catch (error) {
+        console.error('[taskTemplate:dismiss]', error);
+        message.error(t('action.dismiss.error'));
+        // Revert by revalidating from server.
+        mutate();
+      }
+    },
+    [message, mutate, t],
   );
 
   if (!enabled || isLoading) return null;
@@ -173,7 +209,7 @@ const TaskTemplates = memo(() => {
     <GroupBlock icon={Lightbulb} title={t('section.title')}>
       <Flexbox gap={8}>
         {templates.map((tmpl) => (
-          <TaskTemplateCard key={tmpl.id} template={tmpl} />
+          <TaskTemplateCard key={tmpl.id} template={tmpl} onDismiss={handleDismiss} />
         ))}
       </Flexbox>
     </GroupBlock>

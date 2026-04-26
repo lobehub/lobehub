@@ -3,6 +3,8 @@ export default {
   'action.create.success': 'Scheduled task added. Find it in Lobe AI.',
   'action.createButton': 'Add as scheduled task',
   'action.creating': 'Creating...',
+  'action.dismiss.error': 'Failed to dismiss. Please try again.',
+  'action.dismiss.tooltip': 'Not interested',
 
   'arxiv-curated-daily.description':
     'Every morning, pick 5 fresh papers in your research area with one-line summaries. Cut your paper-scanning time in half.',

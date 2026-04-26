@@ -3,6 +3,8 @@
   "action.create.success": "Scheduled task added. Find it in Lobe AI.",
   "action.createButton": "Add as scheduled task",
   "action.creating": "Creating...",
+  "action.dismiss.error": "Failed to dismiss. Please try again.",
+  "action.dismiss.tooltip": "Not interested",
   "arxiv-curated-daily.description": "Every morning, pick 5 fresh papers in your research area with one-line summaries. Cut your paper-scanning time in half.",
   "arxiv-curated-daily.prompt": "Every morning at 9:00, pick 5 of the latest arXiv papers in my research area and give me a one-line summary for each, so I can decide which to read in depth.",
   "arxiv-curated-daily.title": "ArXiv daily picks",

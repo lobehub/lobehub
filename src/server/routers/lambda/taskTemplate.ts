@@ -12,7 +12,17 @@ const listDailyRecommendSchema = z.object({
   interestKeys: z.array(z.string().max(64)).max(32),
 });
 
+const dismissSchema = z.object({
+  templateId: z.string().max(64),
+});
+
 export const taskTemplateRouter = router({
+  dismiss: taskTemplateProcedure.input(dismissSchema).mutation(async ({ input, ctx }) => {
+    const { userId, serverDB: db } = ctx;
+    await new UserTaskTemplateInteractionModel(db, userId).dismiss(input.templateId);
+    return { success: true };
+  }),
+
   listDailyRecommend: taskTemplateProcedure
     .input(listDailyRecommendSchema)
     .query(async ({ input, ctx }) => {

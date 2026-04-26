@@ -3,6 +3,8 @@
   "action.create.success": "定时任务已创建，可在 Lobe AI 中查看",
   "action.createButton": "添加为定时任务",
   "action.creating": "创建中…",
+  "action.dismiss.error": "操作失败，请稍后再试",
+  "action.dismiss.tooltip": "不感兴趣",
   "arxiv-curated-daily.description": "每天早上帮你筛 5 篇最新论文 + 一句话摘要，刷论文时间省一半",
   "arxiv-curated-daily.prompt": "每天早上 9:00 帮我从 arXiv 筛 5 篇和我研究方向相关的最新论文，每篇附一句话摘要，帮我判断哪些值得精读。",
   "arxiv-curated-daily.title": "ArXiv 精选",

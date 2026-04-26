@@ -5,6 +5,17 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       border-color: ${cssVar.colorBorder} !important;
     }
+
+    &:hover .task-template-dismiss {
+      pointer-events: auto;
+      opacity: 1;
+    }
+  `,
+  dismissBtn: css`
+    pointer-events: none;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
   `,
   iconBadge: css`
     flex-shrink: 0;
