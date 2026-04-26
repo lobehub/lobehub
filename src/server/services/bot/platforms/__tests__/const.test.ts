@@ -162,6 +162,29 @@ describe('extractUserAllowlist', () => {
       ids: ['alice', 'bob'],
     });
   });
+
+  it('does NOT inject userId when allowFrom is empty (preserves no-filter semantics)', () => {
+    // Critical: setting only `userId` (the AI-tools field) must not
+    // implicitly turn the bot into a private one. Existing operators who
+    // pre-date allowFrom rely on that.
+    expect(extractUserAllowlist({ userId: 'alice' })).toEqual({ ids: [] });
+  });
+
+  it('implicitly merges userId into a populated allowFrom (anti-lockout)', () => {
+    expect(extractUserAllowlist({ allowFrom: 'bob, carol', userId: 'alice' })).toEqual({
+      ids: ['bob', 'carol', 'alice'],
+    });
+  });
+
+  it('does not duplicate userId when it is already in allowFrom', () => {
+    expect(extractUserAllowlist({ allowFrom: 'alice, bob', userId: 'alice' })).toEqual({
+      ids: ['alice', 'bob'],
+    });
+  });
+
+  it('ignores a blank userId string', () => {
+    expect(extractUserAllowlist({ allowFrom: 'bob', userId: '   ' })).toEqual({ ids: ['bob'] });
+  });
 });
 
 describe('extractGroupSettings', () => {

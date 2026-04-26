@@ -181,7 +181,7 @@ vi.mock('../platforms', () => ({
   },
   extractUserAllowlist: (settings: Record<string, unknown> | null | undefined) => {
     const raw = settings?.allowFrom;
-    const ids =
+    const explicit =
       typeof raw === 'string'
         ? raw
             .split(/[\s,]+/)
@@ -193,7 +193,10 @@ vi.mock('../platforms', () => ({
               .map((s) => s.trim())
               .filter(Boolean)
           : [];
-    return { ids };
+    if (explicit.length === 0) return { ids: [] };
+    const operatorId = (settings?.userId as string | undefined)?.trim();
+    if (!operatorId || explicit.includes(operatorId)) return { ids: explicit };
+    return { ids: [...explicit, operatorId] };
   },
   mergeWithDefaults: mockMergeWithDefaults,
   platformRegistry: {
@@ -995,6 +998,60 @@ describe('BotMessageRouter', () => {
         text: '@bot hi',
       });
 
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it("treats settings.userId as implicitly allowed when allowFrom doesn't list them (anti-lockout)", async () => {
+      // The operator filled in `userId` (the AI-tools field) so AI can
+      // push notifications to them, then later set `allowFrom` to scope
+      // the bot to a couple of friends — forgetting to add themselves.
+      // The router must still let the operator interact.
+      const { mention } = await loadHandlers({
+        allowFrom: 'friend-1, friend-2',
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+        userId: 'operator-id',
+      });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, {
+        author: { isBot: false, userId: 'operator-id', userName: 'me' },
+        isMention: true,
+        text: '@bot hi',
+      });
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('does not flip the bot to private mode when only userId is set (allowFrom empty)', async () => {
+      // The reverse safety check: a long-standing operator who only ever
+      // configured `userId` for AI push must not suddenly find their bot
+      // restricted to themselves once allowFrom-as-global-gate ships.
+      const { mention } = await loadHandlers({
+        dmPolicy: 'open',
+        groupPolicy: 'open',
+        userId: 'operator-id',
+      });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, {
+        author: { isBot: false, userId: 'random-user', userName: 'random' },
+        isMention: true,
+        text: '@bot hi',
+      });
+
+      // Random user gets through because allowFrom is empty → no filter.
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
     });
   });

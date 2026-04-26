@@ -158,12 +158,12 @@ export default {
     'Show tool call details during AI responses. When disabled, only the final response is displayed for a cleaner experience.',
   'channel.historyLimit': 'History Message Limit',
   'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
-  'channel.serverId': 'Default Server / Guild ID',
+  'channel.serverId': 'Default Server (for AI tools)',
   'channel.serverIdHint':
-    'Your default server or guild ID on this platform. The AI uses it to list channels without asking.',
-  'channel.userId': 'Your Platform User ID',
+    "The server / guild ID AI tools should default to when you ask the bot to act on a server (e.g. 'list channels', 'send to #announcements'). Independent of access control — see Group Policy for that.",
+  'channel.userId': 'Your Platform User ID (for AI tools)',
   'channel.userIdHint':
-    'Your user ID on this platform. The AI can use it to send you direct messages.',
+    "Your platform user ID. AI tools use it to reach you proactively (scheduled reminders, notifications). When set, this ID is also implicitly trusted by the global allowlist — populating Allowed User IDs without you in it won't lock you out.",
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',

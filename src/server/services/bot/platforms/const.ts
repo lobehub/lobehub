@@ -5,7 +5,7 @@ import type { FieldSchema } from './types';
 
 export const displayToolCallsField: FieldSchema = {
   key: 'displayToolCalls',
-  default: true,
+  default: false,
   description: 'channel.displayToolCallsHint',
   label: 'channel.displayToolCalls',
   type: 'boolean',
@@ -243,11 +243,27 @@ export function extractDmSettings(
   return { policy };
 }
 
-/** Read the global user-ID allowlist from `settings.allowFrom`. */
+/**
+ * Read the global user-ID allowlist from `settings.allowFrom`.
+ *
+ * When `allowFrom` is non-empty and `settings.userId` (the operator's own
+ * platform ID, used by AI tools to push notifications back to them) is
+ * also set, that operator ID is implicitly merged in so the operator
+ * cannot accidentally lock themselves out by listing only their friends.
+ *
+ * Empty `allowFrom` short-circuits to "no filter" — populating only
+ * `userId` does **not** flip the bot into private mode, which preserves
+ * the original purpose of `userId` (AI-to-operator push) for everyone
+ * who set it before `allowFrom` existed.
+ */
 export function extractUserAllowlist(
   settings: Record<string, unknown> | null | undefined,
 ): UserAllowlist {
-  return { ids: parseIdList(settings?.allowFrom) };
+  const explicit = parseIdList(settings?.allowFrom);
+  if (explicit.length === 0) return { ids: [] };
+  const operatorId = (settings?.userId as string | undefined)?.trim();
+  if (!operatorId || explicit.includes(operatorId)) return { ids: explicit };
+  return { ids: [...explicit, operatorId] };
 }
 
 /** Read `settings.groupPolicy` + `settings.groupAllowFrom`. */

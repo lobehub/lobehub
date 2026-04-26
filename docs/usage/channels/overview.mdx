@@ -84,6 +84,8 @@ Behaviour when populated:
 
 Enter platform user IDs separated by commas, whitespace, or newlines — for example `123456789, 987654321` on Telegram or `U01ABCXYZ, U02DEFUVW` on Slack.
 
+> **Anti-lockout**: if you have **Your Platform User ID** set (the AI-tools field), that ID is implicitly trusted by the global allowlist. Forgetting to add yourself to **Allowed User IDs** when scoping the bot to friends won't lock you out.
+
 ## Direct Message Policy
 
 DM Policy only governs DMs — group `@mentions` are gated independently by **Group Policy** below. The user-level filter from the global **Allowed User IDs** is also applied; per-scope policy stacks on top.
