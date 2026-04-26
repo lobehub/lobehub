@@ -47,6 +47,8 @@
   "sales-pipeline-review.description": "每周五盘点销售漏斗：停滞订单、下周续约、下周重点跟进 3 条",
   "sales-pipeline-review.prompt": "每周五下午 17:00 盘点我的销售漏斗：列出停滞超过 7 天的订单、未来 30 天的续约、并为下周一推荐 3 个高优先级跟进带话术。",
   "sales-pipeline-review.title": "销售漏斗周会",
+  "schedule.daily": "每天 {{time}}",
+  "schedule.weekly": "每{{weekday}} {{time}}",
   "section.title": "试试这些定时任务",
   "seo-weekly-report.description": "每周一一份轻量 SEO 报告：排名变化、新关键词机会、值得翻新的页面",
   "seo-weekly-report.prompt": "每周一早上 9:00 给我一份轻量 SEO 周报：排名升/降 TOP 变动、5 个值得关注的新关键词、3 个适合内容翻新的老页面。",

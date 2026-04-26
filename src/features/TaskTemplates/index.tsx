@@ -1,9 +1,11 @@
 import { type TaskTemplate, type TaskTemplateCategory } from '@lobechat/const';
+import { formatScheduleTime, parseCronPattern, WEEKDAY_I18N_KEYS } from '@lobechat/utils/cron';
 import { ActionIcon, Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import {
   Briefcase,
+  Clock,
   Code,
   GraduationCap,
   Lightbulb,
@@ -80,6 +82,7 @@ interface TaskTemplateCardProps {
 
 const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) => {
   const { t } = useTranslation('taskTemplate');
+  const { t: tSetting } = useTranslation('setting');
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
@@ -89,6 +92,18 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) =
   // Dynamic key lookups: defaultValue forces t() into its string-returning overload.
   const title = t(`${template.id}.title`, { defaultValue: '' });
   const description = t(`${template.id}.description`, { defaultValue: '' });
+
+  const scheduleText = useMemo(() => {
+    const parsed = parseCronPattern(template.cronPattern);
+    const time = formatScheduleTime(parsed.triggerHour, parsed.triggerMinute);
+    if (parsed.scheduleType === 'weekly' && parsed.weekdays?.length === 1) {
+      const weekday = tSetting(`agentCronJobs.weekday.${WEEKDAY_I18N_KEYS[parsed.weekdays[0]]}`);
+      return t('schedule.weekly', { time, weekday });
+    }
+    // Catalog ships only daily + single-weekday weekly today; multi-day or
+    // hourly templates would land here and need richer copy when added.
+    return t('schedule.daily', { time });
+  }, [t, tSetting, template.cronPattern]);
 
   const handleCreate = useCallback(async () => {
     if (!inboxAgentId) return;
@@ -139,6 +154,12 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) =
         <Text fontSize={12} style={{ color: cssVar.colorTextDescription }}>
           {description}
         </Text>
+        <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
+          <Icon icon={Clock} size={12} />
+          <Text fontSize={12} style={{ color: 'inherit' }}>
+            {scheduleText}
+          </Text>
+        </Flexbox>
       </Flexbox>
       <Button
         disabled={created || !inboxAgentId}

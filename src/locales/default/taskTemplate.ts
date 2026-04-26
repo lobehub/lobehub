@@ -6,6 +6,9 @@ export default {
   'action.dismiss.error': 'Failed to dismiss. Please try again.',
   'action.dismiss.tooltip': 'Not interested',
 
+  'schedule.daily': 'Every day at {{time}}',
+  'schedule.weekly': 'Every {{weekday}} at {{time}}',
+
   'arxiv-curated-daily.description':
     'Every morning, pick 5 fresh papers in your research area with one-line summaries. Cut your paper-scanning time in half.',
   'arxiv-curated-daily.prompt':

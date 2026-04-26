@@ -47,6 +47,8 @@
   "sales-pipeline-review.description": "Every Friday, review your pipeline: stalled deals, upcoming renewals, and 3 high-priority follow-ups for next week.",
   "sales-pipeline-review.prompt": "Every Friday at 17:00, review my sales pipeline: list deals stalled for over 7 days, upcoming renewals in the next 30 days, and suggest 3 high-priority follow-ups for next Monday with talking points.",
   "sales-pipeline-review.title": "Sales pipeline review",
+  "schedule.daily": "Every day at {{time}}",
+  "schedule.weekly": "Every {{weekday}} at {{time}}",
   "section.title": "Try these scheduled tasks",
   "seo-weekly-report.description": "Every Monday, a lightweight SEO report: ranking movement, new keywords to chase, and pages worth refreshing.",
   "seo-weekly-report.prompt": "Every Monday at 9:00, give me a lightweight SEO weekly: top ranking movers (up/down), 5 emerging keywords worth targeting, and 3 existing pages ripe for a content refresh.",
