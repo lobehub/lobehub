@@ -43,6 +43,8 @@ export interface FieldSchema {
   devOnly?: boolean;
   /** Enum options for select fields */
   enum?: string[];
+  /** Per-option help text rendered alongside each enum option (1:1 with `enum`). */
+  enumDescriptions?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
   /** Array item schema */

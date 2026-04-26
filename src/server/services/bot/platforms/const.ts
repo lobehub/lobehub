@@ -162,8 +162,13 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
   return {
     key: 'dmPolicy',
     default: defaults.policy,
-    description: 'channel.dmPolicyHint',
     enum: ['open', 'allowlist', 'pairing', 'disabled'],
+    enumDescriptions: [
+      'channel.dmPolicyOpenHint',
+      'channel.dmPolicyAllowlistHint',
+      'channel.dmPolicyPairingHint',
+      'channel.dmPolicyDisabledHint',
+    ],
     enumLabels: [
       'channel.dmPolicyOpen',
       'channel.dmPolicyAllowlist',

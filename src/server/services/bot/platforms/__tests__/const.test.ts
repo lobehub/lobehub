@@ -114,6 +114,14 @@ describe('makeDmPolicyField', () => {
       'channel.dmPolicyPairing',
       'channel.dmPolicyDisabled',
     ]);
+    // Per-option descriptions render to the right of each option in the
+    // dropdown — must stay 1:1 with `enum`/`enumLabels` for the same reason.
+    expect(field.enumDescriptions).toEqual([
+      'channel.dmPolicyOpenHint',
+      'channel.dmPolicyAllowlistHint',
+      'channel.dmPolicyPairingHint',
+      'channel.dmPolicyDisabledHint',
+    ]);
   });
 
   it('supports the per-platform default override (e.g. opt-in disabled)', () => {
