@@ -8,7 +8,10 @@ import {
   AGENT_SIGNAL_SOURCE_TYPES,
   type SourceAgentUserMessage,
 } from '@/server/services/agentSignal/sourceTypes';
-import { runAgentSignalWorkflow } from '@/server/workflows/agentSignal/run';
+import {
+  runAgentSignalWorkflow,
+  type RunAgentSignalWorkflowDeps,
+} from '@/server/workflows/agentSignal/run';
 import { uuid } from '@/utils/uuid';
 
 const createWorkflowContext = <TPayload>(requestPayload: TPayload) => {
@@ -168,10 +171,12 @@ describe('runAgentSignalWorkflow', () => {
     ]);
 
     const now = Date.now();
-    const executeSourceEvent = vi.fn(async (sourceEvent: AgentSignalSourceEnvelope) => {
-      capturedSourceEvent = sourceEvent;
-      return undefined;
-    });
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async (sourceEvent) => {
+        capturedSourceEvent = sourceEvent as AgentSignalSourceEnvelope;
+        return undefined;
+      },
+    );
 
     const result = await runAgentSignalWorkflow(
       createWorkflowContext({
@@ -343,10 +348,12 @@ describe('runAgentSignalWorkflow', () => {
       },
     ]);
 
-    const executeSourceEvent = vi.fn(async (sourceEvent: AgentSignalSourceEnvelope) => {
-      capturedSourceEvent = sourceEvent;
-      return undefined;
-    });
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async (sourceEvent) => {
+        capturedSourceEvent = sourceEvent as AgentSignalSourceEnvelope;
+        return undefined;
+      },
+    );
 
     const result = await runAgentSignalWorkflow(
       createWorkflowContext({

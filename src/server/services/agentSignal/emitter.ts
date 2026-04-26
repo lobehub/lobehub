@@ -70,7 +70,13 @@ export type UserMessageAgentSignalSourceInput = AgentSignalSourceEventInput<
   SourceAgentUserMessage['sourceType']
 >;
 
-export type AgentSignalSourceEnvelope = AgentSignalSourceEventInput<AgentSignalSourceType>;
+export interface AgentSignalSourceEnvelope extends Omit<
+  AgentSignalSourceEventInput<AgentSignalSourceType>,
+  'scopeKey' | 'timestamp'
+> {
+  scopeKey: string;
+  timestamp: number;
+}
 
 export const resolveSourceScopeKey = (payload: Record<string, unknown>) => {
   return AgentSignalScopeKey.fromProducerInput({
