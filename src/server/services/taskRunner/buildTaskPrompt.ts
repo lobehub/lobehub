@@ -1,44 +1,26 @@
+import { buildTaskRunPrompt } from '@lobechat/prompts';
 import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
 
-import { buildTaskRunPrompt, type TaskRunPromptInput } from './index';
+import type { BriefModel } from '@/database/models/brief';
+import type { TaskModel } from '@/database/models/task';
+import type { TaskTopicModel } from '@/database/models/taskTopic';
 
-// ── Structurally-typed deps ──
-//
-// Accept model instances by shape so the prompts package stays free of
-// `@lobechat/database` imports. We use `TaskItem` (from `@lobechat/types`)
-// as the task shape so server-side `TaskModel` methods — which type their
-// `task` parameter as `TaskItem` — are assignable here without contravariance
-// errors.
-
-export interface TaskPromptDeps {
-  briefModel: {
-    findByTaskId: (taskId: string) => Promise<any[]>;
-  };
-  taskModel: {
-    findById: (id: string) => Promise<TaskItem | null>;
-    findByIds: (ids: string[]) => Promise<TaskItem[]>;
-    findSubtasks: (taskId: string) => Promise<any[]>;
-    getComments: (taskId: string) => Promise<any[]>;
-    getDependencies: (taskId: string) => Promise<any[]>;
-    getDependenciesByTaskIds: (ids: string[]) => Promise<any[]>;
-    getReviewConfig: (task: TaskItem) => Record<string, any> | undefined;
-    getTreePinnedDocuments: (taskId: string) => Promise<WorkspaceData>;
-  };
-  taskTopicModel: {
-    findWithHandoff: (taskId: string) => Promise<any[]>;
-  };
+export interface BuildTaskPromptDeps {
+  briefModel: BriefModel;
+  taskModel: TaskModel;
+  taskTopicModel: TaskTopicModel;
 }
 
 /**
- * Fetch task context from the data layer and render the prompt that
- * `task.run` injects into the agent runtime.
+ * Server-side orchestrator: fetches task context from the DB and renders the
+ * prompt that `task.run` injects into the agent runtime.
  *
- * Pure shaping logic. Model dependencies are injected — the prompts package
- * does not import `@lobechat/database`.
+ * Pure prompt rendering lives in `@lobechat/prompts` (`buildTaskRunPrompt`).
+ * This wrapper is the DB-aware layer that assembles the input from models.
  */
 export async function buildTaskPrompt(
   task: TaskItem,
-  deps: TaskPromptDeps,
+  deps: BuildTaskPromptDeps,
   extraPrompt?: string,
 ): Promise<string> {
   const { briefModel, taskModel, taskTopicModel } = deps;
@@ -73,7 +55,20 @@ export async function buildTaskPrompt(
   const depIdToIdentifier = new Map(depTasks.map((t: any) => [t.id, t.identifier]));
 
   let parentIdentifier: string | null = null;
-  let parentTaskContext: TaskRunPromptInput['parentTask'];
+  let parentTaskContext:
+    | {
+        identifier: string;
+        instruction: string;
+        name?: string | null;
+        subtasks?: Array<{
+          blockedBy?: string;
+          identifier: string;
+          name?: string | null;
+          priority?: number | null;
+          status: string;
+        }>;
+      }
+    | undefined;
 
   if (task.parentTaskId) {
     const parent = await taskModel.findById(task.parentTaskId);
