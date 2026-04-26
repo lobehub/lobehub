@@ -49,7 +49,7 @@
       ]
     }
   ],
-  "installCommand": "corepack enable && pnpm install",
+  "installCommand": "npx pnpm@10.26.2 install",
   "rewrites": [
     {
       "source": "/_dangerous_local_dev_proxy",
