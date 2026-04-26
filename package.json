@@ -480,7 +480,7 @@
     "@types/unist": "^3.0.3",
     "@types/ws": "^8.18.1",
     "@types/xast": "^2.0.4",
-    "@typescript/native-preview": "7.0.0-dev.20260207.1",
+    "@typescript/native-preview": "7.0.0-dev.20260425.1",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/coverage-v8": "^3.2.4",
     "ajv": "^8.17.1",

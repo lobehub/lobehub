@@ -45,10 +45,11 @@ export const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-pro',
     maxOutput: 384_000,
     pricing: {
+      // Official limited-time 75% off discount is valid until 2026-05-05 15:59 UTC.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.145, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.74, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3.48, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03625, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.435, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.87, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-24',

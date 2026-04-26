@@ -50,10 +50,11 @@ const deepseekChatModels: AIChatModelCard[] = [
     maxOutput: 384_000,
     pricing: {
       currency: 'CNY',
+      // Official limited-time 75% off discount is valid until 2026-05-05 23:59 Beijing time.
       units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-24',
