@@ -1,11 +1,14 @@
 /**
  * Well-known `topic.trigger` values used to segment the same agent's topics
  * across different panels (Task Manager vs. main chat).
+ *
+ * `RunTask` is what `TaskRunnerService` writes when starting an agent run for
+ * a task; the literal `'task'` is intentional and matches existing DB rows.
  */
 export const TopicTrigger = {
   Cron: 'cron',
   Eval: 'eval',
-  RunTask: 'run_task',
+  RunTask: 'task',
   TaskManager: 'task_manager',
 } as const;
 
