@@ -10,6 +10,14 @@ import type {
   RuntimeWaitProcessorResult,
 } from '@lobechat/agent-signal';
 import { AGENT_SIGNAL_TYPES, createSource } from '@lobechat/agent-signal';
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
+import {
+  handlerCounter,
+  handlerDurationHistogram,
+  terminalResultCounter,
+  tracer,
+} from '@lobechat/observability-otel/modules/agent-signal';
+import { attributesCommon } from '@lobechat/observability-otel/node';
 
 import {
   createRuntimeProcessorContext,
@@ -98,6 +106,8 @@ const isExecutorResult = (value: unknown): value is ExecutorResult => {
   return value.status === 'applied' || value.status === 'failed' || value.status === 'skipped';
 };
 
+type HandlerKind = 'action' | 'signal' | 'source';
+
 const buildExecutionSignal = (action: BaseAction, result: ExecutorResult): BaseSignal => {
   const baseSignal = {
     chain: {
@@ -138,6 +148,53 @@ const buildExecutionSignal = (action: BaseAction, result: ExecutorResult): BaseS
         ? AGENT_SIGNAL_TYPES.actionApplied
         : AGENT_SIGNAL_TYPES.actionSkipped,
   };
+};
+
+const resolveRuntimeNodeKind = (node: RuntimeNode): HandlerKind => {
+  if (isSourceNode(node)) return 'source';
+  if (isSignalNode(node)) return 'signal';
+
+  return 'action';
+};
+
+const resolveRuntimeNodeType = (node: RuntimeNode) => {
+  if (isSourceNode(node)) return node.sourceType;
+  if (isSignalNode(node)) return node.signalType;
+
+  return node.actionType;
+};
+
+const resolveTerminalReason = (
+  result:
+    | RuntimeConcludeProcessorResult
+    | RuntimeScheduleProcessorResult
+    | RuntimeWaitProcessorResult,
+) => {
+  if (result.status === 'wait') {
+    return typeof result.pending?.reason === 'string' ? result.pending.reason : 'wait';
+  }
+
+  if (result.status === 'conclude') {
+    return typeof result.concluded?.reason === 'string' ? result.concluded.reason : 'conclude';
+  }
+
+  return 'schedule';
+};
+
+const recordTerminalResultMetric = (
+  node: RuntimeNode,
+  result:
+    | RuntimeConcludeProcessorResult
+    | RuntimeScheduleProcessorResult
+    | RuntimeWaitProcessorResult,
+) => {
+  terminalResultCounter.add(1, {
+    'agent.signal.node_kind': resolveRuntimeNodeKind(node),
+    'agent.signal.node_type': resolveRuntimeNodeType(node),
+    'agent.signal.terminal_reason': resolveTerminalReason(result),
+    'agent.signal.terminal_status': result.status,
+    ...attributesCommon(),
+  });
 };
 
 /** Queue-driven scheduler for one already-assembled AgentSignal runtime. */
@@ -214,6 +271,7 @@ export class AgentSignalScheduler {
       case 'conclude':
       case 'schedule':
       case 'wait': {
+        recordTerminalResultMetric(node, result);
         return result;
       }
       case 'dispatch': {
@@ -244,6 +302,39 @@ export class AgentSignalScheduler {
     return 'timestamp' in node && typeof node.timestamp === 'number' ? node.timestamp : Date.now();
   }
 
+  /**
+   * Dispatches one runtime node to every matching handler and records per-handler observability.
+   *
+   * Search spans:
+   * - `agent_signal.handler.run`
+   *
+   * Expected attributes:
+   * - `agent.signal.handler_id`
+   * - `agent.signal.handler_kind`
+   * - `agent.signal.node_type`
+   * - `agent.signal.scope_key`
+   * - `agent.signal.handler_result_status` after the handler returns
+   *
+   * Expected events:
+   * - none; handler runs are modeled as one span per invocation
+   *
+   * Expected metrics:
+   * - `agent_signal_handler_runs_total`
+   * - `agent_signal_handler_duration_ms`
+   * - `agent_signal_terminal_results_total` when a handler returns `wait`, `schedule`, or `conclude`
+   *
+   * Metric attributes:
+   * - `agent.signal.handler_id`
+   * - `agent.signal.handler_kind`: `source | signal | action`
+   * - `agent.signal.node_type`
+   * - `agent.signal.handler_status`: `ok | error`
+   * - `agent.signal.terminal_status` / `agent.signal.terminal_reason` for terminal runtime results
+   *
+   * Failure modes:
+   * - Marks the handler span as `ERROR` and rethrows when the handler throws
+   * - Records terminal-result metrics before returning `wait`, `schedule`, or `conclude`
+   * - Leaves `terminalResult` undefined when the handler only dispatches more work or returns void
+   */
   private async dispatchHandlers<TNode extends RuntimeNode>(
     handlers: Array<AgentSignalSchedulerHandler<TNode>>,
     node: TNode,
@@ -253,21 +344,79 @@ export class AgentSignalScheduler {
   ) {
     let terminalResult: AgentSignalSchedulerEmitResult | undefined;
     const now = this.resolveNodeTime(node);
+    const handlerKind = resolveRuntimeNodeKind(node);
+    const nodeType = resolveRuntimeNodeType(node);
 
     for (const handler of handlers) {
-      const result = await handler.handle(
-        node,
-        createRuntimeProcessorContext({
-          backend: this.deps.backend,
-          now: () => now,
-          scopeKey,
-        }),
-      );
-      const runtimeResult = await this.applyResult(node, result, queue, trace);
+      const startedAt = Date.now();
+      const metricAttributes = {
+        'agent.signal.handler_id': handler.id,
+        'agent.signal.handler_kind': handlerKind,
+        'agent.signal.node_type': nodeType,
+        ...attributesCommon(),
+      };
 
-      if (runtimeResult && !terminalResult) {
-        terminalResult = runtimeResult;
-      }
+      await tracer.startActiveSpan(
+        'agent_signal.handler.run',
+        {
+          attributes: {
+            'agent.signal.handler_id': handler.id,
+            'agent.signal.handler_kind': handlerKind,
+            'agent.signal.node_type': nodeType,
+            'agent.signal.scope_key': scopeKey,
+          },
+        },
+        async (span) => {
+          let outcome: 'error' | 'ok' = 'ok';
+
+          try {
+            const result = await handler.handle(
+              node,
+              createRuntimeProcessorContext({
+                backend: this.deps.backend,
+                now: () => now,
+                scopeKey,
+              }),
+            );
+            const runtimeResult = await this.applyResult(node, result, queue, trace);
+
+            if (isExecutorResult(result)) {
+              span.setAttribute('agent.signal.handler_result_status', result.status);
+            } else if (result) {
+              span.setAttribute('agent.signal.handler_result_status', result.status);
+            } else {
+              span.setAttribute('agent.signal.handler_result_status', 'void');
+            }
+
+            if (runtimeResult && !terminalResult) {
+              terminalResult = runtimeResult;
+            }
+
+            span.setStatus({ code: SpanStatusCode.OK });
+          } catch (error) {
+            outcome = 'error';
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: error instanceof Error ? error.message : 'AgentSignal handler failed',
+            });
+            span.recordException(error as Error);
+
+            throw error;
+          } finally {
+            const durationMs = Date.now() - startedAt;
+
+            handlerCounter.add(1, {
+              ...metricAttributes,
+              'agent.signal.handler_status': outcome,
+            });
+            handlerDurationHistogram.record(durationMs, {
+              ...metricAttributes,
+              'agent.signal.handler_status': outcome,
+            });
+            span.end();
+          }
+        },
+      );
     }
 
     return terminalResult;
