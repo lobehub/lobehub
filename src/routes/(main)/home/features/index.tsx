@@ -5,7 +5,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DailyBrief from '@/features/DailyBrief';
-import TemplateRecommendations from '@/features/DailyBrief/TemplateRecommendations';
+import TaskTemplates from '@/features/TaskTemplates';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -34,7 +34,7 @@ const Home = memo(() => {
       {isLogin && (
         <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
           <DailyBrief />
-          <TemplateRecommendations />
+          <TaskTemplates />
         </Flexbox>
       )}
       {/* Use CSS visibility to hide instead of unmounting to prevent data re-fetching */}

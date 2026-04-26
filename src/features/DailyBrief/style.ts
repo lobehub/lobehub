@@ -1,19 +1,5 @@
 import { createStaticStyles } from 'antd-style';
 
-export const recommendStyles = createStaticStyles(({ css, cssVar }) => ({
-  iconBadge: css`
-    flex-shrink: 0;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
-
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBtn: css`
     &:hover {

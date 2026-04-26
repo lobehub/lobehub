@@ -31,7 +31,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
-import { recommendStyles, styles } from './style';
+import { styles } from './style';
 
 const RECOMMEND_THRESHOLD = 1;
 
@@ -72,11 +72,11 @@ const ICON_BY_CATEGORY: Record<TaskTemplateCategory, LucideIcon> = {
   'product': Package,
 };
 
-interface TemplateCardProps {
+interface TaskTemplateCardProps {
   template: TaskTemplate;
 }
 
-const TemplateCard = memo<TemplateCardProps>(({ template }) => {
+const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template }) => {
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
@@ -120,7 +120,7 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
     >
-      <Flexbox align={'center'} className={recommendStyles.iconBadge} justify={'center'}>
+      <Flexbox align={'center'} className={styles.iconBadge} justify={'center'}>
         <Icon icon={IconComp} size={18} />
       </Flexbox>
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
@@ -144,7 +144,7 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
   );
 });
 
-const TemplateRecommendations = memo(() => {
+const TaskTemplates = memo(() => {
   const { t } = useTranslation('taskTemplate');
   const isLogin = useUserStore(authSelectors.isLogin);
   const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
@@ -172,11 +172,11 @@ const TemplateRecommendations = memo(() => {
     <GroupBlock icon={Lightbulb} title={t('section.title')}>
       <Flexbox gap={8}>
         {templates.map((tmpl) => (
-          <TemplateCard key={tmpl.id} template={tmpl} />
+          <TaskTemplateCard key={tmpl.id} template={tmpl} />
         ))}
       </Flexbox>
     </GroupBlock>
   );
 });
 
-export default TemplateRecommendations;
+export default TaskTemplates;
