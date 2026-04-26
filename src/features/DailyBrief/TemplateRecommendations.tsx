@@ -1,4 +1,4 @@
-import { type BriefTemplate, type BriefTemplateCategory } from '@lobechat/const';
+import { type TaskTemplate, type TaskTemplateCategory } from '@lobechat/const';
 import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
@@ -21,7 +21,7 @@ import useSWR from 'swr';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { agentCronJobService } from '@/services/agentCronJob';
-import { briefTemplateService } from '@/services/briefTemplate';
+import { taskTemplateService } from '@/services/taskTemplate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useBriefStore } from '@/store/brief';
@@ -61,7 +61,7 @@ const useResolvedInterestKeys = (): string[] => {
   }, [userInterests, t]);
 };
 
-const ICON_BY_CATEGORY: Record<BriefTemplateCategory, LucideIcon> = {
+const ICON_BY_CATEGORY: Record<TaskTemplateCategory, LucideIcon> = {
   'business': Briefcase,
   'content-creation': PenSquare,
   'design': Palette,
@@ -73,11 +73,11 @@ const ICON_BY_CATEGORY: Record<BriefTemplateCategory, LucideIcon> = {
 };
 
 interface TemplateCardProps {
-  template: BriefTemplate;
+  template: TaskTemplate;
 }
 
 const TemplateCard = memo<TemplateCardProps>(({ template }) => {
-  const { t } = useTranslation('briefTemplate');
+  const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
@@ -104,7 +104,7 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
       setCreated(true);
       message.success(t('action.create.success'));
     } catch (error) {
-      console.error('[briefTemplate:create]', error);
+      console.error('[taskTemplate:create]', error);
       message.error(t('action.create.error'));
     } finally {
       setLoading(false);
@@ -145,7 +145,7 @@ const TemplateCard = memo<TemplateCardProps>(({ template }) => {
 });
 
 const TemplateRecommendations = memo(() => {
-  const { t } = useTranslation('briefTemplate');
+  const { t } = useTranslation('taskTemplate');
   const isLogin = useUserStore(authSelectors.isLogin);
   const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
@@ -160,8 +160,8 @@ const TemplateRecommendations = memo(() => {
   const enabled = isLogin && !!enableAgentTask && isInit && briefs.length <= RECOMMEND_THRESHOLD;
 
   const { data, isLoading } = useSWR(
-    enabled ? ['briefTemplate.listDailyRecommend', swrKey] : null,
-    async () => briefTemplateService.listDailyRecommend(interestKeys),
+    enabled ? ['taskTemplate.listDailyRecommend', swrKey] : null,
+    async () => taskTemplateService.listDailyRecommend(interestKeys),
   );
 
   if (!enabled || isLoading) return null;

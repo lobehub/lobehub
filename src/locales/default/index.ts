@@ -2,7 +2,6 @@ import agent from './agent';
 import agentGroup from './agentGroup';
 import auth from './auth';
 import authError from './authError';
-import briefTemplate from './briefTemplate';
 import changelog from './changelog';
 import chat from './chat';
 import color from './color';
@@ -37,6 +36,7 @@ import setting from './setting';
 import spend from './spend';
 import subscription from './subscription';
 import suggestQuestions from './suggestQuestions';
+import taskTemplate from './taskTemplate';
 import thread from './thread';
 import tool from './tool';
 import topic from './topic';
@@ -49,7 +49,7 @@ const resources = {
   agentGroup,
   auth,
   authError,
-  briefTemplate,
+  taskTemplate,
   changelog,
   chat,
   color,

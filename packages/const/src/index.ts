@@ -1,5 +1,4 @@
 export * from './bot';
-export * from './briefTemplate';
 export * from './currency';
 export * from './desktop';
 export * from './desktopGlobalShortcuts';
@@ -15,6 +14,7 @@ export * from './plugin';
 export * from './recommendedSkill';
 export * from './session';
 export * from './settings';
+export * from './taskTemplate';
 export * from './theme';
 export * from './trace';
 export * from './url';

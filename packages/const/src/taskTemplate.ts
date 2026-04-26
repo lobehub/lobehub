@@ -1,19 +1,19 @@
 /**
- * Brief Template catalog used by home "Try following tasks" recommendation.
- * I18n keys: `briefTemplate:${id}.title|description|prompt`.
+ * Task Template catalog used by home "Try following tasks" recommendation.
+ * I18n keys: `taskTemplate:${id}.title|description|prompt`.
  * Templates requiring third-party OAuth are excluded from this MVP catalog.
  *
  * `interests` values must be keys from `INTEREST_AREAS` in
  * `src/routes/onboarding/config.ts` — that's what `users.interests` stores.
  */
-export interface BriefTemplate {
-  category: BriefTemplateCategory;
+export interface TaskTemplate {
+  category: TaskTemplateCategory;
   cronPattern: string;
   id: string;
   interests: string[];
 }
 
-export type BriefTemplateCategory =
+export type TaskTemplateCategory =
   | 'content-creation'
   | 'engineering'
   | 'design'
@@ -24,12 +24,12 @@ export type BriefTemplateCategory =
   | 'personal-life';
 
 /** Generic categories used to fill the pool when interest-matched picks are insufficient. */
-export const BRIEF_TEMPLATE_FALLBACK_CATEGORIES: BriefTemplateCategory[] = [
+export const TASK_TEMPLATE_FALLBACK_CATEGORIES: TaskTemplateCategory[] = [
   'personal-life',
   'learning-research',
 ];
 
-export const briefTemplates: BriefTemplate[] = [
+export const taskTemplates: TaskTemplate[] = [
   {
     id: 'daily-topic-pick',
     category: 'content-creation',

@@ -1,7 +1,7 @@
 import {
-  BRIEF_TEMPLATE_FALLBACK_CATEGORIES,
-  type BriefTemplate,
-  briefTemplates,
+  TASK_TEMPLATE_FALLBACK_CATEGORIES,
+  type TaskTemplate,
+  taskTemplates,
 } from '@lobechat/const';
 
 export const RECOMMEND_COUNT = 3;
@@ -37,7 +37,7 @@ const seededShuffle = <T>(items: T[], seed: number): T[] => {
 
 const normalize = (s: string) => s.trim().toLowerCase();
 
-const hasIntersection = (template: BriefTemplate, userInterests: string[]): boolean => {
+const hasIntersection = (template: TaskTemplate, userInterests: string[]): boolean => {
   if (userInterests.length === 0) return false;
   const normalized = new Set(userInterests.map(normalize));
   return template.interests.some((i) => normalized.has(normalize(i)));
@@ -45,7 +45,7 @@ const hasIntersection = (template: BriefTemplate, userInterests: string[]): bool
 
 const getUtcDateStr = (now: Date): string => now.toISOString().slice(0, 10);
 
-export class BriefTemplateService {
+export class TaskTemplateService {
   constructor(private userId: string) {}
 
   /**
@@ -55,21 +55,21 @@ export class BriefTemplateService {
   async listDailyRecommend(
     interestKeys: string[],
     now: Date = new Date(),
-  ): Promise<BriefTemplate[]> {
+  ): Promise<TaskTemplate[]> {
     const seed = hashString(`${this.userId}:${getUtcDateStr(now)}`);
 
-    const matched = briefTemplates.filter((t) => hasIntersection(t, interestKeys));
-    const result: BriefTemplate[] = seededShuffle(matched, seed).slice(0, RECOMMEND_COUNT);
+    const matched = taskTemplates.filter((t) => hasIntersection(t, interestKeys));
+    const result: TaskTemplate[] = seededShuffle(matched, seed).slice(0, RECOMMEND_COUNT);
 
-    const takeFrom = (pool: BriefTemplate[]) => {
+    const takeFrom = (pool: TaskTemplate[]) => {
       if (result.length >= RECOMMEND_COUNT) return;
       const seen = new Set(result.map((t) => t.id));
       const remaining = pool.filter((t) => !seen.has(t.id));
       result.push(...seededShuffle(remaining, seed).slice(0, RECOMMEND_COUNT - result.length));
     };
 
-    takeFrom(briefTemplates.filter((t) => BRIEF_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)));
-    takeFrom(briefTemplates);
+    takeFrom(taskTemplates.filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)));
+    takeFrom(taskTemplates);
 
     return result;
   }

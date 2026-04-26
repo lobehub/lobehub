@@ -1,24 +1,24 @@
 // @vitest-environment node
-import { briefTemplates } from '@lobechat/const';
+import { taskTemplates } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { BriefTemplateService, RECOMMEND_COUNT } from './index';
+import { RECOMMEND_COUNT, TaskTemplateService } from './index';
 
 const UTC_DAY_1 = new Date('2026-04-24T10:00:00Z');
 const UTC_DAY_2 = new Date('2026-04-25T10:00:00Z');
 
-describe('BriefTemplateService.listDailyRecommend', () => {
+describe('TaskTemplateService.listDailyRecommend', () => {
   it('returns RECOMMEND_COUNT items when user has matching interests', async () => {
-    const service = new BriefTemplateService('user-1');
+    const service = new TaskTemplateService('user-1');
     const picked = await service.listDailyRecommend(['coding'], UTC_DAY_1);
 
     expect(picked).toHaveLength(RECOMMEND_COUNT);
-    const codingMatches = briefTemplates.filter((t) => t.interests.includes('coding'));
+    const codingMatches = taskTemplates.filter((t) => t.interests.includes('coding'));
     expect(picked.some((p) => codingMatches.some((m) => m.id === p.id))).toBe(true);
   });
 
   it('is stable for the same (userId, utcDate)', async () => {
-    const service = new BriefTemplateService('user-1');
+    const service = new TaskTemplateService('user-1');
 
     const a = await service.listDailyRecommend(['coding'], UTC_DAY_1);
     const b = await service.listDailyRecommend(
@@ -32,7 +32,7 @@ describe('BriefTemplateService.listDailyRecommend', () => {
   it('changes across UTC days', async () => {
     let matches = 0;
     for (const suffix of ['a', 'b', 'c', 'd', 'e']) {
-      const service = new BriefTemplateService(`user-${suffix}`);
+      const service = new TaskTemplateService(`user-${suffix}`);
       const d1 = await service.listDailyRecommend([], UTC_DAY_1);
       const d2 = await service.listDailyRecommend([], UTC_DAY_2);
       if (JSON.stringify(d1) === JSON.stringify(d2)) matches += 1;
@@ -43,7 +43,7 @@ describe('BriefTemplateService.listDailyRecommend', () => {
   it('differs across users on the same day', async () => {
     const results = await Promise.all(
       ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((s) =>
-        new BriefTemplateService(`user-${s}`)
+        new TaskTemplateService(`user-${s}`)
           .listDailyRecommend([], UTC_DAY_1)
           .then((r) => r.map((t) => t.id).join(',')),
       ),
@@ -52,25 +52,25 @@ describe('BriefTemplateService.listDailyRecommend', () => {
   });
 
   it('falls back to fallback categories when user has no interests', async () => {
-    const service = new BriefTemplateService('user-1');
+    const service = new TaskTemplateService('user-1');
     const picked = await service.listDailyRecommend([], UTC_DAY_1);
 
     expect(picked).toHaveLength(RECOMMEND_COUNT);
     for (const p of picked) {
-      expect(briefTemplates.some((t) => t.id === p.id)).toBe(true);
+      expect(taskTemplates.some((t) => t.id === p.id)).toBe(true);
     }
   });
 
   it('intersection is case-insensitive and trims whitespace', async () => {
-    const service = new BriefTemplateService('user-1');
+    const service = new TaskTemplateService('user-1');
     const picked = await service.listDailyRecommend(['  CoDing  '], UTC_DAY_1);
 
-    const codingMatches = briefTemplates.filter((t) => t.interests.includes('coding'));
+    const codingMatches = taskTemplates.filter((t) => t.interests.includes('coding'));
     expect(picked.some((p) => codingMatches.some((m) => m.id === p.id))).toBe(true);
   });
 
   it('unrecognized interest strings fall back to non-matched pool', async () => {
-    const service = new BriefTemplateService('user-1');
+    const service = new TaskTemplateService('user-1');
     // Freeform custom input won't match any template's interests — should still return 3 picks
     const picked = await service.listDailyRecommend(['my special hobby'], UTC_DAY_1);
 
