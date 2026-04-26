@@ -4,7 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { imageService } from '@/services/image';
 import { useImageStore } from '@/store/image';
 
+const { handleGenerationPromptModerationErrorMock } = vi.hoisted(() => ({
+  handleGenerationPromptModerationErrorMock: vi.fn(),
+}));
+
 // Mock external dependencies
+vi.mock('@/business/client/handleGenerationPromptModerationError', () => ({
+  handleGenerationPromptModerationError: handleGenerationPromptModerationErrorMock,
+}));
+
 vi.mock('@/services/image', () => ({
   imageService: {
     createImage: vi.fn().mockResolvedValue({
@@ -202,6 +210,7 @@ describe('CreateImageAction', () => {
 
       // The service should have been called before the error
       expect(mockImageService.createImage).toHaveBeenCalled();
+      expect(handleGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
 
       // Verify prompt is NOT cleared when error occurs
       expect(result.current.parameters?.prompt).toBe('test prompt');
@@ -235,6 +244,7 @@ describe('CreateImageAction', () => {
       // Verify topic was created before the error
       expect(mockCreateGenerationTopic).toHaveBeenCalled();
       expect(mockSwitchGenerationTopic).toHaveBeenCalled();
+      expect(handleGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
 
       // Verify prompt is NOT cleared when error occurs
       expect(result.current.parameters?.prompt).toBe('test prompt');
@@ -350,6 +360,7 @@ describe('CreateImageAction', () => {
 
       // Verify batch was removed before the error
       expect(mockRemoveGenerationBatch).toHaveBeenCalledWith('batch-id', 'active-topic-id');
+      expect(handleGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
     });
 
     it('should handle batch removal error', async () => {
