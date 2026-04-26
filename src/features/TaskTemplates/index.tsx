@@ -99,6 +99,7 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template }) => {
         cronPattern: template.cronPattern,
         enabled: true,
         name: title,
+        templateId: template.id,
         timezone: 'UTC',
       });
       setCreated(true);

@@ -54,11 +54,14 @@ export class TaskTemplateService {
    */
   async listDailyRecommend(
     interestKeys: string[],
-    now: Date = new Date(),
+    options: { excludeIds?: string[]; now?: Date } = {},
   ): Promise<TaskTemplate[]> {
+    const { excludeIds, now = new Date() } = options;
+    const excluded = new Set(excludeIds ?? []);
     const seed = hashString(`${this.userId}:${getUtcDateStr(now)}`);
 
-    const matched = taskTemplates.filter((t) => hasIntersection(t, interestKeys));
+    const candidates = taskTemplates.filter((t) => !excluded.has(t.id));
+    const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
     const result: TaskTemplate[] = seededShuffle(matched, seed).slice(0, RECOMMEND_COUNT);
 
     const takeFrom = (pool: TaskTemplate[]) => {
@@ -68,8 +71,8 @@ export class TaskTemplateService {
       result.push(...seededShuffle(remaining, seed).slice(0, RECOMMEND_COUNT - result.length));
     };
 
-    takeFrom(taskTemplates.filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)));
-    takeFrom(taskTemplates);
+    takeFrom(candidates.filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)));
+    takeFrom(candidates);
 
     return result;
   }
