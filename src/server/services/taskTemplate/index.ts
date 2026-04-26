@@ -2,6 +2,7 @@ import {
   TASK_TEMPLATE_FALLBACK_CATEGORIES,
   type TaskTemplate,
   taskTemplates,
+  type TaskTemplateSkillSource,
 } from '@lobechat/const';
 
 export const RECOMMEND_COUNT = 3;
@@ -45,6 +46,21 @@ const hasIntersection = (template: TaskTemplate, userInterests: string[]): boole
 
 const getUtcDateStr = (now: Date): string => now.toISOString().slice(0, 10);
 
+/**
+ * A template is eligible only if every `requiresSkills[].source` is enabled
+ * server-side. When a template declares no skill requirement, it is always
+ * eligible. When the caller passes no `enabledSkillSources` set, any template
+ * with skill requirements is filtered out (conservative default).
+ */
+export const isTemplateSkillSourceEligible = (
+  template: TaskTemplate,
+  enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>,
+): boolean => {
+  if (!template.requiresSkills || template.requiresSkills.length === 0) return true;
+  if (!enabledSkillSources) return false;
+  return template.requiresSkills.every((s) => enabledSkillSources.has(s.source));
+};
+
 export class TaskTemplateService {
   constructor(private userId: string) {}
 
@@ -54,13 +70,19 @@ export class TaskTemplateService {
    */
   async listDailyRecommend(
     interestKeys: string[],
-    options: { excludeIds?: string[]; now?: Date } = {},
+    options: {
+      enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>;
+      excludeIds?: string[];
+      now?: Date;
+    } = {},
   ): Promise<TaskTemplate[]> {
-    const { excludeIds, now = new Date() } = options;
+    const { enabledSkillSources, excludeIds, now = new Date() } = options;
     const excluded = new Set(excludeIds ?? []);
     const seed = hashString(`${this.userId}:${getUtcDateStr(now)}`);
 
-    const candidates = taskTemplates.filter((t) => !excluded.has(t.id));
+    const candidates = taskTemplates.filter(
+      (t) => !excluded.has(t.id) && isTemplateSkillSourceEligible(t, enabledSkillSources),
+    );
     const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
     const result: TaskTemplate[] = seededShuffle(matched, seed).slice(0, RECOMMEND_COUNT);
 

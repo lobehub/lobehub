@@ -1,4 +1,5 @@
 {
+  "action.connect.button": "Connect {{provider}}",
   "action.create.error": "Failed to create task. Please try again.",
   "action.create.success": "Scheduled task added. Find it in Lobe AI.",
   "action.createButton": "Add as scheduled task",
@@ -29,6 +30,9 @@
   "frontend-weekly-digest.description": "Every Monday, a curated digest of frontend news: browser updates, framework releases, notable blog posts.",
   "frontend-weekly-digest.prompt": "Every Monday at 9:00, curate a frontend weekly digest: browser engine updates, framework releases (React, Vue, Svelte, etc.), notable engineering blog posts — 10 items with a one-line takeaway each.",
   "frontend-weekly-digest.title": "Frontend weekly digest",
+  "github-pr-review-daily.description": "Each morning, list the PRs awaiting your review across your GitHub repos with a one-line takeaway each.",
+  "github-pr-review-daily.prompt": "Every morning at 9:00, fetch open PRs across my GitHub repos that are waiting on my review. For each, summarize the change in one line and flag anything that looks risky or has been sitting for more than 2 days.",
+  "github-pr-review-daily.title": "GitHub PR review queue",
   "hn-writing-angles.description": "Each morning, mine Hacker News front-page discussions and pull out 5 angles you could write about today.",
   "hn-writing-angles.prompt": "Every morning at 10:00, scan today's Hacker News front page and comments, surface 5 writable angles relevant to my niche, and note why each one has momentum right now.",
   "hn-writing-angles.title": "HN writing angles",
@@ -41,6 +45,9 @@
   "marketing-hot-radar.description": "Each morning, track 5 marketing topics heating up in your industry — which to ride, which to avoid.",
   "marketing-hot-radar.prompt": "Every morning at 10:00, track 5 marketing topics heating up in my industry, flag which ones to ride and which to avoid, with 1-2 sentence reasoning.",
   "marketing-hot-radar.title": "Marketing hot radar",
+  "notion-weekly-digest.description": "Every Monday, summarize last week's edits and new pages in your Notion workspace, grouped by area.",
+  "notion-weekly-digest.prompt": "Every Monday at 9:00, scan my Notion workspace for pages edited or created in the last 7 days. Group by top-level area and pick the 5 most important changes worth re-reading.",
+  "notion-weekly-digest.title": "Notion weekly digest",
   "oss-intel-daily.description": "Each morning, get 10 tech stack updates: GitHub Trending, big-name open-sourcing, key repo releases.",
   "oss-intel-daily.prompt": "Every morning at 9:00, give me 10 tech-stack updates: GitHub Trending, notable open-source releases from big companies, and new releases from repos in my stack.",
   "oss-intel-daily.title": "Open-source intel daily",
@@ -55,5 +62,8 @@
   "seo-weekly-report.title": "SEO weekly report",
   "user-feedback-daily.description": "Each morning, aggregate feedback from all channels (stores, social, support) into top 20 items, sorted by sentiment and theme.",
   "user-feedback-daily.prompt": "Every morning at 9:00, aggregate user feedback from all channels (app stores, social media, customer support) into the top 20 items, sorted by sentiment and theme.",
-  "user-feedback-daily.title": "User feedback daily"
+  "user-feedback-daily.title": "User feedback daily",
+  "weekly-engineering-digest.description": "Every Friday afternoon, cross-reference your GitHub PR activity and Linear sprint progress into a single end-of-week status.",
+  "weekly-engineering-digest.prompt": "Every Friday at 17:00, combine my GitHub PR activity (merged, reviewed, opened) with my Linear sprint status (issues closed, in progress, blockers) into one end-of-week status. Highlight 3 things shipped and 1-2 risks for next week.",
+  "weekly-engineering-digest.title": "Weekly engineering digest"
 }

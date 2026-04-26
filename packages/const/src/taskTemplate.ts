@@ -1,7 +1,6 @@
 /**
  * Task Template catalog used by home "Try following tasks" recommendation.
  * I18n keys: `taskTemplate:${id}.title|description|prompt`.
- * Templates requiring third-party OAuth are excluded from this MVP catalog.
  *
  * `interests` values must be keys from `INTEREST_AREAS` in
  * `src/routes/onboarding/config.ts` — that's what `users.interests` stores.
@@ -11,7 +10,17 @@ export interface TaskTemplate {
   cronPattern: string;
   id: string;
   interests: string[];
+  /** Skill dependencies. The `source` field routes the connection flow. */
+  requiresSkills?: TaskTemplateSkillRequirement[];
 }
+
+export interface TaskTemplateSkillRequirement {
+  /** Short identifier from `LOBEHUB_SKILL_PROVIDERS[i].id` or `KLAVIS_SERVER_TYPES[i].identifier`. */
+  provider: string;
+  source: TaskTemplateSkillSource;
+}
+
+export type TaskTemplateSkillSource = 'klavis' | 'lobehub';
 
 export type TaskTemplateCategory =
   | 'content-creation'
@@ -125,5 +134,29 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'business',
     cronPattern: '0 17 * * 5',
     interests: ['sales'],
+  },
+  {
+    id: 'github-pr-review-daily',
+    category: 'engineering',
+    cronPattern: '0 9 * * *',
+    interests: ['coding'],
+    requiresSkills: [{ provider: 'github', source: 'lobehub' }],
+  },
+  {
+    id: 'notion-weekly-digest',
+    category: 'product',
+    cronPattern: '0 9 * * 1',
+    interests: ['product', 'writing'],
+    requiresSkills: [{ provider: 'notion', source: 'klavis' }],
+  },
+  {
+    id: 'weekly-engineering-digest',
+    category: 'engineering',
+    cronPattern: '0 17 * * 5',
+    interests: ['coding', 'product'],
+    requiresSkills: [
+      { provider: 'github', source: 'lobehub' },
+      { provider: 'linear', source: 'lobehub' },
+    ],
   },
 ];

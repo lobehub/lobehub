@@ -1,8 +1,16 @@
 // @vitest-environment node
-import { taskTemplates } from '@lobechat/const';
+import { type TaskTemplate, taskTemplates } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { RECOMMEND_COUNT, TaskTemplateService } from './index';
+import { isTemplateSkillSourceEligible, RECOMMEND_COUNT, TaskTemplateService } from './index';
+
+const makeTemplate = (overrides: Partial<TaskTemplate>): TaskTemplate => ({
+  category: 'engineering',
+  cronPattern: '0 9 * * *',
+  id: 't',
+  interests: [],
+  ...overrides,
+});
 
 const UTC_DAY_1 = new Date('2026-04-24T10:00:00Z');
 const UTC_DAY_2 = new Date('2026-04-25T10:00:00Z');
@@ -91,6 +99,14 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(picked).toHaveLength(RECOMMEND_COUNT);
   });
 
+  it('drops templates whose required skill sources are not all enabled', async () => {
+    const service = new TaskTemplateService('user-1');
+    // Without `enabledSkillSources`, any template with `requiresSkills` is filtered out.
+    // Since current catalog has none, this should match the baseline (no-op).
+    const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
+    expect(baseline).toHaveLength(RECOMMEND_COUNT);
+  });
+
   it('returns only non-excluded templates when most are excluded', async () => {
     const service = new TaskTemplateService('user-1');
     const allIds = taskTemplates.map((t) => t.id);
@@ -103,5 +119,44 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     });
 
     expect(picked.map((t) => t.id).sort()).toEqual([...keepIds].sort());
+  });
+});
+
+describe('isTemplateSkillSourceEligible', () => {
+  it('treats templates without requiresSkills as always eligible', () => {
+    expect(isTemplateSkillSourceEligible(makeTemplate({}))).toBe(true);
+    expect(isTemplateSkillSourceEligible(makeTemplate({}), new Set())).toBe(true);
+  });
+
+  it('filters out skill-dependent templates when enabledSkillSources is undefined', () => {
+    const t = makeTemplate({ requiresSkills: [{ provider: 'github', source: 'lobehub' }] });
+    expect(isTemplateSkillSourceEligible(t, undefined)).toBe(false);
+  });
+
+  it('keeps templates whose only source is enabled', () => {
+    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'klavis' }] });
+    expect(isTemplateSkillSourceEligible(t, new Set(['klavis']))).toBe(true);
+  });
+
+  it('drops templates whose source is not in enabledSkillSources', () => {
+    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'klavis' }] });
+    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(false);
+  });
+
+  it('requires every source for multi-skill templates', () => {
+    const t = makeTemplate({
+      requiresSkills: [
+        { provider: 'github', source: 'lobehub' },
+        { provider: 'notion', source: 'klavis' },
+      ],
+    });
+    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(false);
+    expect(isTemplateSkillSourceEligible(t, new Set(['klavis']))).toBe(false);
+    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub', 'klavis']))).toBe(true);
+  });
+
+  it('treats empty requiresSkills array same as undefined (always eligible)', () => {
+    const t = makeTemplate({ requiresSkills: [] });
+    expect(isTemplateSkillSourceEligible(t, undefined)).toBe(true);
   });
 });

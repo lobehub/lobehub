@@ -1,4 +1,8 @@
-import { type TaskTemplate, type TaskTemplateCategory } from '@lobechat/const';
+import {
+  type TaskTemplate,
+  type TaskTemplateCategory,
+  type TaskTemplateSkillSource,
+} from '@lobechat/const';
 import { formatScheduleTime, parseCronPattern, WEEKDAY_I18N_KEYS } from '@lobechat/utils/cron';
 import { ActionIcon, Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { App } from 'antd';
@@ -21,6 +25,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { useSkillConnection } from '@/hooks/useSkillConnection';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
 import { agentCronJobService } from '@/services/agentCronJob';
@@ -30,6 +35,7 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -87,6 +93,8 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) =
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+
+  const skillConnection = useSkillConnection(template.requiresSkills);
 
   const IconComp = ICON_BY_CATEGORY[template.category] ?? Sparkles;
   // Dynamic key lookups: defaultValue forces t() into its string-returning overload.
@@ -161,15 +169,26 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) =
           </Text>
         </Flexbox>
       </Flexbox>
-      <Button
-        disabled={created || !inboxAgentId}
-        loading={loading}
-        size={'small'}
-        type={created ? 'default' : 'primary'}
-        onClick={handleCreate}
-      >
-        {loading ? t('action.creating') : t('action.createButton')}
-      </Button>
+      {skillConnection.needsConnect && skillConnection.nextUnconnected ? (
+        <Button
+          loading={skillConnection.isConnecting}
+          size={'small'}
+          type={'primary'}
+          onClick={skillConnection.connect}
+        >
+          {t('action.connect.button', { provider: skillConnection.nextUnconnected.label })}
+        </Button>
+      ) : (
+        <Button
+          disabled={created || !inboxAgentId}
+          loading={loading}
+          size={'small'}
+          type={created ? 'default' : 'primary'}
+          onClick={handleCreate}
+        >
+          {loading ? t('action.creating') : t('action.createButton')}
+        </Button>
+      )}
       <ActionIcon
         className={`${styles.dismissBtn} task-template-dismiss`}
         icon={X}
@@ -222,8 +241,24 @@ const TaskTemplates = memo(() => {
     [message, mutate, t],
   );
 
+  // Pre-fetch skill stores only when the recommendation actually contains an
+  // OAuth-dependent template — avoids unnecessary requests on the home page
+  // for users who don't see any.
+  const templates = useMemo(() => data?.data ?? [], [data]);
+  const requiredSources = useMemo(() => {
+    const sources = new Set<TaskTemplateSkillSource>();
+    for (const tmpl of templates) {
+      if (!tmpl.requiresSkills) continue;
+      for (const s of tmpl.requiresSkills) sources.add(s.source);
+    }
+    return sources;
+  }, [templates]);
+  const useFetchUserKlavisServers = useToolStore((s) => s.useFetchUserKlavisServers);
+  const useFetchLobehubSkillConnections = useToolStore((s) => s.useFetchLobehubSkillConnections);
+  useFetchUserKlavisServers(requiredSources.has('klavis'));
+  useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
+
   if (!enabled || isLoading) return null;
-  const templates = data?.data ?? [];
   if (templates.length === 0) return null;
 
   return (

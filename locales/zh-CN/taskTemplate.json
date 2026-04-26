@@ -1,4 +1,5 @@
 {
+  "action.connect.button": "连接 {{provider}}",
   "action.create.error": "创建任务失败，请稍后再试",
   "action.create.success": "定时任务已创建，可在 Lobe AI 中查看",
   "action.createButton": "添加为定时任务",
@@ -29,6 +30,9 @@
   "frontend-weekly-digest.description": "每周一汇总前端资讯：浏览器更新、框架发版、值得读的博客",
   "frontend-weekly-digest.prompt": "每周一早上 9:00 汇总前端周报：浏览器引擎更新、框架新版本（React、Vue、Svelte 等）、值得读的工程博客，10 条 + 一句要点。",
   "frontend-weekly-digest.title": "前端周刊",
+  "github-pr-review-daily.description": "每天早上列出你 GitHub 上等你 review 的 PR，每条附一句要点",
+  "github-pr-review-daily.prompt": "每天早上 9:00 拉一遍我 GitHub 各仓库里等我 review 的 PR，每条用一句话总结改动，并标出风险点或挂超过 2 天的 PR。",
+  "github-pr-review-daily.title": "GitHub PR review 队列",
   "hn-writing-angles.description": "每天早上扒 Hacker News 首页讨论，挖 5 个你今天能写的选题角度",
   "hn-writing-angles.prompt": "每天早上 10:00 扫一遍 Hacker News 今日首页和评论区，挑 5 个适合我赛道的写作角度，说明每个角度当下为什么在发酵。",
   "hn-writing-angles.title": "HN 写作选题",
@@ -41,6 +45,9 @@
   "marketing-hot-radar.description": "每天早上追踪你行业正在发酵的 5 个营销话题，哪些值得蹭、哪些要避雷",
   "marketing-hot-radar.prompt": "每天早上 10:00 追踪我行业正在发酵的 5 个营销话题，标注哪些值得蹭、哪些要避雷，各附 1-2 句理由。",
   "marketing-hot-radar.title": "营销热点雷达",
+  "notion-weekly-digest.description": "每周一汇总过去一周 Notion workspace 的编辑和新增页面，按区块分组",
+  "notion-weekly-digest.prompt": "每周一早上 9:00 扫一遍我的 Notion workspace 过去 7 天编辑或新建的页面，按顶层区块分组，挑 5 条最值得回看的变动。",
+  "notion-weekly-digest.title": "Notion 周报",
   "oss-intel-daily.description": "每天早上给你 10 条技术栈动态：GitHub Trending、大厂新开源、关键 repo 的 release",
   "oss-intel-daily.prompt": "每天早上 9:00 给我 10 条技术栈动态：GitHub Trending、大厂新开源、我关注的 repo 新 release。",
   "oss-intel-daily.title": "开源情报日报",
@@ -55,5 +62,8 @@
   "seo-weekly-report.title": "SEO 周报",
   "user-feedback-daily.description": "每天把各渠道用户反馈（应用商店、社媒、客服）聚合成 TOP 20 条，按情绪和主题分类",
   "user-feedback-daily.prompt": "每天早上 9:00 把各渠道用户反馈（应用商店、社媒、客服）聚合成 TOP 20 条，按情绪和主题分类。",
-  "user-feedback-daily.title": "用户反馈日报"
+  "user-feedback-daily.title": "用户反馈日报",
+  "weekly-engineering-digest.description": "每周五下午把 GitHub PR 进展和 Linear sprint 状态汇成一份本周状态",
+  "weekly-engineering-digest.prompt": "每周五下午 17:00 把我的 GitHub PR 活动（合入、review、新开）和 Linear sprint 状态（已关单、进行中、阻塞项）汇成一份本周状态，挑 3 件已交付的事和 1-2 个下周风险点。",
+  "weekly-engineering-digest.title": "工程周报"
 }

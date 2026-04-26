@@ -1,4 +1,5 @@
 export default {
+  'action.connect.button': 'Connect {{provider}}',
   'action.create.error': 'Failed to create task. Please try again.',
   'action.create.success': 'Scheduled task added. Find it in Lobe AI.',
   'action.createButton': 'Add as scheduled task',
@@ -106,4 +107,22 @@ export default {
   'sales-pipeline-review.prompt':
     'Every Friday at 17:00, review my sales pipeline: list deals stalled for over 7 days, upcoming renewals in the next 30 days, and suggest 3 high-priority follow-ups for next Monday with talking points.',
   'sales-pipeline-review.title': 'Sales pipeline review',
+
+  'github-pr-review-daily.description':
+    'Each morning, list the PRs awaiting your review across your GitHub repos with a one-line takeaway each.',
+  'github-pr-review-daily.prompt':
+    'Every morning at 9:00, fetch open PRs across my GitHub repos that are waiting on my review. For each, summarize the change in one line and flag anything that looks risky or has been sitting for more than 2 days.',
+  'github-pr-review-daily.title': 'GitHub PR review queue',
+
+  'notion-weekly-digest.description':
+    "Every Monday, summarize last week's edits and new pages in your Notion workspace, grouped by area.",
+  'notion-weekly-digest.prompt':
+    'Every Monday at 9:00, scan my Notion workspace for pages edited or created in the last 7 days. Group by top-level area and pick the 5 most important changes worth re-reading.',
+  'notion-weekly-digest.title': 'Notion weekly digest',
+
+  'weekly-engineering-digest.description':
+    'Every Friday afternoon, cross-reference your GitHub PR activity and Linear sprint progress into a single end-of-week status.',
+  'weekly-engineering-digest.prompt':
+    'Every Friday at 17:00, combine my GitHub PR activity (merged, reviewed, opened) with my Linear sprint status (issues closed, in progress, blockers) into one end-of-week status. Highlight 3 things shipped and 1-2 risks for next week.',
+  'weekly-engineering-digest.title': 'Weekly engineering digest',
 };
