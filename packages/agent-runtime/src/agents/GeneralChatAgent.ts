@@ -315,15 +315,16 @@ export class GeneralChatAgent implements Agent {
    * `tool_result` / `tools_batch_result` phase, parking the loop in
    * `waiting_for_human` forever.
    *
-   * "Current turn" = the most recent assistant message that emitted
-   * `tool_calls`. All pending tool messages legitimately belonging to this
-   * turn have `parentId === currentAssistantId`.
+   * "Current turn" = the most recent assistant message that emitted tool calls,
+   * stored as either model-native `tool_calls` or persisted `tools`. All pending
+   * tool messages legitimately belonging to this turn have
+   * `parentId === currentAssistantId`.
    */
   private getCurrentTurnPendingToolMessages(state: AgentState): any[] {
     let currentAssistantId: string | undefined;
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const m = state.messages[i] as any;
-      if (m.role === 'assistant' && m.tool_calls?.length > 0) {
+      if (m.role === 'assistant' && (m.tool_calls?.length > 0 || m.tools?.length > 0)) {
         currentAssistantId = m.id;
         break;
       }
