@@ -600,9 +600,10 @@ export class BotMessageRouter {
       thread: { post: (text: string) => Promise<unknown> },
       replyLocale: BotReplyLocale,
     ): Promise<void> => {
-      // 'open' should never reach here, but guard anyway so we never post the
+      // 'open' and 'pairing' should never reach here ('pairing' has its own
+      // flow via triggerDmPairing), but guard anyway so we never post the
       // wrong copy if shouldHandleDm grows another false branch.
-      if (dmSettings.policy === 'open') return;
+      if (dmSettings.policy !== 'allowlist' && dmSettings.policy !== 'disabled') return;
       try {
         await thread.post(renderDmRejected(dmSettings.policy, replyLocale));
       } catch (error) {
@@ -664,12 +665,12 @@ export class BotMessageRouter {
         redis: getAgentRuntimeRedisClient(),
       });
       let text: string;
-      if (result.status === 'redis-unavailable') {
-        text = renderDmPairing('unavailable', replyLocale);
+      if (result.status === 'created' || result.status === 'reused') {
+        text = renderDmPairing('code', replyLocale, { code: result.code });
       } else if (result.status === 'capacity-exceeded') {
         text = renderDmPairing('capacity-exceeded', replyLocale);
       } else {
-        text = renderDmPairing('code', replyLocale, { code: result.code });
+        text = renderDmPairing('unavailable', replyLocale);
       }
       try {
         await thread.post(text);
