@@ -235,11 +235,15 @@ describe('CreateImageAction', () => {
         });
       });
 
-      await expect(
-        act(async () => {
+      let caught: unknown;
+      await act(async () => {
+        try {
           await result.current.createImage();
-        }),
-      ).rejects.toThrow('Service error');
+        } catch (e) {
+          caught = e;
+        }
+      });
+      expect((caught as Error)?.message).toBe('Service error');
 
       // Verify topic was created before the error
       expect(mockCreateGenerationTopic).toHaveBeenCalled();
@@ -352,11 +356,15 @@ describe('CreateImageAction', () => {
         });
       });
 
-      await expect(
-        act(async () => {
+      let caught: unknown;
+      await act(async () => {
+        try {
           await result.current.recreateImage('batch-id');
-        }),
-      ).rejects.toThrow('Service error');
+        } catch (e) {
+          caught = e;
+        }
+      });
+      expect((caught as Error)?.message).toBe('Service error');
 
       // Verify batch was removed before the error
       expect(mockRemoveGenerationBatch).toHaveBeenCalledWith('batch-id', 'active-topic-id');
