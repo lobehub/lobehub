@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, notInArray, sql } from 'drizzle-orm';
 
 import type { BriefItem, NewBrief } from '../schemas/task';
 import { briefs } from '../schemas/task';
@@ -85,19 +85,29 @@ export class BriefModel {
   }
 
   // Used by heartbeat re-arm to skip rescheduling when a task is already
-  // waiting on user action (review max-iter, error fuse, etc).
-  async hasUnresolvedUrgentByTask(taskId: string): Promise<boolean> {
+  // waiting on user action (review max-iter etc). Optionally exclude brief
+  // types — heartbeat callers exclude `error` because transient errors are
+  // governed by the fuse counter, not by the existence of the error brief
+  // itself (otherwise the very first error would block all retries).
+  async hasUnresolvedUrgentByTask(
+    taskId: string,
+    options?: { excludeTypes?: string[] },
+  ): Promise<boolean> {
+    const excludeTypes = options?.excludeTypes ?? [];
+    const conditions = [
+      eq(briefs.userId, this.userId),
+      eq(briefs.taskId, taskId),
+      eq(briefs.priority, 'urgent'),
+      isNull(briefs.resolvedAt),
+    ];
+    if (excludeTypes.length > 0) {
+      conditions.push(notInArray(briefs.type, excludeTypes));
+    }
+
     const rows = await this.db
       .select({ id: briefs.id })
       .from(briefs)
-      .where(
-        and(
-          eq(briefs.userId, this.userId),
-          eq(briefs.taskId, taskId),
-          eq(briefs.priority, 'urgent'),
-          isNull(briefs.resolvedAt),
-        ),
-      )
+      .where(and(...conditions))
       .limit(1);
     return rows.length > 0;
   }

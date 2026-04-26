@@ -89,14 +89,30 @@ describe('TaskLifecycleService.maybeRearmHeartbeat', () => {
     expect(fakeScheduler.scheduleNextTopic).not.toHaveBeenCalled();
   });
 
-  it('skips when an unresolved urgent brief exists, but persists failure count', async () => {
+  it('skips when a non-error unresolved urgent brief exists, but persists failure count', async () => {
     hasUnresolvedUrgent.mockResolvedValue(true);
 
     await rearm(baseTask(), 'error');
 
+    expect(hasUnresolvedUrgent).toHaveBeenCalledWith('task-1', { excludeTypes: ['error'] });
     expect(fakeScheduler.scheduleNextTopic).not.toHaveBeenCalled();
     expect(updateContext).toHaveBeenCalledWith('task-1', {
       scheduler: { consecutiveFailures: 1 },
+    });
+  });
+
+  it('does NOT block re-arm on an error brief — fuse alone governs error retries', async () => {
+    // Caller passes excludeTypes: ['error'], so brief query returns false even
+    // when there's a fresh error brief. The first error must still schedule
+    // the next tick so the fuse can count up to 3.
+    hasUnresolvedUrgent.mockResolvedValue(false);
+
+    await rearm(baseTask(), 'error');
+
+    expect(hasUnresolvedUrgent).toHaveBeenCalledWith('task-1', { excludeTypes: ['error'] });
+    expect(fakeScheduler.scheduleNextTopic).toHaveBeenCalled();
+    expect(updateContext).toHaveBeenCalledWith('task-1', {
+      scheduler: expect.objectContaining({ consecutiveFailures: 1 }),
     });
   });
 

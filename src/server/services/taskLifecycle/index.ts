@@ -169,7 +169,11 @@ export class TaskLifecycleService {
       consecutiveFailures = 0;
     }
 
-    if (await this.briefModel.hasUnresolvedUrgentByTask(task.id)) {
+    // Exclude `error` briefs from the human-waiting check: error briefs are
+    // created on every error and are governed by the fuse counter above.
+    // Without this exclusion, the urgent error brief from the *just-completed*
+    // failure would block re-arm and the fuse threshold would be unreachable.
+    if (await this.briefModel.hasUnresolvedUrgentByTask(task.id, { excludeTypes: ['error'] })) {
       log('skip re-arm: task=%s has unresolved urgent brief', task.identifier);
       await this.taskModel.updateContext(task.id, {
         scheduler: { consecutiveFailures },

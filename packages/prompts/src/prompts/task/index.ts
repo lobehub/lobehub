@@ -615,5 +615,5 @@ export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
 export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
-export type { TaskPromptDeps, TaskPromptTaskInput } from './buildTaskPrompt';
+export type { TaskPromptDeps } from './buildTaskPrompt';
 export { buildTaskPrompt } from './buildTaskPrompt';

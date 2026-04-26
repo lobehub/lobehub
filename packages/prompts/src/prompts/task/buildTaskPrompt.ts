@@ -1,39 +1,27 @@
-import type { TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
+import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
 
 import { buildTaskRunPrompt, type TaskRunPromptInput } from './index';
 
 // ── Structurally-typed deps ──
 //
-// We accept the model instances by shape rather than importing concrete
-// classes from `@lobechat/database`. This keeps the prompts package free of
-// DB-layer imports while still letting the server pass its real models.
-
-export interface TaskPromptTaskInput {
-  assigneeAgentId?: string | null;
-  config?: unknown;
-  description?: string | null;
-  id: string;
-  identifier: string;
-  instruction: string;
-  name?: string | null;
-  parentTaskId?: string | null;
-  priority?: number | null;
-  status: string;
-  totalTopics?: number | null;
-}
+// Accept model instances by shape so the prompts package stays free of
+// `@lobechat/database` imports. We use `TaskItem` (from `@lobechat/types`)
+// as the task shape so server-side `TaskModel` methods — which type their
+// `task` parameter as `TaskItem` — are assignable here without contravariance
+// errors.
 
 export interface TaskPromptDeps {
   briefModel: {
     findByTaskId: (taskId: string) => Promise<any[]>;
   };
   taskModel: {
-    findById: (id: string) => Promise<TaskPromptTaskInput | null>;
-    findByIds: (ids: string[]) => Promise<TaskPromptTaskInput[]>;
+    findById: (id: string) => Promise<TaskItem | null>;
+    findByIds: (ids: string[]) => Promise<TaskItem[]>;
     findSubtasks: (taskId: string) => Promise<any[]>;
     getComments: (taskId: string) => Promise<any[]>;
     getDependencies: (taskId: string) => Promise<any[]>;
     getDependenciesByTaskIds: (ids: string[]) => Promise<any[]>;
-    getReviewConfig: (task: TaskPromptTaskInput) => Record<string, any> | undefined;
+    getReviewConfig: (task: TaskItem) => Record<string, any> | undefined;
     getTreePinnedDocuments: (taskId: string) => Promise<WorkspaceData>;
   };
   taskTopicModel: {
@@ -49,7 +37,7 @@ export interface TaskPromptDeps {
  * does not import `@lobechat/database`.
  */
 export async function buildTaskPrompt(
-  task: TaskPromptTaskInput,
+  task: TaskItem,
   deps: TaskPromptDeps,
   extraPrompt?: string,
 ): Promise<string> {

@@ -57,6 +57,12 @@ export class TaskRunnerService {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
     }
 
+    // Track whether *this* invocation transitioned the task to 'running'. The
+    // catch-block rollback must only fire when we own the running state —
+    // otherwise an early failure (e.g. CONFLICT thrown because a concurrent
+    // run is in flight) would clobber the in-flight run's status to 'paused'.
+    let weSetRunning = false;
+
     try {
       if (!task.assigneeAgentId) {
         throw new TRPCError({
@@ -108,6 +114,7 @@ export class TaskRunnerService {
           error: null,
           startedAt: new Date(),
         });
+        weSetRunning = true;
       } else if (task.error) {
         await this.taskModel.update(task.id, { error: null });
       }
@@ -189,15 +196,17 @@ export class TaskRunnerService {
         taskIdentifier: task.identifier,
       };
     } catch (error) {
-      try {
-        const failedTask = await this.taskModel.resolve(idOrIdentifier);
-        if (failedTask && failedTask.status === 'running') {
-          await this.taskModel.updateStatus(failedTask.id, 'paused', {
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
+      if (weSetRunning) {
+        try {
+          const failedTask = await this.taskModel.resolve(idOrIdentifier);
+          if (failedTask && failedTask.status === 'running') {
+            await this.taskModel.updateStatus(failedTask.id, 'paused', {
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        } catch {
+          // Rollback itself failed, ignore
         }
-      } catch {
-        // Rollback itself failed, ignore
       }
 
       throw error;

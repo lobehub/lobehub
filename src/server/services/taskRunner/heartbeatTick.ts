@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { BriefModel } from '@/database/models/brief';
@@ -18,6 +19,7 @@ export type HeartbeatTickOutcome =
 
 export type HeartbeatTickSkipReason =
   | 'human-waiting'
+  | 'in-flight'
   | 'mode-changed'
   | 'no-interval'
   | 'not-found'
@@ -63,10 +65,18 @@ export async function runHeartbeatTick(
   }
 
   const runner = new TaskRunnerService(db, userId);
-  // Re-entrant: runner sets status to 'running' itself; the running-topic
-  // idempotency check inside runTask covers the case where a previous tick
-  // is still in flight.
-  await runner.runTask({ taskId });
+  try {
+    await runner.runTask({ taskId });
+  } catch (e) {
+    // Concurrent tick / manual run already running this task — treat as a
+    // graceful skip. runTask's own rollback only fires when *it* set running,
+    // so the in-flight run keeps its 'running' status untouched.
+    if (e instanceof TRPCError && e.code === 'CONFLICT') {
+      log('skip task=%s reason=in-flight', taskId);
+      return { ran: false, reason: 'in-flight' };
+    }
+    throw e;
+  }
   log('ran task=%s identifier=%s', taskId, task.identifier);
   return { ran: true, taskIdentifier: task.identifier };
 }
