@@ -43,6 +43,16 @@ describe('normalizeBotReplyLocale', () => {
   it('falls back to en-US when the input is not a project locale', () => {
     expect(normalizeBotReplyLocale('xx-yy')).toBe('en-US');
   });
+
+  it('maps Chinese script subtags to the matching regional locale', () => {
+    // Telegram emits these lowercase shapes for Chinese users — without
+    // explicit script handling they fall through to en-US.
+    expect(normalizeBotReplyLocale('zh-hans')).toBe('zh-CN');
+    expect(normalizeBotReplyLocale('zh-hant')).toBe('zh-TW');
+    expect(normalizeBotReplyLocale('zh-Hans-CN')).toBe('zh-CN');
+    expect(normalizeBotReplyLocale('zh-Hant-TW')).toBe('zh-TW');
+    expect(normalizeBotReplyLocale('zh_Hant_HK')).toBe('zh-TW');
+  });
 });
 
 describe('getBotReplyLocale', () => {

@@ -1139,6 +1139,205 @@ describe('BotMessageRouter', () => {
     });
   });
 
+  describe('command access gates (P1: /commands must respect allowFrom + DM/group policy)', () => {
+    /**
+     * Real-world risk: command dispatch (`/new`, `/stop`) historically ran
+     * BEFORE the allowFrom / DM-policy / group-policy checks. A blocked
+     * sender could still side-effect — `/stop` cancelling an active run,
+     * `/new` resetting thread state — even though normal messages were
+     * rejected. Lock in: every command-dispatch path applies the same
+     * access stack as the message handlers.
+     */
+    async function loadAllHandlers(settings: Record<string, unknown>) {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const sub = mockOnSubscribedMessage.mock.calls.at(-1);
+      const mention = mockOnNewMention.mock.calls.at(-1);
+      // The command-regex onNewMessage is registered LAST (after the DM
+      // catch-all `/./`), so pick it by matching the `/(new|stop)` pattern.
+      const cmdHandlerCall = mockOnNewMessage.mock.calls.find(
+        (call) => call[0] instanceof RegExp && call[0].source.includes('new'),
+      );
+      const slashNewCall = mockOnSlashCommand.mock.calls.find((c) => c[0] === '/new');
+      const slashStopCall = mockOnSlashCommand.mock.calls.find((c) => c[0] === '/stop');
+      if (!sub || !mention || !cmdHandlerCall || !slashNewCall || !slashStopCall) {
+        throw new Error('handlers not registered');
+      }
+      return {
+        cmdRegexHandler: cmdHandlerCall[1] as (thread: any, message: any) => Promise<void>,
+        mention: mention[0] as (thread: any, message: any, ctx?: any) => Promise<void>,
+        slashNew: slashNewCall[1] as (event: any) => Promise<void>,
+        slashStop: slashStopCall[1] as (event: any) => Promise<void>,
+        subscribed: sub[0] as (thread: any, message: any, ctx?: any) => Promise<void>,
+      };
+    }
+
+    function makeChannel(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+        ...overrides,
+      };
+    }
+
+    it('blocks a native /stop slash command from a non-allowlisted sender', async () => {
+      const { slashStop } = await loadAllHandlers({ allowFrom: 'alice-id' });
+      const channel = makeChannel();
+      const event = {
+        channel,
+        text: '',
+        user: { isBot: false, userId: 'lin-id', userName: 'lin' },
+      };
+
+      await slashStop(event);
+
+      // Rejection notice posted, but the command handler must not have
+      // called setState or kicked off an interruptTask.
+      expect(channel.post).toHaveBeenCalledTimes(1);
+      expect(channel.post.mock.calls[0][0]).toContain("aren't authorized");
+      expect(channel.setState).not.toHaveBeenCalled();
+    });
+
+    it('blocks a native /new slash command in a disabled-DM channel', async () => {
+      const { slashNew } = await loadAllHandlers({
+        dmPolicy: 'disabled',
+        groupPolicy: 'open',
+      });
+      const channel = makeChannel({ isDM: true });
+      const event = {
+        channel,
+        text: '',
+        user: { isBot: false, userId: 'alice-id', userName: 'alice' },
+      };
+
+      await slashNew(event);
+
+      // DM rejection notice (mentions DMs / direct messages), no state reset.
+      expect(channel.post).toHaveBeenCalledTimes(1);
+      expect(channel.post.mock.calls[0][0]).toMatch(/direct message/i);
+      expect(channel.setState).not.toHaveBeenCalled();
+    });
+
+    it('blocks a native slash command in a non-allowlisted group channel', async () => {
+      const { slashNew } = await loadAllHandlers({
+        groupAllowFrom: 'channel-2',
+        groupPolicy: 'allowlist',
+      });
+      const channel = makeChannel({ id: 'telegram:channel-9', isDM: false });
+      const event = {
+        channel,
+        text: '',
+        user: { isBot: false, userId: 'alice-id', userName: 'alice' },
+      };
+
+      await slashNew(event);
+
+      expect(channel.post).toHaveBeenCalledTimes(1);
+      expect(channel.post.mock.calls[0][0]).toContain("isn't enabled in this channel");
+      expect(channel.setState).not.toHaveBeenCalled();
+    });
+
+    it('blocks a text-based /new (Telegram regex path) from a non-allowlisted sender', async () => {
+      const { cmdRegexHandler } = await loadAllHandlers({ allowFrom: 'alice-id' });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+        isMention: false,
+        text: '/new',
+      };
+
+      await cmdRegexHandler(thread, message);
+
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+      expect(thread.setState).not.toHaveBeenCalled();
+    });
+
+    it('blocks /stop typed in onNewMention as a command from a non-allowlisted sender', async () => {
+      // Older code dispatched commands BEFORE the allowFrom check; this
+      // test catches a regression where /stop in an @-mention slips through.
+      const { mention } = await loadAllHandlers({ allowFrom: 'alice-id' });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+        isMention: true,
+        text: '@bot /stop',
+      };
+
+      await mention(thread, message);
+
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+      expect(thread.setState).not.toHaveBeenCalled();
+      expect(mockHandleMention).not.toHaveBeenCalled();
+    });
+
+    it('blocks /new typed in onSubscribedMessage from a non-allowlisted sender', async () => {
+      const { subscribed } = await loadAllHandlers({ allowFrom: 'alice-id' });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+        isMention: false,
+        text: '/new',
+      };
+
+      await subscribed(thread, message);
+
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+      expect(thread.setState).not.toHaveBeenCalled();
+    });
+
+    it('still allows /commands from an allowlisted sender (gate does not break the happy path)', async () => {
+      const { cmdRegexHandler } = await loadAllHandlers({ allowFrom: 'alice-id' });
+      const thread = {
+        channelId: 'channel-1',
+        id: 'telegram:channel-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        isMention: false,
+        text: '/new',
+      };
+
+      await cmdRegexHandler(thread, message);
+
+      // /new resets the topic (replace=true) and posts a confirmation.
+      expect(thread.setState).toHaveBeenCalledWith({ topicId: undefined }, { replace: true });
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).not.toContain("aren't authorized");
+    });
+  });
+
   describe('regression: nested settings.dm.policy is ignored', () => {
     /**
      * Original bug: the form persisted `settings.dmPolicy` (flat) but the

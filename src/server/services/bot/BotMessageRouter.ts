@@ -586,47 +586,81 @@ export class BotMessageRouter {
       return true;
     };
 
-    bot.onNewMention(async (thread, message, context?: MessageContext) => {
-      const replyLocale = detectReplyLocale(message);
-      if (await tryDispatch(thread, message.text, replyLocale)) return;
+    /** Returns true when the inbound passes the standard caller-test
+     *  text. Used to short-circuit gate checks for non-command messages in
+     *  subscribed group threads that aren't addressed to the bot. */
+    const looksLikeCommand = (text: string | undefined): boolean => {
+      const sanitized = client.sanitizeUserInput?.(text ?? '') ?? text;
+      return BotMessageRouter.dispatchTextCommand(sanitized, commands) !== null;
+    };
 
-      if (!passesGlobalAllowlist(message)) {
+    /**
+     * Run all three access gates (global `allowFrom`, group policy, DM policy)
+     * and post the appropriate rejection notice in the thread on failure.
+     * Returns true when the inbound passes every gate.
+     *
+     * Centralised so every entry point — @-mentions, subscribed-message
+     * handler, DM catch-all, **and the slash-command dispatchers** — applies
+     * the same checks. Without this, a /command path could side-effect
+     * (`/stop` cancelling a run, `/new` resetting state) for senders the
+     * normal message path would have rejected.
+     */
+    const passGatesOrNotify = async (
+      thread: { id: string; isDM?: boolean; post: (t: string) => Promise<unknown> },
+      author: { userId?: string; userName?: string },
+      replyLocale: BotReplyLocale,
+      caller: string,
+    ): Promise<boolean> => {
+      if (!passesGlobalAllowlist({ author })) {
         log(
-          'onNewMention: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
+          '%s: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
+          caller,
           agentId,
           platform,
           thread.id,
-          message.author.userName,
+          author.userName ?? author.userId,
         );
         await handleSenderRejected(thread, replyLocale);
-        return;
+        return false;
       }
-
       if (!passesGroupPolicy(thread)) {
         log(
-          'onNewMention: group blocked by policy, agent=%s, platform=%s, thread=%s, channel=%s, policy=%s',
+          '%s: group blocked by policy, agent=%s, platform=%s, thread=%s, policy=%s',
+          caller,
           agentId,
           platform,
           thread.id,
-          thread.channelId,
           groupSettings.policy,
         );
         await notifyGroupRejected(thread, replyLocale);
-        return;
+        return false;
       }
-
-      if (!passesDmPolicy(thread, message)) {
+      if (!passesDmPolicy(thread, { author })) {
         log(
-          'onNewMention: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
+          '%s: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
+          caller,
           agentId,
           platform,
           thread.id,
-          message.author.userName,
+          author.userName ?? author.userId,
           dmSettings.policy,
         );
         await notifyDmRejected(thread, replyLocale);
+        return false;
+      }
+      return true;
+    };
+
+    bot.onNewMention(async (thread, message, context?: MessageContext) => {
+      const replyLocale = detectReplyLocale(message);
+
+      // Gate first — must run before tryDispatch so a /command from a
+      // non-allowlisted sender can't slip through and side-effect.
+      if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onNewMention'))) {
         return;
       }
+
+      if (await tryDispatch(thread, message.text, replyLocale)) return;
 
       log(
         'onNewMention raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -681,7 +715,6 @@ export class BotMessageRouter {
     bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
       if (message.author.isBot === true) return;
       const replyLocale = detectReplyLocale(message);
-      if (await tryDispatch(thread, message.text, replyLocale)) return;
 
       // Group / channel / thread policy: only respond when the bot is @-mentioned.
       // DMs are 1:1 conversations, so every message is implicitly addressed to the bot.
@@ -689,12 +722,17 @@ export class BotMessageRouter {
       // thread — including messages between other users — and hijack the conversation.
       // Skipped (debounced) messages are also inspected so a mention queued behind a
       // non-mention still triggers a reply.
+      //
+      // Commands are exempt from the @-mention requirement (Telegram/Feishu users
+      // type `/new` directly without mentioning the bot), but they are NOT exempt
+      // from the access gates below.
       const isAddressedToBot =
         thread.isDM ||
         message.isMention === true ||
         context?.skipped?.some((m) => m.isMention === true) === true;
+      const isCommand = looksLikeCommand(message.text);
 
-      if (!isAddressedToBot) {
+      if (!isAddressedToBot && !isCommand) {
         log(
           'onSubscribedMessage: skip non-mention in group thread, agent=%s, platform=%s, author=%s, thread=%s',
           agentId,
@@ -705,43 +743,13 @@ export class BotMessageRouter {
         return;
       }
 
-      if (!passesGlobalAllowlist(message)) {
-        log(
-          'onSubscribedMessage: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
-          agentId,
-          platform,
-          thread.id,
-          message.author.userName,
-        );
-        await handleSenderRejected(thread, replyLocale);
+      // Gate before tryDispatch so a /command from a non-allowlisted sender
+      // (or in a disabled DM/group scope) cannot side-effect.
+      if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onSubscribedMessage'))) {
         return;
       }
 
-      if (!passesGroupPolicy(thread)) {
-        log(
-          'onSubscribedMessage: group blocked by policy, agent=%s, platform=%s, thread=%s, channel=%s, policy=%s',
-          agentId,
-          platform,
-          thread.id,
-          thread.channelId,
-          groupSettings.policy,
-        );
-        await notifyGroupRejected(thread, replyLocale);
-        return;
-      }
-
-      if (!passesDmPolicy(thread, message)) {
-        log(
-          'onSubscribedMessage: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
-          agentId,
-          platform,
-          thread.id,
-          message.author.userName,
-          dmSettings.policy,
-        );
-        await notifyDmRejected(thread, replyLocale);
-        return;
-      }
+      if (await tryDispatch(thread, message.text, replyLocale)) return;
 
       log(
         'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -794,11 +802,20 @@ export class BotMessageRouter {
       }
     });
 
-    // Register slash command handlers (native + text-based)
-    this.registerCommands(bot, commands, client, {
-      detectFromMessage: detectReplyLocale,
-      fallback: fallbackReplyLocale,
-    });
+    // Register slash command handlers (native + text-based). The gate
+    // helper is passed in so command paths share the access checks with
+    // the message handlers — without this, a non-allowlisted sender could
+    // /stop or /new and bypass the rest of the policy stack.
+    this.registerCommands(
+      bot,
+      commands,
+      client,
+      {
+        detectFromMessage: detectReplyLocale,
+        fallback: fallbackReplyLocale,
+      },
+      passGatesOrNotify,
+    );
 
     // DM catch-all: only registered when DM handling is enabled. For mixed
     // platforms (e.g. Slack/Discord with both DMs and group channels), the
@@ -810,6 +827,7 @@ export class BotMessageRouter {
         if (message.author.isBot === true) return;
 
         // Skip text-based slash commands — already handled by registerCommands
+        // (which applies the same gates).
         if (BotMessageRouter.dispatchTextCommand(message.text, commands)) return;
 
         // The catch-all exists solely to handle DMs on mention-less platforms
@@ -821,25 +839,14 @@ export class BotMessageRouter {
 
         const replyLocale = detectReplyLocale(message);
 
-        if (!passesGlobalAllowlist(message)) {
-          log(
-            'onNewMessage (%s catch-all): sender blocked by allowFrom, thread=%s, author=%s',
-            platform,
-            thread.id,
-            message.author.userName,
-          );
-          await handleSenderRejected(thread, replyLocale);
-          return;
-        }
-
-        if (!passesDmPolicy(thread, message)) {
-          log(
-            'onNewMessage (%s catch-all): DM blocked by allowFrom list, thread=%s, author=%s',
-            platform,
-            thread.id,
-            message.author.userName,
-          );
-          await notifyDmRejected(thread, replyLocale);
+        if (
+          !(await passGatesOrNotify(
+            thread,
+            message.author,
+            replyLocale,
+            `onNewMessage (${platform} catch-all)`,
+          ))
+        ) {
           return;
         }
 
@@ -994,10 +1001,38 @@ export class BotMessageRouter {
       detectFromMessage: (message: { author?: unknown }) => BotReplyLocale;
       fallback: BotReplyLocale;
     },
+    /**
+     * Apply the same access stack the message handlers use (allowFrom +
+     * group policy + DM policy) before dispatching a command. Returns true
+     * when the dispatch is allowed; on rejection the helper has already
+     * posted the appropriate notice in the thread.
+     */
+    gate: (
+      thread: { id: string; isDM?: boolean; post: (t: string) => Promise<unknown> },
+      author: { userId?: string; userName?: string },
+      replyLocale: BotReplyLocale,
+      caller: string,
+    ) => Promise<boolean>,
   ): void {
     // --- Native slash commands (Slack, Discord) ---
     for (const cmd of commands) {
       bot.onSlashCommand(`/${cmd.name}`, async (event) => {
+        // Native slash-command events expose a Channel (Postable, so it has
+        // `id` / `isDM` / `post`) and the invoking user. Project both into
+        // the gate-friendly thread/author shape.
+        const threadLike = {
+          id: event.channel.id,
+          isDM: event.channel.isDM,
+          post: (t: string) => event.channel.post(t),
+        };
+        const authorLike = {
+          userId: event.user?.userId,
+          userName: event.user?.userName,
+        };
+        const replyLocale = locale.fallback;
+        if (!(await gate(threadLike, authorLike, replyLocale, `onSlashCommand /${cmd.name}`))) {
+          return;
+        }
         await cmd.handler({
           args: event.text,
           post: (text) => event.channel.post(text),
@@ -1005,7 +1040,7 @@ export class BotMessageRouter {
           // there's no per-sender locale field to read; use the channel
           // default. Telegram/Feishu/etc. dispatch via the text-based path
           // below, which DOES have per-message locale.
-          replyLocale: locale.fallback,
+          replyLocale,
           setState: (state, opts) => event.channel.setState(state, opts),
           threadId: event.channel.id,
         });
@@ -1025,10 +1060,16 @@ export class BotMessageRouter {
       const sanitized = client.sanitizeUserInput?.(message.text ?? '') ?? message.text;
       const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
       if (!result) return;
+      const replyLocale = locale.detectFromMessage(message);
+      if (
+        !(await gate(thread, message.author, replyLocale, `onNewMessage /${result.command.name}`))
+      ) {
+        return;
+      }
       await result.command.handler({
         args: result.args,
         post: (text) => thread.post(text),
-        replyLocale: locale.detectFromMessage(message),
+        replyLocale,
         setState: (state, opts) => thread.setState(state, opts),
         threadId: thread.id,
       });

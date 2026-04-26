@@ -76,10 +76,19 @@ export function normalizeBotReplyLocale(
 ): BotReplyLocale | undefined {
   if (!raw) return undefined;
   const parts = raw.replaceAll('_', '-').split('-');
-  const formatted =
-    parts.length === 1
-      ? parts[0].toLowerCase()
-      : `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;
+  const lang = parts[0].toLowerCase();
+
+  // BCP 47 script subtags for Chinese (Telegram emits `zh-hans` / `zh-hant`,
+  // some web platforms emit `zh-Hans-CN` / `zh-Hant-TW`). `normalizeLocale`
+  // only knows region tags, so a `zh-HANS` shape silently falls back to
+  // en-US — map scripts to the closest regional locale before delegating.
+  if (lang === 'zh' && parts.length >= 2) {
+    const scriptOrRegion = parts[1].toLowerCase();
+    if (scriptOrRegion === 'hans') return 'zh-CN';
+    if (scriptOrRegion === 'hant') return 'zh-TW';
+  }
+
+  const formatted = parts.length === 1 ? lang : `${lang}-${parts[1].toUpperCase()}`;
   return normalizeLocale(formatted);
 }
 
