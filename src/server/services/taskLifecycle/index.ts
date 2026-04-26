@@ -1,4 +1,5 @@
 import { chainTaskTopicHandoff, TASK_TOPIC_HANDOFF_SCHEMA } from '@lobechat/prompts';
+import type { TaskItem, TaskSchedulerContext } from '@lobechat/types';
 import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
@@ -10,8 +11,17 @@ import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskReviewService } from '@/server/services/taskReview';
+import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
 const log = debug('task-lifecycle');
+
+const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
+const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
+
+// Consecutive 'error' reasons after which we stop re-arming and let the
+// urgent brief surface for human attention. Hardcoded for now (per LOBE-8233);
+// move to task.config later if it needs to be tunable per-task.
+const HEARTBEAT_FAILURE_FUSE = 3;
 
 export interface TopicCompleteParams {
   errorMessage?: string;
@@ -114,6 +124,95 @@ export class TaskLifecycleService {
       });
 
       await this.taskModel.updateStatus(taskId, 'paused');
+    }
+
+    // Heartbeat re-arm: re-read task state (status / context may have just
+    // been mutated by the branches above) and decide whether to publish the
+    // next tick.
+    const finalTask = await this.taskModel.findById(taskId);
+    if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Re-arm the next heartbeat tick after `onTopicComplete`.
+   *
+   * Skips when:
+   *   - task is not in heartbeat mode or has no positive interval
+   *   - task hit a terminal status (completed / canceled / failed)
+   *   - an unresolved urgent brief exists for this task (human is waiting)
+   *   - consecutive failures hit the fuse threshold (gives up until the user
+   *     resolves the urgent error brief)
+   */
+  private async maybeRearmHeartbeat(task: TaskItem, reason: string): Promise<void> {
+    if (task.automationMode !== 'heartbeat') return;
+    if (!task.heartbeatInterval || task.heartbeatInterval <= 0) return;
+    if (isTerminal(task.status)) return;
+
+    const ctx = (task.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
+    const sched = ctx.scheduler ?? {};
+    let consecutiveFailures = sched.consecutiveFailures ?? 0;
+
+    if (reason === 'error') {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= HEARTBEAT_FAILURE_FUSE) {
+        log(
+          'fuse blown: task=%s consecutiveFailures=%d — not re-arming',
+          task.identifier,
+          consecutiveFailures,
+        );
+        await this.taskModel.updateContext(task.id, {
+          scheduler: { consecutiveFailures },
+        });
+        return;
+      }
+    } else if (reason === 'done') {
+      consecutiveFailures = 0;
+    }
+
+    // Exclude `error` briefs from the human-waiting check: error briefs are
+    // created on every error and are governed by the fuse counter above.
+    // Without this exclusion, the urgent error brief from the *just-completed*
+    // failure would block re-arm and the fuse threshold would be unreachable.
+    if (await this.briefModel.hasUnresolvedUrgentByTask(task.id, { excludeTypes: ['error'] })) {
+      log('skip re-arm: task=%s has unresolved urgent brief', task.identifier);
+      await this.taskModel.updateContext(task.id, {
+        scheduler: { consecutiveFailures },
+      });
+      return;
+    }
+
+    try {
+      const scheduler = createTaskSchedulerModule();
+
+      // Cancel any prior tick (defensive — we usually wouldn't have one
+      // pending here, since the prior tick has already fired to bring us
+      // into onTopicComplete).
+      if (sched.tickMessageId) {
+        await scheduler.cancelScheduled(sched.tickMessageId).catch(() => undefined);
+      }
+
+      const tickMessageId = await scheduler.scheduleNextTopic({
+        delay: task.heartbeatInterval,
+        taskId: task.id,
+        userId: this.userId,
+      });
+
+      await this.taskModel.updateContext(task.id, {
+        scheduler: {
+          consecutiveFailures,
+          scheduledAt: new Date().toISOString(),
+          tickMessageId,
+        },
+      });
+
+      log(
+        're-armed task=%s delay=%ds messageId=%s',
+        task.identifier,
+        task.heartbeatInterval,
+        tickMessageId,
+      );
+    } catch (e) {
+      console.warn('[TaskLifecycle] re-arm failed:', e);
     }
   }
 
