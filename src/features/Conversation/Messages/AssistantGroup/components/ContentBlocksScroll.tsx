@@ -62,8 +62,6 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
     };
   }, [assistantIdFromProps, blocksFromProps, messagesList]);
 
-  const firstBlockId = blocks[0]?.id;
-
   const list = (
     <Flexbox gap={8}>
       {blocks.map((block) => (
@@ -72,7 +70,6 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
           {...block}
           assistantId={assistantId}
           disableEditing={disableEditing}
-          disableMarkdownStreaming={block.disableMarkdownStreaming || block.id === firstBlockId}
         />
       ))}
     </Flexbox>
