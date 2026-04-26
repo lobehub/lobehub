@@ -28,7 +28,7 @@ type CommentMode = { type: 'feedback' } | { key: string; type: 'comment' };
 
 const SuccessTag = memo<{ label: string }>(({ label }) => (
   <Flexbox horizontal align={'center'} gap={4}>
-    <Icon icon={Check} size={14} />
+    <Icon color={cssVar.colorTextQuaternary} icon={Check} size={14} />
     <Text className={styles.resolvedTag}>{label}</Text>
   </Flexbox>
 ));
