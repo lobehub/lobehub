@@ -60,8 +60,21 @@ const isMessageCreating = (id: string) => (s: State) =>
 /**
  * Check if a message is being generated (streaming response)
  */
-const isMessageGenerating = (id: string) => (s: State) =>
-  s.operationState.getMessageOperationState(id).isGenerating;
+const isMessageGenerating = (id: string) => (s: State) => {
+  const isGenerating = (messageId: string) =>
+    s.operationState.getMessageOperationState(messageId).isGenerating;
+
+  if (isGenerating(id)) return true;
+
+  const displayMessage = s.displayMessages.find((message) => message.id === id);
+  if (displayMessage?.children?.some((block) => isGenerating(block.id))) return true;
+
+  const parentMessage = s.displayMessages.find((message) =>
+    message.children?.some((block) => block.id === id),
+  );
+
+  return parentMessage ? isGenerating(parentMessage.id) : false;
+};
 
 /**
  * Check if a message is being regenerated
