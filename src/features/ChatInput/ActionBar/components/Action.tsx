@@ -70,11 +70,12 @@ const Action = memo<ActionProps>(
       />
     );
 
-    if (disabled || loading) return iconNode;
+    if (disabled) return iconNode;
 
     if (dropdown)
       return (
         <ActionDropdown
+          loading={loading}
           open={show}
           trigger={trigger}
           onOpenChange={setShow}
@@ -88,6 +89,7 @@ const Action = memo<ActionProps>(
     if (popover)
       return (
         <ActionPopover
+          loading={loading}
           open={show}
           trigger={trigger}
           onOpenChange={setShow}
