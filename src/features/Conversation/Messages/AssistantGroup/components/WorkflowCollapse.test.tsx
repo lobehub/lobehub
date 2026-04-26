@@ -112,6 +112,7 @@ vi.mock('@/styles', () => ({
 
 vi.mock('../../../store', () => ({
   messageStateSelectors: {
+    isAssistantGroupItemGenerating: () => () => mockIsGenerating,
     isMessageGenerating: () => () => mockIsGenerating,
   },
   useConversationStore: (selector: (state: unknown) => unknown) => selector({}),
