@@ -130,10 +130,12 @@ export default {
     'How long to wait for additional messages before dispatching to the agent (ms)',
   'channel.dm': 'Direct Messages',
   'channel.dmPolicy': 'DM Policy',
-  'channel.dmPolicyHint': 'Control who can send direct messages to the bot',
+  'channel.dmPolicyHint':
+    'Control who can DM the bot. Pairing lets strangers request access via a one-time code that you approve with /approve.',
   'channel.dmPolicyAllowlist': 'Allowlist',
   'channel.dmPolicyDisabled': 'Disabled',
   'channel.dmPolicyOpen': 'Open',
+  'channel.dmPolicyPairing': 'Pairing',
   'channel.allowFrom': 'Allowed Users',
   'channel.allowFromHint':
     "Only listed users can interact with the bot; your 'Platform User ID' is auto-included.",

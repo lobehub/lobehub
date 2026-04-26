@@ -190,10 +190,44 @@ vi.mock('../platforms', () => ({
   extractDmSettings: (settings: Record<string, unknown> | null | undefined) => {
     const rawPolicy = settings?.dmPolicy as string | undefined;
     const policy =
-      rawPolicy === 'allowlist' || rawPolicy === 'open' || rawPolicy === 'disabled'
+      rawPolicy === 'allowlist' ||
+      rawPolicy === 'open' ||
+      rawPolicy === 'disabled' ||
+      rawPolicy === 'pairing'
         ? rawPolicy
         : 'open';
     return { policy };
+  },
+  normalizeAllowFromEntries: (raw: unknown): Array<{ id: string; name?: string }> => {
+    if (typeof raw === 'string') {
+      return raw
+        .split(/[\s,]+/)
+        .map((id: string) => id.trim())
+        .filter(Boolean)
+        .map((id: string) => ({ id }));
+    }
+    if (Array.isArray(raw)) {
+      const out: Array<{ id: string; name?: string }> = [];
+      for (const entry of raw) {
+        if (typeof entry === 'string') {
+          const id = entry.trim();
+          if (id) out.push({ id });
+          continue;
+        }
+        if (entry && typeof entry === 'object' && 'id' in entry) {
+          const id = (entry as { id?: unknown }).id;
+          if (typeof id !== 'string' || !id.trim()) continue;
+          const name = (entry as { name?: unknown }).name;
+          out.push(
+            typeof name === 'string' && name.trim()
+              ? { id: id.trim(), name: name.trim() }
+              : { id: id.trim() },
+          );
+        }
+      }
+      return out;
+    }
+    return [];
   },
   extractGroupSettings: (settings: Record<string, unknown> | null | undefined) => {
     const allowFrom = parseAllowlistMock(settings?.groupAllowFrom);
@@ -226,16 +260,26 @@ vi.mock('../platforms', () => ({
   },
   shouldHandleDm: (params: {
     authorUserId: string | undefined;
-    dmSettings: { policy: 'allowlist' | 'disabled' | 'open' };
+    dmSettings: { policy: 'allowlist' | 'disabled' | 'open' | 'pairing' };
     isDM: boolean;
+    operatorUserId?: string;
     userAllowlist: { ids: string[] };
-  }) => {
-    if (!params.isDM) return true;
-    if (params.dmSettings.policy === 'disabled') return false;
-    if (params.dmSettings.policy === 'open') return true;
-    if (!params.authorUserId) return false;
-    if (params.userAllowlist.ids.length === 0) return false;
-    return params.userAllowlist.ids.includes(params.authorUserId);
+  }): 'allow' | 'pair' | 'reject' => {
+    if (!params.isDM) return 'allow';
+    if (params.dmSettings.policy === 'disabled') return 'reject';
+    if (params.dmSettings.policy === 'open') return 'allow';
+    if (!params.authorUserId) return 'reject';
+    if (
+      params.dmSettings.policy === 'pairing' &&
+      params.operatorUserId &&
+      params.authorUserId === params.operatorUserId
+    ) {
+      return 'allow';
+    }
+    const inList =
+      params.userAllowlist.ids.length > 0 && params.userAllowlist.ids.includes(params.authorUserId);
+    if (inList) return 'allow';
+    return params.dmSettings.policy === 'pairing' ? 'pair' : 'reject';
   },
   shouldHandleGroup: (params: {
     candidateChannelIds: ReadonlyArray<string | undefined>;
@@ -746,6 +790,128 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+    });
+
+    it('lets pairing-mode strangers reach the DM gate (does NOT short-circuit on allowFrom)', async () => {
+      // Regression: previously, the global `allowFrom` gate ran first and
+      // rejected anyone not on the list — including strangers DMing a
+      // pairing bot, who never reached the pairing flow. With pairing,
+      // `allowFrom` is the *post-approval* list (managed by `/approve`),
+      // so the global gate must skip on DM threads under pairing.
+      const handler = await loadDmCatchAllHandler({
+        // allowFrom only contains the operator — Lin is a stranger here.
+        allowFrom: [{ id: 'owner-id', name: 'me' }],
+        dmPolicy: 'pairing',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'Lin' },
+        text: 'Hi',
+      };
+
+      await handler(thread, message);
+
+      // No agent dispatch (gate didn't pass through to the agent)
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      // Post was made — but it must NOT be the allowlist rejection text
+      // (which is what the bug rendered). With redis mocked to null in
+      // this suite the pairing flow falls back to the "unavailable"
+      // copy; the important thing is we left the global-allowFrom branch
+      // and entered the pairing branch.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      const text = thread.post.mock.calls[0][0] as string;
+      expect(text).not.toContain("aren't authorized");
+      expect(text).toContain('Pairing');
+    });
+
+    it('owner DMing a pairing bot bypasses the gate via operator-bypass', async () => {
+      // Even with allowFrom not yet populated with anyone but the owner,
+      // the owner themselves must be able to DM the bot to test it /
+      // approve other users.
+      const handler = await loadDmCatchAllHandler({
+        allowFrom: [{ id: 'owner-id' }],
+        dmPolicy: 'pairing',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'owner-id', userName: 'me' },
+        text: 'self test',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('owner bypasses the gate from any channel context (slash-command DM/group safety net)', async () => {
+      // Discord's native slash-command events sometimes deliver DM
+      // invocations with `event.channel.isDM=false`, which would otherwise
+      // route the owner's `/approve` through the group gate and reject
+      // them when their channel isn't in `groupAllowFrom`. The operator
+      // override neutralises this for any inbound from the bot's owner.
+      const handler = await loadDmCatchAllHandler({
+        allowFrom: [{ id: 'owner-id' }],
+        dmPolicy: 'pairing',
+        groupAllowFrom: [{ id: 'allowed-channel' }],
+        groupPolicy: 'allowlist',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      // Mis-reported isDM=false on a DM-y thread — channel id is NOT in
+      // groupAllowFrom; without owner override the group gate would
+      // reject. (The catch-all itself returns early on isDM!==true, so
+      // we use isDM=true here; the assertion is that the DM path lets
+      // owner through under the strictest combination of policies.)
+      const thread = {
+        id: 'discord:dm-channel-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'owner-id', userName: 'me' },
+        text: 'self test',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('previously-approved users on a pairing bot pass straight through (no re-pairing)', async () => {
+      const handler = await loadDmCatchAllHandler({
+        allowFrom: [{ id: 'owner-id' }, { id: 'lin-id', name: 'Lin' }],
+        dmPolicy: 'pairing',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'Lin' },
+        text: 'Hello again',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      // No pairing notice was posted — Lin is already approved.
+      expect(thread.post).not.toHaveBeenCalled();
     });
   });
 
