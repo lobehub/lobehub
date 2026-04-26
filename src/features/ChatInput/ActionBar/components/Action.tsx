@@ -75,7 +75,6 @@ const Action = memo<ActionProps>(
     if (dropdown)
       return (
         <ActionDropdown
-          loading={loading}
           open={show}
           trigger={trigger}
           onOpenChange={setShow}
