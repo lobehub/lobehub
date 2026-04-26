@@ -1,3 +1,4 @@
+import { type IdentifiersResponse } from '@lobechat/types';
 import { flatten } from 'es-toolkit/compat';
 import { type MetadataRoute } from 'next';
 import qs from 'query-string';
@@ -36,26 +37,62 @@ export const LAST_MODIFIED = new Date().toISOString();
 // Number of items per page
 const ITEMS_PER_PAGE = 100;
 
+type SitemapIdentifiersKey = 'assistant' | 'model' | 'plugin' | 'provider';
+
+const discoverService = new DiscoverService();
+const sitemapIdentifiersCache: Partial<
+  Record<SitemapIdentifiersKey, Promise<IdentifiersResponse>>
+> = {};
+
+function clearCachedIdentifiers() {
+  delete sitemapIdentifiersCache.assistant;
+  delete sitemapIdentifiersCache.model;
+  delete sitemapIdentifiersCache.plugin;
+  delete sitemapIdentifiersCache.provider;
+}
+
+function getCachedIdentifiers(
+  key: SitemapIdentifiersKey,
+  loader: () => Promise<IdentifiersResponse>,
+) {
+  const cached = sitemapIdentifiersCache[key];
+  if (cached) return cached;
+
+  const promise = loader().catch((error) => {
+    delete sitemapIdentifiersCache[key];
+    throw error;
+  });
+
+  sitemapIdentifiersCache[key] = promise;
+  return promise;
+}
+
 export class Sitemap {
   sitemapIndexs = [{ id: SitemapType.Pages }, { id: SitemapType.Providers }];
 
-  private discoverService = new DiscoverService();
+  private discoverService = discoverService;
 
   // Get total number of plugin pages
   async getPluginPageCount(): Promise<number> {
-    const list = await this.discoverService.getPluginIdentifiers();
+    const list = await getCachedIdentifiers('plugin', () =>
+      this.discoverService.getPluginIdentifiers(),
+    );
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }
 
   // Get total number of assistant pages
   async getAssistantPageCount(): Promise<number> {
-    const list = await this.discoverService.getAssistantIdentifiers();
+    const list = await getCachedIdentifiers('assistant', () =>
+      this.discoverService.getAssistantIdentifiers(),
+    );
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }
 
   // Get total number of model pages
   async getModelPageCount(): Promise<number> {
-    const list = await this.discoverService.getModelIdentifiers();
+    const list = await getCachedIdentifiers('model', () =>
+      this.discoverService.getModelIdentifiers(),
+    );
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }
 
@@ -204,7 +241,9 @@ export class Sitemap {
   }
 
   async getAssistants(page?: number): Promise<MetadataRoute.Sitemap> {
-    const list = await this.discoverService.getAssistantIdentifiers();
+    const list = await getCachedIdentifiers('assistant', () =>
+      this.discoverService.getAssistantIdentifiers(),
+    );
 
     if (page !== undefined) {
       const startIndex = (page - 1) * ITEMS_PER_PAGE;
@@ -233,7 +272,9 @@ export class Sitemap {
   }
 
   async getPlugins(page?: number): Promise<MetadataRoute.Sitemap> {
-    const list = await this.discoverService.getPluginIdentifiers();
+    const list = await getCachedIdentifiers('plugin', () =>
+      this.discoverService.getPluginIdentifiers(),
+    );
 
     if (page !== undefined) {
       const startIndex = (page - 1) * ITEMS_PER_PAGE;
@@ -262,7 +303,9 @@ export class Sitemap {
   }
 
   async getModels(page?: number): Promise<MetadataRoute.Sitemap> {
-    const list = await this.discoverService.getModelIdentifiers();
+    const list = await getCachedIdentifiers('model', () =>
+      this.discoverService.getModelIdentifiers(),
+    );
 
     if (page !== undefined) {
       const startIndex = (page - 1) * ITEMS_PER_PAGE;
@@ -291,7 +334,9 @@ export class Sitemap {
   }
 
   async getProviders(): Promise<MetadataRoute.Sitemap> {
-    const list = await this.discoverService.getProviderIdentifiers();
+    const list = await getCachedIdentifiers('provider', () =>
+      this.discoverService.getProviderIdentifiers(),
+    );
     const sitmap = list
       .filter((item) => item.identifier) // Filter out items with empty identifiers
       .map((item) =>
@@ -324,4 +369,8 @@ export class Sitemap {
       ),
     ];
   }
+}
+
+export function clearSitemapCaches() {
+  clearCachedIdentifiers();
 }
