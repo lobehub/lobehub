@@ -15,7 +15,7 @@ vi.mock('react-i18next', () => ({
         'cancel': 'Cancel',
         'brief.commentPlaceholder': 'Share your feedback...',
         'brief.commentSubmit': 'Submit feedback',
-        'brief.action.markAsDone': 'Mark as complete',
+        'brief.action.confirmDone': 'Confirm complete',
         'brief.editResult': 'Edit',
       };
       return map[key] || key;
@@ -114,7 +114,7 @@ describe('BriefCardActions', () => {
     expect(screen.getByText('✅ 确认')).toBeInTheDocument();
   });
 
-  it('should hardcode primary action label to "Mark as complete" for result briefs', () => {
+  it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
     render(
       <BriefCardActions
         actions={[{ key: 'approve', label: '✅ Custom approve', type: 'resolve' }]}
@@ -123,7 +123,7 @@ describe('BriefCardActions', () => {
       />,
     );
 
-    expect(screen.getByText('Mark as complete')).toBeInTheDocument();
+    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
     expect(screen.queryByText('✅ Custom approve')).not.toBeInTheDocument();
   });
 

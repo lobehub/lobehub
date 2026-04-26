@@ -61,12 +61,12 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     const isResult = briefType === 'result';
 
     const actions: BriefAction[] = isResult
-      ? [{ key: 'approve', label: t('brief.action.markAsDone'), type: 'resolve' }]
+      ? [{ key: 'approve', label: t('brief.action.confirmDone'), type: 'resolve' }]
       : (actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? []);
 
     const getActionLabel = useCallback(
       (action: BriefAction) => {
-        if (isResult && action.key === 'approve') return t('brief.action.markAsDone');
+        if (isResult && action.key === 'approve') return t('brief.action.confirmDone');
         const i18nKey = `brief.action.${action.key}`;
         const translated = t(i18nKey, { defaultValue: '' });
         return !translated || translated === i18nKey ? action.label : translated;
