@@ -210,6 +210,17 @@ export interface TaskDetailActivity {
   resolvedAction?: string | null;
   resolvedAt?: string | null;
   resolvedComment?: string | null;
+  /**
+   * Topic-only: currently running Gateway operation, mirrored from
+   * `topics.metadata.runningOperation`. Lets the task topic drawer establish
+   * a Gateway WebSocket reconnection without a separate topic lookup.
+   */
+  runningOperation?: {
+    assistantMessageId: string;
+    operationId: string;
+    scope?: string;
+    threadId?: string | null;
+  } | null;
   seq?: number | null;
   status?: string | null;
   summary?: string;
