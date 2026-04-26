@@ -51,6 +51,24 @@ export interface TaskTopicHandoff {
   title?: string;
 }
 
+// ── Task context (runtime state pockets stored in tasks.context JSONB) ──
+
+export interface TaskSchedulerContext {
+  // Count of consecutive 'error' reasons since the last 'done'. When it hits
+  // the fuse threshold (currently 3) we stop re-arming until the user resolves
+  // the urgent brief.
+  consecutiveFailures?: number;
+  // ISO timestamp when the latest tick was scheduled. Informational only.
+  scheduledAt?: string;
+  // QStash messageId (or LocalScheduler scheduleId) for the next tick. Used to
+  // cancel when the user wants an interval change to take effect immediately.
+  tickMessageId?: string;
+}
+
+export interface TaskContext {
+  scheduler?: TaskSchedulerContext;
+}
+
 // ── Task list item (shared between router response and client) ──
 
 export interface TaskParticipant {

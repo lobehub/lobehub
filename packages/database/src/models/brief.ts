@@ -84,6 +84,24 @@ export class BriefModel {
       .orderBy(desc(briefs.createdAt));
   }
 
+  // Used by heartbeat re-arm to skip rescheduling when a task is already
+  // waiting on user action (review max-iter, error fuse, etc).
+  async hasUnresolvedUrgentByTask(taskId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: briefs.id })
+      .from(briefs)
+      .where(
+        and(
+          eq(briefs.userId, this.userId),
+          eq(briefs.taskId, taskId),
+          eq(briefs.priority, 'urgent'),
+          isNull(briefs.resolvedAt),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  }
+
   async findByCronJobId(cronJobId: string): Promise<BriefItem[]> {
     return this.db
       .select()

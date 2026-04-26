@@ -2,6 +2,7 @@ import debug from 'debug';
 import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/server';
+import { verifyQStashSignature } from '@/libs/qstash';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 const log = debug('lobe-server:workflows:task:on-topic-complete');
@@ -21,7 +22,17 @@ export interface OnTopicCompletePayload {
 
 export async function onTopicComplete(c: Context) {
   try {
-    const body = (await c.req.json()) as OnTopicCompletePayload;
+    const rawBody = await c.req.text();
+
+    if (process.env.QSTASH_CURRENT_SIGNING_KEY) {
+      const ok = await verifyQStashSignature(c.req.raw, rawBody);
+      if (!ok) {
+        log('Rejected: invalid QStash signature');
+        return c.json({ error: 'Invalid signature' }, 401);
+      }
+    }
+
+    const body = JSON.parse(rawBody) as OnTopicCompletePayload;
     const {
       errorMessage,
       lastAssistantContent,
