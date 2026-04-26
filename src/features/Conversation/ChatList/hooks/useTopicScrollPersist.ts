@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { VListHandle } from 'virtua';
 
 import {
+  isDraftPromotionKey,
   loadScrollSnapshot,
+  migrateScrollSnapshot,
   pruneScrollSnapshots,
   saveScrollSnapshot,
 } from '../utils/scrollSnapshotStore';
@@ -38,6 +40,9 @@ export const useTopicScrollPersist = ({
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Initial mount counts as a "key change" so the first restore attempt fires.
   const needsRestoreRef = useRef(true);
+  const prevContextKeyRef = useRef(contextKey);
+  const dataSourceLengthRef = useRef(dataSourceLength);
+  dataSourceLengthRef.current = dataSourceLength;
 
   const flushNow = useCallback(() => {
     if (flushTimerRef.current) {
@@ -66,9 +71,30 @@ export const useTopicScrollPersist = ({
     [contextKey, flushNow],
   );
 
-  // Flush previous topic synchronously before switching, then arm a restore.
+  // On contextKey change: flush any pending writes against the previous key,
+  // then either preserve scroll (draft → real-id promotion of the same
+  // conversation) or arm a restore (real topic switch).
   useEffect(() => {
+    const prevKey = prevContextKeyRef.current;
+    if (prevKey === contextKey) return;
+    prevContextKeyRef.current = contextKey;
+
     flushNow();
+
+    if (isDraftPromotionKey(prevKey, contextKey)) {
+      // `onTopicCreated` mutates context mid-stream: same conversation, new
+      // key. Move the snapshot so future visits resolve the new key, and
+      // skip the restore so we don't yank the user away from content they
+      // were already reading.
+      migrateScrollSnapshot(prevKey, contextKey);
+      // If data hasn't rendered yet, leave the default first-mount restore
+      // (scroll-to-bottom) in place — there's nothing to preserve.
+      if (dataSourceLengthRef.current > 0) {
+        needsRestoreRef.current = false;
+      }
+      return;
+    }
+
     needsRestoreRef.current = true;
   }, [contextKey, flushNow]);
 

@@ -4,7 +4,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  isDraftPromotionKey,
   loadScrollSnapshot,
+  migrateScrollSnapshot,
   pruneScrollSnapshots,
   saveScrollSnapshot,
   SCROLL_SNAPSHOT_KEY_PREFIX,
@@ -133,6 +135,80 @@ describe('scrollSnapshotStore', () => {
       pruneScrollSnapshots();
 
       expect(localStorage.getItem('LOBE_PREFERENCE')).toBe('{"theme":"dark"}');
+    });
+  });
+
+  describe('isDraftPromotionKey', () => {
+    it('matches main scope draft promotion: _new → _<topicId>', () => {
+      expect(isDraftPromotionKey('main_agt_xxx_new', 'main_agt_xxx_tpc_yyy')).toBe(true);
+    });
+
+    it('matches thread scope draft promotion: ..._new → ..._thd_<id>', () => {
+      expect(
+        isDraftPromotionKey('thread_agt_xxx_tpc_yyy_new', 'thread_agt_xxx_tpc_yyy_thd_zzz'),
+      ).toBe(true);
+    });
+
+    it('matches group scope draft promotion', () => {
+      expect(isDraftPromotionKey('group_grp_xxx_new', 'group_grp_xxx_tpc_yyy')).toBe(true);
+    });
+
+    it('rejects unrelated keys with a coincidentally similar prefix', () => {
+      // `xxx_` boundary check: `xxxx` must NOT match `xxx`.
+      expect(isDraftPromotionKey('main_agt_xxx_new', 'main_agt_xxxx_tpc_yyy')).toBe(false);
+    });
+
+    it('rejects when previous key is not a draft', () => {
+      expect(isDraftPromotionKey('main_agt_xxx_tpc_aaa', 'main_agt_xxx_tpc_bbb')).toBe(false);
+    });
+
+    it('rejects when keys are identical', () => {
+      expect(isDraftPromotionKey('main_agt_xxx_new', 'main_agt_xxx_new')).toBe(false);
+    });
+
+    it('rejects switching between two different drafts', () => {
+      expect(isDraftPromotionKey('main_agt_xxx_new', 'main_agt_yyy_new')).toBe(false);
+    });
+  });
+
+  describe('migrateScrollSnapshot', () => {
+    it('moves the snapshot from old key to new key and removes the old entry', () => {
+      const savedAt = Date.now();
+      saveScrollSnapshot('main_agt_xxx_new', { atBottom: false, offset: 4321, savedAt });
+
+      migrateScrollSnapshot('main_agt_xxx_new', 'main_agt_xxx_tpc_yyy');
+
+      expect(loadScrollSnapshot('main_agt_xxx_new')).toBeNull();
+      expect(loadScrollSnapshot('main_agt_xxx_tpc_yyy')).toEqual({
+        atBottom: false,
+        offset: 4321,
+        savedAt,
+      });
+    });
+
+    it('is a no-op when there is no snapshot under the old key', () => {
+      migrateScrollSnapshot('main_agt_xxx_new', 'main_agt_xxx_tpc_yyy');
+
+      expect(loadScrollSnapshot('main_agt_xxx_tpc_yyy')).toBeNull();
+    });
+
+    it('is a no-op when old and new keys are equal', () => {
+      const savedAt = Date.now();
+      saveScrollSnapshot('main_agt_xxx_tpc_yyy', { atBottom: false, offset: 1, savedAt });
+
+      migrateScrollSnapshot('main_agt_xxx_tpc_yyy', 'main_agt_xxx_tpc_yyy');
+
+      expect(loadScrollSnapshot('main_agt_xxx_tpc_yyy')?.offset).toBe(1);
+    });
+
+    it('drops corrupt source entries instead of migrating them', () => {
+      const corruptKey = `${SCROLL_SNAPSHOT_KEY_PREFIX}:main_agt_xxx_new`;
+      localStorage.setItem(corruptKey, '{garbage');
+
+      migrateScrollSnapshot('main_agt_xxx_new', 'main_agt_xxx_tpc_yyy');
+
+      expect(localStorage.getItem(corruptKey)).toBeNull();
+      expect(loadScrollSnapshot('main_agt_xxx_tpc_yyy')).toBeNull();
     });
   });
 
