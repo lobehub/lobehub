@@ -1,7 +1,7 @@
 export default {
   'action.create.error': 'Failed to create task. Please try again.',
-  'action.create.success': 'Task created. Check it in your Tasks page.',
-  'action.createButton': 'Add to tasks',
+  'action.create.success': 'Scheduled task added. Find it in Lobe AI.',
+  'action.createButton': 'Add as scheduled task',
   'action.creating': 'Creating...',
 
   'arxiv-curated-daily.description':
@@ -46,7 +46,7 @@ export default {
     'Every morning at 9:00, give me 10 tech-stack updates: GitHub Trending, notable open-source releases from big companies, and new releases from repos in my stack.',
   'oss-intel-daily.title': 'Open-source intel daily',
 
-  'section.title': 'Try these tasks',
+  'section.title': 'Try these scheduled tasks',
 
   'user-feedback-daily.description':
     'Each morning, aggregate feedback from all channels (stores, social, support) into top 20 items, sorted by sentiment and theme.',

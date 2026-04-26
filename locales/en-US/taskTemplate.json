@@ -1,7 +1,7 @@
 {
   "action.create.error": "Failed to create task. Please try again.",
-  "action.create.success": "Task created. Check it in your Tasks page.",
-  "action.createButton": "Add to tasks",
+  "action.create.success": "Scheduled task added. Find it in Lobe AI.",
+  "action.createButton": "Add as scheduled task",
   "action.creating": "Creating...",
   "arxiv-curated-daily.description": "Every morning, pick 5 fresh papers in your research area with one-line summaries. Cut your paper-scanning time in half.",
   "arxiv-curated-daily.prompt": "Every morning at 9:00, pick 5 of the latest arXiv papers in my research area and give me a one-line summary for each, so I can decide which to read in depth.",
@@ -45,7 +45,7 @@
   "sales-pipeline-review.description": "Every Friday, review your pipeline: stalled deals, upcoming renewals, and 3 high-priority follow-ups for next week.",
   "sales-pipeline-review.prompt": "Every Friday at 17:00, review my sales pipeline: list deals stalled for over 7 days, upcoming renewals in the next 30 days, and suggest 3 high-priority follow-ups for next Monday with talking points.",
   "sales-pipeline-review.title": "Sales pipeline review",
-  "section.title": "Try these tasks",
+  "section.title": "Try these scheduled tasks",
   "seo-weekly-report.description": "Every Monday, a lightweight SEO report: ranking movement, new keywords to chase, and pages worth refreshing.",
   "seo-weekly-report.prompt": "Every Monday at 9:00, give me a lightweight SEO weekly: top ranking movers (up/down), 5 emerging keywords worth targeting, and 3 existing pages ripe for a content refresh.",
   "seo-weekly-report.title": "SEO weekly report",
