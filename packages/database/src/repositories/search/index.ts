@@ -66,6 +66,11 @@ export interface ChatGroupSearchResult extends BaseSearchResult {
 }
 
 export interface TopicSearchResult extends BaseSearchResult {
+  agent: {
+    avatar: string | null;
+    backgroundColor: string | null;
+    title: string | null;
+  } | null;
   agentId: string | null;
   favorite: boolean | null;
   sessionId: string | null;
@@ -405,7 +410,10 @@ export class SearchRepo {
 
     const rows = await this.db
       .select({
+        agentAvatar: agents.avatar,
+        agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
+        agentTitle: agents.title,
         content: topics.content,
         createdAt: topics.createdAt,
         favorite: topics.favorite,
@@ -416,6 +424,7 @@ export class SearchRepo {
         updatedAt: topics.updatedAt,
       })
       .from(topics)
+      .leftJoin(agents, eq(topics.agentId, agents.id))
       .where(
         and(
           eq(topics.userId, this.userId),
@@ -427,6 +436,13 @@ export class SearchRepo {
       .limit(limit);
 
     return this.mapScoresToRelevance(rows).map((row) => ({
+      agent: row.agentId
+        ? {
+            avatar: row.agentAvatar,
+            backgroundColor: row.agentBackgroundColor,
+            title: row.agentTitle,
+          }
+        : null,
       agentId: row.agentId,
       createdAt: row.createdAt,
       description: this.truncate(row.content),
