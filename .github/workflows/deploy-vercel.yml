@@ -48,8 +48,21 @@ jobs:
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
+      - name: Separate migration from build command
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
+            cfg.buildCommand = 'cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 bun run build:raw';
+            fs.writeFileSync('vercel.json', JSON.stringify(cfg, null, 2));
+          "
+
       - name: Build project artifacts
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Run database migrations
+        run: bun run db:migrate
+        continue-on-error: true
 
       - name: Deploy prebuilt artifacts
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
