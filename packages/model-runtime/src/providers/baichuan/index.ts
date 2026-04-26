@@ -18,7 +18,7 @@ export const params = {
   baseURL: 'https://api.baichuan-ai.com/v1',
   chatCompletion: {
     handlePayload: (payload: ChatStreamPayload) => {
-      const { enabledSearch, temperature, thinking, tools, ...rest } = payload;
+      const { model, enabledSearch, temperature, thinking, tools, ...rest } = payload;
 
       const baichuanTools = enabledSearch
         ? [
@@ -38,10 +38,18 @@ export const params = {
 
       return {
         ...rest,
+        model,
         temperature: resolvedParams.temperature,
         tools: baichuanTools,
+        ...(model?.startsWith('Baichuan-M') && {
+          frequency_penalty: undefined,
+          presence_penalty: undefined,
+        }),
         ...(thinking && {
-          budget_tokens: thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+          budget_tokens:
+            thinking?.budget_tokens === 0
+              ? 0
+              : Math.min(thinking?.budget_tokens, 1024) || undefined,
         }),
       } as any;
     },
