@@ -4,7 +4,6 @@ import type { Context } from 'hono';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { getServerDB } from '@/database/server';
-import { verifyQStashSignature } from '@/libs/qstash';
 
 const log = debug('lobe-server:workflows:task:watchdog');
 
@@ -14,21 +13,11 @@ const log = debug('lobe-server:workflows:task:watchdog');
  * leaving an urgent brief for the user.
  *
  * No per-user authentication: this is a global sweep registered as a QStash
- * Schedule (cron). Body is empty; we still validate the QStash signature when
- * signing keys are configured.
+ * Schedule (cron). Signature verification is handled by the `qstashAuth`
+ * middleware mounted on the route.
  */
 export async function watchdog(c: Context) {
   try {
-    const rawBody = await c.req.text();
-
-    if (process.env.QSTASH_CURRENT_SIGNING_KEY) {
-      const ok = await verifyQStashSignature(c.req.raw, rawBody);
-      if (!ok) {
-        log('Rejected: invalid QStash signature');
-        return c.json({ error: 'Invalid signature' }, 401);
-      }
-    }
-
     const db = await getServerDB();
     const stuckTasks = await TaskModel.findStuckTasks(db);
     const failed: string[] = [];
