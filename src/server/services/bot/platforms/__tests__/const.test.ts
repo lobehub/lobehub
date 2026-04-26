@@ -408,38 +408,86 @@ describe('shouldHandleGroup', () => {
   const allowlist = { allowFrom: ['channel-1', 'channel-2'], policy: 'allowlist' as const };
 
   it('lets DM threads pass unconditionally', () => {
-    expect(shouldHandleGroup({ channelId: undefined, groupSettings: disabled, isDM: true })).toBe(
-      true,
-    );
+    expect(
+      shouldHandleGroup({ candidateChannelIds: [], groupSettings: disabled, isDM: true }),
+    ).toBe(true);
   });
 
   it('blocks group traffic when disabled', () => {
     expect(
-      shouldHandleGroup({ channelId: 'channel-1', groupSettings: disabled, isDM: false }),
+      shouldHandleGroup({
+        candidateChannelIds: ['channel-1'],
+        groupSettings: disabled,
+        isDM: false,
+      }),
     ).toBe(false);
   });
 
   it('allows group traffic under the open policy', () => {
-    expect(shouldHandleGroup({ channelId: 'any-channel', groupSettings: open, isDM: false })).toBe(
-      true,
-    );
+    expect(
+      shouldHandleGroup({
+        candidateChannelIds: ['any-channel'],
+        groupSettings: open,
+        isDM: false,
+      }),
+    ).toBe(true);
   });
 
   it('allows group traffic from channels in the allowlist', () => {
     expect(
-      shouldHandleGroup({ channelId: 'channel-1', groupSettings: allowlist, isDM: false }),
+      shouldHandleGroup({
+        candidateChannelIds: ['channel-1'],
+        groupSettings: allowlist,
+        isDM: false,
+      }),
     ).toBe(true);
   });
 
   it('rejects group traffic from channels outside the allowlist', () => {
     expect(
-      shouldHandleGroup({ channelId: 'channel-9', groupSettings: allowlist, isDM: false }),
+      shouldHandleGroup({
+        candidateChannelIds: ['channel-9'],
+        groupSettings: allowlist,
+        isDM: false,
+      }),
     ).toBe(false);
   });
 
-  it('fails closed when the allowlisted policy sees a missing channel id', () => {
-    expect(shouldHandleGroup({ channelId: undefined, groupSettings: allowlist, isDM: false })).toBe(
-      false,
-    );
+  it('fails closed when the allowlisted policy sees no channel ids', () => {
+    expect(
+      shouldHandleGroup({ candidateChannelIds: [], groupSettings: allowlist, isDM: false }),
+    ).toBe(false);
+    expect(
+      shouldHandleGroup({
+        candidateChannelIds: [undefined, undefined],
+        groupSettings: allowlist,
+        isDM: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('passes when ANY candidate is in the allowlist (Discord auto-thread + parent)', () => {
+    // Real-world scenario: operator pastes the *parent* channel ID
+    // (`channel-1`); Discord routes the inbound mention through an
+    // auto-created reply thread whose ID is `auto-thread-id`. The router
+    // hands both candidates over — only the parent matches, but that is
+    // enough to let the message through.
+    expect(
+      shouldHandleGroup({
+        candidateChannelIds: ['auto-thread-id', 'channel-1'],
+        groupSettings: allowlist,
+        isDM: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects when none of the candidates is in the allowlist', () => {
+    expect(
+      shouldHandleGroup({
+        candidateChannelIds: ['auto-thread-id', 'unrelated-parent'],
+        groupSettings: allowlist,
+        isDM: false,
+      }),
+    ).toBe(false);
   });
 });

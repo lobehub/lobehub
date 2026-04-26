@@ -108,6 +108,8 @@ For the same group-capable platforms, each channel has a **Group Policy** that c
 
 When **Allowlist** is selected, **Allowed Channels** appears as a row editor — one entry per channel / group / chat ID, with an optional note (e.g. `#general`) shown only to you so you can recognise each ID later.
 
+> **Discord parent channels**: an `@mention` in a Discord channel automatically spawns a reply thread, so the inbound thread ID is *not* what Discord's "Copy Channel ID" gives you. You can paste the **parent channel ID** here — the bot accepts any auto-created reply thread under it. Pasting a specific thread ID instead works too, in which case only that thread is allowed.
+
 ### Per-platform defaults
 
 Every supported platform defaults to **Open** for both policies so the bot stays reachable out of the box. Tighten per-channel via **Allowlist** or **Disabled** when you want a private bot. WeChat does not expose these settings because the WeChat integration is DM-only by design.

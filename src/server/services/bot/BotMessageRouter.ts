@@ -470,10 +470,26 @@ export class BotMessageRouter {
      * are governed by `passesDmPolicy` instead. Non-DM threads are blocked
      * when disabled, and filtered against `groupAllowFrom` (channel / group
      * / chat IDs) when set to `allowlist`.
+     *
+     * Operators paste **raw** platform IDs (what Discord's "Copy Channel
+     * ID" or Telegram's chat-id tools yield), but `thread.channelId` is a
+     * *composite* string carrying the platform prefix
+     * (`discord:guild:channel`, `telegram:chatId`, …). Using it directly
+     * never matches a raw paste. Each PlatformClient already exposes
+     * `extractChatId` returning the most-specific raw ID, so we use that
+     * as the primary candidate.
+     *
+     * Discord-only quirk: a bare `@mention` in a parent channel triggers
+     * an auto-reply thread; `extractChatId` then resolves to the thread,
+     * not the parent operators pasted. `extraGroupAllowlistChannels`
+     * surfaces the parent so either ID lets the message through.
      */
-    const passesGroupPolicy = (thread: { channelId?: string; isDM?: boolean }): boolean =>
+    const passesGroupPolicy = (thread: { id: string; isDM?: boolean }): boolean =>
       shouldHandleGroup({
-        channelId: thread.channelId,
+        candidateChannelIds: [
+          client.extractChatId(thread.id),
+          ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
+        ],
         groupSettings,
         isDM: thread.isDM === true,
       });

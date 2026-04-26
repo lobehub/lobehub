@@ -393,21 +393,29 @@ export function shouldHandleDm(params: {
  *
  * - `policy='disabled'` → ignore everything outside DMs.
  * - `policy='open'` → respond as before (existing @mention rules apply).
- * - `policy='allowlist'` → only when the channel ID matches an entry in the
- *   configured list. A missing `channelId` fails closed.
+ * - `policy='allowlist'` → match if **any** candidate channel ID is in
+ *   the configured list. The list of candidates exists because some
+ *   platforms surface multiple IDs for one logical surface — Discord
+ *   auto-creates a reply thread for each @-mention, so the inbound
+ *   `thread.channelId` is the thread, but operators paste the *parent*
+ *   channel ID into the allowlist. The router asks the PlatformClient
+ *   to expand the candidate list (see `extraGroupAllowlistChannels`)
+ *   and we accept any match. An empty/all-falsy candidate set fails
+ *   closed.
  */
 export function shouldHandleGroup(params: {
-  channelId: string | undefined;
+  candidateChannelIds: ReadonlyArray<string | undefined>;
   groupSettings: GroupSettings;
   isDM: boolean;
 }): boolean {
-  const { channelId, groupSettings, isDM } = params;
+  const { candidateChannelIds, groupSettings, isDM } = params;
   if (isDM) return true;
   if (groupSettings.policy === 'disabled') return false;
   if (groupSettings.policy === 'open') return true;
   // allowlist
-  if (!channelId) return false;
-  return groupSettings.allowFrom.includes(channelId);
+  const candidates = candidateChannelIds.filter((id): id is string => Boolean(id));
+  if (candidates.length === 0) return false;
+  return candidates.some((id) => groupSettings.allowFrom.includes(id));
 }
 
 // ---------- Step-aware reactions ----------

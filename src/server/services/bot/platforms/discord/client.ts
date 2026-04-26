@@ -359,6 +359,24 @@ class DiscordGatewayClient implements PlatformClient {
     return threadId;
   }
 
+  /**
+   * Surface the parent channel for the group allowlist. When the bot is
+   * @-mentioned in a parent channel, Discord spawns an auto-reply thread
+   * and `thread.channelId` resolves to the **thread** (segment 3 of the
+   * composite). Operators, however, paste the *parent* channel ID
+   * (segment 2 — what Discord's "Copy Channel ID" returns). Returning the
+   * parent here lets `shouldHandleGroup` accept either form.
+   */
+  extraGroupAllowlistChannels(platformThreadId: string): string[] {
+    const parts = platformThreadId.split(':');
+    // Format: discord:guildId:channelId[:discordThreadId]
+    // Only when there's a thread segment is the parent distinct from
+    // `thread.channelId` (which already maps to the thread). For
+    // top-level channels the router already supplies `parts[2]`.
+    if (parts.length === 4 && parts[2]) return [parts[2]];
+    return [];
+  }
+
   sanitizeUserInput(text: string): string {
     return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
   }

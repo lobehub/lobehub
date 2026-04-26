@@ -109,7 +109,19 @@ const mockGetPlatform = vi.hoisted(() =>
           applicationId: 'mock-app',
           createAdapter: mockCreateAdapter,
           extractAuthorLocale: (msg: any) => msg?.raw?.from?.language_code,
-          extractChatId: (id: string) => id.split(':')[1],
+          // Match the per-platform contract: return the most-specific raw
+          // ID (last segment of the composite). Telegram `telegram:chat-1`
+          // → `chat-1`; Discord `discord:guild:channel:thread` → `thread`.
+          extractChatId: (id: string) => id.split(':').at(-1) ?? '',
+          // Mirrors Discord's `extraGroupAllowlistChannels`: when the
+          // platformThreadId has a thread segment, surface the parent
+          // channel as an extra allowlist candidate. Two-segment IDs
+          // (Telegram-style `telegram:chat-1`) return [], leaving
+          // existing tests unaffected.
+          extraGroupAllowlistChannels: (threadId: string) => {
+            const parts = threadId.split(':');
+            return parts.length === 4 && parts[2] ? [parts[2]] : [];
+          },
           getMessenger: () => ({
             createMessage: vi.fn(),
             editMessage: vi.fn(),
@@ -226,15 +238,16 @@ vi.mock('../platforms', () => ({
     return params.userAllowlist.ids.includes(params.authorUserId);
   },
   shouldHandleGroup: (params: {
-    channelId: string | undefined;
+    candidateChannelIds: ReadonlyArray<string | undefined>;
     groupSettings: { allowFrom: string[]; policy: 'allowlist' | 'disabled' | 'open' };
     isDM: boolean;
   }) => {
     if (params.isDM) return true;
     if (params.groupSettings.policy === 'disabled') return false;
     if (params.groupSettings.policy === 'open') return true;
-    if (!params.channelId) return false;
-    return params.groupSettings.allowFrom.includes(params.channelId);
+    const ids = params.candidateChannelIds.filter((id): id is string => Boolean(id));
+    if (ids.length === 0) return false;
+    return ids.some((id) => params.groupSettings.allowFrom.includes(id));
   },
 }));
 
@@ -822,6 +835,75 @@ describe('BotMessageRouter', () => {
       await subscribed(thread, makeMentionMessage());
 
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post.mock.calls[0][0]).toContain("isn't enabled in this channel");
+    });
+
+    it('allows Discord @-mentions when the operator allowlisted ONLY the auto-thread ID', async () => {
+      // Operator wants to allow exactly one specific thread (e.g. they
+      // copied the thread ID from Discord directly). The router uses
+      // `extractChatId` (= the most-specific raw ID, here the thread) as
+      // the primary candidate, so an allowlist holding just the thread ID
+      // matches.
+      const { mention } = await loadHandlers({
+        groupAllowFrom: 'auto-thread-id',
+        groupPolicy: 'allowlist',
+      });
+      const thread = {
+        channelId: 'auto-thread-id',
+        id: 'discord:guild-1:parent-channel:auto-thread-id',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('allows Discord @-mentions when the operator allowlisted the PARENT channel', async () => {
+      // Real-world bug: operator pastes the parent channel ID
+      // (`parent-channel`) into groupAllowFrom; Discord auto-creates a
+      // reply thread for the @-mention so `thread.channelId` is the
+      // ephemeral thread ID, not the parent. The router asks the platform
+      // client for extra allowlist candidates and accepts the message
+      // because the parent matches.
+      const { mention } = await loadHandlers({
+        groupAllowFrom: 'parent-channel',
+        groupPolicy: 'allowlist',
+      });
+      const thread = {
+        channelId: 'auto-thread-id',
+        id: 'discord:guild-1:parent-channel:auto-thread-id',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('blocks Discord @-mentions when neither the thread nor parent are allowlisted', async () => {
+      const { mention } = await loadHandlers({
+        groupAllowFrom: 'some-other-channel',
+        groupPolicy: 'allowlist',
+      });
+      const thread = {
+        channelId: 'auto-thread-id',
+        id: 'discord:guild-1:parent-channel:auto-thread-id',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+
+      await mention(thread, makeMentionMessage());
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).toContain("isn't enabled in this channel");
     });

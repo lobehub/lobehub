@@ -172,6 +172,23 @@ export interface PlatformClient {
   extractFiles?: (message: Message) => Promise<AttachmentSource[] | ExtractFilesResult | undefined>;
 
   /**
+   * Surface additional channel IDs the group allowlist (`groupAllowFrom`)
+   * should match against, beyond the inbound `thread.channelId` the router
+   * already supplies.
+   *
+   * Discord auto-creates a per-mention reply thread when the bot is
+   * @-mentioned in a parent channel; the thread's ID becomes
+   * `thread.channelId`, but operators copy the **parent** channel ID into
+   * the allowlist. Without this hook the allowlist would never match for
+   * @-mentions. The hook returns the parent so either ID lets the message
+   * through.
+   *
+   * Other platforms (Telegram chat IDs, Slack channel IDs, Feishu chat IDs)
+   * have a 1:1 mapping with what the user pastes and can omit this method.
+   */
+  extraGroupAllowlistChannels?: (platformThreadId: string) => string[];
+
+  /**
    * Transform outbound Markdown content into a format the platform can render.
    * Called before `formatReply` and `splitMessage`.
    *
