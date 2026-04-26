@@ -24,6 +24,7 @@ vi.mock('antd-style', () => ({
 
 vi.mock('../../../store', () => ({
   messageStateSelectors: {
+    isAssistantGroupItemGenerating: () => () => mockIsGenerating,
     isMessageCollapsed: () => () => mockIsCollapsed,
     isMessageGenerating: () => () => mockIsGenerating,
   },

@@ -148,7 +148,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     const toolsPhaseComplete = areWorkflowToolsComplete(allTools);
     const pendingInterventionPresent = useMemo(() => hasPendingIntervention(allTools), [allTools]);
     const isGenerating = useConversationStore(
-      messageStateSelectors.isMessageGenerating(assistantMessageId),
+      messageStateSelectors.isAssistantGroupItemGenerating(assistantMessageId),
     );
     /** Earliest op startTime for this message — anchors the working timer so
      *  it reflects wall-clock since the op began, not since the component mounted. */

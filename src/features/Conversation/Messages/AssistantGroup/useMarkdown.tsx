@@ -17,7 +17,7 @@ const remarkPlugins = markdownElements
 
 export const useMarkdown = (id: string, disableStreaming = false): Partial<MarkdownProps> => {
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
-  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const generating = useConversationStore(messageStateSelectors.isAssistantGroupItemGenerating(id));
 
   const enableStream = !disableStreaming;
   const animated = enableStream && transitionMode === 'fadeIn' && generating;

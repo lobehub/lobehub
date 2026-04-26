@@ -293,7 +293,7 @@ const Group = memo<GroupChildrenProps>(
   }) => {
     const [isCollapsed, isGenerating] = useConversationStore((s) => [
       messageStateSelectors.isMessageCollapsed(id)(s),
-      messageStateSelectors.isMessageGenerating(id)(s),
+      messageStateSelectors.isAssistantGroupItemGenerating(id)(s),
     ]);
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
     const firstBlockId = blocks[0]?.id;
