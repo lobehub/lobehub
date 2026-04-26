@@ -10,11 +10,28 @@ import { telegram } from './telegram/definition';
 import { wechat } from './wechat/definition';
 
 export {
+  allowFromField,
+  type BotReplyLocale,
   displayToolCallsField,
+  type DmPolicy,
+  type DmSettings,
+  extractDmSettings,
+  extractGroupSettings,
+  extractUserAllowlist,
+  getBotReplyLocale,
   getStepReactionEmoji,
+  type GroupPolicy,
+  type GroupSettings,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  normalizeBotReplyLocale,
   RECEIVED_REACTION_EMOJI,
   serverIdField,
+  shouldAllowSender,
+  shouldHandleDm,
+  shouldHandleGroup,
   THINKING_REACTION_EMOJI,
+  type UserAllowlist,
   userIdField,
   WORKING_REACTION_EMOJI,
 } from './const';

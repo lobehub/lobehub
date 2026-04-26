@@ -210,19 +210,48 @@ LobeHub 支持两种 Slack 连接模式：
   同时确保在 **OAuth & Permissions** → **Bot Token Scopes** 中添加 `commands` 权限，并在 **Interactivity & Shortcuts** 中启用 Interactivity，将 Request URL 设为相同的 Webhook URL。
 </Steps>
 
+## 接入策略
+
+两个独立的策略控制入站消息，默认都为 **开放**。
+
+### 允许的用户 ID（全局）
+
+填入 **允许的用户 ID** 后，**所有**入站消息（私信和频道 `@提及`）都必须来自列表里的 Slack 成员 ID。留空则不做用户级过滤。打开用户资料 → 点击 `⋮` → **复制成员 ID**（以 `U` 开头）。
+
+### 私信策略
+
+- **开放 (Open)（默认）** — workspace 内任何成员都可以私信机器人（若设置了全局白名单则受其约束）。
+- **白名单 (Allowlist)** — 私信需要发送者在 **允许的用户 ID** 里。和 `Open` 的差别在白名单为空时：`Allowlist` 模式**全部拒绝**。
+- **禁用 (Disabled)** — 机器人忽略所有私信，只在频道里被 `@提及` 时回复。
+
+### 群组策略
+
+控制机器人会在哪些 Slack 频道里响应。
+
+- **开放 (Open)（默认）** — 在机器人加入的任何频道里被 `@` 都响应。
+- **白名单 (Allowlist)** — 只在 **允许的频道 ID** 列出的频道里响应。打开频道详情面板，底部能看到频道 ID（以 `C` 开头）。
+- **禁用 (Disabled)** — 忽略所有频道流量，机器人只接受私信。
+
+跨平台细节见 [渠道概览](/docs/usage/channels/overview#direct-message-policy)。
+
 ## 配置参考
 
-| 字段             | 是否必需          | 描述                                     |
-| -------------- | ------------- | -------------------------------------- |
-| **应用 ID**      | 是             | 您的 Slack 应用 ID                         |
-| **Bot Token**  | 是             | Bot User OAuth Token（`xoxb-...`）       |
-| **签名密钥**       | 是             | 用于验证来自 Slack 的请求                       |
-| **应用级别 Token** | 仅 Socket Mode | 应用级别 Token（`xapp-...`），用于 WebSocket 连接 |
-| **连接模式**       | 否             | `websocket` 或 `webhook`（默认：`webhook`）  |
+| 字段             | 是否必需          | 描述                                                  |
+| -------------- | ------------- | --------------------------------------------------- |
+| **应用 ID**      | 是             | 您的 Slack 应用 ID                                      |
+| **Bot Token**  | 是             | Bot User OAuth Token（`xoxb-...`）                    |
+| **签名密钥**       | 是             | 用于验证来自 Slack 的请求                                    |
+| **应用级别 Token** | 仅 Socket Mode | 应用级别 Token（`xapp-...`），用于 WebSocket 连接              |
+| **连接模式**       | 否             | `websocket` 或 `webhook`（默认：`webhook`）               |
+| **允许的用户 ID**   | 否             | 逗号或空格分隔的 Slack 成员 ID。全局闸门 — 私信和频道 @ 都受其约束           |
+| **私信策略**       | 否             | `open`（默认）、`allowlist` 或 `disabled` — 控制谁可以私信机器人    |
+| **群组策略**       | 否             | `open`（默认）、`allowlist` 或 `disabled` — 控制机器人在哪些频道中响应 |
+| **允许的频道 ID**   | 否             | 逗号或空格分隔的 Slack 频道 ID（以 `C` 开头）。仅在群组策略为白名单时使用        |
 
 ## 故障排除
 
 - **私信显示 "Sending messages to this app has been turned off"：** 在 Slack API 控制台 → **App Home** → **Show Tabs** 中，确保 **Messages Tab** 已启用，并勾选 "Allow users to send Slash commands and messages from the messages tab"。如果使用 Manifest 模板创建应用则默认已开启。
+- **Slack 配置正常但机器人不回私信：** 在 LobeHub 的 **高级设置** 里检查 **私信策略**。如果是 `Disabled`，改成 `Open` 或 `Allowlist`；如果是 `Allowlist`，确认发起方的 Slack 成员 ID 已加入 **允许的用户 ID**。
 - **机器人未响应：** 确认机器人已被邀请到频道。Socket Mode 下请确保应用级别 Token 正确且 Socket Mode 已在 Slack 应用设置中启用。
 - **测试连接失败：** 仔细检查应用 ID 和 Bot Token 是否正确。确保应用已安装到工作区。
 - **Webhook 验证失败（Webhook 模式）：** 确保签名密钥匹配且 Webhook URL 正确。

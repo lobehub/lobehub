@@ -213,19 +213,48 @@ Use this method if your Slack app already has Event Subscriptions configured wit
   Also ensure you add the `commands` scope under **OAuth & Permissions** → **Bot Token Scopes**, and enable **Interactivity & Shortcuts** with the same Webhook URL as the Request URL.
 </Steps>
 
+## Access Policies
+
+Two independent policies gate inbound traffic. Both default to **Open**.
+
+### Allowed User IDs (global)
+
+A populated **Allowed User IDs** field is a global gate — DMs *and* channel `@mentions` are restricted to listed Slack member IDs. Empty means "no user-level filter". Open a user's profile → click `⋮` → **Copy member ID** (starts with `U`).
+
+### DM Policy
+
+- **Open (default)** — Any workspace member can DM the bot (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Disabled** — The bot ignores all DMs and only replies to channel `@mentions`.
+
+### Group Policy
+
+Controls which Slack channels the bot will respond in.
+
+- **Open (default)** — Respond to `@mentions` in any channel the bot has been added to.
+- **Allowlist** — Respond only in channels whose ID is in **Allowed Channel IDs**. Open the channel's About panel to copy the channel ID (starts with `C`).
+- **Disabled** — Ignore all channel traffic; the bot only responds to DMs.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field               | Required         | Description                                           |
-| ------------------- | ---------------- | ----------------------------------------------------- |
-| **Application ID**  | Yes              | Your Slack app's ID                                   |
-| **Bot Token**       | Yes              | Bot User OAuth Token (`xoxb-...`)                     |
-| **Signing Secret**  | Yes              | Used to verify requests from Slack                    |
-| **App-Level Token** | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection |
-| **Connection Mode** | No               | `websocket` or `webhook` (default: `webhook`)         |
+| Field                   | Required         | Description                                                                                            |
+| ----------------------- | ---------------- | ------------------------------------------------------------------------------------------------------ |
+| **Application ID**      | Yes              | Your Slack app's ID                                                                                    |
+| **Bot Token**           | Yes              | Bot User OAuth Token (`xoxb-...`)                                                                      |
+| **Signing Secret**      | Yes              | Used to verify requests from Slack                                                                     |
+| **App-Level Token**     | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection                                                  |
+| **Connection Mode**     | No               | `websocket` or `webhook` (default: `webhook`)                                                          |
+| **Allowed User IDs**    | No               | Comma- or whitespace-separated Slack member IDs. Global gate — applies to DMs and channel @mentions    |
+| **DM Policy**           | No               | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                            |
+| **Group Policy**        | No               | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                     |
+| **Allowed Channel IDs** | No               | Comma- or whitespace-separated Slack channel IDs (start with `C`). Used when Group Policy is Allowlist |
 
 ## Troubleshooting
 
 - **DM shows "Sending messages to this app has been turned off":** In the Slack API Dashboard → **App Home** → **Show Tabs**, make sure **Messages Tab** is enabled and "Allow users to send Slash commands and messages from the messages tab" is checked. This is already enabled if you created the app using the Manifest template.
+- **Bot ignores DMs even though Slack is configured correctly:** Open **Advanced Settings** in LobeHub and check **DM Policy**. If it is `Disabled`, switch to `Open` or `Allowlist`. If it is `Allowlist`, confirm the sender's Slack member ID is listed in **Allowed User IDs**.
 - **Bot not responding:** Confirm the bot has been invited to the channel. For Socket Mode, ensure the App-Level Token is correct and Socket Mode is enabled in Slack app settings.
 - **Test Connection failed:** Double-check the Application ID and Bot Token. Ensure the app is installed to the workspace.
 - **Webhook verification failed (Webhook mode):** Make sure the Signing Secret matches and the Webhook URL is correct.
