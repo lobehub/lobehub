@@ -9,10 +9,14 @@
   "agent_cron_job_failed_title": "Scheduled task failed",
   "billboard.learnMore": "Learn more",
   "billboard.menuLabel": "Announcements",
+  "image_generation_completed": "Your image \"{{prompt}}\" is ready.",
+  "image_generation_completed_title": "Image ready",
   "inbox.archiveAll": "Archive all",
   "inbox.empty": "No notifications yet",
   "inbox.emptyUnread": "No unread notifications",
   "inbox.filterUnread": "Show unread only",
   "inbox.markAllRead": "Mark all as read",
-  "inbox.title": "Notifications"
+  "inbox.title": "Notifications",
+  "video_generation_completed": "Your video \"{{prompt}}\" is ready.",
+  "video_generation_completed_title": "Video ready"
 }
