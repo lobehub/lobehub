@@ -1,14 +1,19 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getCanonicalUrl } from '@/server/utils/url';
 
-import { LAST_MODIFIED, Sitemap, SitemapType } from './sitemap';
+import { clearSitemapCaches, LAST_MODIFIED, Sitemap, SitemapType } from './sitemap';
 
 const LOCALE_COUNT = 18;
 
 describe('Sitemap', () => {
   const sitemap = new Sitemap();
+
+  beforeEach(() => {
+    clearSitemapCaches();
+    vi.restoreAllMocks();
+  });
 
   describe('getIndex', () => {
     it('should return a valid sitemap index with pagination', async () => {
@@ -261,6 +266,29 @@ describe('Sitemap', () => {
 
       const pageCount = await sitemap.getAssistantPageCount();
       expect(pageCount).toBe(3); // 250 items / 100 per page = ceil(2.5) = 3 pages
+    });
+
+    it('should reuse assistant identifiers for count and page generation', async () => {
+      const identifiers = Array.from({ length: 150 }, (_, i) => ({
+        identifier: `assistant-${i}`,
+        lastModified: '2023-01-01',
+      }));
+
+      const getAssistantIdentifiers = vi
+        .spyOn(sitemap['discoverService'], 'getAssistantIdentifiers')
+        .mockResolvedValue(
+          // @ts-ignore
+          identifiers,
+        );
+
+      const [pageCount, assistantsSitemap] = await Promise.all([
+        sitemap.getAssistantPageCount(),
+        sitemap.getAssistants(1),
+      ]);
+
+      expect(pageCount).toBe(2);
+      expect(assistantsSitemap.length).toBe(100 * LOCALE_COUNT);
+      expect(getAssistantIdentifiers).toHaveBeenCalledTimes(1);
     });
 
     it('should return correct model page count', async () => {
