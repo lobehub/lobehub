@@ -216,13 +216,17 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       status: AsyncTaskStatus.Success,
     });
 
-    notifyVideoCompleted({
-      generationBatchId: generation.generationBatchId!,
-      model: requestedModel,
-      prompt: batch?.prompt ?? '',
-      topicId: batch?.generationTopicId,
-      userId: asyncTask.userId,
-    }).catch((err) => console.error('[video-webhook] notification failed:', err));
+    try {
+      await notifyVideoCompleted({
+        generationBatchId: generation.generationBatchId!,
+        model: requestedModel,
+        prompt: batch?.prompt ?? '',
+        topicId: batch?.generationTopicId,
+        userId: asyncTask.userId,
+      });
+    } catch (err) {
+      console.error('[video-webhook] notification failed:', err);
+    }
 
     // Charge after successful video generation
     try {

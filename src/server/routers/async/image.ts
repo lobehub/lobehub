@@ -375,14 +375,18 @@ export const imageRouter = router({
             status: AsyncTaskStatus.Success,
           });
 
-          notifyImageCompleted({
-            duration,
-            generationBatchId,
-            model,
-            prompt: params.prompt,
-            topicId: generationTopicId,
-            userId: ctx.userId,
-          }).catch((err) => console.error('[image-async] notification failed:', err));
+          try {
+            await notifyImageCompleted({
+              duration,
+              generationBatchId,
+              model,
+              prompt: params.prompt,
+              topicId: generationTopicId,
+              userId: ctx.userId,
+            });
+          } catch (err) {
+            console.error('[image-async] notification failed:', err);
+          }
 
           if (ENABLE_BUSINESS_FEATURES) {
             await chargeAfterGenerate({
