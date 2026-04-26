@@ -4,6 +4,10 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentSignalSourceEnvelope } from '@/server/services/agentSignal';
+import {
+  AGENT_SIGNAL_SOURCE_TYPES,
+  type SourceAgentUserMessage,
+} from '@/server/services/agentSignal/sourceTypes';
 import { runAgentSignalWorkflow } from '@/server/workflows/agentSignal/run';
 import { uuid } from '@/utils/uuid';
 
@@ -376,27 +380,34 @@ describe('runAgentSignalWorkflow', () => {
     );
     expect(executeSourceEvent).toHaveBeenCalledTimes(1);
     expect(capturedSourceEvent?.sourceType).toBe('agent.user.message');
-    expect(capturedSourceEvent?.payload.threadId).toBe(threadId);
-    expect(capturedSourceEvent?.payload.serializedContext).toContain('<feedback_analysis_context>');
-    expect(capturedSourceEvent?.payload.serializedContext).toContain(
+
+    if (capturedSourceEvent?.sourceType !== AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage) {
+      throw new Error('Expected captured source event to be an agent user message');
+    }
+
+    const userMessageSource = capturedSourceEvent as SourceAgentUserMessage;
+
+    expect(userMessageSource.payload.threadId).toBe(threadId);
+    expect(userMessageSource.payload.serializedContext).toContain('<feedback_analysis_context>');
+    expect(userMessageSource.payload.serializedContext).toContain(
       'Thread message one that should be included.',
     );
-    expect(capturedSourceEvent?.payload.serializedContext).toContain(
+    expect(userMessageSource.payload.serializedContext).toContain(
       'Thread message two that should be included.',
     );
-    expect(capturedSourceEvent?.payload.serializedContext).toContain(
+    expect(userMessageSource.payload.serializedContext).toContain(
       'Going forward, keep using this format in this thread.',
     );
-    expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
+    expect(userMessageSource.payload.serializedContext).not.toContain(
       'Root topic message that should not appear in the threaded context.',
     );
-    expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
+    expect(userMessageSource.payload.serializedContext).not.toContain(
       'Different thread message that should be excluded.',
     );
-    expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
+    expect(userMessageSource.payload.serializedContext).not.toContain(
       'Later reply in the same thread that should be excluded by the anchor window.',
     );
-    expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
+    expect(userMessageSource.payload.serializedContext).not.toContain(
       'Later root message that should still be excluded from the threaded context.',
     );
   });

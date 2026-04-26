@@ -31,13 +31,21 @@ type DomainSignalVariantByTarget = {
   skill: SignalFeedbackDomainSkill;
 };
 
-const createDomainSignal = <TTarget extends SupportedTask4DomainTarget>(input: {
+type DomainSignalInput<TTarget extends SupportedTask4DomainTarget> = {
   message: string;
   messageId: string;
   signalId: string;
   sourceId: string;
   target: TTarget;
-}): DomainSignalVariantByTarget[TTarget] => {
+};
+
+function createDomainSignal(input: DomainSignalInput<'memory'>): SignalFeedbackDomainMemory;
+function createDomainSignal(input: DomainSignalInput<'none'>): SignalFeedbackDomainNone;
+function createDomainSignal(input: DomainSignalInput<'prompt'>): SignalFeedbackDomainPrompt;
+function createDomainSignal(input: DomainSignalInput<'skill'>): SignalFeedbackDomainSkill;
+function createDomainSignal(
+  input: DomainSignalInput<SupportedTask4DomainTarget>,
+): DomainSignalVariantByTarget[SupportedTask4DomainTarget] {
   const base = {
     chain: {
       chainId: 'chain_1',
@@ -72,7 +80,7 @@ const createDomainSignal = <TTarget extends SupportedTask4DomainTarget>(input: {
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.memory',
         timestamp: 1,
-      } as DomainSignalVariantByTarget[TTarget];
+      };
     }
     case 'none': {
       return {
@@ -94,7 +102,7 @@ const createDomainSignal = <TTarget extends SupportedTask4DomainTarget>(input: {
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.none',
         timestamp: 1,
-      } as DomainSignalVariantByTarget[TTarget];
+      };
     }
     case 'prompt': {
       return {
@@ -116,7 +124,7 @@ const createDomainSignal = <TTarget extends SupportedTask4DomainTarget>(input: {
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.prompt',
         timestamp: 1,
-      } as DomainSignalVariantByTarget[TTarget];
+      };
     }
     case 'skill': {
       return {
@@ -134,10 +142,10 @@ const createDomainSignal = <TTarget extends SupportedTask4DomainTarget>(input: {
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.skill',
         timestamp: 1,
-      } as DomainSignalVariantByTarget[TTarget];
+      };
     }
   }
-};
+}
 
 describe('feedbackActionPlanner', () => {
   it('creates stable idempotency keys for memory actions', async () => {

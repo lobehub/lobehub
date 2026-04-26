@@ -5,9 +5,9 @@ import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { getServerDB } from '@/database/server';
-import type { GeneratedAgentSignalEmissionResult } from '@/server/services/agentSignal';
-import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
+import type { GeneratedAgentSignalEmissionResult } from '@/server/services/agentSignal/orchestrator';
+import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal/orchestrator';
 import { assembleFeedbackContext } from '@/server/services/agentSignal/policies/analyzeIntent/context/feedbackContextAssembler';
 import { createRedisRuntimeGuardBackend } from '@/server/services/agentSignal/runtime/backend/redisGuard';
 import {

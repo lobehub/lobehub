@@ -21,7 +21,6 @@ import {
   type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
 import { AgentService } from '@/server/services/agent';
-import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
@@ -278,6 +277,8 @@ const runMemoryActionAgent = async (
   const operationId = `agent-signal-memory-${nanoid()}`;
   const initialContext = createInitialContext(operationId);
   const streamEventManager = new InMemoryStreamEventManager();
+  const { AgentRuntimeService } =
+    await import('@/server/services/agentRuntime/AgentRuntimeService');
   const runtimeService = new AgentRuntimeService(options.db, options.userId, {
     coordinatorOptions: {
       stateManager: new InMemoryAgentStateManager(),

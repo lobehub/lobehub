@@ -179,7 +179,9 @@ describe('feedbackDomainJudge', () => {
     let resolverInput:
       | Parameters<
           NonNullable<
-            Parameters<typeof createFeedbackDomainJudgeSignalHandler>[0]['resolveDomains']
+            NonNullable<
+              Parameters<typeof createFeedbackDomainJudgeSignalHandler>[0]
+            >['resolveDomains']
           >
         >[0]
       | undefined;
