@@ -13,7 +13,7 @@ import { isModifierClick } from '@/utils/navigation';
 import { prefetchRoute } from '@/utils/router';
 
 /** Keys that are rendered in the header; all others are managed by Body via sidebarSectionOrder */
-const HEADER_KEYS = new Set(['home', 'search', 'tasks']);
+const HEADER_KEYS = new Set(['home', 'search']);
 
 const Nav = memo(() => {
   const tab = useActiveTabKey();
