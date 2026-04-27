@@ -2,7 +2,7 @@
 
 import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ListEnd, Pencil, SendHorizontal, Trash2 } from 'lucide-react';
+import { ArrowUp, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -124,7 +124,7 @@ const QueueTray = memo(() => {
             onClick={() => handleEdit(msg.id, msg.content)}
           />
           <ActionIcon
-            icon={SendHorizontal}
+            icon={ArrowUp}
             size="small"
             title={t('inputQueue.sendNow')}
             onClick={() => handleSendNow(msg)}

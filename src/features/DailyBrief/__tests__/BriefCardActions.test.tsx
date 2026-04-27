@@ -15,6 +15,8 @@ vi.mock('react-i18next', () => ({
         'cancel': 'Cancel',
         'brief.commentPlaceholder': 'Share your feedback...',
         'brief.commentSubmit': 'Submit feedback',
+        'brief.action.confirmDone': 'Confirm complete',
+        'brief.editResult': 'Edit',
       };
       return map[key] || key;
     },
@@ -107,8 +109,34 @@ describe('BriefCardActions', () => {
   });
 
   it('should fallback to DEFAULT_BRIEF_ACTIONS when actions prop is null', () => {
-    render(<BriefCardActions actions={null} briefId="brief-2" briefType="result" />);
+    render(<BriefCardActions actions={null} briefId="brief-2" briefType="decision" />);
 
-    expect(screen.getByText('✅ 通过')).toBeInTheDocument();
+    expect(screen.getByText('✅ 确认')).toBeInTheDocument();
+  });
+
+  it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
+    render(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: '✅ Custom approve', type: 'resolve' }]}
+        briefId="brief-3"
+        briefType="result"
+      />,
+    );
+
+    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.queryByText('✅ Custom approve')).not.toBeInTheDocument();
+  });
+
+  it('should always show the Edit button for result briefs when taskId is set', () => {
+    const { container } = render(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: '✅ Custom', type: 'resolve' }]}
+        briefId="brief-4"
+        briefType="result"
+        taskId="task-1"
+      />,
+    );
+
+    expect(container.querySelector('.brief-comment-btn')).toBeInTheDocument();
   });
 });

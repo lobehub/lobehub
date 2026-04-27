@@ -2,6 +2,7 @@ import type { DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 
+import { TaskModel } from '@/database/models/task';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -13,13 +14,23 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
     }
 
     const service = new AgentDocumentsService(context.serverDB, context.userId);
+    const taskModel = new TaskModel(context.serverDB, context.userId);
+    const { taskId } = context;
+
+    const pinToTask = async <T extends { documentId?: string } | undefined>(doc: T): Promise<T> => {
+      if (taskId && doc?.documentId) {
+        await taskModel.pinDocument(taskId, doc.documentId, 'agent');
+      }
+      return doc;
+    };
 
     return new AgentDocumentsExecutionRuntime({
-      copyDocument: ({ agentId, id, newTitle }) => service.copyDocumentById(id, newTitle, agentId),
-      createDocument: ({ agentId, content, title }) =>
-        service.createDocument(agentId, title, content),
-      createTopicDocument: ({ agentId, content, title, topicId }) =>
-        service.createForTopic(agentId, title, content, topicId),
+      copyDocument: async ({ agentId, id, newTitle }) =>
+        pinToTask(await service.copyDocumentById(id, newTitle, agentId)),
+      createDocument: async ({ agentId, content, title }) =>
+        pinToTask(await service.createDocument(agentId, title, content)),
+      createTopicDocument: async ({ agentId, content, title, topicId }) =>
+        pinToTask(await service.createForTopic(agentId, title, content, topicId)),
       editDocument: ({ agentId, content, id }) => service.editDocumentById(id, content, agentId),
       listDocuments: async ({ agentId }) => {
         const docs = await service.listDocuments(agentId);
@@ -53,8 +64,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
           agentId,
         ),
-      upsertDocumentByFilename: ({ agentId, content, filename }) =>
-        service.upsertDocumentByFilename({ agentId, content, filename }),
+      upsertDocumentByFilename: async ({ agentId, content, filename }) =>
+        pinToTask(await service.upsertDocumentByFilename({ agentId, content, filename })),
     });
   },
   identifier: AgentDocumentsIdentifier,

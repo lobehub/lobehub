@@ -25,6 +25,11 @@ const styles = createStaticStyles(({ css }) => ({
       align-items: center;
       justify-content: center;
     }
+
+    .ant-segmented-item,
+    .ant-segmented-thumb {
+      border-radius: 999px;
+    }
   `,
   icon: css`
     display: none;
@@ -121,6 +126,7 @@ const ViewSwitcher = memo(() => {
     <Segmented
       className={styles.switcher}
       options={options}
+      shape={'round'}
       size={'small'}
       value={currentTab}
       onChange={handleChange}

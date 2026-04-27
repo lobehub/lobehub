@@ -2,7 +2,7 @@ import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
 import { CheckCircle2, HashIcon, MessageSquareDashed } from 'lucide-react';
-import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DotsLoading from '@/components/DotsLoading';
@@ -71,6 +71,18 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+// Module-scoped so a click on any topic cancels a pending click on another.
+// Per-item refs can't do that, which lets rapid clicks across items all
+// fire — each racing to write activeTopicId (see LOBE-7785).
+let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+const cancelPendingSingleClick = () => {
+  if (pendingSingleClickTimer) {
+    clearTimeout(pendingSingleClickTimer);
+    pendingSingleClickTimer = null;
+  }
+};
+
 interface TopicItemProps {
   active?: boolean;
   fav?: boolean;
@@ -112,11 +124,14 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     isInAgentSubRoute,
     isInTopicContextRoute,
     routeTopicId,
+    urlTopicId,
   } = useTopicNavigation();
   const isRouteTopicActive = Boolean(id && routeTopicId === id && isInTopicContextRoute);
   const isTopicActive = Boolean(
     (active || isRouteTopicActive) && !threadId && (!isInAgentSubRoute || isRouteTopicActive),
   );
+
+  const shouldShowThreadList = Boolean(id && id === urlTopicId);
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
@@ -125,13 +140,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     [id],
   );
 
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const handleClick = useCallback(() => {
     if (editing) return;
     if (isDesktop) {
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null;
+      cancelPendingSingleClick();
+      pendingSingleClickTimer = setTimeout(() => {
+        pendingSingleClickTimer = null;
         void navigateToTopic(id);
       }, 250);
     } else {
@@ -141,10 +155,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
 
   const handleDoubleClick = useCallback(async () => {
     if (!id || !activeAgentId || !isDesktop) return;
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-    }
+    cancelPendingSingleClick();
     if (await focusTopicPopup(id)) {
       void navigateToTopic(id, { skipPopupFocus: true });
       return;
@@ -252,7 +263,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         onDoubleClick={() => void handleDoubleClick()}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
-      {isTopicActive && (
+      {shouldShowThreadList && (
         <Suspense
           fallback={
             <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
@@ -261,7 +272,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             </Flexbox>
           }
         >
-          <ThreadList />
+          <ThreadList topicId={id} />
         </Suspense>
       )}
     </Flexbox>

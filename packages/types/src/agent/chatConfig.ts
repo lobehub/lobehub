@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-import { type SearchMode } from '../search';
-import { type UserMemoryEffort } from '../user/settings/memory';
-import { type RuntimeEnvConfig } from './agentConfig';
+import type { SearchMode } from '../search';
+import type { TopicGroupMode } from '../topic';
+import type { UserMemoryEffort } from '../user/settings/memory';
+import type { RuntimeEnvConfig } from './agentConfig';
 
 export interface WorkingModel {
   model: string;
@@ -145,6 +146,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    */
   toolResultMaxLength?: number;
 
+  /**
+   * Agent-specific topic list organization preference.
+   */
+  topicGroupMode?: TopicGroupMode;
+
   urlContext?: boolean;
 
   useModelBuiltinSearch?: boolean;
@@ -221,6 +227,7 @@ export const AgentChatConfigSchema = z
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
     thinkingLevel5: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     toolResultMaxLength: z.number().default(25000),
+    topicGroupMode: z.enum(['byTime', 'byProject', 'flat']).optional(),
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),
   })

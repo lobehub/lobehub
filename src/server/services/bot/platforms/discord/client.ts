@@ -386,7 +386,11 @@ class DiscordGatewayClient implements PlatformClient {
   }
 
   async registerBotCommands(
-    commands: Array<{ command: string; description: string }>,
+    commands: Array<{
+      command: string;
+      description: string;
+      options?: Array<{ description: string; name: string; required?: boolean }>;
+    }>,
   ): Promise<void> {
     await this.discord.registerCommands(this.applicationId, commands);
     log('DiscordBot appId=%s registered %d commands', this.applicationId, commands.length);

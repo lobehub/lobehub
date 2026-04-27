@@ -98,7 +98,8 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
     <Block
       className={styles.commentCard}
       gap={8}
-      padding={12}
+      paddingBlock={12}
+      paddingInline={8}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
     >

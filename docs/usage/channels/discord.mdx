@@ -123,6 +123,26 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
 
 Back in LobeHub's channel settings for Discord, click **Test Connection** to verify everything is configured correctly. Then send a message to your bot in Discord to confirm it responds.
 
+## Step 5: Set Your Platform Identity (Recommended)
+
+Two optional fields under **Advanced Settings** carry a lot of weight in day-to-day use — fill them in once and most surprises go away.
+
+### Your Platform User ID
+
+This is your own Discord user ID, used by:
+
+- **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
+- **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your Discord account.
+- **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to friends won't accidentally lock you out.
+
+To get it: in Discord, open **User Settings → Advanced** and turn on **Developer Mode**. Then right-click your own username anywhere in Discord and choose **Copy User ID**. Paste the numeric ID into **Your Platform User ID** in LobeHub's Advanced Settings.
+
+### Default Server
+
+The Discord guild ID the bot's AI tools should default to when you ask it to "list channels", "send to #announcements", or anything else that needs a server context without naming one explicitly. Doesn't affect access control — that's **Group Policy**'s job.
+
+To get it: with **Developer Mode** on, right-click the server name in your server list and choose **Copy Server ID**. Paste it into **Default Server** in LobeHub's Advanced Settings.
+
 ## Access Policies
 
 LobeHub gates inbound traffic with three layered settings, all under **Advanced Settings** and all defaulting to permissive.
@@ -139,9 +159,10 @@ Controls 1:1 direct messages.
 
 - **Open (default)** — Anyone who shares a server with the bot can DM it (subject to the global allowlist when set).
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` fails closed (no DMs), `Open` still lets anyone DM.
+- **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs. Senders get a one-line notice pointing them at @mentioning the bot in a shared channel instead.
 
-> Discord bots can be reached by anyone in any shared server, so consider populating **Allowed User IDs** or switching DM Policy to **Disabled** if your bot is meant to be private.
+> Discord bots can be reached by anyone in any shared server, so consider populating **Allowed User IDs**, switching DM Policy to **Pairing** for self-service approval, or **Disabled** if your bot is meant to be private.
 
 ### Group Policy
 
@@ -163,7 +184,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **Bot Token**           | Yes      | Authentication token for your Discord bot                                                         |
 | **Public Key**          | Yes      | Used to verify interaction requests from Discord                                                  |
 | **Allowed User IDs**    | No       | Comma- or whitespace-separated Discord user IDs. Global gate — applies to DMs and group @mentions |
-| **DM Policy**           | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                       |
+| **DM Policy**           | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot            |
 | **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                |
 | **Allowed Channel IDs** | No       | Comma- or whitespace-separated Discord channel IDs. Used when Group Policy is Allowlist           |
 

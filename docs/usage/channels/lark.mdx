@@ -165,6 +165,22 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
 
 Back in LobeHub's channel settings, click **Test Connection** to verify the credentials. Then find your bot in Lark by searching its name and send it a message to confirm it responds.
 
+## Step 7: Set Your Platform Identity (Recommended)
+
+One optional field under **Advanced Settings** carries a lot of weight in day-to-day use — fill it in once and most surprises go away.
+
+### Your Platform User ID
+
+This is your own Lark `open_id` (the per-app, per-user identifier — **not** the same as your Lark mobile number or email), used by:
+
+- **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
+- **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your Lark account.
+- **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to teammates won't accidentally lock you out.
+
+To get it: DM the bot once and inspect the inbound event payload — the `open_id` field on the sender is yours. The Lark Developer Portal also exposes a **User ID** lookup that maps mobile/email to `open_id`. Paste it into **Your Platform User ID** in LobeHub's Advanced Settings.
+
+> Lark doesn't expose a single "default server" concept that AI tools can pivot on (the bot operates per-tenant via credentials), so the **Default Server** field is not exposed for Lark channels.
+
 ## Access Policies
 
 Two independent policies gate inbound traffic. Both default to **Open**.
@@ -177,6 +193,7 @@ A populated **Allowed User IDs** field is a global gate — DMs *and* group `@me
 
 - **Open (default)** — Any tenant member can DM the bot (subject to the global allowlist when set).
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs and only responds to chat-group `@mentions`.
 
 ### Group Policy
@@ -199,7 +216,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **Encrypt Key**            | No       | Decrypts encrypted event payloads                                                                      |
 | **Event Subscription URL** | —        | Auto-generated after saving; paste into Lark Developer Portal                                          |
 | **Allowed User IDs**       | No       | Comma- or whitespace-separated Lark `open_id` values. Global gate — applies to DMs and group @mentions |
-| **DM Policy**              | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                            |
+| **DM Policy**              | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                 |
 | **Group Policy**           | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                     |
 | **Allowed Channel IDs**    | No       | Comma- or whitespace-separated Lark `chat_id` values. Used when Group Policy is Allowlist              |
 
