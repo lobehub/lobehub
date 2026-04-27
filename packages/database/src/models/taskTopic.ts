@@ -175,7 +175,7 @@ export class TaskTopicModel {
       .orderBy(desc(taskTopics.seq));
   }
 
-  async findWithHandoff(taskId: string, limit = 4) {
+  async findWithHandoff(taskId: string, limit: number) {
     const { topics } = await import('../schemas/topic');
     return this.db
       .select({

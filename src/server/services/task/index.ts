@@ -61,7 +61,7 @@ export class TaskService {
     const [allDescendants, dependencies, topics, briefs, comments, workspace] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),
       this.taskModel.getDependencies(task.id),
-      this.taskTopicModel.findWithHandoff(task.id).catch(() => []),
+      this.taskTopicModel.findWithHandoff(task.id, 100).catch(() => []),
       this.briefModel.findByTaskId(task.id).catch(() => []),
       this.taskModel.getComments(task.id).catch(() => []),
       this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
