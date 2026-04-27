@@ -520,6 +520,58 @@ const hunyuanChatModels: AIChatModelCard[] = [
       reasoning: true,
       structuredOutput: true,
     },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek-V4-Flash is a production-grade model purpose-built for high concurrency and low latency. It features a standard 1M context window across the lineup, delivering near-flagship reasoning performance and outstanding agent response efficiency at extremely low cost.',
+    displayName: 'DeepSeek-V4-Flash',
+    id: 'deepseek-v4-flash',
+    maxOutput: 384_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek-V4-Pro is a native multimodal flagship model with 1.6 trillion parameters. Powered by a novel CSA+HCA hybrid attention architecture, it represents the industry’s cutting edge in complex mathematical reasoning, long-horizon code engineering, and advanced agent collaboration.',
+    displayName: 'DeepSeek-V4-Pro',
+    id: 'deepseek-v4-pro',
+    maxOutput: 384_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
     contextWindowTokens: 128_000,
     description:
       'DeepSeek-V3.2 is a 685B-parameter MoE (Mixture-of-Experts) model. It introduces a sparse attention architecture that improves efficiency in long-context processing and achieves GPT-5-level performance on reasoning benchmarks.',
