@@ -8,7 +8,7 @@ type DeepSeekReasoningEffort = (typeof DEEPSEEK_REASONING_EFFORT_LEVELS)[number]
 export type DeepSeekReasoningEffortSliderProps = CreatedLevelSliderProps<DeepSeekReasoningEffort>;
 
 const DeepSeekReasoningEffortSlider = createLevelSliderComponent<DeepSeekReasoningEffort>({
-  configKey: 'deepseekReasoningEffort',
+  configKey: 'deepseekV4ReasoningEffort',
   defaultValue: 'high',
   levels: DEEPSEEK_REASONING_EFFORT_LEVELS,
   style: { minWidth: 180 },

@@ -472,7 +472,7 @@ describe('ChatService', () => {
 
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'deepseekReasoningEffort',
+          'deepseekV4ReasoningEffort',
         ]);
 
         await chatService.createAssistantMessage({
@@ -481,7 +481,7 @@ describe('ChatService', () => {
           provider: 'deepseek',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
-            chatConfig: { deepseekReasoningEffort: 'max' },
+            chatConfig: { deepseekV4ReasoningEffort: 'max' },
           }),
         });
 
@@ -504,7 +504,7 @@ describe('ChatService', () => {
 
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'deepseekReasoningEffort',
+          'deepseekV4ReasoningEffort',
         ]);
 
         await chatService.createAssistantMessage({
@@ -513,7 +513,7 @@ describe('ChatService', () => {
           provider: 'deepseek',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
-            chatConfig: { deepseekReasoningEffort: 'none' },
+            chatConfig: { deepseekV4ReasoningEffort: 'none' },
           }),
         });
 

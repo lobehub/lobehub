@@ -199,7 +199,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       label: t('extendParams.reasoningEffort.title'),
       layout: 'horizontal',
       minWidth: undefined,
-      name: 'deepseekReasoningEffort',
+      name: 'deepseekV4ReasoningEffort',
       style: {
         paddingBottom: 0,
       },

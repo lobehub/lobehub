@@ -67,8 +67,8 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'effort',
   },
   {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.deepseekReasoningEffort.hint',
-    key: 'deepseekReasoningEffort',
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint',
+    key: 'deepseekV4ReasoningEffort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint',
@@ -168,7 +168,7 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
 // This allows reusing existing i18n translations instead of adding new ones
 const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   codexMaxReasoningEffort: 'reasoningEffort',
-  deepseekReasoningEffort: 'reasoningEffort',
+  deepseekV4ReasoningEffort: 'reasoningEffort',
   gpt5ReasoningEffort: 'reasoningEffort',
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
@@ -198,8 +198,8 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
-  deepseekReasoningEffort: {
-    labelSuffix: ' (DeepSeek)',
+  deepseekV4ReasoningEffort: {
+    labelSuffix: ' (DeepSeek V4)',
     previewWidth: 240,
     tag: 'reasoning_effort',
   },
@@ -354,7 +354,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
       codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
-      deepseekReasoningEffort: <DeepSeekReasoningEffortSlider value="high" />,
+      deepseekV4ReasoningEffort: <DeepSeekReasoningEffortSlider value="high" />,
       disableContextCaching: <Switch checked disabled />,
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,

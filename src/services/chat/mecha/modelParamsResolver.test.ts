@@ -338,20 +338,20 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
-    describe('deepseekReasoningEffort param', () => {
+    describe('deepseekV4ReasoningEffort param', () => {
       beforeEach(() => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
           () => true,
         );
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'deepseekReasoningEffort',
+          'deepseekV4ReasoningEffort',
         ]);
       });
 
       it('should enable thinking and set reasoning_effort for DeepSeek when configured with a reasoning level', () => {
         const result = resolveModelExtendParams({
           chatConfig: {
-            deepseekReasoningEffort: 'high',
+            deepseekV4ReasoningEffort: 'high',
           } as any,
           model: 'deepseek-v4-pro',
           provider: 'deepseek',
@@ -368,7 +368,7 @@ describe('resolveModelExtendParams', () => {
       it('should disable thinking and omit reasoning_effort for DeepSeek when configured as none', () => {
         const result = resolveModelExtendParams({
           chatConfig: {
-            deepseekReasoningEffort: 'none',
+            deepseekV4ReasoningEffort: 'none',
           } as any,
           model: 'deepseek-v4-pro',
           provider: 'deepseek',
@@ -474,7 +474,7 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
-    it('should not set reasoning_effort when deepseekReasoningEffort is not configured', () => {
+    it('should not set reasoning_effort when deepseekV4ReasoningEffort is not configured', () => {
       const result = resolveModelExtendParams({
         chatConfig: {} as any,
         model: 'deepseek-v4-flash',
@@ -613,16 +613,16 @@ describe('thinking configuration', () => {
     it('should set thinkingLevel when supported and configured', () => {
       const result = resolveModelExtendParams({
         chatConfig: {
-          thinkingLevel: 'advanced',
+          thinkingLevel: 'high',
         } as any,
         model: 'model',
         provider: 'provider',
       });
 
-      expect(result.thinkingLevel).toBe('advanced');
+      expect(result.thinkingLevel).toBe('high');
     });
 
-    it('should not set thinkingLevel when not configured', () => {
+    it("should use default 'high' thinkingLevel when not configured", () => {
       const result = resolveModelExtendParams({
         chatConfig: {} as any,
         model: 'model',
@@ -1150,6 +1150,72 @@ describe('parameter precedence and conflicts', () => {
   });
 
   describe('reasoning effort variants precedence', () => {
+    it('should prioritize deepseekV4ReasoningEffort over generic reasoningEffort when both are supported', () => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+        'deepseekV4ReasoningEffort',
+        'reasoningEffort',
+      ]);
+
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          deepseekV4ReasoningEffort: 'high',
+          reasoningEffort: 'low',
+        } as any,
+        model: 'deepseek-v4-pro',
+        provider: 'deepseek',
+      });
+
+      expect(result).toEqual({
+        reasoning_effort: 'high',
+        thinking: {
+          type: 'enabled',
+        },
+      });
+    });
+
+    it('should omit reasoning_effort when deepseekV4ReasoningEffort is none even if other variants are configured', () => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+        'deepseekV4ReasoningEffort',
+        'reasoningEffort',
+        'gpt5ReasoningEffort',
+      ]);
+
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          deepseekV4ReasoningEffort: 'none',
+          gpt5ReasoningEffort: 'medium',
+          reasoningEffort: 'high',
+        } as any,
+        model: 'deepseek-v4-pro',
+        provider: 'deepseek',
+      });
+
+      expect(result).toEqual({
+        thinking: {
+          type: 'disabled',
+        },
+      });
+    });
+
+    it('should allow other reasoning_effort variants when deepseekV4ReasoningEffort is supported but unset', () => {
+      vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+        'deepseekV4ReasoningEffort',
+        'reasoningEffort',
+      ]);
+
+      const result = resolveModelExtendParams({
+        chatConfig: {
+          reasoningEffort: 'low',
+        } as any,
+        model: 'deepseek-v4-pro',
+        provider: 'deepseek',
+      });
+
+      expect(result).toEqual({
+        reasoning_effort: 'low',
+      });
+    });
+
     it('should give precedence to later reasoning effort variants when multiple are configured', () => {
       vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
         'reasoningEffort',

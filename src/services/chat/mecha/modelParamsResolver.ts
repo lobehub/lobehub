@@ -16,7 +16,7 @@ export interface ModelParamsContext {
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
-  deepseekReasoningEffort?: string;
+  deepseekV4ReasoningEffort?: string;
   effort?: string;
   enabledContextCaching?: boolean;
   imageAspectRatio?: string;
@@ -177,23 +177,6 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
   }
 
   // Reasoning effort variants
-  if (modelExtendParams.includes('deepseekReasoningEffort')) {
-    const deepseekReasoningEffort = chatConfig.deepseekReasoningEffort;
-
-    if (typeof deepseekReasoningEffort === 'string') {
-      if (deepseekReasoningEffort === 'none') {
-        extendParams.thinking = {
-          type: 'disabled',
-        };
-      } else {
-        extendParams.reasoning_effort = deepseekReasoningEffort;
-        extendParams.thinking = {
-          type: 'enabled',
-        };
-      }
-    }
-  }
-
   if (modelExtendParams.includes('reasoningEffort') && chatConfig.reasoningEffort) {
     extendParams.reasoning_effort = chatConfig.reasoningEffort;
   }
@@ -234,6 +217,25 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
 
   if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
+  }
+
+  // DeepSeek reasoning effort is reconciled last to avoid invalid combinations.
+  if (modelExtendParams.includes('deepseekV4ReasoningEffort')) {
+    const deepseekV4ReasoningEffort = chatConfig.deepseekV4ReasoningEffort;
+
+    if (typeof deepseekV4ReasoningEffort === 'string') {
+      if (deepseekV4ReasoningEffort === 'none') {
+        delete extendParams.reasoning_effort;
+        extendParams.thinking = {
+          type: 'disabled',
+        };
+      } else {
+        extendParams.reasoning_effort = deepseekV4ReasoningEffort;
+        extendParams.thinking = {
+          type: 'enabled',
+        };
+      }
+    }
   }
 
   if (modelExtendParams.includes('effort') && chatConfig.effort) {
