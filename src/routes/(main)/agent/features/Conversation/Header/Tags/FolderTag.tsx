@@ -13,9 +13,9 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     overflow: hidden;
-    display: inline-flex;
-    align-items: center;
+    display: inline-block;
 
+    min-width: 0;
     max-width: 200px;
 
     font-size: 13px;
@@ -37,12 +37,11 @@ const FolderTag = memo(() => {
   const topicBoundDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
 
   if (!isDesktop || !topicBoundDirectory) return null;
-
-  const displayName = topicBoundDirectory.split('/').findLast(Boolean) || topicBoundDirectory;
-
   const handleOpen = () => {
     void localFileService.openLocalFolder({ isDirectory: true, path: topicBoundDirectory });
   };
+
+  const displayName = topicBoundDirectory.split('/').findLast(Boolean) || topicBoundDirectory;
 
   return (
     <Tooltip title={`${topicBoundDirectory} · ${t('localFiles.openFolder')}`}>

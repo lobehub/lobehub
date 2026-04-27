@@ -53,9 +53,13 @@ export const params = {
         return rest;
       });
 
+      // DeepSeek rejects `reasoning_effort` when thinking is explicitly disabled.
+      const { reasoning_effort, ...restPayload } = payload;
+
       return {
-        ...payload,
+        ...restPayload,
         messages,
+        ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
         stream: payload.stream ?? true,
       } as any;
     },

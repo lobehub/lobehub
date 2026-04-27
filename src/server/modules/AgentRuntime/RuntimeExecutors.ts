@@ -532,10 +532,14 @@ export const createRuntimeExecutors = (
               return info?.abilities?.video ?? false;
             },
             isCanUseVision: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
-              return info?.abilities?.vision ?? true;
+              // Aggregator providers (e.g. lobehub) route to upstream model cards
+              // that live under the original provider's id in the registry, so
+              // fall back to a cross-provider lookup by model id when the
+              // (model, provider) pair has no direct entry.
+              const info =
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
+              return info?.abilities?.vision ?? false;
             },
           },
           botPlatformContext: ctx.botPlatformContext,

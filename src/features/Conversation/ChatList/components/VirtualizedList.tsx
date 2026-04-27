@@ -1,11 +1,13 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import { type ReactElement, type ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { type VListHandle } from 'virtua';
+import type { VListHandle } from 'virtua';
 import { VList } from 'virtua';
 import { useShallow } from 'zustand/react/shallow';
+
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import WideScreenContainer from '../../../WideScreenContainer';
 import {
@@ -19,6 +21,7 @@ import {
   useConversationScroll,
 } from '../hooks/useConversationScroll';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
+import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector';
@@ -37,8 +40,17 @@ interface VirtualizedListProps {
  */
 const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
-  const didInitialScrollRef = useRef(false);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Per-topic scroll restoration. Provider does not remount on topic switch,
+  // so we key the scroll snapshot by the message-map key derived from
+  // ConversationStore's `context`.
+  const contextKey = useConversationStore((s) => messageMapKey(s.context));
+  const { recordScroll } = useTopicScrollPersist({
+    contextKey,
+    dataSourceLength: dataSource.length,
+    virtuaRef,
+  });
 
   // Second-to-last message is the user turn when sending (user + assistant pair)
   const isSecondLastMessageFromUser = useConversationStore(
@@ -103,6 +115,10 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     const isAtBottom = checkAtBottom();
     setScrollState({ atBottom: isAtBottom });
 
+    if (ref) {
+      recordScroll(ref.scrollOffset, isAtBottom);
+    }
+
     // Clear existing timer
     if (scrollEndTimerRef.current) {
       clearTimeout(scrollEndTimerRef.current);
@@ -112,7 +128,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     scrollEndTimerRef.current = setTimeout(() => {
       setScrollState({ isScrolling: false });
     }, 150);
-  }, [activeIndex, checkAtBottom, onScrollOffset, setActiveIndex, setScrollState]);
+  }, [activeIndex, checkAtBottom, onScrollOffset, recordScroll, setActiveIndex, setScrollState]);
 
   const handleScrollEnd = useCallback(() => {
     setScrollState({ isScrolling: false });
@@ -182,14 +198,6 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     if (merged.size === streamingIndices.length) return streamingIndices;
     return [...merged].sort((a, b) => a - b);
   }, [dataSource, streamingIndices, selectionMessageIds]);
-
-  // Scroll to bottom on initial render
-  useEffect(() => {
-    if (didInitialScrollRef.current || !virtuaRef.current || dataSource.length === 0) return;
-
-    virtuaRef.current.scrollToIndex(dataSource.length - 1, { align: 'end' });
-    didInitialScrollRef.current = true;
-  }, [dataSource.length]);
 
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const scrollToBottom = useConversationStore((s) => s.scrollToBottom);

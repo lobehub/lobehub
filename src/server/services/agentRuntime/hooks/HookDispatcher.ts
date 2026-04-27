@@ -72,6 +72,26 @@ async function fetchDeliver(url: string, payload: Record<string, unknown>): Prom
   }
 }
 
+function buildWebhookPayload(
+  event: AnyHookEvent,
+  eventFields?: (keyof AgentHookEvent)[],
+): Record<string, unknown> {
+  if (eventFields) {
+    const payload: Record<string, unknown> = {};
+    for (const field of eventFields) {
+      if (field === 'finalState') continue;
+      if (field in event) payload[field] = event[field as keyof AnyHookEvent];
+    }
+    return payload;
+  }
+
+  const payload = { ...event };
+  if ('finalState' in payload) {
+    delete (payload as { finalState?: unknown }).finalState;
+  }
+  return payload;
+}
+
 /**
  * HookDispatcher — central hub for registering and dispatching agent lifecycle hooks
  *
@@ -129,12 +149,7 @@ export class HookDispatcher {
             hook.id,
             hook.webhook.url,
           );
-          // Strip finalState from webhook payload (too large, local-only)
-          // Webhook delivery only applies to step-level hooks (AgentHookEvent)
-          const webhookPayload = { ...event };
-          if ('finalState' in webhookPayload) {
-            delete (webhookPayload as { finalState?: unknown }).finalState;
-          }
+          const webhookPayload = buildWebhookPayload(event, hook.webhook.eventFields);
           await deliverWebhook(hook.webhook, {
             ...webhookPayload,
             hookId: hook.id,

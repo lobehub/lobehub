@@ -256,7 +256,11 @@ export const createRouterRuntime = ({
     }> {
       const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
       const resolvedApiType = optionApiType ?? router.apiType;
-      const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
+      const finalOptions = {
+        ...this._params,
+        ...this._options,
+        ...optionOverrides,
+      };
 
       /**
        * Vertex AI uses GoogleGenAI credentials flow rather than API keys.

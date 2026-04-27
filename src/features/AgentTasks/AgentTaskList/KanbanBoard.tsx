@@ -72,16 +72,12 @@ const optimisticMoveTask = (
   });
 };
 
-interface KanbanBoardProps {
-  agentId?: string;
-}
-
-const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
+const KanbanBoard = memo(() => {
   const { t } = useTranslation('chat');
   const navigate = useNavigate();
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  useFetchTaskGroupList({ agentId, allAgents: !agentId });
+  useFetchTaskGroupList({ allAgents: true });
 
   const taskGroups = useTaskStore(taskListSelectors.taskGroups);
   const isInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
@@ -138,21 +134,12 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
 
   const handleCreateTask = useCallback(() => {
     createTaskModal({
-      agentId,
       onCreated: (task) => {
-        if (agentId) {
-          const targetAgentId = task.agentId || agentId;
-          if (targetAgentId) {
-            navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
-            return;
-          }
-        }
-
         navigate(`/task/${task.identifier}`);
       },
       showInlineToggle: false,
     });
-  }, [agentId, navigate]);
+  }, [navigate]);
 
   const handleHideColumn = useCallback(
     (columnKey: string) => {

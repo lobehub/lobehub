@@ -28,6 +28,7 @@ import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { getTaskStoreState } from '@/store/task';
@@ -448,6 +449,18 @@ export class StreamingExecutorActionImpl {
       originalMessages.length,
       disableTools,
     );
+    void emitClientAgentSignalSourceEvent({
+      payload: {
+        agentId,
+        operationId,
+        parentMessageId,
+        parentMessageType,
+        threadId: threadId ?? undefined,
+        topicId: topicId ?? undefined,
+      },
+      sourceId: `${operationId}:client:start`,
+      sourceType: 'client.runtime.start',
+    });
 
     // Create a new array to avoid modifying the original messages
     const messages = [...originalMessages];
@@ -798,6 +811,17 @@ export class StreamingExecutorActionImpl {
     }
 
     log('[internal_execAgentRuntime] completed');
+    void emitClientAgentSignalSourceEvent({
+      payload: {
+        agentId,
+        operationId,
+        status: state.status,
+        threadId: threadId ?? undefined,
+        topicId: topicId ?? undefined,
+      },
+      sourceId: `${operationId}:client:complete`,
+      sourceType: 'client.runtime.complete',
+    });
 
     // Desktop notification (if not in tools calling mode)
     if (isDesktop) {

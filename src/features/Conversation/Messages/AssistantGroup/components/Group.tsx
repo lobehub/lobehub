@@ -17,7 +17,7 @@ import {
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import type { RenderableAssistantContentBlock } from './types';
-import WorkflowCollapse, { type WorkflowExpandLevel } from './WorkflowCollapse';
+import WorkflowCollapse, { type WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -33,7 +33,7 @@ interface GroupChildrenProps {
   blocks: AssistantContentBlock[];
   content?: string;
   contentId?: string;
-  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   id: string;
   messageIndex: number;
@@ -273,6 +273,14 @@ const partitionBlocks = (
   };
 };
 
+const withMarkdownStreamingState = (
+  block: RenderableAssistantContentBlock,
+  firstBlockId: string | undefined,
+): RenderableAssistantContentBlock => ({
+  ...block,
+  disableMarkdownStreaming: block.disableMarkdownStreaming || block.id === firstBlockId,
+});
+
 const Group = memo<GroupChildrenProps>(
   ({
     blocks,
@@ -285,9 +293,10 @@ const Group = memo<GroupChildrenProps>(
   }) => {
     const [isCollapsed, isGenerating] = useConversationStore((s) => [
       messageStateSelectors.isMessageCollapsed(id)(s),
-      messageStateSelectors.isMessageGenerating(id)(s),
+      messageStateSelectors.isAssistantGroupItemGenerating(id)(s),
     ]);
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
+    const firstBlockId = blocks[0]?.id;
 
     const { segments, postToolTailPromoted } = useMemo(
       () => partitionBlocks(blocks, isGenerating),
@@ -316,11 +325,13 @@ const Group = memo<GroupChildrenProps>(
               return (
                 <WorkflowCollapse
                   assistantMessageId={id}
-                  blocks={segment.blocks}
                   defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
                   disableEditing={disableEditing}
                   key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
                   workflowChromeComplete={workflowChromeComplete}
+                  blocks={segment.blocks.map((block) =>
+                    withMarkdownStreamingState(block, firstBlockId),
+                  )}
                 />
               );
             }
@@ -330,7 +341,7 @@ const Group = memo<GroupChildrenProps>(
 
             return (
               <GroupItem
-                {...item}
+                {...withMarkdownStreamingState(item, firstBlockId)}
                 assistantId={id}
                 contentId={contentId}
                 disableEditing={disableEditing}

@@ -14,5 +14,4 @@ export * from './toolDetector';
 export * from './topicPopup';
 export * from './tray';
 export * from './update';
-export * from './upload';
 export * from './window';

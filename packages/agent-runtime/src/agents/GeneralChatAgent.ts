@@ -305,6 +305,42 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Pending-tool scope guard for the main loop.
+   *
+   * The pending-approval check must only count tool messages produced by the
+   * **current** assistant turn. Stale `pluginIntervention.status === 'pending'`
+   * rows from a previous turn (e.g. an abandoned approval flow whose user
+   * never clicked approve/reject) get loaded back into `state.messages` via
+   * `historyMessages` and would otherwise hijack every subsequent
+   * `tool_result` / `tools_batch_result` phase, parking the loop in
+   * `waiting_for_human` forever.
+   *
+   * "Current turn" = the most recent assistant message that emitted tool calls,
+   * stored as either model-native `tool_calls` or persisted `tools`. All pending
+   * tool messages legitimately belonging to this turn have
+   * `parentId === currentAssistantId`.
+   */
+  private getCurrentTurnPendingToolMessages(state: AgentState): any[] {
+    let currentAssistantId: string | undefined;
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      const m = state.messages[i] as any;
+      if (m.role === 'assistant' && (m.tool_calls?.length > 0 || m.tools?.length > 0)) {
+        currentAssistantId = m.id;
+        break;
+      }
+    }
+
+    if (!currentAssistantId) return [];
+
+    return state.messages.filter(
+      (m: any) =>
+        m.role === 'tool' &&
+        m.pluginIntervention?.status === 'pending' &&
+        m.parentId === currentAssistantId,
+    );
+  }
+
+  /**
    * Find existing compression summary from messages
    * Looks for MessageGroup with type 'compression' and extracts its content
    */
@@ -543,10 +579,9 @@ export class GeneralChatAgent implements Agent {
           }
         }
 
-        // Check if there are still pending tool messages waiting for approval
-        const pendingToolMessages = state.messages.filter(
-          (m: any) => m.role === 'tool' && m.pluginIntervention?.status === 'pending',
-        );
+        // Scope pending check to the current assistant turn so stale
+        // `pending` rows from prior turns can never block the loop.
+        const pendingToolMessages = this.getCurrentTurnPendingToolMessages(state);
 
         // If there are pending tools, wait for human approval
         if (pendingToolMessages.length > 0) {
@@ -577,10 +612,9 @@ export class GeneralChatAgent implements Agent {
       case 'tools_batch_result': {
         const { parentMessageId } = context.payload as GeneralAgentCallToolResultPayload;
 
-        // Check if there are still pending tool messages waiting for approval
-        const pendingToolMessages = state.messages.filter(
-          (m: any) => m.role === 'tool' && m.pluginIntervention?.status === 'pending',
-        );
+        // Scope pending check to the current assistant turn so stale
+        // `pending` rows from prior turns can never block the loop.
+        const pendingToolMessages = this.getCurrentTurnPendingToolMessages(state);
 
         // If there are pending tools, wait for human approval
         if (pendingToolMessages.length > 0) {

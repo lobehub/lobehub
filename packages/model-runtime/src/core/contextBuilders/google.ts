@@ -122,13 +122,49 @@ export const buildGoogleMessage = async (
   // Handle assistant messages with tool_calls
   if (!!message.tool_calls) {
     return {
-      parts: message.tool_calls.map<Part>((tool) => ({
-        functionCall: {
-          args: safeParseJSON(tool.function.arguments)!,
-          name: tool.function.name,
-        },
-        thoughtSignature: tool.thoughtSignature,
-      })),
+      parts: message.tool_calls.map<Part>((tool) => {
+        const parsed = safeParseJSON(tool.function.arguments);
+        // Gemini's functionCall.args requires a plain object, same constraint
+        // as Anthropic's tool_use.input. See anthropic.ts for the full
+        // recovery rationale.
+        let args: Record<string, unknown> = {};
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          args = parsed as Record<string, unknown>;
+        } else if (
+          Array.isArray(parsed) &&
+          parsed.length > 0 &&
+          parsed[0] &&
+          typeof parsed[0] === 'object' &&
+          !Array.isArray(parsed[0])
+        ) {
+          args = parsed[0] as Record<string, unknown>;
+          console.warn(
+            '[google] functionCall.args recovered from array — parsed arguments was wrapped in []',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              arrayLength: parsed.length,
+              name: tool.function.name,
+            },
+          );
+        } else if (parsed !== undefined) {
+          console.warn(
+            '[google] functionCall.args fallback to {} — parsed arguments is not a plain object',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              name: tool.function.name,
+              parsedType: Array.isArray(parsed)
+                ? 'array'
+                : parsed === null
+                  ? 'null'
+                  : typeof parsed,
+            },
+          );
+        }
+        return {
+          functionCall: { args, name: tool.function.name },
+          thoughtSignature: tool.thoughtSignature,
+        };
+      }),
       role: 'model',
     };
   }

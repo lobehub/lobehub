@@ -15,11 +15,12 @@ const remarkPlugins = markdownElements
   .map((element: MarkdownElement) => element.remarkPlugin)
   .filter(Boolean);
 
-export const useMarkdown = (id: string): Partial<MarkdownProps> => {
+export const useMarkdown = (id: string, disableStreaming = false): Partial<MarkdownProps> => {
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
-  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const generating = useConversationStore(messageStateSelectors.isAssistantGroupItemGenerating(id));
 
-  const animated = transitionMode === 'fadeIn' && generating;
+  const enableStream = !disableStreaming;
+  const animated = enableStream && transitionMode === 'fadeIn' && generating;
 
   const components = useMemo(
     () =>
@@ -38,10 +39,10 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
         animated,
         components,
         enableCustomFootnotes: true,
-        enableStream: true,
+        enableStream,
         rehypePlugins,
         remarkPlugins,
       }) satisfies Partial<MarkdownProps>,
-    [animated, components],
+    [animated, components, enableStream],
   );
 };

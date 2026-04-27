@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 
@@ -51,6 +51,21 @@ const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
 
 /** Directory under appStoragePath for caching downloaded files */
 const FILE_CACHE_DIR = 'heteroAgent/files';
+const CLI_TRACE_DIR = '.heerogeneous-tracing';
+const IMAGE_EXTENSIONS_BY_MIME = {
+  'image/gif': '.gif',
+  'image/jpg': '.jpg',
+  'image/jpeg': '.jpg',
+  'image/pjpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/x-png': '.png',
+} as const satisfies Record<string, string>;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
+const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
+const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WARN)\s+/;
+const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
 
 // ─── IPC types ───
 
@@ -119,6 +134,11 @@ interface AgentSession {
 }
 
 type SessionErrorPayload = HeterogeneousAgentSessionError | string;
+
+interface CliTraceSession {
+  dir: string;
+  writeQueue: Promise<void>;
+}
 
 /**
  * External Agent Controller — manages external agent CLI processes via Electron IPC.
@@ -306,6 +326,49 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     return error instanceof Error ? error.message : String(error);
   }
 
+  private getRelevantCodexStderr(stderr: string): string {
+    const keptLines: string[] = [];
+    let droppingWarnBlock = false;
+
+    for (const line of stderr.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === CODEX_STDERR_STATUS_LINE) {
+        continue;
+      }
+
+      if (CODEX_WARN_LOG_PATTERN.test(trimmed)) {
+        droppingWarnBlock = true;
+        continue;
+      }
+
+      if (CODEX_LOG_PATTERN.test(trimmed)) {
+        droppingWarnBlock = false;
+        keptLines.push(line);
+        continue;
+      }
+
+      if (droppingWarnBlock && !CLI_ERROR_LINE_PATTERN.test(trimmed)) {
+        continue;
+      }
+
+      droppingWarnBlock = false;
+      keptLines.push(line);
+    }
+
+    return keptLines.join('\n').trim();
+  }
+
+  private getExitErrorMessage(
+    code: number | null,
+    session: AgentSession,
+    stderrOutput: string,
+  ): string {
+    const relevantStderr =
+      session.agentType === 'codex' ? this.getRelevantCodexStderr(stderrOutput) : stderrOutput;
+
+    return relevantStderr || `Agent exited with code ${code}`;
+  }
+
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
@@ -330,6 +393,168 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     if (!status || status.available || !cliMissingError) return;
 
     return cliMissingError;
+  }
+
+  private get shouldTraceCliOutput(): boolean {
+    return process.env.NODE_ENV !== 'test' && !electronApp.isPackaged;
+  }
+
+  private formatTraceTimestamp(date: Date): string {
+    const pad = (value: number) => value.toString().padStart(2, '0');
+
+    return [
+      date.getFullYear(),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+      '-',
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+      pad(date.getSeconds()),
+    ].join('');
+  }
+
+  private sanitizeTracePathSegment(value: string): string {
+    const sanitized = value
+      .replaceAll(path.sep, '-')
+      .replaceAll(/[^\w.-]+/g, '-')
+      .replaceAll(/^-+|-+$/g, '')
+      .slice(0, 80);
+
+    return sanitized || 'unknown';
+  }
+
+  private getAttachmentTraceSummary(image: HeterogeneousAgentImageAttachment) {
+    let urlKind = 'unknown';
+
+    try {
+      urlKind = new URL(image.url).protocol.replace(/:$/, '') || urlKind;
+    } catch {
+      urlKind = image.url.startsWith('data:') ? 'data' : 'unknown';
+    }
+
+    return {
+      id: image.id,
+      urlKind,
+    };
+  }
+
+  private async createCliTraceSession({
+    cliArgs,
+    cwd,
+    imageList,
+    session,
+    stdinPayload,
+  }: {
+    cliArgs: string[];
+    cwd: string;
+    imageList: HeterogeneousAgentImageAttachment[];
+    session: AgentSession;
+    stdinPayload?: string;
+  }): Promise<CliTraceSession | undefined> {
+    if (!this.shouldTraceCliOutput) return;
+
+    // Don't materialize the cwd via mkdir — if the caller passed a stale or
+    // typo'd path, we want spawn() to fail loudly instead of silently running
+    // the agent in an empty auto-created directory.
+    try {
+      await access(cwd);
+    } catch {
+      return;
+    }
+
+    const createdAt = new Date();
+    const rootDir = path.join(cwd, CLI_TRACE_DIR);
+    const agentDir = path.join(rootDir, this.sanitizeTracePathSegment(session.agentType));
+    const traceId = `${this.formatTraceTimestamp(createdAt)}-${this.sanitizeTracePathSegment(
+      session.sessionId,
+    )}`;
+    const dir = path.join(agentDir, traceId);
+
+    try {
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(rootDir, '.last-live-trace'), `${dir}\n`);
+      await writeFile(path.join(dir, 'stdout.jsonl'), '');
+      await writeFile(path.join(dir, 'stderr.log'), '');
+      if (stdinPayload !== undefined) {
+        await writeFile(path.join(dir, 'stdin.txt'), '');
+      }
+      await writeFile(
+        path.join(dir, 'meta.json'),
+        `${JSON.stringify(
+          {
+            agentSessionId: session.agentSessionId,
+            agentType: session.agentType,
+            args: cliArgs,
+            attachments: imageList.map((image) => this.getAttachmentTraceSummary(image)),
+            command: session.command,
+            createdAt: createdAt.toISOString(),
+            cwd,
+            envKeys: session.env ? Object.keys(session.env).sort() : [],
+            resumeSessionId: session.resumeSessionId,
+            sessionId: session.sessionId,
+            stdinBytes: stdinPayload === undefined ? 0 : Buffer.byteLength(stdinPayload),
+            stdinFile: stdinPayload === undefined ? undefined : 'stdin.txt',
+            stderrFile: 'stderr.log',
+            stdoutFile: 'stdout.jsonl',
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      return { dir, writeQueue: Promise.resolve() };
+    } catch (error) {
+      logger.warn('Failed to initialize CLI trace directory:', error);
+    }
+  }
+
+  private queueCliTraceWrite(
+    trace: CliTraceSession | undefined,
+    write: () => Promise<void>,
+  ): Promise<void> | undefined {
+    if (!trace) return;
+
+    trace.writeQueue = trace.writeQueue.then(write).catch((error) => {
+      logger.warn('Failed to write CLI trace file:', error);
+    });
+
+    return trace.writeQueue;
+  }
+
+  private appendCliTraceFile(
+    trace: CliTraceSession | undefined,
+    fileName: string,
+    data: Buffer | string,
+  ): Promise<void> | undefined {
+    if (!trace) return;
+
+    const filePath = path.join(trace.dir, fileName);
+
+    return this.queueCliTraceWrite(trace, () => appendFile(filePath, data));
+  }
+
+  private writeCliTraceFile(
+    trace: CliTraceSession | undefined,
+    fileName: string,
+    data: string,
+  ): Promise<void> | undefined {
+    if (!trace) return;
+
+    const filePath = path.join(trace.dir, fileName);
+
+    return this.queueCliTraceWrite(trace, () => writeFile(filePath, data));
+  }
+
+  private writeCliTraceJson(
+    trace: CliTraceSession | undefined,
+    fileName: string,
+    payload: unknown,
+  ): Promise<void> | undefined {
+    return this.writeCliTraceFile(trace, fileName, `${JSON.stringify(payload, null, 2)}\n`);
+  }
+
+  private async flushCliTrace(trace: CliTraceSession | undefined): Promise<void> {
+    await trace?.writeQueue;
   }
 
   // ─── Broadcast ───
@@ -401,26 +626,42 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     return { buffer, mimeType };
   }
 
+  private normalizeMimeType(mimeType: string): string {
+    return mimeType.split(';')[0]?.trim().toLowerCase() || '';
+  }
+
+  private guessImageExtensionByBuffer(buffer: Buffer): string | undefined {
+    if (buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return '.png';
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return '.jpg';
+
+    const gifSignature = buffer.subarray(0, 6).toString('ascii');
+    if (gifSignature === 'GIF87a' || gifSignature === 'GIF89a') return '.gif';
+
+    if (
+      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      return '.webp';
+    }
+  }
+
   private guessImageExtension(
     mimeType: string,
     image: HeterogeneousAgentImageAttachment,
+    buffer: Buffer,
   ): string | undefined {
-    const knownByMime: Record<string, string> = {
-      'image/gif': '.gif',
-      'image/jpeg': '.jpg',
-      'image/png': '.png',
-      'image/webp': '.webp',
-    };
-
-    if (knownByMime[mimeType]) return knownByMime[mimeType];
+    const knownByMime = IMAGE_EXTENSIONS_BY_MIME[this.normalizeMimeType(mimeType)];
+    if (knownByMime) return knownByMime;
 
     try {
       const pathname = new URL(image.url).pathname;
-      const ext = path.extname(pathname);
-      return ext || undefined;
+      const ext = path.extname(pathname).toLowerCase();
+      if (ext) return ext === '.jpeg' ? '.jpg' : ext;
     } catch {
-      return undefined;
+      // Fall through to byte sniffing below.
     }
+
+    return this.guessImageExtensionByBuffer(buffer);
   }
 
   /**
@@ -430,7 +671,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   private async resolveCliImagePath(image: HeterogeneousAgentImageAttachment): Promise<string> {
     const { buffer, mimeType } = await this.resolveImage(image);
     const cacheKey = this.getImageCacheKey(image.id);
-    const ext = this.guessImageExtension(mimeType, image) || '';
+    const ext = this.guessImageExtension(mimeType, image, buffer);
+    if (!ext) {
+      throw new Error(`Unsupported image type for ${image.id}`);
+    }
+
     const filePath = path.join(this.fileCacheDir, `${cacheKey}${ext}`);
 
     try {
@@ -446,18 +691,31 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   private async resolveCliImagePaths(
     imageList: HeterogeneousAgentImageAttachment[] = [],
   ): Promise<string[]> {
-    const resolved = await Promise.all(
-      imageList.map(async (image) => {
-        try {
-          return await this.resolveCliImagePath(image);
-        } catch (err) {
-          logger.error(`Failed to materialize image ${image.id} for CLI:`, err);
-          return undefined;
-        }
-      }),
+    const results = await Promise.allSettled(
+      imageList.map((image) => this.resolveCliImagePath(image)),
     );
 
-    return resolved.filter(Boolean) as string[];
+    const imagePaths: string[] = [];
+    const failures: string[] = [];
+
+    for (const [index, result] of results.entries()) {
+      const imageId = imageList[index]?.id ?? `image-${index + 1}`;
+
+      if (result.status === 'fulfilled') {
+        imagePaths.push(result.value);
+        continue;
+      }
+
+      const message = this.getErrorMessage(result.reason) || 'Unknown error';
+      logger.error(`Failed to materialize image ${imageId} for CLI:`, result.reason);
+      failures.push(`${imageId}: ${message}`);
+    }
+
+    if (failures.length > 0) {
+      throw new Error(`Failed to attach image(s) to CLI: ${failures.join('; ')}`);
+    }
+
+    return imagePaths;
   }
 
   /**
@@ -551,14 +809,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       resumeSessionId: session.agentSessionId,
     });
     const useStdin = spawnPlan.stdinPayload !== undefined;
+    const cliArgs = spawnPlan.args;
+
+    // Fall back to the user's Desktop so the process never inherits
+    // the Electron parent's cwd (which is `/` when launched from Finder).
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const traceSession = await this.createCliTraceSession({
+      cliArgs,
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: spawnPlan.stdinPayload,
+    });
 
     return new Promise<void>((resolve, reject) => {
-      const cliArgs = spawnPlan.args;
-
-      // Fall back to the user's Desktop so the process never inherits
-      // the Electron parent's cwd (which is `/` when launched from Finder).
-      const cwd = session.cwd || electronApp.getPath('desktop');
-
       logger.info('Spawning agent:', session.command, cliArgs.join(' '), `(cwd: ${cwd})`);
 
       // `detached: true` on Unix puts the child in a new process group so we
@@ -580,6 +844,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
       // In stdin mode, write the prepared payload and close stdin.
       if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
+        void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
         const stdin = proc.stdin as Writable;
         stdin.write(spawnPlan.stdinPayload, () => {
           stdin.end();
@@ -618,6 +883,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       // Stream stdout events as raw provider payloads to Renderer.
       const stdout = proc.stdout as Readable;
       stdout.on('data', (chunk: Buffer) => {
+        void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
         broadcastParsedOutputs(streamProcessor.push(chunk));
       });
       stdout.on('end', () => {
@@ -628,11 +894,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       const stderrChunks: string[] = [];
       const stderr = proc.stderr as Readable;
       stderr.on('data', (chunk: Buffer) => {
+        void this.appendCliTraceFile(traceSession, 'stderr.log', chunk);
         stderrChunks.push(chunk.toString('utf8'));
       });
 
       proc.on('error', (err) => {
         logger.error('Agent process error:', err);
+        void this.writeCliTraceJson(traceSession, 'process-error.json', {
+          message: err.message,
+          name: err.name,
+        });
+        void this.flushCliTrace(traceSession);
         const sessionError = this.getSessionErrorPayload(err, session);
         this.broadcast('heteroAgentSessionError', {
           error: sessionError,
@@ -642,7 +914,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       });
 
       proc.on('exit', (code, signal) => {
-        void stdoutBroadcastQueue.finally(() => {
+        void stdoutBroadcastQueue.finally(async () => {
+          void this.writeCliTraceJson(traceSession, 'exit.json', {
+            code,
+            finishedAt: new Date().toISOString(),
+            signal,
+          });
+          await this.flushCliTrace(traceSession);
+
           logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
           session.process = undefined;
 
@@ -662,7 +941,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
             resolve();
           } else {
             const stderrOutput = stderrChunks.join('').trim();
-            const errorMsg = stderrOutput || `Agent exited with code ${code}`;
+            const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
             const sessionError = this.getSessionErrorPayload(errorMsg, session);
             this.broadcast('heteroAgentSessionError', {
               error: sessionError,

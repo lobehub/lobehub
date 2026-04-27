@@ -91,29 +91,6 @@ export const desktopRoutes: RouteObject[] = [
                 ),
                 path: 'channel',
               },
-              {
-                children: [
-                  {
-                    element: dynamicElement(
-                      () => import('@/routes/(main)/agent/tasks'),
-                      'Desktop > Chat > Tasks',
-                    ),
-                    index: true,
-                  },
-                  {
-                    element: dynamicElement(
-                      () => import('@/routes/(main)/agent/tasks/[taskId]'),
-                      'Desktop > Chat > Task Detail',
-                    ),
-                    path: ':taskId',
-                  },
-                ],
-                element: dynamicLayout(
-                  () => import('@/routes/(main)/agent/tasks/_layout'),
-                  'Desktop > Chat > Tasks > Layout',
-                ),
-                path: 'tasks',
-              },
             ],
             element: dynamicLayout(
               () => import('@/routes/(main)/agent/_layout'),
@@ -640,18 +617,6 @@ export const desktopRoutes: RouteObject[] = [
         path: 'page',
       },
 
-      ...(isDev
-        ? [
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/devtools'),
-                'Desktop > Devtools',
-              ),
-              path: 'devtools',
-            },
-          ]
-        : []),
-
       // Default route - home page (handled by persistent layout)
       {
         index: true,
@@ -684,6 +649,36 @@ export const desktopRoutes: RouteObject[] = [
     ),
     path: '/share/t',
   },
+
+  // Devtools route (outside main layout, dev-only)
+  ...(isDev
+    ? [
+        {
+          children: [
+            {
+              element: dynamicElement(
+                () => import('@/routes/(main)/devtools'),
+                'Desktop > Devtools > Index',
+              ),
+              index: true,
+            },
+            {
+              element: dynamicElement(
+                () => import('@/routes/(main)/devtools/[identifier]'),
+                'Desktop > Devtools > Toolset',
+              ),
+              path: ':identifier',
+            },
+          ],
+          element: dynamicLayout(
+            () => import('@/routes/(main)/devtools/_layout'),
+            'Desktop > Devtools > Layout',
+          ),
+          errorElement: <ErrorBoundary />,
+          path: '/devtools',
+        },
+      ]
+    : []),
 ];
 
 desktopRoutes.push({

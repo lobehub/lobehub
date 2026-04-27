@@ -1,5 +1,5 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { ActionIcon, Avatar, Block, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Block, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
@@ -12,6 +12,8 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
+import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
+import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
@@ -78,13 +80,15 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
     status: task.status,
   });
 
+  const isRunning = status === 'running';
+
   return (
     <ContextMenuTrigger items={items} onContextMenu={onContextMenu}>
       <Flexbox
         horizontal
         align="center"
         gap={8}
-        style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden' }}
+        style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}
       >
         <span
           style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
@@ -101,21 +105,22 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
           {task.name || task.identifier}
         </Text>
-        {task.assignee && (
+        <AssigneeAgentSelector
+          currentAgentId={task.assignee?.id ?? null}
+          disabled={isRunning}
+          taskIdentifier={task.identifier}
+        >
           <span
-            style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-            onClick={(e) => e.stopPropagation()}
+            style={{
+              alignItems: 'center',
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              flex: 'none',
+            }}
           >
-            <Avatar
-              avatar={task.assignee.avatar ?? ''}
-              background={task.assignee.backgroundColor || cssVar.colorBgContainer}
-              shape="circle"
-              size={18}
-              title={task.assignee.title ?? ''}
-              variant="outlined"
-            />
+            <AssigneeAvatar agentId={task.assignee?.id} size={18} />
           </span>
-        )}
+        </AssigneeAgentSelector>
       </Flexbox>
     </ContextMenuTrigger>
   );

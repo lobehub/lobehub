@@ -288,6 +288,44 @@ describe('google contextBuilders', () => {
       });
     });
 
+    it('recovers functionCall.args from element[0] when arguments parse to an array', async () => {
+      // LOBE-8201 — same defense as Anthropic: prefer partial recovery from
+      // element[0] over total loss when malformed JSON parses to an array.
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const message = {
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: '[{"content":"a"},{"content":"b"}]',
+              name: 'writeLocalFile',
+            },
+            id: 'call_array',
+            type: 'function',
+          },
+        ],
+      } as OpenAIChatMessage;
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [
+          {
+            functionCall: { args: { content: 'a' }, name: 'writeLocalFile' },
+          },
+        ],
+        role: 'model',
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('functionCall.args recovered from array'),
+        expect.objectContaining({
+          arrayLength: 2,
+          name: 'writeLocalFile',
+        }),
+      );
+      consoleWarnSpy.mockRestore();
+    });
+
     it('should correctly convert function call message with thoughtSignature', async () => {
       const message = {
         role: 'assistant',

@@ -2,6 +2,7 @@
 import type { HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 
+import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
 export type AgentDocumentEditorData = Record<string, any>;
@@ -104,6 +105,22 @@ const exportSnapshot = (
   };
 };
 
+const hydrateMarkdownOrEmptyState = (
+  editor: ReturnType<(typeof import('@lobehub/editor/headless'))['createHeadlessEditor']>,
+  content: string,
+  options?: { keepId?: boolean },
+) => {
+  if (content.trim().length === 0) {
+    editor.hydrateEditorData(
+      EMPTY_EDITOR_STATE as unknown as SerializedEditorState<SerializedLexicalNode>,
+      options,
+    );
+    return;
+  }
+
+  editor.hydrateMarkdown(content, options);
+};
+
 const loadEditorState = (
   editor: ReturnType<(typeof import('@lobehub/editor/headless'))['createHeadlessEditor']>,
   { editorData, fallbackContent = '' }: LoadEditorStateParams,
@@ -118,7 +135,7 @@ const loadEditorState = (
     return;
   }
 
-  editor.hydrateMarkdown(fallbackContent, { keepId: true });
+  hydrateMarkdownOrEmptyState(editor, fallbackContent, { keepId: true });
 };
 
 export const createMarkdownEditorSnapshot = async (
@@ -128,7 +145,7 @@ export const createMarkdownEditorSnapshot = async (
   const editor = createHeadlessEditor();
 
   try {
-    editor.hydrateMarkdown(content);
+    hydrateMarkdownOrEmptyState(editor, content);
     return exportSnapshot(editor);
   } finally {
     editor.destroy();

@@ -350,6 +350,8 @@ export default {
   'footer.title': 'Like Our Product?',
   'fullscreen': 'Full Screen Mode',
   'generation.hero.taglinePrefix': 'Start Creating with',
+  'generation.promptModeration.blocked':
+    'The request content may violate content policy. Please modify your prompt and try again.',
   'historyRange': 'History Range',
   'home.suggestQuestions': 'Try these examples',
   'import': 'Import',

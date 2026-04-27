@@ -48,6 +48,48 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('emits terminal errors from Codex JSONL error events', () => {
+    const adapter = new CodexAdapter();
+    const rawMessage = JSON.stringify({
+      error: {
+        message:
+          "The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.",
+        type: 'invalid_request_error',
+      },
+      status: 400,
+      type: 'error',
+    });
+
+    adapter.adapt({ type: 'turn.started' });
+    const events = adapter.adapt({
+      message: rawMessage,
+      type: 'error',
+    });
+
+    expect(events.map((event) => event.type)).toEqual(['stream_end', 'error']);
+    expect(events[1].data).toMatchObject({
+      agentType: 'codex',
+      clearEchoedContent: true,
+      message:
+        "The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.",
+      stderr: rawMessage,
+    });
+  });
+
+  it('deduplicates the following turn.failed after a Codex JSONL error event', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({ message: 'first error', type: 'error' });
+
+    expect(
+      adapter.adapt({
+        error: { message: 'first error' },
+        type: 'turn.failed',
+      }),
+    ).toEqual([]);
+  });
+
   it('emits a new-step boundary when a second turn starts', () => {
     const adapter = new CodexAdapter();
 

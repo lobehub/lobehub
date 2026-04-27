@@ -567,6 +567,84 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expect(agentIds.has(otherAgentId)).toBe(true);
     });
 
+    it('should populate agent metadata on topic results', async () => {
+      // Add avatar/background to an existing agent so we can assert join output
+      const [decoratedAgent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🤖',
+          backgroundColor: '#123456',
+          slug: 'decorated-agent',
+          title: 'Decorated Agent',
+          userId,
+        })
+        .returning();
+
+      await serverDB.insert(topics).values({
+        agentId: decoratedAgent.id,
+        title: 'Testing Decorated Agent',
+        userId,
+      });
+
+      const results = await searchRepo.search({ query: 'decorated' });
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const decoratedTopic = topicResults.find(
+        (t) => t.type === 'topic' && t.agentId === decoratedAgent.id,
+      );
+
+      expect(decoratedTopic).toBeDefined();
+      if (decoratedTopic && decoratedTopic.type === 'topic') {
+        expect(decoratedTopic.agent).toEqual({
+          avatar: '🤖',
+          backgroundColor: '#123456',
+          title: 'Decorated Agent',
+        });
+      }
+
+      // Topic without an agent should have a null agent field
+      const orphanTopic = topicResults.find((t) => t.type === 'topic' && t.agentId === null);
+      if (orphanTopic && orphanTopic.type === 'topic') {
+        expect(orphanTopic.agent).toBeNull();
+      }
+    });
+
+    it('should not leak agent metadata when topic.agentId points to another user', async () => {
+      // Foreign agent owned by a different user
+      const [foreignAgent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🕵️',
+          backgroundColor: '#abcdef',
+          slug: 'foreign-agent',
+          title: 'Foreign Agent',
+          userId: otherUserId,
+        })
+        .returning();
+
+      // Topic owned by the current user but carrying the foreign agent id —
+      // simulates state reachable via crafted/migrated rows (e.g. topic
+      // creation persists input.agentId even when resolveContext fails).
+      await serverDB.insert(topics).values({
+        agentId: foreignAgent.id,
+        title: 'Cross-tenant probe',
+        userId,
+      });
+
+      const results = await searchRepo.search({ query: 'cross-tenant' });
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const probeTopic = topicResults.find(
+        (t) => t.type === 'topic' && t.title === 'Cross-tenant probe',
+      );
+
+      expect(probeTopic).toBeDefined();
+      if (probeTopic && probeTopic.type === 'topic') {
+        // The raw agentId is preserved (used for navigation), but no
+        // foreign agent metadata is surfaced to the renderer.
+        expect(probeTopic.agentId).toBe(foreignAgent.id);
+        expect(probeTopic.agent).toBeNull();
+      }
+    });
+
     it('should return 6 topics in agent context', async () => {
       // Create additional topics to test limit
       await serverDB.insert(topics).values(

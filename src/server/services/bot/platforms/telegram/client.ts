@@ -195,11 +195,33 @@ class TelegramWebhookClient implements PlatformClient {
     return extractChatId(platformThreadId);
   }
 
+  /**
+   * Telegram exposes the sender's preferred UI language on every inbound
+   * message via `from.language_code`. Values are IETF-ish (`en`, `zh-hans`,
+   * `pt-br`, …) so the caller normalizes them against the project locale set.
+   * Returns `undefined` for service messages or anonymous senders that omit
+   * the field.
+   */
+  extractAuthorLocale(message: Message): string | undefined {
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    const code = raw?.from?.language_code;
+    return typeof code === 'string' && code.length > 0 ? code : undefined;
+  }
+
   async registerBotCommands(
-    commands: Array<{ command: string; description: string }>,
+    commands: Array<{
+      command: string;
+      description: string;
+      // Telegram setMyCommands has no options schema (users type free-form
+      // text after the command); the field is accepted for interface
+      // parity with platforms that need it (Discord) and ignored here.
+      options?: Array<{ description: string; name: string; required?: boolean }>;
+    }>,
   ): Promise<void> {
     const telegram = new TelegramApi(this.config.credentials.botToken);
-    await telegram.setMyCommands(commands);
+    await telegram.setMyCommands(
+      commands.map((c) => ({ command: c.command, description: c.description })),
+    );
     log('TelegramBot appId=%s registered %d commands', this.applicationId, commands.length);
   }
 

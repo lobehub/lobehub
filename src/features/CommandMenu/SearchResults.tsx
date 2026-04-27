@@ -1,3 +1,5 @@
+import { DEFAULT_AVATAR } from '@lobechat/const';
+import { Avatar, Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
 import {
@@ -14,7 +16,7 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -243,11 +245,40 @@ const SearchResults = memo<SearchResultsProps>(
       return result.description;
     };
 
-    const getSubtitle = (result: SearchResult) => {
+    const getSubtitle = (result: SearchResult): ReactNode => {
       const description = getDescription(result);
 
-      // For topic and message results, append creation date
-      if (result.type === 'topic' || result.type === 'message') {
+      // Topic results: prefix with agent identity (avatar + title) so users can
+      // distinguish topics with the same name (e.g. customer email) across agents.
+      if (result.type === 'topic') {
+        const formattedDate = dayjs(result.createdAt).format('MMM D, YYYY');
+        if (!result.agent) {
+          return description ? `${description} · ${formattedDate}` : formattedDate;
+        }
+        return (
+          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
+            <Avatar
+              avatar={result.agent.avatar || DEFAULT_AVATAR}
+              background={result.agent.backgroundColor || undefined}
+              size={14}
+            />
+            <span style={{ flex: 'none' }}>{result.agent.title || t('defaultAgent')}</span>
+            <span style={{ flex: 'none' }}>·</span>
+            <span style={{ flex: 'none' }}>{formattedDate}</span>
+            {description && (
+              <>
+                <span style={{ flex: 'none' }}>·</span>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {description}
+                </span>
+              </>
+            )}
+          </Flexbox>
+        );
+      }
+
+      // For message results, append creation date
+      if (result.type === 'message') {
         const formattedDate = dayjs(result.createdAt).format('MMM D, YYYY');
         if (description) {
           return `${description} · ${formattedDate}`;

@@ -39,6 +39,10 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
+   * enable agent self-iteration feedback capture and policy execution
+   */
+  enableAgentSelfIteration: z.boolean().optional(),
+  /**
    * enable server-side agent execution via Gateway WebSocket
    */
   enableGatewayMode: z.boolean().optional(),
@@ -46,10 +50,6 @@ export const UserLabSchema = z.object({
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),
-  /**
-   * enable heterogeneous agent execution (Claude Code, Codex CLI, etc.)
-   */
-  enableHeterogeneousAgent: z.boolean().optional(),
   /**
    * enable markdown rendering in chat input editor
    */

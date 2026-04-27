@@ -3,14 +3,13 @@ import { Plus } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors, taskListSelectors } from '@/store/task/selectors';
+import { taskListSelectors } from '@/store/task/selectors';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -21,19 +20,11 @@ import { normalizeTaskListViewOptions } from './listViewOptions';
 import TaskList from './TaskList';
 import TasksGroupConfig from './TasksGroupConfig';
 
-interface AgentTasksPageProps {
-  /**
-   * When omitted, the page shows tasks across all agents (used by the `/tasks` route).
-   */
-  agentId?: string;
-}
-
-const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
+const AgentTasksPage = memo(() => {
   const navigate = useNavigate();
   const viewMode = useTaskStore(taskListSelectors.viewMode);
-  const saveStatus = useTaskStore(taskDetailSelectors.taskSaveStatus);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  useFetchTaskList({ agentId, allAgents: !agentId });
+  useFetchTaskList({ allAgents: true });
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
@@ -48,20 +39,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
 
   const handleCreateTask = useCallback(() => {
     createTaskModal({
-      agentId,
       onCreated: (task) => {
-        if (agentId) {
-          const targetAgentId = task.agentId || agentId;
-          if (targetAgentId) {
-            navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
-            return;
-          }
-        }
-
         navigate(`/task/${task.identifier}`);
       },
     });
-  }, [agentId, navigate]);
+  }, [navigate]);
 
   const handleShowHiddenCompleted = useCallback(() => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
@@ -70,12 +52,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={
-          <>
-            <Breadcrumb agentId={agentId} />
-            {saveStatus !== 'idle' && <AutoSaveHint saveStatus={saveStatus} />}
-          </>
-        }
+        left={<Breadcrumb />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {inlineCollapsed && (
@@ -86,14 +63,14 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         }
         styles={{
           left: {
-            gap: 8,
             paddingLeft: 4,
+            gap: 8,
           },
         }}
       />
       {viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard agentId={agentId} />
+          <KanbanBoard />
         </Flexbox>
       ) : (
         <WideScreenContainer
@@ -101,7 +78,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
           paddingBlock={16}
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
-          {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} />}
+          {!inlineCollapsed && <CreateTaskInlineEntry />}
           <TaskList options={viewOptions} onShowHiddenCompleted={handleShowHiddenCompleted} />
         </WideScreenContainer>
       )}

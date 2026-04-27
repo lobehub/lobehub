@@ -13,7 +13,7 @@ import { settingsSelectors } from '@/store/user/selectors';
 import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
 import MessageItem from '../Messages';
-import type { WorkflowExpandLevel } from '../Messages/AssistantGroup/components/WorkflowCollapse';
+import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
 import { dataSelectors, useConversationStore } from '../store';
 import VirtualizedList from './components/VirtualizedList';
@@ -26,9 +26,10 @@ export interface ChatListProps {
    * - 'collapsed': show summary only
    * - 'semi': constrained scrollable tool list
    * - 'full': all tool details expanded
+   * Pass an object (e.g. `{ streaming: 'full' }`) to override only one phase.
    * Only applies to the default item renderer; ignored when `itemContent` is supplied.
    */
-  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   /**
    * Disable the actions bar for all messages (e.g., in share page)
    */

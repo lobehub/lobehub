@@ -180,6 +180,9 @@ export default {
   'input.stop': 'Stop',
   'input.warp': 'New Line',
   'input.warpWithKey': 'Press <key/> to insert a line break',
+  'inputQueue.delete': 'Delete',
+  'inputQueue.edit': 'Edit',
+  'inputQueue.sendNow': 'Send now (interrupts current run)',
   'intentUnderstanding.title': 'Understanding your intent...',
   'inviteMembers': 'Invite members',
   'knowledgeBase.all': 'All Content',
@@ -382,6 +385,7 @@ export default {
   'searchAgents': 'Search agents...',
   'selectedAgents': 'Selected agents',
   'followUpPlaceholder': 'Follow up. @ to assign tasks to other agents.',
+  'followUpPlaceholderHeterogeneous': 'Follow up.',
   'sendPlaceholder': 'Ask, create, or start a task, <hotkey><hotkey/>',
   'sendPlaceholderHeterogeneous': 'Ask {{name}} to do a task...',
   'sendPlaceholderWithAgentAssignment':

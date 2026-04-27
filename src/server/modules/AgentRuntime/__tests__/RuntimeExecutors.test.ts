@@ -1175,10 +1175,15 @@ describe('RuntimeExecutors', () => {
         expect(callArgs.capabilities.isCanUseVision('no-tools-model', 'test-provider')).toBe(false);
         expect(callArgs.capabilities.isCanUseVideo('no-tools-model', 'test-provider')).toBe(false);
 
-        // Unknown model defaults: functionCall=true, vision=true, video=false
+        // Unknown model defaults: functionCall=true, vision=false, video=false
         expect(callArgs.capabilities.isCanUseFC('unknown', 'unknown')).toBe(true);
-        expect(callArgs.capabilities.isCanUseVision('unknown', 'unknown')).toBe(true);
+        expect(callArgs.capabilities.isCanUseVision('unknown', 'unknown')).toBe(false);
         expect(callArgs.capabilities.isCanUseVideo('unknown', 'unknown')).toBe(false);
+
+        // Aggregator (e.g. lobehub) routes a known model id under a different
+        // provider — vision flag falls back to the upstream model card.
+        expect(callArgs.capabilities.isCanUseVision('gpt-4', 'lobehub')).toBe(true);
+        expect(callArgs.capabilities.isCanUseVision('no-tools-model', 'lobehub')).toBe(false);
       });
 
       it('should filter disabled files and knowledgeBases from agentConfig', async () => {

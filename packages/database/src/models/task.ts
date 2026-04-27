@@ -412,6 +412,22 @@ export class TaskModel {
     return this.update(id, { config });
   }
 
+  // ========== Context (runtime state) ==========
+
+  /**
+   * Deep-merge into the task's context JSONB. Used by the heartbeat scheduler
+   * to update `context.scheduler.{tickMessageId, consecutiveFailures, ...}`
+   * without disturbing other namespaces under context.
+   */
+  async updateContext(id: string, partial: Record<string, unknown>): Promise<TaskItem | null> {
+    const task = await this.findById(id);
+    if (!task) return null;
+
+    const current = (task.context as Record<string, unknown>) || {};
+    const context = merge(current, partial);
+    return this.update(id, { context });
+  }
+
   // ========== Checkpoint ==========
 
   getCheckpointConfig(task: TaskItem): CheckpointConfig {
