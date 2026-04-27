@@ -32,6 +32,24 @@ import { sanitizeFileName } from '@/utils/sanitizeFileName';
 const log = debug('lobe-image:async');
 
 const IMAGE_URL_PREVIEW_LENGTH = 100;
+const CONTENT_POLICY_ERROR_MESSAGE =
+  'Content policy check failed. Revise your prompt and try again.';
+
+const getErrorCode = (error: any) => error?.code || error?.error?.code;
+const getErrorMessage = (error: any) => error?.message || error?.error?.message || '';
+const isContentPolicyError = (error: any) => {
+  const errorCode = getErrorCode(error);
+  const errorMessage = getErrorMessage(error).toLowerCase();
+
+  return (
+    errorCode === 'InputTextSensitiveContentDetected' ||
+    errorCode === 'content_policy_violation' ||
+    errorCode === 'moderation_blocked' ||
+    errorMessage.includes('content policy') ||
+    errorMessage.includes('safety system') ||
+    errorMessage.includes('sensitive information')
+  );
+};
 
 const imageProcedure = asyncAuthedProcedure.use(async (opts) => {
   const { ctx } = opts;
@@ -170,6 +188,13 @@ const categorizeError = (
   if (providerContentPolicyMessage) {
     return {
       errorMessage: providerContentPolicyMessage,
+      errorType: AsyncTaskErrorType.ProviderContentModeration,
+    };
+  }
+
+  if (isContentPolicyError(error)) {
+    return {
+      errorMessage: CONTENT_POLICY_ERROR_MESSAGE,
       errorType: AsyncTaskErrorType.ProviderContentModeration,
     };
   }

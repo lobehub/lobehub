@@ -292,7 +292,7 @@ export const videoRouter = router({
       await asyncTaskModel.update(asyncTaskId, {
         error: new AsyncTaskError(
           providerContentPolicyMessage
-            ? AsyncTaskErrorType.ServerError
+            ? AsyncTaskErrorType.ProviderContentModeration
             : AsyncTaskErrorType.TaskTriggerError,
           providerContentPolicyMessage ??
             'Failed to submit video task: ' + (e instanceof Error ? e.message : 'Unknown error'),
