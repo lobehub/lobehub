@@ -122,15 +122,7 @@ describe('systemStatusSelectors', () => {
       });
       const items = systemStatusSelectors.sidebarItems(s);
       // accordion slot in the default list now uses the user's legacy order
-      expect(items).toEqual([
-        'pages',
-        'tasks',
-        'agent',
-        'recents',
-        'community',
-        'resource',
-        'memory',
-      ]);
+      expect(items).toEqual(['pages', 'agent', 'recents', 'community', 'resource', 'memory']);
     });
 
     it('should fall back to default when legacy `sidebarSectionOrder` is the default order', () => {
