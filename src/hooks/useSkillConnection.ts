@@ -1,12 +1,14 @@
 'use client';
 
+import type {
+  LobehubSkillProviderType,
+  TaskTemplateSkillRequirement,
+  TaskTemplateSkillSource,
+} from '@lobechat/const';
 import {
   getKlavisServerByServerIdentifier,
   getLobehubSkillProviderById,
   KLAVIS_SERVER_TYPES,
-  type LobehubSkillProviderType,
-  type TaskTemplateSkillRequirement,
-  type TaskTemplateSkillSource,
 } from '@lobechat/const';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -20,6 +22,9 @@ import { useUserStore } from '@/store/user';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
+/** Hard cap on how long the OAuth popup-monitor keeps polling — protects against
+ *  users opening the popup, switching away, and never closing it. */
+const OAUTH_OVERALL_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface SkillProviderMeta {
   icon: LobehubSkillProviderType['icon'];
@@ -106,13 +111,20 @@ export const useSkillConnection = (
 
   const oauthWindowRef = useRef<Window | null>(null);
   const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const windowCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Sync lock against double-click — useState guard would only flip after re-render.
+  const isConnectingRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
       clearInterval(windowCheckIntervalRef.current);
       windowCheckIntervalRef.current = null;
+    }
+    if (windowCheckTimeoutRef.current) {
+      clearTimeout(windowCheckTimeoutRef.current);
+      windowCheckTimeoutRef.current = null;
     }
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
@@ -143,8 +155,8 @@ export const useSkillConnection = (
           } else {
             await refreshKlavisServerTools(target.provider);
           }
-        } catch (error) {
-          console.info('[useSkillConnection] Polling check (expected during auth):', error);
+        } catch {
+          // Polling failure is expected until auth completes — suppress noise.
         }
       }, POLL_INTERVAL_MS);
 
@@ -161,25 +173,36 @@ export const useSkillConnection = (
 
   const startWindowMonitor = useCallback(
     (oauthWindow: Window, target: ConnectTarget) => {
+      const stopMonitor = () => {
+        if (windowCheckIntervalRef.current) {
+          clearInterval(windowCheckIntervalRef.current);
+          windowCheckIntervalRef.current = null;
+        }
+        if (windowCheckTimeoutRef.current) {
+          clearTimeout(windowCheckTimeoutRef.current);
+          windowCheckTimeoutRef.current = null;
+        }
+      };
+
       windowCheckIntervalRef.current = setInterval(() => {
         try {
           if (oauthWindow.closed) {
-            if (windowCheckIntervalRef.current) {
-              clearInterval(windowCheckIntervalRef.current);
-              windowCheckIntervalRef.current = null;
-            }
+            stopMonitor();
             oauthWindowRef.current = null;
             startFallbackPolling(target);
           }
         } catch {
           // COOP can block window.closed access — fall back to polling.
-          if (windowCheckIntervalRef.current) {
-            clearInterval(windowCheckIntervalRef.current);
-            windowCheckIntervalRef.current = null;
-          }
+          stopMonitor();
           startFallbackPolling(target);
         }
       }, 500);
+
+      windowCheckTimeoutRef.current = setTimeout(() => {
+        stopMonitor();
+        oauthWindowRef.current = null;
+        setIsWaitingAuth(false);
+      }, OAUTH_OVERALL_TIMEOUT_MS);
     },
     [startFallbackPolling],
   );
@@ -204,6 +227,8 @@ export const useSkillConnection = (
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
+      // Reject same-origin iframes / other tabs forging the success event.
+      if (event.source !== oauthWindowRef.current) return;
       if (event.data?.type !== LOBEHUB_SKILL_AUTH_SUCCESS_MESSAGE) return;
       const provider = event.data?.provider;
       if (!provider) return;
@@ -215,10 +240,11 @@ export const useSkillConnection = (
   }, [checkLobehubStatus, cleanup]);
 
   const connect = useCallback(async () => {
-    if (isConnecting || isWaitingAuth) return;
+    if (isConnectingRef.current || isWaitingAuth) return;
     const next = nextUnconnected;
     if (!next) return;
 
+    isConnectingRef.current = true;
     setIsConnecting(true);
     try {
       if (next.source === 'lobehub') {
@@ -248,11 +274,11 @@ export const useSkillConnection = (
     } catch (error) {
       console.error('[useSkillConnection] Failed to connect:', error);
     } finally {
+      isConnectingRef.current = false;
       setIsConnecting(false);
     }
   }, [
     nextUnconnected,
-    isConnecting,
     isWaitingAuth,
     getLobehubAuth,
     createKlavisServer,

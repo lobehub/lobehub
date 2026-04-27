@@ -1,19 +1,15 @@
-import {
-  type TaskTemplate,
-  type TaskTemplateCategory,
-  type TaskTemplateSkillSource,
-} from '@lobechat/const';
+import type { TaskTemplate, TaskTemplateCategory, TaskTemplateSkillSource } from '@lobechat/const';
 import { formatScheduleTime, parseCronPattern, WEEKDAY_I18N_KEYS } from '@lobechat/utils/cron';
 import { ActionIcon, Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
+import type { LucideIcon } from 'lucide-react';
 import {
   Briefcase,
   Clock,
   Code,
   GraduationCap,
   Lightbulb,
-  type LucideIcon,
   Megaphone,
   Package,
   Palette,
@@ -125,7 +121,7 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) =
         enabled: true,
         name: title,
         templateId: template.id,
-        timezone: 'UTC',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       setCreated(true);
       message.success(t('action.create.success'));
@@ -226,7 +222,9 @@ const TaskTemplates = memo(() => {
       // Optimistic remove — leave a gap until next refresh per LOBE-8187.
       mutate(
         (current) =>
-          current ? { ...current, data: current.data.filter((t) => t.id !== templateId) } : current,
+          current
+            ? { ...current, data: current.data.filter((tmpl) => tmpl.id !== templateId) }
+            : current,
         false,
       );
       try {

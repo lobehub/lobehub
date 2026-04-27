@@ -24,9 +24,7 @@ const DailyBrief = memo(() => {
   const briefs = useBriefStore(briefListSelectors.briefs);
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
 
-  if (!enableAgentTask) return null;
-  if (!isInit) return null;
-  if (briefs.length === 0) return null;
+  if (!enableAgentTask || !isInit || briefs.length === 0) return null;
 
   return (
     <GroupBlock

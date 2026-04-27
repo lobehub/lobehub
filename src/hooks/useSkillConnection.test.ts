@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { type TaskTemplateSkillRequirement } from '@lobechat/const';
+import type { TaskTemplateSkillRequirement } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import { findNextUnconnectedSpec, getProviderMeta } from './useSkillConnection';

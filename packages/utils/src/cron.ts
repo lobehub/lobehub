@@ -1,6 +1,14 @@
-import { type Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 
 export type ScheduleType = 'daily' | 'hourly' | 'weekly';
+
+/** Schedule UI only exposes :00 / :30 — minutes are normalized to one of these. */
+const SCHEDULE_MINUTE_STEP = 30;
+/** Cron weekday list when no specific weekdays are selected (Sun..Sat). */
+const ALL_WEEKDAYS = '0,1,2,3,4,5,6';
+
+const normalizeMinuteToHalfHour = (raw: number): 0 | 30 =>
+  raw >= SCHEDULE_MINUTE_STEP / 2 && raw < SCHEDULE_MINUTE_STEP + SCHEDULE_MINUTE_STEP / 2 ? 30 : 0;
 
 export interface ParsedSchedule {
   hourlyInterval?: number;
@@ -46,8 +54,7 @@ export const parseCronPattern = (cronPattern: string): ParsedSchedule => {
 
   const [minute, hour, , , weekday] = parts;
   const rawMinute = minute === '*' ? 0 : Number.parseInt(minute);
-  // Normalize to nearest 30-minute interval (0 or 30)
-  const triggerMinute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  const triggerMinute = normalizeMinuteToHalfHour(rawMinute);
 
   // Hourly: 0 * * * * or 0 */N * * *
   if (hour.startsWith('*/')) {
@@ -99,9 +106,7 @@ export const buildCronPattern = (
   hourlyInterval?: number,
   weekdays?: number[],
 ): string => {
-  const rawMinute = triggerTime.minute();
-  // Normalize to 0 or 30
-  const minute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  const minute = normalizeMinuteToHalfHour(triggerTime.minute());
   const hour = triggerTime.hour();
 
   switch (scheduleType) {
@@ -116,7 +121,7 @@ export const buildCronPattern = (
       return `${minute} ${hour} * * *`;
     }
     case 'weekly': {
-      const days = weekdays && weekdays.length > 0 ? weekdays.sort().join(',') : '0,1,2,3,4,5,6';
+      const days = weekdays && weekdays.length > 0 ? weekdays.sort().join(',') : ALL_WEEKDAYS;
       return `${minute} ${hour} * * ${days}`;
     }
   }

@@ -1,4 +1,4 @@
-import { type TaskTemplateSkillSource } from '@lobechat/const';
+import type { TaskTemplateSkillSource } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
