@@ -54,7 +54,6 @@ import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
 import { shareRouter } from './share';
 import { taskRouter } from './task';
-import { taskTemplateRouter } from './taskTemplate';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
 import { uploadRouter } from './upload';
@@ -77,7 +76,6 @@ export const lambdaRouter = router({
   agentSignal: agentSignalRouter,
   task: taskRouter,
   brief: briefRouter,
-  taskTemplate: taskTemplateRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,

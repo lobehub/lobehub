@@ -4,7 +4,6 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentCronJobModel } from '@/database/models/agentCronJob';
-import { UserTaskTemplateInteractionModel } from '@/database/models/userTaskTemplateInteraction';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -80,21 +79,12 @@ export const agentCronJobRouter = router({
 
       try {
         const cronJobModel = new AgentCronJobModel(db, userId);
-        const { templateId, ...cronJobInput } = input;
+        // `templateId` is accepted for analytics/cloud bookkeeping but not persisted
+        // on the cron job itself.
+        const { templateId: _templateId, ...cronJobInput } = input;
         // Add userId to the input data since it's provided by authentication context
         const cronJobData = { ...cronJobInput, userId };
         const cronJob = await cronJobModel.create(cronJobData as InsertAgentCronJob);
-
-        if (templateId) {
-          try {
-            await new UserTaskTemplateInteractionModel(db, userId).recordCreated(templateId);
-          } catch (interactionError) {
-            // Swallow: cron job already persisted; interaction is auxiliary metadata
-            // for recommendation filtering. Surfacing this error would force the user
-            // to retry and create a duplicate cron job.
-            console.error('[agentCronJob:create] recordCreated failed', interactionError);
-          }
-        }
 
         return {
           data: cronJob,

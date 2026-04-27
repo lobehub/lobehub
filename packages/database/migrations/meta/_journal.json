@@ -700,13 +700,6 @@
       "when": 1776674965365,
       "tag": "0099_topic_status_tasks_automation_mode",
       "breakpoints": true
-    },
-    {
-      "idx": 100,
-      "version": "7",
-      "when": 1777200784146,
-      "tag": "0100_add_user_task_template_interactions",
-      "breakpoints": true
     }
   ],
   "version": "6"

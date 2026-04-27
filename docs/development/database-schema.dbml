@@ -1943,19 +1943,6 @@ table user_memory_persona_documents {
   }
 }
 
-table user_task_template_interactions {
-  user_id text [not null]
-  template_id varchar(64) [not null]
-  first_created_at "timestamp with time zone"
-  dismissed_at "timestamp with time zone"
-  accessed_at "timestamp with time zone" [not null, default: `now()`]
-  created_at "timestamp with time zone" [not null, default: `now()`]
-  updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    (user_id, template_id) [pk]
-  }
-}
 
 ref: agent_skills.user_id - users.id
 
