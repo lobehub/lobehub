@@ -5,6 +5,10 @@ const NewAPI = dynamic(() => import('./newapi'), {
   loading: () => <Loading debugId="Provider > NewAPI" />,
   ssr: false,
 });
+const TowerAI = dynamic(() => import('./towerai'), {
+  loading: () => <Loading debugId="Provider > TowerAI" />,
+  ssr: false,
+});
 const OpenAI = dynamic(() => import('./openai'), {
   loading: () => <Loading debugId="Provider > OpenAI" />,
   ssr: false,
@@ -85,6 +89,9 @@ const ProviderDetailPage = (props: ProviderDetailPageProps) => {
     }
     case 'newapi': {
       return <NewAPI />;
+    }
+    case 'towerai': {
+      return <TowerAI />;
     }
     case 'openai': {
       return <OpenAI />;
