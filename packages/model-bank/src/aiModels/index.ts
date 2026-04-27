@@ -67,6 +67,7 @@ import { default as straico } from './straico';
 import { default as streamlake } from './streamlake';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
+import { default as towerai } from './towerai';
 import { default as togetherai } from './togetherai';
 import { default as upstage } from './upstage';
 import { default as v0 } from './v0';
@@ -170,6 +171,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   taichu,
   tencentcloud,
   togetherai,
+  towerai,
   upstage,
   v0,
   vercelaigateway,
@@ -253,6 +255,7 @@ export { default as streamlake } from './streamlake';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';
+export { default as towerai } from './towerai';
 export { default as upstage } from './upstage';
 export { default as v0 } from './v0';
 export { default as vercelaigateway } from './vercelaigateway';
