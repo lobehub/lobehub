@@ -3,6 +3,11 @@
   "cloud": [],
   "community": [
     {
+      "id": "2026-04-27-heterogeneous-agent",
+      "date": "2026-04-27",
+      "versionRange": ["2.1.53"]
+    },
+    {
       "image": "/blog/assetsdfda32866c4bc59af0526e52f31d1da2.webp",
       "id": "2026-04-20-daily-brief",
       "date": "2026-04-20",

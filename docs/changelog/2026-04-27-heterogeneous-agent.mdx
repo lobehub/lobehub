@@ -1,0 +1,33 @@
+---
+title: Heterogeneous Agent — Claude Code & Codex on Desktop
+description: >-
+  Claude Code and Codex now run as first-class desktop runtimes, alongside a
+  new Agent Signal runtime, sharper desktop UX, and major model additions.
+tags:
+  - Heterogeneous Agent
+  - Desktop
+  - Models
+  - Tasks
+---
+
+# Heterogeneous Agent — Claude Code & Codex on Desktop
+
+This release graduates Heterogeneous Agent out of the lab. Claude Code and Codex are now first-class runtimes on the desktop app, with native terminal output, tool inspectors, and the same task surface as the LobeHub-native runtime.
+
+A new Agent Signal runtime backs how agents read context and write back memory during long sessions. With self-iteration, agents can revise their own plan after observing tool output instead of finishing on the first try, and subagent threads now stream in parallel without orphaning tools across the conversation.
+
+The desktop experience around all this is also tighter. A new screen-capture overlay with macOS permission gating, a Quick Chat tray, and a floating chat panel keep the agent within reach without leaving the current app. The branch chip in the workspace now lets you pull or push with one click, and Codex terminal errors surface inline so you can act on them without digging through logs.
+
+On models, this release adds GPT-5.5, DeepSeek V4 Flash and Pro with a reasoning-effort slider, gpt-image-2 hosted by LobeHub, Kimi K2.6, MiMo-V2.5 and V2.5-Pro, and two new providers — OpenCode Zen and OpenCode Go.
+
+Conversations and tasks get a round of small but high-impact fixes. Each topic now remembers its own scroll position, the user message stays pinned to the top of the viewport with long messages folded, you can edit and resend the last user message inline, and follow-up sends queue cleanly during a concurrent turn. Tasks get subtask avatars, a redesigned brief actions row, Gateway reconnect when the drawer reopens, and a topic-completion filter on the list view. On bots, Direct Message pair policies and emoji support land for chat-platform integrations.
+
+## Improvements and fixes
+
+- Disabled markdown streaming on the first assistant block to avoid mid-stream layout shifts
+- Stop repinning the conversation after a manual scroll
+- Auto-focus the chat input when the screen-capture overlay mounts
+- Tool inspectors now render correctly for Codex and heterogeneous-agent follow-ups
+- FileEditor migrated from antd Modal to base-ui Modal for consistent focus and keyboard behavior
+- Provider moderation errors are now localized
+- QStash heartbeat self-reschedules to keep long-running tasks alive
