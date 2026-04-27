@@ -61,12 +61,20 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
       overflow: hidden;
       display: flex;
+      flex: 1;
       gap: 4px;
       align-items: center;
 
+      min-width: 0;
       min-height: 36px;
 
       color: ${cssVar.colorTextSecondary};
+    }
+
+    .ant-tree-title {
+      overflow: hidden;
+      flex: 1;
+      min-width: 0;
     }
 
     .ant-tree-switcher {

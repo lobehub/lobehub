@@ -162,11 +162,14 @@ export interface TaskDetailSubtaskAssignee {
 
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
+  automationMode?: TaskAutomationMode | null;
   blockedBy?: string;
   children?: TaskDetailSubtask[];
+  heartbeat?: { interval?: number | null };
   identifier: string;
   name?: string | null;
   priority?: number | null;
+  schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
 }
 
