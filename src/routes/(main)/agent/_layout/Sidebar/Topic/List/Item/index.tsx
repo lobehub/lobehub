@@ -112,17 +112,15 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     isInAgentSubRoute,
     isInTopicContextRoute,
     routeTopicId,
+    urlTopicId,
   } = useTopicNavigation();
   const isRouteTopicActive = Boolean(id && routeTopicId === id && isInTopicContextRoute);
   const isTopicActive = Boolean(
     (active || isRouteTopicActive) && !threadId && (!isInAgentSubRoute || isRouteTopicActive),
   );
-  // ThreadList visibility must not depend on whether a thread is currently
-  // selected — when a thread is open we still want the parent topic's thread
-  // list expanded so the user can see context and switch threads.
-  const shouldShowThreadList = Boolean(
-    (active || isRouteTopicActive) && (!isInAgentSubRoute || isRouteTopicActive),
-  );
+
+  const shouldShowThreadList = Boolean(id && id === urlTopicId);
+
   const toggleEditing = useCallback(
     (visible?: boolean) => {
       useChatStore.setState({ topicRenamingId: visible && id ? id : '' });
@@ -266,7 +264,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             </Flexbox>
           }
         >
-          <ThreadList />
+          <ThreadList topicId={id} />
         </Suspense>
       )}
     </Flexbox>
