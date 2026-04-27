@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
+import { trackProviderContentPolicyViolation } from '@/business/server/trackProviderContentPolicyViolation';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
@@ -36,6 +37,7 @@ export async function processBackgroundVideoPolling(
     generationBatchId,
     generationId,
     inferenceId,
+    model,
     provider,
     userId,
   } = params;
@@ -110,6 +112,19 @@ export async function processBackgroundVideoPolling(
       provider,
       userId,
     });
+    if (providerContentPolicyMessage) {
+      try {
+        await trackProviderContentPolicyViolation({
+          error,
+          model,
+          provider,
+          trigger: 'video-polling',
+          userId,
+        });
+      } catch (trackError) {
+        log('Failed to track provider content policy violation: %O', trackError);
+      }
+    }
     await asyncTaskModel.update(asyncTaskId, {
       error: new AsyncTaskError(
         AsyncTaskErrorType.ServerError,
