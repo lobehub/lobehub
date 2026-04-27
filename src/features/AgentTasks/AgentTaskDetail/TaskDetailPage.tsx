@@ -12,6 +12,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
 import TaskActivities from './TaskActivities';
+import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
 import TaskDetailHeaderActions from './TaskDetailHeaderActions';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
@@ -95,6 +96,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
               <Flexbox gap={24} style={{ paddingBottom: 120 }}>
                 <TaskInstruction />
                 <TaskSubtasks />
+                <TaskArtifacts />
                 <TaskActivities />
               </Flexbox>
             </>
