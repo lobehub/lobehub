@@ -214,6 +214,56 @@ const qwenChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4 Flash is the cost-efficient member of the V4 family with a 1M context window and hybrid thinking. Thinking mode is on by default and can be toggled via the `thinking` parameter; non-thinking mode is optimized for latency-sensitive workflows.',
+    displayName: 'DeepSeek V4 Flash',
+    id: 'deepseek-v4-flash',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4 Pro is the flagship of the V4 family, optimized for high-intensity reasoning, agentic workflows, and long-horizon planning. Thinking mode is on by default and can be toggled via the `thinking` parameter.',
+    displayName: 'DeepSeek V4 Pro',
+    id: 'deepseek-v4-pro',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
     contextWindowTokens: 131_072,
     description:
       'deepseek-v3.2 introduces sparse attention mechanism, aiming to improve training and inference efficiency when processing long texts, priced lower than deepseek-v3.1.',
@@ -229,6 +279,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -253,6 +304,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -277,6 +329,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -3092,6 +3145,9 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-05-28',
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -3114,6 +3170,9 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-01-27',
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
