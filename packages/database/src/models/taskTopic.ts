@@ -176,15 +176,18 @@ export class TaskTopicModel {
   }
 
   async findWithHandoff(taskId: string, limit = 4) {
+    const { topics } = await import('../schemas/topic');
     return this.db
       .select({
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
         seq: taskTopics.seq,
         status: taskTopics.status,
+        title: topics.title,
         topicId: taskTopics.topicId,
       })
       .from(taskTopics)
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
       .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
       .orderBy(desc(taskTopics.seq))
       .limit(limit);

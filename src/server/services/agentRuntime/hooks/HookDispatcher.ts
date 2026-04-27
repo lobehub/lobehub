@@ -8,7 +8,9 @@ import type {
   AgentHookEvent,
   AgentHookType,
   AgentHookWebhook,
+  AnyHookEvent,
   SerializedHook,
+  ToolCallHookEvent,
 } from './types';
 
 const log = debug('lobe-server:hook-dispatcher');
@@ -93,7 +95,7 @@ export class HookDispatcher {
   async dispatch(
     operationId: string,
     type: AgentHookType,
-    event: AgentHookEvent,
+    event: AnyHookEvent,
     serializedHooks?: SerializedHook[],
   ): Promise<void> {
     const isQueueMode = isQueueAgentRuntimeEnabled();
@@ -105,7 +107,7 @@ export class HookDispatcher {
       for (const hook of hooks) {
         try {
           log('[%s][%s] Dispatching local hook: %s', operationId, type, hook.id);
-          await hook.handler(event);
+          await hook.handler(event as AgentHookEvent);
         } catch (error) {
           log('[%s][%s] Hook error (non-fatal): %s %O', operationId, type, hook.id, error);
           // Hook errors should NOT affect main execution flow
@@ -128,9 +130,13 @@ export class HookDispatcher {
             hook.webhook.url,
           );
           // Strip finalState from webhook payload (too large, local-only)
-          const { finalState: _, ...webhookEvent } = event;
+          // Webhook delivery only applies to step-level hooks (AgentHookEvent)
+          const webhookPayload = { ...event };
+          if ('finalState' in webhookPayload) {
+            delete (webhookPayload as { finalState?: unknown }).finalState;
+          }
           await deliverWebhook(hook.webhook, {
-            ...webhookEvent,
+            ...webhookPayload,
             hookId: hook.id,
             hookType: type,
             ...hook.webhook.body,
@@ -146,6 +152,49 @@ export class HookDispatcher {
         }
       }
     }
+  }
+
+  /**
+   * Dispatch beforeToolCall hooks with mock support.
+   * Returns mock result if any handler called event.mock(), otherwise null.
+   */
+  async dispatchBeforeToolCall(
+    operationId: string,
+    event: Omit<ToolCallHookEvent, 'mock' | 'operationId'>,
+  ): Promise<{ content: string; isMocked: true } | null> {
+    const hooks = this.hooks.get(operationId)?.filter((h) => h.type === 'beforeToolCall') || [];
+    if (hooks.length === 0) return null;
+
+    let isMocked = false;
+    let mockedContent = '';
+
+    const toolCallEvent: ToolCallHookEvent = {
+      ...event,
+      mock: (result) => {
+        // Only accept non-empty string content
+        if (typeof result?.content === 'string' && result.content.length > 0) {
+          isMocked = true;
+          mockedContent = result.content;
+        } else {
+          log(
+            '[%s][beforeToolCall] mock() called with invalid content (must be non-empty string), ignoring',
+            operationId,
+          );
+        }
+      },
+      operationId,
+    };
+
+    for (const hook of hooks) {
+      try {
+        log('[%s][beforeToolCall] Dispatching: %s', operationId, hook.id);
+        await hook.handler(toolCallEvent as any);
+      } catch (error) {
+        log('[%s][beforeToolCall] Hook error (non-fatal): %s %O', operationId, hook.id, error);
+      }
+    }
+
+    return isMocked ? { content: mockedContent, isMocked: true } : null;
   }
 
   /**

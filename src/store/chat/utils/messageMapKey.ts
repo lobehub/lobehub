@@ -41,7 +41,7 @@ export interface MessageMapKeyInput {
  * Handles mapping from agentId/threadId to scopeId/subTopicId format
  */
 const toMessageMapContext = (input: MessageMapKeyInput): MessageMapContext => {
-  const { agentId, topicId, threadId, isNew, scope, groupId, subAgentId } = input;
+  const { agentId, topicId, threadId, isNew, groupId, subAgentId, scope } = input;
 
   // If threadId is present and scope is explicitly 'thread', use thread scope
   // Thread scope takes priority when explicitly requested, even with groupId

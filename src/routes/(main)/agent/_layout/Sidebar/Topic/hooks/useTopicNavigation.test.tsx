@@ -11,6 +11,11 @@ const toggleMobileTopicMock = vi.hoisted(() => vi.fn());
 const pushMock = vi.hoisted(() => vi.fn());
 const pathnameMock = vi.hoisted(() => vi.fn());
 const focusTopicPopupMock = vi.hoisted(() => vi.fn());
+const chatStoreStateMock = vi.hoisted(() => ({
+  activeAgentId: 'agent-1' as string | undefined,
+  activeTopicId: undefined as string | undefined,
+  switchTopic: undefined as unknown,
+}));
 
 vi.mock('@/features/TopicPopupGuard/useTopicPopupsRegistry', () => ({
   useFocusTopicPopup: () => focusTopicPopupMock,
@@ -28,10 +33,7 @@ vi.mock('@/libs/router/navigation', () => ({
 
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      activeAgentId: 'agent-1',
-      switchTopic: switchTopicMock,
-    }),
+    selector(chatStoreStateMock as unknown as Record<string, unknown>),
 }));
 
 vi.mock('@/store/global', () => ({
@@ -48,6 +50,9 @@ describe('useTopicNavigation', () => {
     pushMock.mockReset();
     switchTopicMock.mockReset();
     toggleMobileTopicMock.mockReset();
+    chatStoreStateMock.activeAgentId = 'agent-1';
+    chatStoreStateMock.activeTopicId = undefined;
+    chatStoreStateMock.switchTopic = switchTopicMock;
   });
 
   it('focuses the popup and still navigates back to the chat route when the topic is detached', async () => {
@@ -61,7 +66,7 @@ describe('useTopicNavigation', () => {
     });
 
     expect(focusTopicPopupMock).toHaveBeenCalledWith('topic-in-popup');
-    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1?topic=topic-in-popup');
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topic-in-popup');
     expect(switchTopicMock).not.toHaveBeenCalled();
     expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
   });
@@ -77,7 +82,7 @@ describe('useTopicNavigation', () => {
     });
 
     expect(focusTopicPopupMock).toHaveBeenCalledWith('topic-2');
-    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1?topic=topic-2');
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topic-2');
     expect(switchTopicMock).not.toHaveBeenCalled();
     expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
   });
@@ -96,5 +101,23 @@ describe('useTopicNavigation', () => {
     expect(pushMock).not.toHaveBeenCalled();
     expect(switchTopicMock).toHaveBeenCalledWith('topic-3');
     expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
+  });
+
+  it('still routes back to chat from a profile sub-route even when activeTopicId is cached', async () => {
+    // regression: cached activeTopicId should not make profile look like a topic route
+    pathnameMock.mockReturnValue('/agent/agent-1/profile');
+    chatStoreStateMock.activeTopicId = 'cached-topic';
+    focusTopicPopupMock.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useTopicNavigation());
+
+    expect(result.current.isInAgentSubRoute).toBe(true);
+
+    await act(async () => {
+      await result.current.navigateToTopic('topic-click');
+    });
+
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topic-click');
+    expect(switchTopicMock).not.toHaveBeenCalled();
   });
 });

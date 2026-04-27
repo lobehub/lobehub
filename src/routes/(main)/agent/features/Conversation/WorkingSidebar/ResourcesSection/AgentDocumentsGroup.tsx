@@ -6,12 +6,15 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { FileTextIcon, GlobeIcon, type LucideIcon, Trash2Icon } from 'lucide-react';
 import { memo, type MouseEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMatch, useNavigate } from 'react-router-dom';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+
+const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
 
 dayjs.extend(relativeTime);
 
@@ -96,16 +99,18 @@ type AgentDocumentListItem = Awaited<ReturnType<typeof agentDocumentService.getD
 interface DocumentItemProps {
   agentId: string;
   document: AgentDocumentListItem;
-  isActive: boolean;
   mutate: () => Promise<unknown>;
 }
 
-const DocumentItem = memo<DocumentItemProps>(({ agentId, document, isActive, mutate }) => {
+const DocumentItem = memo<DocumentItemProps>(({ agentId, document, mutate }) => {
   const { t } = useTranslation(['chat', 'common']);
   const { message, modal } = App.useApp();
   const [deleting, setDeleting] = useState(false);
   const openDocument = useChatStore((s) => s.openDocument);
   const closeDocument = useChatStore((s) => s.closeDocument);
+  const portalDocumentId = useChatStore(chatPortalSelectors.portalDocumentId);
+  const navigate = useNavigate();
+  const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
 
   const title = document.title || document.filename || '';
   const description = document.description ?? undefined;
@@ -113,8 +118,17 @@ const DocumentItem = memo<DocumentItemProps>(({ agentId, document, isActive, mut
   const IconComponent: LucideIcon = isWeb ? GlobeIcon : FileTextIcon;
   const createdAtLabel = document.createdAt ? dayjs(document.createdAt).fromNow() : null;
 
+  const activeDocumentId = pageMatch ? pageMatch.params.docId : portalDocumentId;
+  const isActive = activeDocumentId === document.documentId;
+
   const handleOpen = () => {
     if (!document.documentId) return;
+    if (pageMatch?.params.aid && pageMatch.params.topicId) {
+      navigate(
+        `/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${document.documentId}`,
+      );
+      return;
+    }
     openDocument(document.documentId);
   };
 
@@ -127,7 +141,12 @@ const DocumentItem = memo<DocumentItemProps>(({ agentId, document, isActive, mut
         setDeleting(true);
         try {
           if (isActive) closeDocument();
-          await agentDocumentService.removeDocument({ agentId, id: document.id });
+          await agentDocumentService.removeDocument({
+            agentId,
+            documentId: document.documentId,
+            id: document.id,
+            topicId: pageMatch?.params.topicId,
+          });
           await mutate();
           message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
         } catch (error) {
@@ -186,7 +205,6 @@ interface AgentDocumentsGroupProps {
 const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentStore((s) => s.activeAgentId);
-  const activeDocumentId = useChatStore(chatPortalSelectors.portalDocumentId);
   const [filter, setFilter] = useState<ResourceFilter>('all');
 
   const {
@@ -251,13 +269,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' 
             </Text>
             <Flexbox gap={8}>
               {group.items.map((doc) => (
-                <DocumentItem
-                  agentId={agentId}
-                  document={doc}
-                  isActive={activeDocumentId === doc.documentId}
-                  key={doc.id}
-                  mutate={mutate}
-                />
+                <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
               ))}
             </Flexbox>
           </Flexbox>
@@ -294,13 +306,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' 
       ) : (
         <Flexbox gap={8}>
           {filteredData.map((doc) => (
-            <DocumentItem
-              agentId={agentId}
-              document={doc}
-              isActive={activeDocumentId === doc.documentId}
-              key={doc.id}
-              mutate={mutate}
-            />
+            <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
           ))}
         </Flexbox>
       )}

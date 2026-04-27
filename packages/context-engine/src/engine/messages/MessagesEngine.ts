@@ -6,6 +6,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   AgentCouncilFlattenProcessor,
   CompressedGroupRoleTransformProcessor,
+  DisabledToolCallFilter,
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
@@ -22,6 +23,7 @@ import {
   ToolMessageReorder,
 } from '../../processors';
 import {
+  ActiveTopicDocumentContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -183,6 +185,7 @@ export class MessagesEngine {
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
+    const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
     // GTD is enabled if gtd.enabled is true and either plan or todos is provided
     const isGTDPlanEnabled = gtd?.enabled && gtd?.plan;
     const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
@@ -315,6 +318,11 @@ export class MessagesEngine {
 
       // Agent documents → after-first-user, context-end
       new AgentDocumentMessageInjector(agentDocConfig),
+      // Active topic document → last user message, for continuing document work outside page scope
+      new ActiveTopicDocumentContextInjector({
+        activeTopicDocument: initialContext?.activeTopicDocument,
+        enabled: hasActiveTopicDocument && !isPageEditorEnabled,
+      }),
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
@@ -439,6 +447,10 @@ export class MessagesEngine {
         isCanUseFC: capabilities?.isCanUseFC || (() => true),
         model,
         provider,
+      }),
+      // Disabled historical tool calls (for scope-specific tool removal)
+      new DisabledToolCallFilter({
+        disabledToolIdentifiers: toolsConfig?.disabledToolIdentifiers,
       }),
 
       // =============================================

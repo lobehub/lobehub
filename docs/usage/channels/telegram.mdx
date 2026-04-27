@@ -93,16 +93,45 @@ To use the bot in Telegram groups:
   **About Group Privacy Mode:** Telegram bots have privacy mode enabled by default, which means they only receive messages that @mention the bot, reply to the bot, or contain /commands. If you change the privacy mode setting after creating the bot, you **must remove and re-add the bot to the group** for the new setting to take effect in that group.
 </Callout>
 
+## Access Policies
+
+Two independent policies gate inbound traffic. Both default to **Open**.
+
+### Allowed User IDs (global)
+
+A populated **Allowed User IDs** field acts as a global gate — DMs *and* group `@mentions` are restricted to listed Telegram numeric user IDs. Empty means "no user-level filter". Grab a user's numeric ID via [@userinfobot](https://t.me/userinfobot), or read the `from.id` field from the bot's incoming update.
+
+### DM Policy
+
+- **Open (default)** — Anyone on Telegram can DM the bot (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
+
+### Group Policy
+
+Controls which Telegram groups / channels the bot will respond in.
+
+- **Open (default)** — Respond in any group / channel the bot has been added to.
+- **Allowlist** — Respond only in chats whose ID is listed in **Allowed Channel IDs**. Forward a message from the chat to [@userinfobot](https://t.me/userinfobot) to grab the chat ID (group IDs are negative).
+- **Disabled** — Ignore all group traffic; the bot only responds to DMs.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field                    | Required | Description                                    |
-| ------------------------ | -------- | ---------------------------------------------- |
-| **Bot Token**            | Yes      | API token from BotFather                       |
-| **Bot User ID**          | Auto     | Automatically derived from the bot token       |
-| **Webhook Secret Token** | No       | Optional secret for verifying webhook requests |
+| Field                    | Required | Description                                                                                                    |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------- |
+| **Bot Token**            | Yes      | API token from BotFather                                                                                       |
+| **Bot User ID**          | Auto     | Automatically derived from the bot token                                                                       |
+| **Webhook Secret Token** | No       | Optional secret for verifying webhook requests                                                                 |
+| **Allowed User IDs**     | No       | Comma- or whitespace-separated Telegram numeric user IDs. Global gate — applies to DMs and group @mentions     |
+| **DM Policy**            | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                                    |
+| **Group Policy**         | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds in groups                                |
+| **Allowed Channel IDs**  | No       | Comma- or whitespace-separated Telegram chat IDs (group IDs are negative). Used when Group Policy is Allowlist |
 
 ## Troubleshooting
 
 - **Bot not responding:** Verify the bot token is correct and the configuration is saved. Click **Test Connection** to diagnose.
+- **Bot ignores DMs:** Open **Advanced Settings** and check **DM Policy**. If it is `Disabled`, switch to `Open` or `Allowlist`. If it is `Allowlist`, confirm the sender's Telegram user ID (from [@userinfobot](https://t.me/userinfobot)) is listed in **Allowed User IDs**.
 - **Webhook registration failed:** Ensure your LobeHub subscription is active. Telegram requires HTTPS endpoints for webhooks, which LobeHub provides automatically.
 - **Group chat issues:** Make sure the bot has been added to the group and has permission to read messages. Mention the bot with `@username` to trigger a response. If the bot doesn't respond in a group, try removing the bot from the group and re-adding it — Telegram's privacy mode changes require re-joining the group to take effect.

@@ -24,6 +24,7 @@ vi.mock('antd-style', () => ({
 
 vi.mock('../../../store', () => ({
   messageStateSelectors: {
+    isAssistantGroupItemGenerating: () => () => mockIsGenerating,
     isMessageCollapsed: () => () => mockIsCollapsed,
     isMessageGenerating: () => () => mockIsGenerating,
   },
@@ -38,13 +39,19 @@ vi.mock('./WorkflowCollapse', () => ({
   default: ({
     blocks,
   }: {
-    blocks: Array<{ content: string; domId?: string; tools?: unknown[] }>;
+    blocks: Array<{
+      content: string;
+      disableMarkdownStreaming?: boolean;
+      domId?: string;
+      tools?: unknown[];
+    }>;
   }) => (
     <div
       data-testid="workflow-segment"
       data-blocks={JSON.stringify(
-        blocks.map(({ content, domId, tools }) => ({
+        blocks.map(({ content, disableMarkdownStreaming, domId, tools }) => ({
           content,
+          disableMarkdownStreaming: !!disableMarkdownStreaming,
           domId,
           toolCount: tools?.length ?? 0,
         })),
@@ -56,12 +63,14 @@ vi.mock('./WorkflowCollapse', () => ({
 vi.mock('./GroupItem', () => ({
   default: ({
     content,
+    disableMarkdownStreaming,
     domId,
     id,
     isFirstBlock,
     tools,
   }: {
     content: string;
+    disableMarkdownStreaming?: boolean;
     domId?: string;
     id: string;
     isFirstBlock?: boolean;
@@ -71,6 +80,7 @@ vi.mock('./GroupItem', () => ({
       data-testid="answer-segment"
       data-block={JSON.stringify({
         content,
+        disableMarkdownStreaming: !!disableMarkdownStreaming,
         domId,
         id,
         isFirstBlock: !!isFirstBlock,
@@ -122,6 +132,7 @@ describe('Group', () => {
 
     expect(parseAnswerSegment()).toEqual({
       content: longContent,
+      disableMarkdownStreaming: true,
       domId: 'block-1__answer',
       id: 'block-1',
       isFirstBlock: false,
@@ -130,6 +141,7 @@ describe('Group', () => {
     expect(parseWorkflowSegment()).toEqual([
       {
         content: '',
+        disableMarkdownStreaming: true,
         domId: 'block-1__workflow',
         toolCount: 1,
       },
@@ -155,6 +167,7 @@ describe('Group', () => {
     expect(parseWorkflowSegment()).toEqual([
       {
         content: '现在我来搜索资料。',
+        disableMarkdownStreaming: true,
         domId: undefined,
         toolCount: 1,
       },

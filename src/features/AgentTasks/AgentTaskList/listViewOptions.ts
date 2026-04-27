@@ -8,11 +8,17 @@ export type TaskOrderDirection = 'asc' | 'desc';
 
 export interface TaskListViewOptions {
   groupBy: TaskGroupBy;
+  hideCompleted: boolean;
   orderBy: TaskOrderBy;
   orderCompletedByRecency: boolean;
   orderDirection: TaskOrderDirection;
   subGroupBy: TaskGroupBy;
 }
+
+export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroupMeta['status']>> = [
+  'completed',
+  'canceled',
+];
 
 export interface TaskGroupMeta {
   assigneeId?: string;
@@ -25,6 +31,7 @@ export interface TaskGroupMeta {
 
 export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
   groupBy: 'status',
+  hideCompleted: true,
   orderBy: 'updatedAt',
   orderCompletedByRecency: true,
   orderDirection: 'asc',
@@ -55,6 +62,10 @@ export const normalizeTaskListViewOptions = (
 
   return {
     groupBy,
+    hideCompleted:
+      typeof next.hideCompleted === 'boolean'
+        ? next.hideCompleted
+        : DEFAULT_TASK_LIST_VIEW_OPTIONS.hideCompleted,
     orderBy: TASK_ORDER_BY_SET.has(next.orderBy as TaskOrderBy)
       ? (next.orderBy as TaskOrderBy)
       : DEFAULT_TASK_LIST_VIEW_OPTIONS.orderBy,

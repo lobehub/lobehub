@@ -71,6 +71,7 @@
   "macOS.services": "Dịch vụ",
   "macOS.unhide": "Hiện tất cả",
   "tray.open": "Mở {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Thoát",
   "tray.show": "Hiện {{appName}}",
   "view.forceReload": "Tải lại cưỡng bức",
@@ -86,6 +87,5 @@
   "window.minimize": "Thu nhỏ",
   "window.title": "Cửa sổ",
   "window.toggleFullscreen": "Chuyển đổi toàn màn hình",
-  "window.zoom": "Thu phóng",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "Thu phóng"
 }

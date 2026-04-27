@@ -392,6 +392,61 @@ describe('ChatPluginAction', () => {
       expect(returnValue).toEqual({ error: 'Invalid arguments', success: false });
     });
 
+    it('should pass page document context to Tool Store executor', async () => {
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(true);
+
+      const { result } = renderHook(() => useChatStore());
+      const messageId = 'page-tool-message-id';
+
+      act(() => {
+        const rootOperationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: {
+            agentId: 'agent-1',
+            documentId: 'docs-current',
+            scope: 'page',
+            topicId: 'topic-1',
+          },
+        }).operationId;
+
+        const toolOperationId = result.current.startOperation({
+          type: 'executeToolCall',
+          context: { messageId },
+          parentOperationId: rootOperationId,
+        }).operationId;
+
+        result.current.associateMessageWithOperation(messageId, toolOperationId);
+      });
+
+      let capturedContext: any;
+      vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
+        async (_id, _api, _params, ctx) => {
+          capturedContext = ctx;
+          return { success: true };
+        },
+      );
+
+      const payload = {
+        identifier: 'lobe-agent-documents',
+        apiName: 'editDocument',
+        arguments: JSON.stringify({ content: 'test', id: 'agent-document-id' }),
+        type: 'builtin',
+      } as ChatToolPayload;
+
+      await act(async () => {
+        await result.current.invokeBuiltinTool(messageId, payload);
+      });
+
+      expect(capturedContext).toMatchObject({
+        agentId: 'agent-1',
+        documentId: 'docs-current',
+        messageId,
+        scope: 'page',
+        topicId: 'topic-1',
+      });
+    });
+
     describe('registerAfterCompletion with Tool Store executor', () => {
       it('should create registerAfterCompletion when root execAgentRuntime operation exists', async () => {
         // Mock hasExecutor to return true

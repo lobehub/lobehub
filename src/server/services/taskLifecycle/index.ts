@@ -1,4 +1,5 @@
 import { chainTaskTopicHandoff, TASK_TOPIC_HANDOFF_SCHEMA } from '@lobechat/prompts';
+import type { TaskItem, TaskSchedulerContext } from '@lobechat/types';
 import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
@@ -10,8 +11,17 @@ import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskReviewService } from '@/server/services/taskReview';
+import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
 const log = debug('task-lifecycle');
+
+const TERMINAL_STATUSES = new Set(['canceled', 'completed', 'failed']);
+const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
+
+// Consecutive 'error' reasons after which we stop re-arming and let the
+// urgent brief surface for human attention. Hardcoded for now (per LOBE-8233);
+// move to task.config later if it needs to be tunable per-task.
+const HEARTBEAT_FAILURE_FUSE = 3;
 
 export interface TopicCompleteParams {
   errorMessage?: string;
@@ -75,30 +85,26 @@ export class TaskLifecycleService {
         );
       }
 
-      // 3. Auto-review (if configured)
-      if (currentTask && topicId && lastAssistantContent) {
-        await this.runAutoReview(
-          taskId,
-          taskIdentifier,
-          topicId,
-          lastAssistantContent,
-          currentTask,
-        );
-      }
+      // 3. Auto-review (if configured) — Judge is the trusted accept signal:
+      //    when review passes, runAutoReview itself transitions the task to 'completed'.
+      //    Returns true if it terminated the task (completed/paused for retry/etc.).
+      const reviewTerminated =
+        currentTask && topicId && lastAssistantContent
+          ? await this.runAutoReview(
+              taskId,
+              taskIdentifier,
+              topicId,
+              lastAssistantContent,
+              currentTask,
+            )
+          : false;
 
-      // 4. Check if agent delivered a result brief → auto-complete
-      //    If the latest brief is type 'result' and no review is configured, complete the task
-      const reviewConfig = currentTask ? this.taskModel.getReviewConfig(currentTask) : null;
-      if (!reviewConfig?.enabled) {
-        const briefs = await this.briefModel.findByTaskId(taskId);
-        const latestBrief = briefs[0]; // sorted by createdAt desc
-        if (latestBrief?.type === 'result') {
-          await this.taskModel.updateStatus(taskId, 'completed', { error: null });
-          return;
-        }
-      }
+      if (reviewTerminated) return;
 
-      // 5. Checkpoint — pause for user review
+      // 4. Default: pause for user review.
+      //    A 'result' brief from the agent is a *proposal* of completion — the user
+      //    must explicitly approve via the brief action to transition to 'completed'.
+      //    Auto-complete only happens via the Judge path above.
       if (currentTask && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
         await this.taskModel.updateStatus(taskId, 'paused', { error: null });
       }
@@ -118,6 +124,95 @@ export class TaskLifecycleService {
       });
 
       await this.taskModel.updateStatus(taskId, 'paused');
+    }
+
+    // Heartbeat re-arm: re-read task state (status / context may have just
+    // been mutated by the branches above) and decide whether to publish the
+    // next tick.
+    const finalTask = await this.taskModel.findById(taskId);
+    if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Re-arm the next heartbeat tick after `onTopicComplete`.
+   *
+   * Skips when:
+   *   - task is not in heartbeat mode or has no positive interval
+   *   - task hit a terminal status (completed / canceled / failed)
+   *   - an unresolved urgent brief exists for this task (human is waiting)
+   *   - consecutive failures hit the fuse threshold (gives up until the user
+   *     resolves the urgent error brief)
+   */
+  private async maybeRearmHeartbeat(task: TaskItem, reason: string): Promise<void> {
+    if (task.automationMode !== 'heartbeat') return;
+    if (!task.heartbeatInterval || task.heartbeatInterval <= 0) return;
+    if (isTerminal(task.status)) return;
+
+    const ctx = (task.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
+    const sched = ctx.scheduler ?? {};
+    let consecutiveFailures = sched.consecutiveFailures ?? 0;
+
+    if (reason === 'error') {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= HEARTBEAT_FAILURE_FUSE) {
+        log(
+          'fuse blown: task=%s consecutiveFailures=%d — not re-arming',
+          task.identifier,
+          consecutiveFailures,
+        );
+        await this.taskModel.updateContext(task.id, {
+          scheduler: { consecutiveFailures },
+        });
+        return;
+      }
+    } else if (reason === 'done') {
+      consecutiveFailures = 0;
+    }
+
+    // Exclude `error` briefs from the human-waiting check: error briefs are
+    // created on every error and are governed by the fuse counter above.
+    // Without this exclusion, the urgent error brief from the *just-completed*
+    // failure would block re-arm and the fuse threshold would be unreachable.
+    if (await this.briefModel.hasUnresolvedUrgentByTask(task.id, { excludeTypes: ['error'] })) {
+      log('skip re-arm: task=%s has unresolved urgent brief', task.identifier);
+      await this.taskModel.updateContext(task.id, {
+        scheduler: { consecutiveFailures },
+      });
+      return;
+    }
+
+    try {
+      const scheduler = createTaskSchedulerModule();
+
+      // Cancel any prior tick (defensive — we usually wouldn't have one
+      // pending here, since the prior tick has already fired to bring us
+      // into onTopicComplete).
+      if (sched.tickMessageId) {
+        await scheduler.cancelScheduled(sched.tickMessageId).catch(() => undefined);
+      }
+
+      const tickMessageId = await scheduler.scheduleNextTopic({
+        delay: task.heartbeatInterval,
+        taskId: task.id,
+        userId: this.userId,
+      });
+
+      await this.taskModel.updateContext(task.id, {
+        scheduler: {
+          consecutiveFailures,
+          scheduledAt: new Date().toISOString(),
+          tickMessageId,
+        },
+      });
+
+      log(
+        're-armed task=%s delay=%ds messageId=%s',
+        task.identifier,
+        task.heartbeatInterval,
+        tickMessageId,
+      );
+    } catch (e) {
+      console.warn('[TaskLifecycle] re-arm failed:', e);
     }
   }
 
@@ -176,7 +271,13 @@ export class TaskLifecycleService {
 
   /**
    * Run auto-review if configured.
-   * @returns true if auto-retry is in progress (caller should skip pause)
+   *
+   * Acts as a "Judge" accept signal: when review passes the task transitions to
+   * `completed` here; when it fails, the task is paused for retry or human action.
+   *
+   * @returns true if this method terminated the task lifecycle (caller should not
+   *          additionally pause/transition); false if review wasn't configured or
+   *          a non-terminal path was taken.
    */
   private async runAutoReview(
     taskId: string,
@@ -184,9 +285,9 @@ export class TaskLifecycleService {
     topicId: string,
     content: string,
     currentTask: any,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const reviewConfig = this.taskModel.getReviewConfig(currentTask);
-    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return;
+    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return false;
 
     try {
       const topicLinks = await this.taskTopicModel.findByTaskId(taskId);
@@ -220,14 +321,21 @@ export class TaskLifecycleService {
       });
 
       if (reviewResult.passed) {
+        // Judge is a trusted accept signal — the brief is created already-resolved
+        // (no actionable buttons in the UI) and the task transitions to 'completed'.
+        const now = new Date();
         await this.briefModel.create({
           priority: 'info',
+          resolvedAction: 'auto-judge-pass',
+          resolvedAt: now,
+          readAt: now,
           summary: `Review passed (score: ${reviewResult.overallScore}%, iteration: ${iteration}). ${content.slice(0, 150)}`,
           taskId,
           title: `${taskIdentifier} review passed`,
           type: 'result',
         });
-        return;
+        await this.taskModel.updateStatus(taskId, 'completed', { error: null });
+        return true;
       }
 
       if (reviewConfig.autoRetry && iteration < reviewConfig.maxIterations) {
@@ -241,10 +349,12 @@ export class TaskLifecycleService {
 
         // Pause so the webhook / polling loop can pick up and re-run
         await this.taskModel.updateStatus(taskId, 'paused', { error: null });
-        return;
+        return true;
       }
 
-      // Max iterations reached
+      // Max iterations reached — surface the (failed) result for human accept/retry.
+      // Type is `result` so the user's `approve` action is treated as a terminal
+      // accept signal (force-pass) by BriefService.resolve.
       await this.briefModel.create({
         actions: [
           { key: 'retry', label: '🔄 重试', type: 'resolve' as const },
@@ -255,10 +365,13 @@ export class TaskLifecycleService {
         summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
         taskId,
         title: `${taskIdentifier} review failed — needs attention`,
-        type: 'decision',
+        type: 'result',
       });
+      await this.taskModel.updateStatus(taskId, 'paused', { error: null });
+      return true;
     } catch (e) {
       console.warn('[TaskLifecycle] auto-review failed:', e);
+      return false;
     }
   }
 }

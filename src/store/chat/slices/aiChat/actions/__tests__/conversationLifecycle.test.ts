@@ -574,6 +574,51 @@ describe('ConversationLifecycle actions', () => {
           'op-running',
         );
       });
+
+      it('should enqueue when an execHeterogeneousAgent op is running (CC queue mode)', async () => {
+        // LOBE-7346: With Plan A, sends during a running CC turn must hit the
+        // same queue path used by client mode — without this we'd spawn a
+        // second `claude` process in parallel.
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-cc-running': {
+                childOperationIds: [],
+                context,
+                id: 'op-cc-running',
+                metadata: {},
+                status: 'running',
+                type: 'execHeterogeneousAgent',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-cc-running'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: 'follow-up during CC run',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({
+            content: 'follow-up during CC run',
+            interruptMode: 'soft',
+          }),
+          'op-cc-running',
+        );
+      });
     });
 
     describe('group chat supervisor metadata', () => {

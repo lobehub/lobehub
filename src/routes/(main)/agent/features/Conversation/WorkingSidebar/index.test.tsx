@@ -16,9 +16,11 @@ vi.mock('@/libs/swr', async (importOriginal) => {
 });
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ ...props }: { [key: string]: unknown }) => <button {...props} />,
   Accordion: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
+  ),
+  ActionIcon: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <button {...props}>{children}</button>
   ),
   AccordionItem: ({
     children,

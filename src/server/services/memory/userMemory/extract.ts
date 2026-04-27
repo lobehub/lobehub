@@ -4,19 +4,19 @@ import {
 } from '@lobechat/const';
 import { messages, topics } from '@lobechat/database/schemas';
 import {
+  ActivityMemoryItemSchema,
+  BenchmarkLocomoContextProvider,
   type BenchmarkLocomoPart,
+  LobeChatTopicContextProvider,
+  LobeChatTopicResultRecorder,
   type MemoryExtractionAgent,
   type MemoryExtractionJob,
   type MemoryExtractionResult,
-  type PersistedMemoryResult,
-} from '@lobechat/memory-user-memory';
-import {
-  BenchmarkLocomoContextProvider,
-  LobeChatTopicContextProvider,
-  LobeChatTopicResultRecorder,
   MemoryExtractionService,
+  type PersistedMemoryResult,
   RetrievalUserMemoryContextProvider,
   RetrievalUserMemoryIdentitiesProvider,
+  type WithActivity,
 } from '@lobechat/memory-user-memory';
 import {
   type Embeddings,
@@ -60,6 +60,7 @@ import { type ListTopicsForMemoryExtractorCursor } from '@/database/models/topic
 import { TopicModel } from '@/database/models/topic';
 import { type ListUsersForMemoryExtractorCursor } from '@/database/models/user';
 import { UserModel } from '@/database/models/user';
+import type { UserMemoryHybridSearchAggregatedResult } from '@/database/models/userMemory';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -69,7 +70,13 @@ import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtract
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
-import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
+import {
+  AsyncTaskError,
+  type AsyncTaskErrorBody,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  type AsyncTaskStructuredErrorItem,
+} from '@/types/asyncTask';
 import { type GlobalMemoryLayer } from '@/types/serverConfig';
 import { type ProviderConfig } from '@/types/user/settings';
 import { type MergeStrategyEnum } from '@/types/userMemory';
@@ -281,6 +288,127 @@ const serializeError = (error: unknown): MemoryExtractionTraceError => {
   }
 };
 
+type MemoryExtractionErrorStage = 'extract' | 'persist' | 'retrieval';
+
+interface MemoryExtractionTaskErrorItem extends AsyncTaskStructuredErrorItem {
+  stage: MemoryExtractionErrorStage;
+}
+
+interface PersistLayerResult {
+  errors: MemoryExtractionTaskErrorItem[];
+  ids: string[];
+}
+
+class MemoryExtractionAggregateError extends Error {
+  readonly items: MemoryExtractionTaskErrorItem[];
+
+  constructor(message: string, items: MemoryExtractionTaskErrorItem[]) {
+    super(message);
+    this.items = items;
+    this.name = 'MemoryExtractionAggregateError';
+  }
+}
+
+const summarizeUnknown = (value: unknown, limit = 500) => {
+  if (value === undefined) return undefined;
+  if (typeof value === 'string')
+    return value.length > limit ? `${value.slice(0, limit)}...` : value;
+
+  try {
+    const serialized = JSON.stringify(value);
+    if (!serialized) return undefined;
+
+    return serialized.length > limit ? `${serialized.slice(0, limit)}...` : serialized;
+  } catch {
+    return String(value);
+  }
+};
+
+const makeTaskErrorItem = (
+  stage: MemoryExtractionErrorStage,
+  error: unknown,
+  options: {
+    layer?: string;
+    memoryIndex?: number;
+    preview?: unknown;
+    sourceId?: string;
+    sourceType?: string;
+  } = {},
+): MemoryExtractionTaskErrorItem => {
+  const serialized = serializeError(error);
+
+  return {
+    layer: options.layer,
+    memoryIndex: options.memoryIndex,
+    message: serialized.message,
+    preview: options.preview ? summarizeUnknown(options.preview) : undefined,
+    sourceId: options.sourceId,
+    sourceType: options.sourceType,
+    stack: serialized.stack,
+    stage,
+  };
+};
+
+const buildAsyncTaskStructuredError = (
+  detail: string,
+  items: MemoryExtractionTaskErrorItem[],
+): AsyncTaskErrorBody => ({
+  detail,
+  extractErrors: items.filter((item) => item.stage === 'extract'),
+  persistErrors: items.filter((item) => item.stage === 'persist'),
+  retrievalErrors: items.filter((item) => item.stage === 'retrieval'),
+});
+
+const buildAsyncTaskErrorFrom = (
+  error: unknown,
+): AsyncTaskError | { body: AsyncTaskErrorBody; name: string } => {
+  if (error instanceof MemoryExtractionAggregateError) {
+    return {
+      body: buildAsyncTaskStructuredError(error.message, error.items),
+      name: AsyncTaskErrorType.ServerError,
+    };
+  }
+
+  return new AsyncTaskError(
+    AsyncTaskErrorType.ServerError,
+    error instanceof Error ? error.message : 'Extraction failed',
+  );
+};
+
+const normalizeActivityAssociationList = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return value;
+  const list = Array.isArray(value) ? value : typeof value === 'object' ? [value] : value;
+  if (!Array.isArray(list)) return list;
+
+  return list.map((item) => {
+    if (!item || typeof item !== 'object' || !('extra' in item)) return item;
+
+    const extra = (item as Record<string, unknown>).extra;
+    if (extra === null || extra === undefined || typeof extra === 'string') return item;
+
+    return {
+      ...item,
+      extra: typeof extra === 'object' ? JSON.stringify(extra) : String(extra),
+    };
+  });
+};
+
+const normalizeActivityMemoryCandidate = (item: unknown) => {
+  if (!item || typeof item !== 'object' || !('withActivity' in item)) return item;
+  const withActivity = item.withActivity as WithActivity | undefined;
+  if (!withActivity || typeof withActivity !== 'object') return item;
+
+  return {
+    ...item,
+    withActivity: {
+      ...withActivity,
+      associatedLocations: normalizeActivityAssociationList(withActivity.associatedLocations),
+      associatedObjects: normalizeActivityAssociationList(withActivity.associatedObjects),
+      associatedSubjects: normalizeActivityAssociationList(withActivity.associatedSubjects),
+    },
+  };
+};
+
 const resolveLayerModels = (
   layers: Partial<Record<GlobalMemoryLayer, string>> | undefined,
   fallback: Record<GlobalMemoryLayer, string>,
@@ -421,6 +549,7 @@ export interface TopicExtractionJob {
   forceTopics: boolean;
   from?: Date;
   layers: LayersEnum[];
+  reportProgress?: boolean;
   source: MemorySourceType;
   to?: Date;
   topicId: string;
@@ -651,68 +780,99 @@ export class MemoryExtractionExecutor {
     db: Awaited<ReturnType<typeof getServerDB>>,
   ) {
     const insertedIds: string[] = [];
+    const errors: MemoryExtractionTaskErrorItem[] = [];
     const userMemoryModel = new UserMemoryModel(db, job.userId);
 
-    for (const item of result?.memories ?? []) {
-      const activityTags = item.withActivity?.tags ?? item.tags;
-      const associatedObjects = UserMemoryModel.parseAssociatedObjects(
-        item.withActivity?.associatedObjects,
-      );
-      const associatedSubjects = UserMemoryModel.parseAssociatedSubjects(
-        item.withActivity?.associatedSubjects,
-      );
-      const associatedLocations = UserMemoryModel.parseAssociatedLocations(
-        item.withActivity?.associatedLocations,
-      );
-      const [summaryVector, detailsVector, narrativeVector, feedbackVector] =
-        await this.generateEmbeddings(
-          runtime,
-          model,
-          [item.summary, item.details, item.withActivity?.narrative, item.withActivity?.feedback],
-          job.userId,
-          tokenLimit,
+    for (const [index, rawItem] of (result?.memories ?? []).entries()) {
+      const normalizedItem = normalizeActivityMemoryCandidate(rawItem);
+
+      try {
+        const parsedItem = ActivityMemoryItemSchema.safeParse(normalizedItem);
+
+        if (!parsedItem.success) {
+          errors.push(
+            makeTaskErrorItem('persist', new Error(parsedItem.error.message), {
+              layer: LAYER_LABEL_MAP[LayersEnum.Activity],
+              memoryIndex: index,
+              preview: normalizedItem,
+              sourceId: job.sourceId,
+              sourceType: job.source,
+            }),
+          );
+          continue;
+        }
+
+        const item = parsedItem.data;
+        const activityTags = item.withActivity?.tags ?? item.tags;
+        const associatedObjects = UserMemoryModel.parseAssociatedObjects(
+          item.withActivity?.associatedObjects,
         );
-      const baseMetadata = this.buildBaseMetadata(
-        job,
-        messageIds,
-        LayersEnum.Activity,
-        activityTags,
-      );
+        const associatedSubjects = UserMemoryModel.parseAssociatedSubjects(
+          item.withActivity?.associatedSubjects,
+        );
+        const associatedLocations = UserMemoryModel.parseAssociatedLocations(
+          item.withActivity?.associatedLocations,
+        );
+        const [summaryVector, detailsVector, narrativeVector, feedbackVector] =
+          await this.generateEmbeddings(
+            runtime,
+            model,
+            [item.summary, item.details, item.withActivity?.narrative, item.withActivity?.feedback],
+            job.userId,
+            tokenLimit,
+          );
+        const baseMetadata = this.buildBaseMetadata(
+          job,
+          messageIds,
+          LayersEnum.Activity,
+          activityTags,
+        );
 
-      const { memory } = await userMemoryModel.createActivityMemory({
-        activity: {
-          associatedLocations: associatedLocations.length > 0 ? associatedLocations : [],
-          associatedObjects: associatedObjects.length > 0 ? associatedObjects : [],
-          associatedSubjects: associatedSubjects.length > 0 ? associatedSubjects : [],
+        const { memory } = await userMemoryModel.createActivityMemory({
+          activity: {
+            associatedLocations: associatedLocations.length > 0 ? associatedLocations : [],
+            associatedObjects: associatedObjects.length > 0 ? associatedObjects : [],
+            associatedSubjects: associatedSubjects.length > 0 ? associatedSubjects : [],
+            capturedAt: job.sourceUpdatedAt,
+            endsAt: UserMemoryModel.parseDateFromString(item.withActivity?.endsAt),
+            feedback: item.withActivity?.feedback ?? null,
+            feedbackVector: feedbackVector ?? null,
+            metadata: baseMetadata,
+            narrative: item.withActivity?.narrative ?? null,
+            narrativeVector: narrativeVector ?? null,
+            notes: item.withActivity?.notes ?? null,
+            startsAt: UserMemoryModel.parseDateFromString(item.withActivity?.startsAt),
+            status: item.withActivity?.status ?? 'pending',
+            tags: activityTags ?? null,
+            timezone: item.withActivity?.timezone ?? null,
+            type: item.withActivity?.type ?? 'other',
+          },
           capturedAt: job.sourceUpdatedAt,
-          endsAt: UserMemoryModel.parseDateFromString(item.withActivity?.endsAt),
-          feedback: item.withActivity?.feedback ?? null,
-          feedbackVector: feedbackVector ?? null,
-          metadata: baseMetadata,
-          narrative: item.withActivity?.narrative ?? null,
-          narrativeVector: narrativeVector ?? null,
-          notes: item.withActivity?.notes ?? null,
-          startsAt: UserMemoryModel.parseDateFromString(item.withActivity?.startsAt),
-          status: item.withActivity?.status ?? 'pending',
-          tags: activityTags ?? null,
-          timezone: item.withActivity?.timezone ?? null,
-          type: item.withActivity?.type ?? 'other',
-        },
-        capturedAt: job.sourceUpdatedAt,
-        details: item.details ?? '',
-        detailsEmbedding: detailsVector ?? undefined,
-        memoryCategory: item.memoryCategory ?? null,
-        memoryLayer: LayersEnum.Activity,
-        memoryType: (item.memoryType as TypesEnum) ?? TypesEnum.Activity,
-        summary: item.summary ?? '',
-        summaryEmbedding: summaryVector ?? undefined,
-        title: item.title ?? '',
-      });
+          details: item.details ?? '',
+          detailsEmbedding: detailsVector ?? undefined,
+          memoryCategory: item.memoryCategory ?? null,
+          memoryLayer: LayersEnum.Activity,
+          memoryType: (item.memoryType as TypesEnum) ?? TypesEnum.Activity,
+          summary: item.summary ?? '',
+          summaryEmbedding: summaryVector ?? undefined,
+          title: item.title ?? '',
+        });
 
-      insertedIds.push(memory.id);
+        insertedIds.push(memory.id);
+      } catch (error) {
+        errors.push(
+          makeTaskErrorItem('persist', error, {
+            layer: LAYER_LABEL_MAP[LayersEnum.Activity],
+            memoryIndex: index,
+            preview: normalizedItem,
+            sourceId: job.sourceId,
+            sourceType: job.source,
+          }),
+        );
+      }
     }
 
-    return insertedIds;
+    return { errors, ids: insertedIds } satisfies PersistLayerResult;
   }
 
   async persistContextMemories(
@@ -775,7 +935,7 @@ export class MemoryExtractionExecutor {
       insertedIds.push(memory.id);
     }
 
-    return insertedIds;
+    return { errors: [], ids: insertedIds } satisfies PersistLayerResult;
   }
 
   async persistExperienceMemories(
@@ -842,7 +1002,7 @@ export class MemoryExtractionExecutor {
       insertedIds.push(memory.id);
     }
 
-    return insertedIds;
+    return { errors: [], ids: insertedIds } satisfies PersistLayerResult;
   }
 
   async persistPreferenceMemories(
@@ -900,7 +1060,7 @@ export class MemoryExtractionExecutor {
       insertedIds.push(memory.id);
     }
 
-    return insertedIds;
+    return { errors: [], ids: insertedIds } satisfies PersistLayerResult;
   }
 
   async persistIdentityMemories(
@@ -1012,7 +1172,7 @@ export class MemoryExtractionExecutor {
       await userMemoryModel.removeIdentityEntry(action.id);
     }
 
-    return insertedIds;
+    return { errors: [], ids: insertedIds } satisfies PersistLayerResult;
   }
 
   async listConversationsForTopic(userId: string, topicId: string, topicUpdatedAt: Date) {
@@ -1054,7 +1214,7 @@ export class MemoryExtractionExecutor {
     userId: string,
     conversations: OpenAIChatMessage[],
     tokenLimit?: number,
-  ) {
+  ): Promise<UserMemoryHybridSearchAggregatedResult> {
     const db = await this.db;
     const userMemoryModel = new UserMemoryModel(db, userId);
     // TODO: make topK configurable
@@ -1107,6 +1267,7 @@ export class MemoryExtractionExecutor {
           identities: { hasMore: false, returned: 0, total: 0 },
           preferences: { hasMore: false, returned: 0, total: 0 },
         },
+        ranking: {},
       },
       preferences: [],
     };
@@ -1162,7 +1323,8 @@ export class MemoryExtractionExecutor {
       'Memory User Memory: Extract Chat Topic',
       { attributes },
       async (span) => {
-        const shouldReportProgress = job.userInitiated && !!job.asyncTaskId;
+        const shouldReportProgress =
+          job.reportProgress !== false && job.userInitiated && !!job.asyncTaskId;
         let topicProcessed = false;
         const startTime = Date.now();
         let extractionJob: MemoryExtractionJob | null = null;
@@ -1281,14 +1443,45 @@ export class MemoryExtractionExecutor {
             traceId: span.spanContext().traceId,
           });
 
-          const searchResult = await this.listRelevantUserMemories(
-            extractionJob,
-            runtimes.embeddings,
-            this.modelConfig.embeddingsModel,
-            job.userId,
-            embeddingConversations,
-            embeddingContextLimit,
-          );
+          const retrievalErrors: MemoryExtractionTaskErrorItem[] = [];
+          let searchResult: UserMemoryHybridSearchAggregatedResult = {
+            activities: [],
+            contexts: [],
+            experiences: [],
+            identities: [],
+            meta: {
+              appliedFilters: {},
+              appliedQueries: [],
+              layers: {
+                activities: { hasMore: false, returned: 0, total: 0 },
+                contexts: { hasMore: false, returned: 0, total: 0 },
+                experiences: { hasMore: false, returned: 0, total: 0 },
+                identities: { hasMore: false, returned: 0, total: 0 },
+                preferences: { hasMore: false, returned: 0, total: 0 },
+              },
+              ranking: {},
+            },
+            preferences: [],
+          };
+
+          try {
+            searchResult = await this.listRelevantUserMemories(
+              extractionJob,
+              runtimes.embeddings,
+              this.modelConfig.embeddingsModel,
+              job.userId,
+              embeddingConversations,
+              embeddingContextLimit,
+            );
+          } catch (error) {
+            retrievalErrors.push(
+              makeTaskErrorItem('retrieval', error, {
+                preview: embeddingConversations.map((item) => item.content).join('\n\n'),
+                sourceId: extractionJob.sourceId,
+                sourceType: extractionJob.source,
+              }),
+            );
+          }
           const retrievedMemoryContextProvider = new RetrievalUserMemoryContextProvider({
             retrievedMemories: {
               activities: searchResult.activities,
@@ -1445,6 +1638,12 @@ export class MemoryExtractionExecutor {
             runtimes,
             db,
           );
+          if (retrievalErrors.length > 0) {
+            throw new MemoryExtractionAggregateError(
+              'Memory extraction completed with retrieval errors',
+              retrievalErrors,
+            );
+          }
           if (tracePayload) {
             tracePayload.result = { extraction, persisted: persistedRes };
           }
@@ -1491,10 +1690,7 @@ export class MemoryExtractionExecutor {
             try {
               const asyncTaskModel = new AsyncTaskModel(await this.db, job.userId);
               await asyncTaskModel.update(job.asyncTaskId, {
-                error: new AsyncTaskError(
-                  AsyncTaskErrorType.ServerError,
-                  error instanceof Error ? error.message : 'Extraction failed',
-                ),
+                error: buildAsyncTaskErrorFrom(error),
                 status: AsyncTaskStatus.Error,
               });
             } catch (taskError) {
@@ -1791,14 +1987,27 @@ export class MemoryExtractionExecutor {
   ): Promise<PersistedMemoryResult> {
     const createdIds: string[] = [];
     const perLayer: Partial<Record<LayersEnum, number>> = {};
-    const errors: Error[] = [];
-    const appendError = (layer: LayersEnum, stage: 'extract' | 'persist', error: unknown) => {
-      errors.push(this.normalizeLayerError(layer, stage, error));
+    const errors: MemoryExtractionTaskErrorItem[] = [];
+    const appendError = (
+      layer: LayersEnum,
+      stage: 'extract' | 'persist',
+      error: unknown,
+      options?: { memoryIndex?: number; preview?: unknown },
+    ) => {
+      errors.push(
+        makeTaskErrorItem(stage, this.normalizeLayerError(layer, stage, error), {
+          layer: LAYER_LABEL_MAP[layer],
+          memoryIndex: options?.memoryIndex,
+          preview: options?.preview,
+          sourceId: job.sourceId,
+          sourceType: job.source,
+        }),
+      );
     };
 
     const persistWithSpan = async (
       layer: LayersEnum,
-      persist: () => Promise<string[]>,
+      persist: () => Promise<PersistLayerResult>,
     ): Promise<void> => {
       const attributes = {
         layer: LAYER_LABEL_MAP[layer],
@@ -1813,10 +2022,11 @@ export class MemoryExtractionExecutor {
         { attributes },
         async (span) => {
           try {
-            const ids = await persist();
+            const { errors: persistErrors, ids } = await persist();
 
             createdIds.push(...ids);
             perLayer[layer] = ids.length;
+            errors.push(...persistErrors);
             this.recordLayerEntries(job, layer, ids.length);
             span.setStatus({ code: SpanStatusCode.OK });
             span.setAttribute('memory.persisted_count', ids.length);
@@ -1938,10 +2148,11 @@ export class MemoryExtractionExecutor {
     }
 
     if (errors.length) {
-      const detail = errors
-        .map((error) => `${error.message}${error.cause ? `: ${error.cause}` : ''}`)
-        .join('; ');
-      throw new AggregateError(errors, `Memory extraction encountered layer errors: ${detail}`);
+      const detail = errors.map((error) => error.message).join('; ');
+      throw new MemoryExtractionAggregateError(
+        `Memory extraction encountered layer errors: ${detail}`,
+        errors,
+      );
     }
 
     return {

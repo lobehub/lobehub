@@ -16,7 +16,6 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
-import { stripMarkdown } from '../stripMarkdown';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -417,10 +416,6 @@ class WechatGatewayClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
-  }
-
-  formatMarkdown(markdown: string): string {
-    return stripMarkdown(markdown);
   }
 
   formatReply(body: string, stats?: UsageStats): string {

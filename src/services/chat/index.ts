@@ -3,8 +3,8 @@ import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
-import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError } from '@lobechat/model-runtime';
+import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import { AgentRuntimeError, responsesAPIModels } from '@lobechat/model-runtime';
 import {
   type RuntimeInitialContext,
   type RuntimeStepContext,
@@ -352,18 +352,14 @@ class ChatService {
     // =================== process model =================== //
     // ===================================================== //
     let model = res.model || DEFAULT_AGENT_CONFIG.model;
+    const deploymentName = providersWithDeploymentName.has(provider)
+      ? findDeploymentName(model, provider)
+      : undefined;
+    const shouldUseDeploymentField =
+      provider === ModelProvider.Azure && responsesAPIModels.has(model);
 
-    // if the provider is Azure, get the deployment name as the request model
-    const providersWithDeploymentName = [
-      ModelProvider.Azure,
-      ModelProvider.Volcengine,
-      ModelProvider.AzureAI,
-      ModelProvider.Qwen,
-      ModelProvider.KimiCodingPlan,
-    ] as string[];
-
-    if (providersWithDeploymentName.includes(provider)) {
-      model = findDeploymentName(model, provider);
+    if (!shouldUseDeploymentField && deploymentName) {
+      model = deploymentName;
     }
 
     // When user explicitly disables Responses API, set apiMode to 'chatCompletion'
@@ -388,7 +384,14 @@ class ChatService {
         stream: chatConfig.enableStreaming !== false, // Default to true if not set
         ...DEFAULT_AGENT_CONFIG.params,
       },
-      { ...res, apiMode, model },
+      {
+        ...res,
+        apiMode,
+        ...(shouldUseDeploymentField &&
+          deploymentName &&
+          deploymentName !== model && { deploymentName }),
+        model,
+      },
     );
 
     // Convert null to undefined for model params to prevent sending null values to API

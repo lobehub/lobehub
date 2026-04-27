@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  resolveCommittedSelectionRect,
-  shouldHideChatPanel,
-} from './overlaySelectionState';
+import { resolveCommittedSelectionRect, shouldHideChatPanel } from './overlaySelectionState';
 
 describe('overlaySelectionState', () => {
   it('keeps the pending selection rect visible until the committed selection arrives', () => {

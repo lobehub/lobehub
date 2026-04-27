@@ -89,6 +89,8 @@ export class AsyncTaskModel {
         `,
         status: sql`
           CASE
+            WHEN ${asyncTasks.status} = ${AsyncTaskStatus.Error} OR ${asyncTasks.error} IS NOT NULL
+              THEN ${AsyncTaskStatus.Error}
             WHEN ${totalExpr} IS NOT NULL AND ${completedExpr} >= ${totalExpr}
               THEN ${AsyncTaskStatus.Success}
             ELSE ${AsyncTaskStatus.Processing}

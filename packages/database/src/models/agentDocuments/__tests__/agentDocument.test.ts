@@ -191,6 +191,29 @@ describe('AgentDocumentModel', () => {
       const byFilename = await agentDocumentModel.findByFilename(agentId, 'own.md');
       expect(byFilename?.id).toBe(ownDoc.id);
     });
+
+    it('should find current-agent records by underlying document ids', async () => {
+      const ownDoc = await agentDocumentModel.create(agentId, 'own.md', 'own content');
+      const secondAgentDoc = await agentDocumentModel.create(
+        secondAgentId,
+        'second.md',
+        'second content',
+      );
+      const otherUserDoc = await otherAgentDocumentModel.create(
+        otherAgentId,
+        'other.md',
+        'other content',
+      );
+
+      const result = await agentDocumentModel.findByDocumentIds(agentId, [
+        ownDoc.documentId,
+        secondAgentDoc.documentId,
+        otherUserDoc.documentId,
+        'missing-document',
+      ]);
+
+      expect(result.map((doc) => doc.id)).toEqual([ownDoc.id]);
+    });
   });
 
   describe('update and upsert', () => {

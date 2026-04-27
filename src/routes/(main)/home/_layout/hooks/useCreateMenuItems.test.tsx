@@ -124,19 +124,6 @@ vi.mock('@/store/page', () => ({
     }),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      enableHeterogeneousAgent: true,
-    }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableHeterogeneousAgent: (state: Record<string, boolean>) => state.enableHeterogeneousAgent,
-  },
-}));
-
 const isActionItem = (
   item: unknown,
 ): item is {

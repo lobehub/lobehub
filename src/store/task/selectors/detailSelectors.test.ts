@@ -155,12 +155,12 @@ describe('taskDetailSelectors', () => {
       expect(taskDetailSelectors.canRunActiveTask(state)).toBe(false);
     });
 
-    it('should return false when no agentId', () => {
+    it('should return true when no agentId is assigned yet', () => {
       const state = createState({
         activeTaskId: 'T-1',
-        taskDetailMap: { 'T-1': { ...mockDetail, agentId: null } },
+        taskDetailMap: { 'T-1': { ...mockDetail, agentId: null, status: 'backlog' } },
       });
-      expect(taskDetailSelectors.canRunActiveTask(state)).toBe(false);
+      expect(taskDetailSelectors.canRunActiveTask(state)).toBe(true);
     });
   });
 

@@ -75,6 +75,15 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       background-color: ${cssVar.colorBgElevated};
     }
+
+    html.desktop[data-theme='dark'] & {
+      background-color: ${cssVar.colorFillSecondary};
+      box-shadow: inset 0 0 0 1px ${cssVar.colorBorderSecondary};
+
+      &:hover {
+        background-color: ${cssVar.colorFillSecondary};
+      }
+    }
   `,
   tabIcon: css`
     flex-shrink: 0;

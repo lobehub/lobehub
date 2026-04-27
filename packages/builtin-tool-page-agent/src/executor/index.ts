@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/editor-runtime';
 import type { BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
+import debug from 'debug';
 
 import type {
   EditTitleState,
@@ -17,6 +18,8 @@ import type {
   ReplaceTextState,
 } from '../types';
 import { PageAgentIdentifier } from '../types';
+
+const log = debug('lobe-page-agent:executor');
 
 /**
  * API enum for Page Agent executor
@@ -38,6 +41,49 @@ const PageAgentApiName = {
   // Text Operations
   replaceText: 'replaceText',
 } as const;
+
+const summarizeError = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
+  }
+
+  return { message: String(error) };
+};
+
+const getRuntimeDebugSnapshot = (runtime: EditorRuntime) => {
+  const candidate = runtime as EditorRuntime & {
+    getDebugSnapshot?: () => unknown;
+  };
+
+  return candidate.getDebugSnapshot?.();
+};
+
+const PAGE_EDITOR_NOT_MOUNTED_MESSAGE =
+  'Page editor is not currently mounted. This topic was started in the page editor, but the editor is not active in the current view. ' +
+  'Do not retry initPage / editTitle / modifyNodes / replaceText / getPageContent here — they require a mounted editor. ' +
+  'To read or modify the topic document, use lobe-agent-documents (readDocument / editDocument / modifyNodes / upsertDocumentByFilename).';
+
+const buildEditorNotMountedResult = (
+  runtime: EditorRuntime,
+  apiName: string,
+): BuiltinToolResult => ({
+  content: PAGE_EDITOR_NOT_MOUNTED_MESSAGE,
+  error: {
+    body: {
+      apiName,
+      code: 'PAGE_EDITOR_NOT_MOUNTED',
+      kind: 'replan',
+      runtime: getRuntimeDebugSnapshot(runtime),
+    },
+    message: PAGE_EDITOR_NOT_MOUNTED_MESSAGE,
+    type: 'PageEditorNotMounted',
+  },
+  success: false,
+});
 
 /**
  * Page Agent Executor
@@ -61,6 +107,22 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
   constructor(runtime: EditorRuntime) {
     super();
     this.runtime = runtime;
+
+    // scope is topic-bound, not route-bound: navigating away from the page
+    // editor keeps scope==='page' on the same topic, so without this guard
+    // the LLM can still call page-agent APIs against a stale editor ref.
+    const baseInvoke = this.invoke;
+    this.invoke = async (apiName, params, ctx) => {
+      if (this.hasApi(apiName) && !this.runtime.isReady()) {
+        console.warn('[PageAgentToolCall] blocked: editor not mounted', {
+          apiName,
+          runtime: getRuntimeDebugSnapshot(this.runtime),
+        });
+        return buildEditorNotMountedResult(this.runtime, apiName);
+      }
+
+      return baseInvoke(apiName, params, ctx);
+    };
   }
 
   // ==================== Initialize ====================
@@ -69,6 +131,11 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Initialize a new document from Markdown content
    */
   initPage = async (params: InitDocumentArgs): Promise<BuiltinToolResult> => {
+    log('[PageAgentToolCall] initPage:start', {
+      markdownLength: params.markdown.length,
+      runtime: getRuntimeDebugSnapshot(this.runtime),
+    });
+
     try {
       const result = await this.runtime.initPage(params);
 
@@ -81,9 +148,20 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         rootId: 'root',
       };
 
+      log('[PageAgentToolCall] initPage:success', {
+        nodeCount: result.nodeCount,
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+        titleExtracted: !!result.extractedTitle,
+      });
+
       return { content, state, success: true };
     } catch (error) {
       const err = error as Error;
+      console.error('[PageAgentToolCall] initPage:error', {
+        error: summarizeError(error),
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+      });
+
       return {
         error: {
           body: error,
@@ -101,6 +179,11 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Edit the page title
    */
   editTitle = async (params: EditTitleArgs): Promise<BuiltinToolResult> => {
+    log('[PageAgentToolCall] editTitle:start', {
+      runtime: getRuntimeDebugSnapshot(this.runtime),
+      titleLength: params.title.length,
+    });
+
     try {
       const result = await this.runtime.editTitle(params);
 
@@ -111,9 +194,19 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         previousTitle: result.previousTitle,
       };
 
+      log('[PageAgentToolCall] editTitle:success', {
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+        titleLength: params.title.length,
+      });
+
       return { content, state, success: true };
     } catch (error) {
       const err = error as Error;
+      console.error('[PageAgentToolCall] editTitle:error', {
+        error: summarizeError(error),
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+      });
+
       return {
         error: {
           body: error,
@@ -131,6 +224,11 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Get page content in XML, markdown, or both formats
    */
   getPageContent = async (params: GetPageContentArgs): Promise<BuiltinToolResult> => {
+    log('[PageAgentToolCall] getPageContent:start', {
+      format: params.format,
+      runtime: getRuntimeDebugSnapshot(this.runtime),
+    });
+
     try {
       const result = await this.runtime.getPageContent(params);
 
@@ -150,9 +248,21 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
       // We return the formatted content based on the requested format
       const content = result.markdown || result.xml || '';
 
+      log('[PageAgentToolCall] getPageContent:success', {
+        format: params.format,
+        markdownLength: result.markdown?.length,
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+        xmlLength: result.xml?.length,
+      });
+
       return { content, state, success: true };
     } catch (error) {
       const err = error as Error;
+      console.error('[PageAgentToolCall] getPageContent:error', {
+        error: summarizeError(error),
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+      });
+
       return {
         error: {
           body: error,
@@ -170,6 +280,18 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Perform unified node operations (insert, modify, remove)
    */
   modifyNodes = async (params: ModifyNodesArgs): Promise<BuiltinToolResult> => {
+    const operations = Array.isArray(params.operations)
+      ? params.operations
+      : params.operations
+        ? [params.operations]
+        : [];
+
+    log('[PageAgentToolCall] modifyNodes:start', {
+      operationActions: operations.map((op) => op.action),
+      operationCount: operations.length,
+      runtime: getRuntimeDebugSnapshot(this.runtime),
+    });
+
     try {
       const result = await this.runtime.modifyNodes(params);
 
@@ -193,9 +315,20 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         totalCount: result.totalCount,
       };
 
+      log('[PageAgentToolCall] modifyNodes:success', {
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+        successCount: result.successCount,
+        totalCount: result.totalCount,
+      });
+
       return { content, state, success: result.successCount > 0 };
     } catch (error) {
       const err = error as Error;
+      console.error('[PageAgentToolCall] modifyNodes:error', {
+        error: summarizeError(error),
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+      });
+
       return {
         error: {
           body: error,
@@ -213,6 +346,13 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * Find and replace text across the document
    */
   replaceText = async (params: ReplaceTextArgs): Promise<BuiltinToolResult> => {
+    log('[PageAgentToolCall] replaceText:start', {
+      newTextLength: params.newText.length,
+      nodeCount: params.nodeIds?.length,
+      runtime: getRuntimeDebugSnapshot(this.runtime),
+      searchTextLength: params.searchText.length,
+    });
+
     try {
       const result = await this.runtime.replaceText(params);
 
@@ -231,9 +371,20 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
         replacementCount: result.replacementCount,
       };
 
+      log('[PageAgentToolCall] replaceText:success', {
+        modifiedNodeCount: result.modifiedNodeIds.length,
+        replacementCount: result.replacementCount,
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+      });
+
       return { content, state, success: true };
     } catch (error) {
       const err = error as Error;
+      console.error('[PageAgentToolCall] replaceText:error', {
+        error: summarizeError(error),
+        runtime: getRuntimeDebugSnapshot(this.runtime),
+      });
+
       return {
         error: {
           body: error,

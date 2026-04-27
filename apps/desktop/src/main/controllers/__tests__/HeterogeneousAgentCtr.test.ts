@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   app: {
     getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
+    isPackaged: false,
     on: vi.fn(),
   },
   ipcMain: { handle: vi.fn() },
@@ -56,9 +57,11 @@ vi.mock('node:child_process', async (importOriginal) => {
  */
 const createFakeProc = ({
   exitCode = 0,
+  stderrLines = [],
   stdoutLines = [],
 }: {
   exitCode?: number;
+  stderrLines?: string[];
   stdoutLines?: string[];
 } = {}) => {
   const proc = new EventEmitter() as any;
@@ -85,6 +88,9 @@ const createFakeProc = ({
     setImmediate(() => {
       for (const line of stdoutLines) {
         stdout.write(line);
+      }
+      for (const line of stderrLines) {
+        stderr.write(line);
       }
       stdout.end();
       stderr.end();
@@ -381,8 +387,9 @@ describe('HeterogeneousAgentCtr', () => {
       expect(command).toBe('codex');
       expect(cliArgs).not.toContain(prompt);
       expect(cliArgs).toEqual(
-        expect.arrayContaining(['exec', '--json', '--skip-git-repo-check', '--full-auto', '-']),
+        expect.arrayContaining(['exec', '--json', '--skip-git-repo-check', '--full-auto']),
       );
+      expect(cliArgs).not.toContain('-');
       expect(writes).toEqual([prompt]);
     });
 
@@ -398,8 +405,11 @@ describe('HeterogeneousAgentCtr', () => {
       const imagePaths = getFlagValues(cliArgs, '--image');
 
       expect(cliArgs).not.toContain('describe these screenshots');
+      expect(cliArgs).not.toContain('-');
       expect(cliArgs.filter((arg) => arg === '--image')).toHaveLength(2);
       expect(imagePaths).toHaveLength(2);
+      expect(imagePaths).not.toContain('-');
+      expect(cliArgs.at(-1)).toBe(imagePaths[1]);
       expect(imagePaths[0]).toMatch(/\.png$/);
       expect(imagePaths[1]).toMatch(/\.jpg$/);
       expect(
@@ -413,22 +423,94 @@ describe('HeterogeneousAgentCtr', () => {
       expect(writes).toEqual(['describe these screenshots']);
     });
 
-    it('skips images that fail to materialize and still forwards the remaining --image args', async () => {
+    it('normalizes parameterized image MIME types before choosing the CLI file extension', async () => {
+      const imageList = [
+        { id: 'image-with-params', url: 'data:image/png;charset=utf-8;base64,UE5HX1RFU1Q=' },
+      ];
+      const { cliArgs } = await runSendPrompt('describe this screenshot', {}, [], { imageList });
+
+      const imagePaths = getFlagValues(cliArgs, '--image');
+
+      expect(imagePaths).toHaveLength(1);
+      expect(imagePaths[0]).toMatch(/\.png$/);
+      await expect(readFile(imagePaths[0], 'utf8')).resolves.toBe('PNG_TEST');
+    });
+
+    it('sniffs image bytes when MIME and URL do not expose a usable extension', async () => {
+      const pngBytes = Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.from('PNG_TEST'),
+      ]);
+      const imageList = [
+        {
+          id: 'image-octet',
+          url: `data:application/octet-stream;base64,${pngBytes.toString('base64')}`,
+        },
+      ];
+      const { cliArgs } = await runSendPrompt('describe this screenshot', {}, [], { imageList });
+
+      const imagePaths = getFlagValues(cliArgs, '--image');
+
+      expect(imagePaths).toHaveLength(1);
+      expect(imagePaths[0]).toMatch(/\.png$/);
+      await expect(readFile(imagePaths[0])).resolves.toEqual(pngBytes);
+    });
+
+    it('fails before spawning Codex when any image cannot be materialized', async () => {
       const imageList = [
         { id: 'good-image', url: 'data:image/png;base64,VkFMSURfSU1BR0U=' },
         { id: 'bad-image', url: 'bad://broken-image' },
       ];
-      const { cliArgs, writes } = await runSendPrompt('inspect the valid screenshot only', {}, [], {
-        imageList,
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
       });
 
-      const imagePaths = getFlagValues(cliArgs, '--image');
+      await expect(
+        ctr.sendPrompt({
+          imageList,
+          prompt: 'inspect the screenshots',
+          sessionId,
+        }),
+      ).rejects.toThrow('Failed to attach image(s) to CLI');
+      expect(spawnCalls).toHaveLength(0);
+    });
 
-      expect(cliArgs.filter((arg) => arg === '--image')).toHaveLength(1);
-      expect(imagePaths).toHaveLength(1);
-      expect(imagePaths[0]).toMatch(/\.png$/);
-      await expect(readFile(imagePaths[0], 'utf8')).resolves.toBe('VALID_IMAGE');
-      expect(writes).toEqual(['inspect the valid screenshot only']);
+    it('does not surface Codex stderr status and warn logs as the terminal error', async () => {
+      const { proc } = createFakeProc({
+        exitCode: 1,
+        stderrLines: [
+          'Reading prompt from stdin...\n',
+          '2026-04-25T09:24:08.165782Z  WARN codex_core::session_startup_prewarm: startup websocket prewarm setup failed\n',
+          '<html>\n',
+          '  <body>challenge page</body>\n',
+          '</html>\n',
+        ],
+        stdoutLines: [
+          `${JSON.stringify({ thread_id: 'thread_codex_123', type: 'thread.started' })}\n`,
+          `${JSON.stringify({ type: 'turn.started' })}\n`,
+          `${JSON.stringify({ message: 'real Codex JSONL error', type: 'error' })}\n`,
+        ],
+      });
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+
+      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
+        'Agent exited with code 1',
+      );
     });
 
     it('uses codex exec resume syntax when continuing an existing thread', async () => {
@@ -437,7 +519,71 @@ describe('HeterogeneousAgentCtr', () => {
       expect(cliArgs.slice(0, 2)).toEqual(['exec', 'resume']);
       expect(cliArgs).toContain('thread_abc');
       expect(cliArgs).not.toContain('--resume');
+      expect(cliArgs.at(-2)).toBe('thread_abc');
       expect(cliArgs.at(-1)).toBe('-');
+    });
+
+    it('writes raw CLI streams to a dev trace directory grouped by agent type', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      try {
+        const prompt = 'trace this run';
+        const rawLine = `${JSON.stringify({
+          thread_id: 'thread_codex_trace',
+          type: 'thread.started',
+        })}\n`;
+        const { sessionId } = await runSendPrompt(prompt, { cwd: appStoragePath }, [rawLine], {
+          imageList: [{ id: 'image-1', url: 'data:image/png;base64,UE5HX1RFU1Q=' }],
+        });
+        const traceRoot = path.join(appStoragePath, '.heerogeneous-tracing');
+        const agentTraceRoot = path.join(traceRoot, 'codex');
+        const traceDirs = await readdir(agentTraceRoot);
+
+        expect(traceDirs).toHaveLength(1);
+
+        const traceDir = path.join(agentTraceRoot, traceDirs[0]);
+
+        await expect(readFile(path.join(traceRoot, '.last-live-trace'), 'utf8')).resolves.toBe(
+          `${traceDir}\n`,
+        );
+        await expect(readFile(path.join(traceDir, 'stdin.txt'), 'utf8')).resolves.toBe(prompt);
+        await expect(readFile(path.join(traceDir, 'stdout.jsonl'), 'utf8')).resolves.toBe(rawLine);
+        await expect(readFile(path.join(traceDir, 'stderr.log'), 'utf8')).resolves.toBe('');
+        await expect(readFile(path.join(traceDir, 'exit.json'), 'utf8')).resolves.toContain(
+          '"code": 0',
+        );
+
+        const meta = JSON.parse(await readFile(path.join(traceDir, 'meta.json'), 'utf8'));
+
+        expect(meta).toMatchObject({
+          agentType: 'codex',
+          command: 'codex',
+          cwd: appStoragePath,
+          sessionId,
+          stdinBytes: Buffer.byteLength(prompt),
+          stdoutFile: 'stdout.jsonl',
+        });
+        expect(meta.args).not.toContain('-');
+        expect(meta.attachments).toEqual([{ id: 'image-1', urlKind: 'data' }]);
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    it('skips trace creation (and never auto-creates the cwd) when the cwd is missing', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      const missingCwd = path.join(appStoragePath, 'does-not-exist');
+
+      try {
+        await runSendPrompt('trace this run', { cwd: missingCwd });
+
+        await expect(access(missingCwd)).rejects.toThrow();
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
     });
 
     it('captures the Codex thread id from json output for later resume', async () => {

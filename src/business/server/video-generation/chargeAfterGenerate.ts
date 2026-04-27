@@ -1,5 +1,5 @@
 interface ChargeParams {
-  computePriceParams?: { generateAudio?: boolean };
+  computePriceParams?: { generateAudio?: boolean; resolution?: string };
   isError?: boolean;
   /** Total time from task submission to webhook callback (ms) */
   latency?: number;

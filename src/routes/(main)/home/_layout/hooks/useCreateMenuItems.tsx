@@ -20,8 +20,6 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 interface CreateAgentOptions {
   groupId?: string;
@@ -39,7 +37,6 @@ export const useCreateMenuItems = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const groupTemplates = useGroupTemplates();
-  const enableHeterogeneousAgent = useUserStore(labPreferSelectors.enableHeterogeneousAgent);
 
   const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
   const [addGroup, refreshAgentList, switchToGroup] = useHomeStore((s) => [
@@ -259,7 +256,7 @@ export const useCreateMenuItems = () => {
    */
   const createHeterogeneousAgentMenuItems = useCallback(
     (options?: CreateAgentOptions): ItemType[] => {
-      if (!isDesktop || !enableHeterogeneousAgent) return [];
+      if (!isDesktop) return [];
 
       return HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((definition) => {
         const AgentIcon = definition.icon;
@@ -275,7 +272,7 @@ export const useCreateMenuItems = () => {
         };
       });
     },
-    [t, createHeterogeneousAgent, enableHeterogeneousAgent],
+    [t, createHeterogeneousAgent],
   );
 
   /**

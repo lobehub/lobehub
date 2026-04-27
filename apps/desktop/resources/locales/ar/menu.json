@@ -71,6 +71,7 @@
   "macOS.services": "خدمات",
   "macOS.unhide": "إظهار الكل",
   "tray.open": "فتح {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "خروج",
   "tray.show": "عرض {{appName}}",
   "view.forceReload": "إعادة تحميل قسري",
@@ -86,6 +87,5 @@
   "window.minimize": "تصغير",
   "window.title": "نافذة",
   "window.toggleFullscreen": "تبديل وضع ملء الشاشة",
-  "window.zoom": "تكبير",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "تكبير"
 }

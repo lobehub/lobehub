@@ -5,7 +5,7 @@ import { CopyDocumentInspector } from './CopyDocument';
 import { CreateDocumentInspector } from './CreateDocument';
 import { EditDocumentInspector } from './EditDocument';
 import { ListDocumentsInspector } from './ListDocuments';
-import { PatchDocumentInspector } from './PatchDocument';
+import { ModifyNodesInspector } from './ModifyNodes';
 import { ReadDocumentInspector } from './ReadDocument';
 import { ReadDocumentByFilenameInspector } from './ReadDocumentByFilename';
 import { RemoveDocumentInspector } from './RemoveDocument';
@@ -18,7 +18,7 @@ export const AgentDocumentsInspectors: Record<string, BuiltinInspector> = {
   [AgentDocumentsApiName.createDocument]: CreateDocumentInspector as BuiltinInspector,
   [AgentDocumentsApiName.editDocument]: EditDocumentInspector as BuiltinInspector,
   [AgentDocumentsApiName.listDocuments]: ListDocumentsInspector as BuiltinInspector,
-  [AgentDocumentsApiName.patchDocument]: PatchDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.modifyNodes]: ModifyNodesInspector as BuiltinInspector,
   [AgentDocumentsApiName.readDocument]: ReadDocumentInspector as BuiltinInspector,
   [AgentDocumentsApiName.readDocumentByFilename]:
     ReadDocumentByFilenameInspector as BuiltinInspector,

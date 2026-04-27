@@ -818,10 +818,19 @@ describe('StreamingExecutor actions', () => {
           tools: [],
         }),
       } as any);
+      vi.spyOn(pageAgentRuntime, 'isReady').mockReturnValue(true);
       vi.spyOn(pageAgentRuntime, 'getPageContentContext').mockReturnValue({
         markdown: '# Test Document',
         xml: '<root><h1>Test</h1></root>',
         metadata: { title: 'Test Doc', charCount: 15, lineCount: 1 },
+      });
+      const { operationId } = result.current.startOperation({
+        context: {
+          agentId: TEST_IDS.SESSION_ID,
+          scope: 'page',
+          topicId: TEST_IDS.TOPIC_ID,
+        },
+        type: 'execAgentRuntime',
       });
 
       const { context } = result.current.internal_createAgentState({
@@ -829,6 +838,7 @@ describe('StreamingExecutor actions', () => {
         parentMessageId: userMessage.id,
         agentId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,
+        operationId,
         initialContext: {
           phase: 'init',
           initialContext: {
@@ -847,6 +857,55 @@ describe('StreamingExecutor actions', () => {
         selectedSkills: [{ identifier: 'user_memory', name: 'User Memory' }],
         selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
       });
+    });
+
+    it('should not inject page editor context outside page scope', () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig(),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: ['lobe-page-agent'],
+      });
+      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
+        generateToolsDetailed: vi.fn().mockReturnValue({
+          enabledManifests: [],
+          enabledToolIds: ['lobe-page-agent'],
+          tools: [],
+        }),
+      } as any);
+      const pageContextSpy = vi.spyOn(pageAgentRuntime, 'getPageContentContext');
+      const { operationId } = result.current.startOperation({
+        context: {
+          agentId: TEST_IDS.SESSION_ID,
+          scope: 'main',
+          topicId: TEST_IDS.TOPIC_ID,
+        },
+        type: 'execAgentRuntime',
+      });
+
+      const { context } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        operationId,
+      });
+
+      expect(context.initialContext?.pageEditor).toBeUndefined();
+      expect(pageContextSpy).not.toHaveBeenCalled();
     });
 
     it('should merge selectedTools into generated tools when provided', () => {

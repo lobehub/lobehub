@@ -119,6 +119,12 @@ export interface MessageMapContext {
 export interface ConversationContext {
   agentId: string;
   /**
+   * Current document ID for page-scoped conversations.
+   * Used by page editor integrations to distinguish the active document from
+   * other agent resources tied to the same topic.
+   */
+  documentId?: string;
+  /**
    * Group ID for group conversations
    * Used when scope is 'group' or 'group_agent'
    */

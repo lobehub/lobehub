@@ -9,16 +9,15 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import ConversationArea from './ConversationArea';
-import ChatHeader from './Header';
 
 const wrapperStyle: React.CSSProperties = {
+  flex: 1,
   height: '100%',
   minWidth: 300,
   width: '100%',
 };
 
 const ChatConversation = memo(() => {
-  const showHeader = useGlobalStore(systemStatusSelectors.showChatHeader);
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
 
   // Get current agent's model info for vision support check
@@ -35,7 +34,6 @@ const ChatConversation = memo(() => {
     <Suspense fallback={<Loading debugId="Agent > ChatConversation" />}>
       <DragUploadZone style={wrapperStyle} onUploadFiles={handleUploadFiles}>
         <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
-          {showHeader && <ChatHeader />}
           <TooltipGroup>
             <ConversationArea />
           </TooltipGroup>

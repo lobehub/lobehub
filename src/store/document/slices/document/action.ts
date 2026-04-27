@@ -8,6 +8,7 @@ import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
+import { documentSWRKeys } from '@/services/document/swrKeys';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -50,6 +51,10 @@ export interface UseFetchDocumentOptions {
    * Source type for the document. Defaults to 'page'.
    */
   sourceType?: DocumentSourceType;
+  /**
+   * Topic ID for notebook documents.
+   */
+  topicId?: string | null;
 }
 
 type Setter = StoreSetter<DocumentStore>;
@@ -153,7 +158,18 @@ export class DocumentActionImpl {
 
     // Update activeDocumentId and editor
     this.#set(
-      { activeDocumentId: documentId, editor },
+      {
+        activeDocumentId: documentId,
+        editor,
+        ...(sourceType === 'notebook' && topicId
+          ? {
+              lastActiveTopicDocumentIdByTopicId: {
+                ...this.#get().lastActiveTopicDocumentIdByTopicId,
+                [topicId]: documentId,
+              },
+            }
+          : {}),
+      },
       false,
       n('initDocumentWithEditor:setActive'),
     );
@@ -174,8 +190,8 @@ export class DocumentActionImpl {
     documentId: string | undefined,
     options: UseFetchDocumentOptions = {},
   ): SWRResponse<DocumentItem | null> => {
-    const { autoSave = true, editor, sourceType = 'page' } = options;
-    const swrKey = documentId && editor ? ['document/editor', documentId] : null;
+    const { autoSave = true, editor, sourceType = 'page', topicId } = options;
+    const swrKey = documentId && editor ? documentSWRKeys.editor(documentId) : null;
 
     return useClientDataSWRWithSync<DocumentItem | null>(
       swrKey,
@@ -213,6 +229,7 @@ export class DocumentActionImpl {
             editorData: document.editorData,
 
             sourceType,
+            topicId: topicId ?? undefined,
           });
         },
         revalidateOnFocus: true,

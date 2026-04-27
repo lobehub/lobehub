@@ -122,6 +122,8 @@ const currentTopicSummary = () => {
 
 const pendingInterventions = (s: State) => getPendingInterventions(s.displayMessages);
 
+const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
+
 export const dataSelectors = {
   currentTopicSummary,
   dbMessages,
@@ -132,6 +134,7 @@ export const dataSelectors = {
   getDbMessageByToolCallId,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
+  isSecondLastMessageFromUser,
   messagesInit,
   pendingInterventions,
   skipFetch,

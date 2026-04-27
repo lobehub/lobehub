@@ -104,15 +104,17 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
   Under **Bot Permissions**, select:
 
   - View Channels
-  - Send Messages
   - Read Message History
+  - Send Messages
+  - Create Public Threads
+  - Send Messages in Threads
   - Embed Links
   - Attach Files
   - Add Reactions (optional)
 
   ### Authorize the Bot
 
-  ![](https://hub-apac-1.lobeobjects.space/docs/2e47836fe4ac988e76460534ee57efa4.png)
+  ![](https://hub-apac-1.lobeobjects.space/docs/d83686461d14690e87512491c1349b6b.webp)
 
   Copy the generated URL, open it in your browser, select the server you want to add the bot to, and click **Authorize**.
 </Steps>
@@ -121,15 +123,52 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
 
 Back in LobeHub's channel settings for Discord, click **Test Connection** to verify everything is configured correctly. Then send a message to your bot in Discord to confirm it responds.
 
+## Access Policies
+
+LobeHub gates inbound traffic with three layered settings, all under **Advanced Settings** and all defaulting to permissive.
+
+### Allowed User IDs (global)
+
+A *global* user-level gate. When populated, **only** the listed users can interact with the bot — DM, group @mention, threads, all of it — regardless of DM Policy / Group Policy mode. Empty means "no user-level filter; let per-scope policies decide". Right-click a user → **Copy User ID** (Developer Mode must be enabled in **Settings → Advanced**) to grab an ID.
+
+DMs from non-allowlisted users get a "you aren't authorized" notice. Group @mentions from non-allowlisted users get the same kind of notice posted **inside the auto-created reply thread** Discord makes for the @-mention — the parent channel stays quiet.
+
+### DM Policy
+
+Controls 1:1 direct messages.
+
+- **Open (default)** — Anyone who shares a server with the bot can DM it (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` fails closed (no DMs), `Open` still lets anyone DM.
+- **Disabled** — The bot ignores all DMs. Senders get a one-line notice pointing them at @mentioning the bot in a shared channel instead.
+
+> Discord bots can be reached by anyone in any shared server, so consider populating **Allowed User IDs** or switching DM Policy to **Disabled** if your bot is meant to be private.
+
+### Group Policy
+
+Controls @mentions in server channels and threads.
+
+- **Open (default)** — Respond to @mentions anywhere the bot can read.
+- **Allowlist** — Respond only in channels listed in **Allowed Channel IDs**. Right-click a channel → **Copy Channel ID** to grab one.
+- **Disabled** — Ignore all server traffic; the bot only responds to DMs.
+
+> The two policies are independent. You can run a DM-only bot with `groupPolicy=disabled`, a channel-only bot with `dmPolicy=disabled`, or scope both with allowlists.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field              | Required | Description                                      |
-| ------------------ | -------- | ------------------------------------------------ |
-| **Application ID** | Yes      | Your Discord application's ID                    |
-| **Bot Token**      | Yes      | Authentication token for your Discord bot        |
-| **Public Key**     | Yes      | Used to verify interaction requests from Discord |
+| Field                   | Required | Description                                                                                       |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------- |
+| **Application ID**      | Yes      | Your Discord application's ID                                                                     |
+| **Bot Token**           | Yes      | Authentication token for your Discord bot                                                         |
+| **Public Key**          | Yes      | Used to verify interaction requests from Discord                                                  |
+| **Allowed User IDs**    | No       | Comma- or whitespace-separated Discord user IDs. Global gate — applies to DMs and group @mentions |
+| **DM Policy**           | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                       |
+| **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                |
+| **Allowed Channel IDs** | No       | Comma- or whitespace-separated Discord channel IDs. Used when Group Policy is Allowlist           |
 
 ## Troubleshooting
 
-- **Bot not responding in server:** Confirm the bot has been invited to the server with the correct permissions, and Message Content Intent is enabled.
+- **Bot not responding in server:** Confirm the bot has been invited to the server with the correct permissions, and Message Content Intent is enabled. If **Group Policy** is `Disabled` or `Allowlist`, double-check the channel is in **Allowed Channel IDs**. If **Allowed User IDs** is set, the sender's user ID must be in it.
+- **Bot not responding to DMs:** Open **Advanced Settings** and confirm **DM Policy** is not set to `Disabled`. If **Allowed User IDs** is set, make sure the sender's Discord user ID is in it.
 - **Test Connection failed:** Double-check the Application ID, Bot Token, and Public Key are correct.

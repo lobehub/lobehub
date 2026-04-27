@@ -29,6 +29,17 @@ const createMockEditor = () => ({
   setDocument: vi.fn(),
 });
 
+const createValidMockEditor = () => ({
+  getDocument: vi.fn((type: string) => {
+    if (type === 'markdown') return '# Test';
+    if (type === 'json') {
+      return { root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } };
+    }
+    return null;
+  }),
+  setDocument: vi.fn(),
+});
+
 describe('DocumentStore - Editor Actions', () => {
   beforeEach(() => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
@@ -72,6 +83,9 @@ describe('DocumentStore - Editor Actions', () => {
         isDirty: false,
         sourceType: 'notebook',
         topicId: 'topic-1',
+      });
+      expect(result.current.lastActiveTopicDocumentIdByTopicId).toEqual({
+        'topic-1': 'doc-1',
       });
       // Should NOT call setDocument - that happens in onEditorInit
       expect(mockEditor.setDocument).not.toHaveBeenCalled();
@@ -449,7 +463,7 @@ describe('DocumentStore - Editor Actions', () => {
 
     it('should save metadata-only updates when history is not appended', async () => {
       const { result } = renderHook(() => useDocumentStore());
-      const mockEditor = createMockEditor() as any;
+      const mockEditor = createValidMockEditor() as any;
 
       vi.mocked(documentService.updateDocument).mockResolvedValue({
         historyAppended: false,
@@ -483,9 +497,66 @@ describe('DocumentStore - Editor Actions', () => {
       expect(result.current.documents['doc-1'].isDirty).toBe(false);
     });
 
+    it('should save and persist raw editorData with diff nodes (pending human review)', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const editorData = {
+        root: {
+          children: [
+            {
+              children: [
+                { children: [{ text: 'origin', type: 'text' }], type: 'paragraph' },
+                { children: [{ text: 'modified', type: 'text' }], type: 'paragraph' },
+              ],
+              diffType: 'modify',
+              type: 'diff',
+            },
+            {
+              children: [{ children: [{ text: 'added', type: 'text' }], type: 'paragraph' }],
+              diffType: 'add',
+              type: 'diff',
+            },
+          ],
+          type: 'root',
+        },
+      };
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Test';
+          if (type === 'json') return editorData;
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      // Autosave preserves diff nodes; DiffAllToolbar surfaces Accept/Reject
+      // on the next render and only then does the editor normalize the state.
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          editorData: JSON.stringify(editorData),
+          id: 'doc-1',
+        }),
+      );
+      expect(result.current.documents['doc-1'].editorData).toEqual(editorData);
+      expect(result.current.documents['doc-1'].lastSavedEditorData).toEqual(editorData);
+    });
+
     it('should pass restore metadata through updateDocument', async () => {
       const { result } = renderHook(() => useDocumentStore());
-      const mockEditor = createMockEditor() as any;
+      const mockEditor = createValidMockEditor() as any;
 
       vi.mocked(documentService.updateDocument).mockResolvedValue({
         historyAppended: true,

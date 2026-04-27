@@ -94,16 +94,38 @@ export class ClientToolExecutionActionImpl {
         const operation = this.#get().operations[operationId];
         const ctx: BuiltinToolContext = {
           agentId: operation?.context?.agentId,
+          documentId: operation?.context?.documentId,
           groupId: operation?.context?.groupId,
           // Gateway-side tool messages are persisted on the server; the client
           // has no local message id, so reuse toolCallId as the context key.
           messageId: toolCallId,
           operationId,
+          scope: operation?.context?.scope,
           signal: operation?.abortController?.signal,
           topicId: operation?.context?.topicId ?? undefined,
         };
 
+        log('[ClientToolCall] execute:start', {
+          agentId: ctx.agentId,
+          apiName,
+          documentId: ctx.documentId,
+          identifier,
+          operationId,
+          scope: ctx.scope,
+          toolCallId,
+          topicId: ctx.topicId,
+        });
+
         const result = await invokeExecutor(identifier, apiName, params, ctx);
+
+        log('[ClientToolCall] execute:end', {
+          apiName,
+          errorType: result.error?.type,
+          identifier,
+          operationId,
+          success: result.success,
+          toolCallId,
+        });
 
         if (result.error) {
           send({

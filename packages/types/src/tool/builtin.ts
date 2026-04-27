@@ -406,6 +406,12 @@ export interface BuiltinToolContext {
   agentId?: string;
 
   /**
+   * The current page document ID when the conversation is scoped to an open editor
+   * Uses the underlying `documents.id`, not tool-specific association IDs
+   */
+  documentId?: string | null;
+
+  /**
    * The current group ID (only available in group chat context)
    * Used by group management tools to access group member information
    */
@@ -445,6 +451,11 @@ export interface BuiltinToolContext {
    * to avoid race conditions with message updates
    */
   registerAfterCompletion?: (callback: AfterCompletionCallback) => void;
+
+  /**
+   * Conversation scope captured when the operation was created
+   */
+  scope?: string | null;
 
   /**
    * AbortSignal for cancellation detection

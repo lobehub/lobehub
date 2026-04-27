@@ -6,8 +6,6 @@ import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -21,8 +19,6 @@ const RecentsList = memo(() => {
   const { t } = useTranslation('chat');
   const recents = useHomeStore(homeRecentSelectors.recents);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
   const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const [drawerOpen, openDrawer, closeDrawer] = useHomeStore((s) => [
@@ -40,19 +36,14 @@ const RecentsList = memo(() => {
     [filteredRecents, recentPageSize],
   );
   const hasMore = filteredRecents.length > recentPageSize;
-  const fallbackAgentId = activeAgentId || inboxAgentId;
 
-  const getRecentRoute = useCallback(
-    (item: (typeof displayItems)[number]) => {
-      if (item.type !== 'task') return item.routePath;
-      const targetAgentId = item.agentId || fallbackAgentId;
-      const taskId = item.id;
-      if (!targetAgentId || !taskId) return item.routePath;
+  const getRecentRoute = useCallback((item: (typeof displayItems)[number]) => {
+    if (item.type !== 'task') return item.routePath;
+    const taskId = item.id;
+    if (!taskId) return item.routePath;
 
-      return `/agent/${targetAgentId}/tasks/${taskId}`;
-    },
-    [fallbackAgentId],
-  );
+    return `/task/${taskId}`;
+  }, []);
 
   if (!isInit) {
     return <SkeletonList rows={3} />;

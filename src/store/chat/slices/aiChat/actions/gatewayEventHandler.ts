@@ -9,6 +9,7 @@ import type { ChatMessageError, ConversationContext } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
 import { messageService } from '@/services/message';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
@@ -119,6 +120,16 @@ export const createGatewayEventHandler = (
           accumulatedReasoning = '';
 
           // Fetch from DB so the new message exists in dbMessagesMap before chunks arrive
+          void emitClientAgentSignalSourceEvent({
+            payload: {
+              agentId: context.agentId,
+              operationId,
+              stepIndex: event.stepIndex,
+              topicId: context.topicId ?? undefined,
+            },
+            sourceId: `${operationId}:gateway:start:${event.stepIndex}`,
+            sourceType: 'client.gateway.stream_start',
+          });
           await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
@@ -240,6 +251,16 @@ export const createGatewayEventHandler = (
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
+            void emitClientAgentSignalSourceEvent({
+              payload: {
+                agentId: context.agentId,
+                operationId,
+                stepIndex: event.stepIndex,
+                topicId: context.topicId ?? undefined,
+              },
+              sourceId: `${operationId}:gateway:step_complete:${event.stepIndex}`,
+              sourceType: 'client.gateway.step_complete',
+            });
             await fetchAndReplaceMessages(get, context).catch(console.error);
           });
         }
@@ -248,6 +269,15 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
+          void emitClientAgentSignalSourceEvent({
+            payload: {
+              agentId: context.agentId,
+              operationId,
+              topicId: context.topicId ?? undefined,
+            },
+            sourceId: `${operationId}:gateway:runtime_end`,
+            sourceType: 'client.gateway.runtime_end',
+          });
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           get().completeOperation(operationId);
 
@@ -264,6 +294,18 @@ export const createGatewayEventHandler = (
       case 'error': {
         enqueue(async () => {
           const messageError = toChatMessageError(event.data);
+          const errorMessage = messageError.message;
+
+          void emitClientAgentSignalSourceEvent({
+            payload: {
+              agentId: context.agentId,
+              errorMessage,
+              operationId,
+              topicId: context.topicId ?? undefined,
+            },
+            sourceId: `${operationId}:gateway:error`,
+            sourceType: 'client.gateway.error',
+          });
 
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           get().completeOperation(operationId);

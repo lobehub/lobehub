@@ -19,9 +19,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: baseline;
   `,
   tag: css`
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
+    padding-block: 2px;
+    padding-inline: 10px;
+    border-radius: 999px;
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;

@@ -71,6 +71,7 @@
   "macOS.services": "Dienste",
   "macOS.unhide": "Alle anzeigen",
   "tray.open": "{{appName}} öffnen",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Beenden",
   "tray.show": "{{appName}} anzeigen",
   "view.forceReload": "Erzwinge Neuladen",
@@ -86,6 +87,5 @@
   "window.minimize": "Minimieren",
   "window.title": "Fenster",
   "window.toggleFullscreen": "Vollbild umschalten",
-  "window.zoom": "Zoom",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "Zoom"
 }

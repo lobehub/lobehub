@@ -801,8 +801,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
               input: messages,
               model,
               text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
-              user: options?.user,
-            },
+              // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+              safety_identifier: options?.user,
+            } as any,
             { headers: options?.headers, signal: options?.signal },
           );
 
@@ -1108,7 +1109,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         store: false,
         stream: !isStreaming ? undefined : isStreaming,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
-        user: options?.user,
+        // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+        safety_identifier: options?.user,
         // Sanitize sampling params for Responses API path
         ...resolveModelSamplingParameters(res.model, res, {
           normalizeTemperature: false,
@@ -1233,8 +1235,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             model,
             tool_choice: 'required',
             tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
-            user: options?.user,
-          },
+            // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+            safety_identifier: options?.user,
+          } as any,
           { headers: options?.headers, signal: options?.signal },
         );
 

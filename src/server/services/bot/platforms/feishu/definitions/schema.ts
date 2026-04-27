@@ -5,7 +5,13 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
-import { displayToolCallsField, userIdField } from '../../const';
+import {
+  allowFromField,
+  displayToolCallsField,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  userIdField,
+} from '../../const';
 import type { FieldSchema } from '../../types';
 import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
 
@@ -104,35 +110,9 @@ export const sharedSchema: FieldSchema[] = [
         type: 'number',
       },
       userIdField,
-      // TODO: DM schema - not implemented yet
-      // {
-      //   key: 'dm',
-      //   label: 'channel.dm',
-      //   properties: [
-      //     {
-      //       key: 'enabled',
-      //       default: true,
-      //       description: 'channel.dmEnabledHint',
-      //       label: 'channel.dmEnabled',
-      //       type: 'boolean',
-      //     },
-      //     {
-      //       key: 'policy',
-      //       default: 'open',
-      //       enum: ['open', 'allowlist', 'disabled'],
-      //       enumLabels: [
-      //         'channel.dmPolicyOpen',
-      //         'channel.dmPolicyAllowlist',
-      //         'channel.dmPolicyDisabled',
-      //       ],
-      //       description: 'channel.dmPolicyHint',
-      //       label: 'channel.dmPolicy',
-      //       type: 'string',
-      //       visibleWhen: { field: 'enabled', value: true },
-      //     },
-      //   ],
-      //   type: 'object',
-      // },
+      makeDmPolicyField({ policy: 'open' }),
+      ...makeGroupPolicyFields({ policy: 'open' }),
+      allowFromField,
     ],
     type: 'object',
   },

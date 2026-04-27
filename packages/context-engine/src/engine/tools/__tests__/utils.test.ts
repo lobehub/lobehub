@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LobeToolManifest } from '../types';
-import { filterValidManifests, validateManifest } from '../utils';
+import { filterValidManifests, normalizeToolParameters, validateManifest } from '../utils';
 
 // Mock manifest schemas
 const mockBuiltinManifest: LobeToolManifest = {
@@ -66,6 +66,54 @@ describe('utils', () => {
 
       expect(result.valid).toEqual([validManifest]);
       expect(result.invalid).toEqual([invalidManifest]);
+    });
+  });
+
+  describe('normalizeToolParameters', () => {
+    it('should add required: [] when missing on object schemas', () => {
+      const result = normalizeToolParameters({
+        type: 'object',
+        properties: { q: { type: 'string' } },
+      });
+
+      expect(result).toEqual({
+        type: 'object',
+        properties: { q: { type: 'string' } },
+        required: [],
+      });
+    });
+
+    it('should preserve existing required array', () => {
+      const parameters = {
+        type: 'object',
+        properties: { q: { type: 'string' } },
+        required: ['q'],
+      };
+
+      expect(normalizeToolParameters(parameters)).toEqual(parameters);
+    });
+
+    it('should overwrite non-array required with []', () => {
+      const result = normalizeToolParameters({
+        type: 'object',
+        properties: { q: { type: 'string' } },
+        required: null as any,
+      });
+
+      expect(result).toEqual({
+        type: 'object',
+        properties: { q: { type: 'string' } },
+        required: [],
+      });
+    });
+
+    it('should leave non-object schemas untouched', () => {
+      const stringSchema = { type: 'string' };
+      expect(normalizeToolParameters(stringSchema)).toBe(stringSchema);
+    });
+
+    it('should pass through undefined', () => {
+      expect(normalizeToolParameters(undefined)).toBeUndefined();
     });
   });
 });

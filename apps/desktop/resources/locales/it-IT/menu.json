@@ -71,6 +71,7 @@
   "macOS.services": "Servizi",
   "macOS.unhide": "Mostra tutto",
   "tray.open": "Apri {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Esci",
   "tray.show": "Mostra {{appName}}",
   "view.forceReload": "Ricarica forzata",
@@ -86,6 +87,5 @@
   "window.minimize": "Minimizza",
   "window.title": "Finestra",
   "window.toggleFullscreen": "Attiva/disattiva schermo intero",
-  "window.zoom": "Zoom",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "Zoom"
 }
