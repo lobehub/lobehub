@@ -1,3 +1,4 @@
+import { parseCronPattern } from '@lobechat/utils/cron';
 import { describe, expect, it } from 'vitest';
 
 import { TASK_TEMPLATE_FALLBACK_CATEGORIES, taskTemplates } from './taskTemplate';
@@ -14,11 +15,20 @@ const VALID_INTEREST_KEYS = new Set([
   'marketing',
   'product',
   'sales',
+  'operations',
+  'hr',
+  'finance-legal',
+  'creator',
+  'investing',
+  'parenting',
+  'health',
+  'hobbies',
+  'personal',
 ]);
 
 describe('taskTemplates', () => {
   it('has the expected number of templates', () => {
-    expect(taskTemplates).toHaveLength(19);
+    expect(taskTemplates).toHaveLength(80);
   });
 
   it('has unique ids', () => {
@@ -38,6 +48,16 @@ describe('taskTemplates', () => {
   it('every template has a 5-field cron pattern', () => {
     for (const t of taskTemplates) {
       expect(t.cronPattern.trim().split(/\s+/), `template ${t.id} cron`).toHaveLength(CRON_FIELDS);
+    }
+  });
+
+  // parseCronPattern only renders 'daily' / 'weekly' / 'hourly' schedule strings.
+  // Monthly or event-driven cron patterns silently fall back to daily display —
+  // guard against accidental introduction here.
+  it('every template parses to daily or weekly schedule', () => {
+    for (const t of taskTemplates) {
+      const { scheduleType } = parseCronPattern(t.cronPattern);
+      expect(['daily', 'weekly'], `template ${t.id} scheduleType`).toContain(scheduleType);
     }
   });
 
