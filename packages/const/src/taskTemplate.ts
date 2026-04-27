@@ -1,3 +1,5 @@
+import type { IconType } from '@icons-pack/react-simple-icons';
+import { SiGithub } from '@icons-pack/react-simple-icons';
 import {
   BookOpen,
   BookText,
@@ -5,7 +7,6 @@ import {
   Crosshair,
   Flame,
   GitBranch,
-  Github,
   GitPullRequest,
   Lightbulb,
   type LucideIcon,
@@ -29,7 +30,7 @@ export interface TaskTemplate {
   category: TaskTemplateCategory;
   cronPattern: string;
   /** Per-template icon override. Falls back to a category-level default when omitted. */
-  icon?: LucideIcon;
+  icon?: IconType | LucideIcon;
   id: string;
   interests: string[];
   /** Skill dependencies. The `source` field routes the connection flow. */
@@ -71,7 +72,7 @@ export const taskTemplates: TaskTemplate[] = [
     id: 'oss-intel-daily',
     category: 'engineering',
     cronPattern: '0 9 * * *',
-    icon: Github,
+    icon: SiGithub,
     interests: ['coding'],
   },
   {
