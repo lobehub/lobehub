@@ -13,7 +13,12 @@ import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
-import { consumePairingRequest, createOrGetPairingRequest } from './dmPairingStore';
+import {
+  createOrGetPairingRequest,
+  deletePairingRequest,
+  peekPairingRequest,
+  releasePairingClaim,
+} from './dmPairingStore';
 import {
   type BotPlatformRuntimeContext,
   type BotReplyLocale,
@@ -1237,21 +1242,27 @@ export class BotMessageRouter {
             return;
           }
 
-          const entry = await consumePairingRequest({
+          const redis = getAgentRuntimeRedisClient();
+          const entry = await peekPairingRequest({
             applicationId,
             code,
             platform,
-            redis: getAgentRuntimeRedisClient(),
+            redis,
           });
           if (!entry) {
             await ctx.post(renderCommandReply('cmdApproveUnknownCode', ctx.replyLocale));
             return;
           }
 
-          // Persist the applicant to allowFrom. Read-modify-write so we
-          // preserve every other settings field; `model.update` would
-          // otherwise lodash-merge over only the fields we pass.
+          // Persist the applicant to allowFrom BEFORE deleting the Redis
+          // entry. If persistence fails (transient DB error, missing
+          // provider row), the code stays valid so the owner can retry
+          // — otherwise the applicant is locked out and we'd need a
+          // fresh code from them. Read-modify-write so we preserve every
+          // other settings field; `model.update` would otherwise
+          // lodash-merge over only the fields we pass.
           const approvedLabel = entry.applicantUserName ?? entry.applicantUserId;
+          let persisted = false;
           try {
             const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
             const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
@@ -1273,10 +1284,37 @@ export class BotMessageRouter {
                 // than re-pairing the user we just approved.
                 await this.invalidateBot(platform, applicationId);
               }
+              // Already on the list counts as a successful approval —
+              // the durable state matches what the owner asked for.
+              persisted = true;
+            } else {
+              log(
+                'command /approve: provider %s not found while approving code=%s',
+                providerId,
+                code,
+              );
             }
           } catch (error) {
             log('command /approve: failed to persist allowFrom for code=%s: %O', code, error);
           }
+
+          if (!persisted) {
+            // Leave the Redis entry intact: the owner can retry the same
+            // /approve once the underlying issue clears, without forcing
+            // the applicant to mint a new code. Release the peek claim
+            // so the retry isn't blocked behind our own lock.
+            await releasePairingClaim({ applicationId, code, platform, redis });
+            await ctx.post(renderCommandReply('cmdApproveFailed', ctx.replyLocale));
+            return;
+          }
+
+          await deletePairingRequest({
+            applicationId,
+            applicantUserId: entry.applicantUserId,
+            code,
+            platform,
+            redis,
+          });
 
           // Notify the applicant in their own DM thread, in the locale
           // they originally DMed in (owner's locale may differ).

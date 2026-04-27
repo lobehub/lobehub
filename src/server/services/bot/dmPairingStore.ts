@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 
 import debug from 'debug';
 import type Redis from 'ioredis';
@@ -21,6 +21,14 @@ export const PAIRING_TTL_SECONDS = 3600;
  * legitimate bot rarely sees that many fresh strangers per hour.
  */
 export const PAIRING_MAX_PENDING_PER_BOT = 50;
+
+/**
+ * How long a single `/approve` handler is granted exclusive access to a
+ * code after `peekPairingRequest` returns. Long enough to cover normal DB
+ * persistence; short enough that a crashed handler doesn't permanently
+ * block the operator from retrying.
+ */
+const PAIRING_CLAIM_TTL_SECONDS = 60;
 
 /**
  * Crockford Base32 alphabet (no I/L/O/U, no 0/1) — chosen because the code
@@ -63,15 +71,17 @@ export type CreatePairingResult =
   | { status: 'capacity-exceeded' | 'redis-unavailable' };
 
 /**
- * Generate a fresh pairing code. Uses `crypto.randomBytes` (CSPRNG) rather
- * than `Math.random` because the code gates write access to allowFrom —
- * predictable codes would let a stranger preempt the owner's approval.
+ * Generate a fresh pairing code. Uses `crypto.randomInt` (CSPRNG with
+ * rejection sampling) rather than `Math.random` because the code gates
+ * write access to allowFrom — predictable codes would let a stranger
+ * preempt the owner's approval. `randomInt` is preferred over
+ * `randomBytes() % N` because the alphabet length (30) doesn't divide 256
+ * evenly, so a naive modulo would bias toward earlier characters.
  */
 export function generatePairingCode(): string {
-  const bytes = randomBytes(CODE_LENGTH);
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i += 1) {
-    code += CROCKFORD_ALPHABET[bytes[i] % CROCKFORD_ALPHABET.length];
+    code += CROCKFORD_ALPHABET[randomInt(CROCKFORD_ALPHABET.length)];
   }
   return code;
 }
@@ -84,6 +94,9 @@ const applicantKey = (platform: string, applicationId: string, applicantUserId: 
 
 const activeSetKey = (platform: string, applicationId: string): string =>
   `bot:dm-pairing:active:${platform}:${applicationId}`;
+
+const claimKey = (platform: string, applicationId: string, code: string): string =>
+  `bot:dm-pairing:claim:${platform}:${applicationId}:${code}`;
 
 /**
  * Create a pending pairing request, or return the applicant's existing one
@@ -132,7 +145,15 @@ export async function createOrGetPairingRequest(params: {
     // Index pointed to an expired code — fall through and mint a fresh one.
   }
 
-  const activeCount = await redis.scard(sKey);
+  // The active set is a ZSET scored by per-entry expiry. Codes only get
+  // SREM'd on explicit approval, so codes that expire naturally (the
+  // common case for abandoned requests) would otherwise linger and wedge
+  // the capacity gate at 50 forever. Drop the dead members before counting.
+  const createdAt = Date.now();
+  const expiresAt = createdAt + PAIRING_TTL_SECONDS * 1000;
+  await redis.zremrangebyscore(sKey, 0, createdAt);
+
+  const activeCount = await redis.zcard(sKey);
   if (activeCount >= PAIRING_MAX_PENDING_PER_BOT) {
     log(
       'createOrGetPairingRequest: capacity %d/%d exceeded for platform=%s, app=%s',
@@ -157,7 +178,7 @@ export async function createOrGetPairingRequest(params: {
     applicantUserName: applicant.applicantUserName,
     applicationId,
     code,
-    createdAt: Date.now(),
+    createdAt,
     platform,
     replyLocale: applicant.replyLocale,
     threadId: applicant.threadId,
@@ -167,7 +188,7 @@ export async function createOrGetPairingRequest(params: {
     .multi()
     .set(codeKey(platform, applicationId, code), JSON.stringify(entry), 'EX', PAIRING_TTL_SECONDS)
     .set(aKey, code, 'EX', PAIRING_TTL_SECONDS)
-    .sadd(sKey, code)
+    .zadd(sKey, expiresAt, code)
     .expire(sKey, PAIRING_TTL_SECONDS)
     .exec();
 
@@ -182,15 +203,23 @@ export async function createOrGetPairingRequest(params: {
 }
 
 /**
- * Atomically claim a pending request by code and remove its bookkeeping.
+ * Look up a pending request by code, taking a single-winner claim on it
+ * for the duration of the caller's downstream work.
  *
- * Returns the persisted `PairingEntry` so callers can act on the
- * applicant's identity / thread / locale, or `null` when the code is
- * unknown / expired / already consumed. Two simultaneous `/approve`s for
- * the same code are safe: only one returns the entry; the other gets
- * `null` because the cleanup multi has already run.
+ * Returns the persisted `PairingEntry`, or `null` when the code is
+ * unknown / expired / malformed, or when another caller already holds
+ * the claim (the GET/MULTI-DEL split would otherwise race: two concurrent
+ * `/approve` calls could both read the entry before either's cleanup
+ * runs and end up sending duplicate approvals to the applicant).
+ *
+ * The entry itself is left in Redis so the caller can pair this with
+ * `deletePairingRequest` (on success) or `releasePairingClaim` (on
+ * persistence failure, so the operator can retry without forcing the
+ * applicant to mint a new code). The claim auto-expires after
+ * `PAIRING_CLAIM_TTL_SECONDS` so a crashed handler doesn't permanently
+ * block retry.
  */
-export async function consumePairingRequest(params: {
+export async function peekPairingRequest(params: {
   applicationId: string;
   code: string;
   platform: string;
@@ -203,31 +232,127 @@ export async function consumePairingRequest(params: {
   if (!normalized) return null;
 
   const cKey = codeKey(platform, applicationId, normalized);
-  const raw = await redis.get(cKey);
-  if (!raw) return null;
+  const lockKey = claimKey(platform, applicationId, normalized);
 
-  let entry: PairingEntry;
-  try {
-    entry = JSON.parse(raw) as PairingEntry;
-  } catch (error) {
-    log('consumePairingRequest: failed to parse entry for code=%s: %O', normalized, error);
-    await redis.del(cKey);
+  // Atomic single-winner claim. SET NX returns null when the lock is
+  // already held — the loser bails out as if the code didn't exist
+  // (which from their perspective it effectively doesn't, because a
+  // peer is mid-approval).
+  const acquired = await redis.set(lockKey, '1', 'EX', PAIRING_CLAIM_TTL_SECONDS, 'NX');
+  if (!acquired) {
+    log('peekPairingRequest: lost claim race for code=%s', normalized);
     return null;
   }
 
+  const raw = await redis.get(cKey);
+  if (!raw) {
+    // Code expired or never existed — release the claim immediately so
+    // the next caller doesn't sit behind a phantom lock for 60s.
+    await redis.del(lockKey);
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as PairingEntry;
+  } catch (error) {
+    log('peekPairingRequest: failed to parse entry for code=%s: %O', normalized, error);
+    // Malformed entries can never be approved — drop them so they don't
+    // sit around forever consuming a slot in the active set, and clear
+    // our own claim while we're at it.
+    await redis
+      .multi()
+      .del(cKey)
+      .del(lockKey)
+      .zrem(activeSetKey(platform, applicationId), normalized)
+      .exec();
+    return null;
+  }
+}
+
+/**
+ * Release the peek claim without removing the underlying entry. Used
+ * when downstream persistence fails: the operator should be able to
+ * retry `/approve` immediately rather than waiting out the claim TTL.
+ */
+export async function releasePairingClaim(params: {
+  applicationId: string;
+  code: string;
+  platform: string;
+  redis: Redis | null;
+}): Promise<void> {
+  const { applicationId, code, platform, redis } = params;
+  if (!redis) return;
+
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return;
+
+  await redis.del(claimKey(platform, applicationId, normalized));
+}
+
+/**
+ * Tear down all bookkeeping for a pairing request once it has been
+ * successfully approved (or otherwise resolved). Idempotent: a second
+ * call after the keys are gone is a no-op against Redis.
+ */
+export async function deletePairingRequest(params: {
+  applicationId: string;
+  applicantUserId: string;
+  code: string;
+  platform: string;
+  redis: Redis | null;
+}): Promise<void> {
+  const { applicationId, applicantUserId, code, platform, redis } = params;
+  if (!redis) return;
+
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return;
+
   await redis
     .multi()
-    .del(cKey)
-    .del(applicantKey(platform, applicationId, entry.applicantUserId))
-    .srem(activeSetKey(platform, applicationId), normalized)
+    .del(codeKey(platform, applicationId, normalized))
+    .del(applicantKey(platform, applicationId, applicantUserId))
+    .del(claimKey(platform, applicationId, normalized))
+    .zrem(activeSetKey(platform, applicationId), normalized)
     .exec();
 
   log(
-    'consumePairingRequest: consumed code for applicant=%s, platform=%s, app=%s',
-    entry.applicantUserId,
+    'deletePairingRequest: cleared code for applicant=%s, platform=%s, app=%s',
+    applicantUserId,
     platform,
     applicationId,
   );
+}
+
+/**
+ * Claim a pending request by code and remove its bookkeeping.
+ *
+ * Returns the persisted `PairingEntry` so callers can act on the
+ * applicant's identity / thread / locale, or `null` when the code is
+ * unknown / expired / already consumed / lost to a concurrent caller.
+ * Atomicity is enforced by `peekPairingRequest`'s claim lock — two
+ * simultaneous `/approve`s for the same code see only one winner.
+ *
+ * Prefer `peekPairingRequest` + `deletePairingRequest` (with
+ * `releasePairingClaim` on failure) when downstream persistence can
+ * fail — consuming the code before persistence loses the code on a
+ * transient error.
+ */
+export async function consumePairingRequest(params: {
+  applicationId: string;
+  code: string;
+  platform: string;
+  redis: Redis | null;
+}): Promise<PairingEntry | null> {
+  const entry = await peekPairingRequest(params);
+  if (!entry) return null;
+
+  await deletePairingRequest({
+    applicationId: params.applicationId,
+    applicantUserId: entry.applicantUserId,
+    code: params.code,
+    platform: params.platform,
+    redis: params.redis,
+  });
 
   return entry;
 }

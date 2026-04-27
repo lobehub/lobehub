@@ -206,6 +206,7 @@ export function renderFinalReply(content: string): string {
  */
 type SystemStrings = {
   cmdApproveDisabled: string;
+  cmdApproveFailed: string;
   cmdApproveNotOwner: string;
   cmdApproveSuccess: (label: string) => string;
   cmdApproveUnknownCode: string;
@@ -241,6 +242,8 @@ type SystemStrings = {
 const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
   'en-US': {
     cmdApproveDisabled: 'Pairing is not enabled on this bot.',
+    cmdApproveFailed:
+      "Couldn't save the approval — the bot's settings may be unavailable. The pairing code is still valid; please try `/approve` again in a moment.",
     cmdApproveNotOwner: 'Only the bot owner can approve pairing requests.',
     cmdApproveSuccess: (label) => `Approved ${label}.`,
     cmdApproveUnknownCode: 'That pairing code is unknown or has expired.',
@@ -276,6 +279,7 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
   },
   'zh-CN': {
     cmdApproveDisabled: '该机器人未启用配对审批模式。',
+    cmdApproveFailed: '保存审批失败，机器人设置暂不可用。配对码仍然有效，请稍后重试 `/approve`。',
     cmdApproveNotOwner: '只有机器人管理员可以审批配对请求。',
     cmdApproveSuccess: (label) => `已审批 ${label}。`,
     cmdApproveUnknownCode: '该配对码不存在或已过期。',
@@ -337,6 +341,7 @@ export function renderInlineError(message: string, lng?: BotReplyLocale): string
 
 export type CommandReplyKey =
   | 'cmdApproveDisabled'
+  | 'cmdApproveFailed'
   | 'cmdApproveNotOwner'
   | 'cmdApproveUnknownCode'
   | 'cmdApproveUsage'
