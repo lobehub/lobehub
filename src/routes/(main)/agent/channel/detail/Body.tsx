@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Form, FormGroup, FormItem, Tag } from '@lobehub/ui';
+import { Flexbox, Form, FormGroup, FormItem, Tag, Text } from '@lobehub/ui';
 import {
   Button,
   Form as AntdForm,
@@ -123,10 +123,26 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
     }
     case 'string': {
       if (field.enum) {
+        const hasDescriptions = field.enumDescriptions?.some(Boolean);
         children = (
           <Select
             placeholder={field.placeholder}
+            optionRender={
+              hasDescriptions
+                ? (item) => (
+                    <Flexbox horizontal align="center" gap={12} justify="space-between">
+                      <span>{item.label}</span>
+                      {item.data.description ? (
+                        <Text fontSize={12} type="secondary">
+                          {item.data.description}
+                        </Text>
+                      ) : null}
+                    </Flexbox>
+                  )
+                : undefined
+            }
             options={field.enum.map((value, i) => ({
+              description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
               label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
               value,
             }))}

@@ -189,6 +189,47 @@ describe('HookDispatcher', () => {
       expect(body.hookId).toBe('custom-body-hook');
     });
 
+    it('should only include selected event fields when eventFields is set', async () => {
+      dispatcher.register(operationId, [
+        {
+          handler: vi.fn(),
+          id: 'projected-hook',
+          type: 'onError',
+          webhook: {
+            body: { taskId: 'task_123' },
+            eventFields: ['errorMessage', 'reason', 'topicId'],
+            url: 'https://example.com/hook',
+          },
+        },
+      ]);
+
+      const serialized = dispatcher.getSerializedHooks(operationId);
+      await dispatcher.dispatch(
+        operationId,
+        'onError',
+        makeEvent({
+          errorDetail: 'internal raw error',
+          errorMessage: 'Public error',
+          finalState: { status: 'error' },
+          lastAssistantContent: 'private assistant output',
+          reason: 'error',
+          topicId: 'topic_123',
+        }),
+        serialized,
+      );
+
+      const call = vi.mocked(global.fetch).mock.calls[0];
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body).toEqual({
+        errorMessage: 'Public error',
+        hookId: 'projected-hook',
+        hookType: 'onError',
+        reason: 'error',
+        taskId: 'task_123',
+        topicId: 'topic_123',
+      });
+    });
+
     it('should not call local handler in production mode', async () => {
       const handler = vi.fn();
       dispatcher.register(operationId, [

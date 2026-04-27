@@ -13,6 +13,7 @@ export {
   allowFromField,
   type BotReplyLocale,
   displayToolCallsField,
+  type DmDecision,
   type DmPolicy,
   type DmSettings,
   extractDmSettings,
@@ -24,6 +25,7 @@ export {
   type GroupSettings,
   makeDmPolicyField,
   makeGroupPolicyFields,
+  normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   RECEIVED_REACTION_EMOJI,
   serverIdField,
@@ -33,6 +35,7 @@ export {
   THINKING_REACTION_EMOJI,
   type UserAllowlist,
   userIdField,
+  validateAccessSettings,
   WORKING_REACTION_EMOJI,
 } from './const';
 export { PlatformRegistry } from './registry';

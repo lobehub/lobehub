@@ -14,15 +14,23 @@ import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
 import {
+  createOrGetPairingRequest,
+  deletePairingRequest,
+  peekPairingRequest,
+  releasePairingClaim,
+} from './dmPairingStore';
+import {
   type BotPlatformRuntimeContext,
   type BotReplyLocale,
   buildRuntimeKey,
+  type DmDecision,
   type DmSettings,
   extractDmSettings,
   extractGroupSettings,
   extractUserAllowlist,
   getBotReplyLocale,
   type GroupSettings,
+  normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   type PlatformClient,
   type PlatformDefinition,
@@ -34,7 +42,9 @@ import {
   type UserAllowlist,
 } from './platforms';
 import {
+  renderApproveSuccess,
   renderCommandReply,
+  renderDmPairing,
   renderDmRejected,
   renderError,
   renderGroupRejected,
@@ -89,6 +99,14 @@ interface RegisteredBot {
 interface CommandContext {
   /** Text after the command name (e.g. "/new foo" → "foo"). */
   args: string;
+  /** Platform user ID of the invoking user. Optional because the source
+   *  event may not carry one (best-effort), but commands that gate on
+   *  identity (e.g. `/approve` requires the owner) treat its absence as
+   *  failure. */
+  authorUserId?: string;
+  /** Display name of the invoking user. Optional because some platforms
+   *  surface only the ID, not a friendly label. */
+  authorUserName?: string;
   post: (text: string) => Promise<any>;
   /** Locale to use for any system-generated reply text. Plumbed in by the
    *  caller — text-based commands derive it per-message via the platform's
@@ -105,6 +123,22 @@ interface BotCommand {
   description: string;
   handler: (ctx: CommandContext) => Promise<void>;
   name: string;
+  /**
+   * Native slash-command argument schema for platforms that require
+   * arguments to be declared up-front (Discord, Slack). Without this,
+   * Discord registers the command as zero-arg — clicking it from the
+   * slash menu fires the handler with `ctx.args` empty even when the
+   * user expected to pass a value. Adapters flatten option values back
+   * into `event.text`, so the handler still reads `ctx.args` as before.
+   *
+   * Text-based platforms (Telegram / Feishu) ignore this and parse args
+   * from the trailing message text via the dispatch regex.
+   */
+  options?: Array<{
+    description: string;
+    name: string;
+    required?: boolean;
+  }>;
 }
 
 /**
@@ -269,7 +303,27 @@ export class BotMessageRouter {
     const client = entry.clientFactory.createClient(providerConfig, runtimeContext);
     const adapters = client.createAdapter();
 
-    const commands = this.buildCommands(serverDB, { agentId, platform, userId });
+    // dmSettings + operatorUserId are needed by `/approve` (to enforce the
+    // owner-only gate and to know whether pairing is even enabled), and by
+    // the DM pairing branch in registerHandlers. Extract once, share with
+    // both — registerHandlers re-derives from `settings` to keep its own
+    // closure-internal contract self-contained.
+    const dmSettings: DmSettings = extractDmSettings(settings);
+    const operatorUserId =
+      typeof settings.userId === 'string'
+        ? (settings.userId as string).trim() || undefined
+        : undefined;
+
+    const commands = this.buildCommands(serverDB, {
+      agentId,
+      applicationId,
+      client,
+      dmSettings,
+      operatorUserId,
+      platform,
+      providerId: provider.id,
+      userId,
+    });
 
     // Default to 'queue' for legacy providers that don't have `concurrency`
     // in their saved settings. Historically this defaulted to 'debounce', but
@@ -297,7 +351,11 @@ export class BotMessageRouter {
 
     // Register platform-specific bot commands (e.g., Telegram setMyCommands menu)
     if (client.registerBotCommands) {
-      const commandList = commands.map((c) => ({ command: c.name, description: c.description }));
+      const commandList = commands.map((c) => ({
+        command: c.name,
+        description: c.description,
+        options: c.options,
+      }));
       client.registerBotCommands(commandList).catch((error) => {
         log('registerBotCommands failed for %s: %O', key, error);
       });
@@ -423,6 +481,17 @@ export class BotMessageRouter {
     const dmSettings: DmSettings = extractDmSettings(info.settings);
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
     const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
+    /**
+     * The provider's owner platform user ID. Only consulted under the
+     * `pairing` policy, where the gate gives the owner a free pass so they
+     * can DM their own bot before any approvals exist (otherwise the
+     * shouldHandleDm gate would tell the owner to ask themselves to
+     * approve via `/approve`).
+     */
+    const operatorUserId =
+      typeof info.settings?.userId === 'string'
+        ? (info.settings.userId as string).trim() || undefined
+        : undefined;
     const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
 
     /**
@@ -451,18 +520,19 @@ export class BotMessageRouter {
 
     /**
      * Gate inbound events on DM policy. Non-DM threads pass through — their
-     * group-policy / @mention rules apply instead. DM threads are blocked
-     * when disabled, and filtered against the global `allowFrom` user list
-     * when set to `allowlist`.
+     * group-policy / @mention rules apply instead. The `'pair'` decision
+     * is distinct from `'reject'` because the router branches on it (issue
+     * a pairing code) — see `passGatesOrNotify` below.
      */
     const passesDmPolicy = (
       thread: { isDM?: boolean },
       message: { author?: { userId?: string } },
-    ): boolean =>
+    ): DmDecision =>
       shouldHandleDm({
         authorUserId: message.author?.userId,
         dmSettings,
         isDM: thread.isDM === true,
+        operatorUserId,
         userAllowlist,
       });
 
@@ -535,9 +605,10 @@ export class BotMessageRouter {
       thread: { post: (text: string) => Promise<unknown> },
       replyLocale: BotReplyLocale,
     ): Promise<void> => {
-      // 'open' should never reach here, but guard anyway so we never post the
+      // 'open' and 'pairing' should never reach here ('pairing' has its own
+      // flow via triggerDmPairing), but guard anyway so we never post the
       // wrong copy if shouldHandleDm grows another false branch.
-      if (dmSettings.policy === 'open') return;
+      if (dmSettings.policy !== 'allowlist' && dmSettings.policy !== 'disabled') return;
       try {
         await thread.post(renderDmRejected(dmSettings.policy, replyLocale));
       } catch (error) {
@@ -562,9 +633,62 @@ export class BotMessageRouter {
       }
     };
 
+    /**
+     * Pairing branch of the DM gate: stranger DMed a bot in `pairing` mode.
+     * Issue (or recycle, when the same applicant DMed within the TTL) a
+     * one-time code, persist a pending entry to Redis so `/approve <code>`
+     * can later append the applicant to `allowFrom`, and post the code in
+     * the applicant's DM thread.
+     *
+     * Best-effort: if Redis is unwired (`'redis-unavailable'`) or the
+     * per-bot pending cap is hit (`'capacity-exceeded'`), surface a useful
+     * status string to the applicant rather than silently dropping them —
+     * silent drops look broken and operators waste time debugging.
+     */
+    const triggerDmPairing = async (
+      thread: { id: string; post: (text: string) => Promise<unknown> },
+      author: { userId?: string; userName?: string },
+      replyLocale: BotReplyLocale,
+    ): Promise<void> => {
+      if (!author.userId) {
+        log(
+          'triggerDmPairing: missing author userId, cannot pair (agent=%s, platform=%s)',
+          agentId,
+          platform,
+        );
+        return;
+      }
+      const result = await createOrGetPairingRequest({
+        applicant: {
+          applicantUserId: author.userId,
+          applicantUserName: author.userName,
+          replyLocale,
+          threadId: thread.id,
+        },
+        applicationId,
+        platform,
+        redis: getAgentRuntimeRedisClient(),
+      });
+      let text: string;
+      if (result.status === 'created' || result.status === 'reused') {
+        text = renderDmPairing('code', replyLocale, { code: result.code });
+      } else if (result.status === 'capacity-exceeded') {
+        text = renderDmPairing('capacity-exceeded', replyLocale);
+      } else {
+        text = renderDmPairing('unavailable', replyLocale);
+      }
+      try {
+        await thread.post(text);
+      } catch (error) {
+        log('triggerDmPairing: failed to post pairing notice: %O', error);
+      }
+    };
+
     /** Try dispatching a text command. Returns true if handled.
      *  Strips platform mention artifacts (e.g. Slack's `<@U123>`) before
-     *  checking so that "@bot /new" correctly resolves to the /new command. */
+     *  checking so that "@bot /new" correctly resolves to the /new command.
+     *  Forwards the inbound `message.author` so commands that gate on
+     *  identity (e.g. `/approve` requires the bot's owner) can verify. */
     const tryDispatch = async (
       thread: {
         id: string;
@@ -572,6 +696,7 @@ export class BotMessageRouter {
         setState: (s: Record<string, any>, o?: { replace?: boolean }) => Promise<any>;
       },
       text: string | undefined,
+      author: { userId?: string; userName?: string } | undefined,
       replyLocale: BotReplyLocale,
     ): Promise<boolean> => {
       const sanitized = client.sanitizeUserInput?.(text ?? '') ?? text;
@@ -579,6 +704,8 @@ export class BotMessageRouter {
       if (!result) return false;
       await result.command.handler({
         args: result.args,
+        authorUserId: author?.userId,
+        authorUserName: author?.userName,
         post: (t) => thread.post(t),
         replyLocale,
         setState: (s, o) => thread.setState(s, o),
@@ -612,7 +739,34 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
       caller: string,
     ): Promise<boolean> => {
-      if (!passesGlobalAllowlist({ author })) {
+      // Owner override. The bot's operator (`settings.userId`) sets the
+      // policies for *other* users — locking themselves out of their own
+      // bot is a footgun. Without this branch:
+      // - `/approve` in any group channel that isn't in `groupAllowFrom`
+      //   gets rejected by the group gate, breaking the approval flow
+      //   from a not-yet-allowed channel (Discord native slash commands
+      //   in particular sometimes report `event.channel.isDM=false` for
+      //   DM invocations, putting the gate on the group branch).
+      // - DMing a `disabled` bot for a self-test gets blocked.
+      // The override is unconditional on author identity, so non-command
+      // messages from the operator also pass — that matches the existing
+      // implicit-merge of `settings.userId` into `extractUserAllowlist`,
+      // which already treats the operator as always-allowed.
+      if (operatorUserId && author.userId === operatorUserId) {
+        return true;
+      }
+      // Pairing redefines what `allowFrom` means: it's the *post-approval*
+      // list (managed by `/approve`), not a hard identity gate. A stranger
+      // DMing a pairing bot must reach the DM gate's `'pair'` branch so we
+      // can issue them a code — but the global allowFrom gate would
+      // otherwise short-circuit them out at step 1 (since they're not yet
+      // approved). Skip the global gate for DM threads under pairing so
+      // the DM gate alone governs user filtering. Other policies are
+      // unaffected: `open` keeps allowFrom as an extra lockdown layer,
+      // `allowlist` resolves to the same list either way, `disabled`
+      // rejects regardless.
+      const isPairingDm = thread.isDM === true && dmSettings.policy === 'pairing';
+      if (!isPairingDm && !passesGlobalAllowlist({ author })) {
         log(
           '%s: sender blocked by allowFrom, agent=%s, platform=%s, thread=%s, author=%s',
           caller,
@@ -636,20 +790,24 @@ export class BotMessageRouter {
         await notifyGroupRejected(thread, replyLocale);
         return false;
       }
-      if (!passesDmPolicy(thread, { author })) {
-        log(
-          '%s: DM blocked by policy, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
-          caller,
-          agentId,
-          platform,
-          thread.id,
-          author.userName ?? author.userId,
-          dmSettings.policy,
-        );
+      const dmDecision = passesDmPolicy(thread, { author });
+      if (dmDecision === 'allow') return true;
+      log(
+        '%s: DM gate=%s, agent=%s, platform=%s, thread=%s, author=%s, policy=%s',
+        caller,
+        dmDecision,
+        agentId,
+        platform,
+        thread.id,
+        author.userName ?? author.userId,
+        dmSettings.policy,
+      );
+      if (dmDecision === 'pair') {
+        await triggerDmPairing(thread, author, replyLocale);
+      } else {
         await notifyDmRejected(thread, replyLocale);
-        return false;
       }
-      return true;
+      return false;
     };
 
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
@@ -661,7 +819,7 @@ export class BotMessageRouter {
         return;
       }
 
-      if (await tryDispatch(thread, message.text, replyLocale)) return;
+      if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
 
       log(
         'onNewMention raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -769,7 +927,7 @@ export class BotMessageRouter {
         return;
       }
 
-      if (await tryDispatch(thread, message.text, replyLocale)) return;
+      if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
 
       log(
         'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -970,14 +1128,38 @@ export class BotMessageRouter {
    * Build the list of bot commands. Each entry defines a name, description,
    * and handler. To add a new command, just append to this array.
    *
-   * Handlers close over serverDB / userId / agentId / platform so they can
-   * access services without needing those passed through CommandContext.
+   * Handlers close over `info` so they can reach services and the bot's
+   * own configuration (DM policy, owner identity, applicationId) without
+   * needing every command entry threaded through CommandContext.
    */
   private buildCommands(
     serverDB: LobeChatDatabase,
-    info: { agentId: string; platform: string; userId: string },
+    info: {
+      agentId: string;
+      applicationId: string;
+      /** PlatformClient used to message the applicant after a successful
+       *  `/approve`; the owner runs the command in their own thread, but
+       *  the applicant's notification has to land in the applicant's DM. */
+      client: PlatformClient;
+      dmSettings: DmSettings;
+      operatorUserId?: string;
+      platform: string;
+      /** DB row id of the agent_bot_providers row for this bot — used by
+       *  `/approve` to append a fresh applicant to `settings.allowFrom`. */
+      providerId: string;
+      userId: string;
+    },
   ): BotCommand[] {
-    const { agentId, platform, userId } = info;
+    const {
+      agentId,
+      applicationId,
+      client,
+      dmSettings,
+      operatorUserId,
+      platform,
+      providerId,
+      userId,
+    } = info;
 
     return [
       {
@@ -1022,6 +1204,132 @@ export class BotMessageRouter {
           await ctx.post(renderCommandReply('cmdStopRequested', ctx.replyLocale));
         },
         name: 'stop',
+      },
+      {
+        description: 'Approve a pairing request: /approve <code>',
+        options: [
+          {
+            description: 'The 8-character pairing code shown to the applicant',
+            name: 'code',
+            required: true,
+          },
+        ],
+        handler: async (ctx) => {
+          log(
+            'command /approve: agent=%s, platform=%s, author=%s',
+            agentId,
+            platform,
+            ctx.authorUserName ?? ctx.authorUserId,
+          );
+
+          if (dmSettings.policy !== 'pairing') {
+            await ctx.post(renderCommandReply('cmdApproveDisabled', ctx.replyLocale));
+            return;
+          }
+
+          // Owner check: the gate in passGatesOrNotify already lets the
+          // operator through (operator bypass for pairing), but a
+          // pre-approved third party would also pass that gate. The
+          // command itself enforces owner-only at the action layer.
+          if (!operatorUserId || !ctx.authorUserId || ctx.authorUserId !== operatorUserId) {
+            await ctx.post(renderCommandReply('cmdApproveNotOwner', ctx.replyLocale));
+            return;
+          }
+
+          const code = ctx.args.toUpperCase().trim();
+          if (!code) {
+            await ctx.post(renderCommandReply('cmdApproveUsage', ctx.replyLocale));
+            return;
+          }
+
+          const redis = getAgentRuntimeRedisClient();
+          const entry = await peekPairingRequest({
+            applicationId,
+            code,
+            platform,
+            redis,
+          });
+          if (!entry) {
+            await ctx.post(renderCommandReply('cmdApproveUnknownCode', ctx.replyLocale));
+            return;
+          }
+
+          // Persist the applicant to allowFrom BEFORE deleting the Redis
+          // entry. If persistence fails (transient DB error, missing
+          // provider row), the code stays valid so the owner can retry
+          // — otherwise the applicant is locked out and we'd need a
+          // fresh code from them. Read-modify-write so we preserve every
+          // other settings field; `model.update` would otherwise
+          // lodash-merge over only the fields we pass.
+          const approvedLabel = entry.applicantUserName ?? entry.applicantUserId;
+          let persisted = false;
+          try {
+            const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+            const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
+            const provider = await model.findById(providerId);
+            if (provider) {
+              const settings = (provider.settings ?? {}) as Record<string, unknown>;
+              const entries = normalizeAllowFromEntries(settings.allowFrom);
+              if (!entries.some((e) => e.id === entry.applicantUserId)) {
+                entries.push(
+                  entry.applicantUserName
+                    ? { id: entry.applicantUserId, name: entry.applicantUserName }
+                    : { id: entry.applicantUserId },
+                );
+                await model.update(providerId, {
+                  settings: { ...settings, allowFrom: entries },
+                });
+                // The router caches RegisteredBot by key; drop it so the
+                // next inbound DM rebuilds with fresh allowFrom rather
+                // than re-pairing the user we just approved.
+                await this.invalidateBot(platform, applicationId);
+              }
+              // Already on the list counts as a successful approval —
+              // the durable state matches what the owner asked for.
+              persisted = true;
+            } else {
+              log(
+                'command /approve: provider %s not found while approving code=%s',
+                providerId,
+                code,
+              );
+            }
+          } catch (error) {
+            log('command /approve: failed to persist allowFrom for code=%s: %O', code, error);
+          }
+
+          if (!persisted) {
+            // Leave the Redis entry intact: the owner can retry the same
+            // /approve once the underlying issue clears, without forcing
+            // the applicant to mint a new code. Release the peek claim
+            // so the retry isn't blocked behind our own lock.
+            await releasePairingClaim({ applicationId, code, platform, redis });
+            await ctx.post(renderCommandReply('cmdApproveFailed', ctx.replyLocale));
+            return;
+          }
+
+          await deletePairingRequest({
+            applicationId,
+            applicantUserId: entry.applicantUserId,
+            code,
+            platform,
+            redis,
+          });
+
+          // Notify the applicant in their own DM thread, in the locale
+          // they originally DMed in (owner's locale may differ).
+          try {
+            const messenger = client.getMessenger(entry.threadId);
+            await messenger.createMessage(
+              renderCommandReply('dmPairingApplicantApproved', entry.replyLocale),
+            );
+          } catch (error) {
+            log('command /approve: failed to notify applicant for code=%s: %O', code, error);
+          }
+
+          await ctx.post(renderApproveSuccess(approvedLabel, ctx.replyLocale));
+        },
+        name: 'approve',
       },
     ];
   }
@@ -1093,6 +1401,8 @@ export class BotMessageRouter {
         }
         await cmd.handler({
           args: event.text,
+          authorUserId: authorLike.userId,
+          authorUserName: authorLike.userName,
           post: (text) => event.channel.post(text),
           // Native slash-command events don't carry a Chat SDK Message, so
           // there's no per-sender locale field to read; use the channel
@@ -1126,6 +1436,8 @@ export class BotMessageRouter {
       }
       await result.command.handler({
         args: result.args,
+        authorUserId: message.author?.userId,
+        authorUserName: message.author?.userName,
         post: (text) => thread.post(text),
         replyLocale,
         setState: (state, opts) => thread.setState(state, opts),

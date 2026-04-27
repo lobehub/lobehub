@@ -7,6 +7,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
+import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -35,6 +36,11 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const operationState = useOperationState(context);
+
+  const runningOperation = useTaskStore(
+    (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
+  );
+  useGatewayReconnect(topicId, runningOperation);
 
   const itemContent = useCallback(
     (index: number, id: string) => (

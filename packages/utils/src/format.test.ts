@@ -185,6 +185,19 @@ describe('format', () => {
       expect(formatPrice(0.99)).toBe('0.99');
       expect(formatPrice(1000000.01, 0)).toBe('1,000,000');
     });
+
+    it('should expand precision when a positive price would round to zero', () => {
+      expect(formatPrice(0.003625)).toBe('0.004');
+      expect(formatPrice(0.0001)).toBe('0.0001');
+      expect(formatPrice(0)).toBe('0.00');
+    });
+
+    it('should not throw RangeError for sub-1e-100 prices', () => {
+      // Number.prototype.toFixed accepts digits in [0, 100]; without a clamp
+      // Math.ceil(-Math.log10(price)) can exceed that and throw RangeError.
+      expect(() => formatPrice(1e-101)).not.toThrow();
+      expect(() => formatPrice(Number.MIN_VALUE)).not.toThrow();
+    });
   });
 
   describe('formatPriceByCurrency', () => {

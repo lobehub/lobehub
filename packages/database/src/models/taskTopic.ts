@@ -181,6 +181,7 @@ export class TaskTopicModel {
       .select({
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
+        metadata: topics.metadata,
         seq: taskTopics.seq,
         status: taskTopics.status,
         title: topics.title,

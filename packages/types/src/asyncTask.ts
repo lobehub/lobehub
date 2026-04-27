@@ -23,16 +23,17 @@ export enum AsyncTaskErrorType {
   FreePlanLimit = 'FreePlanLimit',
 
   InvalidProviderAPIKey = 'InvalidProviderAPIKey',
-  /* ↑ cloud slot ↑ */
-
   /**
    * Model not found on server
    */
   ModelNotFound = 'ModelNotFound',
+  /* ↑ cloud slot ↑ */
+
   /**
    * the chunk parse result it empty
    */
   NoChunkError = 'NoChunkError',
+  ProviderContentModeration = 'ProviderContentModeration',
   ServerError = 'ServerError',
   /**
    * Subscription plan limit reached (paid users run out of credits)

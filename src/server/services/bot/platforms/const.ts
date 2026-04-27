@@ -1,7 +1,7 @@
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
 
-import type { FieldSchema } from './types';
+import type { FieldSchema, ValidationResult } from './types';
 
 export const displayToolCallsField: FieldSchema = {
   key: 'displayToolCalls',
@@ -118,7 +118,7 @@ export function normalizeBotReplyLocale(
  * crosses scopes (`allowFrom` is consulted by every gate); a prefixed name
  * advertises the field is the property of one specific scope.
  */
-export type DmPolicy = 'open' | 'allowlist' | 'disabled';
+export type DmPolicy = 'open' | 'allowlist' | 'pairing' | 'disabled';
 
 /** User-ID allowlist shared across user-scope policies (DM today). */
 export interface UserAllowlist {
@@ -138,7 +138,7 @@ export interface GroupSettings {
   policy: GroupPolicy;
 }
 
-const DM_POLICIES: ReadonlySet<DmPolicy> = new Set(['open', 'allowlist', 'disabled']);
+const DM_POLICIES: ReadonlySet<DmPolicy> = new Set(['open', 'allowlist', 'pairing', 'disabled']);
 const GROUP_POLICIES: ReadonlySet<GroupPolicy> = new Set(['open', 'allowlist', 'disabled']);
 
 /**
@@ -149,6 +149,12 @@ const GROUP_POLICIES: ReadonlySet<GroupPolicy> = new Set(['open', 'allowlist', '
  * - `allowlist`: DMs require the sender to be in the global `allowFrom`
  *   list. Distinct from `open` only when `allowFrom` is empty: `allowlist`
  *   then **fails closed** (no DMs), while `open` still lets anyone DM.
+ * - `pairing`: same gate as `allowlist`, but a non-listed sender receives a
+ *   one-time pairing code instead of a flat rejection. The owner approves
+ *   via `/approve <code>`, which appends the applicant to `allowFrom` so
+ *   subsequent DMs flow normally. Requires `settings.userId` (the owner's
+ *   platform user ID, used both as approver identity and as the implicit
+ *   "always allowed" sender for an empty allowFrom).
  * - `disabled`: ignore all DMs (the sender gets a one-line system reply
  *   pointing them at @mentioning the bot in a shared channel instead)
  */
@@ -157,8 +163,19 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
     key: 'dmPolicy',
     default: defaults.policy,
     description: 'channel.dmPolicyHint',
-    enum: ['open', 'allowlist', 'disabled'],
-    enumLabels: ['channel.dmPolicyOpen', 'channel.dmPolicyAllowlist', 'channel.dmPolicyDisabled'],
+    enum: ['open', 'allowlist', 'pairing', 'disabled'],
+    enumDescriptions: [
+      'channel.dmPolicyOpenHint',
+      'channel.dmPolicyAllowlistHint',
+      'channel.dmPolicyPairingHint',
+      'channel.dmPolicyDisabledHint',
+    ],
+    enumLabels: [
+      'channel.dmPolicyOpen',
+      'channel.dmPolicyAllowlist',
+      'channel.dmPolicyPairing',
+      'channel.dmPolicyDisabled',
+    ],
     label: 'channel.dmPolicy',
     type: 'string',
   };
@@ -223,6 +240,11 @@ export function makeGroupPolicyFields(defaults: { policy: GroupPolicy }): FieldS
       default: defaults.policy,
       description: 'channel.groupPolicyHint',
       enum: ['open', 'allowlist', 'disabled'],
+      enumDescriptions: [
+        'channel.groupPolicyOpenHint',
+        'channel.groupPolicyAllowlistHint',
+        'channel.groupPolicyDisabledHint',
+      ],
       enumLabels: [
         'channel.groupPolicyOpen',
         'channel.groupPolicyAllowlist',
@@ -260,6 +282,45 @@ export function makeGroupPolicyFields(defaults: { policy: GroupPolicy }): FieldS
       visibleWhen: { field: 'groupPolicy', value: 'allowlist' },
     },
   ];
+}
+
+/**
+ * Like {@link parseIdList} but preserves `name` so writers (e.g. the
+ * pairing approval flow) can round-trip the operator-facing labels rather
+ * than collapsing every entry to a bare ID. Same back-compat coverage:
+ * accepts the current `{ id, name? }[]`, the legacy `string[]`, and the
+ * original comma-separated string shape.
+ */
+export function normalizeAllowFromEntries(raw: unknown): Array<{ id: string; name?: string }> {
+  if (typeof raw === 'string') {
+    return raw
+      .split(/[\s,]+/)
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => ({ id }));
+  }
+  if (Array.isArray(raw)) {
+    const out: Array<{ id: string; name?: string }> = [];
+    for (const entry of raw) {
+      if (typeof entry === 'string') {
+        const id = entry.trim();
+        if (id) out.push({ id });
+        continue;
+      }
+      if (entry && typeof entry === 'object' && 'id' in entry) {
+        const id = (entry as { id?: unknown }).id;
+        if (typeof id !== 'string' || !id.trim()) continue;
+        const name = (entry as { name?: unknown }).name;
+        out.push(
+          typeof name === 'string' && name.trim()
+            ? { id: id.trim(), name: name.trim() }
+            : { id: id.trim() },
+        );
+      }
+    }
+    return out;
+  }
+  return [];
 }
 
 /**
@@ -366,34 +427,59 @@ export function shouldAllowSender(params: {
 }
 
 /**
+ * Three-state outcome of the DM gate. `pair` is distinct from `reject`
+ * because the router branches on it (issue a pairing code instead of
+ * dropping the sender). Existing pass / fail call-sites can keep treating
+ * `'pair'` as not-allow — the only thing that promotes pairing into a
+ * useful behaviour is the router's pairing branch.
+ */
+export type DmDecision = 'allow' | 'pair' | 'reject';
+
+/**
  * Gate inbound DM handling. Non-DM threads pass through unconditionally —
  * those are governed by `shouldHandleGroup` instead.
  *
  * Callers are expected to apply {@link shouldAllowSender} first, so this
  * function only encodes the per-scope semantics:
  *
- * - `policy='disabled'` → block all DMs.
- * - `policy='open'` → allow any sender (the global `allowFrom` filter, if
+ * - `policy='disabled'` → `'reject'` for everyone.
+ * - `policy='open'` → `'allow'` (the global `allowFrom` filter, when
  *   populated, is enforced earlier by the caller).
- * - `policy='allowlist'` → require the sender to be in the global
- *   `userAllowlist`, **and fail closed when the list is empty** (this is
- *   the only behavioural difference from `open`; `open` lets anyone DM
- *   when `allowFrom` is empty, `allowlist` does not).
+ * - `policy='allowlist'` → `'allow'` for senders in `userAllowlist`,
+ *   `'reject'` otherwise. Fails closed when the list is empty (this is
+ *   the only behavioural difference from `open`).
+ * - `policy='pairing'` → same gate as `allowlist`, but a non-listed sender
+ *   gets `'pair'` instead of `'reject'` so the router can issue a pairing
+ *   code. The owner (`operatorUserId`) is implicitly always allowed —
+ *   without this, a fresh pairing bot with an empty allowFrom would refuse
+ *   its own owner's DMs and they'd be told to ask themselves to approve.
  */
 export function shouldHandleDm(params: {
   authorUserId: string | undefined;
   dmSettings: DmSettings;
   isDM: boolean;
+  /**
+   * The owning operator's platform user ID (`settings.userId`). Only
+   * consulted under `pairing` policy, where the owner bypasses the
+   * allowlist gate so they can DM their own bot before anyone is
+   * approved. Pass `undefined` for non-pairing policies — the validator
+   * already enforces presence at save time for pairing.
+   */
+  operatorUserId?: string;
   userAllowlist: UserAllowlist;
-}): boolean {
-  const { authorUserId, dmSettings, isDM, userAllowlist } = params;
-  if (!isDM) return true;
-  if (dmSettings.policy === 'disabled') return false;
-  if (dmSettings.policy === 'open') return true;
-  // allowlist: require non-empty list AND user in it (fail closed otherwise)
-  if (!authorUserId) return false;
-  if (userAllowlist.ids.length === 0) return false;
-  return userAllowlist.ids.includes(authorUserId);
+}): DmDecision {
+  const { authorUserId, dmSettings, isDM, operatorUserId, userAllowlist } = params;
+  if (!isDM) return 'allow';
+  if (dmSettings.policy === 'disabled') return 'reject';
+  if (dmSettings.policy === 'open') return 'allow';
+  // allowlist & pairing share the same gate; they differ only on miss.
+  if (!authorUserId) return 'reject';
+  if (dmSettings.policy === 'pairing' && operatorUserId && authorUserId === operatorUserId) {
+    return 'allow';
+  }
+  const inList = userAllowlist.ids.length > 0 && userAllowlist.ids.includes(authorUserId);
+  if (inList) return 'allow';
+  return dmSettings.policy === 'pairing' ? 'pair' : 'reject';
 }
 
 /**
@@ -425,6 +511,39 @@ export function shouldHandleGroup(params: {
   const candidates = candidateChannelIds.filter((id): id is string => Boolean(id));
   if (candidates.length === 0) return false;
   return candidates.some((id) => groupSettings.allowFrom.includes(id));
+}
+
+/**
+ * Validate cross-platform access-policy settings at save time.
+ *
+ * Catches misconfigurations that would silently break runtime gating
+ * before they hit the DB. Today this only enforces one rule:
+ *
+ * - `dmPolicy='pairing'` requires `settings.userId` (the owner's platform
+ *   user ID). Without it nobody can issue `/approve`, so inbound pairing
+ *   requests would land in a permanent limbo — surface the missing field
+ *   at save time so operators don't paint themselves into the corner.
+ *
+ * Per-platform rules (e.g. Telegram bot tokens, Discord intents) belong
+ * in `ClientFactory.validateSettings`; this function only encodes shared
+ * invariants that apply regardless of platform.
+ */
+export function validateAccessSettings(
+  settings: Record<string, unknown> | null | undefined,
+): ValidationResult {
+  const errors: Array<{ field: string; message: string }> = [];
+  const dmSettings = extractDmSettings(settings);
+  if (dmSettings.policy === 'pairing') {
+    const operatorId = (settings?.userId as string | undefined)?.trim();
+    if (!operatorId) {
+      errors.push({
+        field: 'userId',
+        message:
+          "Pairing policy requires the owner's Platform User ID. Fill in 'Your Platform User ID' or pick a different DM Policy.",
+      });
+    }
+  }
+  return errors.length > 0 ? { errors, valid: false } : { valid: true };
 }
 
 // ---------- Step-aware reactions ----------

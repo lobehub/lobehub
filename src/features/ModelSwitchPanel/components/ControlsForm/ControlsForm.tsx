@@ -105,6 +105,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
 
   const screens = Grid.useBreakpoint();
   const isNarrow = !screens.sm;
+  const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
 
   const descWide = { display: 'inline-block', width: 300 } as const;
   const descNarrow = {
@@ -257,7 +258,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       },
     },
     {
-      children: <GPT52ReasoningEffortSlider />,
+      children: <GPT52ReasoningEffortSlider defaultValue={gpt52ReasoningEffortDefaultValue} />,
       desc: 'reasoning_effort',
       label: t('extendParams.reasoningEffort.title'),
       layout: 'horizontal',

@@ -29,6 +29,7 @@ import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgen
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
+import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../utils/messageMapKey';
@@ -43,12 +44,21 @@ const generateThreadId = () => `thd_${createNanoId(16)()}`;
  * Notification only shows when the window is hidden (enforced in main); the
  * badge is always set so a minimized/backgrounded app still signals completion.
  */
-const notifyCompletion = async (title: string, body: string) => {
+const notifyCompletion = async (title: string, body: string, context: ConversationContext) => {
   if (!isDesktop) return;
   try {
     const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    const navigatePath = resolveNotificationNavigatePath({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      topicId: context.topicId,
+    });
     await Promise.allSettled([
-      desktopNotificationService.showNotification({ body, title }),
+      desktopNotificationService.showNotification({
+        body,
+        navigate: navigatePath ? { path: navigatePath } : undefined,
+        title,
+      }),
       desktopNotificationService.setBadgeCount(1),
     ]);
   } catch (error) {
@@ -1719,7 +1729,11 @@ export const executeHeterogeneousAgent = async (
           const body = accumulatedContent
             ? markdownToTxt(accumulatedContent)
             : t('notification.finishChatGeneration', { ns: 'electron' });
-          notifyCompletion(t('notification.finishChatGeneration', { ns: 'electron' }), body);
+          notifyCompletion(
+            t('notification.finishChatGeneration', { ns: 'electron' }),
+            body,
+            context,
+          );
         }
       },
 

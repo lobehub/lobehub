@@ -164,6 +164,12 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     ) => ChatStreamPayload;
   };
   routers: Routers;
+  shouldStopFallback?: (params: {
+    error: unknown;
+    metadata?: Record<string, unknown>;
+    model: string;
+    optionIndex: number;
+  }) => boolean | Promise<boolean>;
 }
 
 export const createRouterRuntime = ({
@@ -404,6 +410,25 @@ export const createRouterRuntime = ({
             AgentRuntimeErrorType.ExceededContextWindow
           ) {
             throw error;
+          }
+
+          try {
+            const shouldStopFallback = await params.shouldStopFallback?.({
+              error,
+              metadata,
+              model,
+              optionIndex: index,
+            });
+
+            if (shouldStopFallback) {
+              throw error;
+            }
+          } catch (fallbackError) {
+            if (fallbackError === error) {
+              throw error;
+            }
+
+            log('shouldStopFallback callback error: %O', fallbackError);
           }
 
           if (attempt < totalOptions) {

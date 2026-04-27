@@ -38,6 +38,9 @@ export interface AgentHookWebhook {
   /** Delivery method: 'fetch' (plain HTTP) or 'qstash' (guaranteed delivery). Default: 'qstash' */
   delivery?: 'fetch' | 'qstash';
 
+  /** Event fields to include in the webhook payload. Defaults to all serializable event fields. */
+  eventFields?: (keyof AgentHookEvent)[];
+
   /** Webhook endpoint URL (relative or absolute) */
   url: string;
 }

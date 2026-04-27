@@ -8,6 +8,7 @@ import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/t
 import debug from 'debug';
 import { z } from 'zod';
 
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
@@ -263,11 +264,20 @@ export const videoRouter = router({
         inferenceId,
       });
 
+      const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+        error,
+        provider,
+        userId: ctx.userId,
+      });
+
       await ctx.asyncTaskModel.update(asyncTaskId, {
         error: new AsyncTaskError(
-          AsyncTaskErrorType.ServerError,
-          'Background polling failed: ' +
-            (error instanceof Error ? error.message : 'Unknown error'),
+          providerContentPolicyMessage
+            ? AsyncTaskErrorType.ProviderContentModeration
+            : AsyncTaskErrorType.ServerError,
+          providerContentPolicyMessage ??
+            'Background polling failed: ' +
+              (error instanceof Error ? error.message : 'Unknown error'),
         ),
         status: AsyncTaskStatus.Error,
       });
