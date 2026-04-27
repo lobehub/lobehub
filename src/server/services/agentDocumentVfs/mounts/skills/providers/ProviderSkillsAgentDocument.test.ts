@@ -183,15 +183,18 @@ describe('Agent skill VFS providers', () => {
         agentId: 'agent-1',
         documentId: 'root-1',
         policyLoad: 'disabled',
+        uniqueSibling: false,
       });
       expect(agentDocumentModel.associate).toHaveBeenNthCalledWith(2, {
         agentId: 'agent-1',
         documentId: 'folder-1',
         policyLoad: 'disabled',
+        uniqueSibling: false,
       });
       expect(agentDocumentModel.associate).toHaveBeenNthCalledWith(3, {
         agentId: 'agent-1',
         documentId: 'file-1',
+        uniqueSibling: false,
       });
       expect(result.path).toBe('./lobe/skills/agent/skills/writer/SKILL.md');
     });
@@ -496,6 +499,10 @@ describe('Agent skill VFS providers', () => {
         agentDocumentModel,
         documentService,
       });
+
+      if (!provider.promote) {
+        throw new Error('Expected agent-topic provider to support skill promotion');
+      }
 
       const result = await provider.promote({
         agentId: 'agent-1',

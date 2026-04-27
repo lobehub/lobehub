@@ -112,6 +112,10 @@ describe('AgentDocument VFS Router Integration Tests', () => {
       path: './lobe/skills/agent/skills/router-skill/SKILL.md',
     });
 
+    if (!read) {
+      throw new Error('Expected readDocumentByPath to return the router skill file content');
+    }
+
     expect(read.content).toContain('# Router Skill');
   });
 });

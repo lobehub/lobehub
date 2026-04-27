@@ -8,7 +8,12 @@ import { getUnifiedSkillNamespaceRootPath } from '../path';
 import type { SkillMountNode } from '../types';
 
 export interface AgentSkillDocumentModelLike {
-  associate: (params: { agentId: string; documentId: string; policyLoad?: PolicyLoad }) => Promise<{
+  associate: (params: {
+    agentId: string;
+    documentId: string;
+    policyLoad?: PolicyLoad;
+    uniqueSibling?: boolean;
+  }) => Promise<{
     id: string;
   }>;
   delete: (documentId: string, deleteReason?: string) => Promise<void>;
@@ -341,6 +346,7 @@ export const ensureNamespaceRoot = async ({
     agentId,
     documentId: root.id,
     policyLoad: PolicyLoad.DISABLED,
+    uniqueSibling: false,
   });
 
   return { documentId: root.id };
@@ -398,6 +404,7 @@ export const createSkillTree = async ({
         agentId,
         documentId: folder.id,
         policyLoad: PolicyLoad.DISABLED,
+        uniqueSibling: false,
       });
     }
 
@@ -416,7 +423,7 @@ export const createSkillTree = async ({
     });
 
     createdFileId = file.id;
-    await agentDocumentModel.associate({ agentId, documentId: file.id });
+    await agentDocumentModel.associate({ agentId, documentId: file.id, uniqueSibling: false });
 
     return { fileDocumentId: file.id, folderDocumentId: folder.id };
   } catch (error) {

@@ -128,6 +128,28 @@ describe('AgentDocumentModel', () => {
 
       expect(countAfter.length).toBe(countBefore.length);
     });
+
+    it('should reject associating a document when a live sibling already owns the same path', async () => {
+      await agentDocumentModel.create(agentId, 'associated.md', 'managed');
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'existing',
+          fileType: 'article',
+          filename: 'associated.md',
+          source: 'https://example.com/associated',
+          sourceType: 'web',
+          title: 'Associated',
+          totalCharCount: 8,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      await expect(
+        agentDocumentModel.associate({ agentId, documentId: doc!.id }),
+      ).rejects.toThrow();
+    });
   });
 
   describe('create', () => {
@@ -177,6 +199,39 @@ describe('AgentDocumentModel', () => {
       await agentDocumentModel.create(agentId, 'duplicate.md', 'first');
 
       await expect(agentDocumentModel.create(agentId, 'duplicate.md', 'second')).rejects.toThrow();
+    });
+
+    it('should allow different agents to use the same root filename', async () => {
+      const first = await agentDocumentModel.create(agentId, 'shared.md', 'first');
+      const second = await agentDocumentModel.create(secondAgentId, 'shared.md', 'second');
+
+      expect(first.agentId).toBe(agentId);
+      expect(second.agentId).toBe(secondAgentId);
+      expect(first.documentId).not.toBe(second.documentId);
+    });
+
+    it('should allow recreating a filename after the previous sibling is soft deleted', async () => {
+      const first = await agentDocumentModel.create(agentId, 'recreated.md', 'first');
+
+      await agentDocumentModel.delete(first.id, 'replace');
+
+      const second = await agentDocumentModel.create(agentId, 'recreated.md', 'second');
+
+      expect(second.id).not.toBe(first.id);
+      expect(second.content).toBe('second');
+    });
+
+    it('should allow callers to opt out of sibling uniqueness for managed mount documents', async () => {
+      const first = await agentDocumentModel.create(agentId, 'skills', '', {
+        uniqueSibling: false,
+        metadata: { mount: { namespace: 'topic', role: 'root' } },
+      });
+      const second = await agentDocumentModel.create(agentId, 'skills', '', {
+        uniqueSibling: false,
+        metadata: { mount: { namespace: 'agent', role: 'root' } },
+      });
+
+      expect(first.documentId).not.toBe(second.documentId);
     });
   });
 
@@ -339,6 +394,24 @@ describe('AgentDocumentModel', () => {
         .where(eq(documents.id, created.documentId));
 
       expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('new.md')}`);
+    });
+
+    it('should reject moving a document over an existing live sibling path', async () => {
+      const folder = await agentDocumentModel.create(agentId, 'move-folder', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        title: 'move-folder',
+      });
+      const source = await agentDocumentModel.create(agentId, 'source.md', 'source');
+      await agentDocumentModel.create(agentId, 'target.md', 'target', {
+        parentId: folder.documentId,
+      });
+
+      await expect(
+        agentDocumentModel.movePath(source.id, {
+          filename: 'target.md',
+          parentId: folder.documentId,
+        }),
+      ).rejects.toThrow();
     });
 
     it('should copy into a new record and keep policy/template metadata', async () => {
@@ -535,6 +608,15 @@ describe('AgentDocumentModel', () => {
         .where(eq(documents.id, created.documentId));
 
       expect(rawDoc).toBeDefined();
+    });
+
+    it('should reject restoring a deleted document over an existing live sibling path', async () => {
+      const first = await agentDocumentModel.create(agentId, 'restore-conflict.md', 'first');
+
+      await agentDocumentModel.delete(first.id, 'replace');
+      await agentDocumentModel.create(agentId, 'restore-conflict.md', 'second');
+
+      await expect(agentDocumentModel.restore(first.id)).rejects.toThrow();
     });
 
     it('should return empty string from getAgentContext when no loadable docs exist', async () => {

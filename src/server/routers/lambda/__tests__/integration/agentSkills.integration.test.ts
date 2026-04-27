@@ -539,6 +539,10 @@ describe('Skill Router Integration Tests', () => {
         topicId,
       });
 
+      if (!updatedFile) {
+        throw new Error('Expected readDocumentByPath to return the updated topic skill file');
+      }
+
       expect(updatedFile.content?.trimEnd()).toBe('# Topic Draft\n\nUpdated topic skill content.');
 
       const persistedFile = (await agentDocumentModel.findByAgent(agentId)).find(
