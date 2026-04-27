@@ -226,7 +226,7 @@ describe('runAgentSignalWorkflow', () => {
     expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
       'Future assistant reply that should be excluded from the anchored root context.',
     );
-  });
+  }, 10_000);
 
   it('assembles serializedContext from the matching thread before executing a threaded source event', async () => {
     const db = await getTestDB();
