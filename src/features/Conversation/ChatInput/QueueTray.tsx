@@ -18,10 +18,10 @@ import { useConversationStore } from '../store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-radius: 12px 12px 0 0;
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorBgElevated};
   `,
   icon: css`
     flex-shrink: 0;
