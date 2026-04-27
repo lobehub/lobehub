@@ -46,7 +46,9 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
         ? [
             ...(tools || []),
             {
-              sources: ['douyin', 'moji', 'toutiao'], // Additional search sources (Douyin Baike, Moji Weather, Toutiao, etc.)
+              function: {
+                sources: ['douyin', 'moji', 'toutiao'], // Additional search sources (Douyin Baike, Moji Weather, Toutiao, etc.)
+              },
               type: 'web_search',
             },
           ]
