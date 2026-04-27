@@ -1,9 +1,13 @@
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { TaskModel } from '@/database/models/task';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
 import { agentDocumentsRuntime } from '../agentDocuments';
 
 vi.mock('@/server/services/agentDocuments');
+vi.mock('@/database/models/task');
 
 describe('agentDocumentsRuntime', () => {
   it('should have correct identifier', () => {
@@ -20,6 +24,101 @@ describe('agentDocumentsRuntime', () => {
     expect(() => agentDocumentsRuntime.factory({ toolManifestMap: {}, userId: 'user-1' })).toThrow(
       'userId and serverDB are required for Agent Documents execution',
     );
+  });
+});
+
+describe('agentDocumentsRuntime auto-pin to task', () => {
+  const newDoc = {
+    documentId: 'documents-row-id',
+    filename: 'daily-brief',
+    id: 'agent-doc-assoc-id',
+    title: 'Daily Brief',
+  };
+
+  let serviceImpl: {
+    copyDocumentById: ReturnType<typeof vi.fn>;
+    createDocument: ReturnType<typeof vi.fn>;
+    createForTopic: ReturnType<typeof vi.fn>;
+    upsertDocumentByFilename: ReturnType<typeof vi.fn>;
+  };
+  let pinDocument: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    serviceImpl = {
+      copyDocumentById: vi.fn().mockResolvedValue(newDoc),
+      createDocument: vi.fn().mockResolvedValue(newDoc),
+      createForTopic: vi.fn().mockResolvedValue(newDoc),
+      upsertDocumentByFilename: vi.fn().mockResolvedValue(newDoc),
+    };
+    pinDocument = vi.fn().mockResolvedValue(undefined);
+
+    vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
+    vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument }) as any);
+  });
+
+  const buildContext = (taskId?: string) => ({
+    serverDB: {} as never,
+    taskId,
+    toolManifestMap: {},
+    userId: 'user-1',
+  });
+
+  it('pins newly created document when taskId is in context', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+
+    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('skips pin when no taskId is provided', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext());
+
+    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('pins documents created via createTopicDocument', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument(
+      { content: 'body', target: 'currentTopic', title: 'Topic Note' },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+
+    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('pins documents produced by copyDocument', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.copyDocument(
+      { id: 'agent-doc-assoc-id', newTitle: 'Copy' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('pins documents produced by upsertDocumentByFilename', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.upsertDocumentByFilename(
+      { content: 'body', filename: 'daily-brief.md' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('does not pin when service returns undefined (e.g. copy of missing doc)', async () => {
+    serviceImpl.copyDocumentById.mockResolvedValue(undefined);
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.copyDocument({ id: 'missing' }, { agentId: 'agent-1' });
+
+    expect(pinDocument).not.toHaveBeenCalled();
   });
 });
 
