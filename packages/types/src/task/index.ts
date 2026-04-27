@@ -1,6 +1,13 @@
 // ── Task type aliases ──
 
-export type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+export type TaskStatus =
+  | 'backlog'
+  | 'canceled'
+  | 'completed'
+  | 'failed'
+  | 'paused'
+  | 'running'
+  | 'scheduled';
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
@@ -258,6 +265,11 @@ export interface TaskDetailData {
   parent?: { identifier: string; name: string | null } | null;
   priority?: number | null;
   review?: Record<string, any> | null;
+  schedule?: {
+    maxExecutions?: number | null;
+    pattern?: string | null;
+    timezone?: string | null;
+  };
   status: string;
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;

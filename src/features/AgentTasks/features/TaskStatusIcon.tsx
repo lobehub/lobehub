@@ -1,12 +1,19 @@
+import type { TaskStatus } from '@lobechat/types';
 import { ActionIcon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { CircleCheck, CircleDashed, CircleDot, CircleSlash, CircleX, HandIcon } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleSlash,
+  CircleX,
+  Clock,
+  HandIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 
 import { taskListSelectors } from '@/store/task/selectors';
-
-type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
 
 interface StatusMeta {
   color: string;
@@ -20,11 +27,12 @@ const STATUS_META: Record<TaskStatus, StatusMeta> = {
   failed: { color: cssVar.colorError, icon: CircleX },
   paused: { color: cssVar.colorInfo, icon: HandIcon },
   running: { color: cssVar.colorWarning, icon: CircleDot },
+  scheduled: { color: cssVar.colorTextDescription, icon: Clock },
 };
 
 interface TaskStatusIconProps {
   size?: number;
-  status: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+  status: TaskStatus;
 }
 
 const TaskStatusIcon = memo<TaskStatusIconProps>(({ size = 16, status }) => {

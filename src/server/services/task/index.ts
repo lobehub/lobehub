@@ -265,11 +265,14 @@ export class TaskService {
       return a.time.localeCompare(b.time);
     });
 
+    const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
+    const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
+
     return {
       agentId: task.assigneeAgentId,
       automationMode: task.automationMode ?? null,
       checkpoint: this.taskModel.getCheckpointConfig(task),
-      config: task.config ? (task.config as Record<string, unknown>) : undefined,
+      config: taskConfig,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
       dependencies: dependencies.map((d) => {
         const info = depIdToInfo.get(d.dependsOnId);
@@ -295,6 +298,14 @@ export class TaskService {
       parent,
       priority: task.priority,
       review: this.taskModel.getReviewConfig(task),
+      schedule:
+        task.schedulePattern || task.scheduleTimezone || scheduleConfig.maxExecutions != null
+          ? {
+              maxExecutions: scheduleConfig.maxExecutions ?? null,
+              pattern: task.schedulePattern,
+              timezone: task.scheduleTimezone,
+            }
+          : undefined,
       status: task.status,
       userId: task.assigneeUserId,
       subtasks,
