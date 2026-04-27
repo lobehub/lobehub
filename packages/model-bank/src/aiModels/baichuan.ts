@@ -19,6 +19,9 @@ const baichuanChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    settings: {
+      searchImpl: 'internal',
+    },
     type: 'chat',
   },
   {
@@ -61,6 +64,9 @@ const baichuanChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
       ],
+    },
+    settings: {
+      searchImpl: 'internal',
     },
     type: 'chat',
   },
