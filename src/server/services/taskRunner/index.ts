@@ -163,6 +163,7 @@ export class TaskRunnerService {
             type: 'onComplete' as const,
             webhook: {
               body: { taskId, taskIdentifier, userId },
+              delivery: 'qstash' as const,
               url: '/api/workflows/task/on-topic-complete',
             },
           },
