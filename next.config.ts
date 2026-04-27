@@ -21,9 +21,6 @@ const vercelConfig = {
 };
 const nextConfig = defineConfig({
   ...(isVercel ? vercelConfig : {}),
-  turbopack: {
-    root: __dirname,
-  },
 });
 
 export default nextConfig;
