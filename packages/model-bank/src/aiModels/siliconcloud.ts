@@ -10,6 +10,30 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Flash is a preview version of the MoE language model in the DeepSeek-V4 series. The total parameter size is 284B, the activation parameter size is 13B, and it supports 1M tokens ultra-long context.The model uses a hybrid attention architecture that combines CSA and HCA, and introduces mHC and Muon Optimizer to improve long-context reasoning efficiency, training stability, and overall performance.',
+    displayName: 'DeepSeek V4 Flash',
+    enabled: true,
+    id: 'deepseek-ai/DeepSeek-V4-Flash',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -634,7 +658,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       "DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is based on three major technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework, through which the model's performance can rival GPT-5, and its high-compute version can rival Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline, designed to integrate reasoning capabilities into tool-using scenarios, thereby improving instruction-following and generalization abilities in complex interactive environments. The model achieved gold medal results in the 2025 International Mathematical Olympiad (IMO) and International Informatics Olympiad (IOI).",
     displayName: 'DeepSeek V3.2',
-    enabled: true,
     id: 'deepseek-ai/DeepSeek-V3.2',
     pricing: {
       currency: 'CNY',
