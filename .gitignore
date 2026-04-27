@@ -148,3 +148,4 @@ apps/desktop/resources/cli-package.json
 .superpowers/
 docs/superpowers/
 .heerogeneous-tracing
+.worktrees/
