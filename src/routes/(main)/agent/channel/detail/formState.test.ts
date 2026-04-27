@@ -53,6 +53,47 @@ describe('getChannelFormValues', () => {
       settings: {},
     });
   });
+
+  it('migrates a legacy comma-separated allowFrom string to object-list shape', () => {
+    // Operators on the very first cut of allowFrom stored a single string.
+    // The new editor is bound to an array — the form would crash on a string
+    // unless we lift it into `[{id}]` on read.
+    const result = getChannelFormValues({
+      settings: { allowFrom: 'alice, bob\n carol' },
+    });
+    expect(result.settings).toEqual({
+      allowFrom: [{ id: 'alice' }, { id: 'bob' }, { id: 'carol' }],
+    });
+  });
+
+  it('migrates a legacy bare string[] allowFrom into object-list shape', () => {
+    const result = getChannelFormValues({
+      settings: { groupAllowFrom: ['channel-1', '  channel-2 ', ''] },
+    });
+    expect(result.settings).toEqual({
+      groupAllowFrom: [{ id: 'channel-1' }, { id: 'channel-2' }],
+    });
+  });
+
+  it('passes through the new object-list shape unchanged (preserves names)', () => {
+    const result = getChannelFormValues({
+      settings: {
+        allowFrom: [{ id: 'alice', name: 'Alice — PM' }, { id: 'bob' }],
+      },
+    });
+    expect(result.settings).toEqual({
+      allowFrom: [{ id: 'alice', name: 'Alice — PM' }, { id: 'bob' }],
+    });
+  });
+
+  it('drops object entries with empty / missing ids during migration', () => {
+    const result = getChannelFormValues({
+      settings: {
+        allowFrom: [{ id: '' }, { id: '   ' }, { id: 'bob', name: 'Bob' }],
+      },
+    });
+    expect(result.settings).toEqual({ allowFrom: [{ id: 'bob', name: 'Bob' }] });
+  });
 });
 
 describe('extractSettingsDefaults', () => {

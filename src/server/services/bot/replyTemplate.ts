@@ -1,6 +1,6 @@
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
-import { formatDuration } from './platforms';
+import { type BotReplyLocale, formatDuration } from './platforms';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
 // because bot-callback webhooks send via DiscordPlatformClient directly
@@ -108,12 +108,15 @@ function formatCompletedTools(
 
 export { formatDuration, formatTokens } from './platforms';
 
-function renderProgressHeader(params: { elapsedMs?: number; totalToolCalls?: number }): string {
+function renderProgressHeader(
+  params: { elapsedMs?: number; totalToolCalls?: number },
+  lng?: BotReplyLocale,
+): string {
   const { elapsedMs, totalToolCalls } = params;
   if (!totalToolCalls || totalToolCalls <= 0) return '';
 
   const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
-  return `> total **${totalToolCalls}** tools calling ${time}\n\n`;
+  return getSystemStrings(lng).toolsCallingHeader(totalToolCalls, time);
 }
 
 // ==================== 1. Start ====================
@@ -126,10 +129,10 @@ export const renderStart = getExtremeAck;
  * LLM step just finished. Returns the message body (no usage stats).
  * Stats are handled separately via `PlatformClient.formatReply`.
  */
-export function renderLLMGenerating(params: RenderStepParams): string {
+export function renderLLMGenerating(params: RenderStepParams, lng?: BotReplyLocale): string {
   const { content, elapsedMs, lastContent, reasoning, toolsCalling, totalToolCalls } = params;
   const displayContent = (content || lastContent)?.trim();
-  const header = renderProgressHeader({ elapsedMs, totalToolCalls });
+  const header = renderProgressHeader({ elapsedMs, totalToolCalls }, lng);
 
   // Sub-state: LLM decided to call tools → show content + pending tool calls (○)
   if (toolsCalling && toolsCalling.length > 0) {
@@ -149,7 +152,7 @@ export function renderLLMGenerating(params: RenderStepParams): string {
     return `${header}${displayContent}`;
   }
 
-  return `${header}${EMOJI_THINKING} Processing...`;
+  return `${header}${EMOJI_THINKING} ${getSystemStrings(lng).processing}`;
 }
 
 // ==================== 3. Tool Executing ====================
@@ -158,9 +161,10 @@ export function renderLLMGenerating(params: RenderStepParams): string {
  * Tool step just finished, LLM is next.
  * Returns the message body (no usage stats).
  */
-export function renderToolExecuting(params: RenderStepParams): string {
+export function renderToolExecuting(params: RenderStepParams, lng?: BotReplyLocale): string {
   const { elapsedMs, lastContent, lastToolsCalling, toolsResult, totalToolCalls } = params;
-  const header = renderProgressHeader({ elapsedMs, totalToolCalls });
+  const header = renderProgressHeader({ elapsedMs, totalToolCalls }, lng);
+  const processing = `${EMOJI_THINKING} ${getSystemStrings(lng).processing}`;
 
   const parts: string[] = [];
 
@@ -170,9 +174,9 @@ export function renderToolExecuting(params: RenderStepParams): string {
 
   if (lastToolsCalling && lastToolsCalling.length > 0) {
     parts.push(formatCompletedTools(lastToolsCalling, toolsResult));
-    parts.push(`${EMOJI_THINKING} Processing...`);
+    parts.push(processing);
   } else {
-    parts.push(`${EMOJI_THINKING} Processing...`);
+    parts.push(processing);
   }
 
   return parts.join('\n\n');
@@ -188,15 +192,165 @@ export function renderFinalReply(content: string): string {
   return content.trimEnd();
 }
 
-export function renderError(operationId?: string): string {
-  if (operationId) {
-    return `**Agent Execution Failed**\nOperation ID: \`${operationId}\``;
-  }
-  return `**Agent Execution Failed**`;
+// ==================== System message strings ====================
+
+/**
+ * Static strings emitted by the bot itself (errors, stopped notices, DM
+ * rejection). Keyed by IETF locale so it lines up with the project-wide
+ * `Locales` set; new platform languages can be added by dropping in another
+ * entry without touching the type. A missing locale falls back to `en-US`
+ * at lookup time, so we never silently render `undefined`.
+ *
+ * Agent conversation content is produced by the LLM and is not routed
+ * through this map.
+ */
+type SystemStrings = {
+  cmdNewReset: string;
+  cmdStopNotActive: string;
+  cmdStopRequested: string;
+  cmdStopUnable: string;
+  dmRejectedAllowlist: string;
+  dmRejectedDisabled: string;
+  error: string;
+  errorWithDetails: (details: string) => string;
+  errorWithId: (operationId: string) => string;
+  groupRejectedAllowlist: string;
+  groupRejectedDisabled: string;
+  inlineError: (message: string) => string;
+  processing: string;
+  /**
+   * Generic "user is not on the allowlist" copy used when the global
+   * `allowFrom` gate rejects an inbound non-DM event. Delivered via
+   * ephemeral (Slack) or as an out-of-band DM (Discord/Telegram fallback),
+   * so the wording avoids "direct messages" — the sender did not try to DM.
+   */
+  senderRejected: string;
+  stoppedDefault: string;
+  toolsCallingHeader: (count: number, time: string) => string;
+};
+
+const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
+  'en-US': {
+    cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
+    cmdStopNotActive: 'No active execution to stop.',
+    cmdStopRequested: 'Stop requested.',
+    cmdStopUnable: 'Unable to stop the current execution.',
+    dmRejectedAllowlist:
+      "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.",
+    dmRejectedDisabled:
+      "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
+    error: '**Agent Execution Failed**',
+    errorWithDetails: (details) =>
+      `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
+    errorWithId: (operationId) => `**Agent Execution Failed**\nOperation ID: \`${operationId}\``,
+    groupRejectedAllowlist:
+      "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
+    groupRejectedDisabled:
+      "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+    inlineError: (message) => `**Error**: ${message}`,
+    processing: 'Processing...',
+    senderRejected:
+      "Sorry, you aren't authorized to interact with this bot. Please contact the bot's owner if you need access.",
+    stoppedDefault: 'Execution stopped.',
+    toolsCallingHeader: (count, time) => `> total **${count}** tools calling ${time}\n\n`,
+  },
+  'zh-CN': {
+    cmdNewReset: '对话已重置，下一条消息会开启新话题。',
+    cmdStopNotActive: '当前没有正在执行的任务可以停止。',
+    cmdStopRequested: '已发出停止请求。',
+    cmdStopUnable: '无法停止当前执行。',
+    dmRejectedAllowlist: '抱歉，您没有私信该机器人的权限。如需访问请联系机器人管理员。',
+    dmRejectedDisabled: '该机器人不接受私信。请在共享频道或群组里 @它来联系。',
+    error: '**Agent 执行失败**',
+    errorWithDetails: (details) => `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
+    errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
+    groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
+    groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
+    inlineError: (message) => `**错误**：${message}`,
+    processing: '处理中…',
+    senderRejected: '抱歉，您没有与该机器人交互的权限。如需访问请联系机器人管理员。',
+    stoppedDefault: '执行已停止。',
+    toolsCallingHeader: (count, time) => `> 共 **${count}** 次工具调用 ${time}\n\n`,
+  },
+};
+
+const DEFAULT_REPLY_LOCALE: BotReplyLocale = 'en-US';
+
+const getSystemStrings = (lng: BotReplyLocale = DEFAULT_REPLY_LOCALE): SystemStrings =>
+  SYSTEM_STRINGS[lng] ?? SYSTEM_STRINGS[DEFAULT_REPLY_LOCALE]!;
+
+export function renderError(operationId?: string, lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return operationId ? strings.errorWithId(operationId) : strings.error;
 }
 
-export function renderStopped(message = 'Execution stopped.'): string {
-  return message;
+export function renderStopped(message?: string, lng?: BotReplyLocale): string {
+  return message ?? getSystemStrings(lng).stoppedDefault;
+}
+
+/**
+ * Verbose error template used when we want to surface the underlying error
+ * message verbatim (typically for stale-topic or FK violations where the raw
+ * detail helps the operator diagnose the failure).
+ */
+export function renderErrorWithDetails(details: string, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).errorWithDetails(details);
+}
+
+/**
+ * Compact `**Error**: …` line used as a last-resort handler-level fallback
+ * when an unexpected exception escapes the bridge / catch-all path.
+ */
+export function renderInlineError(message: string, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).inlineError(message);
+}
+
+export type CommandReplyKey =
+  | 'cmdNewReset'
+  | 'cmdStopNotActive'
+  | 'cmdStopRequested'
+  | 'cmdStopUnable';
+
+/**
+ * Render a slash-command response (e.g. `/new`, `/stop`). Centralized so the
+ * command handlers don't each carry their own English literal.
+ */
+export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng)[key];
+}
+
+/**
+ * Render the system message shown to a sender whose DM was blocked by the
+ * channel's DM Policy. We split disabled vs allowlist so the user can act on
+ * the answer (e.g. ping in a channel instead, or ask the owner for access).
+ */
+export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.dmRejectedDisabled : strings.dmRejectedAllowlist;
+}
+
+/**
+ * Render the system message shown when an inbound non-DM event was blocked
+ * by Group Policy. Same disabled-vs-allowlist split as
+ * {@link renderDmRejected} so the sender can pivot (try DM, ask the owner).
+ */
+export function renderGroupRejected(
+  reason: 'disabled' | 'allowlist',
+  lng?: BotReplyLocale,
+): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.groupRejectedDisabled : strings.groupRejectedAllowlist;
+}
+
+/**
+ * Render the system message shown when the **global `allowFrom`** gate
+ * rejected the sender of a non-DM event (group / channel / thread). The
+ * notice is delivered out-of-band — ephemerally on Slack, via DM fallback
+ * on Discord/Telegram — so the copy intentionally avoids "direct messages"
+ * (the sender did not try to DM, they @-mentioned in a group).
+ */
+export function renderSenderRejected(lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).senderRejected;
 }
 
 // ==================== Dispatcher ====================
@@ -205,9 +359,9 @@ export function renderStopped(message = 'Execution stopped.'): string {
  * Dispatch to the correct template based on step state.
  * Returns message body only — caller handles stats via platform.
  */
-export function renderStepProgress(params: RenderStepParams): string {
+export function renderStepProgress(params: RenderStepParams, lng?: BotReplyLocale): string {
   if (params.stepType === 'call_llm') {
-    return renderLLMGenerating(params);
+    return renderLLMGenerating(params, lng);
   }
-  return renderToolExecuting(params);
+  return renderToolExecuting(params, lng);
 }

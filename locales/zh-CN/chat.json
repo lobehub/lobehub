@@ -137,6 +137,7 @@
   "extendParams.urlContext.desc": "开启后会自动解析网页链接，提取网页内容作为上下文",
   "extendParams.urlContext.title": "提取网页链接内容",
   "followUpPlaceholder": "继续跟进。使用 @ 分配任务给其他智能体。",
+  "followUpPlaceholderHeterogeneous": "继续跟进。",
   "group.desc": "在同一对话空间，让多个助理一起推进任务",
   "group.memberTooltip": "群组内有 {{count}} 名成员",
   "group.orchestratorThinking": "主持人思考中…",

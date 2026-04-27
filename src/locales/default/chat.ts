@@ -385,6 +385,7 @@ export default {
   'searchAgents': 'Search agents...',
   'selectedAgents': 'Selected agents',
   'followUpPlaceholder': 'Follow up. @ to assign tasks to other agents.',
+  'followUpPlaceholderHeterogeneous': 'Follow up.',
   'sendPlaceholder': 'Ask, create, or start a task, <hotkey><hotkey/>',
   'sendPlaceholderHeterogeneous': 'Ask {{name}} to do a task...',
   'sendPlaceholderWithAgentAssignment':

@@ -1,6 +1,12 @@
 import { DEFAULT_BOT_DEBOUNCE_MS, MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
-import { displayToolCallsField, userIdField } from '../const';
+import {
+  allowFromField,
+  displayToolCallsField,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  userIdField,
+} from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -74,35 +80,9 @@ export const schema: FieldSchema[] = [
       },
       displayToolCallsField,
       userIdField,
-      // TODO: DM schema - not implemented yet
-      // {
-      //   key: 'dm',
-      //   label: 'channel.dm',
-      //   properties: [
-      //     {
-      //       key: 'enabled',
-      //       default: true,
-      //       description: 'channel.dmEnabledHint',
-      //       label: 'channel.dmEnabled',
-      //       type: 'boolean',
-      //     },
-      //     {
-      //       key: 'policy',
-      //       default: 'open',
-      //       enum: ['open', 'allowlist', 'disabled'],
-      //       enumLabels: [
-      //         'channel.dmPolicyOpen',
-      //         'channel.dmPolicyAllowlist',
-      //         'channel.dmPolicyDisabled',
-      //       ],
-      //       description: 'channel.dmPolicyHint',
-      //       label: 'channel.dmPolicy',
-      //       type: 'string',
-      //       visibleWhen: { field: 'enabled', value: true },
-      //     },
-      //   ],
-      //   type: 'object',
-      // },
+      makeDmPolicyField({ policy: 'open' }),
+      ...makeGroupPolicyFields({ policy: 'open' }),
+      allowFromField,
     ],
     type: 'object',
   },
