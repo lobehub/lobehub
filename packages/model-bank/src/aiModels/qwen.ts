@@ -1850,6 +1850,88 @@ const qwenChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_000_000,
     description:
       'Qwen 3.5 is a native vision-language Plus model. Compared to the February 15 snapshot, this version delivers substantial improvements in agentic coding capabilities and significantly faster inference speed. Its knowledge, reasoning, and long-context abilities remain at a high level, meeting the demands of complex agent tasks. It is well-suited for coding agents, production workflows, and high-throughput scenarios. This version corresponds to the April 20, 2026 snapshot.',
+    displayName: 'Qwen3.5 Plus 2026-04-20',
+    id: 'qwen3.5-plus-2026-04-20',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8 * 0.1,
+              '[0.128, 0.256]': 2 * 0.1,
+              '[0.256, infinity]': 4 * 0.1,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8 * 1.25,
+              '[0.128, 0.256]': 2 * 1.25,
+              '[0.256, infinity]': 4 * 1.25,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8,
+              '[0.128, 0.256]': 2,
+              '[0.256, infinity]': 4,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 4.8,
+              '[0.128, 0.256]': 12,
+              '[0.256, infinity]': 24,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-22',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'qwen3.5-plus', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.5 Plus supports text, image, and video input. Its performance on pure text tasks is comparable to Qwen3 Max, with better performance and lower cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.5 Plus',
     id: 'qwen3.5-plus',
     maxOutput: 65_536,
@@ -1911,7 +1993,7 @@ const qwenChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    releasedAt: '2026-04-22',
+    releasedAt: '2026-02-15',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
       searchImpl: 'params',
@@ -3324,9 +3406,35 @@ const qwenImageModels: AIImageModelCard[] = [
   {
     description:
       'The Qwen-Image-2.0 series full-version model integrates image generation and image editing into a unified capability. It supports more professional text rendering with up to 1k token instruction capacity, delivers more delicate and realistic visual textures, enables fine-grained depiction of realistic scenes, and demonstrates stronger semantic alignment with prompts. The full-version model provides the strongest text rendering capability and the highest level of realism within the 2.0 series.',
+    displayName: 'Qwen Image 2.0 Pro 2026-04-22',
+    id: 'qwen-image-2.0-pro-2026-04-22',
+    enabled: true,
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1024, max: 4096, min: 256, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-04-22',
+    type: 'image',
+  },
+  {
+    description:
+      'The Qwen-Image-2.0 series full-version model integrates image generation and image editing into a unified capability. It supports more professional text rendering with up to 1k token instruction capacity, delivers more delicate and realistic visual textures, enables fine-grained depiction of realistic scenes, and demonstrates stronger semantic alignment with prompts. The full-version model provides the strongest text rendering capability and the highest level of realism within the 2.0 series.',
     displayName: 'Qwen Image 2.0 Pro',
     id: 'qwen-image-2.0-pro',
-    enabled: true,
     organization: 'Qwen',
     parameters: {
       height: { default: 1024, max: 4096, min: 256, step: 1 },
@@ -3879,8 +3987,37 @@ const qwenVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Wanxiang 2.7 Image-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Combined with more dynamic and rhythmically driven shot transitions, it achieves stronger overall performance and storytelling.',
-    displayName: 'Wan2.7 I2V',
+    displayName: 'Wan2.7 I2V 2026-04-25',
     enabled: true,
+    id: 'wan2.7-i2v-2026-04-25',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-26',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Image-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Combined with more dynamic and rhythmically driven shot transitions, it achieves stronger overall performance and storytelling.',
+    displayName: 'Wan2.7 I2V',
     id: 'wan2.7-i2v',
     parameters: {
       duration: { default: 5, max: 15, min: 2 },
@@ -3941,8 +4078,35 @@ const qwenVideoModels: AIVideoModelCard[] = [
   {
     description:
       'Wanxiang 2.7 Text-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Enhanced with more dynamic and rhythmically driven shot transitions, it achieves stronger overall acting and storytelling performance.',
-    displayName: 'Wan2.7 T2V',
+    displayName: 'Wan2.7 T2V 2026-04-25',
     enabled: true,
+    id: 'wan2.7-t2v-2026-04-25',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 2 },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-26',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Text-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Enhanced with more dynamic and rhythmically driven shot transitions, it achieves stronger overall acting and storytelling performance.',
+    displayName: 'Wan2.7 T2V',
     id: 'wan2.7-t2v',
     parameters: {
       aspectRatio: {
