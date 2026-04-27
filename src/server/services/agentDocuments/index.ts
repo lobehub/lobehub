@@ -20,13 +20,15 @@ import {
 } from '@/database/models/agentDocuments';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 
+import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
+import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
+import { DocumentService } from '../document';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
   createMarkdownEditorSnapshot,
   exportEditorDataSnapshot,
-} from './agentDocuments/headlessEditor';
-import { DocumentService } from './document';
+} from './headlessEditor';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 
@@ -78,7 +80,12 @@ export class AgentDocumentsService {
         fallbackContent: doc.content,
       });
 
-      return { ...doc, content: snapshot.content };
+      const content =
+        snapshot.content.trim().length === 0 && doc.content.trim().length > 0
+          ? doc.content
+          : snapshot.content;
+
+      return { ...doc, content };
     } catch (error) {
       console.error('[AgentDocumentsService] Failed to project editorData to Markdown:', error);
       return doc;
@@ -195,27 +202,6 @@ export class AgentDocumentsService {
     }
 
     await this.initializeFromTemplate(agentId, newTemplateId as keyof typeof DOCUMENT_TEMPLATES);
-  }
-
-  /**
-   * Backward-compatible alias.
-   */
-  async initializeFromPolicy(agentId: string, policyId: keyof typeof DOCUMENT_TEMPLATES = 'claw') {
-    return this.initializeFromTemplate(agentId, policyId);
-  }
-
-  /**
-   * Backward-compatible alias.
-   */
-  async initializeFromCustomPolicy(agentId: string, policy: DocumentTemplateSet) {
-    return this.initializeFromCustomTemplate(agentId, policy);
-  }
-
-  /**
-   * Backward-compatible alias.
-   */
-  async switchPolicy(agentId: string, newPolicyId: string, preserveCustomizations = false) {
-    return this.switchTemplate(agentId, newPolicyId, preserveCustomizations);
   }
 
   async getAgentDocuments(agentId: string): Promise<AgentDocumentWithRules[]> {
@@ -535,6 +521,12 @@ export class AgentDocumentsService {
   async renameDocumentById(documentId: string, newTitle: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
+    if (isManagedSkillDocument(doc)) {
+      throw new AgentDocumentVfsError(
+        'Skill VFS documents must be renamed through skill-specific APIs',
+        'METHOD_NOT_SUPPORTED',
+      );
+    }
 
     const title = newTitle.trim();
     if (title && title !== doc.title) {
@@ -547,6 +539,12 @@ export class AgentDocumentsService {
   async copyDocumentById(documentId: string, newTitle?: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
+    if (isManagedSkillDocument(doc)) {
+      throw new AgentDocumentVfsError(
+        'Skill VFS documents must be copied through skill-specific APIs',
+        'METHOD_NOT_SUPPORTED',
+      );
+    }
 
     return this.agentDocumentModel.copy(documentId, newTitle);
   }

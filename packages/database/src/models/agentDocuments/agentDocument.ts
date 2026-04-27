@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { agentDocuments, documents } from '../../schemas';
@@ -28,6 +28,13 @@ import {
 } from './types';
 
 export * from './types';
+
+interface AgentDocumentQueryOptions {
+  cursor?: string;
+  deletedOnly?: boolean;
+  includeDeleted?: boolean;
+  limit?: number;
+}
 
 export class AgentDocumentModel {
   private userId: string;
@@ -72,9 +79,11 @@ export class AgentDocumentModel {
       description: doc.description ?? null,
       documentId: settings.documentId,
       editorData: doc.editorData ?? null,
+      fileType: doc.fileType,
       filename: doc.filename ?? '',
       id: settings.id,
       metadata: (doc.metadata as Record<string, any> | null) ?? null,
+      parentId: doc.parentId ?? null,
       policy,
       policyLoadFormat,
       policyLoadPosition: settings.policyLoadPosition,
@@ -86,6 +95,47 @@ export class AgentDocumentModel {
       updatedAt: settings.updatedAt,
       userId: settings.userId,
     };
+  }
+
+  private buildDeletedAtFilters(options?: AgentDocumentQueryOptions) {
+    if (options?.deletedOnly) return [isNotNull(agentDocuments.deletedAt)];
+    if (options?.includeDeleted) return [];
+
+    return [isNull(agentDocuments.deletedAt)];
+  }
+
+  private normalizeListOffset(cursor?: string): number {
+    if (!cursor) return 0;
+
+    const parsed = Number.parseInt(cursor, 10);
+
+    // Offset cursors keep the first VFS pagination pass storage-neutral.
+    // Callers that need opaque cursors can wrap this model helper at the service layer later.
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+
+  private async listByParentIds(
+    agentId: string,
+    parentIds: string[],
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument[]> {
+    if (parentIds.length === 0) return [];
+
+    const results = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          inArray(documents.parentId, parentIds),
+          ...this.buildDeletedAtFilters(options),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map(({ settings, doc }) => this.toAgentDocument(settings, doc));
   }
 
   async associate(params: {
@@ -134,9 +184,11 @@ export class AgentDocumentModel {
     params?: {
       createdAt?: Date;
       editorData?: Record<string, any>;
+      fileType?: string;
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, any>;
+      parentId?: string | null;
       policy?: AgentDocumentPolicy;
       policyLoad?: PolicyLoad;
       templateId?: string;
@@ -147,9 +199,11 @@ export class AgentDocumentModel {
     const {
       createdAt,
       editorData,
+      fileType = 'agent/document',
       loadPosition,
       loadRules,
       metadata,
+      parentId,
       policy,
       policyLoad,
       templateId,
@@ -167,8 +221,9 @@ export class AgentDocumentModel {
         createdAt,
         description: metadata?.description,
         editorData,
-        fileType: 'agent/document',
+        fileType,
         filename,
+        parentId,
         metadata,
         source: `agent-document://${agentId}/${encodeURIComponent(filename)}`,
         sourceType: 'file',
@@ -317,6 +372,45 @@ export class AgentDocumentModel {
     return this.findById(documentId);
   }
 
+  /**
+   * Moves or renames an agent document without changing its binding or document identity.
+   *
+   * Use when:
+   * - VFS `rename(from, to)` needs filesystem-style metadata mutation
+   * - Callers must preserve document id, agent document id, policy, history, and load settings
+   *
+   * Expects:
+   * - `filename` is already validated as a single VFS path segment
+   * - `parentId` points to a document row owned by the same user, or `null` for root
+   *
+   * Returns:
+   * - The same agent document binding after the backing document row is moved
+   */
+  async movePath(
+    documentId: string,
+    params: { filename: string; parentId: string | null },
+  ): Promise<AgentDocument | undefined> {
+    const existing = await this.findById(documentId);
+    if (!existing) return undefined;
+
+    const filename = params.filename.trim();
+    if (!filename) return existing;
+
+    const source = `agent-document://${existing.agentId}/${encodeURIComponent(filename)}`;
+
+    await this.db
+      .update(documents)
+      .set({
+        filename,
+        parentId: params.parentId,
+        source,
+        title: filename,
+      })
+      .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+
+    return this.findById(documentId);
+  }
+
   async copy(documentId: string, newTitle?: string): Promise<AgentDocument | undefined> {
     const existing = await this.findById(documentId);
     if (!existing) return undefined;
@@ -367,7 +461,17 @@ export class AgentDocumentModel {
     return this.findById(documentId);
   }
 
-  async findById(documentId: string): Promise<AgentDocument | undefined> {
+  async findById(
+    documentId: string,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument | undefined> {
+    return this.findByIdWithOptions(documentId, options);
+  }
+
+  async findByIdWithOptions(
+    documentId: string,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument | undefined> {
     const [result] = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
@@ -376,7 +480,7 @@ export class AgentDocumentModel {
         and(
           eq(agentDocuments.id, documentId),
           eq(agentDocuments.userId, this.userId),
-          isNull(agentDocuments.deletedAt),
+          ...this.buildDeletedAtFilters(options),
         ),
       )
       .limit(1);
@@ -541,7 +645,11 @@ export class AgentDocumentModel {
     });
   }
 
-  async findByFilename(agentId: string, filename: string): Promise<AgentDocument | undefined> {
+  async findByFilename(
+    agentId: string,
+    filename: string,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument | undefined> {
     const [result] = await this.db
       .select({ doc: documents, settings: agentDocuments })
       .from(agentDocuments)
@@ -551,7 +659,7 @@ export class AgentDocumentModel {
           eq(agentDocuments.userId, this.userId),
           eq(agentDocuments.agentId, agentId),
           eq(documents.filename, filename),
-          isNull(agentDocuments.deletedAt),
+          ...this.buildDeletedAtFilters(options),
         ),
       )
       .orderBy(desc(agentDocuments.updatedAt))
@@ -560,6 +668,164 @@ export class AgentDocumentModel {
     if (!result) return undefined;
 
     return this.toAgentDocument(result.settings, result.doc);
+  }
+
+  async findByParentAndFilename(
+    agentId: string,
+    parentId: string | null,
+    filename: string,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument | undefined> {
+    const [result] = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          eq(documents.filename, filename),
+          parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
+          ...this.buildDeletedAtFilters(options),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt))
+      .limit(1);
+
+    if (!result) return undefined;
+
+    return this.toAgentDocument(result.settings, result.doc);
+  }
+
+  /**
+   * Lists agent document bindings that share one tree segment.
+   *
+   * Use when:
+   * - VFS callers need to reject ambiguous sibling paths before create, write, or restore
+   * - Migration checks need to detect duplicate `parentId + filename` rows
+   *
+   * Expects:
+   * - `parentId` is the canonical document row parent id, not the agent document id
+   *
+   * Returns:
+   * - Matching bindings ordered newest first, optionally capped for conflict probes
+   */
+  async listByParentAndFilename(
+    agentId: string,
+    parentId: string | null,
+    filename: string,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument[]> {
+    const results = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          eq(documents.filename, filename),
+          parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
+          ...this.buildDeletedAtFilters(options),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt))
+      .limit(options?.limit ?? 9999)
+      .offset(this.normalizeListOffset(options?.cursor));
+
+    return results.map(({ settings, doc }) => this.toAgentDocument(settings, doc));
+  }
+
+  async findByDocumentId(
+    agentId: string,
+    documentId: string,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument | undefined> {
+    const [result] = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          eq(agentDocuments.documentId, documentId),
+          ...this.buildDeletedAtFilters(options),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt))
+      .limit(1);
+
+    if (!result) return undefined;
+
+    return this.toAgentDocument(result.settings, result.doc);
+  }
+
+  async listByParent(
+    agentId: string,
+    parentId: string | null,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument[]> {
+    const results = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
+          ...this.buildDeletedAtFilters(options),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt))
+      .limit(options?.limit ?? 9999)
+      .offset(this.normalizeListOffset(options?.cursor));
+
+    return results.map(({ settings, doc }) => this.toAgentDocument(settings, doc));
+  }
+
+  async listDeletedByAgent(agentId: string): Promise<AgentDocument[]> {
+    const results = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          eq(documents.userId, this.userId),
+          isNotNull(agentDocuments.deletedAt),
+        ),
+      )
+      .orderBy(desc(agentDocuments.deletedAt), desc(agentDocuments.updatedAt));
+
+    return results.map(({ settings, doc }) => this.toAgentDocument(settings, doc));
+  }
+
+  async listSubtreeByDocumentId(
+    agentId: string,
+    rootDocumentId: string,
+    options?: AgentDocumentQueryOptions,
+  ): Promise<AgentDocument[]> {
+    const root = await this.findByDocumentId(agentId, rootDocumentId, options);
+
+    if (!root) return [];
+
+    const subtree = [root];
+    const pendingParentIds = [root.documentId];
+
+    while (pendingParentIds.length > 0) {
+      const parentIds = pendingParentIds.splice(0, pendingParentIds.length);
+      const children = await this.listByParentIds(agentId, parentIds, options);
+
+      for (const child of children) {
+        subtree.push(child);
+        pendingParentIds.push(child.documentId);
+      }
+    }
+
+    return subtree;
   }
 
   async delete(documentId: string, deleteReason?: string): Promise<void> {
@@ -581,6 +847,118 @@ export class AgentDocumentModel {
           isNull(agentDocuments.deletedAt),
         ),
       );
+  }
+
+  async deleteSubtreeByDocumentId(
+    agentId: string,
+    rootDocumentId: string,
+    deleteReason?: string,
+  ): Promise<void> {
+    const subtree = await this.listSubtreeByDocumentId(agentId, rootDocumentId);
+
+    if (subtree.length === 0) return;
+
+    await this.db
+      .update(agentDocuments)
+      .set({
+        policyLoad: PolicyLoad.DISABLED,
+        deleteReason,
+        deletedAt: new Date(),
+        deletedByAgentId: null,
+        deletedByUserId: this.userId,
+      })
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          inArray(
+            agentDocuments.id,
+            subtree.map((item) => item.id),
+          ),
+          isNull(agentDocuments.deletedAt),
+        ),
+      );
+  }
+
+  async restore(documentId: string): Promise<void> {
+    await this.db
+      .update(agentDocuments)
+      .set({
+        deleteReason: null,
+        deletedAt: null,
+        deletedByAgentId: null,
+        deletedByUserId: null,
+        policyLoad: PolicyLoad.PROGRESSIVE,
+      })
+      .where(and(eq(agentDocuments.id, documentId), eq(agentDocuments.userId, this.userId)));
+  }
+
+  async restoreSubtreeByDocumentId(agentId: string, rootDocumentId: string): Promise<void> {
+    const subtree = await this.listSubtreeByDocumentId(agentId, rootDocumentId, {
+      includeDeleted: true,
+    });
+
+    if (subtree.length === 0) return;
+
+    await this.db
+      .update(agentDocuments)
+      .set({
+        deleteReason: null,
+        deletedAt: null,
+        deletedByAgentId: null,
+        deletedByUserId: null,
+        policyLoad: PolicyLoad.PROGRESSIVE,
+      })
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          inArray(
+            agentDocuments.id,
+            subtree.map((item) => item.id),
+          ),
+        ),
+      );
+  }
+
+  async permanentlyDelete(documentId: string): Promise<void> {
+    const existing = await this.findByIdWithOptions(documentId, { includeDeleted: true });
+
+    if (!existing) return;
+
+    await this.db.transaction(async (trx) => {
+      await trx
+        .delete(agentDocuments)
+        .where(and(eq(agentDocuments.id, documentId), eq(agentDocuments.userId, this.userId)));
+
+      await trx
+        .delete(documents)
+        .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+    });
+  }
+
+  async permanentlyDeleteSubtreeByDocumentId(
+    agentId: string,
+    rootDocumentId: string,
+  ): Promise<void> {
+    const subtree = await this.listSubtreeByDocumentId(agentId, rootDocumentId, {
+      includeDeleted: true,
+    });
+
+    if (subtree.length === 0) return;
+
+    const agentDocumentIds = subtree.map((item) => item.id);
+    const documentIds = subtree.map((item) => item.documentId);
+
+    await this.db.transaction(async (trx) => {
+      await trx
+        .delete(agentDocuments)
+        .where(
+          and(eq(agentDocuments.userId, this.userId), inArray(agentDocuments.id, agentDocumentIds)),
+        );
+
+      await trx
+        .delete(documents)
+        .where(and(eq(documents.userId, this.userId), inArray(documents.id, documentIds)));
+    });
   }
 
   async deleteByAgent(agentId: string, deleteReason?: string): Promise<void> {

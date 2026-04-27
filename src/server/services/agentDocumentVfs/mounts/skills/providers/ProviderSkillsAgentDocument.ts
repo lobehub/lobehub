@@ -1,0 +1,259 @@
+import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
+import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
+
+import type {
+  CreateSkillInput,
+  DeleteSkillInput,
+  PromoteSkillInput,
+  SkillMountProviderRequest,
+  UpdateSkillInput,
+  WritableSkillMountProvider,
+} from '../SkillMount';
+import { SkillMountPathResolver } from '../SkillMountPathResolver';
+import type { SkillMountNode } from '../types';
+import type { ProviderSkillsAgentDocumentDeps } from './providerSkillsAgentDocumentUtils';
+import {
+  assertSkillDocument,
+  buildSkillDirectoryNode,
+  buildSkillFileNode,
+  buildSkillNamespaceRootNode,
+  createSkillTree,
+  EMPTY_EDITOR_DATA,
+  getRequiredTopicId,
+  getResolvedSkillName,
+  getScopedSkillDocuments,
+  getSkillFile,
+  getSkillFolder,
+  getSkillMetadata,
+  getValidatedSkillName,
+  listScopedSkillFolders,
+  projectDocumentContent,
+  sortSkillFolders,
+} from './providerSkillsAgentDocumentUtils';
+
+interface ProviderSkillsAgentDocumentConfig {
+  namespace: 'agent' | 'agent-topic';
+}
+
+const DOCUMENT_SKILL_PROVIDER_CONFIGS = {
+  'agent': {
+    namespace: 'agent',
+  },
+  'agent-topic': {
+    namespace: 'agent-topic',
+  },
+} as const satisfies Record<'agent' | 'agent-topic', ProviderSkillsAgentDocumentConfig>;
+
+/**
+ * Provides writable VFS operations for document-backed skills.
+ *
+ * Use when:
+ * - Serving agent-level skills from agent documents.
+ * - Serving topic-level draft skills from agent documents.
+ *
+ * Expects:
+ * - Managed skill documents carry `metadata.lobeSkill` with namespace, role, and topic scope.
+ * - Topic-backed requests pass `topicId`.
+ *
+ * Returns:
+ * - Skill VFS nodes whose paths use the target unified `./lobe/skills/...` layout.
+ */
+export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
+  private readonly config: ProviderSkillsAgentDocumentConfig;
+
+  readonly promote?: (input: PromoteSkillInput) => Promise<SkillMountNode>;
+
+  constructor(
+    namespace: ProviderSkillsAgentDocumentConfig['namespace'],
+    private readonly deps: ProviderSkillsAgentDocumentDeps,
+  ) {
+    this.config = DOCUMENT_SKILL_PROVIDER_CONFIGS[namespace];
+
+    if (namespace === 'agent-topic') {
+      this.promote = (input) => this.promoteTopicSkill(input);
+    }
+  }
+
+  async get(input: SkillMountProviderRequest): Promise<SkillMountNode> {
+    const topicId = this.getTopicId(input.topicId);
+
+    if (!input.resolvedPath.skillName) {
+      return buildSkillNamespaceRootNode(this.config.namespace);
+    }
+
+    const skillName = getResolvedSkillName(
+      input.resolvedPath.skillName,
+      input.resolvedPath.filePath,
+    );
+    const documents = await this.deps.agentDocumentModel.findByAgent(input.agentId);
+
+    if (!input.resolvedPath.filePath) {
+      assertSkillDocument(getSkillFolder(documents, this.config.namespace, skillName, topicId));
+      return buildSkillDirectoryNode(this.config.namespace, skillName);
+    }
+
+    const document = assertSkillDocument(
+      getSkillFile(documents, this.config.namespace, skillName, topicId),
+    );
+    const content = await projectDocumentContent(document);
+
+    return buildSkillFileNode({
+      content,
+      namespace: this.config.namespace,
+      skillName,
+    });
+  }
+
+  async list(input: SkillMountProviderRequest): Promise<SkillMountNode[]> {
+    const topicId = this.getTopicId(input.topicId);
+    const documents = getScopedSkillDocuments(
+      await this.deps.agentDocumentModel.findByAgent(input.agentId),
+      this.config.namespace,
+      topicId,
+    );
+
+    if (!input.resolvedPath.skillName) {
+      return sortSkillFolders(
+        listScopedSkillFolders(documents, this.config.namespace, topicId),
+      ).map((document) =>
+        buildSkillDirectoryNode(
+          this.config.namespace,
+          getSkillMetadata(document)?.skillName ?? document.filename,
+        ),
+      );
+    }
+
+    const skillName = getResolvedSkillName(
+      input.resolvedPath.skillName,
+      input.resolvedPath.filePath,
+    );
+    assertSkillDocument(getSkillFolder(documents, this.config.namespace, skillName, topicId));
+
+    return [
+      buildSkillFileNode({
+        namespace: this.config.namespace,
+        skillName,
+      }),
+    ];
+  }
+
+  async create(input: CreateSkillInput): Promise<SkillMountNode> {
+    const topicId = this.getTopicId(input.topicId);
+    const skillName = getValidatedSkillName(input.skillName, 'skillName');
+    const documents = await this.deps.agentDocumentModel.findByAgent(input.agentId);
+
+    if (getSkillFolder(documents, this.config.namespace, skillName, topicId)) {
+      throw new AgentDocumentVfsError(`Skill "${skillName}" already exists`, 'CONFLICT');
+    }
+
+    const snapshot = await createMarkdownEditorSnapshot(input.content);
+
+    await createSkillTree({
+      agentDocumentModel: this.deps.agentDocumentModel,
+      agentId: input.agentId,
+      content: snapshot.content,
+      documentService: this.deps.documentService,
+      editorData: snapshot.editorData,
+      namespace: this.config.namespace,
+      skillName,
+      topicId,
+    });
+
+    return buildSkillFileNode({
+      content: snapshot.content,
+      namespace: this.config.namespace,
+      skillName,
+    });
+  }
+
+  async update(input: UpdateSkillInput): Promise<SkillMountNode> {
+    const topicId = this.getTopicId(input.topicId);
+    const resolvedPath = SkillMountPathResolver.resolve(input.path);
+    const skillName = getResolvedSkillName(resolvedPath.skillName, resolvedPath.filePath);
+    const documents = await this.deps.agentDocumentModel.findByAgent(input.agentId);
+    const document = assertSkillDocument(
+      getSkillFile(documents, this.config.namespace, skillName, topicId),
+    );
+    const existingContent = await projectDocumentContent(document);
+    const snapshot = await createMarkdownEditorSnapshot(input.content);
+
+    if (existingContent !== snapshot.content) {
+      await this.deps.documentService.trySaveCurrentDocumentHistory(
+        document.documentId,
+        'llm_call',
+      );
+    }
+
+    await this.deps.agentDocumentModel.update(document.id, {
+      content: snapshot.content,
+      editorData: snapshot.editorData,
+    });
+
+    return buildSkillFileNode({
+      content: snapshot.content,
+      namespace: this.config.namespace,
+      skillName,
+    });
+  }
+
+  async delete(input: DeleteSkillInput): Promise<void> {
+    const topicId = this.getTopicId(input.topicId);
+    const resolvedPath = SkillMountPathResolver.resolve(input.path);
+    const skillName = getResolvedSkillName(resolvedPath.skillName, resolvedPath.filePath);
+    const documents = getScopedSkillDocuments(
+      await this.deps.agentDocumentModel.findByAgent(input.agentId),
+      this.config.namespace,
+      topicId,
+    );
+    const folder = assertSkillDocument(
+      getSkillFolder(documents, this.config.namespace, skillName, topicId),
+    );
+
+    await this.deps.documentService.deleteDocument(folder.documentId);
+  }
+
+  private async promoteTopicSkill(input: PromoteSkillInput): Promise<SkillMountNode> {
+    const topicId = getRequiredTopicId(input.topicId);
+    const resolvedPath = SkillMountPathResolver.resolve(input.path);
+    const skillName = getResolvedSkillName(resolvedPath.skillName, resolvedPath.filePath);
+    const targetName = input.targetName
+      ? getValidatedSkillName(input.targetName, 'targetName')
+      : skillName;
+    const documents = await this.deps.agentDocumentModel.findByAgent(input.agentId);
+
+    if (getSkillFolder(documents, 'agent', targetName)) {
+      throw new AgentDocumentVfsError(`Skill "${targetName}" already exists`, 'CONFLICT');
+    }
+
+    const sourceFile = assertSkillDocument(
+      getSkillFile(documents, 'agent-topic', skillName, topicId),
+    );
+    const content = await projectDocumentContent(sourceFile);
+
+    await createSkillTree({
+      agentDocumentModel: this.deps.agentDocumentModel,
+      agentId: input.agentId,
+      content,
+      documentService: this.deps.documentService,
+      editorData: sourceFile.editorData ?? EMPTY_EDITOR_DATA,
+      lineage: {
+        sourceDocumentId: sourceFile.documentId,
+        sourceNamespace: 'agent-topic',
+        sourceSkillName: skillName,
+        sourceTopicId: topicId,
+      },
+      namespace: 'agent',
+      skillName: targetName,
+    });
+
+    return buildSkillFileNode({
+      content,
+      namespace: 'agent',
+      skillName: targetName,
+    });
+  }
+
+  private getTopicId(topicId?: string) {
+    return this.config.namespace === 'agent-topic' ? getRequiredTopicId(topicId) : undefined;
+  }
+}

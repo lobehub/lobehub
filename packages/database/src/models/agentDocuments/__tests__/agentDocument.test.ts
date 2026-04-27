@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agentDocuments, agents, documents, users } from '../../../schemas';
+import { DOCUMENT_FOLDER_TYPE } from '../../../schemas/file';
 import type { LobeChatDatabase } from '../../../type';
 import {
   AgentDocumentModel,
@@ -171,6 +172,12 @@ describe('AgentDocumentModel', () => {
       expect(result.accessShared).toBe(0);
       expect(result.accessPublic).toBe(0);
     });
+
+    it('should reject duplicate live siblings at the database boundary', async () => {
+      await agentDocumentModel.create(agentId, 'duplicate.md', 'first');
+
+      await expect(agentDocumentModel.create(agentId, 'duplicate.md', 'second')).rejects.toThrow();
+    });
   });
 
   describe('findById and findByFilename', () => {
@@ -307,6 +314,31 @@ describe('AgentDocumentModel', () => {
       const renamed = await agentDocumentModel.rename(created.id, 'IDENTITY 2');
 
       expect(renamed?.filename).toBe('IDENTITY 2');
+    });
+
+    it('should move path metadata without changing agent document identity', async () => {
+      const folder = await agentDocumentModel.create(agentId, 'folder', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        title: 'folder',
+      });
+      const created = await agentDocumentModel.create(agentId, 'old.md', 'hello');
+
+      const moved = await agentDocumentModel.movePath(created.id, {
+        filename: 'new.md',
+        parentId: folder.documentId,
+      });
+
+      expect(moved?.id).toBe(created.id);
+      expect(moved?.documentId).toBe(created.documentId);
+      expect(moved?.filename).toBe('new.md');
+      expect(moved?.parentId).toBe(folder.documentId);
+
+      const [doc] = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.id, created.documentId));
+
+      expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('new.md')}`);
     });
 
     it('should copy into a new record and keep policy/template metadata', async () => {
@@ -541,6 +573,150 @@ describe('AgentDocumentModel', () => {
         .from(agentDocuments)
         .where(and(eq(agentDocuments.id, otherTemplateDoc.id), eq(agentDocuments.userId, userId)));
       expect(otherTemplateRow?.deletedAt).toBeNull();
+    });
+
+    it('should support include-deleted lookups and deleted-only child listings', async () => {
+      const folder = await agentDocumentModel.create(agentId, 'notes', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        title: 'notes',
+      });
+      const visibleChild = await agentDocumentModel.create(agentId, 'visible.md', 'visible', {
+        parentId: folder.documentId,
+      });
+      const deletedChild = await agentDocumentModel.create(agentId, 'deleted.md', 'deleted', {
+        parentId: folder.documentId,
+      });
+
+      await agentDocumentModel.delete(deletedChild.id, 'trash it');
+
+      expect(await agentDocumentModel.findById(deletedChild.id)).toBeUndefined();
+      expect(
+        await agentDocumentModel.findById(deletedChild.id, {
+          includeDeleted: true,
+        }),
+      ).toMatchObject({ id: deletedChild.id });
+
+      const liveChildren = await agentDocumentModel.listByParent(agentId, folder.documentId);
+      const allChildren = await agentDocumentModel.listByParent(agentId, folder.documentId, {
+        includeDeleted: true,
+      });
+      const deletedChildren = await agentDocumentModel.listByParent(agentId, folder.documentId, {
+        deletedOnly: true,
+      });
+
+      expect(liveChildren.map((item) => item.id)).toEqual([visibleChild.id]);
+      expect(allChildren.map((item) => item.id).sort()).toEqual(
+        [visibleChild.id, deletedChild.id].sort(),
+      );
+      expect(deletedChildren.map((item) => item.id)).toEqual([deletedChild.id]);
+
+      const deletedByPath = await agentDocumentModel.findByParentAndFilename(
+        agentId,
+        folder.documentId,
+        'deleted.md',
+        {
+          includeDeleted: true,
+        },
+      );
+      expect(deletedByPath?.id).toBe(deletedChild.id);
+
+      const liveByPath = await agentDocumentModel.listByParentAndFilename(
+        agentId,
+        folder.documentId,
+        'visible.md',
+        {
+          limit: 1,
+        },
+      );
+      expect(liveByPath.map((item) => item.id)).toEqual([visibleChild.id]);
+    });
+
+    it('should soft-delete, restore, and permanently delete a subtree by root document id', async () => {
+      const rootFolder = await agentDocumentModel.create(agentId, 'workspace', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        title: 'workspace',
+      });
+      const nestedFolder = await agentDocumentModel.create(agentId, 'drafts', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        parentId: rootFolder.documentId,
+        title: 'drafts',
+      });
+      const nestedFile = await agentDocumentModel.create(agentId, 'plan.md', 'v1', {
+        parentId: nestedFolder.documentId,
+      });
+      const siblingFile = await agentDocumentModel.create(agentId, 'keep.md', 'keep me');
+
+      await agentDocumentModel.deleteSubtreeByDocumentId(
+        agentId,
+        rootFolder.documentId,
+        'recursive cleanup',
+      );
+
+      expect(await agentDocumentModel.findById(rootFolder.id)).toBeUndefined();
+      expect(await agentDocumentModel.findById(nestedFolder.id)).toBeUndefined();
+      expect(await agentDocumentModel.findById(nestedFile.id)).toBeUndefined();
+      expect(await agentDocumentModel.findById(siblingFile.id)).toBeDefined();
+
+      const deletedTree = await agentDocumentModel.listSubtreeByDocumentId(
+        agentId,
+        rootFolder.documentId,
+        {
+          includeDeleted: true,
+        },
+      );
+      expect(deletedTree.map((item) => item.id).sort()).toEqual(
+        [rootFolder.id, nestedFolder.id, nestedFile.id].sort(),
+      );
+
+      const trashItems = await agentDocumentModel.listDeletedByAgent(agentId);
+      expect(trashItems.map((item) => item.id).sort()).toEqual(
+        [rootFolder.id, nestedFolder.id, nestedFile.id].sort(),
+      );
+
+      await agentDocumentModel.restoreSubtreeByDocumentId(agentId, rootFolder.documentId);
+
+      const restoredTree = await agentDocumentModel.listSubtreeByDocumentId(
+        agentId,
+        rootFolder.documentId,
+      );
+      expect(restoredTree.map((item) => item.id).sort()).toEqual(
+        [rootFolder.id, nestedFolder.id, nestedFile.id].sort(),
+      );
+      expect(await agentDocumentModel.listDeletedByAgent(agentId)).toEqual([]);
+
+      await agentDocumentModel.deleteSubtreeByDocumentId(
+        agentId,
+        rootFolder.documentId,
+        'recursive cleanup',
+      );
+      await agentDocumentModel.permanentlyDeleteSubtreeByDocumentId(agentId, rootFolder.documentId);
+
+      expect(
+        await agentDocumentModel.findByDocumentId(agentId, rootFolder.documentId, {
+          includeDeleted: true,
+        }),
+      ).toBeUndefined();
+      expect(
+        await agentDocumentModel.findByDocumentId(agentId, nestedFolder.documentId, {
+          includeDeleted: true,
+        }),
+      ).toBeUndefined();
+      expect(
+        await agentDocumentModel.findByDocumentId(agentId, nestedFile.documentId, {
+          includeDeleted: true,
+        }),
+      ).toBeUndefined();
+      expect(await agentDocumentModel.findById(siblingFile.id)).toBeDefined();
+
+      const remainingRows = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.userId, userId));
+
+      expect(remainingRows.map((item) => item.id)).toContain(siblingFile.documentId);
+      expect(remainingRows.map((item) => item.id)).not.toContain(rootFolder.documentId);
+      expect(remainingRows.map((item) => item.id)).not.toContain(nestedFolder.documentId);
+      expect(remainingRows.map((item) => item.id)).not.toContain(nestedFile.documentId);
     });
   });
 });

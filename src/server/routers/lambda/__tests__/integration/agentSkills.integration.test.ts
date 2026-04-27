@@ -4,8 +4,17 @@ import { agentSkills } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
+
+import { agentDocumentRouter } from '../../agentDocument';
 import { agentSkillsRouter } from '../../agentSkills';
-import { cleanupTestUser, createTestContext, createTestUser } from './setup';
+import {
+  cleanupTestUser,
+  createTestAgent,
+  createTestContext,
+  createTestTopic,
+  createTestUser,
+} from './setup';
 
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
@@ -83,17 +92,46 @@ vi.stubGlobal('fetch', mockFetch);
 
 describe('Skill Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
+  let agentDocumentModel: AgentDocumentModel;
   let userId: string;
 
   beforeEach(async () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    agentDocumentModel = new AgentDocumentModel(serverDB, userId);
   });
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
   });
+
+  const getManagedSkillBindingId = async ({
+    agentId,
+    namespace,
+    skillName,
+    topicId,
+  }: {
+    agentId: string;
+    namespace: 'agent' | 'agent-topic';
+    skillName: string;
+    topicId?: string;
+  }) => {
+    const documents = await agentDocumentModel.findByAgent(agentId);
+    const document = documents.find(
+      (item) =>
+        item.filename === 'SKILL.md' &&
+        item.metadata?.lobeSkill?.namespace === namespace &&
+        item.metadata?.lobeSkill?.skillName === skillName &&
+        item.metadata?.lobeSkill?.topicId === topicId,
+    );
+
+    if (!document) {
+      throw new Error(`Expected managed skill document ${namespace}:${skillName} to exist`);
+    }
+
+    return document.id;
+  };
 
   describe('create', () => {
     it('should create a new skill', async () => {
@@ -431,6 +469,336 @@ describe('Skill Router Integration Tests', () => {
 
       expect(remaining.data).toHaveLength(1);
       expect(remaining.data[0].id).toBe(skill2!.id);
+    });
+  });
+
+  describe('VFS write APIs', () => {
+    it('should create an agent skill through the VFS API', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const result = await caller.createSkillByPath({
+        agentId,
+        content: '# Research Helper\n\nUse this skill for research.',
+        skillName: 'research-helper',
+        targetNamespace: 'agent',
+      });
+
+      if (!result) {
+        throw new Error('Expected createSkill to return a skill file node');
+      }
+
+      expect(result.mount?.namespace).toBe('agent');
+      expect(result.path).toBe('./lobe/skills/agent/skills/research-helper/SKILL.md');
+
+      const fileNode = await caller.readDocumentByPath({
+        agentId,
+        path: './lobe/skills/agent/skills/research-helper/SKILL.md',
+      });
+
+      if (!fileNode) {
+        throw new Error('Expected created agent skill file to exist');
+      }
+
+      expect(fileNode.content?.trimEnd()).toBe('# Research Helper\n\nUse this skill for research.');
+    });
+
+    it('should create and update an agent-topic skill through the VFS API', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+      const topicId = await createTestTopic(serverDB, userId);
+
+      const created = await caller.createSkillByPath({
+        agentId,
+        content: '# Topic Draft\n\nInitial topic skill content.',
+        skillName: 'topic-draft',
+        targetNamespace: 'agent-topic',
+        topicId,
+      });
+
+      if (!created) {
+        throw new Error('Expected createSkill to return a topic skill file node');
+      }
+
+      const updated = await caller.updateSkillByPath({
+        agentId,
+        content: '# Topic Draft\n\nUpdated topic skill content.',
+        path: created.path,
+        topicId,
+      });
+
+      if (!updated) {
+        throw new Error('Expected updateSkill to return an updated topic skill file node');
+      }
+
+      expect(updated.mount?.namespace).toBe('agent-topic');
+
+      const updatedFile = await caller.readDocumentByPath({
+        agentId,
+        path: updated.path,
+        topicId,
+      });
+
+      expect(updatedFile.content?.trimEnd()).toBe('# Topic Draft\n\nUpdated topic skill content.');
+
+      const persistedFile = (await agentDocumentModel.findByAgent(agentId)).find(
+        (document) =>
+          document.filename === 'SKILL.md' &&
+          document.metadata?.lobeSkill?.namespace === 'agent-topic' &&
+          document.metadata?.lobeSkill?.skillName === 'topic-draft' &&
+          document.metadata?.lobeSkill?.topicId === topicId,
+      );
+
+      expect(persistedFile?.content.trimEnd()).toBe(
+        '# Topic Draft\n\nUpdated topic skill content.',
+      );
+    });
+
+    it('should delete an agent skill through the VFS API', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const created = await caller.createSkillByPath({
+        agentId,
+        content: '# Disposable Skill\n\nTemporary content.',
+        skillName: 'disposable-skill',
+        targetNamespace: 'agent',
+      });
+
+      if (!created) {
+        throw new Error('Expected createSkill to return a disposable skill file node');
+      }
+
+      await caller.deleteSkillByPath({
+        agentId,
+        path: created.path,
+      });
+
+      await expect(
+        caller.readDocumentByPath({
+          agentId,
+          path: created.path,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('should promote an agent-topic skill into the agent namespace', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+      const topicId = await createTestTopic(serverDB, userId);
+
+      const created = await caller.createSkillByPath({
+        agentId,
+        content: '# Topic Specialist\n\nPromote this skill.',
+        skillName: 'topic-specialist',
+        targetNamespace: 'agent-topic',
+        topicId,
+      });
+
+      if (!created) {
+        throw new Error('Expected createSkill to return a promotable topic skill file node');
+      }
+
+      const promoted = await caller.promoteSkillByPath({
+        agentId,
+        path: created.path,
+        targetName: 'agent-specialist',
+        topicId,
+      });
+
+      if (!promoted) {
+        throw new Error('Expected promoteSkill to return a promoted skill file node');
+      }
+
+      expect(promoted.mount?.namespace).toBe('agent');
+      expect(promoted.path).toBe('./lobe/skills/agent/skills/agent-specialist/SKILL.md');
+
+      const promotedFile = await caller.readDocumentByPath({ agentId, path: promoted.path });
+
+      if (!promotedFile) {
+        throw new Error('Expected promoted agent skill file to exist');
+      }
+
+      expect(promotedFile.content?.trimEnd()).toBe('# Topic Specialist\n\nPromote this skill.');
+    });
+
+    it('should surface CONFLICT when creating a duplicate VFS skill', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await caller.createSkillByPath({
+        agentId,
+        content: '# Research Helper\n\nUse this skill for research.',
+        skillName: 'research-helper',
+        targetNamespace: 'agent',
+      });
+
+      await expect(
+        caller.createSkillByPath({
+          agentId,
+          content: '# Research Helper\n\nDuplicate content.',
+          skillName: 'research-helper',
+          targetNamespace: 'agent',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('should surface NOT_FOUND when deleting a missing VFS skill', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.deleteSkillByPath({
+          agentId,
+          path: './lobe/skills/agent/skills/missing-skill/SKILL.md',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('should surface METHOD_NOT_SUPPORTED when promoting from a non-promotable namespace', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const created = await caller.createSkillByPath({
+        agentId,
+        content: '# Local Skill\n\nNo promote support.',
+        skillName: 'local-skill',
+        targetNamespace: 'agent',
+      });
+
+      if (!created) {
+        throw new Error('Expected createSkill to return a local skill file node');
+      }
+
+      await expect(
+        caller.promoteSkillByPath({
+          agentId,
+          path: created.path,
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({ code: 'METHOD_NOT_SUPPORTED' });
+    });
+
+    it('should surface BAD_REQUEST for invalid skill names', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.createSkillByPath({
+          agentId,
+          content: '# Invalid',
+          skillName: 'bad/name',
+          targetNamespace: 'agent',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('should surface BAD_REQUEST when agent-topic skill creation is missing topicId', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.createSkillByPath({
+          agentId,
+          content: '# Topic Skill',
+          skillName: 'topic-skill',
+          targetNamespace: 'agent-topic',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('should surface BAD_REQUEST for invalid promote target names', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+      const topicId = await createTestTopic(serverDB, userId);
+
+      const created = await caller.createSkillByPath({
+        agentId,
+        content: '# Topic Specialist\n\nPromote this skill.',
+        skillName: 'topic-specialist',
+        targetNamespace: 'agent-topic',
+        topicId,
+      });
+
+      if (!created) {
+        throw new Error('Expected createSkill to return a promotable topic skill file node');
+      }
+
+      await expect(
+        caller.promoteSkillByPath({
+          agentId,
+          path: created.path,
+          targetName: 'bad/name',
+          topicId,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('should surface BAD_REQUEST for unsupported VFS file paths on update', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.updateSkillByPath({
+          agentId,
+          content: '# Updated',
+          path: './lobe/skills/agent/skills/research-helper/notes.md',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('should surface METHOD_NOT_SUPPORTED when renaming a skill-managed document through agentDocument', async () => {
+      const skillCaller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const documentCaller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await skillCaller.createSkillByPath({
+        agentId,
+        content: '# Research Helper\n\nUse this skill for research.',
+        skillName: 'research-helper',
+        targetNamespace: 'agent',
+      });
+
+      const id = await getManagedSkillBindingId({
+        agentId,
+        namespace: 'agent',
+        skillName: 'research-helper',
+      });
+
+      await expect(
+        documentCaller.renameDocument({
+          agentId,
+          id,
+          newTitle: 'Renamed Skill',
+        }),
+      ).rejects.toMatchObject({ code: 'METHOD_NOT_SUPPORTED' });
+    });
+
+    it('should surface METHOD_NOT_SUPPORTED when copying a skill-managed document through agentDocument', async () => {
+      const skillCaller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const documentCaller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await skillCaller.createSkillByPath({
+        agentId,
+        content: '# Research Helper\n\nUse this skill for research.',
+        skillName: 'research-helper',
+        targetNamespace: 'agent',
+      });
+
+      const id = await getManagedSkillBindingId({
+        agentId,
+        namespace: 'agent',
+        skillName: 'research-helper',
+      });
+
+      await expect(
+        documentCaller.copyDocument({
+          agentId,
+          id,
+          newTitle: 'Copied Skill',
+        }),
+      ).rejects.toMatchObject({ code: 'METHOD_NOT_SUPPORTED' });
     });
   });
 

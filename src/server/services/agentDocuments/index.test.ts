@@ -1,16 +1,19 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
 import {
   AgentDocumentModel,
   buildDocumentFilename,
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
+import { AgentSkillModel } from '@/database/models/agentSkill';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { AgentDocumentsService } from './agentDocuments';
-import { DocumentService } from './document';
+import { DocumentService } from '../document';
+import { SkillResourceService } from '../skill/resource';
+import { AgentDocumentsService } from './index';
 
 const headlessEditorMocks = vi.hoisted(() => ({
   applyLiteXML: vi.fn(),
@@ -26,12 +29,24 @@ vi.mock('@/database/models/agentDocuments', () => ({
   extractMarkdownH1Title: vi.fn((content: string) => ({ content })),
 }));
 
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/agentSkill', () => ({
+  AgentSkillModel: vi.fn(),
+}));
+
 vi.mock('@/database/models/topicDocument', () => ({
   TopicDocumentModel: vi.fn(),
 }));
 
-vi.mock('./document', () => ({
+vi.mock('../document', () => ({
   DocumentService: vi.fn(),
+}));
+
+vi.mock('../skill/resource', () => ({
+  SkillResourceService: vi.fn(),
 }));
 
 vi.mock('@lobehub/editor/headless', () => ({
@@ -72,6 +87,7 @@ describe('AgentDocumentsService', () => {
 
   const mockModel = {
     associate: vi.fn(),
+    copy: vi.fn(),
     create: vi.fn(),
     findById: vi.fn(),
     findByAgent: vi.fn(),
@@ -83,17 +99,34 @@ describe('AgentDocumentsService', () => {
     upsert: vi.fn(),
   };
   const mockDocumentService = {
+    createDocument: vi.fn(),
+    deleteDocument: vi.fn(),
     trySaveCurrentDocumentHistory: vi.fn(),
+    updateDocument: vi.fn(),
+  };
+  const mockAgentModel = {
+    getAgentConfigById: vi.fn(),
+  };
+  const mockSkillModel = {
+    findAll: vi.fn(),
+    findById: vi.fn(),
+    findByName: vi.fn(),
   };
   const mockTopicDocumentModel = {
     associate: vi.fn(),
     findByTopicId: vi.fn(),
   };
+  const mockSkillResourceService = {
+    readResource: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     (AgentDocumentModel as any).mockImplementation(() => mockModel);
+    (AgentModel as any).mockImplementation(() => mockAgentModel);
+    (AgentSkillModel as any).mockImplementation(() => mockSkillModel);
     (DocumentService as any).mockImplementation(() => mockDocumentService);
+    (SkillResourceService as any).mockImplementation(() => mockSkillResourceService);
     (TopicDocumentModel as any).mockImplementation(() => mockTopicDocumentModel);
     vi.mocked(buildDocumentFilename).mockImplementation((title: string) => title);
     vi.mocked(extractMarkdownH1Title).mockImplementation((content: string) => ({ content }));
@@ -529,6 +562,56 @@ describe('AgentDocumentsService', () => {
       expect(
         mockDocumentService.trySaveCurrentDocumentHistory.mock.invocationCallOrder[0],
       ).toBeLessThan(mockModel.rename.mock.invocationCallOrder[0]);
+    });
+
+    it('should reject renaming skill-managed documents', async () => {
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        content: 'content',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        metadata: {
+          lobeSkill: {
+            namespace: 'agent',
+            role: 'skill-folder',
+            skillName: 'writer',
+          },
+        },
+        title: 'writer',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(service.renameDocumentById('agent-doc-1', 'renamed', 'agent-1')).rejects.toThrow(
+        'Skill VFS documents must be renamed through skill-specific APIs',
+      );
+      expect(mockModel.rename).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('copyDocumentById', () => {
+    it('should reject copying skill-managed documents', async () => {
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        content: 'content',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        metadata: {
+          lobeSkill: {
+            namespace: 'agent',
+            role: 'skill-file',
+            skillName: 'writer',
+          },
+        },
+        title: 'SKILL.md',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(service.copyDocumentById('agent-doc-1', 'copy', 'agent-1')).rejects.toThrow(
+        'Skill VFS documents must be copied through skill-specific APIs',
+      );
+      expect(mockModel.copy).not.toHaveBeenCalled();
     });
   });
 

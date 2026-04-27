@@ -3,6 +3,7 @@ import {
   DocumentLoadFormat,
   DocumentLoadRule,
 } from '@lobechat/agent-templates';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentDocumentModel } from '@/database/models/agentDocuments';
@@ -11,9 +12,50 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
+import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
+import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
 
 const MAX_METADATA_BYTES = 16 * 1024;
 const MAX_RULE_REGEXP_LENGTH = 512;
+
+const agentDocumentVfsErrorToTRPCCode = (
+  code: AgentDocumentVfsError['code'],
+): 'BAD_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'METHOD_NOT_SUPPORTED' | 'NOT_FOUND' => {
+  switch (code) {
+    case 'CONFLICT': {
+      return 'CONFLICT';
+    }
+    case 'FORBIDDEN': {
+      return 'FORBIDDEN';
+    }
+    case 'METHOD_NOT_SUPPORTED': {
+      return 'METHOD_NOT_SUPPORTED';
+    }
+    case 'NOT_FOUND': {
+      return 'NOT_FOUND';
+    }
+    default: {
+      return 'BAD_REQUEST';
+    }
+  }
+};
+
+const handleAgentDocumentVfsError = (error: unknown): never => {
+  if (error instanceof TRPCError) {
+    throw error;
+  }
+
+  if (error instanceof AgentDocumentVfsError) {
+    throw new TRPCError({
+      cause: error,
+      code: agentDocumentVfsErrorToTRPCCode(error.code),
+      message: error.message,
+    });
+  }
+
+  throw error;
+};
 
 const metadataSchema = z
   .record(z.string(), z.unknown())
@@ -33,6 +75,37 @@ const toolLoadRuleSchema = z.object({
 });
 
 const readFormatSchema = z.enum(['xml', 'markdown', 'both']).optional();
+const writeCreateModeSchema = z.enum(['always-new', 'if-missing', 'must-exist']).optional();
+const recursiveSchema = z.boolean().optional();
+const mountedSkillNamespaceSchema = z.enum(['agent', 'agent-topic']);
+
+const createMountedSkillSchema = z.object({
+  agentId: z.string(),
+  content: z.string(),
+  skillName: z.string().min(1),
+  targetNamespace: mountedSkillNamespaceSchema,
+  topicId: z.string().optional(),
+});
+
+const deleteMountedSkillSchema = z.object({
+  agentId: z.string(),
+  path: z.string(),
+  topicId: z.string().optional(),
+});
+
+const promoteMountedSkillSchema = z.object({
+  agentId: z.string(),
+  path: z.string(),
+  targetName: z.string().optional(),
+  topicId: z.string(),
+});
+
+const updateMountedSkillSchema = z.object({
+  agentId: z.string(),
+  content: z.string(),
+  path: z.string(),
+  topicId: z.string().optional(),
+});
 
 const liteXMLOperationSchema = z.union([
   z.object({
@@ -62,6 +135,7 @@ const agentDocumentProcedure = authedProcedure.use(serverDatabase).use(async (op
     ctx: {
       agentDocumentModel: new AgentDocumentModel(ctx.serverDB, ctx.userId),
       agentDocumentService: new AgentDocumentsService(ctx.serverDB, ctx.userId),
+      agentDocumentVfsService: new AgentDocumentVfsService(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId),
     },
@@ -237,6 +311,37 @@ export const agentDocumentRouter = router({
     }),
 
   /**
+   * Tool-oriented: list documents by VFS path
+   */
+  listDocumentsByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        cursor: z.string().optional(),
+        limit: z.number().int().positive().max(500).optional(),
+        path: z.string(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.list(
+          input.path,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          {
+            cursor: input.cursor,
+            limit: input.limit,
+          },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
    * Tool-oriented: read document by filename
    */
   readDocumentByFilename: agentDocumentProcedure
@@ -251,6 +356,331 @@ export const agentDocumentRouter = router({
       return input.format
         ? ctx.agentDocumentService.getDocumentSnapshotByFilename(input.agentId, input.filename)
         : ctx.agentDocumentService.getDocumentByFilename(input.agentId, input.filename);
+    }),
+
+  /**
+   * Tool-oriented: stat document by VFS path
+   */
+  statDocumentByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        path: z.string(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.stat(input.path, {
+          agentId: input.agentId,
+          topicId: input.topicId,
+        });
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: read document by VFS path
+   */
+  readDocumentByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        path: z.string(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.read(input.path, {
+          agentId: input.agentId,
+          topicId: input.topicId,
+        });
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: write document by VFS path
+   */
+  writeDocumentByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        content: z.string(),
+        createMode: writeCreateModeSchema,
+        path: z.string(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.write(
+          input.path,
+          input.content,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { createMode: input.createMode },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  createSkillByPath: agentDocumentProcedure
+    .input(createMountedSkillSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const path = `${getUnifiedSkillNamespaceRootPath(input.targetNamespace)}/${input.skillName}`;
+
+        return await ctx.agentDocumentVfsService.write(
+          path,
+          input.content,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { createMode: 'always-new' },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  updateSkillByPath: agentDocumentProcedure
+    .input(updateMountedSkillSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.write(
+          input.path,
+          input.content,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { createMode: 'must-exist' },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  deleteSkillByPath: agentDocumentProcedure
+    .input(deleteMountedSkillSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.agentDocumentVfsService.delete(input.path, {
+          agentId: input.agentId,
+          topicId: input.topicId,
+        });
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  promoteSkillByPath: agentDocumentProcedure
+    .input(promoteMountedSkillSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.promoteSkill(
+          input.path,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { targetName: input.targetName },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: create a VFS directory
+   */
+  mkdirDocumentByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        path: z.string(),
+        recursive: recursiveSchema,
+        topicId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.mkdir(
+          input.path,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { recursive: input.recursive },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: rename or move a VFS path
+   */
+  renameDocumentByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        force: z.boolean().optional(),
+        fromPath: z.string(),
+        toPath: z.string(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.rename(
+          input.fromPath,
+          input.toPath,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { overwrite: input.force },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: copy a VFS path
+   */
+  copyDocumentByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        force: z.boolean().optional(),
+        fromPath: z.string(),
+        toPath: z.string(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.copy(
+          input.fromPath,
+          input.toPath,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { overwrite: input.force },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: soft-delete a VFS path
+   */
+  deleteDocumentByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        force: z.boolean().optional(),
+        path: z.string(),
+        recursive: recursiveSchema,
+        topicId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.agentDocumentVfsService.delete(
+          input.path,
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          { recursive: input.recursive },
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: list agent-scoped trash entries
+   */
+  listTrashDocumentsByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        path: z.string().optional(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.listTrash(
+          {
+            agentId: input.agentId,
+            topicId: input.topicId,
+          },
+          input.path,
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: restore a trash entry
+   */
+  restoreDocumentFromTrashByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        path: z.string(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentVfsService.restoreFromTrashByPath(input.path, {
+          agentId: input.agentId,
+          topicId: input.topicId,
+        });
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: permanently remove a trash entry
+   */
+  deleteDocumentPermanentlyByPath: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        force: z.boolean().optional(),
+        path: z.string(),
+        recursive: recursiveSchema,
+        topicId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.agentDocumentVfsService.deletePermanentlyByPath(input.path, {
+          agentId: input.agentId,
+          topicId: input.topicId,
+        });
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
     }),
 
   /**
@@ -303,7 +733,7 @@ export const agentDocumentRouter = router({
 
   /**
    * Create an agent document and associate it with a topic in one call.
-   * Used by the topic → page flow to replace the legacy notebook entry point.
+   * Used by the topic → page flow to create an agent document.
    */
   createForTopic: agentDocumentProcedure
     .input(
@@ -405,7 +835,15 @@ export const agentDocumentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.copyDocumentById(input.id, input.newTitle, input.agentId);
+      try {
+        return await ctx.agentDocumentService.copyDocumentById(
+          input.id,
+          input.newTitle,
+          input.agentId,
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
     }),
 
   /**
@@ -420,7 +858,15 @@ export const agentDocumentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.renameDocumentById(input.id, input.newTitle, input.agentId);
+      try {
+        return await ctx.agentDocumentService.renameDocumentById(
+          input.id,
+          input.newTitle,
+          input.agentId,
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
     }),
 
   /**
