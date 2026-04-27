@@ -155,6 +155,9 @@ export default class NotificationCtr extends ControllerModule {
         const mainWindow = this.app.browserManager.getMainWindow();
         mainWindow.show();
         mainWindow.browserWindow.focus();
+        if (params.navigate?.path) {
+          mainWindow.broadcast('navigate', params.navigate);
+        }
       });
 
       notification.on('close', () => {

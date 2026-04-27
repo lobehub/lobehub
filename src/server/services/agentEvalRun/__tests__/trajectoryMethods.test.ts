@@ -197,6 +197,7 @@ describe('AgentEvalRunService', () => {
               type: 'onComplete',
               webhook: {
                 body: { runId: run.id, testCaseId: testCase.id, userId },
+                delivery: 'qstash',
                 url: '/api/workflows/agent-eval-run/on-trajectory-complete',
               },
             }),
