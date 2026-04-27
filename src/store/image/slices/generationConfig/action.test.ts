@@ -583,6 +583,55 @@ describe('GenerationConfigAction', () => {
         });
       }).not.toThrow();
     });
+
+    it('should preserve resolution when changing aspect ratio for models with resolution enum', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      useImageStore.setState({
+        parameters: createTestParameters({ resolution: '4K' }),
+        parametersSchema: createTestSchema({
+          resolution: { default: '1K', enum: ['1K', '2K', '4K'] },
+        }),
+      });
+
+      act(() => {
+        result.current.setAspectRatio('16:9');
+      });
+
+      expect(result.current.parameters?.resolution).toBe('4K');
+    });
+
+    it('should strip resolution when new schema does not support the current resolution value', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      useImageStore.setState({
+        parameters: createTestParameters({ resolution: '4K' }),
+        parametersSchema: createTestSchema({
+          resolution: { default: '1K', enum: ['1K', '2K'] },
+        }),
+      });
+
+      act(() => {
+        result.current.setAspectRatio('16:9');
+      });
+
+      expect(result.current.parameters?.resolution).toBeUndefined();
+    });
+
+    it('should strip resolution when schema has no resolution enum', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      useImageStore.setState({
+        parameters: createTestParameters({ resolution: '4K' }),
+        parametersSchema: createTestSchema(),
+      });
+
+      act(() => {
+        result.current.setAspectRatio('16:9');
+      });
+
+      expect(result.current.parameters?.resolution).toBeUndefined();
+    });
   });
 
   describe('Configuration Initialization', () => {
