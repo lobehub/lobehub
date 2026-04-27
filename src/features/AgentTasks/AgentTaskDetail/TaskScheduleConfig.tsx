@@ -1,8 +1,9 @@
 import type { TaskAutomationMode } from '@lobechat/types';
 import {
   ActionIcon,
-  Button,
+  Avatar,
   Flexbox,
+  Icon,
   InputNumber,
   Popover,
   Segmented,
@@ -10,7 +11,9 @@ import {
   Text,
 } from '@lobehub/ui';
 import { Switch } from 'antd';
-import { TimerIcon } from 'lucide-react';
+import { createStaticStyles, cssVar } from 'antd-style';
+import dayjs from 'dayjs';
+import { CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,9 +21,29 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import {
+  formatIntervalLabel,
+  formatScheduleDescription,
+  formatTimezoneName,
+  nextHeartbeatFiring,
+  nextScheduleFiring,
+} from './scheduler/helpers';
 import SchedulerForm, { type SchedulerFormChange } from './scheduler/SchedulerForm';
 
 type IntervalUnit = 'hours' | 'minutes' | 'seconds';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  fieldLabel: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  preview: css`
+    padding-block: 12px;
+    padding-inline: 14px;
+    border-radius: 12px;
+    background: ${cssVar.colorFillQuaternary};
+  `,
+}));
 
 interface IntervalTabProps {
   currentInterval: number;
@@ -33,7 +56,7 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
 
   const derived = useMemo(() => {
     if (!currentInterval || currentInterval === 0)
-      return { displayValue: undefined, unit: 'minutes' as IntervalUnit };
+      return { displayValue: 10, unit: 'minutes' as IntervalUnit };
     if (currentInterval >= 3600 && currentInterval % 3600 === 0)
       return { displayValue: currentInterval / 3600, unit: 'hours' as IntervalUnit };
     if (currentInterval >= 60 && currentInterval % 60 === 0)
@@ -93,38 +116,33 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
     [taskId, localValue, updatePeriodicInterval],
   );
 
-  const handleClear = useCallback(() => {
-    setLocalValue(undefined);
-    if (taskId) updatePeriodicInterval(taskId, null);
-  }, [taskId, updatePeriodicInterval]);
-
   return (
-    <>
-      <Flexbox horizontal align="center" gap={16} justify={'space-between'}>
-        <Text weight={500}>{t('taskSchedule.every')}</Text>
-        <Flexbox horizontal align="center" gap={8}>
-          <InputNumber
-            min={1}
-            placeholder="10"
-            style={{ width: 100 }}
-            value={localValue}
-            onChange={handleValueChange}
-          />
-          <Select
-            style={{ width: 110 }}
-            value={localUnit}
-            variant="outlined"
-            options={[
-              { label: t('taskSchedule.seconds'), value: 'seconds' },
-              { label: t('taskSchedule.minutes'), value: 'minutes' },
-              { label: t('taskSchedule.hours'), value: 'hours' },
-            ]}
-            onChange={handleUnitChange}
-          />
-        </Flexbox>
+    <Flexbox gap={6}>
+      <Text className={styles.fieldLabel}>{t('taskSchedule.intervalLabel')}</Text>
+      <Flexbox horizontal align="center" gap={8}>
+        <Text type="secondary">{t('taskSchedule.every')}</Text>
+        <InputNumber
+          min={1}
+          placeholder="10"
+          style={{ width: 100 }}
+          value={localValue}
+          variant="filled"
+          onChange={handleValueChange}
+        />
+        <Select
+          style={{ flex: 1 }}
+          value={localUnit}
+          variant="filled"
+          options={[
+            { label: t('taskSchedule.seconds'), value: 'seconds' },
+            { label: t('taskSchedule.minutes'), value: 'minutes' },
+            { label: t('taskSchedule.hours'), value: 'hours' },
+          ]}
+          onChange={handleUnitChange}
+        />
+        <Text type="secondary">{t('taskSchedule.intervalSuffix')}</Text>
       </Flexbox>
-      {currentInterval > 0 && <Button onClick={handleClear}>{t('taskSchedule.clear')}</Button>}
-    </>
+    </Flexbox>
   );
 });
 
@@ -167,20 +185,62 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   currentInterval,
   taskId,
 }: TaskScheduleConfigProps) {
-  const { t } = useTranslation('chat');
+  const { t, i18n } = useTranslation('chat');
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const activeTaskInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const setAutomationMode = useTaskStore((s) => s.setAutomationMode);
+  const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
+  const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
+  const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+
   const finalTaskId = taskId ?? activeTaskId;
   const finalCurrentInterval = currentInterval ?? activeTaskInterval;
 
   const enabled = !!automationMode;
 
+  const summary = useMemo(() => {
+    if (automationMode === 'heartbeat' && finalCurrentInterval > 0) {
+      return t('taskSchedule.summary.heartbeat', {
+        interval: formatIntervalLabel(finalCurrentInterval, t),
+      });
+    }
+    if (automationMode === 'schedule' && schedulePattern) {
+      const description = formatScheduleDescription(schedulePattern, t);
+      const tzName = scheduleTimezone ? formatTimezoneName(scheduleTimezone, i18n.language) : '';
+      return tzName
+        ? t('taskSchedule.summary.schedule', { description, timezone: tzName })
+        : description;
+    }
+    return null;
+  }, [automationMode, finalCurrentInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
+
+  const nextRun = useMemo(() => {
+    if (!enabled) return null;
+    if (automationMode === 'heartbeat') {
+      return nextHeartbeatFiring(detail?.heartbeat?.lastAt, finalCurrentInterval);
+    }
+    if (automationMode === 'schedule' && schedulePattern) {
+      return nextScheduleFiring(schedulePattern, scheduleTimezone);
+    }
+    return null;
+  }, [
+    automationMode,
+    detail?.heartbeat?.lastAt,
+    enabled,
+    finalCurrentInterval,
+    schedulePattern,
+    scheduleTimezone,
+  ]);
+
+  const nextRunText = useMemo(() => {
+    if (!nextRun) return null;
+    return dayjs(nextRun.toDate()).format(t('taskSchedule.nextRun.format'));
+  }, [nextRun, t]);
+
   const handleEnableChange = useCallback(
     (checked: boolean) => {
       if (!finalTaskId) return;
-      // When enabling, default to heartbeat (the more common mode)
       setAutomationMode(finalTaskId, checked ? 'heartbeat' : null);
     },
     [finalTaskId, setAutomationMode],
@@ -195,19 +255,57 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   );
 
   const content = (
-    <Flexbox gap={16} style={{ padding: 8, width: 420 }} onClick={(e) => e.stopPropagation()}>
-      <Flexbox horizontal align="center" gap={8}>
-        <Text weight={500}>{t('taskSchedule.enable')}</Text>
+    <Flexbox gap={16} style={{ padding: 4, width: 440 }} onClick={(e) => e.stopPropagation()}>
+      <Flexbox horizontal align="center" gap={12}>
+        <Avatar
+          avatar={<Icon color={cssVar.colorSuccess} icon={Zap} size={20} />}
+          background={cssVar.colorSuccessBg}
+          shape="square"
+          size={40}
+        />
+        <Flexbox flex={1} gap={2}>
+          <Text weight={500}>{t('taskSchedule.heading')}</Text>
+          <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
+            {summary ?? t('taskSchedule.summary.disabled')}
+          </Text>
+        </Flexbox>
         <Switch checked={enabled} onChange={handleEnableChange} />
       </Flexbox>
+
+      {enabled && nextRunText && (
+        <Flexbox horizontal align="center" className={styles.preview} gap={10}>
+          <Icon color={cssVar.colorTextDescription} icon={Clock} size={16} />
+          <Text style={{ color: cssVar.colorTextSecondary }}>{t('taskSchedule.nextRun')}</Text>
+          <Text style={{ flex: 1, textAlign: 'right' }} weight={500}>
+            {nextRunText}
+          </Text>
+        </Flexbox>
+      )}
+
       {enabled && (
         <>
           <Segmented
             block
             value={automationMode ?? 'heartbeat'}
             options={[
-              { label: t('taskSchedule.schedulerTab'), value: 'schedule' },
-              { label: t('taskSchedule.intervalTab'), value: 'heartbeat' },
+              {
+                label: (
+                  <Flexbox horizontal align="center" gap={6} justify="center">
+                    <Icon icon={CalendarDays} size={14} />
+                    <span>{t('taskSchedule.schedulerTab')}</span>
+                  </Flexbox>
+                ),
+                value: 'schedule',
+              },
+              {
+                label: (
+                  <Flexbox horizontal align="center" gap={6} justify="center">
+                    <Icon icon={RefreshCw} size={14} />
+                    <span>{t('taskSchedule.intervalTab')}</span>
+                  </Flexbox>
+                ),
+                value: 'heartbeat',
+              },
             ]}
             onChange={handleModeChange}
           />
@@ -221,7 +319,18 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   );
 
   return (
-    <Popover content={content} placement="bottomRight" trigger="click">
+    <Popover
+      content={content}
+      placement="bottomRight"
+      trigger="click"
+      styles={{
+        content: {
+          background: cssVar.colorBgContainer,
+          border: `1px solid ${cssVar.colorBorderSecondary}`,
+          borderRadius: 12,
+        },
+      }}
+    >
       {children ? (
         <div onClick={(e) => e.stopPropagation()}>{children}</div>
       ) : (
