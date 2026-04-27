@@ -1,6 +1,5 @@
 import { Button, Flexbox, Markdown, MaskShadow } from '@lobehub/ui';
 import { useSize } from 'ahooks';
-import { Divider } from 'antd';
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +32,6 @@ const BriefCardSummary = memo<BriefCardSummaryProps>(({ summary }) => {
 
   return (
     <Flexbox gap={4}>
-      <Divider dashed style={{ marginTop: 0, marginBottom: 8 }} />
       {isOverflow && !expanded ? (
         <MaskShadow
           size={32}

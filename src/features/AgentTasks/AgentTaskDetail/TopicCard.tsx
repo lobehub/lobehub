@@ -6,17 +6,18 @@ import {
   type DropdownItem,
   DropdownMenu,
   Flexbox,
-  Icon,
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { CalendarDays, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { CircleDot, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useTaskStore } from '@/store/task';
 
+import { styles } from '../shared/style';
 import TopicStatusIcon from './TopicStatusIcon';
 
 const formatDuration = (ms: number): string => {
@@ -76,17 +77,39 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     },
   ];
 
+  const isAgent = activity.author?.type === 'agent';
+
+  const avatarNode = activity.author?.avatar ? (
+    <Avatar avatar={activity.author.avatar} size={24} />
+  ) : (
+    <div className={styles.activityAvatar}>
+      <CircleDot size={12} />
+    </div>
+  );
+
   return (
     <Block
       clickable={!!activity.id}
       gap={8}
-      padding={12}
+      paddingBlock={8}
+      paddingInline={8}
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
       onClick={activity.id ? handleOpen : undefined}
     >
-      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
+          {isAgent && activity.author?.id ? (
+            <AgentProfilePopup
+              agent={{ avatar: activity.author.avatar, title: activity.author.name }}
+              agentId={activity.author.id}
+              trigger={'hover'}
+            >
+              {avatarNode}
+            </AgentProfilePopup>
+          ) : (
+            avatarNode
+          )}
           <TopicStatusIcon size={16} status={activity.status} />
           <Text ellipsis weight={500}>
             {activity.title}
@@ -104,21 +127,10 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         </Flexbox>
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-          {activity.author && (
-            <Flexbox horizontal align={'center'} gap={6}>
-              {activity.author.avatar && <Avatar avatar={activity.author.avatar} size={20} />}
-              <Text fontSize={12} type={'secondary'}>
-                {activity.author.name}
-              </Text>
-            </Flexbox>
-          )}
           {startedAt && (
-            <Flexbox horizontal align={'center'} gap={4}>
-              <Icon color={cssVar.colorTextTertiary} icon={CalendarDays} size={12} />
-              <Text fontSize={12} type={'secondary'}>
-                {startedAt}
-              </Text>
-            </Flexbox>
+            <Text fontSize={12} type={'secondary'}>
+              {startedAt}
+            </Text>
           )}
           <DropdownMenu items={menuItems}>
             <ActionIcon
