@@ -1,5 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
+import type { ChatStreamPayload } from '@/types/index';
+
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { createVolcengineImage } from './createImage';
 import { createVolcengineVideo } from './video/createVideo';
@@ -9,11 +11,20 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { model, thinking, reasoning_effort, ...rest } = payload;
+      const { enabledSearch, thinking, reasoning_effort, ...rest } = payload;
+
+      if (enabledSearch) {
+        return {
+          ...rest,
+          apiMode: 'responses',
+          enabledSearch,
+          thinking,
+          reasoning_effort,
+        } as ChatStreamPayload;
+      }
 
       return {
         ...rest,
-        model,
         ...(thinking?.type && { thinking: { type: thinking.type } }),
         ...(reasoning_effort && { reasoning_effort }),
       } as any;
@@ -26,4 +37,25 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   },
   handleCreateVideoWebhook: handleVolcengineVideoWebhook,
   provider: ModelProvider.Volcengine,
+  responses: {
+    handlePayload: (payload) => {
+      const { enabledSearch, tools, thinking, reasoning_effort, ...rest } = payload;
+
+      const volcengineTools = enabledSearch
+        ? [
+            ...(tools || []),
+            {
+              type: 'web_search',
+            },
+          ]
+        : tools;
+
+      return {
+        ...rest,
+        tools: volcengineTools,
+        ...(thinking?.type && { thinking: { type: thinking.type } }),
+        ...(reasoning_effort && { reasoning_effort }),
+      } as any;
+    },
+  },
 });
