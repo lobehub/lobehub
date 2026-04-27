@@ -5,6 +5,7 @@ import { type UserStore } from '@/store/user';
 const useCmdEnterToSend = (s: UserStore): boolean => s.preference.useCmdEnterToSend || false;
 const topicGroupMode = (s: UserStore) =>
   s.preference.topicGroupMode || DEFAULT_PREFERENCE.topicGroupMode!;
+const topicGroupModeByAgentId = (s: UserStore) => s.preference.topicGroupModeByAgentId || {};
 const topicSortBy = (s: UserStore) => s.preference.topicSortBy || DEFAULT_PREFERENCE.topicSortBy!;
 const topicIncludeCompleted = (s: UserStore): boolean =>
   s.preference.topicIncludeCompleted ?? false;
@@ -28,6 +29,7 @@ export const preferenceSelectors = {
   shouldTriggerFileInKnowledgeBaseTip,
   showUploadFileInKnowledgeBaseTip,
   topicGroupMode,
+  topicGroupModeByAgentId,
   topicIncludeCompleted,
   topicSortBy,
   useCmdEnterToSend,
