@@ -17,6 +17,7 @@ import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
+import TaskTriggerTag from '../features/TaskTriggerTag';
 import { useTaskItemContextMenu } from '../features/useTaskItemContextMenu';
 import { styles } from '../shared/style';
 
@@ -88,6 +89,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         horizontal
         align="center"
         gap={8}
+        justify="space-between"
         style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}
       >
         <span
@@ -105,6 +107,18 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
           {task.name || task.identifier}
         </Text>
+        {task.automationMode ? (
+          <span
+            style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TaskTriggerTag
+              heartbeatInterval={task.heartbeat?.interval}
+              schedulePattern={task.schedule?.pattern}
+              scheduleTimezone={task.schedule?.timezone}
+            />
+          </span>
+        ) : null}
         <AssigneeAgentSelector
           currentAgentId={task.assignee?.id ?? null}
           disabled={isRunning}

@@ -354,13 +354,9 @@ export class TaskLifecycleService {
 
       // Max iterations reached — surface the (failed) result for human accept/retry.
       // Type is `result` so the user's `approve` action is treated as a terminal
-      // accept signal (force-pass) by BriefService.resolve.
+      // accept signal (force-pass) by BriefService.resolve. Result briefs render
+      // a fixed single-button UI, so no custom actions are persisted.
       await this.briefModel.create({
-        actions: [
-          { key: 'retry', label: '🔄 重试', type: 'resolve' as const },
-          { key: 'approve', label: '✅ 强制通过', type: 'resolve' as const },
-          { key: 'feedback', label: '💬 修改意见', type: 'comment' as const },
-        ],
         priority: 'urgent',
         summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
         taskId,

@@ -117,11 +117,16 @@ export class TaskService {
                 },
               }
             : {}),
+          automationMode: s.automationMode,
           blockedBy: depMap.get(s.id),
           children: buildSubtaskTree(s.id),
+          ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
+          ...(s.schedulePattern || s.scheduleTimezone
+            ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
+            : {}),
           status: s.status,
         };
       });
