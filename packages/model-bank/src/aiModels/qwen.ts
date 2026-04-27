@@ -4084,8 +4084,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       },
       prompt: { default: '' },
       resolution: {
-        default: '720P',
-        enum: ['720P'],
+        default: '1080P',
+        enum: ['720P', '1080P'],
       },
       seed: { default: null },
       promptExtend: { default: false },
@@ -4093,7 +4093,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-26',
     type: 'video',
@@ -4173,8 +4173,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       duration: { default: 5, max: 15, min: 2 },
       prompt: { default: '' },
       resolution: {
-        default: '720P',
-        enum: ['720P'],
+        default: '1080P',
+        enum: ['720P', '1080P'],
       },
       seed: { default: null },
       promptExtend: { default: false },
@@ -4182,7 +4182,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-26',
     type: 'video',
@@ -4218,7 +4218,6 @@ const qwenVideoModels: AIVideoModelCard[] = [
     description:
       'Wanxiang 2.6 introduces multi-shot narrative capabilities, while also supporting automatic voiceover generation and the ability to incorporate custom audio files.',
     displayName: 'Wan2.6 I2V Flash',
-    enabled: true,
     id: 'wan2.6-i2v-flash',
     parameters: {
       duration: { default: 5, max: 15, min: 2 },
@@ -4272,7 +4271,6 @@ const qwenVideoModels: AIVideoModelCard[] = [
     description:
       'Wanxiang 2.6 Reference-to-Video – Flash offers faster generation and better cost performance. It supports referencing specific characters or any objects, accurately maintaining consistency in appearance and voice, and enables multi-character reference for co-performance.',
     displayName: 'Wan2.6 R2V Flash',
-    enabled: true,
     id: 'wan2.6-r2v-flash',
     parameters: {
       duration: { default: 5, max: 10, min: 2 },
@@ -4350,7 +4348,6 @@ const qwenVideoModels: AIVideoModelCard[] = [
     description:
       'Wanxiang 2.6 introduces multi-shot narrative capabilities, while also supporting automatic voiceover generation and the ability to incorporate custom audio files.',
     displayName: 'Wan2.6 T2V',
-    enabled: true,
     id: 'wan2.6-t2v',
     parameters: {
       duration: { default: 5, max: 15, min: 2 },
