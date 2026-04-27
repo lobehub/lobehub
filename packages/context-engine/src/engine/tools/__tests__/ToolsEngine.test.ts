@@ -168,6 +168,55 @@ describe('ToolsEngine', () => {
       });
     });
 
+    it('should default object-typed parameters required to [] when omitted', () => {
+      const allOptionalManifest: LobeToolManifest = {
+        api: [
+          {
+            description: 'Search with all-optional params',
+            name: 'search',
+            parameters: {
+              type: 'object',
+              properties: {
+                q: { type: 'string', description: 'optional query' },
+              },
+            },
+          },
+        ],
+        identifier: 'lobe-all-optional',
+        meta: { title: 'All Optional', description: '' },
+        type: 'builtin',
+      };
+
+      const engine = new ToolsEngine({
+        manifestSchemas: [allOptionalManifest],
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateTools({
+        toolIds: ['lobe-all-optional'],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toEqual([
+        {
+          type: 'function',
+          function: {
+            name: 'lobe-all-optional____search____builtin',
+            description: 'Search with all-optional params',
+            parameters: {
+              type: 'object',
+              properties: {
+                q: { type: 'string', description: 'optional query' },
+              },
+              required: [],
+            },
+          },
+        },
+      ]);
+    });
+
     it('should handle non-existent plugins gracefully', () => {
       const engine = new ToolsEngine({
         manifestSchemas: [mockWebBrowsingManifest],
@@ -742,6 +791,7 @@ describe('ToolsEngine', () => {
                 type: 'string',
               },
             },
+            required: [],
             type: 'object',
           },
         });
@@ -764,6 +814,7 @@ describe('ToolsEngine', () => {
         expect(func.parameters).toEqual({
           type: 'object',
           properties: { a: { type: 'string' } },
+          required: [],
         });
       });
     });

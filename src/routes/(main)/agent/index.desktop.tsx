@@ -9,7 +9,6 @@ import { useChatStore } from '@/store/chat';
 
 import Conversation from './features/Conversation';
 import ChatHydration from './features/Conversation/ChatHydration';
-import AgentWorkingSidebar from './features/Conversation/WorkingSidebar';
 import PageTitle from './features/PageTitle';
 import Portal from './features/Portal';
 import TelemetryNotification from './features/TelemetryNotification';
@@ -25,30 +24,32 @@ const ChatPage = memo(() => {
   // When the same topic is already hosted in a popup window, avoid
   // rendering a second (out-of-sync) instance here — guide the user back
   // to the popup instead.
-  if (activeTopicId && popup) {
-    return (
+  const pageContent =
+    activeTopicId && popup ? (
       <>
-        <ChatHydration />
         <PageTitle />
         <TopicInPopupGuard popup={popup} />
       </>
+    ) : (
+      <>
+        <PageTitle />
+        <Flexbox
+          horizontal
+          height={'100%'}
+          style={{ overflow: 'hidden', position: 'relative' }}
+          width={'100%'}
+        >
+          <Conversation />
+          <Portal />
+        </Flexbox>
+        <TelemetryNotification mobile={false} />
+      </>
     );
-  }
 
   return (
     <>
-      <PageTitle />
-      <Flexbox
-        horizontal
-        height={'100%'}
-        style={{ overflow: 'hidden', position: 'relative' }}
-        width={'100%'}
-      >
-        <Conversation />
-        <Portal />
-        <AgentWorkingSidebar />
-      </Flexbox>
-      <TelemetryNotification mobile={false} />
+      <ChatHydration />
+      {pageContent}
     </>
   );
 });

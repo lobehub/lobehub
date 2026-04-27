@@ -50,6 +50,12 @@ describe('aiModelSelectors', () => {
         contextWindowTokens: 4000,
         settings: {
           disabledParams: ['temperature', 'top_p'],
+          extendParamOptions: {
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          },
         },
         type: 'chat',
       },
@@ -264,6 +270,23 @@ describe('aiModelSelectors', () => {
     it('should return undefined for an unknown model', () => {
       expect(
         aiModelSelectors.modelDisabledParams('missing', 'provider1')(mockState),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('modelExtendParamOptions', () => {
+    it('should return extendParamOptions when declared on the model card', () => {
+      expect(aiModelSelectors.modelExtendParamOptions('model1', 'provider1')(mockState)).toEqual({
+        enableReasoning: {
+          defaultValue: true,
+          includeBudget: false,
+        },
+      });
+    });
+
+    it('should return undefined when the model has no settings', () => {
+      expect(
+        aiModelSelectors.modelExtendParamOptions('model4', 'provider2')(mockState),
       ).toBeUndefined();
     });
   });

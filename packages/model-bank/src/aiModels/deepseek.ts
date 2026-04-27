@@ -17,15 +17,22 @@ const deepseekChatModels: AIChatModelCard[] = [
     maxOutput: 384_000,
     pricing: {
       currency: 'CNY',
+      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['thinking', 'deepseekV4ReasoningEffort'],
+      extendParamOptions: {
+        enableReasoning: {
+          defaultValue: true,
+          includeBudget: false,
+        },
+      },
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -44,15 +51,23 @@ const deepseekChatModels: AIChatModelCard[] = [
     maxOutput: 384_000,
     pricing: {
       currency: 'CNY',
+      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
+      // DeepSeek V4 Pro limited-time 75% off discount is valid until 2026-05-05 23:59 Beijing time.
       units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['thinking', 'deepseekV4ReasoningEffort'],
+      extendParamOptions: {
+        enableReasoning: {
+          defaultValue: true,
+          includeBudget: false,
+        },
+      },
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
     },
     type: 'chat',
   },
@@ -68,14 +83,14 @@ const deepseekChatModels: AIChatModelCard[] = [
     description:
       'Compatibility alias for DeepSeek V4 Flash non-thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
     displayName: 'DeepSeek V3.2 (routes to V4 Flash)',
-    enabled: true,
     id: 'deepseek-chat',
     legacy: true,
     maxOutput: 384_000,
     pricing: {
       currency: 'CNY',
+      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
@@ -94,14 +109,14 @@ const deepseekChatModels: AIChatModelCard[] = [
     description:
       'Compatibility alias for DeepSeek V4 Flash thinking mode. Slated for deprecation — use deepseek-v4-flash instead.',
     displayName: 'DeepSeek V3.2 Thinking (routes to V4 Flash)',
-    enabled: true,
     id: 'deepseek-reasoner',
     legacy: true,
     maxOutput: 384_000,
     pricing: {
       currency: 'CNY',
+      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],

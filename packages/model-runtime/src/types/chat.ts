@@ -61,6 +61,10 @@ export interface OpenAIChatMessage {
  */
 export interface ChatStreamPayload {
   apiMode?: 'chatCompletion' | 'responses';
+  /**
+   * @title Provider deployment name
+   */
+  deploymentName?: string;
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /**
    * Enable context caching

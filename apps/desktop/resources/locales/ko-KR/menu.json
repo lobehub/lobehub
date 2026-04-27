@@ -71,6 +71,7 @@
   "macOS.services": "서비스",
   "macOS.unhide": "모두 표시",
   "tray.open": "{{appName}} 열기",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "종료",
   "tray.show": "{{appName}} 표시",
   "view.forceReload": "강제 새로 고침",
@@ -86,6 +87,5 @@
   "window.minimize": "최소화",
   "window.title": "창",
   "window.toggleFullscreen": "전체 화면 전환",
-  "window.zoom": "줌",
-  "tray.openMiniToolbar": "Quick Composer"
+  "window.zoom": "줌"
 }

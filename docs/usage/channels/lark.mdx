@@ -165,19 +165,48 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
 
 Back in LobeHub's channel settings, click **Test Connection** to verify the credentials. Then find your bot in Lark by searching its name and send it a message to confirm it responds.
 
+## Access Policies
+
+Two independent policies gate inbound traffic. Both default to **Open**.
+
+### Allowed User IDs (global)
+
+A populated **Allowed User IDs** field is a global gate — DMs *and* group `@mentions` are restricted to listed Lark `open_id` values. Empty means "no user-level filter". Read the `open_id` from the event payload, or copy the **User ID** displayed in the Lark Developer Portal.
+
+### DM Policy
+
+- **Open (default)** — Any tenant member can DM the bot (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Disabled** — The bot ignores all DMs and only responds to chat-group `@mentions`.
+
+### Group Policy
+
+Controls which Lark chat groups the bot will respond in.
+
+- **Open (default)** — Respond to `@mentions` in any chat group the bot has been added to.
+- **Allowlist** — Respond only in chats whose `chat_id` is listed in **Allowed Channel IDs** (read it from the event payload).
+- **Disabled** — Ignore all group traffic; the bot only responds to DMs.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field                      | Required | Description                                                   |
-| -------------------------- | -------- | ------------------------------------------------------------- |
-| **App ID**                 | Yes      | Your Lark app's App ID (`cli_xxx`)                            |
-| **App Secret**             | Yes      | Your Lark app's App Secret                                    |
-| **Verification Token**     | No       | Verifies webhook event source (recommended)                   |
-| **Encrypt Key**            | No       | Decrypts encrypted event payloads                             |
-| **Event Subscription URL** | —        | Auto-generated after saving; paste into Lark Developer Portal |
+| Field                      | Required | Description                                                                                            |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| **App ID**                 | Yes      | Your Lark app's App ID (`cli_xxx`)                                                                     |
+| **App Secret**             | Yes      | Your Lark app's App Secret                                                                             |
+| **Verification Token**     | No       | Verifies webhook event source (recommended)                                                            |
+| **Encrypt Key**            | No       | Decrypts encrypted event payloads                                                                      |
+| **Event Subscription URL** | —        | Auto-generated after saving; paste into Lark Developer Portal                                          |
+| **Allowed User IDs**       | No       | Comma- or whitespace-separated Lark `open_id` values. Global gate — applies to DMs and group @mentions |
+| **DM Policy**              | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                            |
+| **Group Policy**           | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                     |
+| **Allowed Channel IDs**    | No       | Comma- or whitespace-separated Lark `chat_id` values. Used when Group Policy is Allowlist              |
 
 ## Troubleshooting
 
 - **Event Subscription URL verification failed:** Ensure you saved the configuration in LobeHub first, and the URL was copied correctly.
 - **Bot not responding:** Verify the app is published and approved, the bot capability is enabled, and the `im.message.receive_v1` event is subscribed.
+- **Bot ignores DMs:** Open **Advanced Settings** in LobeHub and check **DM Policy**. If it is `Disabled`, switch to `Open` or `Allowlist`. If it is `Allowlist`, confirm the sender's `open_id` is listed in **Allowed User IDs**.
 - **Permission errors:** Confirm all required permissions are added and approved in the Developer Portal.
 - **Test Connection failed:** Double-check the App ID and App Secret. Make sure you selected "Lark" (not "飞书") in LobeHub's channel settings.

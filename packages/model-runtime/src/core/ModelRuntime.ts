@@ -296,7 +296,6 @@ export class ModelRuntime {
         LobeBedrockAIParams &
         LobeCloudflareParams & {
           apiKey?: string;
-          apiVersion?: string;
           baseURL?: string;
           userId?: string;
         }

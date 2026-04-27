@@ -1883,6 +1883,31 @@ describe('AgentModel', () => {
       expect(result).toBeUndefined();
     });
 
+    it('should merge nested chatConfig fields without replacing the whole object', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableHistoryCount: true, historyCount: 10 },
+          title: 'Chat Config Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        chatConfig: { enableReasoning: true } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.chatConfig).toEqual({
+        enableHistoryCount: true,
+        enableReasoning: true,
+        historyCount: 10,
+      });
+    });
+
     it('should delete params field when value is undefined', async () => {
       const [agent] = await serverDB
         .insert(agents)

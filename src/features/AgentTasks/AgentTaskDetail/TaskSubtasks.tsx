@@ -1,5 +1,5 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
@@ -15,6 +15,7 @@ import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
+import { useTaskItemContextMenu } from '../features/useTaskItemContextMenu';
 import { styles } from '../shared/style';
 
 type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
@@ -69,58 +70,63 @@ const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] => {
   return roots;
 };
 
-const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
-  return tree.map((node) => {
-    const status = toTaskStatus(node.task.status);
+const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
+  const status = toTaskStatus(task.status);
+  const { items, onContextMenu } = useTaskItemContextMenu({
+    identifier: task.identifier,
+    priority: task.priority,
+    status: task.status,
+  });
 
-    return {
-      children: toTreeData(node.children),
-      key: node.task.identifier,
-      title: (
-        <Flexbox
-          horizontal
-          align="center"
-          gap={8}
-          style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden' }}
+  return (
+    <ContextMenuTrigger items={items} onContextMenu={onContextMenu}>
+      <Flexbox
+        horizontal
+        align="center"
+        gap={8}
+        style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden' }}
+      >
+        <span
+          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+          onClick={(e) => e.stopPropagation()}
         >
+          <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.identifier} />
+        </span>
+        <span
+          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier} />
+        </span>
+        <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+          {task.name || task.identifier}
+        </Text>
+        {task.assignee && (
           <span
             style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <TaskPriorityTag
-              priority={node.task.priority}
-              size={14}
-              taskIdentifier={node.task.identifier}
+            <Avatar
+              avatar={task.assignee.avatar ?? ''}
+              background={task.assignee.backgroundColor || cssVar.colorBgContainer}
+              shape="circle"
+              size={18}
+              title={task.assignee.title ?? ''}
+              variant="outlined"
             />
           </span>
-          <span
-            style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <TaskStatusTag size={14} status={status} taskIdentifier={node.task.identifier} />
-          </span>
-          <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
-            {node.task.name || node.task.identifier}
-          </Text>
-          {node.task.assignee && (
-            <span
-              style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Avatar
-                avatar={node.task.assignee.avatar ?? ''}
-                background={node.task.assignee.backgroundColor || cssVar.colorBgContainer}
-                shape="circle"
-                size={18}
-                title={node.task.assignee.title ?? ''}
-                variant="outlined"
-              />
-            </span>
-          )}
-        </Flexbox>
-      ),
-    };
-  });
+        )}
+      </Flexbox>
+    </ContextMenuTrigger>
+  );
+});
+
+const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
+  return tree.map((node) => ({
+    children: toTreeData(node.children),
+    key: node.task.identifier,
+    title: <SubtaskTitle task={node.task} />,
+  }));
 };
 
 const TaskSubtasks = memo(() => {
@@ -131,12 +137,13 @@ const TaskSubtasks = memo(() => {
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
 
   const [isCreating, setIsCreating] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const handleNavigate = useCallback(
     (identifier: string) => {
-      if (agentId) navigate(`/agent/${agentId}/tasks/${identifier}`);
+      navigate(`/task/${identifier}`);
     },
-    [agentId, navigate],
+    [navigate],
   );
 
   const treeData = useMemo(() => {
@@ -154,7 +161,39 @@ const TaskSubtasks = memo(() => {
     <Flexbox gap={8}>
       {hasSubtasks ? (
         <>
-          <Flexbox horizontal align="center" justify="flex-end">
+          <Flexbox horizontal align="center" justify="space-between">
+            <Flexbox horizontal align="center" gap={8}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={8}
+                paddingBlock={4}
+                paddingInline={8}
+                style={{ cursor: 'pointer', width: 'fit-content' }}
+                variant="borderless"
+                onClick={() => setIsExpanded((prev) => !prev)}
+              >
+                <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
+                <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+                  {t('taskDetail.subtasks')}
+                </Text>
+                <Icon
+                  color={cssVar.colorTextDescription}
+                  icon={ChevronDown}
+                  size={14}
+                  style={{
+                    transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 200ms',
+                  }}
+                />
+              </Block>
+              <TaskSubtaskProgressTag
+                currentIdentifier={taskId}
+                subtasks={subtasks}
+                onSubtaskClick={handleNavigate}
+              />
+            </Flexbox>
             <ActionIcon
               icon={Plus}
               size="small"
@@ -162,44 +201,24 @@ const TaskSubtasks = memo(() => {
               onClick={toggleCreating}
             />
           </Flexbox>
-
-          {isCreating && (
-            <CreateTaskInlineEntry
-              autoFocus
-              agentId={agentId ?? undefined}
-              parentTaskId={taskId}
-              placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
-              onCollapse={() => setIsCreating(false)}
-              onCreated={() => setIsCreating(false)}
-            />
-          )}
-
-          <Accordion defaultExpandedKeys={['subtasks']} gap={0}>
-            <AccordionItem
-              itemKey="subtasks"
-              paddingBlock={4}
-              paddingInline={8}
-              title={
-                <Flexbox horizontal align="center" gap={8}>
-                  <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
-                  <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-                    {t('taskDetail.subtasks')}
-                  </Text>
-                  <TaskSubtaskProgressTag
-                    currentIdentifier={taskId}
-                    subtasks={subtasks}
-                    onSubtaskClick={handleNavigate}
-                  />
-                </Flexbox>
-              }
-            >
+          {isExpanded && (
+            <>
+              {isCreating && (
+                <CreateTaskInlineEntry
+                  autoFocus
+                  agentId={agentId ?? undefined}
+                  parentTaskId={taskId}
+                  placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
+                  onCollapse={() => setIsCreating(false)}
+                  onCreated={() => setIsCreating(false)}
+                />
+              )}
               <ConfigProvider theme={{ components: { Tree: { titleHeight: 36 } } }}>
                 <Tree
                   blockNode
                   defaultExpandAll
                   showLine
                   className={styles.subtaskTree}
-                  style={{ marginTop: 8 }}
                   switcherIcon={<Icon icon={ChevronDown} size={14} />}
                   treeData={treeData}
                   onSelect={(keys) => {
@@ -209,8 +228,8 @@ const TaskSubtasks = memo(() => {
                   }}
                 />
               </ConfigProvider>
-            </AccordionItem>
-          </Accordion>
+            </>
+          )}
         </>
       ) : (
         <>

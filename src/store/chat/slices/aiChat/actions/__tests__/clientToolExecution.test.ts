@@ -58,7 +58,12 @@ function setup(options: { hasConnection?: boolean; sendReturns?: boolean } = {})
     operations: {
       'op-1': {
         abortController: { signal: { aborted: false } },
-        context: { agentId: 'agent-1', topicId: 'topic-1' },
+        context: {
+          agentId: 'agent-1',
+          documentId: 'documents-row-id',
+          scope: 'page',
+          topicId: 'topic-1',
+        },
       },
     },
     pendingClientToolExecutions: {},
@@ -101,8 +106,10 @@ describe('internal_executeClientTool', () => {
         { path: '/tmp/a.txt' },
         expect.objectContaining({
           agentId: 'agent-1',
+          documentId: 'documents-row-id',
           messageId: 'call_1',
           operationId: 'op-1',
+          scope: 'page',
           topicId: 'topic-1',
         }),
       );

@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { openRenameModal } from '@/components/RenameModal';
+import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { openShareModal } from '@/features/ShareModal';
@@ -140,8 +141,8 @@ export const useTopicItemDropdownMenu = ({
               label: t('actions.openInNewTab'),
               onClick: () => {
                 if (!activeAgentId) return;
-                const url = `/agent/${activeAgentId}?topic=${id}`;
-                const reference = pluginRegistry.parseUrl(`/agent/${activeAgentId}`, `topic=${id}`);
+                const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
+                const reference = pluginRegistry.parseUrl(url, '');
                 if (reference) {
                   addTab(reference);
                   navigate(url);
@@ -167,7 +168,7 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeAgentId) return;
-          const url = `${appOrigin}/agent/${activeAgentId}?topic=${id}`;
+          const url = `${appOrigin}${SESSION_CHAT_TOPIC_URL(activeAgentId, id)}`;
           navigator.clipboard.writeText(url);
           message.success(t('actions.copyLinkSuccess'));
         },

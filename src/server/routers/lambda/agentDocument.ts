@@ -6,6 +6,8 @@ import {
 import { z } from 'zod';
 
 import { AgentDocumentModel } from '@/database/models/agentDocuments';
+import { TopicModel } from '@/database/models/topic';
+import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
@@ -30,6 +32,29 @@ const toolLoadRuleSchema = z.object({
   timeRange: z.object({ from: z.string().optional(), to: z.string().optional() }).optional(),
 });
 
+const readFormatSchema = z.enum(['xml', 'markdown', 'both']).optional();
+
+const liteXMLOperationSchema = z.union([
+  z.object({
+    action: z.literal('insert'),
+    beforeId: z.string(),
+    litexml: z.string(),
+  }),
+  z.object({
+    action: z.literal('insert'),
+    afterId: z.string(),
+    litexml: z.string(),
+  }),
+  z.object({
+    action: z.literal('modify'),
+    litexml: z.union([z.string(), z.array(z.string())]),
+  }),
+  z.object({
+    action: z.literal('remove'),
+    id: z.string(),
+  }),
+]);
+
 const agentDocumentProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -37,6 +62,8 @@ const agentDocumentProcedure = authedProcedure.use(serverDatabase).use(async (op
     ctx: {
       agentDocumentModel: new AgentDocumentModel(ctx.serverDB, ctx.userId),
       agentDocumentService: new AgentDocumentsService(ctx.serverDB, ctx.userId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId),
+      topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -192,8 +219,20 @@ export const agentDocumentRouter = router({
    * Tool-oriented: list documents for an agent
    */
   listDocuments: agentDocumentProcedure
-    .input(z.object({ agentId: z.string() }))
+    .input(
+      z.object({
+        agentId: z.string(),
+        target: z.enum(['agent', 'currentTopic']).optional().default('agent'),
+        topicId: z.string().optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
+      if (input.target === 'currentTopic') {
+        if (!input.topicId) throw new Error('topicId is required to list current topic documents');
+
+        return ctx.agentDocumentService.listDocumentsForTopic(input.agentId, input.topicId);
+      }
+
       return ctx.agentDocumentService.listDocuments(input.agentId);
     }),
 
@@ -204,11 +243,14 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        format: readFormatSchema,
         filename: z.string(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.getDocumentByFilename(input.agentId, input.filename);
+      return input.format
+        ? ctx.agentDocumentService.getDocumentSnapshotByFilename(input.agentId, input.filename)
+        : ctx.agentDocumentService.getDocumentByFilename(input.agentId, input.filename);
     }),
 
   /**
@@ -260,17 +302,65 @@ export const agentDocumentRouter = router({
     }),
 
   /**
+   * Create an agent document and associate it with a topic in one call.
+   * Used by the topic → page flow to replace the legacy notebook entry point.
+   */
+  createForTopic: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        content: z.string(),
+        title: z.string(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const topic = input.title.trim() ? undefined : await ctx.topicModel.findById(input.topicId);
+      const title = input.title.trim() || topic?.title || '';
+      const doc = await ctx.agentDocumentService.createForTopic(
+        input.agentId,
+        title,
+        input.content,
+        input.topicId,
+      );
+
+      return doc;
+    }),
+
+  /**
    * Tool-oriented: read document by id
    */
   readDocument: agentDocumentProcedure
     .input(
       z.object({
         agentId: z.string(),
+        format: readFormatSchema,
         id: z.string(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.getDocumentById(input.id, input.agentId);
+      return input.format
+        ? ctx.agentDocumentService.getDocumentSnapshotById(input.id, input.agentId)
+        : ctx.agentDocumentService.getDocumentById(input.id, input.agentId);
+    }),
+
+  /**
+   * Tool-oriented: modify document nodes by id through LiteXML.
+   */
+  modifyNodes: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        id: z.string(),
+        operations: z.array(liteXMLOperationSchema).min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.modifyDocumentNodesById(
+        input.id,
+        input.operations,
+        input.agentId,
+      );
     }),
 
   /**

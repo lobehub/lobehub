@@ -15,12 +15,13 @@ const FETCH_TASK_GROUP_LIST_KEY = 'fetchTaskGroupList';
  */
 export const ALL_AGENTS_LIST_KEY = '__all__';
 
-// Default kanban groups: 4 columns
+// Default kanban groups: 5 columns
 const DEFAULT_KANBAN_GROUPS = [
   { key: 'backlog', statuses: ['backlog'] },
   { key: 'running', statuses: ['running'] },
   { key: 'needsInput', statuses: ['paused', 'failed'] },
   { key: 'done', statuses: ['completed'] },
+  { key: 'canceled', statuses: ['canceled'] },
 ];
 
 type Setter = StoreSetter<TaskStore>;
@@ -62,16 +63,24 @@ export class TaskListSliceActionImpl {
     this.#set({ viewMode: mode }, false, 'setViewMode');
   };
 
-  useFetchTaskGroupList = (agentId?: string, enabled: boolean = true) => {
-    if (agentId && this.#get().listAgentId !== agentId) {
-      this.#set({ listAgentId: agentId }, false, 'useFetchTaskGroupList/syncAgentId');
+  useFetchTaskGroupList = (
+    options: {
+      agentId?: string;
+      allAgents?: boolean;
+      enabled?: boolean;
+    } = {},
+  ) => {
+    const { agentId, allAgents = false, enabled = true } = options;
+    const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
+    if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
+      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskGroupList/syncAgentId');
     }
 
     return useClientDataSWR(
-      enabled && agentId ? [FETCH_TASK_GROUP_LIST_KEY, agentId] : null,
-      async ([, id]: [string, string]) => {
+      enabled && effectiveKey ? [FETCH_TASK_GROUP_LIST_KEY, effectiveKey] : null,
+      async () => {
         return taskService.groupList({
-          assigneeAgentId: id,
+          assigneeAgentId: allAgents ? undefined : agentId,
           groups: DEFAULT_KANBAN_GROUPS,
         });
       },

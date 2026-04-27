@@ -621,6 +621,17 @@ describe('resolveAgentConfig', () => {
       expect(result.plugins).toEqual([PageAgentIdentifier, 'other-plugin']);
     });
 
+    it('should strip page-agent from explicit plugins outside page scope', () => {
+      const result = resolveAgentConfig({
+        agentId: 'custom-agent',
+        plugins: [PageAgentIdentifier, 'other-plugin'],
+        scope: 'main',
+      });
+
+      expect(result.plugins).toEqual(['other-plugin']);
+      expect(result.plugins).not.toContain(PageAgentIdentifier);
+    });
+
     it('should apply chatConfig overrides for page editor', () => {
       vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
         () =>

@@ -111,11 +111,15 @@ function createMockStore(overrides: Record<string, any> = {}) {
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
+    drainQueuedMessages: vi.fn(() => []),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
+    markUnreadCompleted: vi.fn(),
+    operations: {} as Record<string, any>,
     refreshMessages: vi.fn(async () => {}),
     refreshThreads: vi.fn(async () => {}),
     replaceMessages: vi.fn(),
+    sendMessage: vi.fn(async () => {}),
     startOperation: vi.fn(() => {
       subOpCounter += 1;
       return {
@@ -974,6 +978,73 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           },
         },
         { operationId: 'op-1' },
+      );
+    });
+
+    it('should prefer Codex JSONL terminal errors over stderr status session errors', async () => {
+      const codexModelError =
+        "The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.";
+      const rawCodexError = JSON.stringify({
+        error: {
+          message: codexModelError,
+          type: 'invalid_request_error',
+        },
+        status: 400,
+        type: 'error',
+      });
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', codexThreadStarted());
+      ipc.emitRawLine('ipc-sess-1', codexTurnStarted());
+      ipc.emitRawLine('ipc-sess-1', { message: rawCodexError, type: 'error' });
+      ipc.emitRawLine('ipc-sess-1', {
+        error: { message: rawCodexError },
+        type: 'turn.failed',
+      });
+      ipc.emitError('ipc-sess-1', 'Agent exited with code 1');
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise.catch(() => {});
+      await flush();
+
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        {
+          body: expect.objectContaining({
+            agentType: 'codex',
+            clearEchoedContent: true,
+            message: codexModelError,
+            stderr: rawCodexError,
+          }),
+          message: codexModelError,
+          type: 'AgentRuntimeError',
+        },
+        expect.any(Object),
+      );
+      expect(mockUpdateMessageError).not.toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: 'Reading prompt from stdin...' }),
+        expect.any(Object),
+      );
+      expect(mockUpdateMessageError).not.toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: 'Agent exited with code 1' }),
+        expect.any(Object),
       );
     });
 

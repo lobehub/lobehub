@@ -667,12 +667,32 @@ describe('GeneralChatAgent', () => {
         type: 'default',
       };
 
+      // Pending tool messages must hang off the *current* assistant turn for
+      // the runner to treat them as live (otherwise they're treated as stale
+      // history). Mirror the real persisted shape: assistant carries
+      // `tool_calls`, pending tool message carries `parentId`.
       const state = createMockState({
         messages: [
           { role: 'user', content: 'Hello' },
-          { role: 'assistant', content: '', tools: [] },
-          { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
           {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              { id: 'call-1', function: { name: 'plugin-1', arguments: '{}' }, type: 'function' },
+              { id: 'call-2', function: { name: 'plugin-2', arguments: '{}' }, type: 'function' },
+            ],
+          },
+          {
+            id: 'tool-1',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: 'Result',
+            tool_call_id: 'call-1',
+          },
+          {
+            id: 'tool-2',
+            parentId: 'assistant-1',
             role: 'tool',
             content: '',
             tool_call_id: 'call-2',
@@ -694,6 +714,151 @@ describe('GeneralChatAgent', () => {
         reason: 'Some tools still pending approval',
         skipCreateToolMessage: true,
       });
+    });
+
+    it('should return request_human_approve when current assistant turn stores calls in tools', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const pendingPlugin: ChatToolPayload = {
+        id: 'call-2',
+        identifier: 'plugin-2',
+        apiName: 'api-2',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '',
+            tools: [
+              {
+                apiName: 'api-1',
+                arguments: '{}',
+                id: 'call-1',
+                identifier: 'plugin-1',
+                type: 'default',
+              },
+              pendingPlugin,
+            ],
+          },
+          {
+            id: 'tool-1',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: 'Result',
+            tool_call_id: 'call-1',
+          },
+          {
+            id: 'tool-2',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: '',
+            tool_call_id: 'call-2',
+            plugin: pendingPlugin,
+            pluginIntervention: { status: 'pending' },
+          },
+        ] as any,
+      });
+
+      const context = createMockContext('tool_result', {
+        parentMessageId: 'tool-msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'request_human_approve',
+        pendingToolsCalling: [pendingPlugin],
+        reason: 'Some tools still pending approval',
+        skipCreateToolMessage: true,
+      });
+    });
+
+    it('should ignore stale pending tool messages from a previous assistant turn', async () => {
+      // Regression: before scoping, a previous turn's never-resolved
+      // `pluginIntervention.status === 'pending'` row would be loaded back
+      // into state.messages via historyMessages and hijack every subsequent
+      // tool_result phase, parking the loop in waiting_for_human forever.
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const stalePendingPlugin: ChatToolPayload = {
+        id: 'old-call-1',
+        identifier: 'plugin-old',
+        apiName: 'api-old',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        messages: [
+          // Previous turn — abandoned, leaves a pending tool message behind.
+          { role: 'user', content: 'old prompt' },
+          {
+            id: 'old-assistant',
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: 'old-call-1',
+                function: { name: 'plugin-old', arguments: '{}' },
+                type: 'function',
+              },
+            ],
+          },
+          {
+            id: 'old-tool-1',
+            parentId: 'old-assistant',
+            role: 'tool',
+            content: '',
+            tool_call_id: 'old-call-1',
+            plugin: stalePendingPlugin,
+            pluginIntervention: { status: 'pending' },
+          },
+          // Current turn — assistant called a different tool and it succeeded.
+          { role: 'user', content: 'new prompt' },
+          {
+            id: 'current-assistant',
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: 'new-call-1',
+                function: { name: 'plugin-new', arguments: '{}' },
+                type: 'function',
+              },
+            ],
+          },
+          {
+            id: 'current-tool-1',
+            parentId: 'current-assistant',
+            role: 'tool',
+            content: 'OK',
+            tool_call_id: 'new-call-1',
+          },
+        ] as any,
+      });
+
+      const context = createMockContext('tool_result', {
+        parentMessageId: 'current-tool-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      // The loop must continue with another LLM call, NOT get hijacked into
+      // request_human_approve by the stale pending row from the prior turn.
+      expect((result as any).type).toBe('call_llm');
     });
   });
 
@@ -747,13 +912,120 @@ describe('GeneralChatAgent', () => {
         type: 'default',
       };
 
+      // Pending tool messages must hang off the *current* assistant turn for
+      // the runner to treat them as live (otherwise they're treated as stale
+      // history). Mirror the real persisted shape: assistant carries
+      // `tool_calls`, pending tool message carries `parentId`.
       const state = createMockState({
         messages: [
           { role: 'user', content: 'Hello' },
-          { role: 'assistant', content: '', tools: [] },
-          { role: 'tool', content: 'Result 1', tool_call_id: 'call-1' },
-          { role: 'tool', content: 'Result 2', tool_call_id: 'call-2' },
           {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              { id: 'call-1', function: { name: 'plugin-1', arguments: '{}' }, type: 'function' },
+              { id: 'call-2', function: { name: 'plugin-2', arguments: '{}' }, type: 'function' },
+              { id: 'call-3', function: { name: 'plugin-3', arguments: '{}' }, type: 'function' },
+            ],
+          },
+          {
+            id: 'tool-1',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: 'Result 1',
+            tool_call_id: 'call-1',
+          },
+          {
+            id: 'tool-2',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: 'Result 2',
+            tool_call_id: 'call-2',
+          },
+          {
+            id: 'tool-3',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: '',
+            tool_call_id: 'call-3',
+            plugin: pendingPlugin,
+            pluginIntervention: { status: 'pending' },
+          },
+        ] as any,
+      });
+
+      const context = createMockContext('tools_batch_result', {
+        parentMessageId: 'tool-msg-2',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'request_human_approve',
+        pendingToolsCalling: [pendingPlugin],
+        reason: 'Some tools still pending approval',
+        skipCreateToolMessage: true,
+      });
+    });
+
+    it('should return request_human_approve when batch current assistant turn stores calls in tools', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const pendingPlugin: ChatToolPayload = {
+        id: 'call-3',
+        identifier: 'plugin-3',
+        apiName: 'api-3',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '',
+            tools: [
+              {
+                apiName: 'api-1',
+                arguments: '{}',
+                id: 'call-1',
+                identifier: 'plugin-1',
+                type: 'default',
+              },
+              {
+                apiName: 'api-2',
+                arguments: '{}',
+                id: 'call-2',
+                identifier: 'plugin-2',
+                type: 'default',
+              },
+              pendingPlugin,
+            ],
+          },
+          {
+            id: 'tool-1',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: 'Result 1',
+            tool_call_id: 'call-1',
+          },
+          {
+            id: 'tool-2',
+            parentId: 'assistant-1',
+            role: 'tool',
+            content: 'Result 2',
+            tool_call_id: 'call-2',
+          },
+          {
+            id: 'tool-3',
+            parentId: 'assistant-1',
             role: 'tool',
             content: '',
             tool_call_id: 'call-3',

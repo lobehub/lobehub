@@ -7,8 +7,12 @@ export interface ToolExecutionContext {
   activeDeviceId?: string;
   /** Agent ID executing the tool call */
   agentId?: string;
+  /** Current page document ID for page-scoped conversations */
+  documentId?: string | null;
   /** Memory tool permission from agent chat config */
   memoryToolPermission?: 'read-only' | 'read-write';
+  /** Conversation scope captured when the operation was created */
+  scope?: string | null;
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
   /** Task ID when executing within the Task system */

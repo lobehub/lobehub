@@ -195,6 +195,19 @@ class TelegramWebhookClient implements PlatformClient {
     return extractChatId(platformThreadId);
   }
 
+  /**
+   * Telegram exposes the sender's preferred UI language on every inbound
+   * message via `from.language_code`. Values are IETF-ish (`en`, `zh-hans`,
+   * `pt-br`, …) so the caller normalizes them against the project locale set.
+   * Returns `undefined` for service messages or anonymous senders that omit
+   * the field.
+   */
+  extractAuthorLocale(message: Message): string | undefined {
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    const code = raw?.from?.language_code;
+    return typeof code === 'string' && code.length > 0 ? code : undefined;
+  }
+
   async registerBotCommands(
     commands: Array<{ command: string; description: string }>,
   ): Promise<void> {

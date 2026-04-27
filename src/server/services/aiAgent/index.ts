@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-ag
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import {
   type DeviceAttachment,
   generateSystemPrompt,
@@ -58,8 +59,10 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
@@ -353,6 +356,33 @@ export class AiAgentService {
           log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
         }
       }
+    }
+
+    if (appContext?.scope !== 'page') {
+      agentConfig.plugins = agentConfig.plugins?.filter((id) => id !== PageAgentIdentifier);
+    }
+
+    if (appContext?.scope === 'page' && agentSlug !== BUILTIN_AGENT_SLUGS.pageAgent) {
+      const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {
+        model: agentConfig.model,
+        plugins: agentConfig.plugins ?? [],
+      });
+      const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
+
+      if (pageAgentSystemRole) {
+        agentConfig.systemRole = agentConfig.systemRole
+          ? `${agentConfig.systemRole}\n\n${pageAgentSystemRole}`
+          : pageAgentSystemRole;
+      }
+
+      agentConfig.plugins = agentConfig.plugins?.includes(PageAgentIdentifier)
+        ? agentConfig.plugins
+        : [PageAgentIdentifier, ...(agentConfig.plugins ?? [])];
+      agentConfig.chatConfig = {
+        ...agentConfig.chatConfig,
+        enableHistoryCount: false,
+      };
+      log('execAgent: injected page-agent runtime for page scope');
     }
 
     await throwIfExecutionAborted('agent configuration');
@@ -1257,6 +1287,24 @@ export class AiAgentService {
         });
     if (userMessageRecord) {
       log('execAgent: created user message %s', userMessageRecord.id);
+      await enqueueAgentSignalSourceEvent(
+        {
+          payload: {
+            agentId: resolvedAgentId,
+            message: prompt,
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+            trigger,
+            messageId: userMessageRecord.id,
+          },
+          sourceId: userMessageRecord.id,
+          sourceType: 'agent.user.message',
+        },
+        {
+          agentId: resolvedAgentId,
+          userId: this.userId,
+        },
+      );
     }
 
     // 14. Create assistant message placeholder in database
@@ -1325,6 +1373,39 @@ export class AiAgentService {
       },
     };
 
+    if (appContext?.scope !== 'page' && appContext?.documentId && topicId) {
+      try {
+        const topicDocuments = await this.agentDocumentsService.listDocumentsForTopic(
+          resolvedAgentId,
+          topicId,
+        );
+        const activeTopicDocument = topicDocuments.find(
+          (document) => document.documentId === appContext.documentId,
+        );
+
+        initialContext = {
+          ...initialContext,
+          initialContext: {
+            activeTopicDocument: {
+              agentDocumentId: activeTopicDocument?.id,
+              documentId: appContext.documentId,
+              title: activeTopicDocument?.title,
+            },
+          },
+        };
+      } catch (error) {
+        log('execAgent: failed to resolve active topic document context: %O', error);
+        initialContext = {
+          ...initialContext,
+          initialContext: {
+            activeTopicDocument: {
+              documentId: appContext.documentId,
+            },
+          },
+        };
+      }
+    }
+
     // 16b. Human-approval resume — override initialContext based on the
     // user's decision. The DB write above has already persisted the
     // intervention status, so `allMessages` reflects the decision for the
@@ -1346,6 +1427,7 @@ export class AiAgentService {
         // the plugin row fetched above; missing any of identifier/apiName
         // breaks the server-side tool executor dispatch.
         initialContext = {
+          initialContext: initialContext.initialContext,
           payload: {
             approvedToolCall: {
               apiName: resumeApprovalPlugin.apiName,
@@ -1438,7 +1520,9 @@ export class AiAgentService {
         userTimezone,
         appContext: {
           agentId: resolvedAgentId,
+          documentId: appContext?.documentId,
           groupId: appContext?.groupId,
+          scope: appContext?.scope,
           taskId,
           threadId: appContext?.threadId,
           topicId,
@@ -1633,7 +1717,8 @@ export class AiAgentService {
    * 3. Store operationId in Thread metadata
    */
   async execSubAgentTask(params: ExecSubAgentTaskParams): Promise<ExecSubAgentTaskResult> {
-    const { groupId, topicId, parentMessageId, agentId, instruction, title } = params;
+    const { groupId, topicId, parentMessageId, agentId, instruction, title, parentOperationId } =
+      params;
 
     log(
       'execSubAgentTask: agentId=%s, groupId=%s, topicId=%s, instruction=%s',
@@ -1642,6 +1727,18 @@ export class AiAgentService {
       topicId,
       instruction.slice(0, 50),
     );
+
+    // Dispatch beforeCallAgent hook on parent operation
+    if (parentOperationId) {
+      hookDispatcher
+        .dispatch(parentOperationId, 'beforeCallAgent', {
+          agentId,
+          instruction: instruction.slice(0, 200),
+          operationId: parentOperationId,
+          userId: this.userId,
+        })
+        .catch(() => {});
+    }
 
     // 1. Create Thread for isolated task execution
     const thread = await this.threadModel.create({
@@ -1705,6 +1802,30 @@ export class AiAgentService {
         },
         status: ThreadStatus.Failed,
       });
+
+      // Dispatch onCallAgentError hook
+      if (parentOperationId) {
+        hookDispatcher
+          .dispatch(parentOperationId, 'onCallAgentError', {
+            agentId,
+            error: result.error || 'Sub-agent execution failed',
+            operationId: parentOperationId,
+            userId: this.userId,
+          })
+          .catch(() => {});
+      }
+    } else if (parentOperationId) {
+      // Dispatch afterCallAgent hook
+      hookDispatcher
+        .dispatch(parentOperationId, 'afterCallAgent', {
+          agentId,
+          operationId: parentOperationId,
+          subOperationId: result.operationId,
+          success: true,
+          threadId: thread.id,
+          userId: this.userId,
+        })
+        .catch(() => {});
     }
 
     return {

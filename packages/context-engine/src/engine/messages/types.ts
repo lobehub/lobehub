@@ -54,6 +54,8 @@ export interface KnowledgeConfig {
  * Tools configuration
  */
 export interface ToolsConfig {
+  /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
+  disabledToolIdentifiers?: string[];
   /** Tool manifests with systemRole and API definitions */
   manifests?: LobeToolManifest[];
   /** Enabled tool IDs (kept for compatibility) */

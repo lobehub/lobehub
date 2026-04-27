@@ -5,6 +5,11 @@
  * The NotebookService is injected via constructor so both client and server can provide their own implementation.
  *
  * Note: listDocuments is not exposed as a tool - it's automatically injected by the system.
+ *
+ * @deprecated The notebook tool is no longer injected into the LLM tools
+ * engine. This executor is retained so that legacy tool-call messages can
+ * still resolve on execution. New flows should use
+ * `@lobechat/builtin-tool-agent-documents`.
  */
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 

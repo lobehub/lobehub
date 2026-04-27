@@ -18,7 +18,18 @@ interface ContentBlockProps extends RenderableAssistantContentBlock {
   disableEditing?: boolean;
 }
 const ContentBlock = memo<ContentBlockProps>(
-  ({ id, tools, content, imageList, reasoning, error, domId, assistantId, disableEditing }) => {
+  ({
+    id,
+    tools,
+    content,
+    imageList,
+    reasoning,
+    error,
+    domId,
+    assistantId,
+    disableEditing,
+    disableMarkdownStreaming,
+  }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
@@ -73,7 +84,12 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {showMessageContent && (
           <SafeBoundary variant="alert">
-            <MessageContent content={content} hasTools={hasTools} id={id} />
+            <MessageContent
+              content={content}
+              disableStreaming={disableMarkdownStreaming}
+              hasTools={hasTools}
+              id={id}
+            />
           </SafeBoundary>
         )}
 

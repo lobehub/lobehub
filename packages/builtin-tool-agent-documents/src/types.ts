@@ -1,5 +1,3 @@
-import type { MarkdownPatchHunk } from '@lobechat/markdown-patch';
-
 export const AgentDocumentsIdentifier = 'lobe-agent-documents';
 
 export const AgentDocumentsApiName = {
@@ -7,7 +5,7 @@ export const AgentDocumentsApiName = {
   copyDocument: 'copyDocument',
   editDocument: 'editDocument',
   listDocuments: 'listDocuments',
-  patchDocument: 'patchDocument',
+  modifyNodes: 'modifyNodes',
   readDocument: 'readDocument',
   readDocumentByFilename: 'readDocumentByFilename',
   removeDocument: 'removeDocument',
@@ -18,6 +16,7 @@ export const AgentDocumentsApiName = {
 
 export interface CreateDocumentArgs {
   content: string;
+  target?: 'agent' | 'currentTopic';
   title: string;
 }
 
@@ -26,6 +25,7 @@ export interface CreateDocumentState {
 }
 
 export interface ReadDocumentArgs {
+  format?: 'xml' | 'markdown' | 'both';
   id: string;
 }
 
@@ -33,6 +33,7 @@ export interface ReadDocumentState {
   content?: string;
   id: string;
   title?: string;
+  xml?: string;
 }
 
 export interface EditDocumentArgs {
@@ -45,15 +46,46 @@ export interface EditDocumentState {
   updated: boolean;
 }
 
-export interface PatchDocumentArgs {
-  hunks: MarkdownPatchHunk[];
+export type ModifyDocumentInsertOperation =
+  | {
+      action: 'insert';
+      afterId: string;
+      litexml: string;
+    }
+  | {
+      action: 'insert';
+      beforeId: string;
+      litexml: string;
+    };
+
+export interface ModifyDocumentUpdateOperation {
+  action: 'modify';
+  litexml: string | string[];
+}
+
+export interface ModifyDocumentRemoveOperation {
+  action: 'remove';
   id: string;
 }
 
-export interface PatchDocumentState {
-  applied: number;
+export type ModifyDocumentOperation =
+  | ModifyDocumentInsertOperation
+  | ModifyDocumentRemoveOperation
+  | ModifyDocumentUpdateOperation;
+
+export interface ModifyDocumentNodesArgs {
   id: string;
-  patched: boolean;
+  operations: ModifyDocumentOperation[];
+}
+
+export interface ModifyDocumentNodesState {
+  id: string;
+  results: Array<{
+    action: 'insert' | 'remove' | 'modify';
+    success: boolean;
+  }>;
+  successCount: number;
+  totalCount: number;
 }
 
 export interface RemoveDocumentArgs {
@@ -121,14 +153,17 @@ export interface AgentDocumentReference {
   title?: string;
 }
 
-export interface ListDocumentsArgs {}
+export interface ListDocumentsArgs {
+  target?: 'agent' | 'currentTopic';
+}
 
 export interface ListDocumentsState {
-  documents: { filename: string; id: string; title?: string }[];
+  documents: { documentId?: string; filename: string; id: string; title?: string }[];
 }
 
 export interface ReadDocumentByFilenameArgs {
   filename: string;
+  format?: 'xml' | 'markdown' | 'both';
 }
 
 export interface ReadDocumentByFilenameState {
@@ -136,6 +171,7 @@ export interface ReadDocumentByFilenameState {
   filename: string;
   id: string;
   title?: string;
+  xml?: string;
 }
 
 export interface UpsertDocumentByFilenameArgs {

@@ -28,9 +28,11 @@ import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
-import type { ChatStore } from '@/store/chat/store';
+import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+import { messageMapKey } from '../../../utils/messageMapKey';
+import { mergeQueuedMessages } from '../../operation/types';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
@@ -1775,6 +1777,55 @@ export const executeHeterogeneousAgent = async (
         heteroSessionId: adapter.sessionId,
         workingDirectory: workingDirectory ?? '',
       });
+    }
+
+    // ━━━ Drain queued messages after a successful CC turn ━━━
+    // Mirrors the client-mode drain in streamingExecutor.ts. With Plan A we
+    // don't extend CC's stdin lifetime — a follow-up message just spawns a
+    // new `claude` (with --resume via topic metadata) once the current run
+    // exits. Must run AFTER the `updateTopicMetadata` await above so the next
+    // sendMessage's `resolveHeteroResume` reads the just-finished session id
+    // instead of starting a fresh CLI session and breaking turn-to-turn
+    // continuity. Skip on abort/error so a manual stop preserves the queue
+    // for the user to manage via QueueTray; "send now" = stop + send.
+    // Cast: TS narrows the closure-mutated `deferredTerminalEvent` back to
+    // `null` in linear flow (it can't see writes from the async IPC handler).
+    const terminalEvent = deferredTerminalEvent as HeterogeneousAgentEvent | null;
+    if (!isAborted() && terminalEvent?.type !== 'error') {
+      const contextKey = messageMapKey(context);
+      const remainingQueued = get().drainQueuedMessages?.(contextKey) ?? [];
+      if (remainingQueued.length > 0) {
+        // Force-complete this op + mark unread BEFORE the next sendMessage,
+        // otherwise its queue check (covering all AI_RUNTIME_OPERATION_TYPES)
+        // would still see this op as "running" and re-queue the merged content
+        // into a now-orphaned operation.
+        get().completeOperation(operationId);
+        const completedOp = get().operations?.[operationId];
+        if (completedOp?.context.agentId) {
+          get().markUnreadCompleted?.(completedOp.context.agentId, completedOp.context.topicId);
+        }
+
+        const merged = mergeQueuedMessages(remainingQueued);
+        const mergedFiles =
+          merged.files.length > 0 ? merged.files.map((id) => ({ id }) as any) : undefined;
+
+        setTimeout(() => {
+          useChatStore
+            .getState()
+            .sendMessage({
+              context: { ...context },
+              editorData: merged.editorData,
+              files: mergedFiles,
+              message: merged.content,
+            })
+            .catch((e: unknown) => {
+              console.error(
+                '[heterogeneousAgentExecutor] sendMessage for queued content failed:',
+                e,
+              );
+            });
+        }, 100);
+      }
     }
   } catch (error) {
     if (!completed) {

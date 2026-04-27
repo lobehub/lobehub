@@ -1,3 +1,4 @@
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { type OpenAIChatMessage } from '@lobechat/types';
 
@@ -58,6 +59,7 @@ export const serverMessagesEngine = async ({
   historyCount,
   historySummary,
   formatHistorySummary,
+  initialContext,
   knowledge,
   agentDocuments,
   skillsConfig,
@@ -101,6 +103,8 @@ export const serverMessagesEngine = async ({
 
     inputTemplate,
 
+    initialContext,
+
     // Knowledge injection
     knowledge: {
       fileContents: knowledge?.fileContents,
@@ -123,6 +127,9 @@ export const serverMessagesEngine = async ({
     // Tools configuration
     toolDiscoveryConfig,
     toolsConfig: {
+      disabledToolIdentifiers:
+        toolsConfig?.disabledToolIdentifiers ??
+        (toolsConfig?.tools?.includes(PageAgentIdentifier) ? undefined : [PageAgentIdentifier]),
       manifests: toolsConfig?.manifests,
       tools: toolsConfig?.tools,
     },

@@ -2,6 +2,7 @@ import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
+import { documentSWRKeys } from '@/services/document/swrKeys';
 import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { type LobeDocument } from '@/types/document';
@@ -124,7 +125,7 @@ export class ListActionImpl {
 
   useFetchDocuments = (): SWRResponse<LobeDocument[]> => {
     return useClientDataSWRWithSync<LobeDocument[]>(
-      ['pageDocuments'],
+      documentSWRKeys.pageDocuments(),
       async () => {
         const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
         return (await documentService.getPageDocuments(pageSize)) as LobeDocument[];

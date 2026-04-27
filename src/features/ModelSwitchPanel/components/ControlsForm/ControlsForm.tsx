@@ -1,8 +1,9 @@
+import type { LobeAgentChatConfig } from '@lobechat/types';
 import { type FormItemProps } from '@lobehub/ui';
 import { Form } from '@lobehub/ui';
 import { Form as AntdForm, Grid, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { memo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
@@ -44,6 +45,23 @@ interface ControlsFormProps {
   provider?: string;
 }
 
+/**
+ * Keeps the switch state aligned with runtime behavior for legacy configs.
+ * Users may still have only `thinking: 'disabled'`; treating that as unset would
+ * show the model default and could persist the opposite value on unrelated edits.
+ */
+const resolveEnableReasoningInitialValue = (
+  config: LobeAgentChatConfig,
+  defaultValue?: boolean,
+) => {
+  if (Object.hasOwn(config, 'enableReasoning')) return config.enableReasoning;
+
+  if (config.thinking === 'enabled') return true;
+  if (config.thinking === 'disabled') return false;
+
+  return defaultValue;
+};
+
 const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: providerProp }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
@@ -55,7 +73,6 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   const model = modelProp ?? agentModel;
   const provider = providerProp ?? agentProvider;
   const [form] = Form.useForm();
-  const enableReasoning = AntdForm.useWatch(['enableReasoning'], form);
 
   const config = useAgentStore(
     (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
@@ -63,6 +80,28 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   );
 
   const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
+  const modelExtendParamOptions = useAiInfraStore(
+    aiModelSelectors.modelExtendParamOptions(model, provider),
+  );
+  const initialValues = useMemo(() => {
+    const enableReasoningInitialValue = resolveEnableReasoningInitialValue(
+      config,
+      modelExtendParamOptions?.enableReasoning?.defaultValue,
+    );
+
+    return {
+      ...config,
+      enableReasoning: enableReasoningInitialValue,
+    };
+  }, [config, modelExtendParamOptions?.enableReasoning?.defaultValue]);
+
+  useEffect(() => {
+    form.setFieldsValue(initialValues);
+  }, [form, initialValues]);
+
+  const enableReasoning =
+    AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
+  const includeReasoningBudget = modelExtendParamOptions?.enableReasoning?.includeBudget !== false;
 
   const screens = Grid.useBreakpoint();
   const isNarrow = !screens.sm;
@@ -102,17 +141,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       desc: (
         <span style={isNarrow ? descNarrow : descWide}>
           <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
-            基于 Claude Thinking 机制限制（
-            <a
-              rel="noreferrer nofollow"
-              target="_blank"
-              href={
-                'https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking?utm_source=lobechat#why-thinking-blocks-must-be-preserved'
-              }
-            >
-              了解更多
-            </a>
-            ），开启后将自动禁用历史消息数限制
+            开启后模型会先进行推理，适合复杂问题。
           </Trans>
         </span>
       ),
@@ -133,7 +162,8 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       minWidth: undefined,
       name: 'enableAdaptiveThinking',
     },
-    (enableReasoning || modelExtendParams?.includes('reasoningBudgetToken')) && {
+    ((enableReasoning && includeReasoningBudget) ||
+      modelExtendParams?.includes('reasoningBudgetToken')) && {
       children: <ReasoningTokenSlider />,
       label: t('extendParams.reasoningBudgetToken.title'),
       layout: 'vertical',
@@ -453,7 +483,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   return (
     <Form
       form={form}
-      initialValues={config}
+      initialValues={initialValues}
       itemsType={'flat'}
       size={'small'}
       style={{ fontSize: 12 }}
@@ -463,7 +493,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
           .map((item: any) => items.find((i) => i.name === item))
           .filter(Boolean) as FormItemProps[]
       }
-      onValuesChange={async (_, values) => {
+      onValuesChange={async (values) => {
         await updateAgentChatConfig(values);
       }}
     />

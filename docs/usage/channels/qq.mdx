@@ -140,13 +140,41 @@ To use the bot in QQ groups:
 2. @mention the bot in a message to trigger a response
 3. The bot will reply in the group conversation
 
+## Access Policies
+
+Two independent policies gate inbound traffic. Both default to **Open**.
+
+### Allowed User IDs (global)
+
+A populated **Allowed User IDs** field is a global gate — DMs *and* group `@mentions` are restricted to listed QQ `tiny_id` values. Empty means "no user-level filter". Use the platform `tiny_id` from the OpenAPI event payload — the visible QQ number is not always the same as the platform ID.
+
+### DM Policy
+
+- **Open (default)** — Any QQ user who shares context with the bot can DM it (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
+
+### Group Policy
+
+Controls which QQ groups the bot will respond in.
+
+- **Open (default)** — Respond to `@mentions` in any group the bot has been added to.
+- **Allowlist** — Respond only in groups whose ID is listed in **Allowed Channel IDs** (use the platform group ID from the OpenAPI event payload).
+- **Disabled** — Ignore all group traffic; the bot only responds to DMs.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field               | Required | Description                                                                             |
-| ------------------- | -------- | --------------------------------------------------------------------------------------- |
-| **Application ID**  | Yes      | Your bot's App ID from QQ Open Platform                                                 |
-| **App Secret**      | Yes      | Your bot's App Secret from QQ Open Platform                                             |
-| **Connection Mode** | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration |
+| Field                   | Required | Description                                                                                          |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| **Application ID**      | Yes      | Your bot's App ID from QQ Open Platform                                                              |
+| **App Secret**          | Yes      | Your bot's App Secret from QQ Open Platform                                                          |
+| **Connection Mode**     | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration              |
+| **Allowed User IDs**    | No       | Comma- or whitespace-separated QQ `tiny_id` values. Global gate — applies to DMs and group @mentions |
+| **DM Policy**           | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                          |
+| **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                   |
+| **Allowed Channel IDs** | No       | Comma- or whitespace-separated QQ group IDs. Used when Group Policy is Allowlist                     |
 
 ## Limitations
 

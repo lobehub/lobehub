@@ -166,8 +166,8 @@ export const briefRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const model = new BriefModel(ctx.serverDB, ctx.userId);
-        const brief = await model.resolve(input.id, {
+        const service = new BriefService(ctx.serverDB, ctx.userId);
+        const brief = await service.resolve(input.id, {
           action: input.action,
           comment: input.comment,
         });

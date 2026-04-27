@@ -76,7 +76,7 @@ const PageEditorCanvas = memo(() => {
               </Flexbox>
             </WideScreenContainer>
           </Flexbox>
-          {documentId && <DiffAllToolbar documentId={documentId} editor={editor!} />}
+          {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
         </Flexbox>
         <RightPanel />
       </Flexbox>

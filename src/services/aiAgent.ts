@@ -27,6 +27,7 @@ export interface ResumeApprovalParam {
 export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: {
+    documentId?: string | null;
     groupId?: string | null;
     scope?: string | null;
     sessionId?: string;
@@ -62,6 +63,8 @@ export interface ExecSubAgentTaskParams {
   groupId?: string;
   instruction: string;
   parentMessageId: string;
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId?: string;
   timeout?: number;
   /** Task title (shown in UI, used as thread title) */
   title?: string;

@@ -181,6 +181,78 @@ describe('AgentBridgeService', () => {
     );
   });
 
+  describe('progress message gating by supportsMessageEdit', () => {
+    // Regression test for the QQ duplicate-reply bug:
+    // QQ doesn't support message edits — the chat-adapter falls `editMessage`
+    // back to `postMessage`. So if we posted an "ack" placeholder and then
+    // tried to edit it on afterStep + onComplete, the user saw the placeholder
+    // PLUS two duplicate copies of the final reply. Edit-incapable platforms
+    // must skip the placeholder entirely so the final reply lands once.
+
+    beforeEach(() => {
+      // Happy-path startup so we only count the placeholder post, not error fallbacks.
+      mockExecAgent.mockResolvedValue({
+        assistantMessageId: 'assistant-msg-1',
+        createdAt: new Date().toISOString(),
+        operationId: 'op-1',
+        success: true,
+        topicId: 'topic-1',
+      });
+    });
+
+    /** Pull the `progressMessageId` the bridge handed to execAgent's webhook hooks. */
+    const progressMessageIdFromHooks = (): unknown => {
+      const call = mockExecAgent.mock.calls.at(-1);
+      const hooks = call?.[0]?.hooks as
+        | Array<{ id?: string; webhook?: { body?: Record<string, unknown> } }>
+        | undefined;
+      return hooks?.find((h) => h.id === 'bot-completion')?.webhook?.body?.progressMessageId;
+    };
+
+    it('posts the ack for an edit-incapable platform but does not track it as progressMessage', async () => {
+      mockGetPlatform.mockReturnValue({
+        id: 'qq',
+        name: 'QQ',
+        supportsMessageEdit: false,
+      });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      const message = createMessage();
+      const client = createClient();
+
+      await service.handleMention(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platform: 'qq', platformThreadId: 'qq:c2c:user-1' } as any,
+        client,
+      });
+
+      // User still gets immediate feedback ("处理中…").
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      // But the ack is NOT tracked as `progressMessage`, so the downstream
+      // hooks won't try to edit it (which would surface as a duplicate message
+      // on edit-incapable platforms).
+      expect(progressMessageIdFromHooks()).toBeUndefined();
+    });
+
+    it('posts the ack AND tracks it as progressMessage when the platform supports edit', async () => {
+      // Default mock returns supportsMessageEdit: true (Discord).
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      const message = createMessage();
+      const client = createClient();
+
+      await service.handleMention(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platform: 'discord', platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      // Tracked → downstream hooks will edit this message in place.
+      expect(progressMessageIdFromHooks()).toBe('progress-msg-1');
+    });
+  });
+
   describe('activeThreads cleanup on side-effect failure', () => {
     // Regression test for the "already has an active execution" lockup:
     // a transient network error from `thread.startTyping()` (or any other

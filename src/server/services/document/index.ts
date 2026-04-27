@@ -8,6 +8,8 @@ import isEqual from 'fast-deep-equal';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { isValidEditorData } from '@/libs/editor/isValidEditorData';
+import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
 import { type LobeDocument } from '@/types/document';
 
 import { FileService } from '../file';
@@ -203,15 +205,44 @@ export class DocumentService {
       throw new Error(`Document not found: ${documentId}`);
     }
 
+    const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
     const savedAt = new Date();
     await this.documentHistoryService.createHistory({
       documentId,
-      editorData,
+      editorData: normalizedEditorData,
       saveSource,
       savedAt,
     });
 
     return { savedAt };
+  }
+
+  /**
+   * Best-effort snapshot of the current document editor state before an automated mutation.
+   */
+  async trySaveCurrentDocumentHistory(
+    documentId: string,
+    saveSource: DocumentHistorySaveSource,
+  ): Promise<SaveDocumentHistoryResult | undefined> {
+    try {
+      const currentDocument = await this.documentModel.findById(documentId);
+      const editorData = currentDocument?.editorData;
+      if (!isValidEditorData(editorData)) return undefined;
+
+      const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
+      const savedAt = new Date();
+      await this.documentHistoryService.createHistory({
+        documentId,
+        editorData: normalizedEditorData,
+        saveSource,
+        savedAt,
+      });
+
+      return { savedAt };
+    } catch (error) {
+      console.error('[DocumentService] Failed to save current document history:', error);
+      return undefined;
+    }
   }
 
   /**
@@ -274,10 +305,20 @@ export class DocumentService {
         throw new Error(`Document not found: ${id}`);
       }
 
-      const currentEditorData = (currentDocument.editorData ?? {}) as Record<string, any>;
-      const nextEditorData = params.editorData;
+      // Accepted-view projections used only for historyAppended comparison and
+      // for the "before" snapshot written into history. The persisted editorData
+      // keeps any pending diff nodes — they're only normalized when the user
+      // explicitly accepts/rejects via DiffAllToolbar.
+      const currentEditorDataAccepted = normalizeEditorDataDiffNodes(
+        (currentDocument.editorData ?? {}) as Record<string, any>,
+      );
+      const nextEditorDataAccepted =
+        params.editorData === undefined
+          ? undefined
+          : normalizeEditorDataDiffNodes(params.editorData);
       const historyAppended =
-        nextEditorData !== undefined && !isEqual(nextEditorData, currentEditorData);
+        nextEditorDataAccepted !== undefined &&
+        !isEqual(nextEditorDataAccepted, currentEditorDataAccepted);
 
       const updates: Record<string, unknown> = {};
 
@@ -314,7 +355,7 @@ export class DocumentService {
         savedAt = new Date();
         await documentHistoryService.createHistory({
           documentId: id,
-          editorData: currentEditorData,
+          editorData: currentEditorDataAccepted,
           saveSource: params.saveSource ?? 'autosave',
           savedAt,
         });

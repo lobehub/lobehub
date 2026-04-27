@@ -18,11 +18,19 @@ import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
-import { compareTaskItems, getTaskGroupMeta, sortGroupEntries } from './listViewOptions';
+import {
+  compareTaskItems,
+  getTaskGroupMeta,
+  HIDDEN_WHEN_COMPLETED_STATUSES,
+  sortGroupEntries,
+} from './listViewOptions';
 
 interface TaskListProps {
+  onShowHiddenCompleted?: () => void;
   options: TaskListViewOptions;
 }
+
+const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
 
 const renderTaskRows = (items: ReturnType<typeof taskListSelectors.taskList>, sub?: boolean) =>
   items.map((task, index) => (
@@ -109,21 +117,29 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
   </Flexbox>
 );
 
-const TaskList = memo<TaskListProps>(({ options }) => {
+const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options }) => {
   const { t } = useTranslation('chat');
   const tasks = useTaskStore(taskListSelectors.taskList);
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
+  const visibleTasks = useMemo(
+    () =>
+      options.hideCompleted
+        ? tasks.filter((task) => !HIDDEN_COMPLETED_STATUS_SET.has(task.status))
+        : tasks,
+    [tasks, options.hideCompleted],
+  );
+  const hiddenCount = tasks.length - visibleTasks.length;
   const groupedTaskEntries = useMemo(() => {
-    const sortedTasks = [...tasks].sort((a, b) => compareTaskItems(a, b, options));
+    const sortedTasks = [...visibleTasks].sort((a, b) => compareTaskItems(a, b, options));
     const primaryGroupOrderDirection =
       options.orderBy === groupBy ? options.orderDirection : undefined;
     const subGroupOrderDirection =
       options.orderBy === effectiveSubGroupBy ? options.orderDirection : undefined;
 
-    const primaryGroupMap = new Map<string, { items: typeof tasks; meta: TaskGroupMeta }>();
+    const primaryGroupMap = new Map<string, { items: typeof visibleTasks; meta: TaskGroupMeta }>();
     for (const task of sortedTasks) {
       const primaryGroup = getTaskGroupMeta(task, groupBy);
       if (!primaryGroup?.key) continue;
@@ -147,11 +163,11 @@ const TaskList = memo<TaskListProps>(({ options }) => {
         return {
           items: groupedTasks,
           meta,
-          subGroups: [] as Array<[TaskGroupMeta, typeof tasks]>,
+          subGroups: [] as Array<[TaskGroupMeta, typeof visibleTasks]>,
         };
       }
 
-      const subGroupMap = new Map<string, { items: typeof tasks; meta: TaskGroupMeta }>();
+      const subGroupMap = new Map<string, { items: typeof visibleTasks; meta: TaskGroupMeta }>();
       for (const task of groupedTasks) {
         const subGroup = getTaskGroupMeta(task, effectiveSubGroupBy);
         if (!subGroup?.key) continue;
@@ -174,7 +190,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
         ),
       };
     });
-  }, [effectiveSubGroupBy, groupBy, options, tasks]);
+  }, [effectiveSubGroupBy, groupBy, options, visibleTasks]);
 
   if (!isInit) return null;
 
@@ -186,50 +202,79 @@ const TaskList = memo<TaskListProps>(({ options }) => {
     );
   }
 
+  const hiddenFooter = hiddenCount > 0 && (
+    <Flexbox
+      horizontal
+      align={'center'}
+      gap={16}
+      justify={'center'}
+      paddingBlock={16}
+      style={{ fontSize: 13 }}
+    >
+      <Flexbox horizontal align={'center'} gap={6}>
+        <Text weight={500}>{t('taskList.hiddenCompleted.count', { count: hiddenCount })}</Text>
+        <Text type={'secondary'}>{t('taskList.hiddenCompleted.suffix')}</Text>
+      </Flexbox>
+      {onShowHiddenCompleted && (
+        <Text style={{ cursor: 'pointer' }} weight={500} onClick={onShowHiddenCompleted}>
+          {t('taskList.hiddenCompleted.show')}
+        </Text>
+      )}
+    </Flexbox>
+  );
+
   if (groupBy === 'none') {
-    return renderTaskListBlock(groupedTaskEntries[0]?.items ?? []);
+    return (
+      <>
+        {renderTaskListBlock(groupedTaskEntries[0]?.items ?? [])}
+        {hiddenFooter}
+      </>
+    );
   }
 
   return (
-    <Accordion gap={16}>
-      {groupedTaskEntries.map((group) => {
-        return (
-          <AccordionItem
-            defaultExpand
-            indicatorPlacement={'end'}
-            itemKey={`group-${group.meta.key}`}
-            key={group.meta.key}
-            paddingBlock={8}
-            paddingInline={14}
-            title={renderGroupTitle(group.meta, group.items.length)}
-            variant={'filled'}
-            styles={{
-              header: { marginBottom: 8 },
-            }}
-          >
-            {group.subGroups.length > 0 ? (
-              <Accordion gap={6}>
-                {group.subGroups.map(([subGroup, subGroupTasks]) => (
-                  <AccordionItem
-                    defaultExpand
-                    indicatorPlacement={'end'}
-                    itemKey={`sub-${group.meta.key}-${subGroup.key}`}
-                    key={`${group.meta.key}-${subGroup.key}`}
-                    paddingBlock={6}
-                    paddingInline={14}
-                    title={renderGroupTitle(subGroup, subGroupTasks.length, true)}
-                  >
-                    {renderTaskListBlock(subGroupTasks, true)}
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            ) : (
-              renderTaskListBlock(group.items)
-            )}
-          </AccordionItem>
-        );
-      })}
-    </Accordion>
+    <>
+      <Accordion gap={16}>
+        {groupedTaskEntries.map((group) => {
+          return (
+            <AccordionItem
+              defaultExpand
+              indicatorPlacement={'end'}
+              itemKey={`group-${group.meta.key}`}
+              key={group.meta.key}
+              paddingBlock={8}
+              paddingInline={14}
+              title={renderGroupTitle(group.meta, group.items.length)}
+              variant={'filled'}
+              styles={{
+                header: { marginBottom: 8 },
+              }}
+            >
+              {group.subGroups.length > 0 ? (
+                <Accordion gap={6}>
+                  {group.subGroups.map(([subGroup, subGroupTasks]) => (
+                    <AccordionItem
+                      defaultExpand
+                      indicatorPlacement={'end'}
+                      itemKey={`sub-${group.meta.key}-${subGroup.key}`}
+                      key={`${group.meta.key}-${subGroup.key}`}
+                      paddingBlock={6}
+                      paddingInline={14}
+                      title={renderGroupTitle(subGroup, subGroupTasks.length, true)}
+                    >
+                      {renderTaskListBlock(subGroupTasks, true)}
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              ) : (
+                renderTaskListBlock(group.items)
+              )}
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+      {hiddenFooter}
+    </>
   );
 });
 

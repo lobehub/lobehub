@@ -9,6 +9,7 @@ import {
 } from '../store/remote-store';
 import type { ExecutionSnapshot, StepSnapshot } from '../types';
 import {
+  renderAgentSignal,
   renderDiff,
   renderEnvContext,
   renderMemory,
@@ -89,6 +90,7 @@ export function registerInspectCommand(program: Command) {
     .option('-d, --diff <n>', 'Diff against step N (use with -r or --env)')
     .option('-T, --payload-tools', 'List available tools registered in LLM payload')
     .option('-M, --memory', 'Show full user memory content (default step 0)')
+    .option('-S, --agent-signal', 'Show local agent-signal chain analysis')
     .option(
       '-p, --payload',
       'Show context engine input overview (knowledge, memory, capabilities, etc.)',
@@ -98,6 +100,7 @@ export function registerInspectCommand(program: Command) {
       async (
         traceId: string | undefined,
         opts: {
+          agentSignal?: boolean;
           context?: boolean;
           diff?: string;
           env?: boolean;
@@ -159,6 +162,16 @@ export function registerInspectCommand(program: Command) {
               : 'No snapshots found. Run an agent operation first.',
           );
           process.exit(1);
+        }
+
+        if (opts.agentSignal) {
+          if (opts.json) {
+            const { analyzeAgentSignal } = await import('../viewer/agentSignal');
+            console.log(JSON.stringify(analyzeAgentSignal(snapshot), null, 2));
+          } else {
+            console.log(renderAgentSignal(snapshot));
+          }
+          return;
         }
 
         const stepIndex = opts.step !== undefined ? Number.parseInt(opts.step, 10) : undefined;

@@ -149,7 +149,9 @@ export interface OperationCreationParams {
   agentConfig?: any;
   appContext: {
     agentId?: string;
+    documentId?: string | null;
     groupId?: string | null;
+    scope?: string | null;
     taskId?: string;
     threadId?: string | null;
     topicId?: string | null;

@@ -46,9 +46,7 @@ declare global {
   interface Window {
     electronAPI?: {
       invoke?: IpcInvoke;
-      onScreenCaptureSession?: (
-        listener: (session: ScreenCaptureSession) => void,
-      ) => () => void;
+      onScreenCaptureSession?: (listener: (session: ScreenCaptureSession) => void) => () => void;
       onStreamInvoke: (
         params: StreamInvokeRequestParams,
         callbacks: StreamerCallbacks,

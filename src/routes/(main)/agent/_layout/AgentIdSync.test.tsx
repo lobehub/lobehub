@@ -77,5 +77,20 @@ describe('AgentIdSync', () => {
 
     expect(useChatStore.getState().portalStack).toEqual([]);
     expect(useChatStore.getState().showPortal).toBe(false);
+    expect(useChatStore.getState().activeTopicId).toBe('topic-1');
+  });
+
+  it('preserves the active topic when the destination route carries a topic path segment', () => {
+    useParamsMock.mockReturnValue({ aid: 'agent-1', topicId: 'topic-1' });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), vi.fn()]);
+
+    const { rerender } = render(<AgentIdSync />);
+
+    useParamsMock.mockReturnValue({ aid: 'agent-2', topicId: 'topic-2' });
+    rerender(<AgentIdSync />);
+
+    expect(useChatStore.getState().portalStack).toEqual([]);
+    expect(useChatStore.getState().showPortal).toBe(false);
+    expect(useChatStore.getState().activeTopicId).toBe('topic-1');
   });
 });

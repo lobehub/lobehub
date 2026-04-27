@@ -4,20 +4,10 @@ import {
   type AgentContextDocument,
 } from '@lobechat/context-engine';
 
-import { mutate } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
+import { invalidateDocumentMutation } from '@/services/document/invalidation';
 
-export const agentDocumentSWRKeys = {
-  documents: (agentId: string) => ['agent-documents', agentId] as const,
-  /**
-   * UI-side list: raw AgentDocumentWithRules (includes documentId, sourceType, createdAt).
-   * Kept separate from `documents` because the agent store writes mapAgentDocumentsToContext(...)
-   * under that key, which drops those fields.
-   */
-  documentsList: (agentId: string) => ['agent-documents-list', agentId] as const,
-  readDocument: (agentId: string, id: string) =>
-    ['workspace-agent-document-editor', agentId, id] as const,
-};
+export { agentDocumentSWRKeys } from '@/services/document/swrKeys';
 
 const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
   AGENT_DOCUMENT_INJECTION_POSITIONS,
@@ -34,13 +24,20 @@ export const normalizeAgentDocumentPosition = (
 };
 
 const revalidateAgentDocuments = async (agentId: string) => {
-  await mutate(agentDocumentSWRKeys.documents(agentId));
-  await mutate(agentDocumentSWRKeys.documentsList(agentId));
+  await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
 };
 
-const revalidateReadDocument = async (agentId: string, id: string) => {
-  await mutate(agentDocumentSWRKeys.readDocument(agentId, id));
+const getStringField = (value: unknown, field: 'documentId' | 'id') => {
+  if (!value || typeof value !== 'object' || !(field in value)) return undefined;
+
+  const fieldValue = (value as Record<string, unknown>)[field];
+
+  return typeof fieldValue === 'string' ? fieldValue : undefined;
 };
+
+const getAgentDocumentId = (value: unknown) => getStringField(value, 'id');
+
+const getDocumentId = (value: unknown) => getStringField(value, 'documentId');
 
 class AgentDocumentService {
   getTemplates = async () => {
@@ -58,11 +55,19 @@ class AgentDocumentService {
     return result;
   };
 
-  listDocuments = async (params: { agentId: string }) => {
+  listDocuments = async (params: {
+    agentId: string;
+    target?: 'agent' | 'currentTopic';
+    topicId?: string;
+  }) => {
     return lambdaClient.agentDocument.listDocuments.query(params);
   };
 
-  readDocumentByFilename = async (params: { agentId: string; filename: string }) => {
+  readDocumentByFilename = async (params: {
+    agentId: string;
+    filename: string;
+    format?: 'xml' | 'markdown' | 'both';
+  }) => {
     return lambdaClient.agentDocument.readDocumentByFilename.query(params);
   };
 
@@ -72,54 +77,152 @@ class AgentDocumentService {
     filename: string;
   }) => {
     const result = await lambdaClient.agentDocument.upsertDocumentByFilename.mutate(params);
-    await revalidateAgentDocuments(params.agentId);
+    await invalidateDocumentMutation({
+      agentDocumentId: getAgentDocumentId(result),
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+    });
 
     return result;
   };
 
   associateDocument = async (params: { agentId: string; documentId: string }) => {
     const result = await lambdaClient.agentDocument.associateDocument.mutate(params);
-    await revalidateAgentDocuments(params.agentId);
+    await invalidateDocumentMutation({
+      agentDocumentId: getAgentDocumentId(result),
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: params.documentId,
+    });
 
     return result;
   };
 
   createDocument = async (params: { agentId: string; content: string; title: string }) => {
     const result = await lambdaClient.agentDocument.createDocument.mutate(params);
-    await revalidateAgentDocuments(params.agentId);
+    await invalidateDocumentMutation({
+      agentDocumentId: getAgentDocumentId(result),
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+    });
 
     return result;
   };
 
-  readDocument = async (params: { agentId: string; id: string }) => {
+  createForTopic = async (params: {
+    agentId: string;
+    content: string;
+    title: string;
+    topicId: string;
+  }) => {
+    const result = await lambdaClient.agentDocument.createForTopic.mutate(params);
+    await invalidateDocumentMutation({
+      agentDocumentId: getAgentDocumentId(result),
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+      topicId: params.topicId,
+    });
+
+    return result;
+  };
+
+  readDocument = async (params: {
+    agentId: string;
+    format?: 'xml' | 'markdown' | 'both';
+    id: string;
+  }) => {
     return lambdaClient.agentDocument.readDocument.query(params);
   };
 
   editDocument = async (params: { agentId: string; content: string; id: string }) => {
     const result = await lambdaClient.agentDocument.editDocument.mutate(params);
-    await revalidateAgentDocuments(params.agentId);
+    await invalidateDocumentMutation({
+      agentDocumentId: params.id,
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+    });
 
     return result;
   };
 
-  removeDocument = async (params: { agentId: string; id: string }) => {
-    const result = await lambdaClient.agentDocument.removeDocument.mutate(params);
-    await revalidateAgentDocuments(params.agentId);
+  modifyNodes = async (params: {
+    agentId: string;
+    id: string;
+    operations: Array<
+      | {
+          action: 'insert';
+          afterId: string;
+          litexml: string;
+        }
+      | {
+          action: 'insert';
+          beforeId: string;
+          litexml: string;
+        }
+      | {
+          action: 'modify';
+          litexml: string | string[];
+        }
+      | {
+          action: 'remove';
+          id: string;
+        }
+    >;
+  }) => {
+    const result = await lambdaClient.agentDocument.modifyNodes.mutate(params);
+    await invalidateDocumentMutation({
+      agentDocumentId: params.id,
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+    });
+
+    return result;
+  };
+
+  removeDocument = async (params: {
+    agentId: string;
+    documentId?: string;
+    id: string;
+    topicId?: string;
+  }) => {
+    const { agentId, documentId, id, topicId } = params;
+    const result = await lambdaClient.agentDocument.removeDocument.mutate({ agentId, id });
+    await invalidateDocumentMutation({
+      agentDocumentId: id,
+      agentId,
+      cause: 'agent-document',
+      documentId,
+      topicId,
+    });
 
     return result;
   };
 
   copyDocument = async (params: { agentId: string; id: string; newTitle?: string }) => {
     const result = await lambdaClient.agentDocument.copyDocument.mutate(params);
-    await revalidateAgentDocuments(params.agentId);
+    await invalidateDocumentMutation({
+      agentDocumentId: getAgentDocumentId(result),
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+    });
 
     return result;
   };
 
   renameDocument = async (params: { agentId: string; id: string; newTitle: string }) => {
     const result = await lambdaClient.agentDocument.renameDocument.mutate(params);
-    await revalidateAgentDocuments(params.agentId);
-    await revalidateReadDocument(params.agentId, params.id);
+    await invalidateDocumentMutation({
+      agentDocumentId: params.id,
+      agentId: params.agentId,
+      cause: 'agent-document',
+      documentId: getDocumentId(result),
+    });
 
     return result;
   };

@@ -27,6 +27,13 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(mobile)/chat'),
+                  'Mobile > Chat > Topic',
+                ),
+                path: ':topicId',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(mobile)/chat/settings'),
                   'Mobile > Chat > Settings',
                 ),

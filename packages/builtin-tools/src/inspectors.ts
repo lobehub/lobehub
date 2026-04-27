@@ -95,6 +95,23 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   },
 };
 
+export interface BuiltinInspectorRegistryEntry {
+  apiName: string;
+  identifier: string;
+  inspector: BuiltinInspector;
+}
+
+export const listBuiltinInspectorEntries = (): BuiltinInspectorRegistryEntry[] =>
+  Object.entries(BuiltinToolInspectors).flatMap(([identifier, toolset]) =>
+    Object.entries(toolset)
+      .filter((entry): entry is [string, BuiltinInspector] => !!entry[1])
+      .map(([apiName, inspector]) => ({
+        apiName,
+        identifier,
+        inspector,
+      })),
+  );
+
 /**
  * Get builtin inspector component for a specific API
  * @param identifier - Tool identifier (e.g., 'lobe-code-interpreter')

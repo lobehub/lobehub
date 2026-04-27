@@ -22,11 +22,16 @@ const Placeholder = memo<PlaceholderProps>(
       : combineKeys([KeyEnum.Mod, KeyEnum.Enter]);
     const { t } = useTranslation('chat');
 
+    const isHeterogeneous = !!heterogeneousName;
+
     if (variant === 'followUp') {
-      return <span>{t('followUpPlaceholder')}</span>;
+      return (
+        <span>
+          {t(isHeterogeneous ? 'followUpPlaceholderHeterogeneous' : 'followUpPlaceholder')}
+        </span>
+      );
     }
 
-    const isHeterogeneous = !!heterogeneousName;
     const i18nKey = isHeterogeneous
       ? 'sendPlaceholderHeterogeneous'
       : showAgentAssignmentHint

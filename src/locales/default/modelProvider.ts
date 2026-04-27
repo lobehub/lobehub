@@ -5,8 +5,9 @@ export default {
   'azure.azureApiVersion.title': 'Azure API Version',
   'azure.empty': 'Please enter a model ID to add the first model',
   'azure.endpoint.desc':
-    "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section",
-  'azure.endpoint.placeholder': 'https://docs-test-001.openai.azure.com',
+    "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section. Azure OpenAI endpoints from the Responses API path are also supported.",
+  'azure.endpoint.placeholder':
+    'https://your-resource.cognitiveservices.azure.com/openai/responses',
   'azure.endpoint.title': 'Azure API Address',
   'azure.modelListPlaceholder': 'Select or add the OpenAI model you deployed',
   'azure.title': 'Azure OpenAI',

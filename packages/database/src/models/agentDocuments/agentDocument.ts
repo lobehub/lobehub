@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { agentDocuments, documents } from '../../schemas';
@@ -71,6 +71,7 @@ export class AgentDocumentModel {
       deletedByUserId: settings.deletedByUserId,
       description: doc.description ?? null,
       documentId: settings.documentId,
+      editorData: doc.editorData ?? null,
       filename: doc.filename ?? '',
       id: settings.id,
       metadata: (doc.metadata as Record<string, any> | null) ?? null,
@@ -132,6 +133,7 @@ export class AgentDocumentModel {
     content: string,
     params?: {
       createdAt?: Date;
+      editorData?: Record<string, any>;
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, any>;
@@ -144,6 +146,7 @@ export class AgentDocumentModel {
   ): Promise<AgentDocument> {
     const {
       createdAt,
+      editorData,
       loadPosition,
       loadRules,
       metadata,
@@ -163,6 +166,7 @@ export class AgentDocumentModel {
         content,
         createdAt,
         description: metadata?.description,
+        editorData,
         fileType: 'agent/document',
         filename,
         metadata,
@@ -214,6 +218,7 @@ export class AgentDocumentModel {
     documentId: string,
     params?: {
       content?: string;
+      editorData?: Record<string, any>;
       loadPosition?: DocumentLoadPosition;
       loadRules?: Partial<DocumentLoadRules>;
       metadata?: Record<string, any>;
@@ -221,7 +226,8 @@ export class AgentDocumentModel {
       policyLoad?: PolicyLoad;
     },
   ): Promise<void> {
-    const { content, loadPosition, loadRules, metadata, policy, policyLoad } = params ?? {};
+    const { content, editorData, loadPosition, loadRules, metadata, policy, policyLoad } =
+      params ?? {};
 
     const existing = await this.findById(documentId);
 
@@ -257,7 +263,7 @@ export class AgentDocumentModel {
     };
 
     await this.db.transaction(async (trx) => {
-      if (content !== undefined || metadata !== undefined) {
+      if (content !== undefined || editorData !== undefined || metadata !== undefined) {
         const documentUpdate: Partial<NewDocument> = {};
 
         if (content !== undefined) {
@@ -265,6 +271,10 @@ export class AgentDocumentModel {
           documentUpdate.content = content;
           documentUpdate.totalCharCount = stats.totalCharCount;
           documentUpdate.totalLineCount = stats.totalLineCount;
+        }
+
+        if (editorData !== undefined) {
+          documentUpdate.editorData = editorData;
         }
 
         if (metadata !== undefined) {
@@ -317,6 +327,7 @@ export class AgentDocumentModel {
       : `copy-${Date.now()}-${existing.filename}`;
 
     return this.create(existing.agentId, filename, existing.content, {
+      editorData: existing.editorData || undefined,
       title,
       loadPosition:
         (existing.policy?.context?.position as DocumentLoadPosition | undefined) ||
@@ -381,6 +392,7 @@ export class AgentDocumentModel {
     content: string,
     params?: {
       createdAt?: Date;
+      editorData?: Record<string, any>;
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
       metadata?: Record<string, any>;
@@ -392,6 +404,7 @@ export class AgentDocumentModel {
   ): Promise<AgentDocument> {
     const {
       createdAt,
+      editorData,
       loadPosition,
       loadRules,
       metadata,
@@ -412,6 +425,7 @@ export class AgentDocumentModel {
 
       await this.update(existing.id, {
         content,
+        editorData,
         loadPosition,
         loadRules: mergedRules,
         metadata: mergedMetadata,
@@ -424,6 +438,7 @@ export class AgentDocumentModel {
 
     return this.create(agentId, filename, content, {
       createdAt,
+      editorData,
       loadPosition,
       loadRules,
       metadata,
@@ -443,6 +458,35 @@ export class AgentDocumentModel {
         and(
           eq(agentDocuments.userId, this.userId),
           eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map(({ settings, doc }) => {
+      const item = this.toAgentDocument(settings, doc);
+      return {
+        ...item,
+        loadRules: parseLoadRules(item),
+      };
+    });
+  }
+
+  async findByDocumentIds(
+    agentId: string,
+    documentIds: string[],
+  ): Promise<AgentDocumentWithRules[]> {
+    if (documentIds.length === 0) return [];
+
+    const results = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          inArray(agentDocuments.documentId, documentIds),
           isNull(agentDocuments.deletedAt),
         ),
       )

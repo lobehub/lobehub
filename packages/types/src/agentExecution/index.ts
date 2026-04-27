@@ -5,6 +5,8 @@ import type { ChatTopic } from '../topic';
  * Application context for message storage
  */
 export interface ExecAgentAppContext {
+  /** Current document ID for page-scoped conversations */
+  documentId?: string | null;
   /** Group ID for group chat */
   groupId?: string | null;
   /** Scope identifier */
@@ -188,6 +190,8 @@ export interface ExecSubAgentTaskParams {
   instruction: string;
   /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: string;
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId?: string;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Task title (shown in UI, used as thread title) */

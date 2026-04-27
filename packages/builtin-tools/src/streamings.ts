@@ -11,6 +11,10 @@ import {
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
 import {
+  ClaudeCodeIdentifier,
+  ClaudeCodeStreamings,
+} from '@lobechat/builtin-tool-claude-code/client';
+import {
   CloudSandboxManifest,
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
@@ -47,6 +51,7 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
     string,
     BuiltinStreaming
   >,
+  [ClaudeCodeIdentifier]: ClaudeCodeStreamings as Record<string, BuiltinStreaming>,
   [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
     string,
@@ -62,6 +67,23 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
   [MessageManifest.identifier]: MessageStreamings as Record<string, BuiltinStreaming>,
   [NotebookManifest.identifier]: NotebookStreamings as Record<string, BuiltinStreaming>,
 };
+
+export interface BuiltinStreamingRegistryEntry {
+  apiName: string;
+  identifier: string;
+  streaming: BuiltinStreaming;
+}
+
+export const listBuiltinStreamingEntries = (): BuiltinStreamingRegistryEntry[] =>
+  Object.entries(BuiltinToolStreamings).flatMap(([identifier, toolset]) =>
+    Object.entries(toolset)
+      .filter((entry): entry is [string, BuiltinStreaming] => !!entry[1])
+      .map(([apiName, streaming]) => ({
+        apiName,
+        identifier,
+        streaming,
+      })),
+  );
 
 /**
  * Get builtin streaming component for a specific API

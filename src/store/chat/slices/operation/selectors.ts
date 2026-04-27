@@ -206,31 +206,11 @@ const hasRunningOperationByContext =
  * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
  */
 const isAgentRuntimeRunningByContext =
-  (context: {
-    agentId?: string;
-    groupId?: string;
-    threadId?: string | null;
-    topicId?: string | null;
-  }) =>
+  (context: MessageMapKeyInput) =>
   (s: ChatStoreState): boolean => {
     if (!context.agentId) return false;
 
-    const contextKey = messageMapKey({
-      agentId: context.agentId,
-      groupId: context.groupId,
-      topicId: context.topicId,
-    });
-
-    const operationIds = s.operationsByContext[contextKey] || [];
-    const operations = operationIds
-      .map((id) => s.operations[id])
-      .filter((op): op is Operation => {
-        if (!op) return false;
-        // Also filter by threadId if provided
-        const opThreadId = op.context.threadId ?? null;
-        const contextThreadId = context.threadId ?? null;
-        return opThreadId === contextThreadId;
-      });
+    const operations = getOperationsByContext(context)(s);
 
     return operations.some(
       (op) =>
@@ -246,30 +226,11 @@ const isAgentRuntimeRunningByContext =
  * so the input stays in loading state from the moment user sends until AI finishes
  */
 const isInputLoadingByContext =
-  (context: {
-    agentId?: string;
-    groupId?: string;
-    threadId?: string | null;
-    topicId?: string | null;
-  }) =>
+  (context: MessageMapKeyInput) =>
   (s: ChatStoreState): boolean => {
     if (!context.agentId) return false;
 
-    const contextKey = messageMapKey({
-      agentId: context.agentId,
-      groupId: context.groupId,
-      topicId: context.topicId,
-    });
-
-    const operationIds = s.operationsByContext[contextKey] || [];
-    const operations = operationIds
-      .map((id) => s.operations[id])
-      .filter((op): op is Operation => {
-        if (!op) return false;
-        const opThreadId = op.context.threadId ?? null;
-        const contextThreadId = context.threadId ?? null;
-        return opThreadId === contextThreadId;
-      });
+    const operations = getOperationsByContext(context)(s);
 
     return operations.some(
       (op) =>

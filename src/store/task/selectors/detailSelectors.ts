@@ -57,7 +57,7 @@ const activeTaskTopicCount = (s: TaskStoreState) => activeTaskDetail(s)?.topicCo
 const canRunActiveTask = (s: TaskStoreState): boolean => {
   const detail = activeTaskDetail(s);
   if (!detail) return false;
-  return ['backlog', 'failed', 'paused', 'completed'].includes(detail.status) && !!detail.agentId;
+  return ['backlog', 'failed', 'paused', 'completed'].includes(detail.status);
 };
 
 const canPauseActiveTask = (s: TaskStoreState): boolean =>
