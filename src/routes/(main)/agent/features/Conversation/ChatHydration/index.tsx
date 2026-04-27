@@ -21,23 +21,19 @@ const ChatHydration = memo(() => {
   const [searchParams] = useSearchParams();
 
   const [thread, setThread] = useQueryState('thread', { history: 'replace', throttleMs: 500 });
-  const routeTopicId = params.topicId ?? searchParams.get('topic');
+  const routeTopicId = params.topicId;
 
-  // Sync URL → store synchronously (before paint) so the store never carries
-  // a stale topic/thread id from a previous agent. A useEffect-based
-  // updater here would let Conversation paint one frame against the prior
-  // agent's `activeTopicId` after switching agents.
   useLayoutEffect(() => {
     const target = routeTopicId ?? null;
     if (useChatStore.getState().activeTopicId !== target) {
-      useChatStore.setState({ activeTopicId: target }, false, 'ChatHydration/syncTopicFromUrl');
+      useChatStore.setState({ activeTopicId: target! }, false, 'ChatHydration/syncTopicFromUrl');
     }
   }, [routeTopicId]);
 
   useLayoutEffect(() => {
     const target = thread ?? null;
     if (useChatStore.getState().activeThreadId !== target) {
-      useChatStore.setState({ activeThreadId: target }, false, 'ChatHydration/syncThreadFromUrl');
+      useChatStore.setState({ activeThreadId: target! }, false, 'ChatHydration/syncThreadFromUrl');
     }
   }, [thread]);
 
@@ -48,31 +44,6 @@ const ChatHydration = memo(() => {
   locationRef.current = location;
   paramsRef.current = params;
   searchParamsRef.current = searchParams;
-
-  useLayoutEffect(() => {
-    const legacyTopicId = searchParams.get('topic');
-
-    if (!params.aid || !legacyTopicId) return;
-
-    const normalizedTopicId = params.topicId ?? legacyTopicId;
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.delete('topic');
-
-    const nextUrl = `${SESSION_CHAT_TOPIC_URL(params.aid, normalizedTopicId)}${getSearchSuffix(nextSearchParams)}${location.hash}`;
-    const currentUrl = `${location.pathname}${location.search}${location.hash}`;
-
-    if (currentUrl !== nextUrl) {
-      navigate(nextUrl, { replace: true });
-    }
-  }, [
-    location.hash,
-    location.pathname,
-    location.search,
-    navigate,
-    params.aid,
-    params.topicId,
-    searchParams,
-  ]);
 
   useLayoutEffect(() => {
     const unsubscribeTopic = useChatStore.subscribe(

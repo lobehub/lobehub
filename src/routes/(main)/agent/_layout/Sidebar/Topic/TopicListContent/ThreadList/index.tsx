@@ -9,6 +9,7 @@ import ThreadItem from './ThreadItem';
 
 const ThreadList = memo(() => {
   const [id] = useChatStore((s) => [s.activeTopicId]);
+
   const threads = useChatStore(threadSelectors.getThreadsByTopic(id));
 
   useFetchThreads(id);

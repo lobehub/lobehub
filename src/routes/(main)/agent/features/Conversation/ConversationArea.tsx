@@ -41,6 +41,7 @@ const Conversation = memo(() => {
   );
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+
   log('contextKey %s: %o', chatKey, messages);
 
   // Get operation state from ChatStore for reactive updates
