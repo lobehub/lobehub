@@ -556,6 +556,7 @@
       "stylelint-config-clean-order": "7.0.0"
     },
     "patchedDependencies": {
+      "@ant-design/icons@6.2.0": "patches/@ant-design__icons@6.2.0.patch",
       "@upstash/qstash": "patches/@upstash__qstash.patch"
     }
   }

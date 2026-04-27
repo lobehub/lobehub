@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+index 4eb160fffc944307c4aaa6880ca64bcf8ca80951..5a50bc3a955d638c2f1de67e81ddd2c2666c64ea 100644
+--- a/package.json
++++ b/package.json
+@@ -20,6 +20,8 @@
+     },
+     "./es/*": "./es/*",
+     "./lib/*": "./lib/*",
++    "./es/components/*": "./es/components/*.js",
++    "./lib/components/*": "./lib/components/*.js",
+     "./package.json": "./package.json",
+     "./*": {
+       "types": "./lib/icons/*.d.ts",
