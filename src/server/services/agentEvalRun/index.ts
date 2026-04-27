@@ -567,6 +567,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },
@@ -708,6 +709,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, threadId, topicId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },
@@ -987,6 +989,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },
@@ -1143,6 +1146,7 @@ export class AgentEvalRunService {
             type: 'onComplete' as const,
             webhook: {
               body: { runId, testCaseId, threadId, topicId, userId },
+              delivery: 'qstash' as const,
               url: webhookUrl,
             },
           },

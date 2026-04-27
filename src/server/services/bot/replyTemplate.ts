@@ -205,10 +205,20 @@ export function renderFinalReply(content: string): string {
  * through this map.
  */
 type SystemStrings = {
+  cmdApproveDisabled: string;
+  cmdApproveFailed: string;
+  cmdApproveNotOwner: string;
+  cmdApproveSuccess: (label: string) => string;
+  cmdApproveUnknownCode: string;
+  cmdApproveUsage: string;
   cmdNewReset: string;
   cmdStopNotActive: string;
   cmdStopRequested: string;
   cmdStopUnable: string;
+  dmPairingApplicantApproved: string;
+  dmPairingCapacityExceeded: string;
+  dmPairingCode: (code: string) => string;
+  dmPairingUnavailable: string;
   dmRejectedAllowlist: string;
   dmRejectedDisabled: string;
   error: string;
@@ -231,10 +241,23 @@ type SystemStrings = {
 
 const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
   'en-US': {
+    cmdApproveDisabled: 'Pairing is not enabled on this bot.',
+    cmdApproveFailed:
+      "Couldn't save the approval — the bot's settings may be unavailable. The pairing code is still valid; please try `/approve` again in a moment.",
+    cmdApproveNotOwner: 'Only the bot owner can approve pairing requests.',
+    cmdApproveSuccess: (label) => `Approved ${label}.`,
+    cmdApproveUnknownCode: 'That pairing code is unknown or has expired.',
+    cmdApproveUsage: 'Usage: `/approve <code>`',
     cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
     cmdStopNotActive: 'No active execution to stop.',
     cmdStopRequested: 'Stop requested.',
     cmdStopUnable: 'Unable to stop the current execution.',
+    dmPairingApplicantApproved: "You've been approved. Send your message again.",
+    dmPairingCapacityExceeded:
+      'This bot is handling too many pairing requests right now. Please try again in a few minutes.',
+    dmPairingCode: (code) =>
+      `To DM this bot, send this pairing code to the bot's owner: \`${code}\`. They run \`/approve ${code}\` to grant you access. The code expires in 1 hour.`,
+    dmPairingUnavailable: 'Pairing is temporarily unavailable on this bot. Please try again later.',
     dmRejectedAllowlist:
       "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.",
     dmRejectedDisabled:
@@ -255,10 +278,21 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     toolsCallingHeader: (count, time) => `> total **${count}** tools calling ${time}\n\n`,
   },
   'zh-CN': {
+    cmdApproveDisabled: '该机器人未启用配对审批模式。',
+    cmdApproveFailed: '保存审批失败，机器人设置暂不可用。配对码仍然有效，请稍后重试 `/approve`。',
+    cmdApproveNotOwner: '只有机器人管理员可以审批配对请求。',
+    cmdApproveSuccess: (label) => `已审批 ${label}。`,
+    cmdApproveUnknownCode: '该配对码不存在或已过期。',
+    cmdApproveUsage: '用法：`/approve <配对码>`',
     cmdNewReset: '对话已重置，下一条消息会开启新话题。',
     cmdStopNotActive: '当前没有正在执行的任务可以停止。',
     cmdStopRequested: '已发出停止请求。',
     cmdStopUnable: '无法停止当前执行。',
+    dmPairingApplicantApproved: '已通过审批，请重新发送你的消息。',
+    dmPairingCapacityExceeded: '该机器人当前待审批请求过多，请稍后再试。',
+    dmPairingCode: (code) =>
+      `若要私信该机器人，请把以下配对码发给机器人管理员：\`${code}\`，他们将通过 \`/approve ${code}\` 命令为你授权。配对码 1 小时后失效。`,
+    dmPairingUnavailable: '配对功能暂时不可用，请稍后再试。',
     dmRejectedAllowlist: '抱歉，您没有私信该机器人的权限。如需访问请联系机器人管理员。',
     dmRejectedDisabled: '该机器人不接受私信。请在共享频道或群组里 @它来联系。',
     error: '**Agent 执行失败**',
@@ -306,10 +340,16 @@ export function renderInlineError(message: string, lng?: BotReplyLocale): string
 }
 
 export type CommandReplyKey =
+  | 'cmdApproveDisabled'
+  | 'cmdApproveFailed'
+  | 'cmdApproveNotOwner'
+  | 'cmdApproveUnknownCode'
+  | 'cmdApproveUsage'
   | 'cmdNewReset'
   | 'cmdStopNotActive'
   | 'cmdStopRequested'
-  | 'cmdStopUnable';
+  | 'cmdStopUnable'
+  | 'dmPairingApplicantApproved';
 
 /**
  * Render a slash-command response (e.g. `/new`, `/stop`). Centralized so the
@@ -317,6 +357,39 @@ export type CommandReplyKey =
  */
 export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): string {
   return getSystemStrings(lng)[key];
+}
+
+/**
+ * Render the owner-facing confirmation when `/approve` succeeds. The label
+ * is the applicant's display name when known, otherwise their platform
+ * user ID — owners shouldn't have to do the lookup themselves to know what
+ * they just approved.
+ */
+export function renderApproveSuccess(label: string, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdApproveSuccess(label);
+}
+
+/**
+ * Render the system message a stranger sees after their first DM when the
+ * bot is in pairing mode. Variants:
+ *
+ * - `code`: a fresh pairing code was issued. Bake the code into the body
+ *   so it's copy-pastable from the chat client without follow-up.
+ * - `capacity-exceeded`: per-bot pending cap hit; no code created. Tell
+ *   the applicant to retry rather than silently dropping them.
+ * - `unavailable`: Redis isn't wired (pairing requires it for cross-process
+ *   pending state). Surface the temporary state so the operator can fix
+ *   the deployment instead of debugging mysterious silence.
+ */
+export function renderDmPairing(
+  variant: 'capacity-exceeded' | 'code' | 'unavailable',
+  lng?: BotReplyLocale,
+  params?: { code?: string },
+): string {
+  const strings = getSystemStrings(lng);
+  if (variant === 'code' && params?.code) return strings.dmPairingCode(params.code);
+  if (variant === 'capacity-exceeded') return strings.dmPairingCapacityExceeded;
+  return strings.dmPairingUnavailable;
 }
 
 /**

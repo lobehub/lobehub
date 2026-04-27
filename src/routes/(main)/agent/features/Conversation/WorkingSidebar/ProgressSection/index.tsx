@@ -1,174 +1,257 @@
-import type { StepContextTodoStatus } from '@lobechat/types';
-import { Accordion, AccordionItem, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { Progress } from 'antd';
+import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { CircleArrowRight } from 'lucide-react';
-import { memo, type ReactNode, useMemo } from 'react';
+import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
+import { type KeyboardEvent, memo, useCallback, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsDark } from '@/hooks/useIsDark';
 import { useChatStore } from '@/store/chat';
-import { selectTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
+import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useAgentContext } from '../../useAgentContext';
 import { normalizeTaskProgress } from './taskProgressAdapter';
 
-const styles = createStaticStyles(({ css }) => ({
-  barWrap: css`
-    margin-block-end: 2px;
-    margin-inline: -16px;
+const RING_SIZE = 14;
+const RING_STROKE = 2;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUM = 2 * Math.PI * RING_RADIUS;
 
-    :where(.ant-progress-line) .ant-progress-rail {
-      border-radius: 0;
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  collapsed: css`
+    grid-template-rows: 0fr;
+
+    margin-block-start: 0 !important;
+    padding-block: 0 !important;
+    border-block-start: none !important;
+
+    opacity: 0;
+  `,
+  container: css`
+    margin-block-start: 4px;
+    margin-inline: 16px;
+    padding-block: 8px 10px;
+    padding-inline: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 12px;
+
+    background: ${cssVar.colorBgElevated};
+
+    transition: all 0.2s ${cssVar.motionEaseInOut};
+  `,
+  count: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  expanded: css`
+    grid-template-rows: 1fr;
+    opacity: 1;
+  `,
+  header: css`
+    overflow: hidden;
+
+    font-size: 13px;
+    font-weight: 500;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  headerRow: css`
+    cursor: pointer;
+    user-select: none;
+    border-radius: 4px;
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 2px;
     }
-  `,
-  chevron: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  progressBadge: css`
-    color: ${cssVar.colorTextLightSolid};
-  `,
-  progressBadge_dark: css`
-    color: ${cssVar.colorBgBase};
-  `,
-  progressBadge_neutral: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  sectionTitle: css`
-    color: ${cssVar.colorTextSecondary};
   `,
   itemRow: css`
     padding-block: 6px;
-    padding-inline: 0;
+    padding-inline: 4px;
+    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
+    font-size: 13px;
+
+    &:last-child {
+      border-block-end: none;
+    }
+  `,
+  listContainer: css`
+    display: grid;
+
+    margin-block-start: 8px;
+    padding-block: 4px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    transition:
+      grid-template-rows 0.25s ${cssVar.motionEaseInOut},
+      opacity 0.2s ${cssVar.motionEaseInOut},
+      margin-block-start 0.2s ${cssVar.motionEaseInOut},
+      padding 0.2s ${cssVar.motionEaseInOut};
+  `,
+  listInner: css`
+    overflow: hidden;
+    min-height: 0;
   `,
   processingRow: css`
     display: flex;
-    gap: 7px;
+    gap: 6px;
     align-items: center;
   `,
+  ring: css`
+    transform: rotate(-90deg);
+    flex-shrink: 0;
+  `,
+  ringProgress: css`
+    transition:
+      stroke-dashoffset 240ms ease,
+      stroke 240ms ease;
+  `,
+  ringTrack: css`
+    stroke: ${cssVar.colorFillSecondary};
+  `,
   textCompleted: css`
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextQuaternary};
+    text-decoration: line-through;
   `,
   textProcessing: css`
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
   `,
   textTodo: css`
     color: ${cssVar.colorTextSecondary};
   `,
 }));
 
-interface ReadOnlyTodoItemProps {
-  status: StepContextTodoStatus;
-  text: ReactNode;
-}
-
-const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ status, text }) => {
-  const isCompleted = status === 'completed';
-  const isProcessing = status === 'processing';
-
-  if (isProcessing) {
-    return (
-      <div className={cx(styles.itemRow, styles.processingRow)}>
-        <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorTextSecondary }} />
-        <span className={styles.textProcessing}>{text}</span>
-      </div>
-    );
-  }
-
-  return (
-    <Checkbox
-      backgroundColor={cssVar.colorSuccess}
-      checked={isCompleted}
-      shape={'circle'}
-      style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
-      classNames={{
-        text: cx(styles.textTodo, isCompleted && styles.textCompleted),
-        wrapper: styles.itemRow,
-      }}
-      textProps={{
-        type: isCompleted ? 'secondary' : undefined,
-      }}
-    >
-      {text}
-    </Checkbox>
-  );
-});
-
-ReadOnlyTodoItem.displayName = 'ReadOnlyTodoItem';
-
 const ProgressSection = memo(() => {
   const { t } = useTranslation('chat');
-  const isDarkMode = useIsDark();
+  const [expanded, setExpanded] = useState(true);
   const context = useAgentContext();
   const chatKey = messageMapKey(context);
   const dbMessages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+  const listId = useId();
 
   const progress = useMemo(
-    () => normalizeTaskProgress(selectTodosFromMessages(dbMessages || [])),
+    () => normalizeTaskProgress(selectCurrentTurnTodosFromMessages(dbMessages || [])),
     [dbMessages],
   );
-  const hasTasks = progress.items.length > 0;
 
-  if (!hasTasks) return null;
+  const items = progress.items;
+  const total = items.length;
+  const completed = items.filter((item) => item.status === 'completed').length;
+
+  const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
+  const handleHeaderKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleExpanded();
+      }
+    },
+    [toggleExpanded],
+  );
+
+  if (total === 0) return null;
+
+  const allDone = completed === total;
+  const ringColor = allDone ? cssVar.colorSuccess : cssVar.colorInfo;
+  const ringOffset = RING_CIRCUM * (1 - progress.completionPercent / 100);
 
   return (
-    <>
-      <div className={styles.barWrap}>
-        <Progress
-          percent={progress.completionPercent}
-          railColor={cssVar.colorFillTertiary}
-          showInfo={false}
-          strokeColor={cssVar.colorSuccess}
-          strokeWidth={4}
-        />
-      </div>
-      <Flexbox data-testid="workspace-progress" padding={16}>
-        <Flexbox horizontal gap={8}>
-          <Accordion defaultExpandedKeys={['progress']} gap={0}>
-            <AccordionItem
-              itemKey={'progress'}
-              paddingBlock={2}
-              paddingInline={6}
-              title={<Text strong>{t('workingPanel.progress')}</Text>}
-              styles={{
-                header: {
-                  width: 'fit-content',
-                },
-              }}
-            >
-              <div style={{ paddingTop: 2 }}>
-                {progress.items.map((item, index) => (
-                  <ReadOnlyTodoItem key={index} status={item.status} text={item.text} />
-                ))}
-              </div>
-            </AccordionItem>
-          </Accordion>
-          <Tag
-            size={'small'}
-            variant={'filled'}
-            style={{
-              background: hasTasks ? cssVar.colorSuccess : cssVar.colorFillTertiary,
-              borderRadius: 999,
-              flexShrink: 0,
-              minWidth: 42,
-              paddingInline: 8,
-              textAlign: 'center',
-            }}
-          >
-            <span
-              className={
-                hasTasks
-                  ? cx(styles.progressBadge, isDarkMode && styles.progressBadge_dark)
-                  : styles.progressBadge_neutral
-              }
-            >
-              {progress.completionPercent}%
+    <div className={styles.container} data-testid="workspace-progress">
+      <Flexbox
+        horizontal
+        align="center"
+        aria-controls={listId}
+        aria-expanded={expanded}
+        className={styles.headerRow}
+        gap={8}
+        justify="space-between"
+        role="button"
+        tabIndex={0}
+        onClick={toggleExpanded}
+        onKeyDown={handleHeaderKeyDown}
+      >
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
+          <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
+            <circle
+              className={styles.ringTrack}
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              fill="none"
+              r={RING_RADIUS}
+              strokeWidth={RING_STROKE}
+            />
+            <circle
+              className={styles.ringProgress}
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              fill="none"
+              r={RING_RADIUS}
+              stroke={ringColor}
+              strokeDasharray={RING_CIRCUM}
+              strokeDashoffset={ringOffset}
+              strokeLinecap="round"
+              strokeWidth={RING_STROKE}
+            />
+          </svg>
+          <span className={styles.header}>{t('workingPanel.progress')}</span>
+          <Tag size="small" style={{ flexShrink: 0 }}>
+            <span className={styles.count}>
+              {completed}/{total}
             </span>
           </Tag>
         </Flexbox>
+        <Icon
+          icon={expanded ? ChevronUp : ChevronDown}
+          size={16}
+          style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
+        />
       </Flexbox>
-    </>
+
+      <div
+        className={cx(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}
+        id={listId}
+      >
+        <div className={styles.listInner}>
+          {items.map((item, index) => {
+            const isCompleted = item.status === 'completed';
+            const isProcessing = item.status === 'processing';
+
+            if (isProcessing) {
+              return (
+                <div className={cx(styles.itemRow, styles.processingRow)} key={item.id ?? index}>
+                  <Icon
+                    icon={CircleArrowRight}
+                    size={17}
+                    style={{ color: cssVar.colorTextSecondary }}
+                  />
+                  <span className={styles.textProcessing}>{item.text}</span>
+                </div>
+              );
+            }
+
+            return (
+              <Checkbox
+                backgroundColor={cssVar.colorSuccess}
+                checked={isCompleted}
+                key={item.id ?? index}
+                shape="circle"
+                style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
+                classNames={{
+                  text: cx(styles.textTodo, isCompleted && styles.textCompleted),
+                  wrapper: styles.itemRow,
+                }}
+                textProps={{
+                  type: isCompleted ? 'secondary' : undefined,
+                }}
+              >
+                {item.text}
+              </Checkbox>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 });
 

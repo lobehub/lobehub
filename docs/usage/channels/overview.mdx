@@ -90,11 +90,12 @@ Add one entry per row. Each row holds a platform user ID (required) and an optio
 
 DM Policy only governs DMs — group `@mentions` are gated independently by **Group Policy** below. The user-level filter from the global **Allowed Users** is also applied; per-scope policy stacks on top.
 
-| Policy        | Behavior                                                                                                                                                                      |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Open**      | Any user on the platform can DM the bot (subject to the global allowlist when set). Best for public-facing assistants.                                                        |
-| **Allowlist** | DMs require the sender to be in **Allowed Users**. Distinct from `Open` only when the list is empty: `Allowlist` then **fails closed** (no DMs); `Open` still lets anyone DM. |
-| **Disabled**  | The bot ignores all DMs entirely. Use this when the bot should only reply in shared channels via `@mention`.                                                                  |
+| Policy        | Behavior                                                                                                                                                                                                                                                                                           |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Open**      | Any user on the platform can DM the bot (subject to the global allowlist when set). Best for public-facing assistants.                                                                                                                                                                             |
+| **Allowlist** | DMs require the sender to be in **Allowed Users**. Distinct from `Open` only when the list is empty: `Allowlist` then **fails closed** (no DMs); `Open` still lets anyone DM.                                                                                                                      |
+| **Pairing**   | Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. The owner approves via `/approve <code>`, which appends the applicant to **Allowed Users** so future DMs flow normally. Requires **Your Platform User ID** and a configured Redis. |
+| **Disabled**  | The bot ignores all DMs entirely. Use this when the bot should only reply in shared channels via `@mention`.                                                                                                                                                                                       |
 
 ## Group Policy
 

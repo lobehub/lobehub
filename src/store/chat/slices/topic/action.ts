@@ -70,6 +70,12 @@ export class ChatTopicActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
 
+  // Monotonic token for switchTopic. Each call increments it and captures a
+  // local copy; after awaited work, a mismatch means a newer switch has
+  // started and our continuation is stale — drop it rather than let it
+  // clobber the newer topic (see LOBE-7785).
+  #switchTopicEpoch = 0;
+
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
@@ -521,6 +527,7 @@ export class ChatTopicActionImpl {
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
+    const epoch = ++this.#switchTopicEpoch;
 
     const { activeAgentId, activeGroupId } = this.#get();
 
@@ -561,6 +568,14 @@ export class ChatTopicActionImpl {
     }
 
     if (opts.skipRefreshMessage) return;
+
+    // Yield a microtask so any switchTopic calls queued behind us can run
+    // their sync bodies (and bump #switchTopicEpoch) before we commit to a
+    // refresh. On the other side of the yield, an epoch mismatch means a
+    // newer switch has taken over — skip the redundant SWR mutate.
+    await Promise.resolve();
+    if (epoch !== this.#switchTopicEpoch) return;
+
     await this.#get().refreshMessages();
   };
 

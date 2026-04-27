@@ -8,10 +8,12 @@ import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider, TodoProgress } from '@/features/Conversation';
 import ZenModeToast from '@/features/ZenModeToast';
+import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import HeterogeneousChatInput from './HeterogeneousChatInput';
@@ -20,7 +22,6 @@ import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
 import { useAgentContext } from './useAgentContext';
-import { useGatewayReconnect } from './useGatewayReconnect';
 
 const log = debug('lobe-render:agent:ConversationArea');
 
@@ -55,7 +56,12 @@ const Conversation = memo(() => {
   const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
 
   // Auto-reconnect to running Gateway operation on topic load
-  useGatewayReconnect(context.topicId);
+  const runningOperation = useChatStore((s) =>
+    context.topicId
+      ? topicSelectors.getTopicById(context.topicId)(s)?.metadata?.runningOperation
+      : undefined,
+  );
+  useGatewayReconnect(context.topicId, runningOperation);
 
   return (
     <ConversationProvider

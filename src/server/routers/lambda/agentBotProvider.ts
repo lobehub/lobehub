@@ -7,7 +7,11 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
-import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
+import {
+  mergeWithDefaults,
+  platformRegistry,
+  validateAccessSettings,
+} from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -40,6 +44,24 @@ function mergeSettingsForPersist(
   return mergeWithDefaults(definition.schema, settings);
 }
 
+/**
+ * Run cross-platform access-policy invariants on settings before they hit
+ * the DB. Throws `TRPCError(BAD_REQUEST)` with field-prefixed messages so
+ * the client form can surface the failing field. Skipped when `settings`
+ * is undefined (update payload didn't touch them).
+ */
+function assertAccessSettings(settings: Record<string, unknown> | undefined): void {
+  if (settings === undefined) return;
+  const result = validateAccessSettings(settings);
+  if (result.valid) return;
+  throw new TRPCError({
+    code: 'BAD_REQUEST',
+    message:
+      result.errors?.map((e) => `${e.field}: ${e.message}`).join('; ') ||
+      'Invalid access policy settings',
+  });
+}
+
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(() => {
     return platformRegistry.listSerializedPlatforms();
@@ -57,11 +79,12 @@ export const agentBotProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const payload = {
+        ...input,
+        settings: mergeSettingsForPersist(input.platform, input.settings),
+      };
+      assertAccessSettings(payload.settings);
       try {
-        const payload = {
-          ...input,
-          settings: mergeSettingsForPersist(input.platform, input.settings),
-        };
         return await ctx.agentBotProviderModel.create(payload);
       } catch (e: any) {
         if (e?.cause?.code === '23505') {
@@ -236,6 +259,7 @@ export const agentBotProviderRouter = router({
           value.platform ?? existing?.platform,
           value.settings,
         );
+        assertAccessSettings(value.settings);
       }
 
       const result = await ctx.agentBotProviderModel.update(id, value);

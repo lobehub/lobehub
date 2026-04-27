@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "定时任务「{{jobName}}」执行失败，点击查看详情。",
+  "agent_cron_job_failed_insufficient_budget": "定时任务「{{jobName}}」因账户额度不足未能执行。请充值或升级套餐以恢复后续运行。",
+  "agent_cron_job_failed_insufficient_budget_title": "定时任务已暂停：额度不足",
+  "agent_cron_job_failed_title": "定时任务执行失败",
   "billboard.learnMore": "了解更多",
   "billboard.menuLabel": "公告",
+  "image_generation_completed": "图片「{{prompt}}」已生成。",
+  "image_generation_completed_title": "图片生成完成",
   "inbox.archiveAll": "全部归档",
   "inbox.empty": "暂无通知",
   "inbox.emptyUnread": "没有未读通知",
   "inbox.filterUnread": "仅显示未读",
   "inbox.markAllRead": "全部标为已读",
-  "inbox.title": "通知"
+  "inbox.title": "通知",
+  "video_generation_completed": "视频「{{prompt}}」已生成。",
+  "video_generation_completed_title": "视频生成完成"
 }

@@ -213,6 +213,26 @@ Use this method if your Slack app already has Event Subscriptions configured wit
   Also ensure you add the `commands` scope under **OAuth & Permissions** → **Bot Token Scopes**, and enable **Interactivity & Shortcuts** with the same Webhook URL as the Request URL.
 </Steps>
 
+## Set Your Platform Identity (Recommended)
+
+Two optional fields under **Advanced Settings** carry a lot of weight in day-to-day use — fill them in once and most surprises go away.
+
+### Your Platform User ID
+
+This is your own Slack member ID, used by:
+
+- **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
+- **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your Slack account.
+- **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to teammates won't accidentally lock you out.
+
+To get it: in Slack, click your avatar → **Profile**, then click the `⋮` overflow menu and choose **Copy member ID**. Member IDs start with `U`. Paste it into **Your Platform User ID** in LobeHub's Advanced Settings.
+
+### Default Server
+
+The Slack workspace (team) ID the bot's AI tools should default to when you ask it to "list channels", "send to #announcements", or anything else that needs a workspace context without naming one explicitly. Doesn't affect access control — that's **Group Policy**'s job.
+
+To get it: open Slack in the browser; the URL contains the team ID (`https://app.slack.com/client/T01ABCDEF/...`) — copy the part starting with `T`. Paste it into **Default Server** in LobeHub's Advanced Settings.
+
 ## Access Policies
 
 Two independent policies gate inbound traffic. Both default to **Open**.
@@ -225,6 +245,7 @@ A populated **Allowed User IDs** field is a global gate — DMs *and* channel `@
 
 - **Open (default)** — Any workspace member can DM the bot (subject to the global allowlist when set).
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs and only replies to channel `@mentions`.
 
 ### Group Policy
@@ -247,7 +268,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **App-Level Token**     | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection                                                  |
 | **Connection Mode**     | No               | `websocket` or `webhook` (default: `webhook`)                                                          |
 | **Allowed User IDs**    | No               | Comma- or whitespace-separated Slack member IDs. Global gate — applies to DMs and channel @mentions    |
-| **DM Policy**           | No               | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                            |
+| **DM Policy**           | No               | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                 |
 | **Group Policy**        | No               | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                     |
 | **Allowed Channel IDs** | No               | Comma- or whitespace-separated Slack channel IDs (start with `C`). Used when Group Policy is Allowlist |
 

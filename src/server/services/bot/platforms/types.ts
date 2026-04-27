@@ -43,6 +43,8 @@ export interface FieldSchema {
   devOnly?: boolean;
   /** Enum options for select fields */
   enum?: string[];
+  /** Per-option help text rendered alongside each enum option (1:1 with `enum`). */
+  enumDescriptions?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
   /** Array item schema */
@@ -222,7 +224,21 @@ export interface PlatformClient {
    * Optional — platforms that don't support command menus can omit this.
    */
   registerBotCommands?: (
-    commands: Array<{ command: string; description: string }>,
+    commands: Array<{
+      command: string;
+      description: string;
+      /**
+       * Argument schema for platforms with structured slash commands
+       * (Discord, Slack). Without this, Discord registers as zero-arg and
+       * users have no UI to pass a value — adapters that don't support
+       * options should silently ignore this field.
+       */
+      options?: Array<{
+        description: string;
+        name: string;
+        required?: boolean;
+      }>;
+    }>,
   ) => Promise<void>;
 
   /**

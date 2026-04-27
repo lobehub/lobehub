@@ -132,6 +132,22 @@ LobeHub supports two connection modes for QQ bots:
 
 Click **Test Connection** in LobeHub's channel settings to verify the integration. Then open QQ, find your bot, and send a message. The bot should respond through your LobeHub agent.
 
+## Set Your Platform Identity (Recommended)
+
+One optional field under **Advanced Settings** carries a lot of weight in day-to-day use — fill it in once and most surprises go away.
+
+### Your Platform User ID
+
+This is your own QQ `tiny_id` (the platform-level user identifier — **not** the public-facing QQ number, which doesn't always match), used by:
+
+- **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
+- **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your QQ account.
+- **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to friends won't accidentally lock you out.
+
+To get it: DM the bot once with any message and check the server logs for the `tiny_id` field on the inbound event payload (or read it from the OpenAPI dashboard if available). Paste the long numeric ID into **Your Platform User ID** in LobeHub's Advanced Settings.
+
+> QQ doesn't expose a single "default server" concept that AI tools can pivot on, so the **Default Server** field is not exposed for QQ channels.
+
 ## Adding the Bot to Group Chats
 
 To use the bot in QQ groups:
@@ -152,6 +168,7 @@ A populated **Allowed User IDs** field is a global gate — DMs *and* group `@me
 
 - **Open (default)** — Any QQ user who shares context with the bot can DM it (subject to the global allowlist when set).
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
 
 ### Group Policy
@@ -172,7 +189,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **App Secret**          | Yes      | Your bot's App Secret from QQ Open Platform                                                          |
 | **Connection Mode**     | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration              |
 | **Allowed User IDs**    | No       | Comma- or whitespace-separated QQ `tiny_id` values. Global gate — applies to DMs and group @mentions |
-| **DM Policy**           | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                          |
+| **DM Policy**           | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot               |
 | **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                   |
 | **Allowed Channel IDs** | No       | Comma- or whitespace-separated QQ group IDs. Used when Group Policy is Allowlist                     |
 

@@ -61,6 +61,10 @@ export const schema: FieldSchema[] = [
         default: DEFAULT_SLACK_CONNECTION_MODE,
         description: 'channel.connectionModeHint',
         enum: ['websocket', 'webhook'],
+        enumDescriptions: [
+          'channel.connectionModeWebSocketHint',
+          'channel.connectionModeWebhookHint',
+        ],
         enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
         label: 'channel.connectionMode',
         type: 'string',
@@ -79,6 +83,7 @@ export const schema: FieldSchema[] = [
         default: 'queue',
         description: 'channel.concurrencyHint',
         enum: ['queue', 'debounce'],
+        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
         enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
         label: 'channel.concurrency',
         type: 'string',
