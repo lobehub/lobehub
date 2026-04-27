@@ -96,7 +96,7 @@ const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismiss }) =
 
   const skillConnection = useSkillConnection(template.requiresSkills);
 
-  const IconComp = ICON_BY_CATEGORY[template.category] ?? Sparkles;
+  const IconComp = template.icon ?? ICON_BY_CATEGORY[template.category] ?? Sparkles;
   // Dynamic key lookups: defaultValue forces t() into its string-returning overload.
   const title = t(`${template.id}.title`, { defaultValue: '' });
   const description = t(`${template.id}.description`, { defaultValue: '' });
