@@ -34,6 +34,7 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   createVideo: createVolcengineVideo,
   debug: {
     chatCompletion: () => process.env.DEBUG_VOLCENGINE_CHAT_COMPLETION === '1',
+    responses: () => process.env.DEBUG_VOLCENGINE_RESPONSES === '1',
   },
   handleCreateVideoWebhook: handleVolcengineVideoWebhook,
   provider: ModelProvider.Volcengine,
@@ -45,6 +46,7 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
         ? [
             ...(tools || []),
             {
+              sources: ['douyin', 'moji', 'toutiao'], // Additional search sources (Douyin Baike, Moji Weather, Toutiao, etc.)
               type: 'web_search',
             },
           ]
