@@ -104,9 +104,10 @@ export const formatPrice = (price: number, fractionDigits: number = 2) => {
 
   // Expand precision when a positive price would round to zero at the requested
   // precision (e.g. $0.003625 → "0.00"), so users can tell it isn't actually free.
+  // Cap at 100 because Number.prototype.toFixed throws RangeError beyond that.
   let digits = fractionDigits;
   if (price > 0 && Number(price.toFixed(fractionDigits)) === 0) {
-    digits = Math.ceil(-Math.log10(price));
+    digits = Math.min(100, Math.ceil(-Math.log10(price)));
   }
 
   const [a, b] = price.toFixed(digits).split('.');
