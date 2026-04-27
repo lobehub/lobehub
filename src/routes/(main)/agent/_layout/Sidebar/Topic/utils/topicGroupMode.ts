@@ -10,8 +10,8 @@ const PROJECT_DEFAULT_HETEROGENEOUS_AGENT_TYPES = new Set<HeterogeneousAgentType
 ]);
 
 export const getDefaultTopicGroupModeByAgentType = (
-  agentType?: HeterogeneousAgentType,
   fallbackMode: TopicGroupMode,
+  agentType?: HeterogeneousAgentType,
 ): TopicGroupMode =>
   agentType && PROJECT_DEFAULT_HETEROGENEOUS_AGENT_TYPES.has(agentType)
     ? 'byProject'
@@ -28,5 +28,5 @@ export const resolveAgentTopicGroupMode = ({
 }): TopicGroupMode => {
   if (agentTopicGroupMode) return agentTopicGroupMode;
 
-  return getDefaultTopicGroupModeByAgentType(agentType, globalMode);
+  return getDefaultTopicGroupModeByAgentType(globalMode, agentType);
 };
