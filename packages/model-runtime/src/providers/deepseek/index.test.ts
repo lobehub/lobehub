@@ -259,6 +259,37 @@ describe('LobeDeepSeekAI - custom features', () => {
         });
       });
 
+      it('should remove reasoning_effort when thinking.type is disabled', () => {
+        const payload = {
+          messages: [{ role: 'user', content: 'hi' }],
+          model: 'deepseek-v4-flash',
+          reasoning_effort: 'high',
+          thinking: { type: 'disabled' },
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result).toEqual({
+          messages: [{ role: 'user', content: 'hi' }],
+          model: 'deepseek-v4-flash',
+          stream: true,
+          thinking: { type: 'disabled' },
+        });
+      });
+
+      it('should preserve reasoning_effort when thinking is enabled', () => {
+        const payload = {
+          messages: [{ role: 'user', content: 'hi' }],
+          model: 'deepseek-v4-flash',
+          reasoning_effort: 'high',
+          thinking: { type: 'enabled' },
+        };
+
+        const result = params.chatCompletion!.handlePayload!(payload as any);
+
+        expect(result.reasoning_effort).toBe('high');
+      });
+
       it('should preserve existing reasoning_content on v4 assistant messages', () => {
         const payload = {
           messages: [

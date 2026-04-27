@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 interface LoadIndexIntegrationModuleOptions {
   featureGateEnabled?: boolean;
   mockEmitSourceEvent?: Mock;
+  mockInitModelRuntimeFromDB?: Mock;
   mockProjectObservability?: Mock;
   mockRuntimeFactory?: Mock;
 }
@@ -38,6 +39,7 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
   vi.doUnmock('../runtime/AgentSignalRuntime');
   vi.doUnmock('../sources');
   vi.doUnmock('@/server/services/agentDocuments');
+  vi.doUnmock('@/server/modules/ModelRuntime');
 
   const persistAgentSignalObservability = vi.fn().mockResolvedValue(undefined);
   const isAgentSignalEnabledForUser = vi.fn().mockResolvedValue(options.featureGateEnabled ?? true);
@@ -48,6 +50,12 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
   vi.doMock('../observability/store', () => ({
     persistAgentSignalObservability,
   }));
+
+  if (options.mockInitModelRuntimeFromDB) {
+    vi.doMock('@/server/modules/ModelRuntime', () => ({
+      initModelRuntimeFromDB: options.mockInitModelRuntimeFromDB,
+    }));
+  }
 
   if (options.mockEmitSourceEvent) {
     vi.doMock('../sources', () => ({
@@ -201,8 +209,18 @@ describe('emitAgentSignalSourceEvent integration', () => {
       mockRedis.hgetall.mockResolvedValue({});
       mockRedis.hset.mockResolvedValue(1);
       mockRedis.expire.mockResolvedValue(1);
+      const initModelRuntimeFromDB = vi.fn().mockResolvedValue({
+        generateObject: vi.fn().mockResolvedValue({
+          confidence: 0.91,
+          evidence: [{ cue: 'no durable request', excerpt: 'remember this' }],
+          reason: 'the message does not express satisfaction feedback',
+          result: 'neutral',
+        }),
+      });
 
-      const { emitAgentSignalSourceEvent, mocks } = await loadIndexIntegrationModule();
+      const { emitAgentSignalSourceEvent, mocks } = await loadIndexIntegrationModule({
+        mockInitModelRuntimeFromDB: initModelRuntimeFromDB,
+      });
 
       const result = await emitAgentSignalSourceEvent(
         {
@@ -230,6 +248,7 @@ describe('emitAgentSignalSourceEvent integration', () => {
 
       expect(result.orchestration.observability.record.sourceType).toBe('agent.user.message');
       expect(result.orchestration.observability.envelope.source.sourceId).toBe('source_1');
+      expect(initModelRuntimeFromDB).toHaveBeenCalledTimes(1);
       expect(mocks.persistAgentSignalObservability).toHaveBeenCalledWith(
         expect.objectContaining({
           record: expect.objectContaining({ sourceId: 'source_1' }),

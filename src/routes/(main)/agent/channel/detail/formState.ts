@@ -10,9 +10,46 @@ interface ChannelFormSettings {
   [key: string]: {} | undefined;
 }
 
+/**
+ * Allowlist fields used to be stored as a comma-separated string and briefly
+ * as a bare `string[]`, before evolving into `[{ id, name? }]`. Migrate any
+ * pre-object-list payload up to the new shape on read so the array form
+ * editor can mount without crashing on a string. Still safe to write back —
+ * the runtime parser (`parseIdList`) keeps accepting all three shapes.
+ */
+const ALLOWLIST_KEYS = new Set(['allowFrom', 'groupAllowFrom']);
+
+const migrateAllowList = (value: unknown): Array<{ id: string; name?: string }> => {
+  if (typeof value === 'string') {
+    return value
+      .split(/[\s,]+/)
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => ({ id }));
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') return { id: entry.trim() };
+        if (entry && typeof entry === 'object' && 'id' in entry) {
+          const id = String((entry as { id?: unknown }).id ?? '').trim();
+          const rawName = (entry as { name?: unknown }).name;
+          const name = typeof rawName === 'string' ? rawName : undefined;
+          return name ? { id, name } : { id };
+        }
+        return { id: '' };
+      })
+      .filter((entry) => entry.id);
+  }
+  return [];
+};
+
 const normalizeSettings = (settings?: Record<string, unknown> | null): ChannelFormSettings =>
   Object.fromEntries(
-    Object.entries(settings || {}).map(([key, value]) => [key, value ?? undefined]),
+    Object.entries(settings || {}).map(([key, value]) => [
+      key,
+      ALLOWLIST_KEYS.has(key) ? migrateAllowList(value) : (value ?? undefined),
+    ]),
   );
 
 export const getChannelFormValues = (config: ChannelConfigFormState) => ({

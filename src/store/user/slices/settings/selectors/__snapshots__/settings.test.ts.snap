@@ -73,11 +73,6 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.4-mini",
     "provider": "openai",
   },
-  "queryRewrite": {
-    "enabled": true,
-    "model": "gpt-5.4-mini",
-    "provider": "openai",
-  },
   "replyMessage": "Custom auto reply",
   "thread": {
     "model": "claude-sonnet-4-6",

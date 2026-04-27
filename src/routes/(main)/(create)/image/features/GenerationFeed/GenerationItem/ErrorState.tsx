@@ -7,6 +7,8 @@ import { ImageOffIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AsyncTaskErrorType } from '@/types/asyncTask';
+
 import { ActionButtons } from './ActionButtons';
 import { styles } from './styles';
 import { type ErrorStateProps } from './types';
@@ -55,7 +57,10 @@ export const ErrorState = memo<ErrorStateProps>(
 
       // Fallback to original error message
       return errorBody || error.name || 'Unknown error';
-    }, [generation.task.error, generationBatch.provider, tError]);
+    }, [generation.task.error, tError]);
+
+    const isProviderContentModerationError =
+      generation.task.error?.name === AsyncTaskErrorType.ProviderContentModeration;
 
     return (
       <Block
@@ -74,9 +79,11 @@ export const ErrorState = memo<ErrorStateProps>(
         <Center gap={8}>
           <Icon color={cssVar.colorTextDescription} icon={ImageOffIcon} size={24} />
           <Text strong align={'center'} type={'secondary'}>
-            {t('generation.status.failed')}
+            {isProviderContentModerationError
+              ? tError('response.ProviderContentModeration')
+              : t('generation.status.failed')}
           </Text>
-          {generation.task.error && (
+          {generation.task.error && !isProviderContentModerationError && (
             <Text
               code
               ellipsis={{ rows: 2 }}

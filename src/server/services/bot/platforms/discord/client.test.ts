@@ -34,6 +34,32 @@ describe('DiscordGatewayClient', () => {
     });
   });
 
+  describe('extraGroupAllowlistChannels', () => {
+    // Operators paste the parent channel ID (Discord "Copy Channel ID")
+    // into groupAllowFrom; @-mentions arrive routed through an auto-created
+    // reply thread, so `thread.channelId` is the thread, not the parent.
+    // This hook surfaces the parent so the allowlist still matches.
+    it('returns the parent channel ID when the thread segment is present', () => {
+      const client = createClient();
+
+      expect(
+        client.extraGroupAllowlistChannels?.('discord:guild-1:channel-1:auto-thread-id'),
+      ).toEqual(['channel-1']);
+    });
+
+    it('returns an empty list for top-level channels (parent already supplied)', () => {
+      const client = createClient();
+
+      expect(client.extraGroupAllowlistChannels?.('discord:guild-1:channel-1')).toEqual([]);
+    });
+
+    it('returns an empty list for DMs (no parent concept)', () => {
+      const client = createClient();
+
+      expect(client.extraGroupAllowlistChannels?.('discord:@me:dm-channel-1')).toEqual([]);
+    });
+  });
+
   describe('extractFiles', () => {
     // Discord is the easy case: attachments come with public CDN URLs that
     // require no auth and survive `Message.toJSON` unchanged. extractFiles
@@ -176,6 +202,43 @@ describe('DiscordGatewayClient', () => {
         }),
       );
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('extractAuthorLocale', () => {
+    const makeMessage = (overrides: Record<string, unknown>) =>
+      ({
+        attachments: [],
+        id: 'msg-1',
+        text: '',
+        ...overrides,
+      }) as any;
+
+    it('returns the user locale from an INTERACTION_CREATE payload', () => {
+      const client = createClient();
+      expect(
+        client.extractAuthorLocale!(
+          makeMessage({ raw: { locale: 'pt-BR', guild_locale: 'en-US' } }),
+        ),
+      ).toBe('pt-BR');
+    });
+
+    it('falls back to guild_locale when the user-level field is missing', () => {
+      const client = createClient();
+      expect(client.extractAuthorLocale!(makeMessage({ raw: { guild_locale: 'zh-CN' } }))).toBe(
+        'zh-CN',
+      );
+    });
+
+    it('returns undefined for plain MESSAGE_CREATE payloads (Discord does not expose user locale there)', () => {
+      const client = createClient();
+      expect(
+        client.extractAuthorLocale!(
+          makeMessage({ raw: { author: { id: '123', username: 'alice' } } }),
+        ),
+      ).toBeUndefined();
+      expect(client.extractAuthorLocale!(makeMessage({ raw: {} }))).toBeUndefined();
+      expect(client.extractAuthorLocale!(makeMessage({}))).toBeUndefined();
     });
   });
 });

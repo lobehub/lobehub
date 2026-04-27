@@ -385,6 +385,7 @@ export default {
   'searchAgents': 'Search agents...',
   'selectedAgents': 'Selected agents',
   'followUpPlaceholder': 'Follow up. @ to assign tasks to other agents.',
+  'followUpPlaceholderHeterogeneous': 'Follow up.',
   'sendPlaceholder': 'Ask, create, or start a task, <hotkey><hotkey/>',
   'sendPlaceholderHeterogeneous': 'Ask {{name}} to do a task...',
   'sendPlaceholderWithAgentAssignment':
@@ -530,6 +531,7 @@ export default {
   'taskSchedule.title': 'Schedule',
   'taskDetail.activities': 'Activities',
   'taskDetail.activitiesEmpty': 'No activity yet',
+  'taskDetail.artifacts': 'Artifacts',
   'taskDetail.activities.agentTag': 'Agent',
   'taskDetail.activities.fallback.brief': 'posted a brief',
   'taskDetail.activities.fallback.comment': 'left a comment',

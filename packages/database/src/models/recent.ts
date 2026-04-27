@@ -23,6 +23,9 @@ export class RecentModel {
   }
 
   queryRecent = async (limit: number = 10): Promise<RecentDbItem[]> => {
+    // System-trigger topics live in their own surfaces (Task Manager, cron,
+    // eval, task runs) and would clutter the main "Recent" sidebar. Mirrors
+    // `MAIN_SIDEBAR_EXCLUDE_TRIGGERS` in `src/const/topic.ts`.
     const query = sql`
       SELECT * FROM (
         SELECT
@@ -40,6 +43,10 @@ export class RecentModel {
             ${topics.groupId} IS NOT NULL
             OR ${agents.slug} = 'inbox'
             OR (${topics.groupId} IS NULL AND ${agents.virtual} != true)
+          )
+          AND (
+            ${topics.trigger} IS NULL
+            OR ${topics.trigger} NOT IN ('cron', 'eval', 'task_manager', 'task')
           )
 
         UNION ALL

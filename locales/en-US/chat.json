@@ -137,6 +137,7 @@
   "extendParams.urlContext.desc": "When enabled, web links will be automatically parsed to retrieve the actual webpage context content",
   "extendParams.urlContext.title": "Extract Webpage Link Content",
   "followUpPlaceholder": "Follow up. @ to assign tasks to other agents.",
+  "followUpPlaceholderHeterogeneous": "Follow up.",
   "group.desc": "Move a task forward with multiple Agents in one shared space.",
   "group.memberTooltip": "There are {{count}} members in the group",
   "group.orchestratorThinking": "Orchestrator is thinking...",

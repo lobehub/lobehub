@@ -51,6 +51,24 @@ export interface TaskTopicHandoff {
   title?: string;
 }
 
+// ── Task context (runtime state pockets stored in tasks.context JSONB) ──
+
+export interface TaskSchedulerContext {
+  // Count of consecutive 'error' reasons since the last 'done'. When it hits
+  // the fuse threshold (currently 3) we stop re-arming until the user resolves
+  // the urgent brief.
+  consecutiveFailures?: number;
+  // ISO timestamp when the latest tick was scheduled. Informational only.
+  scheduledAt?: string;
+  // QStash messageId (or LocalScheduler scheduleId) for the next tick. Used to
+  // cancel when the user wants an interval change to take effect immediately.
+  tickMessageId?: string;
+}
+
+export interface TaskContext {
+  scheduler?: TaskSchedulerContext;
+}
+
 // ── Task list item (shared between router response and client) ──
 
 export interface TaskParticipant {
@@ -144,11 +162,14 @@ export interface TaskDetailSubtaskAssignee {
 
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
+  automationMode?: TaskAutomationMode | null;
   blockedBy?: string;
   children?: TaskDetailSubtask[];
+  heartbeat?: { interval?: number | null };
   identifier: string;
   name?: string | null;
   priority?: number | null;
+  schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
 }
 
@@ -192,6 +213,17 @@ export interface TaskDetailActivity {
   resolvedAction?: string | null;
   resolvedAt?: string | null;
   resolvedComment?: string | null;
+  /**
+   * Topic-only: currently running Gateway operation, mirrored from
+   * `topics.metadata.runningOperation`. Lets the task topic drawer establish
+   * a Gateway WebSocket reconnection without a separate topic lookup.
+   */
+  runningOperation?: {
+    assistantMessageId: string;
+    operationId: string;
+    scope?: string;
+    threadId?: string | null;
+  } | null;
   seq?: number | null;
   status?: string | null;
   summary?: string;

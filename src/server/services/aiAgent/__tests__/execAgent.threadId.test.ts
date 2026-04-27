@@ -131,6 +131,10 @@ vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
   },
 }));
 
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+}));
+
 // Mock model-bank
 vi.mock('model-bank', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelBankModule>();

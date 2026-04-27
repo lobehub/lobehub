@@ -9,8 +9,13 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
-import type { PlatformClient, PlatformMessenger, UsageStats } from './platforms';
-import { getStepReactionEmoji, platformRegistry, resolveBotProviderConfig } from './platforms';
+import type { BotReplyLocale, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
+import {
+  getBotReplyLocale,
+  getStepReactionEmoji,
+  platformRegistry,
+  resolveBotProviderConfig,
+} from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
   renderError,
@@ -87,10 +92,11 @@ export class BotCallbackService {
 
     const entry = platformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
+    const replyLocale = getBotReplyLocale(platform);
 
     if (type === 'step') {
       if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
-        await this.handleStep(body, messenger, progressMessageId, client);
+        await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
       }
       // Swap the user-message reaction to match the current step type (tool
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
@@ -111,6 +117,7 @@ export class BotCallbackService {
         messenger,
         progressMessageId ?? '',
         client,
+        replyLocale,
         charLimit,
         canEdit,
       );
@@ -177,27 +184,31 @@ export class BotCallbackService {
     messenger: PlatformMessenger,
     progressMessageId: string,
     client: PlatformClient,
+    replyLocale: BotReplyLocale,
   ): Promise<void> {
     if (!body.shouldContinue) return;
 
-    const msgBody = renderStepProgress({
-      content: body.content,
-      elapsedMs: body.elapsedMs,
-      executionTimeMs: body.executionTimeMs ?? 0,
-      lastContent: body.lastLLMContent,
-      lastToolsCalling: body.lastToolsCalling,
-      reasoning: body.reasoning,
-      stepType: body.stepType ?? ('call_llm' as const),
-      thinking: body.thinking ?? false,
-      toolsCalling: body.toolsCalling,
-      toolsResult: body.toolsResult,
-      totalCost: body.totalCost ?? 0,
-      totalInputTokens: body.totalInputTokens ?? 0,
-      totalOutputTokens: body.totalOutputTokens ?? 0,
-      totalSteps: body.totalSteps ?? 0,
-      totalTokens: body.totalTokens ?? 0,
-      totalToolCalls: body.totalToolCalls,
-    });
+    const msgBody = renderStepProgress(
+      {
+        content: body.content,
+        elapsedMs: body.elapsedMs,
+        executionTimeMs: body.executionTimeMs ?? 0,
+        lastContent: body.lastLLMContent,
+        lastToolsCalling: body.lastToolsCalling,
+        reasoning: body.reasoning,
+        stepType: body.stepType ?? ('call_llm' as const),
+        thinking: body.thinking ?? false,
+        toolsCalling: body.toolsCalling,
+        toolsResult: body.toolsResult,
+        totalCost: body.totalCost ?? 0,
+        totalInputTokens: body.totalInputTokens ?? 0,
+        totalOutputTokens: body.totalOutputTokens ?? 0,
+        totalSteps: body.totalSteps ?? 0,
+        totalTokens: body.totalTokens ?? 0,
+        totalToolCalls: body.totalToolCalls,
+      },
+      replyLocale,
+    );
 
     const stats: UsageStats = {
       elapsedMs: body.elapsedMs,
@@ -226,6 +237,7 @@ export class BotCallbackService {
     messenger: PlatformMessenger,
     progressMessageId: string,
     client: PlatformClient,
+    replyLocale: BotReplyLocale,
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
@@ -237,7 +249,7 @@ export class BotCallbackService {
         operationId,
         errorMessage,
       );
-      const errorText = renderError(operationId);
+      const errorText = renderError(operationId, replyLocale);
       try {
         if (canEdit && progressMessageId) {
           await messenger.editMessage(progressMessageId, errorText);
@@ -251,7 +263,7 @@ export class BotCallbackService {
     }
 
     if (reason === 'interrupted') {
-      const stoppedText = renderStopped(errorMessage || 'Execution stopped.');
+      const stoppedText = renderStopped(errorMessage, replyLocale);
       try {
         await messenger.createMessage(stoppedText);
       } catch (error) {

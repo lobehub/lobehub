@@ -199,6 +199,10 @@ export default {
     'This skill needs to be correctly configured before it can be used. Please check if your configuration is correct',
   'response.ProviderBizError':
     'Error requesting {{provider}} service, please troubleshoot or retry based on the following information',
+  'response.ProviderContentModeration':
+    'Content policy check failed. Revise your prompt and try again.',
+  'response.ProviderContentModerationWarning':
+    'Repeated policy violations detected. Further misuse may restrict your account.',
   'response.QuotaLimitReached':
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   'response.ServerAgentRuntimeError':

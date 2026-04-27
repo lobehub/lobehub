@@ -117,11 +117,16 @@ export class TaskService {
                 },
               }
             : {}),
+          automationMode: s.automationMode,
           blockedBy: depMap.get(s.id),
           children: buildSubtaskTree(s.id),
+          ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
+          ...(s.schedulePattern || s.scheduleTimezone
+            ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
+            : {}),
           status: s.status,
         };
       });
@@ -210,6 +215,7 @@ export class TaskService {
         return {
           author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
           id: t.topicId ?? undefined,
+          runningOperation: t.metadata?.runningOperation ?? null,
           seq: t.seq,
           status: t.status,
           summary: handoff?.summary,
