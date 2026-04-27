@@ -3986,6 +3986,90 @@ const qwenImageModels: AIImageModelCard[] = [
 const qwenVideoModels: AIVideoModelCard[] = [
   {
     description:
+      'HappyHorse-1.0-I2V supports text-to-video generation, delivering highly faithful dynamic visuals. It can accurately understand textual semantics and produce high-quality videos that are smooth, natural, and rich in detail.',
+    displayName: 'HappyHorse-1.0-I2V',
+    enabled: true,
+    id: 'happyhorse-1.0-i2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 3 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-22',
+    type: 'video',
+  },
+  {
+    description:
+      'HappyHorse-1.0-R2V supports reference-based video generation, offering more stable subject and scene consistency. It supports up to 9 reference images, accurately preserves creative intent, and delivers enhanced expressive capability.',
+    displayName: 'HappyHorse-1.0-R2V',
+    enabled: true,
+    id: 'happyhorse-1.0-r2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 10, min: 3 },
+      imageUrls: {
+        default: [],
+        maxCount: 9,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-26',
+    type: 'video',
+  },
+  {
+    description:
+      'HappyHorse-1.0-T2V supports text-to-video generation, delivering highly faithful dynamic visuals. It can accurately understand textual semantics and produce high-quality videos that are smooth, natural, and rich in detail.',
+    displayName: 'HappyHorse-1.0-T2V',
+    enabled: true,
+    id: 'happyhorse-1.0-t2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 3 },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-21',
+    type: 'video',
+  },
+  {
+    description:
       'Wanxiang 2.7 Image-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Combined with more dynamic and rhythmically driven shot transitions, it achieves stronger overall performance and storytelling.',
     displayName: 'Wan2.7 I2V 2026-04-25',
     enabled: true,
