@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { useCallback, useEffect, useRef } from 'react';
 import type { VListHandle } from 'virtua';
 
+import { AT_BOTTOM_THRESHOLD } from '../components/AutoScroll/const';
 import {
   isDraftPromotionKey,
   loadScrollSnapshot,
@@ -118,11 +119,26 @@ export const useTopicScrollPersist = ({
     needsRestoreRef.current = false;
     restoringRef.current = true;
 
-    // Two rAFs is empirically enough for virtua to fire the onScroll event
-    // triggered by our programmatic scroll before we re-enable recording.
-    const releaseGuard = () => {
+    // After two rAFs the programmatic scroll's onScroll volley has flushed,
+    // so we can re-enable recording. When `convergeSnapshot` is set, the
+    // target was unreachable — persist the actual landing position so the
+    // snapshot self-heals and future revisits don't burn the polling budget.
+    const finalize = (convergeSnapshot: boolean) => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          if (convergeSnapshot) {
+            const ref = virtuaRef.current;
+            if (ref) {
+              const isAtBottom =
+                ref.scrollSize - ref.scrollOffset - ref.viewportSize <= AT_BOTTOM_THRESHOLD;
+              pendingWriteRef.current = {
+                atBottom: isAtBottom,
+                key: contextKey,
+                offset: ref.scrollOffset,
+              };
+              flushNow();
+            }
+          }
           restoringRef.current = false;
         });
       });
@@ -133,7 +149,7 @@ export const useTopicScrollPersist = ({
 
     if (targetOffset === null) {
       virtuaRef.current.scrollToIndex(dataSourceLength - 1, { align: 'end' });
-      releaseGuard();
+      finalize(false);
       return;
     }
 
@@ -150,16 +166,17 @@ export const useTopicScrollPersist = ({
         return;
       }
       const required = targetOffset + ref.viewportSize;
-      if (ref.scrollSize >= required || attempts >= RESTORE_MAX_FRAMES) {
+      const cappedOut = attempts >= RESTORE_MAX_FRAMES;
+      if (ref.scrollSize >= required || cappedOut) {
         ref.scrollTo(targetOffset);
-        releaseGuard();
+        finalize(cappedOut);
         return;
       }
       attempts += 1;
       requestAnimationFrame(tryScroll);
     };
     requestAnimationFrame(tryScroll);
-  }, [contextKey, dataSourceLength, virtuaRef]);
+  }, [contextKey, dataSourceLength, flushNow, virtuaRef]);
 
   // One-shot housekeeping: drop expired entries and enforce the cap.
   useEffect(() => {

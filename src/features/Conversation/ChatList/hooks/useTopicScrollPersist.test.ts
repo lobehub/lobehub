@@ -156,6 +156,63 @@ describe('useTopicScrollPersist', () => {
       expect(handle.scrollTo).toHaveBeenCalledWith(999_999);
     });
 
+    it('converges the snapshot to the actual landing position after capping out', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        atBottom: false,
+        offset: 999_999,
+        savedAt: Date.now() - 60_000,
+      });
+      const handle = createFakeVList({ scrollSize: 1500, viewportSize: 800 });
+      // Simulate virtua clamping the request to the actual scrollable range.
+      handle.scrollTo.mockImplementation((offset: number) => {
+        handle.scrollOffset = Math.min(offset, handle.scrollSize - handle.viewportSize);
+      });
+
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSourceLength: 50,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(40);
+
+      // 1500 - 800 = 700; this is what virtua actually landed on.
+      const persisted = loadScrollSnapshot('main_agt_1_tpc_a');
+      expect(persisted?.offset).toBe(700);
+      // 1500 - 700 - 800 = 0 ≤ 300 → at bottom now that we've clamped.
+      expect(persisted?.atBottom).toBe(true);
+    });
+
+    it('does not rewrite the snapshot when the saved offset was reached without capping', async () => {
+      const originalSavedAt = Date.now() - 60_000;
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        atBottom: false,
+        offset: 5000,
+        savedAt: originalSavedAt,
+      });
+      const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
+      handle.scrollTo.mockImplementation((offset: number) => {
+        handle.scrollOffset = offset;
+      });
+
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSourceLength: 50,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(20);
+
+      // Snapshot is untouched — same offset and same savedAt.
+      const persisted = loadScrollSnapshot('main_agt_1_tpc_a');
+      expect(persisted?.offset).toBe(5000);
+      expect(persisted?.savedAt).toBe(originalSavedAt);
+    });
+
     it('skips the entire restore until dataSourceLength becomes non-zero', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
