@@ -21,7 +21,7 @@ const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task'];
 
 // Excluded so file uploads and web-browsing tool scrapes don't surface as
 // "recent docs"; only user-authored pages ('api') and legacy 'topic' rows remain.
-const TOOL_DOCUMENT_SOURCE_TYPES = ['file', 'web'];
+const TOOL_DOCUMENT_SOURCE_TYPES = ['file', 'web'] as const;
 
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 
