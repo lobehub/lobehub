@@ -29,12 +29,9 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
-import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-  AsyncTaskType,
-} from '@/types/asyncTask';
+import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
+
+import { createVideoTaskSubmitError } from './error';
 
 const log = debug('lobe-video:lambda');
 
@@ -290,13 +287,7 @@ export const videoRouter = router({
         userId,
       });
       await asyncTaskModel.update(asyncTaskId, {
-        error: new AsyncTaskError(
-          providerContentPolicyMessage
-            ? AsyncTaskErrorType.ProviderContentModeration
-            : AsyncTaskErrorType.TaskTriggerError,
-          providerContentPolicyMessage ??
-            'Failed to submit video task: ' + (e instanceof Error ? e.message : 'Unknown error'),
-        ),
+        error: createVideoTaskSubmitError(e, providerContentPolicyMessage),
         status: AsyncTaskStatus.Error,
       });
 
