@@ -25,19 +25,23 @@ describe('resolveAgentTopicGroupMode', () => {
     expect(resolveAgentTopicGroupMode({ globalMode: 'byTime' })).toBe('byTime');
   });
 
-  it('respects a non-default global selection', () => {
+  it('keeps Claude Code agents on project grouping when the global selection changes', () => {
     expect(
       resolveAgentTopicGroupMode({
         agentType: 'claude-code',
         globalMode: 'flat',
       }),
-    ).toBe('flat');
+    ).toBe('byProject');
   });
 
-  it('uses the agent-specific selection when present', () => {
+  it('uses the global selection for normal agents', () => {
+    expect(resolveAgentTopicGroupMode({ globalMode: 'flat' })).toBe('flat');
+  });
+
+  it('uses the agent chat config selection when present', () => {
     expect(
       resolveAgentTopicGroupMode({
-        agentSpecificMode: 'byTime',
+        agentTopicGroupMode: 'byTime',
         agentType: 'codex',
         globalMode: 'byTime',
       }),

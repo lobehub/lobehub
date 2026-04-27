@@ -1,11 +1,8 @@
-import { DEFAULT_PREFERENCE } from '@lobechat/const';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
 
 import type { TopicGroupMode } from '@/types/topic';
 
 type HeterogeneousAgentType = HeterogeneousProviderConfig['type'];
-
-const DEFAULT_TOPIC_GROUP_MODE = DEFAULT_PREFERENCE.topicGroupMode ?? 'byTime';
 
 const PROJECT_DEFAULT_HETEROGENEOUS_AGENT_TYPES = new Set<HeterogeneousAgentType>([
   'claude-code',
@@ -14,23 +11,22 @@ const PROJECT_DEFAULT_HETEROGENEOUS_AGENT_TYPES = new Set<HeterogeneousAgentType
 
 export const getDefaultTopicGroupModeByAgentType = (
   agentType?: HeterogeneousAgentType,
+  fallbackMode: TopicGroupMode,
 ): TopicGroupMode =>
   agentType && PROJECT_DEFAULT_HETEROGENEOUS_AGENT_TYPES.has(agentType)
     ? 'byProject'
-    : DEFAULT_TOPIC_GROUP_MODE;
+    : fallbackMode;
 
 export const resolveAgentTopicGroupMode = ({
-  agentSpecificMode,
+  agentTopicGroupMode,
   agentType,
   globalMode,
 }: {
-  agentSpecificMode?: TopicGroupMode;
+  agentTopicGroupMode?: TopicGroupMode;
   agentType?: HeterogeneousAgentType;
   globalMode: TopicGroupMode;
 }): TopicGroupMode => {
-  if (agentSpecificMode) return agentSpecificMode;
+  if (agentTopicGroupMode) return agentTopicGroupMode;
 
-  return globalMode === DEFAULT_TOPIC_GROUP_MODE
-    ? getDefaultTopicGroupModeByAgentType(agentType)
-    : globalMode;
+  return getDefaultTopicGroupModeByAgentType(agentType, globalMode);
 };
