@@ -170,7 +170,7 @@ const categorizeError = (
   if (providerContentPolicyMessage) {
     return {
       errorMessage: providerContentPolicyMessage,
-      errorType: AsyncTaskErrorType.ServerError,
+      errorType: AsyncTaskErrorType.ProviderContentModeration,
     };
   }
 

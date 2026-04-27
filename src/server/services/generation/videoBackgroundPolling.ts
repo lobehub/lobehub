@@ -127,7 +127,9 @@ export async function processBackgroundVideoPolling(
     }
     await asyncTaskModel.update(asyncTaskId, {
       error: new AsyncTaskError(
-        AsyncTaskErrorType.ServerError,
+        providerContentPolicyMessage
+          ? AsyncTaskErrorType.ProviderContentModeration
+          : AsyncTaskErrorType.ServerError,
         providerContentPolicyMessage ??
           'Background polling failed: ' +
             (error instanceof Error ? error.message : 'Unknown error'),
