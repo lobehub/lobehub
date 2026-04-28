@@ -95,7 +95,16 @@ describe('systemStatusSelectors', () => {
     });
 
     it('should return stored items when set', () => {
-      const custom = ['agent', 'recents', 'pages', 'tasks', 'community', 'resource', 'memory'];
+      const custom = [
+        'agent',
+        'recents',
+        'pages',
+        'tasks',
+        'image',
+        'community',
+        'resource',
+        'memory',
+      ];
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: custom },
       });
@@ -127,6 +136,7 @@ describe('systemStatusSelectors', () => {
         'pages',
         'agent',
         'recents',
+        'image',
         'community',
         'resource',
         'memory',
