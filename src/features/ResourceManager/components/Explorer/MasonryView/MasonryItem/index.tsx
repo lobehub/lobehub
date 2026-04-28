@@ -198,6 +198,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     size,
     onOpen,
     metadata,
+    parentId,
     sourceType,
     slug,
   }) => {
@@ -369,6 +370,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       filename: name,
       id,
       libraryId: knowledgeBaseId,
+      parentId,
       sourceType,
       url,
     });

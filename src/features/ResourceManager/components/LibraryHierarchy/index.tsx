@@ -222,6 +222,7 @@ const LibraryHierarchyTree = memo(() => {
             onRenameStart: item.isFolder
               ? () => treeRef.current?.startRenaming(node.id)
               : undefined,
+            parentId: item.parentId,
             sourceType: item.sourceType,
             url: item.url,
           });

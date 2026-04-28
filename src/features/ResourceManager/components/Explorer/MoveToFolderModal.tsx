@@ -15,10 +15,11 @@ interface MoveToFolderModalProps {
   knowledgeBaseId?: string;
   onClose: () => void;
   open: boolean;
+  sourceParentId?: string | null;
 }
 
 const MoveToFolderModal = memo<MoveToFolderModalProps>(
-  ({ open, onClose, fileId, knowledgeBaseId }) => {
+  ({ open, onClose, fileId, knowledgeBaseId, sourceParentId }) => {
     const { t } = useTranslation('components');
     const { message } = App.useApp();
 
@@ -220,7 +221,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
     const handleMove = () => {
       if (!selectedFolderId) return;
-      const fromParent = useFileStore.getState().queryParams?.parentId ?? null;
+      const fromParent = sourceParentId ?? null;
 
       void moveExternalResourceTreeItems([fileId], selectedFolderId, fromParent)?.catch(() => {
         message.error(t('FileManager.actions.moveError'));
@@ -230,7 +231,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
     };
 
     const handleMoveToRoot = () => {
-      const fromParent = useFileStore.getState().queryParams?.parentId ?? null;
+      const fromParent = sourceParentId ?? null;
 
       void moveExternalResourceTreeItems([fileId], null, fromParent)?.catch(() => {
         message.error(t('FileManager.actions.moveError'));

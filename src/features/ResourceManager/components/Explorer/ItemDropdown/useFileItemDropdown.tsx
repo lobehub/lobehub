@@ -33,6 +33,7 @@ export interface UseFileItemDropdownParams {
   id: string;
   libraryId?: string;
   onRenameStart?: () => void;
+  parentId?: string | null;
   sourceType?: string;
   url: string;
 }
@@ -69,6 +70,7 @@ export const useFileItemDropdownFactory = () => {
       fileType,
       sourceType,
       onRenameStart,
+      parentId,
     }: UseFileItemDropdownParams): ItemType[] => {
       const isInLibrary = !!libraryId;
       const isFolder = fileType === 'custom/folder';
@@ -210,6 +212,7 @@ export const useFileItemDropdownFactory = () => {
               createRawModal(MoveToFolderModal, {
                 fileId: id,
                 knowledgeBaseId: libraryId,
+                sourceParentId: parentId ?? null,
               });
             },
           },
@@ -309,9 +312,7 @@ export const useFileItemDropdownFactory = () => {
                   await deleteResource(id);
 
                   // Revalidate tree for the parent folder
-                  const { queryParams } = useFileStore.getState();
-                  const parentId = queryParams?.parentId ?? null;
-                  void revalidateResourceTreeParent(parentId);
+                  void revalidateResourceTreeParent(parentId ?? null);
                   await refreshFileList({ revalidateResources: false });
 
                   message.success(t('FileManager.actions.deleteSuccess'));
@@ -348,6 +349,7 @@ export const useFileItemDropdown = ({
   fileType,
   sourceType,
   onRenameStart,
+  parentId,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const getFileItemDropdown = useFileItemDropdownFactory();
 
@@ -359,10 +361,21 @@ export const useFileItemDropdown = ({
         id,
         libraryId,
         onRenameStart,
+        parentId,
         sourceType,
         url,
       }),
-    [fileType, filename, getFileItemDropdown, id, libraryId, onRenameStart, sourceType, url],
+    [
+      fileType,
+      filename,
+      getFileItemDropdown,
+      id,
+      libraryId,
+      onRenameStart,
+      parentId,
+      sourceType,
+      url,
+    ],
   );
 
   return { menuItems };
