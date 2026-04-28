@@ -50,6 +50,7 @@ function ExplorerTreeInner<TData>(
   const lastEmittedSelectedIds = useRef<string[]>(
     props.defaultSelectedIds ?? props.defaultSelected ?? [],
   );
+  const suppressModelEventsRef = useRef(false);
   const renamingRef = useRef(false);
 
   const initialOptions = useMemo((): FileTreeOptions => {
@@ -138,6 +139,7 @@ function ExplorerTreeInner<TData>(
       initialSelectedPaths,
       itemHeight: props.itemHeight,
       onSelectionChange: (paths) => {
+        if (suppressModelEventsRef.current) return;
         const ids = remapPathsToIds(paths, adapterRef.current.idByPath);
         if (arrayEqual(ids, lastEmittedSelectedIds.current)) return;
         lastEmittedSelectedIds.current = ids;
@@ -203,6 +205,7 @@ function ExplorerTreeInner<TData>(
   // We read expanded paths on demand from the visible rows via getItem; emit when defaultExpanded or nodes changes.
   useLayoutEffect(() => {
     return model.subscribe(() => {
+      if (suppressModelEventsRef.current) return;
       const onChange = propsRef.current.onExpandedChange;
       if (!onChange) return;
       const a = adapterRef.current;
@@ -229,16 +232,21 @@ function ExplorerTreeInner<TData>(
     const nextSelectedIds = remapPathsToIds(nextSelectedPaths, a.idByPath);
     const currentSelectedPaths = model.getSelectedPaths();
     const currentSelectedIds = remapPathsToIds(currentSelectedPaths, a.idByPath);
+    lastEmittedSelectedIds.current = nextSelectedIds;
     if (arrayEqual(currentSelectedIds, nextSelectedIds)) return;
 
-    lastEmittedSelectedIds.current = nextSelectedIds;
     const nextSelectedPathSet = new Set(nextSelectedPaths);
-    for (const path of currentSelectedPaths) {
-      if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
-    }
-    const currentSelectedPathSet = new Set(currentSelectedPaths);
-    for (const path of nextSelectedPaths) {
-      if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+    suppressModelEventsRef.current = true;
+    try {
+      for (const path of currentSelectedPaths) {
+        if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
+      }
+      const currentSelectedPathSet = new Set(currentSelectedPaths);
+      for (const path of nextSelectedPaths) {
+        if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+      }
+    } finally {
+      suppressModelEventsRef.current = false;
     }
   }, [props.selectedIds, model]);
 
@@ -257,9 +265,14 @@ function ExplorerTreeInner<TData>(
       directoryEntries.push({ dir, shouldExpand });
     }
     lastExpandedSignatureRef.current = nextExpandedIds.slice().sort().join('\n');
-    for (const { dir, shouldExpand } of directoryEntries) {
-      if (shouldExpand && !dir.isExpanded()) dir.expand();
-      else if (!shouldExpand && dir.isExpanded()) dir.collapse();
+    suppressModelEventsRef.current = true;
+    try {
+      for (const { dir, shouldExpand } of directoryEntries) {
+        if (shouldExpand && !dir.isExpanded()) dir.expand();
+        else if (!shouldExpand && dir.isExpanded()) dir.collapse();
+      }
+    } finally {
+      suppressModelEventsRef.current = false;
     }
   }, [props.expandedIds, model]);
 
@@ -291,21 +304,23 @@ function ExplorerTreeInner<TData>(
       .slice()
       .sort()
       .join('\n');
-    model.resetPaths(next.paths, {
-      initialExpandedPaths,
-    });
     // restore selection
     const nextSelectedPaths = remapIdsToPaths(nextSelectedIds, next.pathById);
     lastEmittedSelectedIds.current = remapPathsToIds(nextSelectedPaths, next.idByPath);
-    for (const id of nextSelectedIds) {
-      const path = next.pathById.get(id);
-      if (!path) continue;
-      model.getItem(path)?.select();
-    }
-    // restore focus
-    if (focusedId) {
-      const path = next.pathById.get(focusedId);
-      if (path) model.focusPath(path);
+    suppressModelEventsRef.current = true;
+    try {
+      model.resetPaths(next.paths, {
+        initialExpandedPaths,
+      });
+      for (const path of nextSelectedPaths) {
+        model.getItem(path)?.select();
+      }
+      if (focusedId) {
+        const path = next.pathById.get(focusedId);
+        if (path) model.focusPath(path);
+      }
+    } finally {
+      suppressModelEventsRef.current = false;
     }
   }, [props.nodes, model]);
 
