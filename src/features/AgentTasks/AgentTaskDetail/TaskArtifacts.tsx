@@ -6,6 +6,7 @@ import { cssVar } from 'antd-style';
 import { ChevronDown, FileText, FolderClosed, Package } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -61,6 +62,7 @@ const toTreeData = (nodes: TaskDetailWorkspaceNode[]): DataNode[] =>
 
 const TaskArtifacts = memo(() => {
   const { t } = useTranslation('chat');
+  const navigate = useNavigate();
   const workspace = useTaskStore(taskDetailSelectors.activeTaskWorkspace);
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -105,9 +107,13 @@ const TaskArtifacts = memo(() => {
             defaultExpandAll
             showLine
             className={styles.subtaskTree}
-            selectable={false}
             switcherIcon={<Icon icon={ChevronDown} size={14} />}
             treeData={treeData}
+            onSelect={(keys) => {
+              const key = keys[0];
+              if (!key) return;
+              navigate(`/page/${String(key)}`);
+            }}
           />
         </ConfigProvider>
       )}
