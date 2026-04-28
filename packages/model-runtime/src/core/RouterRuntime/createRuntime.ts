@@ -11,6 +11,7 @@ import type { Stream } from 'openai/streaming';
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeVertexAI } from '../../providers/vertexai';
 import type {
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamCallbacks,
   ChatStreamPayload,
