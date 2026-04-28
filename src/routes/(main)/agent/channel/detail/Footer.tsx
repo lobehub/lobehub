@@ -4,7 +4,7 @@ import { Alert, Flexbox, Tag } from '@lobehub/ui';
 import { Button, Form as AntdForm, type FormInstance } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { RefreshCw, Save, Trash2 } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
@@ -101,10 +101,17 @@ const Footer = memo<FooterProps>(
     }, [platformDef.schema]);
     const watchedUserId = AntdForm.useWatch(['settings', 'userId'], form);
     // `useWatch` returns `undefined` until antd Form hydrates from the
-    // parent's `initialValues` — without falling back to the saved value
-    // we'd flash the alert for every saved bot.
+    // parent's `initialValues`. Fall back to the saved value only during
+    // that pre-hydration window so we don't flash the alert for every
+    // saved bot. Once the form has reported a value, trust the watched
+    // value — including `undefined`, so "Reset to Default" (which clears
+    // settings.userId) correctly re-surfaces the alert.
     const savedUserId = currentConfig?.settings?.userId;
-    const effectiveUserId = watchedUserId === undefined ? savedUserId : watchedUserId;
+    const [formHydrated, setFormHydrated] = useState(false);
+    useEffect(() => {
+      if (watchedUserId !== undefined) setFormHydrated(true);
+    }, [watchedUserId]);
+    const effectiveUserId = formHydrated ? watchedUserId : savedUserId;
     const userIdMissing =
       hasConfig &&
       hasUserIdField &&
