@@ -1,5 +1,4 @@
 export type {
-  ExplorerTreeCanDropCtx,
   ExplorerTreeHandle,
   ExplorerTreeLegacyCanDropCtx,
   ExplorerTreeMoveEvent,

@@ -24,27 +24,9 @@ export interface ExplorerTreeMoveEvent<TData = unknown> {
   targetNode: ExplorerTreeNode<TData> | null;
 }
 
-export interface ExplorerTreeCanDropCtx<TData = unknown> {
-  sourceIds: string[];
-  sourceNodes: ExplorerTreeNode<TData>[];
-  targetId: string | null;
-  targetNode: ExplorerTreeNode<TData> | null;
-}
-
 export interface ExplorerTreeLegacyCanDropCtx<TData = unknown> {
   source: ExplorerTreeNode<TData>;
   target: ExplorerTreeNode<TData> | null;
-}
-
-export interface ExplorerTreeRowMeta {
-  active?: boolean;
-  error?: boolean;
-  loading?: boolean;
-}
-
-export interface ExplorerTreeRowCtx<TData = unknown> {
-  meta: ExplorerTreeRowMeta;
-  node: ExplorerTreeNode<TData>;
 }
 
 export interface ExplorerTreeRowDecorationCtx<TData = unknown> {
