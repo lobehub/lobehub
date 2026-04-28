@@ -159,6 +159,8 @@
   "channel.userIdHint.qq": "你的 QQ 号，在 QQ 资料页可见。",
   "channel.userIdHint.slack": "打开 Slack 个人资料 → ⋮ 更多 → 复制 Member ID（以 U 开头）。",
   "channel.userIdHint.telegram": "在 Telegram 中给 @userinfobot 发送任意消息，它会回复你的数字 User ID。",
+  "channel.userIdMissingDesc": "未填写时，AI 工具无法主动联系你，配对申请也将无法被批准。请在下方「高级设置」中补充。",
+  "channel.userIdMissingTitle": "建议补充你的平台用户 ID",
   "channel.validationError": "请填写应用 ID 和 Token",
   "channel.verificationToken": "Verification Token",
   "channel.verificationTokenHint": "可选。用于验证事件推送来源。",

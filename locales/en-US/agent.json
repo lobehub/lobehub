@@ -159,6 +159,8 @@
   "channel.userIdHint.qq": "Your QQ number, shown on your QQ profile page.",
   "channel.userIdHint.slack": "Open your Slack profile → ⋮ More → Copy member ID (starts with U).",
   "channel.userIdHint.telegram": "Send any message to @userinfobot in Telegram — it replies with your numeric User ID.",
+  "channel.userIdMissingDesc": "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Fill it in below — the field is in Advanced Settings.",
+  "channel.userIdMissingTitle": "Add your platform User ID",
   "channel.validationError": "Please fill in Application ID and Token",
   "channel.verificationToken": "Verification Token",
   "channel.verificationTokenHint": "Optional. Used to verify webhook event source.",
