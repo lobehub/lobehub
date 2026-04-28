@@ -105,7 +105,9 @@ const UploadDock = memo(() => {
 
   useEffect(() => {
     if (isUploading || overviewUploadingStatus === 'pending') {
-      clearTimeout(autoDismissTimerRef.current);
+      if (autoDismissTimerRef.current) {
+        clearTimeout(autoDismissTimerRef.current);
+      }
       return;
     }
 
@@ -114,7 +116,11 @@ const UploadDock = memo(() => {
       dispatchDockFileList({ ids: fileList.map((item) => item.id), type: 'removeFiles' });
     }, 3000);
 
-    return () => clearTimeout(autoDismissTimerRef.current);
+    return () => {
+      if (autoDismissTimerRef.current) {
+        clearTimeout(autoDismissTimerRef.current);
+      }
+    };
   }, [isUploading, overviewUploadingStatus, fileList, dispatchDockFileList]);
 
   if (count === 0 || !show) return;
