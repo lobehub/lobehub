@@ -182,6 +182,103 @@ describe('useResourceTreeController', () => {
     ]);
   });
 
+  it('ignores older same-parent responses when a newer revalidation finishes first', async () => {
+    const staleRootResponse = createDeferred<{ items: FileListItem[] }>();
+    const currentRootResponse = createDeferred<{ items: FileListItem[] }>();
+    const getKnowledgeItemsSpy = vi.spyOn(fileService, 'getKnowledgeItems');
+
+    getKnowledgeItemsSpy
+      .mockResolvedValueOnce({
+        items: [createKnowledgeItem('initial-file', 'Initial.md', null)],
+      })
+      .mockReturnValueOnce(staleRootResponse.promise)
+      .mockReturnValueOnce(currentRootResponse.promise);
+
+    const { result } = renderHook(() => useResourceTreeController({ libraryId: 'library-a' }));
+
+    await waitFor(() => {
+      expect(result.current.childrenByParentId.get(null)?.map((node) => node.id)).toEqual([
+        'initial-file',
+      ]);
+    });
+
+    let staleLoad: Promise<void> | undefined;
+    let currentRevalidation: Promise<void> | undefined;
+
+    act(() => {
+      staleLoad = result.current.loadChildren(null);
+      currentRevalidation = result.current.revalidateParent(null);
+    });
+
+    expect(getKnowledgeItemsSpy).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      currentRootResponse.resolve({
+        items: [createKnowledgeItem('current-file', 'Current.md', null)],
+      });
+      await currentRevalidation;
+    });
+
+    expect(result.current.childrenByParentId.get(null)?.map((node) => node.id)).toEqual([
+      'current-file',
+    ]);
+
+    await act(async () => {
+      staleRootResponse.resolve({
+        items: [createKnowledgeItem('stale-file', 'Stale.md', null)],
+      });
+      await staleLoad;
+    });
+
+    expect(result.current.childrenByParentId.get(null)?.map((node) => node.id)).toEqual([
+      'current-file',
+    ]);
+  });
+
+  it('does not issue duplicate folder loads during rapid repeated expansion', async () => {
+    const folderResponse = createDeferred<{ items: FileListItem[] }>();
+    const getKnowledgeItemsSpy = vi.spyOn(fileService, 'getKnowledgeItems');
+
+    getKnowledgeItemsSpy.mockImplementation(({ parentId }) => {
+      if (parentId === null) {
+        return Promise.resolve({
+          items: [createKnowledgeItem('folder-a', 'Folder A', null, 'custom/folder')],
+        });
+      }
+
+      return folderResponse.promise;
+    });
+
+    const { result } = renderHook(() => useResourceTreeController({ libraryId: 'library-a' }));
+
+    await waitFor(() => {
+      expect(result.current.childrenByParentId.get(null)?.map((node) => node.id)).toEqual([
+        'folder-a',
+      ]);
+    });
+
+    act(() => {
+      result.current.setExpandedIds(['folder-a']);
+      result.current.setExpandedIds(['folder-a']);
+    });
+
+    expect(
+      getKnowledgeItemsSpy.mock.calls.filter(([params]) => params.parentId === 'folder-a'),
+    ).toHaveLength(1);
+
+    await act(async () => {
+      folderResponse.resolve({
+        items: [createKnowledgeItem('file-child', 'Child.md', 'folder-a')],
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.childrenByParentId.get('folder-a')?.map((node) => node.id)).toEqual([
+        'file-child',
+      ]);
+    });
+  });
+
   it('keeps selected tree ids as local state that changes independently', () => {
     const { result } = renderHook(() => useResourceTreeController({ libraryId: null }));
 

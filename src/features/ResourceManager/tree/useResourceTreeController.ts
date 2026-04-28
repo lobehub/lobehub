@@ -13,7 +13,16 @@ interface UseResourceTreeControllerOptions {
 }
 
 const ROOT_PARENT_ID = null;
+const ROOT_PARENT_REQUEST_KEY = '__root__';
 const FOLDER_FILE_TYPE = 'custom/folder';
+
+interface ActiveRequest {
+  promise: Promise<void>;
+  status: ResourceTreeLoadStatus;
+  token: number;
+}
+
+const getParentRequestKey = (parentId: string | null) => parentId ?? ROOT_PARENT_REQUEST_KEY;
 
 const sortTreeNodes = (nodes: ResourceTreeNode[]) =>
   [...nodes].sort((a, b) => {
@@ -38,6 +47,9 @@ const toResourceTreeNode = (
 
 export const useResourceTreeController = ({ libraryId }: UseResourceTreeControllerOptions) => {
   const generationRef = useRef(0);
+  const requestSeqRef = useRef(0);
+  const activeRequestByParentRef = useRef(new Map<string, ActiveRequest>());
+  const latestRequestTokenByParentRef = useRef(new Map<string, number>());
   const [childrenByParentId, setChildrenByParentId] = useState<
     Map<string | null, ResourceTreeNode[]>
   >(() => new Map());
@@ -52,36 +64,66 @@ export const useResourceTreeController = ({ libraryId }: UseResourceTreeControll
       if (!libraryId) return;
 
       const generation = generationRef.current;
+      const parentKey = getParentRequestKey(parentId);
+      const activeRequest = activeRequestByParentRef.current.get(parentKey);
 
-      setStatusByParentId((previous) => new Map(previous).set(parentId, status));
+      if (activeRequest?.status === status) return activeRequest.promise;
 
-      try {
-        const response = await fileService.getKnowledgeItems({
-          knowledgeBaseId: libraryId,
-          parentId,
-          showFilesInKnowledgeBase: false,
-        });
+      const token = requestSeqRef.current + 1;
+      requestSeqRef.current = token;
+      latestRequestTokenByParentRef.current.set(parentKey, token);
 
-        if (generationRef.current !== generation) return;
+      const promise = (async () => {
+        setStatusByParentId((previous) => new Map(previous).set(parentId, status));
 
-        const children = sortTreeNodes(
-          response.items.map((item) => toResourceTreeNode(item, parentId)),
-        );
+        try {
+          const response = await fileService.getKnowledgeItems({
+            knowledgeBaseId: libraryId,
+            parentId,
+            showFilesInKnowledgeBase: false,
+          });
 
-        setChildrenByParentId((previous) => new Map(previous).set(parentId, children));
-        setStatusByParentId((previous) => new Map(previous).set(parentId, 'idle'));
-      } catch (error) {
-        if (generationRef.current !== generation) return;
+          if (
+            generationRef.current !== generation ||
+            latestRequestTokenByParentRef.current.get(parentKey) !== token
+          ) {
+            return;
+          }
 
-        console.error(`Failed to load resource tree children for ${parentId ?? 'root'}:`, error);
-        setStatusByParentId((previous) => new Map(previous).set(parentId, 'error'));
-      }
+          const children = sortTreeNodes(
+            response.items.map((item) => toResourceTreeNode(item, parentId)),
+          );
+
+          setChildrenByParentId((previous) => new Map(previous).set(parentId, children));
+          setStatusByParentId((previous) => new Map(previous).set(parentId, 'idle'));
+        } catch (error) {
+          if (
+            generationRef.current !== generation ||
+            latestRequestTokenByParentRef.current.get(parentKey) !== token
+          ) {
+            return;
+          }
+
+          console.error(`Failed to load resource tree children for ${parentId ?? 'root'}:`, error);
+          setStatusByParentId((previous) => new Map(previous).set(parentId, 'error'));
+        } finally {
+          if (activeRequestByParentRef.current.get(parentKey)?.token === token) {
+            activeRequestByParentRef.current.delete(parentKey);
+          }
+        }
+      })();
+
+      activeRequestByParentRef.current.set(parentKey, { promise, status, token });
+
+      return promise;
     },
     [libraryId],
   );
 
   useEffect(() => {
     generationRef.current += 1;
+    activeRequestByParentRef.current.clear();
+    latestRequestTokenByParentRef.current.clear();
     setChildrenByParentId(new Map());
     setStatusByParentId(new Map());
     setExpandedIdsState([]);
@@ -109,6 +151,7 @@ export const useResourceTreeController = ({ libraryId }: UseResourceTreeControll
             node.isFolder &&
             expandedIdSet.has(node.id) &&
             !childrenByParentId.has(node.id) &&
+            !activeRequestByParentRef.current.has(getParentRequestKey(node.id)) &&
             statusByParentId.get(node.id) !== 'loading',
         )
         .map((node) => node.id);
