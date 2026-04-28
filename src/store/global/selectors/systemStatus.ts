@@ -48,6 +48,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'pages',
   'recents',
   'agent',
+  'image',
   'community',
   'resource',
   'memory',
