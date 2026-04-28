@@ -1,12 +1,9 @@
+import type { AgentSignalSourceEvent, AgentSignalSourceType } from '@lobechat/agent-signal/source';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { workflowClient } from '@/libs/qstash';
-import type {
-  AgentSignalSourcePayloadMap,
-  AgentSignalSourceType,
-} from '@/server/services/agentSignal/sourceTypes';
 
 const log = debug('lobe-server:workflows:agent-signal');
 
@@ -20,19 +17,10 @@ const normalizeFlowControlKeySegment = (value: string) => {
 
 type AgentSignalWorkflowSourceType = AgentSignalSourceType;
 
-type AgentSignalWorkflowSourcePayload<TSourceType extends AgentSignalWorkflowSourceType> =
-  AgentSignalSourcePayloadMap[TSourceType];
-
 /** One normalized Agent Signal source event handed to the workflow worker. */
 export interface AgentSignalWorkflowSourceEventInput<
   TSourceType extends AgentSignalWorkflowSourceType = AgentSignalWorkflowSourceType,
-> {
-  payload: AgentSignalWorkflowSourcePayload<TSourceType>;
-  scopeKey: string;
-  sourceId: string;
-  sourceType: TSourceType;
-  timestamp: number;
-}
+> extends AgentSignalSourceEvent<TSourceType> {}
 
 /** One Upstash workflow payload for Agent Signal execution. */
 export interface AgentSignalWorkflowRunPayload {
@@ -56,7 +44,7 @@ const getWorkflowUrl = (path: string): string => {
  *
  * Use when:
  * - Server-owned ingress wants to hand off execution to Upstash Workflow
- * - The caller already normalized the source event envelope
+ * - The caller already normalized the source event
  *
  * Expects:
  * - `sourceEvent.scopeKey` is stable for the policy coordination scope

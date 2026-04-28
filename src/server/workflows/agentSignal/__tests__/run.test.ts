@@ -1,13 +1,13 @@
 // @vitest-environment node
+import {
+  AGENT_SIGNAL_SOURCE_TYPES,
+  type AgentSignalSourceEvent,
+  type SourceAgentUserMessage,
+} from '@lobechat/agent-signal/source';
 import { agents, messages, threads, topics, users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentSignalSourceEnvelope } from '@/server/services/agentSignal';
-import {
-  AGENT_SIGNAL_SOURCE_TYPES,
-  type SourceAgentUserMessage,
-} from '@/server/services/agentSignal/sourceTypes';
 import {
   runAgentSignalWorkflow,
   type RunAgentSignalWorkflowDeps,
@@ -32,7 +32,7 @@ describe('runAgentSignalWorkflow', () => {
     const topicId = `topic_${uuid()}`;
     const parentMessageId = `msg_${uuid()}`;
     const baseTimestamp = new Date('2026-01-01T00:00:00.000Z').getTime();
-    let capturedSourceEvent: AgentSignalSourceEnvelope | undefined;
+    let capturedSourceEvent: AgentSignalSourceEvent | undefined;
 
     await db.insert(users).values({ id: userId });
 
@@ -177,7 +177,7 @@ describe('runAgentSignalWorkflow', () => {
     const now = Date.now();
     const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
       async (sourceEvent) => {
-        capturedSourceEvent = sourceEvent as AgentSignalSourceEnvelope;
+        capturedSourceEvent = sourceEvent as AgentSignalSourceEvent;
         return undefined;
       },
     );
@@ -251,7 +251,7 @@ describe('runAgentSignalWorkflow', () => {
     const otherThreadId = `thread_${uuid()}`;
     const feedbackMessageId = `msg_${uuid()}`;
     const baseTimestamp = new Date('2026-01-02T00:00:00.000Z').getTime();
-    let capturedSourceEvent: AgentSignalSourceEnvelope | undefined;
+    let capturedSourceEvent: AgentSignalSourceEvent | undefined;
 
     await db.insert(users).values({ id: userId });
 
@@ -365,7 +365,7 @@ describe('runAgentSignalWorkflow', () => {
 
     const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
       async (sourceEvent) => {
-        capturedSourceEvent = sourceEvent as AgentSignalSourceEnvelope;
+        capturedSourceEvent = sourceEvent as AgentSignalSourceEvent;
         return undefined;
       },
     );

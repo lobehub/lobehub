@@ -1,11 +1,10 @@
 import type { BaseAction, BaseSignal } from '@lobechat/agent-signal';
-
 import type {
   SourceAgentExecutionCompleted,
   SourceAgentExecutionFailed,
   SourceRuntimeAfterStep,
   SourceRuntimeBeforeStep,
-} from '../sourceTypes';
+} from '@lobechat/agent-signal/source';
 
 /** Server-owned built-in AgentSignal policy identifiers. */
 export const AGENT_SIGNAL_POLICIES = {

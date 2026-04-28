@@ -1,4 +1,16 @@
 import type { DedupedSourceEventResult } from '@lobechat/agent-signal';
+import {
+  type AgentSignalSourceEventInput as SharedAgentSignalSourceEventInput,
+  type AgentSignalSourceType,
+  createSourceEvent,
+  getSourceEventScopeKey,
+  type SourceAgentExecutionCompleted,
+  type SourceAgentExecutionFailed,
+  type SourceAgentUserMessage,
+  type SourceBotMessageMerged,
+  type SourceRuntimeAfterStep,
+  type SourceRuntimeBeforeStep,
+} from '@lobechat/agent-signal/source';
 import debug from 'debug';
 
 import { getServerDB } from '@/database/server';
@@ -8,18 +20,6 @@ import { AgentSignalWorkflow } from '@/server/workflows/agentSignal';
 import { isAgentSignalEnabledForUser } from './featureGate';
 import type { GeneratedAgentSignalEmissionResult } from './orchestrator';
 import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
-import { AgentSignalScopeKey } from './scopeKey';
-import type { EmitSourceEventInput } from './sources';
-import type {
-  AgentSignalSourcePayloadMap,
-  AgentSignalSourceType,
-  SourceAgentExecutionCompleted,
-  SourceAgentExecutionFailed,
-  SourceAgentUserMessage,
-  SourceBotMessageMerged,
-  SourceRuntimeAfterStep,
-  SourceRuntimeBeforeStep,
-} from './sourceTypes';
 
 const log = debug('lobe-server:agent-signal:service');
 
@@ -35,18 +35,9 @@ type RuntimeProducerSourceType =
   | SourceRuntimeAfterStep['sourceType']
   | SourceRuntimeBeforeStep['sourceType'];
 
-type AgentSignalSourcePayload<TSourceType extends AgentSignalSourceType> =
-  AgentSignalSourcePayloadMap[TSourceType];
-
 /** One producer-side source emission input. */
-export interface AgentSignalSourceEventInput<
-  TSourceType extends AgentSignalSourceType,
-> extends Omit<EmitSourceEventInput, 'payload' | 'scopeKey' | 'sourceType' | 'timestamp'> {
-  payload: AgentSignalSourcePayload<TSourceType>;
-  scopeKey?: string;
-  sourceType: TSourceType;
-  timestamp?: number;
-}
+export type AgentSignalSourceEventInput<TSourceType extends AgentSignalSourceType> =
+  SharedAgentSignalSourceEventInput<TSourceType>;
 
 /** One AgentSignal emission execution option set. */
 export interface AgentSignalPolicyOptionOverrides extends Omit<
@@ -81,23 +72,7 @@ export type UserMessageAgentSignalSourceInput = AgentSignalSourceEventInput<
   SourceAgentUserMessage['sourceType']
 >;
 
-export interface AgentSignalSourceEnvelope extends Omit<
-  AgentSignalSourceEventInput<AgentSignalSourceType>,
-  'scopeKey' | 'timestamp'
-> {
-  scopeKey: string;
-  timestamp: number;
-}
-
-export const resolveSourceScopeKey = (payload: Record<string, unknown>) => {
-  return AgentSignalScopeKey.fromProducerInput({
-    applicationId: typeof payload.applicationId === 'string' ? payload.applicationId : undefined,
-    platform: typeof payload.platform === 'string' ? payload.platform : undefined,
-    platformThreadId:
-      typeof payload.platformThreadId === 'string' ? payload.platformThreadId : undefined,
-    topicId: typeof payload.topicId === 'string' ? payload.topicId : undefined,
-  });
-};
+export const resolveSourceScopeKey = getSourceEventScopeKey;
 
 const withSelfIterationPolicy = (
   options: AgentSignalEmitOptions,
@@ -169,13 +144,7 @@ export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSig
     };
   }
 
-  const sourceEvent = {
-    payload: input.payload,
-    scopeKey: input.scopeKey ?? resolveSourceScopeKey(input.payload),
-    sourceId: input.sourceId,
-    sourceType: input.sourceType,
-    timestamp: input.timestamp ?? Date.now(),
-  };
+  const sourceEvent = createSourceEvent(input);
 
   log('Enqueueing source event payload=%O', {
     agentId: context.agentId,

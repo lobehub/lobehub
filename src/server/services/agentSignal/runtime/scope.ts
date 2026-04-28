@@ -1,6 +1,8 @@
 import type { AgentSignalScope } from '@lobechat/agent-signal';
-
-import { type AgentSignalProducerScopeInput, AgentSignalScopeKey } from '../scopeKey';
+import {
+  type AgentSignalProducerScopeInput,
+  AgentSignalScopeKey,
+} from '@lobechat/agent-signal/source';
 
 /** Resolves the canonical runtime scope key for one source scope. */
 export const resolveRuntimeScopeKey = (scope: AgentSignalScope) => {
@@ -8,7 +10,7 @@ export const resolveRuntimeScopeKey = (scope: AgentSignalScope) => {
 };
 
 /**
- * Resolves one stable scope key for producers that emit raw source envelopes.
+ * Resolves one stable scope key for producers that emit raw source events.
  *
  * Before:
  * - `{ topicId: 'topic-1' }`

@@ -1,4 +1,8 @@
 import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
+import {
+  AGENT_SIGNAL_SOURCE_TYPES,
+  type SourceAgentUserMessage,
+} from '@lobechat/agent-signal/source';
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import { chainAgentSignalAnalyzeIntentFeedbackSatisfaction } from '@lobechat/prompts';
@@ -10,7 +14,6 @@ import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { defineSourceHandler } from '../../runtime/middleware';
-import { AGENT_SIGNAL_SOURCE_TYPES, type SourceAgentUserMessage } from '../../sourceTypes';
 import {
   AGENT_SIGNAL_POLICY_SIGNAL_TYPES,
   type AgentSignalFeedbackEvidence,

@@ -1,4 +1,5 @@
-import { AGENT_SIGNAL_SOURCE_TYPES } from '../../sourceTypes';
+import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+
 import type { SourceRenderer } from '../types';
 import { createBaseSource } from './shared';
 

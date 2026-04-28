@@ -1,3 +1,10 @@
+import {
+  AGENT_SIGNAL_SOURCE_TYPES,
+  type AgentSignalSourceEvent,
+  type AgentSignalSourceType,
+  type SourceAgentUserMessage,
+  type SourceClientRuntimeStart,
+} from '@lobechat/agent-signal/source';
 import type { ExecutionSnapshot, ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
 import { messages } from '@lobechat/database/schemas';
 import { context as otContext, SpanStatusCode } from '@lobechat/observability-otel/api';
@@ -19,13 +26,6 @@ import type { GeneratedAgentSignalEmissionResult } from '@/server/services/agent
 import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal/orchestrator';
 import { assembleFeedbackContext } from '@/server/services/agentSignal/policies/analyzeIntent/context/feedbackContextAssembler';
 import { createRedisRuntimeGuardBackend } from '@/server/services/agentSignal/runtime/backend/redisGuard';
-import {
-  AGENT_SIGNAL_SOURCE_TYPES,
-  type AgentSignalSourcePayloadMap,
-  type AgentSignalSourceType,
-  type SourceAgentUserMessage,
-  type SourceClientRuntimeStart,
-} from '@/server/services/agentSignal/sourceTypes';
 
 import type { AgentSignalWorkflowRunPayload } from './index';
 
@@ -63,13 +63,7 @@ export interface RunAgentSignalWorkflowDeps {
  */
 interface NormalizedWorkflowSourceEventInput<
   TSourceType extends AgentSignalSourceType = AgentSignalSourceType,
-> {
-  payload: AgentSignalSourcePayloadMap[TSourceType];
-  scopeKey: string;
-  sourceId: string;
-  sourceType: TSourceType;
-  timestamp: number;
-}
+> extends AgentSignalSourceEvent<TSourceType> {}
 
 const buildWorkflowMetricAttributes = (
   sourceType: string,
