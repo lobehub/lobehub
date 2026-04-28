@@ -108,7 +108,7 @@
   "channel.line.channelSecretHint": "From the Basic settings tab. Required — used to verify X-Line-Signature on every inbound webhook.",
   "channel.line.description": "Connect this assistant to LINE Messaging API for direct and group chats.",
   "channel.line.destinationUserId": "Destination User ID",
-  "channel.line.destinationUserIdHint": "The bot's destination user ID (starts with `U`, 33 chars total). Find it in the LINE Developers Console under Messaging API → Bot info, or in the response of the /v2/bot/info endpoint.",
+  "channel.line.destinationUserIdHint": "The bot's destination user ID (starts with `U`, 33 chars total). Find it in the LINE Developers Console under Basic settings → Your user ID, or in the response of the /v2/bot/info endpoint.",
   "channel.line.destinationUserIdPlaceholder": "e.g. U1234567890abcdef1234567890abcdef",
   "channel.line.webhookManualSetup": "LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click \"Verify\", and enable \"Use webhook\".",
   "channel.openPlatform": "Open Platform",

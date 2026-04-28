@@ -12,11 +12,11 @@ Authoritative documentation:
 
 ## Credentials
 
-| Field                | Source                                                      | Notes                                                                                                      |
-| -------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `applicationId`      | LINE Developers Console → Messaging API tab → "Bot info"    | The bot's destination user ID (`U` + 32 hex chars). Also the `destination` field on every webhook payload. |
-| `channelAccessToken` | LINE Developers Console → Messaging API tab → "Issue token" | Long-lived. Bearer header for every API call.                                                              |
-| `channelSecret`      | LINE Developers Console → Basic settings tab                | Used to validate `X-Line-Signature` on every inbound POST. **Required**, no fallback.                      |
+| Field                | Source                                                        | Notes                                                                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `applicationId`      | LINE Developers Console → Basic settings tab → "Your user ID" | The bot's destination user ID (`U` + 32 hex chars). Also the `destination` field on every webhook payload. The LINE API reference confirms: _"You can access your user ID under the Basic settings tab of your channel"_ — there is no API to fetch it. |
+| `channelAccessToken` | LINE Developers Console → Messaging API tab → "Issue token"   | Long-lived. Bearer header for every API call.                                                                                                                                                                                                           |
+| `channelSecret`      | LINE Developers Console → Basic settings tab                  | Used to validate `X-Line-Signature` on every inbound POST. **Required**, no fallback.                                                                                                                                                                   |
 
 ## Webhook lifecycle
 
