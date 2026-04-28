@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
-import TaskScheduleConfig from '../AgentTaskDetail/TaskScheduleConfig';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
@@ -120,17 +119,12 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   );
 
   const scheduleNode = task.automationMode ? (
-    <TaskScheduleConfig
-      currentInterval={taskDetail?.heartbeat?.interval ?? 0}
-      taskId={task.identifier}
-    >
-      <TaskTriggerTag
-        automationMode={task.automationMode}
-        heartbeatInterval={taskDetail?.heartbeat?.interval}
-        schedulePattern={task.schedulePattern}
-        scheduleTimezone={task.scheduleTimezone}
-      />
-    </TaskScheduleConfig>
+    <TaskTriggerTag
+      automationMode={task.automationMode}
+      heartbeatInterval={taskDetail?.heartbeat?.interval}
+      schedulePattern={task.schedulePattern}
+      scheduleTimezone={task.scheduleTimezone}
+    />
   ) : null;
 
   const timeNode = time ? (
