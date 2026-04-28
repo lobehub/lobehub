@@ -37,7 +37,7 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
       align="center"
       gap={12}
       paddingBlock={12}
-      paddingInline={16}
+      paddingInline={12}
       variant="outlined"
       onClick={() => openPageDrawer(node.documentId)}
     >
@@ -93,7 +93,7 @@ const TaskArtifacts = memo(() => {
         </Block>
       </Flexbox>
       {isExpanded && (
-        <Flexbox gap={8}>
+        <Flexbox gap={8} paddingInline={12}>
           {items.map((node) => (
             <ArtifactCard key={node.documentId} node={node} />
           ))}
