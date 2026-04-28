@@ -973,6 +973,7 @@ describe('ConversationLifecycle actions', () => {
         const targetAgentId = 'agent-direct-target';
         const toolMessageId = 'tool-call-agent-result';
         const message = '@Agent B hello';
+        const createdThreadId = 'thread-created-by-send';
 
         const userMessage = createMockMessage({
           id: TEST_IDS.USER_MESSAGE_ID,
@@ -987,6 +988,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          createdThreadId,
           messages: [userMessage, assistantMessage],
           topics: [],
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
@@ -1077,6 +1079,7 @@ describe('ConversationLifecycle actions', () => {
               scope: 'sub_agent',
               subAgentId: targetAgentId,
             }),
+            inPortalThread: true,
             parentMessageId: toolMessageId,
             parentMessageType: 'tool',
           }),

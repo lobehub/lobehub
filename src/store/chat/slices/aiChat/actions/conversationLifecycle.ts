@@ -855,6 +855,7 @@ export class ConversationLifecycleActionImpl {
             assistantMessageId: data.assistantMessageId,
             context: execContext,
             directMentionRoute,
+            inPortalThread: !!data.createdThreadId,
             instruction: message,
             parentOperationId: operationId,
           });
@@ -929,12 +930,14 @@ export class ConversationLifecycleActionImpl {
   async #executeDirectMentionRoute({
     assistantMessageId,
     context,
+    inPortalThread,
     directMentionRoute,
     instruction,
     parentOperationId,
   }: {
     assistantMessageId: string;
     context: ConversationContext;
+    inPortalThread?: boolean;
     directMentionRoute: SingleAgentMentionDirectRoute;
     instruction: string;
     parentOperationId: string;
@@ -1038,6 +1041,7 @@ export class ConversationLifecycleActionImpl {
 
       await this.#get().internal_execAgentRuntime({
         context: { ...context, scope: 'sub_agent', subAgentId: targetAgentId },
+        inPortalThread,
         messages: messagesWithInstruction,
         parentMessageId: toolMessage.id,
         parentMessageType: 'tool',
