@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ClipboardList } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -21,11 +21,6 @@ const KNOWN_STATUSES: TaskStatus[] = [
 ];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-    border-radius: 12px;
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
   divider: css`
     inline-size: 100%;
     block-size: 1px;
@@ -65,11 +60,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     inline-size: 32px;
     block-size: 32px;
-    border-radius: 8px;
 
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
+    color: ${cssVar.colorTextSecondary};
   `,
   identifier: css`
     flex: none;
@@ -165,13 +157,7 @@ const Render = memo<TaskRenderProps>(({ children }) => {
   const titleText = parsed.name || parsed.identifier || '';
 
   return (
-    <Block
-      className={styles.container}
-      gap={12}
-      paddingBlock={14}
-      paddingInline={16}
-      variant={'outlined'}
-    >
+    <Flexbox gap={12}>
       <Flexbox horizontal align={'center'} gap={12}>
         <span className={styles.headerIcon}>
           <ClipboardList size={16} />
@@ -248,7 +234,7 @@ const Render = memo<TaskRenderProps>(({ children }) => {
           <RawSection items={parsed.reviewRubrics ?? []} label="Review rubrics" />
         </Flexbox>
       )}
-    </Block>
+    </Flexbox>
   );
 });
 
