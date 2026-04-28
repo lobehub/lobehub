@@ -228,7 +228,14 @@ export class TaskDetailSliceActionImpl {
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {
     await taskService.unpinDocument(taskId, documentId);
+    // taskId here is the source (owning) task — may be a descendant of the
+    // task currently open. The detail page's SWR cache is keyed by activeTaskId,
+    // so revalidate that too; otherwise the artifact stays visible until reload.
     await this.internal_refreshTaskDetail(taskId);
+    const activeTaskId = this.#get().activeTaskId;
+    if (activeTaskId && activeTaskId !== taskId) {
+      await this.internal_refreshTaskDetail(activeTaskId);
+    }
   };
 
   updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
