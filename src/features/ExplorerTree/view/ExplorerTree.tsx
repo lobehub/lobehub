@@ -282,6 +282,53 @@ function ExplorerTreeInner<TData>(
     const prev = adapterRef.current;
     if (arrayEqual(next.paths, prev.paths)) {
       adapterRef.current = next; // keep metadata fresh (name/data) even if paths identical
+      const selectedIds = propsRef.current.selectedIds;
+      if (selectedIds) {
+        const nextSelectedPaths = remapIdsToPaths(selectedIds, next.pathById);
+        const nextSelectedIds = remapPathsToIds(nextSelectedPaths, next.idByPath);
+        const currentSelectedPaths = model.getSelectedPaths();
+        const currentSelectedIds = remapPathsToIds(currentSelectedPaths, next.idByPath);
+        lastEmittedSelectedIds.current = nextSelectedIds;
+        if (!arrayEqual(currentSelectedIds, nextSelectedIds)) {
+          const nextSelectedPathSet = new Set(nextSelectedPaths);
+          suppressModelEventsRef.current = true;
+          try {
+            for (const path of currentSelectedPaths) {
+              if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
+            }
+            const currentSelectedPathSet = new Set(currentSelectedPaths);
+            for (const path of nextSelectedPaths) {
+              if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+            }
+          } finally {
+            suppressModelEventsRef.current = false;
+          }
+        }
+      }
+
+      const expandedIds = propsRef.current.expandedIds;
+      if (expandedIds) {
+        const nextExpandedIdSet = new Set(expandedIds);
+        const nextExpandedIds: string[] = [];
+        const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
+        for (const [id, path] of next.pathById) {
+          const dir = asDirectory(model.getItem(path));
+          if (!dir) continue;
+          const shouldExpand = nextExpandedIdSet.has(id);
+          if (shouldExpand) nextExpandedIds.push(id);
+          directoryEntries.push({ dir, shouldExpand });
+        }
+        lastExpandedSignatureRef.current = nextExpandedIds.slice().sort().join('\n');
+        suppressModelEventsRef.current = true;
+        try {
+          for (const { dir, shouldExpand } of directoryEntries) {
+            if (shouldExpand && !dir.isExpanded()) dir.expand();
+            else if (!shouldExpand && dir.isExpanded()) dir.collapse();
+          }
+        } finally {
+          suppressModelEventsRef.current = false;
+        }
+      }
       return;
     }
     if (renamingRef.current) return; // defer reset while a rename is pending
