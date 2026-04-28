@@ -182,9 +182,24 @@ export default {
   'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
   'channel.serverId': 'Default Server ID',
   'channel.serverIdHint': 'Default server / guild AI tools act on; not used for access control',
+  'channel.serverIdHint.discord':
+    'Enable Developer Mode (Settings → Advanced), then right-click the server icon → Copy Server ID.',
+  'channel.serverIdHint.slack':
+    'Workspace ID (starts with T). Find it under Settings & administration → Workspace settings, or in the workspace URL.',
   'channel.userId': 'Your Platform User ID',
   'channel.userIdHint':
     'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist',
+  'channel.userIdMissingDesc':
+    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Fill it in under Advanced Settings.",
+  'channel.userIdMissingTitle': 'Add your platform User ID',
+  'channel.userIdHint.discord':
+    'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
+  'channel.userIdHint.feishu':
+    'Open your app on the Feishu / Lark Open Platform → Permissions, then look up your Open ID.',
+  'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
+  'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
+  'channel.userIdHint.telegram':
+    'Send any message to @userinfobot in Telegram — it replies with your numeric User ID.',
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',

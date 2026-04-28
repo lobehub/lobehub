@@ -168,6 +168,7 @@ const TaskActivities = memo(() => {
                     brief={brief}
                     key={key}
                     onAfterAddComment={refreshActiveTask}
+                    onAfterDelete={refreshActiveTask}
                     onAfterResolve={refreshActiveTask}
                   />
                 );

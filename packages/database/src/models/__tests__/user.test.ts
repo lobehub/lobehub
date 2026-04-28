@@ -60,6 +60,7 @@ describe('UserModel', () => {
       await serverDB.insert(userSettings).values({
         id: userId,
         general: { fontSize: 14 },
+        notification: { inbox: { enabled: false } },
         tts: { voice: 'default' },
       });
 
@@ -70,6 +71,7 @@ describe('UserModel', () => {
       expect(result.fullName).toBe('Test User');
       expect(result.settings.general).toEqual({ fontSize: 14 });
       expect(result.settings.tts).toEqual({ voice: 'default' });
+      expect(result.settings.notification).toEqual({ inbox: { enabled: false } });
     });
 
     it('should throw UserNotFoundError for non-existent user', async () => {

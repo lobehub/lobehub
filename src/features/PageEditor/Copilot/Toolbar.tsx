@@ -27,7 +27,7 @@ const CopilotToolbar = memo(() => {
 
   const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
 
-  const [toggleRightPanel] = useGlobalStore((s) => [s.toggleRightPanel]);
+  const [togglePageAgentPanel] = useGlobalStore((s) => [s.togglePageAgentPanel]);
 
   const isLoadingTopics = topics === undefined;
   const hideHistory = !isLoadingTopics && topics.length === 0;
@@ -102,7 +102,7 @@ const CopilotToolbar = memo(() => {
           <ActionIcon
             icon={PanelRightCloseIcon}
             size={DESKTOP_HEADER_ICON_SIZE}
-            onClick={() => toggleRightPanel()}
+            onClick={() => togglePageAgentPanel()}
           />
         </>
       }

@@ -1,4 +1,3 @@
-import { type ModelParamsSchema } from '../standard-parameters';
 import {
   type AIChatModelCard,
   type AIEmbeddingModelCard,
@@ -8,16 +7,7 @@ import {
   type AITTSModelCard,
   type AIVideoModelCard,
 } from '../types/aiModel';
-import { gptImage2Schema } from './lobehub';
-
-export const gptImage1ParamsSchema: ModelParamsSchema = {
-  imageUrls: { default: [] },
-  prompt: { default: '' },
-  size: {
-    default: 'auto',
-    enum: ['auto', '1024x1024', '1536x1024', '1024x1536'],
-  },
-};
+import { gptImage1Schema, gptImage2Schema } from './lobehub';
 
 export const openaiChatModels: AIChatModelCard[] = [
   {
@@ -1634,7 +1624,7 @@ export const openaiImageModels: AIImageModelCard[] = [
       'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
     displayName: 'GPT Image 1.5',
     id: 'gpt-image-1.5',
-    parameters: gptImage1ParamsSchema,
+    parameters: gptImage1Schema,
     pricing: {
       approximatePricePerImage: 0.034,
       units: [
@@ -1653,7 +1643,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     description: 'ChatGPT native multimodal image generation model.',
     displayName: 'GPT Image 1',
     id: 'gpt-image-1',
-    parameters: gptImage1ParamsSchema,
+    parameters: gptImage1Schema,
     pricing: {
       approximatePricePerImage: 0.042,
       units: [
@@ -1671,7 +1661,7 @@ export const openaiImageModels: AIImageModelCard[] = [
       'A lower-cost GPT Image 1 variant with native text and image input and image output.',
     displayName: 'GPT Image 1 Mini',
     id: 'gpt-image-1-mini',
-    parameters: gptImage1ParamsSchema,
+    parameters: gptImage1Schema,
     pricing: {
       approximatePricePerImage: 0.011,
       units: [

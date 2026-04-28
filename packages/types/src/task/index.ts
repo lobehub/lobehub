@@ -36,6 +36,7 @@ export interface WorkspaceDocNode {
   fileType: string;
   parentId: string | null;
   pinnedBy: string;
+  sourceTaskId: string;
   sourceTaskIdentifier: string | null;
   title: string;
   updatedAt: string | null;
@@ -186,6 +187,7 @@ export interface TaskDetailWorkspaceNode {
   documentId: string;
   fileType?: string;
   size?: number | null;
+  sourceTaskId?: string;
   sourceTaskIdentifier?: string | null;
   title?: string;
 }

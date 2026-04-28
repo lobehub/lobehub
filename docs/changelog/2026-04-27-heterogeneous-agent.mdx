@@ -1,0 +1,29 @@
+---
+title: Coding Agent — Claude Code & Codex on Desktop
+description: >-
+  Claude Code and Codex graduate to first-class desktop runtimes, alongside a
+  new Agent Signal runtime and a wave of flagship models.
+tags:
+  - Heterogeneous Agent
+  - Desktop
+  - Models
+---
+
+# Claude Code & Codex on Desktop
+
+## Features
+
+- Topic remembers its own scroll position
+- User message stays pinned to the viewport top with long messages folded, the last user message can be edited and resent inline, and follow-up sends queue cleanly during a concurrent turn.
+- Delegating 3rd party coding agents such as Claude Code and Codex
+- Quick chat and capture your screen and ask LobeHun with desktop app
+- New models: GPT-5.5, DeepSeek V4 Flash and Pro with a reasoning-effort slider, LobeHub-hosted gpt-image-2, Kimi K2.6, MiMo-V2.5 and Pro
+- New providers: OpenCode Zen and OpenCode Go.
+
+## Improvements and fixes
+
+- Disabled markdown streaming on the first assistant block to avoid mid-stream layout shifts.
+- Conversation no longer repins to the bottom after a manual scroll.
+- Tool inspectors render correctly for Codex and heterogeneous-agent follow-ups.
+- FileEditor migrated from antd Modal to base-ui Modal for consistent focus and keyboard behavior.
+- QStash heartbeat self-reschedules to keep long-running tasks alive.

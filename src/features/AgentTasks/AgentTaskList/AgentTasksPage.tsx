@@ -55,7 +55,7 @@ const AgentTasksPage = memo(() => {
         left={<Breadcrumb />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {inlineCollapsed && (
+            {(inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
             )}
             <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />

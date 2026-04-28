@@ -6,6 +6,7 @@ import {
   type DropdownItem,
   DropdownMenu,
   Flexbox,
+  stopPropagation,
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
@@ -72,7 +73,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       disabled: !activity.id,
       icon: Copy,
       key: 'copy',
-      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy run ID' }),
+      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy topic ID' }),
       onClick: handleCopyId,
     },
   ];
@@ -132,15 +133,11 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
               {startedAt}
             </Text>
           )}
-          <DropdownMenu items={menuItems}>
-            <ActionIcon
-              icon={MoreHorizontal}
-              size={'small'}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            />
-          </DropdownMenu>
+          <Flexbox onClick={stopPropagation}>
+            <DropdownMenu items={menuItems}>
+              <ActionIcon icon={MoreHorizontal} size={'small'} />
+            </DropdownMenu>
+          </Flexbox>
         </Flexbox>
       </Flexbox>
 

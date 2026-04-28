@@ -134,15 +134,90 @@ describe('TaskConfigSliceAction', () => {
   });
 
   describe('setAutomationMode', () => {
-    it('should optimistically update and call update with automationMode', async () => {
+    it('should seed default heartbeat interval when first enabling', async () => {
       const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
 
       expect(useTaskStore.getState().taskDetailMap['T-1'].automationMode).toBe('heartbeat');
-      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'heartbeat' });
+      expect(taskService.update).toHaveBeenCalledWith('T-1', {
+        automationMode: 'heartbeat',
+        heartbeatInterval: 600,
+      });
       expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+    });
+
+    it('should preserve existing heartbeat interval when re-entering heartbeat mode', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            heartbeat: { interval: 1800 },
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'heartbeat' });
+    });
+
+    it('should seed default cron pattern + local timezone when entering schedule mode', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'schedule');
+
+      const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      expect(taskService.update).toHaveBeenCalledWith('T-1', {
+        automationMode: 'schedule',
+        schedulePattern: '0 9 * * *',
+        scheduleTimezone: localTz,
+      });
+    });
+
+    it('should override DB-default UTC timezone on first-time schedule enable', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      // The tasks table has `schedule_timezone TEXT DEFAULT 'UTC'`, so a row that
+      // has never had its schedule configured still surfaces timezone='UTC'.
+      // First-time enable (no pattern yet) must override with the user's local tz.
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            schedule: { pattern: null, timezone: 'UTC' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'schedule');
+
+      const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      expect(taskService.update).toHaveBeenCalledWith('T-1', {
+        automationMode: 'schedule',
+        schedulePattern: '0 9 * * *',
+        scheduleTimezone: localTz,
+      });
+    });
+
+    it('should preserve user-chosen timezone when re-entering schedule mode', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            schedule: { pattern: '0 8 * * 1', timezone: 'Asia/Shanghai' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'schedule');
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'schedule' });
     });
 
     it('should accept null to disable automation', async () => {

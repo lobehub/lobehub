@@ -7,10 +7,13 @@ import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
+import PageModal from './PageModal';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
@@ -35,6 +38,11 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
   const isLoading = useTaskStore(taskDetailSelectors.isTaskDetailLoading);
   const saveStatus = useTaskStore(taskDetailSelectors.taskSaveStatus);
 
+  const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
+    systemStatusSelectors.showTaskAgentPanel(s),
+    s.toggleTaskAgentPanel,
+  ]);
+
   useEffect(() => {
     setActiveTaskId(taskId);
     return () => setActiveTaskId(undefined);
@@ -58,13 +66,19 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
       <NavHeader
-        right={<ToggleRightPanelButton hideWhenExpanded />}
         left={
           <>
             <Breadcrumb taskId={taskId} />
             <TaskDetailHeaderActions />
             {saveStatus === 'saving' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
           </>
+        }
+        right={
+          <ToggleRightPanelButton
+            hideWhenExpanded
+            expand={showTaskAgentPanel}
+            onToggle={() => toggleTaskAgentPanel()}
+          />
         }
         styles={{
           left: {
@@ -104,6 +118,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
         </WideScreenContainer>
       </Flexbox>
       <TopicChatDrawer />
+      <PageModal />
     </Flexbox>
   );
 });

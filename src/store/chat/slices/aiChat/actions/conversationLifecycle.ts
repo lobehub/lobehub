@@ -1,17 +1,23 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
+import type { CallAgentParams, CallAgentState } from '@lobechat/builtin-tool-agent-management';
+import {
+  AgentManagementApiName,
+  AgentManagementIdentifier,
+  createCallAgentManifest,
+} from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isDesktop, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
-import {
-  type ChatImageItem,
-  type ChatThreadType,
-  type ChatVideoItem,
-  type ConversationContext,
-  type SendMessageParams,
-  type SendMessageServerResponse,
-  type UIChatMessage,
+import type {
+  ChatImageItem,
+  ChatThreadType,
+  ChatToolPayload,
+  ChatVideoItem,
+  ConversationContext,
+  SendMessageParams,
+  SendMessageServerResponse,
+  UIChatMessage,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
@@ -19,12 +25,13 @@ import { t } from 'i18next';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { message as antdMessage } from '@/components/AntdStaticMethods';
+import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
-import { getAgentStoreState } from '@/store/agent';
+import { getAgentStoreState, useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
@@ -48,13 +55,14 @@ import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { topicMapKey } from '../../../utils/topicMapKey';
 import { AI_RUNTIME_OPERATION_TYPES } from '../../operation/types';
+import type { CommandSendOverrides, SingleAgentMentionDirectRoute } from './commandBus';
 import {
-  type CommandSendOverrides,
   hasNonActionContent,
   injectReferTopicNode,
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
+  parseSingleAgentMentionDirectRoute,
   processCommands,
 } from './commandBus';
 /**
@@ -231,7 +239,11 @@ export class ConversationLifecycleActionImpl {
       isGroupSupervisor = group?.supervisorAgentId === agentId;
     }
     // In non-group context, @agent mentions make the current agent act as supervisor
-    const hasMentionedAgents = !context.groupId && mentionedAgents.length > 0;
+    const directMentionRoute = !context.groupId
+      ? parseSingleAgentMentionDirectRoute(editorData)
+      : undefined;
+    const hasMentionedAgents =
+      !context.groupId && !directMentionRoute && mentionedAgents.length > 0;
 
     const operationContext = {
       ...context,
@@ -870,48 +882,59 @@ export class ConversationLifecycleActionImpl {
 
     // ── AI execution (client mode) ──
     {
-      const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
-        messageMapKey(execContext),
-      )(this.#get());
-
       try {
-        // When agents are @mentioned, inject a slim callAgent-only manifest
-        // so the AI can delegate directly without activating the full agent-management tool
-        const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
-        const activeTopicDocumentInitialContext =
-          await resolveActiveTopicDocumentInitialContext(execContext);
+        if (directMentionRoute) {
+          await this.#executeDirectMentionRoute({
+            assistantMessageId: data.assistantMessageId,
+            context: execContext,
+            directMentionRoute,
+            inPortalThread: !!data.createdThreadId,
+            instruction: message,
+            parentOperationId: operationId,
+          });
+        } else {
+          const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
+            messageMapKey(execContext),
+          )(this.#get());
 
-        const hasInitialContext = hasMentionedAgents || !!injectedManifests;
+          // When agents are @mentioned, inject a slim callAgent-only manifest
+          // so the AI can delegate directly without activating the full agent-management tool
+          const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
+          const activeTopicDocumentInitialContext =
+            await resolveActiveTopicDocumentInitialContext(execContext);
 
-        // Note: selectedSkills and selectedTools are NOT passed here — they are
-        // persisted into the user message content above so they survive across
-        // turns without re-injection.
-        const agentRuntimeInitialContext = hasInitialContext
-          ? {
-              initialContext: {
-                // Only inject mentionedAgents in non-group context to avoid
-                // group @member mentions (including ALL_MEMBERS) leaking into agent-management
-                ...(hasMentionedAgents ? { mentionedAgents } : undefined),
-                ...(injectedManifests ? { injectedManifests } : undefined),
-              },
-              phase: 'init' as const,
-            }
-          : undefined;
-        const mergedAgentRuntimeInitialContext = mergeAgentRuntimeInitialContexts(
-          activeTopicDocumentInitialContext,
-          agentRuntimeInitialContext,
-        );
+          const hasInitialContext = hasMentionedAgents || !!injectedManifests;
 
-        await internal_execAgentRuntime({
-          context: execContext,
-          initialContext: mergedAgentRuntimeInitialContext,
-          messages: displayMessages,
-          parentMessageId: data.assistantMessageId,
-          parentMessageType: 'assistant',
-          parentOperationId: operationId,
-          inPortalThread: !!data.createdThreadId,
-          skipCreateFirstMessage: true,
-        });
+          // Note: selectedSkills and selectedTools are NOT passed here — they are
+          // persisted into the user message content above so they survive across
+          // turns without re-injection.
+          const agentRuntimeInitialContext = hasInitialContext
+            ? {
+                initialContext: {
+                  // Only inject mentionedAgents in non-group context to avoid
+                  // group @member mentions (including ALL_MEMBERS) leaking into agent-management
+                  ...(hasMentionedAgents ? { mentionedAgents } : undefined),
+                  ...(injectedManifests ? { injectedManifests } : undefined),
+                },
+                phase: 'init' as const,
+              }
+            : undefined;
+          const mergedAgentRuntimeInitialContext = mergeAgentRuntimeInitialContexts(
+            activeTopicDocumentInitialContext,
+            agentRuntimeInitialContext,
+          );
+
+          await internal_execAgentRuntime({
+            context: execContext,
+            initialContext: mergedAgentRuntimeInitialContext,
+            messages: displayMessages,
+            parentMessageId: data.assistantMessageId,
+            parentMessageType: 'assistant',
+            parentOperationId: operationId,
+            inPortalThread: !!data.createdThreadId,
+            skipCreateFirstMessage: true,
+          });
+        }
 
         const userFiles = dbMessageSelectors
           .dbUserFiles(this.#get())
@@ -936,6 +959,154 @@ export class ConversationLifecycleActionImpl {
       userMessageId: data.userMessageId,
     };
   };
+
+  async #executeDirectMentionRoute({
+    assistantMessageId,
+    context,
+    inPortalThread,
+    directMentionRoute,
+    instruction,
+    parentOperationId,
+  }: {
+    assistantMessageId: string;
+    context: ConversationContext;
+    inPortalThread?: boolean;
+    directMentionRoute: SingleAgentMentionDirectRoute;
+    instruction: string;
+    parentOperationId: string;
+  }): Promise<void> {
+    const targetAgentId = directMentionRoute.agent.id;
+    const callAgentParams: CallAgentParams = {
+      agentId: targetAgentId,
+      instruction,
+    };
+    const toolPayload: ChatToolPayload = {
+      apiName: AgentManagementApiName.callAgent,
+      arguments: JSON.stringify(callAgentParams),
+      id: `call_agent_${nanoid()}`,
+      identifier: AgentManagementIdentifier,
+      source: 'builtin',
+      type: 'builtin',
+    };
+    const callAgentState: CallAgentState = {
+      agentId: targetAgentId,
+      instruction,
+      mode: 'speak',
+    };
+    const toolResultContent = `Called agent "${targetAgentId}" to respond.`;
+
+    const { operationId } = this.#get().startOperation({
+      context: { ...context, messageId: assistantMessageId },
+      label: 'Direct Agent Mention',
+      metadata: {
+        apiName: AgentManagementApiName.callAgent,
+        targetAgentId,
+        tool_call_id: toolPayload.id,
+      },
+      parentOperationId,
+      type: 'toolCalling',
+    });
+
+    try {
+      this.#get().internal_dispatchMessage(
+        {
+          id: assistantMessageId,
+          type: 'updateMessage',
+          value: { content: '' },
+        },
+        { operationId },
+      );
+      await this.#get().optimisticUpdateMessageContent(
+        assistantMessageId,
+        '',
+        { tools: [toolPayload] },
+        { operationId },
+      );
+
+      const toolMessage = await this.#get().optimisticCreateMessage(
+        {
+          agentId: context.agentId!,
+          content: toolResultContent,
+          groupId: context.groupId,
+          parentId: assistantMessageId,
+          plugin: toolPayload,
+          pluginState: callAgentState,
+          role: 'tool',
+          threadId: context.threadId,
+          tool_call_id: toolPayload.id,
+          topicId: context.topicId ?? undefined,
+        },
+        { operationId },
+      );
+
+      if (!toolMessage) {
+        throw new Error(
+          `[directMentionRoute] Failed to create callAgent tool message for agentId: ${targetAgentId}`,
+        );
+      }
+
+      const preloadError = await this.#preloadDirectMentionAgentConfig(targetAgentId);
+      if (preloadError) {
+        await this.#get().optimisticUpdateMessageContent(toolMessage.id, preloadError, undefined, {
+          operationId,
+        });
+        this.#get().completeOperation(operationId);
+        return;
+      }
+
+      const currentMessages = dbMessageSelectors.getDbMessagesByKey(messageMapKey(context))(
+        this.#get(),
+      );
+      const trimmedInstruction = instruction.trim();
+      const now = Date.now();
+      const messagesWithInstruction = trimmedInstruction
+        ? [
+            ...currentMessages,
+            {
+              content: `<speaker name="Supervisor" />\n${instruction}`,
+              createdAt: now,
+              id: `virtual_speak_instruction_${now}`,
+              role: 'user' as const,
+              updatedAt: now,
+            },
+          ]
+        : currentMessages;
+
+      await this.#get().internal_execAgentRuntime({
+        context: { ...context, scope: 'sub_agent', subAgentId: targetAgentId },
+        inPortalThread,
+        messages: messagesWithInstruction,
+        parentMessageId: toolMessage.id,
+        parentMessageType: 'tool',
+        parentOperationId: operationId,
+      });
+
+      this.#get().completeOperation(operationId);
+    } catch (error) {
+      this.#get().failOperation(operationId, {
+        type: 'DirectMentionRouteError',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  async #preloadDirectMentionAgentConfig(agentId: string): Promise<string | undefined> {
+    const targetAgentExists = useAgentStore.getState().agentMap[agentId];
+    if (targetAgentExists) return;
+
+    try {
+      const config = await agentService.getAgentConfigById(agentId);
+      if (!config) {
+        return `Agent "${agentId}" not found in your workspace. Please check the agent ID and try again.`;
+      }
+
+      useAgentStore.getState().internal_dispatchAgentMap(agentId, config);
+    } catch (error) {
+      console.error('[directMentionRoute] Failed to load agent config:', error);
+      return `Failed to load agent "${agentId}": ${(error as Error).message}`;
+    }
+  }
 
   continueGenerationMessage = async (id: string, messageId: string): Promise<void> => {
     const message = dbMessageSelectors.getDbMessageById(id)(this.#get());

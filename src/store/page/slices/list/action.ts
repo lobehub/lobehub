@@ -1,3 +1,4 @@
+import { type DocumentItem } from '@lobechat/database/schemas';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
@@ -5,10 +6,29 @@ import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
 import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
-import { type LobeDocument } from '@/types/document';
+import { DocumentSourceType, type LobeDocument } from '@/types/document';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type PageStore } from '../../store';
+
+const documentItemToLobeDocument = (document: DocumentItem): LobeDocument => ({
+  content: document.content || null,
+  createdAt: document.createdAt ? new Date(document.createdAt) : new Date(),
+  editorData:
+    typeof document.editorData === 'string'
+      ? JSON.parse(document.editorData)
+      : document.editorData || null,
+  fileType: document.fileType,
+  filename: document.title || document.filename || 'Untitled',
+  id: document.id,
+  metadata: document.metadata || {},
+  source: 'document',
+  sourceType: DocumentSourceType.EDITOR,
+  title: document.title || '',
+  totalCharCount: document.content?.length || 0,
+  totalLineCount: 0,
+  updatedAt: document.updatedAt ? new Date(document.updatedAt) : new Date(),
+});
 
 const n = setNamespace('page/list');
 
@@ -121,6 +141,17 @@ export class ListActionImpl {
 
   setShowOnlyPagesNotInLibrary = (show: boolean): void => {
     this.#set({ showOnlyPagesNotInLibrary: show }, false, n('setShowOnlyPagesNotInLibrary'));
+  };
+
+  upsertDocument = (document: DocumentItem): void => {
+    const lobeDoc = documentItemToLobeDocument(document);
+    const { documents } = this.#get();
+    const exists = documents?.some((doc) => doc.id === document.id);
+    this.#get().internal_dispatchDocuments(
+      exists
+        ? { document: lobeDoc, id: document.id, type: 'updateDocument' }
+        : { document: lobeDoc, type: 'addDocument' },
+    );
   };
 
   useFetchDocuments = (): SWRResponse<LobeDocument[]> => {

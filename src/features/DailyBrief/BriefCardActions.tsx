@@ -2,7 +2,7 @@ import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
@@ -46,17 +46,10 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     const { t } = useTranslation('home');
     const [commentMode, setCommentMode] = useState<CommentMode | null>(null);
     const [loadingKey, setLoadingKey] = useState<string | null>(null);
-    const [feedbackSent, setFeedbackSent] = useState(false);
-    const { addComment, resolveBrief } = useBriefStore(
-      (s) => ({ addComment: s.addComment, resolveBrief: s.resolveBrief }),
+    const { resolveBrief, submitFeedback } = useBriefStore(
+      (s) => ({ resolveBrief: s.resolveBrief, submitFeedback: s.submitFeedback }),
       shallow,
     );
-
-    useEffect(() => {
-      if (!feedbackSent) return;
-      const timer = setTimeout(() => setFeedbackSent(false), 1500);
-      return () => clearTimeout(timer);
-    }, [feedbackSent]);
 
     const isResult = briefType === 'result';
 
@@ -99,21 +92,29 @@ const BriefCardActions = memo<BriefCardActionsProps>(
           } finally {
             setLoadingKey(null);
           }
-        } else {
-          if (taskId) {
-            await addComment(briefId, taskId, text);
-            await onAfterAddComment?.();
-          }
-          setFeedbackSent(true);
+        } else if (taskId) {
+          // Free-form feedback must resolve the brief (so the heartbeat
+          // re-arm gate stops blocking on this urgent brief) AND re-run
+          // the task so the agent picks up `resolvedComment` next turn.
+          await submitFeedback(briefId, taskId, text);
+          await onAfterAddComment?.();
+          await onAfterResolve?.();
         }
 
         setCommentMode(null);
       },
-      [addComment, briefId, commentMode, resolveBrief, taskId, onAfterResolve, onAfterAddComment],
+      [
+        briefId,
+        commentMode,
+        resolveBrief,
+        submitFeedback,
+        taskId,
+        onAfterResolve,
+        onAfterAddComment,
+      ],
     );
 
     if (resolvedAction) return <SuccessTag label={t('brief.resolved')} />;
-    if (feedbackSent) return <SuccessTag label={t('brief.feedbackSent')} />;
     if (commentMode) {
       return <CommentInput onCancel={() => setCommentMode(null)} onSubmit={handleCommentSubmit} />;
     }

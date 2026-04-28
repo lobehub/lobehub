@@ -192,7 +192,11 @@ export class TaskDetailSliceActionImpl {
   setActiveTaskId = (taskId?: string): void => {
     if (this.#get().activeTaskId === taskId) return;
     this.#set(
-      { activeTaskId: taskId, activeTopicDrawerTopicId: undefined },
+      {
+        activePageModalId: undefined,
+        activeTaskId: taskId,
+        activeTopicDrawerTopicId: undefined,
+      },
       false,
       'setActiveTaskId',
     );
@@ -208,9 +212,30 @@ export class TaskDetailSliceActionImpl {
     this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
   };
 
+  openPageModal = (pageId: string): void => {
+    if (this.#get().activePageModalId === pageId) return;
+    this.#set(
+      { activePageModalId: pageId, activeTopicDrawerTopicId: undefined },
+      false,
+      'openPageModal',
+    );
+  };
+
+  closePageModal = (): void => {
+    if (!this.#get().activePageModalId) return;
+    this.#set({ activePageModalId: undefined }, false, 'closePageModal');
+  };
+
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {
     await taskService.unpinDocument(taskId, documentId);
+    // taskId here is the source (owning) task — may be a descendant of the
+    // task currently open. The detail page's SWR cache is keyed by activeTaskId,
+    // so revalidate that too; otherwise the artifact stays visible until reload.
     await this.internal_refreshTaskDetail(taskId);
+    const activeTaskId = this.#get().activeTaskId;
+    if (activeTaskId && activeTaskId !== taskId) {
+      await this.internal_refreshTaskDetail(activeTaskId);
+    }
   };
 
   updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {

@@ -60,6 +60,12 @@ export interface FieldSchema {
   properties?: FieldSchema[];
   required?: boolean;
   /**
+   * i18n key for an extra `?` tooltip rendered next to the field label. Use
+   * for "how to find this value" guidance that's too long for the inline
+   * `description` (e.g. platform-specific UI paths for fetching User IDs).
+   */
+  tooltip?: string;
+  /**
    * Field type, maps to UI component:
    * - 'string' → Input
    * - 'password' → Password input

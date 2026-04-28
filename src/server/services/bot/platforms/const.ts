@@ -11,19 +11,59 @@ export const displayToolCallsField: FieldSchema = {
   type: 'boolean',
 };
 
-export const serverIdField: FieldSchema = {
-  key: 'serverId',
-  description: 'channel.serverIdHint',
-  label: 'channel.serverId',
-  type: 'string',
+/**
+ * Per-platform "how to find this ID" tooltip keys. Each platform paints a
+ * different path to the value the operator has to paste — Discord wants
+ * Developer Mode + right-click, Telegram wants @userinfobot, Slack uses
+ * profile menus, etc. The factory below picks the right key so the field's
+ * `?` tooltip renders concrete steps; the inline `description` stays
+ * platform-agnostic so it doesn't compete with the tooltip.
+ *
+ * Platforms not listed render no tooltip — only the generic description.
+ */
+const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  discord: 'channel.userIdHint.discord',
+  // Feishu and Lark share `sharedSchema`, which always passes 'feishu' — the
+  // tooltip copy mentions both products so it reads naturally for either.
+  feishu: 'channel.userIdHint.feishu',
+  qq: 'channel.userIdHint.qq',
+  slack: 'channel.userIdHint.slack',
+  telegram: 'channel.userIdHint.telegram',
 };
 
-export const userIdField: FieldSchema = {
-  key: 'userId',
-  description: 'channel.userIdHint',
-  label: 'channel.userId',
-  type: 'string',
+const SERVER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  discord: 'channel.serverIdHint.discord',
+  slack: 'channel.serverIdHint.slack',
 };
+
+/**
+ * Build the operator's "Default Server ID" field for `platform`. The inline
+ * description stays generic; platform-specific "how to find" guidance lives
+ * in the `?` tooltip next to the label.
+ */
+export function makeServerIdField(platform?: string): FieldSchema {
+  return {
+    key: 'serverId',
+    description: 'channel.serverIdHint',
+    label: 'channel.serverId',
+    tooltip: platform ? SERVER_ID_TOOLTIP_BY_PLATFORM[platform] : undefined,
+    type: 'string',
+  };
+}
+
+/**
+ * Build the operator's "Your Platform User ID" field for `platform`. See
+ * {@link makeServerIdField} — same factory pattern, swapped vocabulary.
+ */
+export function makeUserIdField(platform?: string): FieldSchema {
+  return {
+    key: 'userId',
+    description: 'channel.userIdHint',
+    label: 'channel.userId',
+    tooltip: platform ? USER_ID_TOOLTIP_BY_PLATFORM[platform] : undefined,
+    type: 'string',
+  };
+}
 
 // ---------- Bot reply locale ----------
 

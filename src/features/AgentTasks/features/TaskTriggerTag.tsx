@@ -1,16 +1,14 @@
 import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import type { TFunction } from 'i18next';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const formatInterval = (seconds: number, t: TFunction<'chat'>) => {
-  if (seconds < 60) return t('taskSchedule.unit.second', { count: seconds });
-  if (seconds % 3600 === 0) return t('taskSchedule.unit.hour', { count: seconds / 3600 });
-  if (seconds % 60 === 0) return t('taskSchedule.unit.minute', { count: seconds / 60 });
-  return t('taskSchedule.unit.second', { count: seconds });
-};
+import {
+  formatIntervalLabel,
+  formatScheduleDescription,
+  formatTimezoneName,
+} from '@/features/AgentTasks/AgentTaskDetail/scheduler/helpers';
 
 interface TaskTriggerTagProps {
   heartbeatInterval?: number | null;
@@ -21,40 +19,60 @@ interface TaskTriggerTagProps {
 
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
   ({ heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
-    const { t } = useTranslation('chat');
-    const data = useMemo(() => {
+    const { t, i18n } = useTranslation('chat');
+    const data = useMemo<
+      | {
+          primary: string;
+          secondary?: string;
+          tooltip: string;
+        }
+      | undefined
+    >(() => {
       if (schedulePattern) {
-        const timezone = scheduleTimezone ? ` (${scheduleTimezone})` : '';
+        const primary = formatScheduleDescription(schedulePattern, t);
+        const tzName = scheduleTimezone
+          ? formatTimezoneName(scheduleTimezone, i18n.language)
+          : undefined;
         return {
-          tooltip: t('taskSchedule.tag.schedule', {
-            schedule: schedulePattern,
-            timezone,
-          }),
-          text: `${schedulePattern} ${timezone}`,
+          primary,
+          secondary: tzName,
+          tooltip: tzName ? `${primary} · ${tzName}` : primary,
         };
       }
 
       if (heartbeatInterval && heartbeatInterval > 0) {
         const every = t('taskSchedule.tag.every', {
-          interval: formatInterval(heartbeatInterval, t),
+          interval: formatIntervalLabel(heartbeatInterval, t),
         });
         return {
+          primary: every,
           tooltip: t('taskSchedule.tag.heartbeat', { every }),
-          text: every,
         };
       }
 
       return undefined;
-    }, [heartbeatInterval, schedulePattern, scheduleTimezone, t]);
+    }, [heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
     if (mode === 'inline') {
       return (
         <Tooltip title={data?.tooltip}>
-          <Flexbox horizontal align="center" gap={10}>
-            <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
-            <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
-              {data?.text ?? t('taskSchedule.tag.add')}
-            </Text>
+          <Flexbox horizontal align="flex-start" gap={10}>
+            <Icon
+              color={cssVar.colorTextDescription}
+              icon={ClockIcon}
+              size={16}
+              style={{ marginTop: 2 }}
+            />
+            <Flexbox gap={2}>
+              <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
+                {data?.primary ?? t('taskSchedule.tag.add')}
+              </Text>
+              {data?.secondary && (
+                <Text style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>
+                  {data.secondary}
+                </Text>
+              )}
+            </Flexbox>
           </Flexbox>
         </Tooltip>
       );
@@ -62,6 +80,8 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
 
     if (!data) return null;
 
+    // Pill height (24px) only fits one line — drop the timezone here; the
+    // tooltip surfaces it on hover.
     return (
       <Tooltip title={data.tooltip}>
         <Block
@@ -75,7 +95,7 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
         >
           <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
           <Text fontSize={12} type={'secondary'}>
-            {data.text}
+            {data.primary}
           </Text>
         </Block>
       </Tooltip>

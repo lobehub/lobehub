@@ -1,45 +1,90 @@
 import type { TaskDetailWorkspaceNode } from '@lobechat/types';
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { ConfigProvider, Tree } from 'antd';
-import type { DataNode } from 'antd/es/tree';
+import {
+  ActionIcon,
+  Block,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
+import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import { ChevronDown, FileText, FolderClosed, Package } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from '../shared/style';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 
-const formatSize = (size?: number | null): string | undefined => {
-  if (size == null) return undefined;
-  if (size < 1000) return `${size} chars`;
-  return `${(size / 1000).toFixed(1)}k chars`;
-};
+const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspaceNode[] =>
+  nodes.flatMap((node) => [
+    node,
+    ...(node.children?.length ? flattenWorkspace(node.children) : []),
+  ]);
 
-const ArtifactTitle = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
-  const isFolder = (node.children?.length ?? 0) > 0;
-  const sizeLabel = formatSize(node.size);
+const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
+  const { t } = useTranslation('chat');
+  const { modal } = App.useApp();
+  const openPageModal = useTaskStore((s) => s.openPageModal);
+  const unpinDocument = useTaskStore((s) => s.unpinDocument);
+  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const title = node.title || 'Untitled';
+  const sizeLabel =
+    node.size == null ? undefined : t('taskDetail.artifactSize', { value: node.size });
+
+  const handleDelete = useCallback(() => {
+    const taskId = node.sourceTaskId ?? activeTaskId;
+    if (!taskId) return;
+    modal.confirm({
+      centered: true,
+      content: t('taskDetail.artifactMenu.deleteConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.artifactMenu.deleteConfirm.ok'),
+      onOk: () => unpinDocument(taskId, node.documentId),
+      title: t('taskDetail.artifactMenu.deleteConfirm.title'),
+      type: 'error',
+    });
+  }, [activeTaskId, modal, node.documentId, node.sourceTaskId, t, unpinDocument]);
+
+  const menuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        danger: true,
+        icon: <Icon icon={Trash} />,
+        key: 'delete',
+        label: t('taskDetail.artifactMenu.delete'),
+        onClick: handleDelete,
+      },
+    ],
+    [handleDelete, t],
+  );
 
   return (
-    <Flexbox
+    <Block
+      clickable
       horizontal
       align="center"
-      gap={8}
-      style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}
+      gap={10}
+      paddingBlock={8}
+      paddingInline={12}
+      variant="outlined"
+      onClick={() => openPageModal(node.documentId)}
     >
       <Icon
-        color={cssVar.colorTextDescription}
-        icon={isFolder ? FolderClosed : FileText}
-        size={14}
-        style={{ flex: 'none' }}
+        color={cssVar.colorTextSecondary}
+        icon={FileTextIcon}
+        size={{ size: 18, strokeWidth: 1.5 }}
+        style={{ flexShrink: 0 }}
       />
-      <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
-        {node.title || 'Untitled'}
+      <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+        {title}
       </Text>
       {sizeLabel && (
-        <Text style={{ color: cssVar.colorTextQuaternary, flex: 'none', fontSize: 12 }}>
+        <Text fontSize={12} style={{ flexShrink: 0 }} type="secondary">
           {sizeLabel}
         </Text>
       )}
@@ -48,25 +93,27 @@ const ArtifactTitle = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
           {node.sourceTaskIdentifier}
         </Tag>
       )}
-    </Flexbox>
+      <DropdownMenu items={menuItems}>
+        <ActionIcon
+          icon={MoreHorizontal}
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        />
+      </DropdownMenu>
+    </Block>
   );
 });
-
-const toTreeData = (nodes: TaskDetailWorkspaceNode[]): DataNode[] =>
-  nodes.map((node) => ({
-    children: node.children?.length ? toTreeData(node.children) : undefined,
-    key: node.documentId,
-    title: <ArtifactTitle node={node} />,
-  }));
 
 const TaskArtifacts = memo(() => {
   const { t } = useTranslation('chat');
   const workspace = useTaskStore(taskDetailSelectors.activeTaskWorkspace);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const treeData = useMemo(() => toTreeData(workspace), [workspace]);
+  const items = useMemo(() => flattenWorkspace(workspace), [workspace]);
 
-  if (workspace.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
     <Flexbox gap={8}>
@@ -86,30 +133,16 @@ const TaskArtifacts = memo(() => {
           <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
             {t('taskDetail.artifacts')}
           </Text>
-          <Tag size="small">{workspace.length}</Tag>
-          <Icon
-            color={cssVar.colorTextDescription}
-            icon={ChevronDown}
-            size={14}
-            style={{
-              transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-              transition: 'transform 200ms',
-            }}
-          />
+          <Tag size="small">{items.length}</Tag>
+          <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
         </Block>
       </Flexbox>
       {isExpanded && (
-        <ConfigProvider theme={{ components: { Tree: { titleHeight: 32 } } }}>
-          <Tree
-            blockNode
-            defaultExpandAll
-            showLine
-            className={styles.subtaskTree}
-            selectable={false}
-            switcherIcon={<Icon icon={ChevronDown} size={14} />}
-            treeData={treeData}
-          />
-        </ConfigProvider>
+        <Flexbox gap={8} paddingInline={12}>
+          {items.map((node) => (
+            <ArtifactCard key={node.documentId} node={node} />
+          ))}
+        </Flexbox>
       )}
     </Flexbox>
   );

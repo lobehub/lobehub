@@ -344,10 +344,9 @@ export class GatewayActionImpl {
   }): Promise<void> => {
     const { assistantMessageId, operationId, topicId, scope, threadId } = params;
 
-    if (!this.isGatewayModeEnabled()) return;
-
     const agentGatewayUrl =
-      window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
+      window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
+    if (!agentGatewayUrl) return;
 
     // Get a fresh JWT token (original expired after 5 min)
     const { token } = await aiAgentService.refreshGatewayToken(topicId);
