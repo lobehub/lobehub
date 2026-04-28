@@ -20,6 +20,15 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
 - A LobeHub account with an active subscription
 - A QQ account
 
+## Connection Modes
+
+LobeHub supports two connection modes for QQ bots:
+
+- **WebSocket (Recommended)** — Persistent connection. Events are delivered in real time via WebSocket. No callback URL configuration required. This is the default mode for new bots.
+- **Webhook** — Stateless HTTP callbacks. Use this mode if your bot already has a callback URL configured on the QQ Open Platform and cannot switch.
+
+> **Note:** On the QQ Open Platform, once a bot is configured with a Webhook callback URL, it cannot be switched to WebSocket mode. New bots that have not configured a callback URL should use WebSocket mode.
+
 ## Step 1: Create a QQ Bot
 
 <Steps>
@@ -42,9 +51,11 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
 
   ![](/blog/assets276a4e8748e9bd300b30dcd9d0e24980.webp)
 
-  ### Configure Webhook URL
+  ### Configure Event Delivery (Webhook Only)
 
-  In the QQ Open Platform, navigate to **Development Settings** → **Callback Configuration**. You will need to paste the LobeHub Callback URL here after completing Step 2.
+  If you are using **Webhook mode**, navigate to **Development Settings** → **Callback Configuration** in the QQ Open Platform. You will need to paste the LobeHub Callback URL here after completing Step 2.
+
+  If you are using **WebSocket mode** (default), skip this step — no callback URL is needed.
 </Steps>
 
 ## Step 2: Configure QQ in LobeHub
@@ -61,16 +72,26 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   - **Application ID** — The App ID from the QQ Open Platform
   - **App Secret** — The App Secret from the QQ Open Platform
 
-  ### Save and Copy the Callback URL
+  ### Select Connection Mode
 
-  Click **Save Configuration**. After saving, a **Callback URL** will be displayed. Copy this URL.
+  In **Advanced Settings**, choose the **Connection Mode**:
 
-  Your credentials will be encrypted and stored securely.
+  - **WebSocket** (default) — Recommended for new bots
+  - **Webhook** — For bots with an existing callback URL on QQ Open Platform
+
+  ### Save Configuration
+
+  Click **Save Configuration**. Your credentials will be encrypted and stored securely.
+
+  - In **WebSocket mode**, the bot will automatically connect to the QQ gateway. No further configuration is needed.
+  - In **Webhook mode**, a **Callback URL** will be displayed after saving. Copy this URL for Step 3.
 
   ![](/blog/assetsf9317924035e48fcb1d1ae586568ea5f.webp)
 </Steps>
 
-## Step 3: Configure Callback in QQ Open Platform
+## Step 3: Configure Callback in QQ Open Platform (Webhook Only)
+
+> Skip this step if you are using WebSocket mode.
 
 <Steps>
   ### Paste the Callback URL
@@ -111,6 +132,22 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
 
 Click **Test Connection** in LobeHub's channel settings to verify the integration. Then open QQ, find your bot, and send a message. The bot should respond through your LobeHub agent.
 
+## Set Your Platform Identity (Recommended)
+
+One optional field under **Advanced Settings** carries a lot of weight in day-to-day use — fill it in once and most surprises go away.
+
+### Your Platform User ID
+
+This is your own QQ `tiny_id` (the platform-level user identifier — **not** the public-facing QQ number, which doesn't always match), used by:
+
+- **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
+- **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your QQ account.
+- **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to friends won't accidentally lock you out.
+
+To get it: DM the bot once with any message and check the server logs for the `tiny_id` field on the inbound event payload (or read it from the OpenAPI dashboard if available). Paste the long numeric ID into **Your Platform User ID** in LobeHub's Advanced Settings.
+
+> QQ doesn't expose a single "default server" concept that AI tools can pivot on, so the **Default Server** field is not exposed for QQ channels.
+
 ## Adding the Bot to Group Chats
 
 To use the bot in QQ groups:
@@ -119,13 +156,42 @@ To use the bot in QQ groups:
 2. @mention the bot in a message to trigger a response
 3. The bot will reply in the group conversation
 
+## Access Policies
+
+Two independent policies gate inbound traffic. Both default to **Open**.
+
+### Allowed User IDs (global)
+
+A populated **Allowed User IDs** field is a global gate — DMs *and* group `@mentions` are restricted to listed QQ `tiny_id` values. Empty means "no user-level filter". Use the platform `tiny_id` from the OpenAPI event payload — the visible QQ number is not always the same as the platform ID.
+
+### DM Policy
+
+- **Open (default)** — Any QQ user who shares context with the bot can DM it (subject to the global allowlist when set).
+- **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
+- **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
+
+### Group Policy
+
+Controls which QQ groups the bot will respond in.
+
+- **Open (default)** — Respond to `@mentions` in any group the bot has been added to.
+- **Allowlist** — Respond only in groups whose ID is listed in **Allowed Channel IDs** (use the platform group ID from the OpenAPI event payload).
+- **Disabled** — Ignore all group traffic; the bot only responds to DMs.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
 ## Configuration Reference
 
-| Field              | Required | Description                                              |
-| ------------------ | -------- | -------------------------------------------------------- |
-| **Application ID** | Yes      | Your bot's App ID from QQ Open Platform                  |
-| **App Secret**     | Yes      | Your bot's App Secret from QQ Open Platform              |
-| **Callback URL**   | —        | Auto-generated after saving; paste into QQ Open Platform |
+| Field                   | Required | Description                                                                                          |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| **Application ID**      | Yes      | Your bot's App ID from QQ Open Platform                                                              |
+| **App Secret**          | Yes      | Your bot's App Secret from QQ Open Platform                                                          |
+| **Connection Mode**     | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration              |
+| **Allowed User IDs**    | No       | Comma- or whitespace-separated QQ `tiny_id` values. Global gate — applies to DMs and group @mentions |
+| **DM Policy**           | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot               |
+| **Group Policy**        | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                   |
+| **Allowed Channel IDs** | No       | Comma- or whitespace-separated QQ group IDs. Used when Group Policy is Allowlist                     |
 
 ## Limitations
 
@@ -136,7 +202,8 @@ To use the bot in QQ groups:
 
 ## Troubleshooting
 
-- **Callback URL verification failed:** Ensure you saved the configuration in LobeHub first and the URL was copied correctly. LobeHub handles Ed25519 verification automatically.
+- **Bot not connecting (WebSocket mode):** Verify the App ID and App Secret are correct. Ensure the bot has not been configured with a callback URL on QQ Open Platform — once a callback URL is set, WebSocket mode is unavailable.
+- **Callback URL verification failed (Webhook mode):** Ensure you saved the configuration in LobeHub first and the URL was copied correctly. LobeHub handles Ed25519 verification automatically.
 - **Bot not responding:** Verify the App ID and App Secret are correct, the bot is published (or you are a sandbox test user), and the required message events are subscribed.
 - **Group chat issues:** Make sure the bot has been added to the group. @mention the bot to trigger a response.
 - **Test Connection failed:** Double-check the App ID and App Secret in LobeHub's channel settings.

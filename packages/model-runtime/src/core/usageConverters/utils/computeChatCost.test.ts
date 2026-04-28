@@ -1,6 +1,7 @@
 import type { ModelTokensUsage } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
 import anthropicChatModels from 'model-bank/anthropic';
+import azureChatModels from 'model-bank/azure';
 import googleChatModels from 'model-bank/google';
 import openaiChatModels from 'model-bank/openai';
 import { describe, expect, it } from 'vitest';
@@ -363,6 +364,47 @@ describe('computeChatPricing', () => {
 
       const cached = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached?.quantity).toBe(7596);
+    });
+  });
+
+  describe('Azure', () => {
+    it('uses total input tokens to select GPT-5.4 tiered rates', () => {
+      const pricing = azureChatModels.find(
+        (model: { id: string }) => model.id === 'gpt-5.4',
+      )?.pricing;
+      expect(pricing).toBeDefined();
+
+      const usage: ModelTokensUsage = {
+        inputCachedTokens: 299_000,
+        inputCacheMissTokens: 1_000,
+        inputTextTokens: 300_000,
+        outputTextTokens: 10,
+        totalInputTokens: 300_000,
+        totalOutputTokens: 10,
+        totalTokens: 300_010,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+
+      const input = result?.breakdown.find((item) => item.unit.name === 'textInput');
+      expect(input?.quantity).toBe(1_000);
+      expect(input?.credits).toBe(5_000);
+      expect(input?.segments).toEqual([{ quantity: 1_000, rate: 5, credits: 5_000 }]);
+
+      const cached = result?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+      expect(cached?.quantity).toBe(299_000);
+      expect(cached?.credits).toBe(149_500);
+      expect(cached?.segments).toEqual([{ quantity: 299_000, rate: 0.5, credits: 149_500 }]);
+
+      const output = result?.breakdown.find((item) => item.unit.name === 'textOutput');
+      expect(output?.quantity).toBe(10);
+      expect(output?.credits).toBe(225);
+      expect(output?.segments).toEqual([{ quantity: 10, rate: 22.5, credits: 225 }]);
+
+      expect(result?.totalCredits).toBe(154_725);
+      expect(result?.totalCost).toBeCloseTo(0.154725, 6);
     });
   });
 

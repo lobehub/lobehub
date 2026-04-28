@@ -178,8 +178,62 @@ export const buildAnthropicMessage = async (
             ...(message.tool_calls.map((tool) => {
               let input: Record<string, unknown> = {};
               try {
-                input = JSON.parse(tool.function.arguments);
-              } catch {}
+                const parsed = JSON.parse(tool.function.arguments);
+                // Anthropic requires tool_use.input to be a plain object.
+                // Models occasionally emit malformed JSON whose top-level shape
+                // is an array / null / primitive (e.g. unescaped quotes inside
+                // a long string arg make the parser re-segment the payload).
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                  input = parsed;
+                } else if (
+                  Array.isArray(parsed) &&
+                  parsed.length > 0 &&
+                  parsed[0] &&
+                  typeof parsed[0] === 'object' &&
+                  !Array.isArray(parsed[0])
+                ) {
+                  // Best-effort recovery: either the model wrapped the args
+                  // in `[...]` (length === 1, full recovery) or unescaped
+                  // quotes re-segmented the payload (partial recovery —
+                  // parsed[0] usually still carries the first legit key,
+                  // e.g. `content` for writeLocalFile).
+                  input = parsed[0] as Record<string, unknown>;
+                  console.warn(
+                    '[anthropic] tool_use.input recovered from array — parsed arguments was wrapped in []',
+                    {
+                      argumentsLength: tool.function.arguments?.length,
+                      arrayLength: parsed.length,
+                      id: tool.id,
+                      name: tool.function.name,
+                    },
+                  );
+                } else {
+                  console.warn(
+                    '[anthropic] tool_use.input fallback to {} — parsed arguments is not a plain object',
+                    {
+                      argumentsLength: tool.function.arguments?.length,
+                      id: tool.id,
+                      name: tool.function.name,
+                      parsedType: Array.isArray(parsed)
+                        ? 'array'
+                        : parsed === null
+                          ? 'null'
+                          : typeof parsed,
+                    },
+                  );
+                }
+              } catch (error) {
+                // Surface the failure instead of silently falling back to `{}`.
+                // Bad arguments should be sanitized upstream (context-engine
+                // ToolCallProcessor); if we reach here it means the defense
+                // was bypassed and the Anthropic call will proceed with empty
+                // input — worth knowing about.
+                console.error(
+                  'parse tool call arguments error:',
+                  { id: tool.id, name: tool.function.name, arguments: tool.function.arguments },
+                  error,
+                );
+              }
               return {
                 id: tool.id,
                 input,

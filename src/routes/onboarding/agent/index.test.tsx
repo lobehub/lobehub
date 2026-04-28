@@ -2,13 +2,36 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const renderAgentRoute = async (enabled: boolean) => {
+interface RenderAgentRouteOptions {
+  desktop?: boolean;
+  enabled: boolean;
+  serverConfigInit?: boolean;
+}
+
+const renderAgentRoute = async ({
+  desktop = false,
+  enabled,
+  serverConfigInit = true,
+}: RenderAgentRouteOptions) => {
   vi.resetModules();
+  vi.doMock('@lobechat/const', () => ({
+    isDesktop: desktop,
+  }));
+  vi.doMock('@/components/Loading/BrandTextLoading', () => ({
+    default: ({ debugId }: { debugId: string }) => <div>{debugId}</div>,
+  }));
   vi.doMock('@/features/Onboarding/Agent', () => ({
     default: () => <div>Agent onboarding</div>,
   }));
-  vi.doMock('@/routes/onboarding/config', () => ({
-    AGENT_ONBOARDING_ENABLED: enabled,
+  function selectFromServerConfigStore(selector: (state: Record<string, unknown>) => unknown) {
+    return selector({
+      featureFlags: { enableAgentOnboarding: enabled },
+      serverConfigInit,
+    });
+  }
+
+  vi.doMock('@/store/serverConfig', () => ({
+    useServerConfigStore: selectFromServerConfigStore,
   }));
 
   const { default: AgentOnboardingRoute } = await import('./index');
@@ -24,19 +47,33 @@ const renderAgentRoute = async (enabled: boolean) => {
 };
 
 afterEach(() => {
+  vi.doUnmock('@lobechat/const');
+  vi.doUnmock('@/components/Loading/BrandTextLoading');
   vi.doUnmock('@/features/Onboarding/Agent');
-  vi.doUnmock('@/routes/onboarding/config');
+  vi.doUnmock('@/store/serverConfig');
 });
 
 describe('AgentOnboardingRoute', () => {
   it('renders the agent onboarding page when the feature is enabled', async () => {
-    await renderAgentRoute(true);
+    await renderAgentRoute({ enabled: true });
 
     expect(screen.getByText('Agent onboarding')).toBeInTheDocument();
   });
 
+  it('shows a loading state before the server config is initialized', async () => {
+    await renderAgentRoute({ enabled: true, serverConfigInit: false });
+
+    expect(screen.getByText('AgentOnboardingRoute')).toBeInTheDocument();
+  });
+
   it('redirects to classic onboarding when the feature is disabled', async () => {
-    await renderAgentRoute(false);
+    await renderAgentRoute({ enabled: false });
+
+    expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
+  });
+
+  it('redirects to classic onboarding on desktop builds', async () => {
+    await renderAgentRoute({ desktop: true, enabled: true });
 
     expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
   });

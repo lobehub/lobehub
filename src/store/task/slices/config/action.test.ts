@@ -124,12 +124,34 @@ describe('TaskConfigSliceAction', () => {
       expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
     });
 
-    it('should send 0 when null to disable', async () => {
+    it('should send 0 when null to disable interval (automationMode untouched)', async () => {
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().updatePeriodicInterval('T-1', null);
 
       expect(taskService.update).toHaveBeenCalledWith('T-1', { heartbeatInterval: 0 });
+    });
+  });
+
+  describe('setAutomationMode', () => {
+    it('should optimistically update and call update with automationMode', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'heartbeat');
+
+      expect(useTaskStore.getState().taskDetailMap['T-1'].automationMode).toBe('heartbeat');
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'heartbeat' });
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+    });
+
+    it('should accept null to disable automation', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().setAutomationMode('T-1', null);
+
+      expect(useTaskStore.getState().taskDetailMap['T-1'].automationMode).toBeNull();
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: null });
     });
   });
 

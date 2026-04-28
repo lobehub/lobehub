@@ -11,6 +11,10 @@ import {
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management/client';
 import {
+  ClaudeCodeIdentifier,
+  ClaudeCodeInspectors,
+} from '@lobechat/builtin-tool-claude-code/client';
+import {
   CloudSandboxIdentifier,
   CloudSandboxInspectors,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
@@ -44,7 +48,10 @@ import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
 } from '@lobechat/builtin-tool-web-browsing/client';
+import { createRunCommandInspector } from '@lobechat/shared-tool-ui/inspectors';
 import { type BuiltinInspector } from '@lobechat/types';
+
+import { CodexInspectors } from './codex';
 
 /**
  * Builtin tools inspector registry
@@ -59,6 +66,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     string,
     BuiltinInspector
   >,
+  [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
   [CloudSandboxIdentifier]: CloudSandboxInspectors as Record<string, BuiltinInspector>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderInspectors as Record<
     string,
@@ -81,7 +89,28 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
+  codex: {
+    ...CodexInspectors,
+    command_execution: createRunCommandInspector('Run') as BuiltinInspector,
+  },
 };
+
+export interface BuiltinInspectorRegistryEntry {
+  apiName: string;
+  identifier: string;
+  inspector: BuiltinInspector;
+}
+
+export const listBuiltinInspectorEntries = (): BuiltinInspectorRegistryEntry[] =>
+  Object.entries(BuiltinToolInspectors).flatMap(([identifier, toolset]) =>
+    Object.entries(toolset)
+      .filter((entry): entry is [string, BuiltinInspector] => !!entry[1])
+      .map(([apiName, inspector]) => ({
+        apiName,
+        identifier,
+        inspector,
+      })),
+  );
 
 /**
  * Get builtin inspector component for a specific API

@@ -70,12 +70,16 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
     'outputImageTokens',
     'outputReasoningTokens',
     'outputTextTokens',
+    // Nested canonical shape — executors write `metadata.usage` / `metadata.performance`
+    // as objects; treat them as part of the usage/performance set alongside the legacy flat keys.
+    'performance',
     'rejectedPredictionTokens',
     'totalInputTokens',
     'totalOutputTokens',
     'totalTokens',
     'tps',
     'ttft',
+    'usage',
   ]);
 
   helperMaps.messageMap.forEach((message, id) => {
@@ -117,11 +121,25 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
   // For non-grouped supervisor messages (e.g., supervisor summary without tools)
   // Note: sub_agent scope transformation is done in pre-processing phase (before buildHelperMaps)
   const processedFlatList = flatList.map((msg) => {
+    let next = msg;
+
     // Transform supervisor messages
-    if (msg.role === 'assistant' && msg.metadata?.isSupervisor) {
-      return { ...msg, role: 'supervisor' as const };
+    if (next.role === 'assistant' && next.metadata?.isSupervisor) {
+      next = { ...next, role: 'supervisor' as const };
     }
-    return msg;
+
+    // Promote `metadata.usage` (canonical storage) onto the top-level `usage`
+    // field that UIChatMessage consumers (Extras token badge, tokenCounter,
+    // etc.) read from. The DB layer stores token usage inside the metadata
+    // JSONB column — executors on every path (Gateway, hetero-agent CLI) write
+    // there — but no server-side transform lifts it out. Doing it here keeps
+    // the promotion in one place, close to where display shapes are built,
+    // and works for both desktop (local PGlite) and web (remote Postgres).
+    if (!next.usage && next.metadata?.usage) {
+      next = { ...next, usage: next.metadata.usage };
+    }
+
+    return next;
   });
 
   return {

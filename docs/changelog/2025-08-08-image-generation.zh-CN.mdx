@@ -1,28 +1,43 @@
 ---
-title: 全新设计风格与桌面端发布 ✨
-description: LobeHub v1.49.12 已完整支持 DeepSeek R1 模型，为用户带来前所未有的思维链交互体验
+title: 图像生成、桌面端与认证更新 🎨
+description: 通过多个服务商生成 AI 图像，用更多身份系统完成接入，并在桌面端享受更顺畅的工作流。
 tags:
-  - DeepSeek R1
-  - CoT
-  - 思维链
+  - 图像生成
+  - 桌面应用
+  - 认证
+  - API Key
 ---
 
-# AI 图像生成与桌面端增强 🎨
+# 图像生成、桌面端与认证更新 🎨
 
-LobeHub 在七月至八月推出 AI 图像生成功能，新增多个服务商支持，并持续优化桌面端体验与认证系统。
+七月到八月，LobeHub 上线了 AI 图像生成功能，扩展了身份与访问能力，并持续打磨桌面端体验。这次更新的主线是立即可用的实用能力 —— 更多视觉创作方式、更易接入现有系统、更顺畅的桌面日常操作。
 
-## 🌟 重大更新
+## 按你的方式生成图像
 
-- 🎨 AI 图像生成：支持通过 Google Imagen、Qwen、Zhipu CogView4、MiniMax 等服务商生成图像
-- 🔐 认证系统扩展：新增 Amazon Cognito、Google SSO、Okta 认证支持
-- 🖥️ 桌面端优化：支持网络代理配置、自定义快捷键、OAuth 重构与远程聊天支持
-- 🔌 MCP 认证增强：支持 Streamable HTTP MCP Server 认证
-- 🔑 API Key 管理：实现完整的 API Key 管理功能
+LobeHub 现已支持通过 Google Imagen、Qwen、智谱 CogView4、MiniMax 等服务商进行 AI 图像生成。你可以按质量、速度和成本偏好选择服务商，无需改变整体工作流。
 
-## 📊 模型库更新
+可用于：
 
-新增 Claude Opus 4.1、Grok-4、Kimi K2、Ollama gpt-oss 支持，更新 Gemini 2.5 Flash-Lite GA、Hunyuan A13B thinking、Doubao 思维模型等
+- 直接在对话中生成视觉素材，无需切换工具
+- 对比不同服务商对同一提示词的输出效果
+- 根据当前项目需求灵活路由图像请求
 
-## 💫 体验优化
+## 接入现有身份体系
 
-桌面端新增通知功能、优化设置窗口布局、改进多显示器体验；优化 MCP 插件调用与显示、修复 Gemini Artifacts 换行问题
+认证能力扩展至 Amazon Cognito、Google SSO 和 Okta。如果你的组织已在运行这些系统，接入 LobeHub 现在只是配置步骤而非迁移项目。
+
+本次更新还为 Streamable HTTP MCP Server 添加认证支持，API Key 管理界面也已完整支持创建、管理和轮换密钥。
+
+## 桌面端与模型更新
+
+桌面端改进包括网络代理配置、自定义快捷键、OAuth 流程优化和远程聊天能力。这些改动让桌面应用在不同网络环境和团队配置下更具适应性。
+
+模型库新增 Claude Opus 4.1、Grok-4、Kimi K2、Ollama gpt-oss，同时更新 Gemini 2.5 Flash-Lite GA、Hunyuan A13B 思维模型、Doubao 推理模型等。
+
+## 体验优化与修复
+
+- 新增桌面端通知能力
+- 优化设置窗口布局
+- 改进多显示器体验
+- 增强 MCP 插件调用与渲染
+- 修复 Gemini Artifacts 换行问题

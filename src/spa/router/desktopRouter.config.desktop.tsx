@@ -16,8 +16,12 @@ import DesktopVideoLayout from '@/routes/(main)/(create)/video/_layout';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
+import DesktopAgentChatLayout from '@/routes/(main)/agent/(chat)/_layout';
+import AgentTopicNotebookRedirectPage from '@/routes/(main)/agent/[topicId]/page';
+import AgentTopicNotebookDocPage from '@/routes/(main)/agent/[topicId]/page/[docId]';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
 import AgentCronDetailPage from '@/routes/(main)/agent/cron/[cronId]';
+import AgentPageRedirectPage from '@/routes/(main)/agent/page';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
@@ -39,6 +43,9 @@ import CommunityListModelLayout from '@/routes/(main)/community/(list)/model/_la
 import CommunityListProviderPage from '@/routes/(main)/community/(list)/provider';
 import CommunityListSkillPage from '@/routes/(main)/community/(list)/skill';
 import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_layout';
+import DevtoolsIndexPage from '@/routes/(main)/devtools';
+import DevtoolsLayout from '@/routes/(main)/devtools/_layout';
+import DevtoolsToolPage from '@/routes/(main)/devtools/[identifier]';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -69,9 +76,15 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
+import TaskDetailLayout from '@/routes/(main)/task/_layout';
+import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
+import AllTasksPage from '@/routes/(main)/tasks';
+import AllTasksLayout from '@/routes/(main)/tasks/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
+
+const isDev = process.env.NODE_ENV === 'development';
 
 // Desktop router configuration — all sync imports for Electron local build
 export const desktopRoutes: RouteObject[] = [
@@ -87,8 +100,39 @@ export const desktopRoutes: RouteObject[] = [
           {
             children: [
               {
-                element: <AgentPage />,
-                index: true,
+                children: [
+                  {
+                    element: <AgentPage />,
+                    index: true,
+                  },
+                  {
+                    children: [
+                      {
+                        element: <AgentPage />,
+                        index: true,
+                      },
+                      {
+                        children: [
+                          {
+                            element: <AgentTopicNotebookRedirectPage />,
+                            index: true,
+                          },
+                          {
+                            element: <AgentTopicNotebookDocPage />,
+                            path: ':docId',
+                          },
+                        ],
+                        path: 'page',
+                      },
+                    ],
+                    path: ':topicId',
+                  },
+                ],
+                element: <DesktopAgentChatLayout />,
+              },
+              {
+                element: <AgentPageRedirectPage />,
+                path: 'page',
               },
               {
                 element: <AgentProfilePage />,
@@ -104,7 +148,7 @@ export const desktopRoutes: RouteObject[] = [
               },
             ],
             element: <DesktopChatLayout />,
-            errorElement: <ErrorBoundary resetPath="/agent" />,
+            errorElement: <ErrorBoundary />,
             path: ':aid',
           },
         ],
@@ -130,7 +174,7 @@ export const desktopRoutes: RouteObject[] = [
               },
             ],
             element: <DesktopGroupLayout />,
-            errorElement: <ErrorBoundary resetPath="/group" />,
+            errorElement: <ErrorBoundary />,
             path: ':gid',
           },
         ],
@@ -230,7 +274,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <CommunityLayout />,
-        errorElement: <ErrorBoundary resetPath="/community" />,
+        errorElement: <ErrorBoundary />,
         path: 'community',
       },
 
@@ -264,7 +308,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <ResourceLayout />,
-        errorElement: <ErrorBoundary resetPath="/resource" />,
+        errorElement: <ErrorBoundary />,
         path: 'resource',
       },
 
@@ -297,7 +341,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <SettingsLayout />,
-        errorElement: <ErrorBoundary resetPath="/settings" />,
+        errorElement: <ErrorBoundary />,
         path: 'settings',
       },
 
@@ -330,7 +374,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopMemoryLayout />,
-        errorElement: <ErrorBoundary resetPath="/memory" />,
+        errorElement: <ErrorBoundary />,
         path: 'memory',
       },
 
@@ -343,7 +387,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopVideoLayout />,
-        errorElement: <ErrorBoundary resetPath="/video" />,
+        errorElement: <ErrorBoundary />,
         path: 'video',
       },
 
@@ -356,7 +400,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopImageLayout />,
-        errorElement: <ErrorBoundary resetPath="/image" />,
+        errorElement: <ErrorBoundary />,
         path: 'image',
       },
 
@@ -405,8 +449,34 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <EvalLayout />,
-        errorElement: <ErrorBoundary resetPath="/eval" />,
+        errorElement: <ErrorBoundary />,
         path: 'eval',
+      },
+
+      // Tasks routes (cross-agent)
+      {
+        children: [
+          {
+            element: <AllTasksPage />,
+            index: true,
+          },
+        ],
+        element: <AllTasksLayout />,
+        errorElement: <ErrorBoundary resetPath="/" />,
+        path: 'tasks',
+      },
+
+      // Task detail route (cross-agent entry — resolves by task identifier)
+      {
+        children: [
+          {
+            element: <TaskDetailRoute />,
+            path: ':taskId',
+          },
+        ],
+        element: <TaskDetailLayout />,
+        errorElement: <ErrorBoundary resetPath="/tasks" />,
+        path: 'task',
       },
 
       // Pages routes
@@ -422,7 +492,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopPageLayout />,
-        errorElement: <ErrorBoundary resetPath="/page" />,
+        errorElement: <ErrorBoundary />,
         path: 'page',
       },
 
@@ -437,7 +507,7 @@ export const desktopRoutes: RouteObject[] = [
       },
     ],
     element: <DesktopMainLayout />,
-    errorElement: <ErrorBoundary resetPath="/" />,
+    errorElement: <ErrorBoundary />,
     path: '/',
   },
 
@@ -454,30 +524,45 @@ export const desktopRoutes: RouteObject[] = [
     element: <ShareTopicLayout />,
     path: '/share/t',
   },
+
+  // Devtools route (outside main layout, dev-only)
+  ...(isDev
+    ? [
+        {
+          children: [
+            { element: <DevtoolsIndexPage />, index: true },
+            { element: <DevtoolsToolPage />, path: ':identifier' },
+          ],
+          element: <DevtoolsLayout />,
+          errorElement: <ErrorBoundary />,
+          path: '/devtools',
+        },
+      ]
+    : []),
 ];
 
 // Desktop onboarding route (Electron only in .desktop.tsx)
 desktopRoutes.push({
   element: <DesktopOnboarding />,
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/desktop-onboarding',
 });
 
 // Web onboarding aliases redirect to the desktop-specific onboarding flow.
 desktopRoutes.push({
   element: redirectElement('/desktop-onboarding'),
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/onboarding',
 });
 
 desktopRoutes.push({
   element: redirectElement('/desktop-onboarding'),
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/onboarding/agent',
 });
 
 desktopRoutes.push({
   element: redirectElement('/desktop-onboarding'),
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/onboarding/classic',
 });

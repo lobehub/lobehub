@@ -12,12 +12,12 @@ import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { usePageStore } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
-import Copilot from './Copilot';
 import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import PageTitle from './PageTitle';
+import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
 import TitleSection from './TitleSection';
 
@@ -76,9 +76,9 @@ const PageEditorCanvas = memo(() => {
               </Flexbox>
             </WideScreenContainer>
           </Flexbox>
-          {documentId && <DiffAllToolbar documentId={documentId} editor={editor!} />}
+          {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
         </Flexbox>
-        <Copilot />
+        <RightPanel />
       </Flexbox>
     </>
   );

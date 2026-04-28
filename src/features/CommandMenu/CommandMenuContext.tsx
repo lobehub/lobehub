@@ -8,6 +8,7 @@ import { detectContext } from './utils/context';
 import { type ValidSearchType } from './utils/queryParser';
 
 interface CommandMenuContextValue {
+  activeAgentId: string | undefined;
   menuContext: MenuContext;
   mounted: boolean;
   onClose: () => void;
@@ -43,6 +44,11 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
 
   // Memoize derived values
   const menuContext = useMemo(() => detectContext(pathname ?? '/'), [pathname]);
+  const activeAgentId = useMemo(() => {
+    if (menuContext !== 'agent') return undefined;
+    const match = pathname?.match(/^\/agent\/([^/?]+)/);
+    return match?.[1] || undefined;
+  }, [menuContext, pathname]);
   const page = pages.at(-1);
   const viewMode: MenuViewMode = search.trim().length > 0 ? 'search' : 'default';
 
@@ -63,6 +69,7 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
   // Memoize the context value to prevent unnecessary re-renders
   const contextValue = useMemo<CommandMenuContextValue>(
     () => ({
+      activeAgentId,
       menuContext,
       mounted: true, // Always true after initial render since provider only mounts on client
       onClose,
@@ -80,6 +87,7 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
       viewMode,
     }),
     [
+      activeAgentId,
       menuContext,
       onClose,
       page,

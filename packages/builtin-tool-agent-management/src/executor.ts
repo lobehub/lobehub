@@ -27,8 +27,12 @@ import {
   type CallAgentState,
   type CreateAgentParams,
   type DeleteAgentParams,
+  type DuplicateAgentParams,
+  type GetAgentDetailParams,
+  type InstallPluginParams,
   type SearchAgentParams,
   type UpdateAgentParams,
+  type UpdatePromptParams,
 } from './types';
 
 const runtime = new AgentManagerRuntime({
@@ -47,12 +51,48 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
   };
 
   updateAgent = async (params: UpdateAgentParams): Promise<BuiltinToolResult> => {
-    const { agentId, config, meta } = params;
+    const { agentId } = params;
+    // LLMs sometimes double-encode JSON, sending config/meta as stringified JSON
+    // instead of objects. Parse them defensively before passing to runtime.
+    let { config, meta } = params;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (typeof meta === 'string') {
+      try {
+        meta = JSON.parse(meta);
+      } catch {
+        /* ignore */
+      }
+    }
     return runtime.updateAgentConfig(agentId, { config, meta });
   };
 
   deleteAgent = async (params: DeleteAgentParams): Promise<BuiltinToolResult> => {
     return runtime.deleteAgent(params.agentId);
+  };
+
+  getAgentDetail = async (params: GetAgentDetailParams): Promise<BuiltinToolResult> => {
+    return runtime.getAgentDetail(params.agentId);
+  };
+
+  duplicateAgent = async (params: DuplicateAgentParams): Promise<BuiltinToolResult> => {
+    return runtime.duplicateAgent(params.agentId, params.newTitle);
+  };
+
+  updatePrompt = async (params: UpdatePromptParams): Promise<BuiltinToolResult> => {
+    return runtime.updatePrompt(params.agentId, { prompt: params.prompt });
+  };
+
+  installPlugin = async (params: InstallPluginParams): Promise<BuiltinToolResult> => {
+    return runtime.installPlugin(params.agentId, {
+      identifier: params.identifier,
+      source: params.source,
+    });
   };
 
   // ==================== Search ====================

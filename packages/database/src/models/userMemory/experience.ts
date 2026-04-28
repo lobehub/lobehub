@@ -5,7 +5,7 @@ import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import type { NewUserMemoryExperience, UserMemoryExperience } from '../../schemas';
 import { userMemories, userMemoriesExperiences } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { sanitizeBm25Query } from '../../utils/bm25';
+import { SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from '../../utils/bm25';
 
 export class UserMemoryExperienceModel {
   private userId: string;
@@ -74,7 +74,9 @@ export class UserMemoryExperienceModel {
     const normalizedPageSize = Math.min(Math.max(pageSize, 1), 100);
     const offset = (normalizedPage - 1) * normalizedPageSize;
     const normalizedQuery = typeof q === 'string' ? q.trim() : '';
-    const bm25Query = normalizedQuery ? sanitizeBm25Query(normalizedQuery) : '';
+    const bm25Query = normalizedQuery
+      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
+      : '';
 
     // Build WHERE conditions
     const conditions: Array<SQL | undefined> = [

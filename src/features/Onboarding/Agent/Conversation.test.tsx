@@ -8,11 +8,13 @@ import AgentOnboardingConversation from './Conversation';
 
 // Prevent unhandled rejections from @splinetool/runtime fetching remote assets in CI
 vi.mock('@lobehub/ui/brand', () => ({
+  LobeHub: () => null,
   LogoThree: () => null,
 }));
 
-const { chatInputSpy, mockState } = vi.hoisted(() => ({
+const { chatInputSpy, messageItemSpy, mockState } = vi.hoisted(() => ({
   chatInputSpy: vi.fn(),
+  messageItemSpy: vi.fn(),
   mockState: {
     displayMessages: [] as Array<{ content?: string; id: string; role: string }>,
   },
@@ -33,14 +35,27 @@ vi.mock('@/features/Conversation', () => ({
 
     return <div data-testid="chat-input" />;
   },
-  ChatList: ({ itemContent }: { itemContent?: (index: number, id: string) => ReactNode }) => (
+  ChatList: ({
+    itemContent,
+    showWelcome,
+    welcome,
+  }: {
+    itemContent?: (index: number, id: string) => ReactNode;
+    showWelcome?: boolean;
+    welcome?: ReactNode;
+  }) => (
     <div data-testid="chat-list">
+      {showWelcome ? <div data-testid="chat-welcome">{welcome}</div> : null}
       {mockState.displayMessages.map((message, index) => (
         <div key={message.id}>{itemContent?.(index, message.id)}</div>
       ))}
     </div>
   ),
-  MessageItem: ({ id }: { id: string }) => <div data-testid={`message-item-${id}`}>{id}</div>,
+  MessageItem: (props: { defaultWorkflowExpandLevel?: string; id: string }) => {
+    messageItemSpy(props);
+
+    return <div data-testid={`message-item-${props.id}`}>{props.id}</div>;
+  },
   conversationSelectors: {
     displayMessages: (state: typeof mockState) => state.displayMessages,
   },
@@ -63,9 +78,14 @@ vi.mock('@/features/Conversation/hooks/useAgentMeta', () => ({
   }),
 }));
 
+vi.mock('./Welcome', () => ({
+  default: ({ content }: { content: string }) => <div data-testid="welcome-content">{content}</div>,
+}));
+
 describe('AgentOnboardingConversation', () => {
   beforeEach(() => {
     chatInputSpy.mockClear();
+    messageItemSpy.mockClear();
     mockState.displayMessages = [];
   });
 
@@ -83,6 +103,7 @@ describe('AgentOnboardingConversation', () => {
 
     render(<AgentOnboardingConversation />);
 
+    expect(screen.getByTestId('chat-welcome')).toBeInTheDocument();
     expect(screen.getByText('Welcome')).toBeInTheDocument();
     expect(screen.queryByText('finish')).not.toBeInTheDocument();
   });
@@ -96,6 +117,7 @@ describe('AgentOnboardingConversation', () => {
       expect.objectContaining({
         allowExpand: false,
         leftActions: [],
+        rightActions: [],
         showRuntimeConfig: false,
       }),
     );
@@ -112,5 +134,20 @@ describe('AgentOnboardingConversation', () => {
 
     expect(screen.getByTestId('message-item-assistant-2')).toBeInTheDocument();
     expect(screen.queryByText('finish')).not.toBeInTheDocument();
+  });
+
+  it('passes collapsed workflow default to onboarding message items', () => {
+    mockState.displayMessages = [
+      { id: 'assistant-1', role: 'assistant' },
+      { id: 'user-1', role: 'user' },
+    ];
+
+    render(<AgentOnboardingConversation />);
+
+    expect(messageItemSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultWorkflowExpandLevel: 'collapsed',
+      }),
+    );
   });
 });

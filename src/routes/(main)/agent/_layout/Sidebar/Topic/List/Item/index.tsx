@@ -1,10 +1,13 @@
+import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import { AnimatePresence, m } from 'motion/react';
-import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
+import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
+import { CheckCircle2, HashIcon, MessageSquareDashed } from 'lucide-react';
+import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import DotsLoading from '@/components/DotsLoading';
+import RingLoadingIcon from '@/components/RingLoading';
+import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -13,7 +16,6 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
-import type { ChatTopicMetadata } from '@/types/topic';
 
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
@@ -21,60 +23,90 @@ import Actions from './Actions';
 import Editing from './Editing';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const styles = createStaticStyles(({ css }) => ({
-  neonDotWrapper: css`
-    position: absolute;
-    inset: 0;
+const rippleAnim = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+`;
 
-    display: flex;
-    flex-shrink: 0;
+const styles = createStaticStyles(({ css }) => ({
+  unreadWrapper: css`
+    position: relative;
+
+    display: inline-flex;
     align-items: center;
     justify-content: center;
 
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
   `,
-  dotContainer: css`
-    will-change: width;
-
+  unreadDot: css`
     position: relative;
+    z-index: 1;
 
-    width: 18px;
-    height: 18px;
-    margin-inline-start: -6px;
-
-    transition: width 0.2s ${cssVar.motionEaseOut};
-  `,
-  neonDot: css`
     width: 6px;
     height: 6px;
     border-radius: 50%;
 
     background: ${cssVar.colorInfo};
-    box-shadow:
-      0 0 3px ${cssVar.colorInfo},
-      0 0 6px ${cssVar.colorInfo};
+  `,
+  unreadRipple: css`
+    position: absolute;
+    inset: 0;
+
+    width: 6px;
+    height: 6px;
+    margin: auto;
+    border: 1px solid ${cssVar.colorInfo};
+    border-radius: 50%;
+
+    background: transparent;
+
+    animation: ${rippleAnim} 1.8s ease-out infinite;
   `,
 }));
+
+// Module-scoped so a click on any topic cancels a pending click on another.
+// Per-item refs can't do that, which lets rapid clicks across items all
+// fire — each racing to write activeTopicId (see LOBE-7785).
+let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+const cancelPendingSingleClick = () => {
+  if (pendingSingleClickTimer) {
+    clearTimeout(pendingSingleClickTimer);
+    pendingSingleClickTimer = null;
+  }
+};
 
 interface TopicItemProps {
   active?: boolean;
   fav?: boolean;
   id?: string;
   metadata?: ChatTopicMetadata;
+  status?: ChatTopicStatus | null;
   threadId?: string;
   title: string;
 }
 
-const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, metadata }) => {
+const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, metadata, status }) => {
   const { t } = useTranslation('topic');
+  const { isDarkMode } = useTheme();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const addTab = useElectronStore((s) => s.addTab);
+
+  const loadingRingColor = isDarkMode
+    ? cssVar.colorWarningBorder
+    : `color-mix(in srgb, ${cssVar.colorWarning} 45%, transparent)`;
 
   // Construct href for cmd+click support
   const href = useMemo(() => {
     if (!activeAgentId || !id) return undefined;
-    return `/agent/${activeAgentId}?topic=${id}`;
+    return SESSION_CHAT_TOPIC_URL(activeAgentId, id);
   }, [activeAgentId, id]);
 
   const [editing, isLoading] = useChatStore((s) => [
@@ -86,7 +118,20 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     id ? operationSelectors.isTopicUnreadCompleted(id) : () => false,
   );
 
-  const { navigateToTopic, isInAgentSubRoute } = useTopicNavigation();
+  const {
+    focusTopicPopup,
+    navigateToTopic,
+    isInAgentSubRoute,
+    isInTopicContextRoute,
+    routeTopicId,
+    urlTopicId,
+  } = useTopicNavigation();
+  const isRouteTopicActive = Boolean(id && routeTopicId === id && isInTopicContextRoute);
+  const isTopicActive = Boolean(
+    (active || isRouteTopicActive) && !threadId && (!isInAgentSubRoute || isRouteTopicActive),
+  );
+
+  const shouldShowThreadList = Boolean(id && id === urlTopicId);
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
@@ -95,78 +140,48 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     [id],
   );
 
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const handleClick = useCallback(() => {
     if (editing) return;
     if (isDesktop) {
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null;
-        navigateToTopic(id);
+      cancelPendingSingleClick();
+      pendingSingleClickTimer = setTimeout(() => {
+        pendingSingleClickTimer = null;
+        void navigateToTopic(id);
       }, 250);
     } else {
-      navigateToTopic(id);
+      void navigateToTopic(id);
     }
   }, [editing, id, navigateToTopic]);
 
-  const handleDoubleClick = useCallback(() => {
+  const handleDoubleClick = useCallback(async () => {
     if (!id || !activeAgentId || !isDesktop) return;
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
+    cancelPendingSingleClick();
+    if (await focusTopicPopup(id)) {
+      void navigateToTopic(id, { skipPopupFocus: true });
+      return;
     }
-    const reference = pluginRegistry.parseUrl(`/agent/${activeAgentId}`, `topic=${id}`);
+    const url = SESSION_CHAT_TOPIC_URL(activeAgentId, id);
+    const reference = pluginRegistry.parseUrl(url, '');
     if (reference) {
       addTab(reference);
-      navigateToTopic(id);
+      void navigateToTopic(id);
     }
-  }, [id, activeAgentId, addTab, navigateToTopic]);
+  }, [id, activeAgentId, addTab, focusTopicPopup, navigateToTopic]);
 
   const { dropdownMenu } = useTopicItemDropdownMenu({
     fav,
     id,
-    toggleEditing,
+    status,
+    title,
   });
 
+  const isCompleted = status === 'completed';
+
   const hasUnread = id && isUnreadCompleted;
-  const infoColor = cssVar.colorInfo;
-  const unreadNode = (
-    <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
-      <AnimatePresence mode="popLayout">
-        {hasUnread && (
-          <m.div
-            className={styles.neonDotWrapper}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{
-              scale: 1,
-              opacity: 1,
-            }}
-            exit={{
-              scale: 0,
-              opacity: 0,
-            }}
-          >
-            <m.span
-              className={styles.neonDot}
-              initial={false}
-              animate={{
-                scale: [1, 1.3, 1],
-                opacity: [1, 0.9, 1],
-                boxShadow: [
-                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-                  `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
-                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-                ],
-              }}
-              transition={{
-                duration: 1.2,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            />
-          </m.div>
-        )}
-      </AnimatePresence>
+  const unreadIcon = (
+    <span className={styles.unreadWrapper}>
+      <span className={styles.unreadRipple} />
+      <span className={styles.unreadDot} />
     </span>
   );
 
@@ -174,10 +189,17 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   if (!id) {
     return (
       <NavItem
-        active={active && !isInAgentSubRoute}
-        loading={isLoading}
+        active={Boolean(active && !isInAgentSubRoute && !isInTopicContextRoute)}
         icon={
-          <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          isLoading ? (
+            <RingLoadingIcon
+              ringColor={loadingRingColor}
+              size={14}
+              style={{ color: cssVar.colorWarning }}
+            />
+          ) : (
+            <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          )
         }
         title={
           <Flexbox horizontal align={'center'} flex={1} gap={6}>
@@ -202,13 +224,31 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
-        active={active && !threadId && !isInAgentSubRoute}
+        active={isTopicActive}
         contextMenuItems={dropdownMenu}
         disabled={editing}
         href={href}
-        loading={isLoading}
-        title={title}
+        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
+          if (isLoading) {
+            return (
+              <RingLoadingIcon
+                ringColor={loadingRingColor}
+                size={14}
+                style={{ color: cssVar.colorWarning }}
+              />
+            );
+          }
+          if (isCompleted) {
+            return (
+              <Icon
+                icon={CheckCircle2}
+                size={'small'}
+                style={{ color: cssVar.colorTextDescription }}
+              />
+            );
+          }
+          if (hasUnread) return unreadIcon;
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
             if (ProviderIcon) {
@@ -219,14 +259,11 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
           );
         })()}
-        slots={{
-          iconPostfix: unreadNode,
-        }}
         onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
+        onDoubleClick={() => void handleDoubleClick()}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
-      {active && (
+      {shouldShowThreadList && (
         <Suspense
           fallback={
             <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
@@ -235,7 +272,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             </Flexbox>
           }
         >
-          <ThreadList />
+          <ThreadList topicId={id} />
         </Suspense>
       )}
     </Flexbox>

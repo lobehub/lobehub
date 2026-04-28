@@ -131,6 +131,17 @@ function buildAnalyticsConfig(): AnalyticsConfig {
     };
   }
 
+  if (analyticsEnv.ENABLED_X_ADS && analyticsEnv.X_ADS_PIXEL_ID) {
+    config.xAds = {
+      eventIds: {
+        login_or_signup_clicked: analyticsEnv.X_ADS_LOGIN_OR_SIGNUP_CLICKED_EVENT_ID,
+        main_page_view: analyticsEnv.X_ADS_MAIN_PAGE_VIEW_EVENT_ID,
+      },
+      pixelId: analyticsEnv.X_ADS_PIXEL_ID,
+      purchaseEventId: analyticsEnv.X_ADS_PURCHASE_EVENT_ID,
+    };
+  }
+
   if (analyticsEnv.REACT_SCAN_MONITOR_API_KEY) {
     config.reactScan = { apiKey: analyticsEnv.REACT_SCAN_MONITOR_API_KEY };
   }

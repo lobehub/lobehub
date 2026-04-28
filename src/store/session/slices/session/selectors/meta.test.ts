@@ -42,18 +42,4 @@ describe('sessionMetaSelectors', () => {
       expect(title).toBe('defaultSession'); // Assuming translation returns this key
     });
   });
-
-  describe('getDescription', () => {
-    it('should return the description from the meta data', () => {
-      const meta: MetaData = { description: 'Custom Description' };
-      const description = sessionMetaSelectors.getDescription(meta);
-      expect(description).toBe(meta.description);
-    });
-
-    it('should return the default description if none is defined in the meta data', () => {
-      const meta: MetaData = {};
-      const description = sessionMetaSelectors.getDescription(meta);
-      expect(description).toBe(undefined); // Assuming translation returns this key
-    });
-  });
 });

@@ -11,9 +11,30 @@ const stepfunChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
+      'Built on Step 3.5 Flash and optimized for high-frequency agent scenarios, it further improves token efficiency and inference speed while retaining flagship-level reasoning and tool-calling capabilities. It also supports switching to a low-reasoning mode to reduce resource consumption. Additionally, targeted optimizations have been made to enhance compatibility with coding tasks and agent frameworks.',
+    displayName: 'Step 3.5 Flash 2603',
+    enabled: true,
+    id: 'step-3.5-flash-2603',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
       'Stepfun’s flagship language reasoning model.This model has top-notch reasoning capabilities and fast and reliable execution capabilities.Able to decompose and plan complex tasks, call tools quickly and reliably to perform tasks, and be competent in various complex tasks such as logical reasoning, mathematics, software engineering, and in-depth research.',
     displayName: 'Step 3.5 Flash',
-    enabled: true,
     id: 'step-3.5-flash',
     pricing: {
       currency: 'CNY',

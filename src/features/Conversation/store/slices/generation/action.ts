@@ -10,6 +10,10 @@ import {
 } from '@/store/chat/slices/aiChat/actions/commandBus';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import {
+  mergeAgentRuntimeInitialContexts,
+  resolveActiveTopicDocumentInitialContext,
+} from '@/store/chat/utils/activeTopicDocumentContext';
 
 import { type Store as ConversationStore } from '../../action';
 
@@ -323,7 +327,10 @@ export const generationSlice: StateCreator<
     const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
     const item = displayMessages[currentIndex];
     if (!item) return;
-    const initialContext = buildRetryInitialContext(item.editorData);
+    const initialContext = mergeAgentRuntimeInitialContexts(
+      await resolveActiveTopicDocumentInitialContext(context),
+      buildRetryInitialContext(item.editorData),
+    );
 
     // Get context messages up to and including the target message
     const contextMessages = displayMessages.slice(0, currentIndex + 1);
@@ -349,10 +356,32 @@ export const generationSlice: StateCreator<
       // New branch index = current children count (since index is 0-based)
       const nextBranchIndex = childrenCount;
 
-      // Switch to a new branch (pass operationId for correct context in optimistic update)
+      // Switch to the new branch so the UI shows the incoming response immediately
       await chatStore.switchMessageBranch(messageId, nextBranchIndex, {
         operationId,
       });
+
+      // ── Gateway mode: trigger server-side regeneration ──
+      if (chatStore.isGatewayModeEnabled()) {
+        // Keep the regenerate operation running until the gateway session completes,
+        // so isMessageRegenerating stays true and duplicate clicks are blocked.
+        await chatStore.executeGatewayAgent({
+          context,
+          message: item.content,
+          onComplete: () => {
+            chatStore.completeOperation(operationId);
+            if (hooks.onRegenerateComplete) {
+              hooks.onRegenerateComplete(messageId);
+            }
+          },
+          parentMessageId: messageId,
+        });
+
+        return;
+      }
+
+      // ── Client mode: run agent locally ──
+      // (switchMessageBranch already called above)
 
       // Execute agent runtime with full context from ConversationStore
       await chatStore.internal_execAgentRuntime({

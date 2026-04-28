@@ -24,6 +24,9 @@ import type { SPAServerConfig } from '@/types/spaServerConfig';
 import Locale from './Locale';
 
 const ModalHost = lazy(() => import('@lobehub/ui').then((m) => ({ default: m.ModalHost })));
+const BaseModalHost = lazy(() =>
+  import('@lobehub/ui/base-ui').then((m) => ({ default: m.ModalHost })),
+);
 const ToastHost = lazy(() => import('@lobehub/ui/base-ui').then((m) => ({ default: m.ToastHost })));
 const ContextMenuHost = lazy(() =>
   import('@lobehub/ui').then((m) => ({ default: m.ContextMenuHost })),
@@ -66,6 +69,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                         </TooltipGroup>
                         <Suspense>
                           <ModalHost />
+                          <BaseModalHost />
                           <ToastHost />
                           <ContextMenuHost />
                         </Suspense>

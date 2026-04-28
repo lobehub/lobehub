@@ -10,7 +10,7 @@ import type {
   ToolsGenerationResult,
   UniformTool,
 } from './types';
-import { generateToolName } from './utils';
+import { generateToolName, normalizeToolParameters } from './utils';
 
 const log = debug('context-engine:tools-engine');
 
@@ -267,7 +267,7 @@ export class ToolsEngine {
         function: {
           description: api.description,
           name: this.generateToolName(manifest.identifier, api.name, manifest.type),
-          parameters: api.parameters,
+          parameters: normalizeToolParameters(api.parameters),
         },
         type: 'function' as const,
       })),

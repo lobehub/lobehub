@@ -111,7 +111,7 @@ describe('cron command', () => {
       ]);
 
       expect(mockTrpcClient.agentCronJob.create.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({ agentId: 'a1', name: 'My Job', schedule: '* * * * *' }),
+        expect.objectContaining({ agentId: 'a1', cronPattern: '* * * * *', name: 'My Job' }),
       );
     });
   });

@@ -3,9 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type StreamEvent } from '@/services/agentRuntime';
 import { useChatStore } from '@/store/chat/store';
+import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
+vi.mock('@/store/chat/utils/desktopNotification', () => ({
+  notifyDesktopHumanApprovalRequired: vi.fn().mockResolvedValue(undefined),
+}));
 
 // Test Constants
 const TEST_IDS = {
@@ -312,6 +316,67 @@ describe('runAgent actions', () => {
 
         // Should not process event
         expect(result.current.internal_dispatchMessage).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('step_start event', () => {
+      it('should notify desktop when human approval is required', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              [TEST_IDS.OPERATION_ID]: {
+                abortController: new AbortController(),
+                context: { agentId: 'agent-1', groupId: 'group-1', topicId: 'topic-1' },
+                id: TEST_IDS.OPERATION_ID,
+                metadata: {
+                  lastEventId: '0',
+                  startTime: Date.now(),
+                  stepCount: 0,
+                },
+                status: 'running',
+                type: 'groupAgentGenerate',
+              },
+            },
+          });
+        });
+
+        const context = createStreamingContext({
+          assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        });
+
+        const event: StreamEvent = {
+          type: 'step_start',
+          timestamp: Date.now(),
+          operationId: TEST_IDS.OPERATION_ID,
+          data: {
+            pendingToolsCalling: [{ id: 'tool-1' }],
+            phase: 'human_approval',
+            requiresApproval: true,
+          },
+        };
+
+        await act(async () => {
+          await result.current.internal_handleAgentStreamEvent(
+            TEST_IDS.OPERATION_ID,
+            event,
+            context,
+          );
+        });
+
+        expect(result.current.updateOperationMetadata).toHaveBeenCalledWith(TEST_IDS.OPERATION_ID, {
+          needsHumanInput: true,
+          pendingApproval: [{ id: 'tool-1' }],
+        });
+        expect(notifyDesktopHumanApprovalRequired).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            agentId: 'agent-1',
+            groupId: 'group-1',
+            topicId: 'topic-1',
+          }),
+        );
       });
     });
   });

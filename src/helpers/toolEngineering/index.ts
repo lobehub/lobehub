@@ -14,6 +14,7 @@ import { type ChatCompletionTool, type ToolManifest, type WorkingModel } from '@
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
 import {
   klavisStoreSelectors,
@@ -39,6 +40,43 @@ export interface ToolsEngineConfig {
 }
 
 /**
+ * A manifest is usable by ToolsEngine only if it has a non-empty `api` array.
+ * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)` unconditionally,
+ * so any entry with `api` missing / non-array will crash the whole tools build.
+ * Sources that populate manifests (installed plugins, Klavis, LobeHub skills, MCP)
+ * have no shared schema validation, so we guard defensively at the merge point.
+ */
+const isValidToolManifest = (m: ToolManifest | undefined): m is ToolManifest =>
+  !!m && typeof m === 'object' && Array.isArray((m as ToolManifest).api);
+
+const dropInvalidManifests = (manifests: (ToolManifest | undefined)[], source: string) => {
+  const valid: ToolManifest[] = [];
+  const dropped: Array<{ identifier?: string; reason: string }> = [];
+
+  for (const m of manifests) {
+    if (isValidToolManifest(m)) {
+      valid.push(m);
+    } else if (m) {
+      dropped.push({
+        identifier: (m as { identifier?: string }).identifier,
+        reason: Array.isArray((m as { api?: unknown }).api)
+          ? 'unknown'
+          : 'missing `api` field (expected array)',
+      });
+    }
+  }
+
+  if (dropped.length > 0) {
+    console.warn(
+      `[toolEngineering] Dropped ${dropped.length} invalid manifest(s) from ${source}:`,
+      dropped,
+    );
+  }
+
+  return valid;
+};
+
+/**
  * Initialize ToolsEngine with current manifest schemas and configurable options
  */
 export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine => {
@@ -62,13 +100,14 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     .map((tool) => tool.manifest as ToolManifest)
     .filter(Boolean);
 
-  // Combine all manifests
+  // Combine all manifests, dropping entries that would crash ToolsEngine.
+  // Each source is filtered separately so the warning pinpoints the origin.
   const allManifests = [
-    ...pluginManifests,
-    ...builtinManifests,
-    ...klavisManifests,
-    ...lobehubSkillManifests,
-    ...additionalManifests,
+    ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
+    ...dropInvalidManifests(builtinManifests, 'builtinTools'),
+    ...dropInvalidManifests(klavisManifests, 'klavis'),
+    ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
+    ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];
 
   return new ToolsEngine({
@@ -87,6 +126,11 @@ export const createAgentToolsEngine = (
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
+  // Page-level scenario-enabled tool ids (e.g. tasks page enables `lobe-task`).
+  // Set by page layouts via `useChatStore.setState({ scenarioEnabledToolIds })`,
+  // cleared on unmount. Only effective when the id is also in `defaultToolIds`
+  // or `pluginIds` — rules only apply to tools that reach the candidate pool.
+  const scenarioEnabledToolIds = getChatStoreState().scenarioEnabledToolIds ?? [];
 
   return createToolsEngine({
     defaultToolIds,
@@ -114,6 +158,8 @@ export const createAgentToolsEngine = (
         ...Object.fromEntries(userPlugins.map((id) => [id, true])),
         // Always-on builtin tools
         ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+        // Page-level scenario-enabled tools (e.g. tasks page enables `lobe-task`)
+        ...Object.fromEntries(scenarioEnabledToolIds.map((id) => [id, true])),
         // System-level rules (may override user selection for specific tools)
         [CloudSandboxManifest.identifier]:
           agentChatConfigSelectors.isCloudSandboxEnabled(agentState),

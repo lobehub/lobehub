@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-ag
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import {
   type DeviceAttachment,
   generateSystemPrompt,
@@ -13,18 +14,22 @@ import { LOADING_FLAT } from '@lobechat/const';
 import type {
   AgentManagementContext,
   LobeToolManifest,
+  ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
+  ChatFileItem,
   ChatTopicBotContext,
+  ChatVideoItem,
   ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
   ExecSubAgentTaskParams,
   ExecSubAgentTaskResult,
+  MessagePluginItem,
   UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
@@ -34,6 +39,7 @@ import debug from 'debug';
 import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
@@ -53,8 +59,11 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
@@ -131,6 +140,21 @@ interface InternalExecAgentParams extends ExecAgentParams {
   queueRetryDelay?: string;
   /** Whether to continue execution from an existing persisted message */
   resume?: boolean;
+  /**
+   * When present, this execAgent call acts as the "continue" step for a
+   * previous op that hit `human_approve_required`. The service writes the
+   * decision to the target tool message and either runs the approved tool
+   * (`approved`), halts with `reason='human_rejected'` (`rejected`), or
+   * surfaces the rejection as user feedback so the LLM can respond
+   * (`rejected_continue`). `parentMessageId` must point at the pending tool
+   * message.
+   */
+  resumeApproval?: {
+    decision: 'approved' | 'rejected' | 'rejected_continue';
+    parentMessageId: string;
+    rejectionReason?: string;
+    toolCallId: string;
+  };
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
@@ -218,10 +242,12 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      clientRuntime,
       deviceId: requestedDeviceId,
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
+      fileIds: attachedFileIds,
       files,
       functionTools,
       hooks,
@@ -237,11 +263,12 @@ export class AiAgentService {
       maxSteps,
       initialStepCount,
       signal,
-      userInterventionConfig,
+      userInterventionConfig = { approvalMode: 'headless' },
       queueRetries,
       queueRetryDelay,
       parentMessageId,
       resume,
+      resumeApproval,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -331,6 +358,33 @@ export class AiAgentService {
       }
     }
 
+    if (appContext?.scope !== 'page') {
+      agentConfig.plugins = agentConfig.plugins?.filter((id) => id !== PageAgentIdentifier);
+    }
+
+    if (appContext?.scope === 'page' && agentSlug !== BUILTIN_AGENT_SLUGS.pageAgent) {
+      const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {
+        model: agentConfig.model,
+        plugins: agentConfig.plugins ?? [],
+      });
+      const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
+
+      if (pageAgentSystemRole) {
+        agentConfig.systemRole = agentConfig.systemRole
+          ? `${agentConfig.systemRole}\n\n${pageAgentSystemRole}`
+          : pageAgentSystemRole;
+      }
+
+      agentConfig.plugins = agentConfig.plugins?.includes(PageAgentIdentifier)
+        ? agentConfig.plugins
+        : [PageAgentIdentifier, ...(agentConfig.plugins ?? [])];
+      agentConfig.chatConfig = {
+        ...agentConfig.chatConfig,
+        enableHistoryCount: false,
+      };
+      log('execAgent: injected page-agent runtime for page scope');
+    }
+
     await throwIfExecutionAborted('agent configuration');
 
     // 2.5. Append additional instructions to agent's systemRole
@@ -343,7 +397,14 @@ export class AiAgentService {
 
     let resumeParentMessage;
 
-    if (resume) {
+    // `resumeApproval` implies the same "load parent message + skip user
+    // message creation" semantics as `resume`. Callers that go through the
+    // tRPC router get `resume: true` via the router, but the service-level
+    // API allows resumeApproval alone — fold both into a single effective
+    // flag so downstream resume branches don't need to know about approval.
+    const effectiveResume = resume || !!resumeApproval;
+
+    if (effectiveResume) {
       if (!parentMessageId) {
         throw new Error('parentMessageId is required when resume is true');
       }
@@ -376,6 +437,74 @@ export class AiAgentService {
       if (resumeParentMessage.sessionId && resumeParentMessage.sessionId !== appContext.sessionId) {
         throw new Error('appContext.sessionId does not match parent message');
       }
+    }
+
+    // 2.6. Human-approval resume: write the user's decision to the target tool
+    // message in the DB so the history fetched below (step 11) + the runtime
+    // state both reflect the decision before the first step runs. Validates
+    // the parent is actually a pending tool message tied to the tool call we
+    // were asked about — guards against stale / double-clicks.
+    //
+    // Note: `messages` and `message_plugins` live in separate tables. The
+    // `messageModel.findById` query returns the `messages` row only — the
+    // tool_call_id / apiName / identifier / arguments / type fields live on
+    // the plugin row and must be fetched separately.
+    let resumeApprovalPlugin: MessagePluginItem | undefined;
+
+    if (resumeApproval) {
+      if (!resumeParentMessage) {
+        throw new Error('resumeApproval requires parentMessageId to point at a tool message');
+      }
+      if (resumeParentMessage.role !== 'tool') {
+        throw new Error(
+          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
+        );
+      }
+
+      resumeApprovalPlugin = await this.messageModel.findMessagePlugin(
+        resumeApproval.parentMessageId,
+      );
+      if (!resumeApprovalPlugin) {
+        throw new Error(
+          `resumeApproval: no plugin row for tool message ${resumeApproval.parentMessageId}`,
+        );
+      }
+      if (
+        resumeApprovalPlugin.toolCallId &&
+        resumeApprovalPlugin.toolCallId !== resumeApproval.toolCallId
+      ) {
+        throw new Error(
+          `resumeApproval.toolCallId mismatch for message ${resumeApproval.parentMessageId}: ` +
+            `stored=${resumeApprovalPlugin.toolCallId}, requested=${resumeApproval.toolCallId}`,
+        );
+      }
+
+      const { decision, rejectionReason } = resumeApproval;
+      if (decision === 'approved') {
+        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+          intervention: { status: 'approved' },
+        });
+      } else {
+        // rejected / rejected_continue both write the same rejection content
+        // + intervention state. The difference surfaces later in how the new
+        // op's initial state/context are configured (halt vs. continue LLM).
+        const rejectionContent = rejectionReason
+          ? `User reject this tool calling with reason: ${rejectionReason}`
+          : 'User reject this tool calling without reason';
+        await this.messageModel.updateToolMessage(resumeApproval.parentMessageId, {
+          content: rejectionContent,
+        });
+        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+          intervention: { rejectedReason: rejectionReason, status: 'rejected' },
+        });
+      }
+
+      log(
+        'execAgent: resumeApproval decision=%s applied to tool message %s (toolCallId=%s)',
+        decision,
+        resumeApproval.parentMessageId,
+        resumeApproval.toolCallId,
+      );
     }
 
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
@@ -452,6 +581,7 @@ export class AiAgentService {
     };
     const toolManifestMap: Record<string, any> = {};
     const toolSourceMap: Record<string, ToolSource> = {};
+    const toolExecutorMap: Record<string, ToolExecutor> = {};
     let onlineDevices: DeviceAttachment[] = [];
     let activeDeviceId: string | undefined;
     let hasAgentDocuments = false;
@@ -558,6 +688,7 @@ export class AiAgentService {
           chatConfig: agentConfig.chatConfig ?? undefined,
           plugins: agentPlugins,
         },
+        clientRuntime,
         deviceContext: gatewayConfigured
           ? {
               autoActivated: activeDeviceId ? true : undefined,
@@ -581,6 +712,9 @@ export class AiAgentService {
         LocalSystemManifest.identifier,
         RemoteDeviceManifest.identifier,
         ...(isBotConversation ? [MessageToolIdentifier] : []),
+        // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
+        ...lobehubSkillManifests.map((m) => m.identifier),
+        ...klavisManifests.map((m) => m.identifier),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
 
@@ -597,16 +731,75 @@ export class AiAgentService {
 
       log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
+      // Start with the scoped manifest map (pluginIds + defaultToolIds)
       const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
       manifestMap.forEach((manifest, id) => {
         toolManifestMap[id] = manifest;
       });
+
+      // Also include discoverable builtin tools that are not yet in the map,
+      // so the activator can find their manifests when dynamically enabling them
+      // (e.g., lobe-creds, lobe-cron). Exclude discoverable:false tools to prevent
+      // internal infrastructure tools from being surfaced to the activator.
+      for (const tool of builtinTools) {
+        if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
+          toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
+        }
+      }
+
+      // Include lobehub skill and klavis manifests for activator discovery
+      for (const manifest of lobehubSkillManifests) {
+        if (!toolManifestMap[manifest.identifier]) {
+          toolManifestMap[manifest.identifier] = manifest;
+        }
+      }
+      for (const manifest of klavisManifests) {
+        if (!toolManifestMap[manifest.identifier]) {
+          toolManifestMap[manifest.identifier] = manifest;
+        }
+      }
 
       for (const manifest of lobehubSkillManifests) {
         toolSourceMap[manifest.identifier] = 'lobehubSkill';
       }
       for (const manifest of klavisManifests) {
         toolSourceMap[manifest.identifier] = 'klavis';
+      }
+
+      // Mark tools that must run on the client (desktop Electron) because they
+      // require local IPC / subprocess capabilities:
+      //   - local-system builtin: Electron IPC for file + command execution
+      //   - stdio MCP plugins: subprocess lives on the user's machine
+      //
+      // Two triggers, in priority order:
+      //  (a) `clientRuntime === 'desktop'` — the caller itself is an Electron
+      //      client on the Agent Gateway WS and is ready to receive
+      //      `tool_execute`. This is the Phase 6.4 path and is authoritative
+      //      regardless of whether DEVICE_GATEWAY (the legacy device-proxy) is
+      //      also configured.
+      //  (b) `!gatewayConfigured` — no DEVICE_GATEWAY configured on the server,
+      //      so legacy Remote Device proxy isn't an option and any client
+      //      tooling falls through to the Gateway WS (standalone Electron).
+      //
+      // When DEVICE_GATEWAY is configured AND the caller is a web client, we
+      // leave executor unset so tools route via RemoteDevice proxy.
+      const shouldDispatchToClient = clientRuntime === 'desktop' || !gatewayConfigured;
+      if (shouldDispatchToClient) {
+        // Tools that declare `executors` including `'client'` in their
+        // manifest are dispatched to the client when a desktop caller is
+        // connected. `toolManifestMap` is a superset of `manifestMap`
+        // (includes both enabled plugins and discoverable builtins).
+        for (const id of Object.keys(toolManifestMap)) {
+          if (toolManifestMap[id]?.executors?.includes('client')) {
+            toolExecutorMap[id] = 'client';
+          }
+        }
+        // Stdio MCP plugins: subprocess lives on the user's machine
+        for (const plugin of installedPlugins) {
+          if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
+            toolExecutorMap[plugin.identifier] = 'client';
+          }
+        }
       }
 
       log(
@@ -717,6 +910,12 @@ export class AiAgentService {
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        ...(resolvedAgentId && {
+          currentAgent: {
+            id: resolvedAgentId,
+            title: agentConfig.title ?? undefined,
+          },
+        }),
       };
     }
 
@@ -881,13 +1080,22 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('message history loading');
 
-    // 12. Upload external files to S3 and collect file IDs
+    // 12. Collect Phase 2 warnings (ingestion/parsing errors) alongside Phase 1 warnings
+    // Phase 1 warnings (e.g. file too large) are already in botPlatformContext.warnings
+    const warnings: string[] = [];
+
+    // 13. Upload external files to S3 and collect file IDs
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
+    let videoList: ChatVideoItem[] | undefined;
+    let fileList: ChatFileItem[] | undefined;
 
     if (files && files.length > 0) {
       fileIds = [];
       imageList = [];
+      videoList = [];
+      fileList = [];
+      const documentService = new DocumentService(this.db, this.userId);
 
       for (const file of files) {
         await throwIfExecutionAborted('file upload');
@@ -902,23 +1110,172 @@ export class AiAgentService {
               id: result.fileId,
               url: result.resolvedUrl,
             });
+            continue;
           }
+
+          if (result.isVideo) {
+            videoList.push({
+              alt: file.name || 'video',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
+            continue;
+          }
+
+          // Non-image / non-video: parse file content into the documents table so
+          // the MessageContentProcessor can inject it via filesPrompts(). Mirrors
+          // what the web upload path does, ensuring bot-uploaded PDFs / text /
+          // JSON / .skill files are actually visible to the LLM (instead of
+          // being silently uploaded but never read).
+          let content: string | undefined;
+          try {
+            const document = await documentService.parseFile(result.fileId);
+            content = document.content ?? undefined;
+          } catch (parseError) {
+            log(
+              'execAgent: parseFile failed for %s (fileId=%s): %O',
+              file.name,
+              result.fileId,
+              parseError,
+            );
+            warnings.push(
+              `File "${file.name || 'unknown'}" was uploaded but its contents could not be extracted.`,
+            );
+          }
+
+          fileList.push({
+            content,
+            fileType: file.mimeType ?? 'application/octet-stream',
+            id: result.fileId,
+            name: file.name ?? 'file',
+            size: file.size ?? 0,
+            url: result.resolvedUrl || '',
+          });
         } catch (error) {
           log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
+          warnings.push(`File "${file.name || 'unknown'}" could not be uploaded and was skipped.`);
         }
       }
 
       if (fileIds.length > 0) {
-        log('execAgent: uploaded %d files to S3', fileIds.length);
+        log(
+          'execAgent: uploaded %d files to S3 (%d images, %d videos, %d documents)',
+          fileIds.length,
+          imageList.length,
+          videoList.length,
+          fileList.length,
+        );
       }
       if (imageList.length === 0) imageList = undefined;
+      if (videoList.length === 0) videoList = undefined;
+      if (fileList.length === 0) fileList = undefined;
+    }
+
+    // 13b. Attach already-uploaded files referenced by fileIds (e.g. SPA Gateway mode).
+    // These files are already in the `files` table; resolve URLs + classify, and
+    // merge into the imageList/videoList/fileList passed to the LLM and stored
+    // as message relations via messagesFiles.
+    if (attachedFileIds && attachedFileIds.length > 0) {
+      await throwIfExecutionAborted('file resolution');
+
+      // Dedupe while preserving caller order. messages_files has a composite PK
+      // on (file_id, message_id), so duplicate fileIds would violate the
+      // constraint on messageModel.create and abort the whole send.
+      const dedupedFileIds = Array.from(new Set(attachedFileIds));
+
+      const fileModel = new FileModel(this.db, this.userId);
+      const fileRecords = await fileModel.findByIds(dedupedFileIds);
+
+      if (fileRecords.length > 0) {
+        fileIds = fileIds ?? [];
+        imageList = imageList ?? [];
+        videoList = videoList ?? [];
+        fileList = fileList ?? [];
+
+        const documentService = new DocumentService(this.db, this.userId);
+
+        // Preserve caller's ordering of fileIds so rendering matches upload order.
+        const recordById = new Map(fileRecords.map((f) => [f.id, f]));
+
+        for (const id of dedupedFileIds) {
+          const file = recordById.get(id);
+          if (!file) {
+            warnings.push(`Attachment "${id}" was not found and skipped.`);
+            continue;
+          }
+
+          fileIds.push(file.id);
+          const resolvedUrl = (await fileService.getFullFileUrl(file.url)) || file.url;
+          const fileType = file.fileType || '';
+
+          if (fileType.startsWith('image')) {
+            imageList.push({
+              alt: file.name || 'image',
+              id: file.id,
+              url: resolvedUrl,
+            });
+            continue;
+          }
+
+          if (fileType.startsWith('video')) {
+            videoList.push({
+              alt: file.name || 'video',
+              id: file.id,
+              url: resolvedUrl,
+            });
+            continue;
+          }
+
+          // Non-image / non-video: ensure the document content is parsed so
+          // MessageContentProcessor can inject it via filesPrompts(). parseFile
+          // is idempotent — returns cached content when the document already exists.
+          let content: string | undefined;
+          try {
+            const document = await documentService.parseFile(file.id);
+            content = document.content ?? undefined;
+          } catch (parseError) {
+            log(
+              'execAgent: parseFile failed for attached file %s (id=%s): %O',
+              file.name,
+              file.id,
+              parseError,
+            );
+            warnings.push(
+              `File "${file.name || 'unknown'}" was attached but its contents could not be extracted.`,
+            );
+          }
+
+          fileList.push({
+            content,
+            fileType: fileType || 'application/octet-stream',
+            id: file.id,
+            name: file.name || 'file',
+            size: file.size ?? 0,
+            url: resolvedUrl,
+          });
+        }
+
+        log(
+          'execAgent: resolved %d attached file(s) (%d images, %d videos, %d documents)',
+          fileRecords.length,
+          imageList.length,
+          videoList.length,
+          fileList.length,
+        );
+
+        if (imageList.length === 0) imageList = undefined;
+        if (videoList.length === 0) videoList = undefined;
+        if (fileList.length === 0) fileList = undefined;
+      } else {
+        log('execAgent: no file records found for attachedFileIds=%O', dedupedFileIds);
+      }
     }
 
     await throwIfExecutionAborted('message creation');
 
     // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
-    const userMessageRecord = resume
+    const userMessageRecord = effectiveResume
       ? undefined
       : await this.messageModel.create({
           agentId: resolvedAgentId,
@@ -930,6 +1287,24 @@ export class AiAgentService {
         });
     if (userMessageRecord) {
       log('execAgent: created user message %s', userMessageRecord.id);
+      await enqueueAgentSignalSourceEvent(
+        {
+          payload: {
+            agentId: resolvedAgentId,
+            message: prompt,
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+            trigger,
+            messageId: userMessageRecord.id,
+          },
+          sourceId: userMessageRecord.id,
+          sourceType: 'agent.user.message',
+        },
+        {
+          agentId: resolvedAgentId,
+          userId: this.userId,
+        },
+      );
     }
 
     // 14. Create assistant message placeholder in database
@@ -947,11 +1322,27 @@ export class AiAgentService {
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
 
-    // Create user message object for processing (include imageList for vision models)
-    const userMessage = { content: prompt, imageList, role: 'user' as const };
+    // Append Phase 2 warnings (ingestion/parsing errors) to botPlatformContext
+    // so the context engine can inject them alongside Phase 1 warnings
+    if (warnings.length > 0 && botPlatformContext) {
+      const existing = (botPlatformContext as any).warnings as string[] | undefined;
+      (botPlatformContext as any).warnings = [...(existing ?? []), ...warnings];
+    }
+
+    // Create user message object for processing.
+    // - imageList: vision models render these as image_url parts
+    // - videoList: video-capable models render these as video parts
+    // - fileList: MessageContentProcessor injects content via filesPrompts() XML
+    const userMessage = {
+      content: prompt,
+      fileList,
+      imageList,
+      role: 'user' as const,
+      videoList,
+    };
 
     // Combine history messages with user message
-    const allMessages = resume ? historyMessages : [...historyMessages, userMessage];
+    const allMessages = effectiveResume ? historyMessages : [...historyMessages, userMessage];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -962,12 +1353,12 @@ export class AiAgentService {
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
     // 16. Create initial context
-    const initialContext: AgentRuntimeContext = {
+    let initialContext: AgentRuntimeContext = {
       payload: {
         // Pass assistant message ID so agent runtime knows which message to update
         assistantMessageId: assistantMessageRecord.id,
         isFirstMessage: true,
-        message: resume ? [{ content: '' }] : [{ content: prompt }],
+        message: effectiveResume ? [{ content: '' }] : [{ content: prompt }],
         // Pass user message ID as parentMessageId for reference
         parentMessageId: parentMessageId ?? userMessageRecord?.id ?? '',
         // Include tools for initial LLM call
@@ -981,6 +1372,94 @@ export class AiAgentService {
         stepCount: 0,
       },
     };
+
+    if (appContext?.scope !== 'page' && appContext?.documentId && topicId) {
+      try {
+        const topicDocuments = await this.agentDocumentsService.listDocumentsForTopic(
+          resolvedAgentId,
+          topicId,
+        );
+        const activeTopicDocument = topicDocuments.find(
+          (document) => document.documentId === appContext.documentId,
+        );
+
+        initialContext = {
+          ...initialContext,
+          initialContext: {
+            activeTopicDocument: {
+              agentDocumentId: activeTopicDocument?.id,
+              documentId: appContext.documentId,
+              title: activeTopicDocument?.title,
+            },
+          },
+        };
+      } catch (error) {
+        log('execAgent: failed to resolve active topic document context: %O', error);
+        initialContext = {
+          ...initialContext,
+          initialContext: {
+            activeTopicDocument: {
+              documentId: appContext.documentId,
+            },
+          },
+        };
+      }
+    }
+
+    // 16b. Human-approval resume — override initialContext based on the
+    // user's decision. The DB write above has already persisted the
+    // intervention status, so `allMessages` reflects the decision for the
+    // LLM / runner on the first step.
+    //
+    // `rejected` and `rejected_continue` share the same server-side path:
+    // both surface the rejection to the LLM as user feedback via
+    // `phase: 'user_input'`. The client-side split (halt vs. continue) is
+    // only about the UX of the button and the optimistic writes — once the
+    // decision is persisted, there's nothing meaningful to do differently
+    // server-side, and letting the LLM produce a brief acknowledgement keeps
+    // the conversation cleanly terminated either way.
+    if (resumeApproval && resumeApprovalPlugin) {
+      if (resumeApproval.decision === 'approved') {
+        // Ask the runtime to execute the approved tool directly. Matches the
+        // `phase: 'human_approved_tool'` contract used by the in-place
+        // handleHumanIntervention flow — the runner generates a `call_tool`
+        // instruction keyed on this payload. All tool metadata comes from
+        // the plugin row fetched above; missing any of identifier/apiName
+        // breaks the server-side tool executor dispatch.
+        initialContext = {
+          initialContext: initialContext.initialContext,
+          payload: {
+            approvedToolCall: {
+              apiName: resumeApprovalPlugin.apiName,
+              arguments: resumeApprovalPlugin.arguments,
+              id: resumeApproval.toolCallId,
+              identifier: resumeApprovalPlugin.identifier,
+              type: resumeApprovalPlugin.type ?? 'default',
+            },
+            assistantMessageId: assistantMessageRecord.id,
+            parentMessageId: resumeApproval.parentMessageId,
+            skipCreateToolMessage: true,
+          } as any,
+          phase: 'human_approved_tool' as const,
+          session: {
+            messageCount: allMessages.length,
+            sessionId: operationId,
+            status: 'idle' as const,
+            stepCount: 0,
+          },
+        };
+      } else {
+        initialContext = {
+          ...initialContext,
+          payload: {
+            ...(initialContext.payload as any),
+            isFirstMessage: false,
+            message: [{ content: '' }],
+            parentMessageId: resumeApproval.parentMessageId,
+          },
+        };
+      }
+    }
 
     // 17. Log final operation parameters summary
     log(
@@ -1041,7 +1520,9 @@ export class AiAgentService {
         userTimezone,
         appContext: {
           agentId: resolvedAgentId,
+          documentId: appContext?.documentId,
           groupId: appContext?.groupId,
+          scope: appContext?.scope,
           taskId,
           threadId: appContext?.threadId,
           topicId,
@@ -1064,6 +1545,7 @@ export class AiAgentService {
         stream,
         toolSet: {
           enabledToolIds: toolsResult.enabledToolIds,
+          executorMap: toolExecutorMap,
           manifestMap: toolManifestMap,
           sourceMap: toolSourceMap,
           tools,
@@ -1075,6 +1557,16 @@ export class AiAgentService {
       });
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
+
+      // Persist running operation to topic metadata for reconnect after page reload
+      await this.topicModel.updateMetadata(topicId, {
+        runningOperation: {
+          assistantMessageId: assistantMessageRecord.id,
+          operationId,
+          scope: appContext?.scope ?? undefined,
+          threadId: appContext?.threadId ?? undefined,
+        },
+      });
 
       // Generate a short-lived JWT for Gateway WebSocket authentication
       let gatewayToken: string | undefined;
@@ -1225,7 +1717,8 @@ export class AiAgentService {
    * 3. Store operationId in Thread metadata
    */
   async execSubAgentTask(params: ExecSubAgentTaskParams): Promise<ExecSubAgentTaskResult> {
-    const { groupId, topicId, parentMessageId, agentId, instruction, title } = params;
+    const { groupId, topicId, parentMessageId, agentId, instruction, title, parentOperationId } =
+      params;
 
     log(
       'execSubAgentTask: agentId=%s, groupId=%s, topicId=%s, instruction=%s',
@@ -1234,6 +1727,18 @@ export class AiAgentService {
       topicId,
       instruction.slice(0, 50),
     );
+
+    // Dispatch beforeCallAgent hook on parent operation
+    if (parentOperationId) {
+      hookDispatcher
+        .dispatch(parentOperationId, 'beforeCallAgent', {
+          agentId,
+          instruction: instruction.slice(0, 200),
+          operationId: parentOperationId,
+          userId: this.userId,
+        })
+        .catch(() => {});
+    }
 
     // 1. Create Thread for isolated task execution
     const thread = await this.threadModel.create({
@@ -1297,6 +1802,30 @@ export class AiAgentService {
         },
         status: ThreadStatus.Failed,
       });
+
+      // Dispatch onCallAgentError hook
+      if (parentOperationId) {
+        hookDispatcher
+          .dispatch(parentOperationId, 'onCallAgentError', {
+            agentId,
+            error: result.error || 'Sub-agent execution failed',
+            operationId: parentOperationId,
+            userId: this.userId,
+          })
+          .catch(() => {});
+      }
+    } else if (parentOperationId) {
+      // Dispatch afterCallAgent hook
+      hookDispatcher
+        .dispatch(parentOperationId, 'afterCallAgent', {
+          agentId,
+          operationId: parentOperationId,
+          subOperationId: result.operationId,
+          success: true,
+          threadId: thread.id,
+          userId: this.userId,
+        })
+        .catch(() => {});
     }
 
     return {

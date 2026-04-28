@@ -60,6 +60,7 @@
   "response.520": "Lo sentimos, el servidor encontró un problema inesperado. Inténtalo de nuevo más tarde.",
   "response.522": "Lo sentimos, la conexión con el servidor expiró. Inténtalo más tarde.",
   "response.524": "Lo sentimos, el servidor agotó el tiempo de espera esperando una respuesta.",
+  "response.AccountDeactivated": "Tu cuenta ha sido desactivada o suspendida. Esto puede deberse a motivos de política, seguridad o revisión de la cuenta. Por favor, ponte en contacto con el servicio de atención al cliente del proveedor para obtener ayuda.",
   "response.AgentRuntimeError": "Error de ejecución del modelo de lenguaje Lobe. Soluciona el problema o vuelve a intentarlo.",
   "response.ComfyUIBizError": "Ocurrió un error al solicitar el servicio ComfyUI. Intenta solucionarlo o vuelve a intentarlo.",
   "response.ComfyUIEmptyResult": "ComfyUI no generó ninguna imagen. Verifica la configuración del modelo.",

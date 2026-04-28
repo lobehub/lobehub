@@ -6,6 +6,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   AgentCouncilFlattenProcessor,
   CompressedGroupRoleTransformProcessor,
+  DisabledToolCallFilter,
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
@@ -22,6 +23,7 @@ import {
   ToolMessageReorder,
 } from '../../processors';
 import {
+  ActiveTopicDocumentContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -48,6 +50,7 @@ import {
   SkillContextProvider,
   SystemDateProvider,
   SystemRoleInjector,
+  TaskManagerContextInjector,
   ToolDiscoveryProvider,
   ToolSystemRoleProvider,
   TopicReferenceContextInjector,
@@ -182,6 +185,7 @@ export class MessagesEngine {
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
+    const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
     // GTD is enabled if gtd.enabled is true and either plan or todos is provided
     const isGTDPlanEnabled = gtd?.enabled && gtd?.plan;
     const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
@@ -314,6 +318,11 @@ export class MessagesEngine {
 
       // Agent documents → after-first-user, context-end
       new AgentDocumentMessageInjector(agentDocConfig),
+      // Active topic document → last user message, for continuing document work outside page scope
+      new ActiveTopicDocumentContextInjector({
+        activeTopicDocument: initialContext?.activeTopicDocument,
+        enabled: hasActiveTopicDocument && !isPageEditorEnabled,
+      }),
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
@@ -336,6 +345,11 @@ export class MessagesEngine {
                 xml: stepContext?.stepPageEditor?.xml || initialContext.pageEditor.xml,
               }
             : undefined),
+      }),
+      // Task Manager page context (inject current tasks list/detail to last user message)
+      new TaskManagerContextInjector({
+        contextPrompt: initialContext?.taskManager?.contextPrompt,
+        enabled: !!initialContext?.taskManager?.contextPrompt,
       }),
       // GTD Todo (at end of last user message)
       new GTDTodoInjector({ enabled: !!isGTDTodoEnabled, todos: gtd?.todos }),
@@ -368,8 +382,6 @@ export class MessagesEngine {
 
       // Input template processing
       new InputTemplateProcessor({ inputTemplate }),
-      // Placeholder variables processing
-      new PlaceholderVariablesProcessor({ variableGenerators: variableGenerators || {} }),
       // AgentCouncil message flatten
       new AgentCouncilFlattenProcessor(),
       // Group message flatten
@@ -403,6 +415,16 @@ export class MessagesEngine {
             }),
           ]
         : []),
+      // Placeholder variables processing — MUST run AFTER all flatten / role
+      // transform steps. AssistantGroup / Supervisor messages keep their real
+      // content (including any `{{...}}` placeholders inside tool results)
+      // nested under `children[].tools[].result.content`. The flatten processors
+      // hoist that nested content into top-level `role: 'tool'` messages.
+      // PlaceholderVariablesProcessor only walks `message.content`, so it MUST
+      // run after the hoist or it would silently miss every placeholder buried
+      // inside an assistantGroup. (Regression discovered while wiring lobehub
+      // skill identity placeholders — see LOBE-6882.)
+      new PlaceholderVariablesProcessor({ variableGenerators: variableGenerators || {} }),
 
       // =============================================
       // Phase 6: Content Processing
@@ -425,6 +447,10 @@ export class MessagesEngine {
         isCanUseFC: capabilities?.isCanUseFC || (() => true),
         model,
         provider,
+      }),
+      // Disabled historical tool calls (for scope-specific tool removal)
+      new DisabledToolCallFilter({
+        disabledToolIdentifiers: toolsConfig?.disabledToolIdentifiers,
       }),
 
       // =============================================

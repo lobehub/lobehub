@@ -15,11 +15,26 @@ import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
+import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 
 const ProfileEditor = memo(() => {
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
+  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
+  const updateHeterogeneousCommand = async (command: string) => {
+    if (!heterogeneousProvider) return;
+
+    await updateConfig({
+      agencyConfig: {
+        heterogeneousProvider: {
+          ...heterogeneousProvider,
+          command,
+        },
+      },
+    });
+  };
 
   return (
     <>
@@ -31,25 +46,35 @@ const ProfileEditor = memo(() => {
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
-        {/* Config Bar: Model Selector */}
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={8}
-          justify={'flex-start'}
-          style={{ marginBottom: 12 }}
-        >
-          <ModelSelect
-            initialWidth
-            popupWidth={400}
-            value={{
-              model: config.model,
-              provider: config.provider,
-            }}
-            onChange={updateConfig}
+        {isHeterogeneous && heterogeneousProvider ? (
+          // Heterogeneous integration mode: show provider CLI status instead of model/skills pickers
+          <HeterogeneousAgentStatusCard
+            provider={heterogeneousProvider}
+            onCommandChange={updateHeterogeneousCommand}
           />
-        </Flexbox>
-        <AgentTool />
+        ) : (
+          <>
+            {/* Config Bar: Model Selector */}
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={8}
+              justify={'flex-start'}
+              style={{ marginBottom: 12 }}
+            >
+              <ModelSelect
+                initialWidth
+                popupWidth={400}
+                value={{
+                  model: config.model,
+                  provider: config.provider,
+                }}
+                onChange={updateConfig}
+              />
+            </Flexbox>
+            <AgentTool />
+          </>
+        )}
       </Flexbox>
       <Divider />
       {/* Main Content: Prompt Editor */}

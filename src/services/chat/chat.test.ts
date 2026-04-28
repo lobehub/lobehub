@@ -3,6 +3,7 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { type ChatStreamPayload, type LobeTool, type UIChatMessage } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { act } from '@testing-library/react';
+import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
@@ -10,7 +11,7 @@ import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors } from '@/store/aiInfra';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -118,6 +119,7 @@ beforeEach(async () => {
     () => ({ searchMode: 'off' }) as any,
   );
   useAgentStore.setState({ activeAgentId: undefined, agentDocumentsMap: {} } as any);
+  useAiInfraStore.setState({ enabledAiModels: [] });
   useChatStore.setState({ activeAgentId: undefined } as any);
 });
 
@@ -535,7 +537,16 @@ describe('ChatService', () => {
               {
                 content: [
                   {
+                    // NOTE: `vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(true)`
+                    // above does not actually flow through to MessageContentProcessor
+                    // — the capability function reaches the processor via an object
+                    // literal captured in contextEngineering.ts at import time, so the
+                    // spy has no effect on the downstream pipeline. The effective
+                    // behavior is therefore vision=disabled, and the image is
+                    // downgraded to a placeholder (see LOBE-7214).
                     text: `Hello
+
+[image omitted: not supported by this model]
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
 <context.instruction>following part contains context information injected by the system. Please follow these instructions:
@@ -1601,6 +1612,37 @@ describe('ChatService', () => {
           body: JSON.stringify(expectedPayload),
           headers: expect.any(Object),
           method: 'POST',
+        }),
+      );
+    });
+
+    it('should preserve Azure Responses-only logical model and pass deploymentName separately', async () => {
+      useAiInfraStore.setState({
+        enabledAiModels: [
+          {
+            config: { deploymentName: 'prod-gpt-54' },
+            id: 'gpt-5.4',
+            providerId: ModelProvider.Azure,
+          },
+        ],
+      } as any);
+
+      const params: Partial<ChatStreamPayload> = {
+        messages: [],
+        model: 'gpt-5.4',
+        provider: ModelProvider.Azure,
+      };
+
+      await chatService.getChatCompletion(params, {});
+
+      const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
+
+      expect(payload).toEqual(
+        expect.objectContaining({
+          apiMode: 'chatCompletion',
+          deploymentName: 'prod-gpt-54',
+          messages: [],
+          model: 'gpt-5.4',
         }),
       );
     });

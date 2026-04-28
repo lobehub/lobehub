@@ -1,13 +1,12 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import process from 'node:process';
 
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
-import { macOS } from 'electron-is';
+import * as electronIs from 'electron-is';
 import { pathExists, readdir } from 'fs-extra';
 
 import { legacyLocalDbDir } from '@/const/dir';
+import { detectRepoType } from '@/utils/git';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -104,7 +103,7 @@ export default class SystemController extends ControllerModule {
       return 'granted';
     }
 
-    if (!macOS()) {
+    if (!electronIs.macOS()) {
       logger.info('[FullDiskAccess] Not macOS, returning granted');
       return 'granted';
     }
@@ -185,7 +184,7 @@ export default class SystemController extends ControllerModule {
     }
 
     const folderPath = result.filePaths[0];
-    const repoType = await this.detectRepoType(folderPath);
+    const repoType = await detectRepoType(folderPath);
 
     return { path: folderPath, repoType };
   }
@@ -232,17 +231,6 @@ export default class SystemController extends ControllerModule {
     } catch {
       // If directory exists but cannot be read, treat as "used" to surface guidance.
       return true;
-    }
-  }
-
-  private async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
-    const gitConfigPath = path.join(dirPath, '.git', 'config');
-    try {
-      const config = await readFile(gitConfigPath, 'utf8');
-      if (config.includes('github.com')) return 'github';
-      return 'git';
-    } catch {
-      return undefined;
     }
   }
 

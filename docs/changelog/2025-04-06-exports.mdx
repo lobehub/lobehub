@@ -1,34 +1,64 @@
 ---
-title: 'Hotkey Settings, Data Export, and Multiple Optimizations ⚡'
-description: >-
-  LobeHub v1.49.12 fully supports the DeepSeek R1 model, bringing an
-  unprecedented chain-of-thought experience.
+title: "Customizable Hotkeys, Data Export, and Provider Expansion"
+description: LobeHub adds customizable hotkeys, data export functionality, and expands provider support to make daily workflows smoother and more portable.
 tags:
-  - LobeHub Hotkeys
-  - CoT
-  - Chain of Thought
+  - LobeHub
+  - Hotkeys
+  - Data Export
 ---
 
-# Seamless DeepSeek R1 Integration, Unlock a New Chain-of-Thought Experience
+# Customizable Hotkeys, Data Export, and Provider Expansion
 
-In March, LobeHub continued to refine the user experience—adding practical features like customizable hotkeys and data export, while further expanding the AI provider ecosystem.
+This March release focuses on everyday workflow improvements. Custom hotkeys let you set shortcuts that match your habits. Data export makes your conversations portable. New providers and better reasoning display round out the update.
 
-## 🌟 Key Updates
+## Keyboard shortcuts that match your habits
 
-- ⚡ Customizable hotkeys: customize keyboard shortcuts to create a personalized workflow
-- 💾 Data export: export data from PgLite and PostgreSQL for better data safety and portability
-- 🔮 Provider expansion: added Xinference, Cohere, Search1API, Infini-AI, PPIO, and more
-- 🧠 Reasoning model improvements: a reasoning-content selector and enhanced chain-of-thought rendering for models like Claude 3.7 and DeepSeek R1
-- 🌐 Web crawling enhancements: special support for YouTube, Reddit, and WeChat Official Account links; improved short-content crawling; added a Search1API crawler implementation
+Hotkeys are now customizable. You can remap common actions to keys that feel natural for your workflow rather than learning a preset layout.
 
-## 📊 Model Library Update
+New shortcuts have also been added for clearing conversations and deleting messages. If you prefer keyboard-driven workflows, these additions reduce the need to reach for the mouse during fast-paced sessions.
 
-Added multiple mainstream AI models, including Google's Gemini 2.5 Pro Experimental and Gemini 2.0 Flash variants; Anthropic context caching support; OpenAI's gpt-4o-mini-tts voice model; DeepSeek-V3-0324 and Hunyuan-T1-Latest; plus QwQ, QVQ-Max, and Baidu Wenxin ernie-x1-32k-preview.
+## Export your data for backup and migration
 
-## 💫 Experience Improvements
+Data export is now available for both PgLite and PostgreSQL backends. You can create backups of your conversations or migrate data between installations without manual database operations.
 
-- UI refinements: revamped Drawer styles, improved editing scroll experience, and support for screenshot sharing to clipboard
-- Search enhancements: online search for non-function-calling models (e.g., DeepSeek R1); built-in web search for Wenxin and Hunyuan
-- File handling: added EPUB chunking support and improved PDF processing
-- Performance: refactored the Agent Runtime implementation, optimized database core code, and fixed LiteLLM streaming usage statistics
-- Stability fixes: addressed multiple issues including theme flicker, knowledge base, and WeChat login
+This matters most when you want to:
+
+- Archive important conversation histories
+- Move your setup to a new device or server
+- Keep a local backup alongside cloud storage
+
+## Expanded provider and reasoning support
+
+Six new providers join the lineup: Xinference, Cohere, Search1API, Infini-AI, and PPIO. Each integrates into the existing provider selection flow without requiring additional configuration steps.
+
+Reasoning models now have a dedicated content selector, and chain-of-thought display has been improved for Claude 3.7 and DeepSeek R1. The reasoning content is easier to read and navigate during long conversations.
+
+## Better web crawling for diverse content
+
+Web crawling now handles more content types with dedicated support for YouTube, Reddit, and WeChat Official Account links. Short content extraction has been improved, and Search1API provides an additional crawler implementation for better coverage.
+
+## Model library updates
+
+This release brings in several notable additions:
+
+- Google Gemini 2.5 Pro Experimental and Gemini 2.0 Flash variants
+- Anthropic context caching support
+- OpenAI gpt-4o-mini-tts voice model
+- DeepSeek-V3-0324
+- Hunyuan-T1-Latest
+- QwQ, QVQ-Max
+- Baidu Wenxin ernie-x1-32k-preview
+
+## Improvements and fixes
+
+- UI refinements: revamped Drawer styles, improved editor scrolling, clipboard screenshot sharing
+- Search enhancements: online search now works with non-function-calling models including DeepSeek R1; built-in web search added for Wenxin and Hunyuan
+- File handling: EPUB chunking support, improved PDF processing
+- Performance: refactored Agent Runtime, optimized database core code, fixed LiteLLM streaming statistics
+- Stability: resolved theme flickering, knowledge base behavior issues, and WeChat login problems
+
+## Credits
+
+Huge thanks to these contributors:
+
+@AmAzing129 @arvinxx @hezhijie0327 @tjx666 @lobehub-team

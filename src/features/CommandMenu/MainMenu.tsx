@@ -1,11 +1,10 @@
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { DiscordIcon } from '@lobehub/ui/icons';
+import { DiscordIcon, GithubIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import {
   Bot,
   FeatherIcon,
   FilePen,
-  Github,
   LibraryBig,
   MessageSquarePlusIcon,
   Monitor,
@@ -145,7 +144,7 @@ const MainMenu = memo(() => {
           {t('cmdk.contactUs')}
         </CommandItem>
         <CommandItem
-          icon={<Github />}
+          icon={<GithubIcon />}
           keywords={t('cmdk.keywords.submitIssue').split(' ')}
           value="submit-issue"
           onSelect={() => handleExternalLink(FEEDBACK)}

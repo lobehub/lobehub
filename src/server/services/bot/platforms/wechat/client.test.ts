@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockCreateWechatAdapter = vi.hoisted(() => vi.fn());
 const mockGetUpdates = vi.hoisted(() => vi.fn());
 const mockStartTyping = vi.hoisted(() => vi.fn());
+const mockDownloadMediaFromRawMessage = vi.hoisted(() => vi.fn());
 const MessageState = vi.hoisted(() => ({ FINISH: 2 }));
 const MessageType = vi.hoisted(() => ({ BOT: 2, USER: 1 }));
 
 vi.mock('@lobechat/chat-adapter-wechat', () => ({
   createWechatAdapter: mockCreateWechatAdapter,
+  downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
   MessageState,
   MessageType,
   WechatApiClient: vi.fn().mockImplementation(() => ({
@@ -165,5 +167,152 @@ describe('WechatGatewayClient', () => {
         { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
       ),
     ).toThrowError('Bot Token is required');
+  });
+
+  describe('extractFiles', () => {
+    // Verifies the post-Redis re-download path: when WeChat messages
+    // round-trip through the chat-sdk debounce/queue, `Message.toJSON`
+    // strips the `att.buffer` field that the adapter pre-populated. We
+    // recover by walking `message.raw.item_list` and re-running the same
+    // download logic via the package-exported helper.
+    const createClient = () =>
+      new WechatClientFactory().createClient(
+        {
+          applicationId: 'wechat-app',
+          credentials: { botId: 'bot-id', botToken: 'bot-token' },
+          platform: 'wechat',
+          settings: {},
+        },
+        { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+      );
+
+    /** Build a fake Chat SDK Message with a WeChat raw payload. */
+    const makeMessage = (raw: Record<string, unknown>, id = 'wechat-msg-1') =>
+      ({ id, attachments: [], raw, text: '' }) as any;
+
+    it('returns undefined when raw has no item_list', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(makeMessage({}));
+      expect(mockDownloadMediaFromRawMessage).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when item_list is empty', async () => {
+      const client = createClient();
+      const result = await client.extractFiles!(makeMessage({ item_list: [] }));
+      expect(mockDownloadMediaFromRawMessage).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('delegates to downloadMediaFromRawMessage and maps the result to AttachmentSource[]', async () => {
+      const buffer = Buffer.from('wechat-image-bytes');
+      mockDownloadMediaFromRawMessage.mockResolvedValue([
+        {
+          buffer,
+          mimeType: 'image/jpeg',
+          name: 'image.jpg',
+          type: 'image',
+          url: '',
+        },
+      ]);
+
+      const client = createClient();
+      const raw = {
+        item_list: [
+          {
+            image_item: {
+              aeskey: 'hex-key',
+              media: { encrypt_query_param: 'enc-1' },
+            },
+            type: 1, // MessageItemType.IMAGE
+          },
+        ],
+      };
+      const result = await client.extractFiles!(makeMessage(raw));
+
+      expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(1);
+      // Confirm we pass the api client + raw payload (the helper handles the rest).
+      expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledWith(
+        expect.anything(), // WechatApiClient instance
+        raw,
+      );
+      expect(result).toEqual([
+        { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
+      ]);
+    });
+
+    it('returns undefined when downloadMediaFromRawMessage resolves to an empty array', async () => {
+      mockDownloadMediaFromRawMessage.mockResolvedValue([]);
+      const client = createClient();
+      const result = await client.extractFiles!(makeMessage({ item_list: [{ type: 99 }] }));
+      expect(mockDownloadMediaFromRawMessage).toHaveBeenCalledTimes(1);
+      expect(result).toBeUndefined();
+    });
+
+    it('maps file attachments preserving name + size', async () => {
+      const buffer = Buffer.from('pdf-bytes');
+      mockDownloadMediaFromRawMessage.mockResolvedValue([
+        {
+          buffer,
+          mimeType: 'application/pdf',
+          name: 'report.pdf',
+          size: 4096,
+          type: 'file',
+          url: '',
+        },
+      ]);
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          item_list: [
+            {
+              file_item: {
+                file_name: 'report.pdf',
+                len: '4096',
+                media: { encrypt_query_param: 'enc-pdf' },
+              },
+              type: 4, // MessageItemType.FILE
+            },
+          ],
+        }),
+      );
+      expect(result).toEqual([
+        { buffer, mimeType: 'application/pdf', name: 'report.pdf', size: 4096 },
+      ]);
+    });
+
+    it('maps multiple attachments in a single message', async () => {
+      const imageBuf = Buffer.from('img');
+      const voiceBuf = Buffer.from('voice');
+      mockDownloadMediaFromRawMessage.mockResolvedValue([
+        { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image', url: '' },
+        { buffer: voiceBuf, mimeType: 'audio/silk', type: 'audio', url: '' },
+      ]);
+      const client = createClient();
+      const result = await client.extractFiles!(
+        makeMessage({
+          item_list: [
+            { image_item: { media: { encrypt_query_param: 'a' } }, type: 1 },
+            { type: 2, voice_item: { media: { encrypt_query_param: 'b' } } },
+          ],
+        }),
+      );
+      expect(result).toEqual([
+        { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
+        { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
+      ]);
+    });
+
+    it('propagates errors from downloadMediaFromRawMessage as undefined gracefully', async () => {
+      // The helper itself swallows per-item errors; if it throws as a whole,
+      // that's an unexpected programmer error and we let it propagate.
+      // This test verifies we DON'T silently swallow whole-helper failures —
+      // we want them to surface in logs / be debuggable.
+      mockDownloadMediaFromRawMessage.mockRejectedValue(new Error('helper crashed'));
+      const client = createClient();
+      await expect(
+        client.extractFiles!(makeMessage({ item_list: [{ image_item: {}, type: 1 }] })),
+      ).rejects.toThrow('helper crashed');
+    });
   });
 });

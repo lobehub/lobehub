@@ -1,4 +1,5 @@
 // Context Provider exports
+export { ActiveTopicDocumentContextInjector } from './ActiveTopicDocumentContextInjector';
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
@@ -37,12 +38,14 @@ export {
 export { SkillContextProvider } from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
+export { TaskManagerContextInjector } from './TaskManagerContextInjector';
 export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
 export { ToolSystemRoleProvider } from './ToolSystemRole';
 export { TopicReferenceContextInjector } from './TopicReferenceContextInjector';
 export { UserMemoryInjector } from './UserMemoryInjector';
 
 // Re-export types
+export type { ActiveTopicDocumentContextInjectorConfig } from './ActiveTopicDocumentContextInjector';
 export type {
   AgentBuilderContext,
   AgentBuilderContextInjectorConfig,
@@ -98,6 +101,7 @@ export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
+export type { TaskManagerContextInjectorConfig } from './TaskManagerContextInjector';
 export type { ToolDiscoveryMeta, ToolDiscoveryProviderConfig } from './ToolDiscoveryProvider';
 export type { ToolSystemRoleConfig } from './ToolSystemRole';
 export type {

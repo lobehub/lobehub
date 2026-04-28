@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "برای نانو بانانا ۲؛ نسبت ابعاد تصاویر تولید شده را کنترل می‌کند (پشتیبانی از فوق‌العاده عریض ۱:۴، ۴:۱، ۱:۸، ۸:۱).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "برای مدل‌های تولید تصویر Gemini 3؛ وضوح تصویر تولیدی را کنترل می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "برای مدل‌های تصویر فلش جمینی ۳.۱؛ وضوح تصاویر تولید شده را کنترل می‌کند (پشتیبانی از ۵۱۲ پیکسل).",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "برای مدل Claude Opus 4.7؛ سطح تلاش را کنترل می‌کند (کم/متوسط/زیاد/بسیار زیاد/حداکثر).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "برای Claude، Qwen3 و مدل‌های مشابه؛ بودجه توکن برای استدلال را کنترل می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "برای GLM-5 و GLM-4.7؛ بودجه توکن برای استدلال را کنترل می‌کند (حداکثر ۳۲k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "برای سری Qwen3؛ بودجه توکن برای استدلال را کنترل می‌کند (حداکثر ۸۰k).",

@@ -2,13 +2,14 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
+import { documentService } from '@/services/document';
 
 import { useDocumentStore } from '../../store';
 
 // Mock services
 vi.mock('@/services/document', () => ({
   documentService: {
-    updateDocument: vi.fn().mockResolvedValue({}),
+    updateDocument: vi.fn().mockResolvedValue({ historyAppended: false, id: 'doc-1' }),
   },
 }));
 
@@ -28,8 +29,24 @@ const createMockEditor = () => ({
   setDocument: vi.fn(),
 });
 
+const createValidMockEditor = () => ({
+  getDocument: vi.fn((type: string) => {
+    if (type === 'markdown') return '# Test';
+    if (type === 'json') {
+      return { root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } };
+    }
+    return null;
+  }),
+  setDocument: vi.fn(),
+});
+
 describe('DocumentStore - Editor Actions', () => {
   beforeEach(() => {
+    vi.mocked(documentService.updateDocument).mockResolvedValue({
+      historyAppended: false,
+      id: 'doc-1',
+    });
+
     // Reset store state before each test
     const { result } = renderHook(() => useDocumentStore());
     act(() => {
@@ -66,6 +83,9 @@ describe('DocumentStore - Editor Actions', () => {
         isDirty: false,
         sourceType: 'notebook',
         topicId: 'topic-1',
+      });
+      expect(result.current.lastActiveTopicDocumentIdByTopicId).toEqual({
+        'topic-1': 'doc-1',
       });
       // Should NOT call setDocument - that happens in onEditorInit
       expect(mockEditor.setDocument).not.toHaveBeenCalled();
@@ -135,6 +155,23 @@ describe('DocumentStore - Editor Actions', () => {
       expect(result.current.documents['doc-1'].editorData).toEqual(editorData);
       // Should NOT call setDocument - that happens in onEditorInit
       expect(mockEditor.setDocument).not.toHaveBeenCalled();
+    });
+
+    it('should initialize document with editor data', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createMockEditor() as any;
+      const editorData = { blocks: [{ type: 'paragraph' }] };
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData,
+          sourceType: 'page',
+        });
+      });
+
+      expect(result.current.documents['doc-1'].editorData).toEqual(editorData);
     });
   });
 
@@ -300,7 +337,7 @@ describe('DocumentStore - Editor Actions', () => {
       const mockEditor = {
         getDocument: vi.fn((type: string) => {
           if (type === 'markdown') return '# Test';
-          if (type === 'json') return { type: 'doc', version: 2 };
+          if (type === 'json') return { type: 'doc', updated: true };
           return null;
         }),
         setDocument: vi.fn(),
@@ -311,7 +348,7 @@ describe('DocumentStore - Editor Actions', () => {
           content: '# Test',
           documentId: 'doc-1',
           editor: mockEditor,
-          editorData: { type: 'doc', version: 1 },
+          editorData: { type: 'doc' },
           sourceType: 'page',
         });
       });
@@ -324,7 +361,7 @@ describe('DocumentStore - Editor Actions', () => {
 
       expect(result.current.documents['doc-1']).toMatchObject({
         content: '# Test',
-        editorData: { type: 'doc', version: 2 },
+        editorData: { type: 'doc', updated: true },
         isDirty: true,
       });
     });
@@ -389,6 +426,170 @@ describe('DocumentStore - Editor Actions', () => {
           result.current.flushSave();
         });
       }).not.toThrow();
+    });
+  });
+
+  describe('performSave', () => {
+    it('should reject saving when editorData is an empty object', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Test';
+          if (type === 'json') return {};
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+      vi.mocked(documentService.updateDocument).mockClear();
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(documentService.updateDocument).not.toHaveBeenCalled();
+      expect(result.current.documents['doc-1'].isDirty).toBe(true);
+      expect(result.current.documents['doc-1'].saveStatus).toBe('idle');
+    });
+
+    it('should save metadata-only updates when history is not appended', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      vi.mocked(documentService.updateDocument).mockResolvedValue({
+        historyAppended: false,
+        id: 'doc-1',
+      });
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+      });
+
+      await act(async () => {
+        await result.current.performSave(
+          'doc-1',
+          { title: 'Updated Title' },
+          { saveSource: 'autosave' },
+        );
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'doc-1',
+          saveSource: 'autosave',
+          title: 'Updated Title',
+        }),
+      );
+      expect(result.current.documents['doc-1'].isDirty).toBe(false);
+    });
+
+    it('should save and persist raw editorData with diff nodes (pending human review)', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const editorData = {
+        root: {
+          children: [
+            {
+              children: [
+                { children: [{ text: 'origin', type: 'text' }], type: 'paragraph' },
+                { children: [{ text: 'modified', type: 'text' }], type: 'paragraph' },
+              ],
+              diffType: 'modify',
+              type: 'diff',
+            },
+            {
+              children: [{ children: [{ text: 'added', type: 'text' }], type: 'paragraph' }],
+              diffType: 'add',
+              type: 'diff',
+            },
+          ],
+          type: 'root',
+        },
+      };
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Test';
+          if (type === 'json') return editorData;
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      // Autosave preserves diff nodes; DiffAllToolbar surfaces Accept/Reject
+      // on the next render and only then does the editor normalize the state.
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          editorData: JSON.stringify(editorData),
+          id: 'doc-1',
+        }),
+      );
+      expect(result.current.documents['doc-1'].editorData).toEqual(editorData);
+      expect(result.current.documents['doc-1'].lastSavedEditorData).toEqual(editorData);
+    });
+
+    it('should pass restore metadata through updateDocument', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      vi.mocked(documentService.updateDocument).mockResolvedValue({
+        historyAppended: true,
+        id: 'doc-1',
+        savedAt: '2026-04-15T10:00:00.000Z',
+      });
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      await act(async () => {
+        await result.current.performSave('doc-1', undefined, {
+          restoreFromHistoryId: 'hist-2',
+          saveSource: 'restore',
+        });
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: '# Test',
+          id: 'doc-1',
+          restoreFromHistoryId: 'hist-2',
+          saveSource: 'restore',
+        }),
+      );
+      expect(result.current.documents['doc-1'].isDirty).toBe(false);
     });
   });
 });

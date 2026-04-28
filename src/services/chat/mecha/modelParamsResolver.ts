@@ -1,4 +1,5 @@
-import { type LobeAgentChatConfig } from '@lobechat/types';
+import type { LobeAgentChatConfig } from '@lobechat/types';
+import type { ExtendParamsType } from 'model-bank';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
@@ -30,6 +31,39 @@ export interface ModelExtendParams {
   verbosity?: string;
 }
 
+const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
+  thinkingLevel: 'high',
+  thinkingLevel2: 'high',
+  thinkingLevel3: 'high',
+  thinkingLevel4: 'minimal',
+  thinkingLevel5: 'minimal',
+} as const satisfies Partial<Record<ExtendParamsType, string>>;
+
+const THINKING_LEVEL_PARAM_TO_CONFIG_KEY = {
+  thinkingLevel: 'thinkingLevel',
+  thinkingLevel2: 'thinkingLevel2',
+  thinkingLevel3: 'thinkingLevel3',
+  thinkingLevel4: 'thinkingLevel4',
+  thinkingLevel5: 'thinkingLevel5',
+} as const satisfies Partial<Record<ExtendParamsType, keyof LobeAgentChatConfig>>;
+
+/**
+ * Preserves legacy `thinking` preferences for users created before `enableReasoning`.
+ * Without this fallback, an old `thinking: 'disabled'` setting would be treated as unset
+ * and could be overwritten by a model-level default such as DeepSeek V4 reasoning enabled.
+ */
+const resolveEnableReasoningValue = (
+  chatConfig: LobeAgentChatConfig,
+  defaultValue?: boolean,
+): boolean | undefined => {
+  if (Object.hasOwn(chatConfig, 'enableReasoning')) return chatConfig.enableReasoning;
+
+  if (chatConfig.thinking === 'enabled') return true;
+  if (chatConfig.thinking === 'disabled') return false;
+
+  return defaultValue;
+};
+
 /**
  * Resolves extended parameters for model runtime based on model capabilities and chat config
  *
@@ -57,27 +91,50 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     return extendParams;
   }
 
+  const modelExtendParamOptions = aiModelSelectors.modelExtendParamOptions(
+    model,
+    provider,
+  )(aiInfraStoreState);
+
   // Reasoning configuration
   if (modelExtendParams.includes('enableReasoning')) {
-    if (chatConfig.enableReasoning) {
-      // Determine which budget field to use based on model support
-      let budgetTokens: number | undefined;
-      if (modelExtendParams.includes('reasoningBudgetToken32k')) {
-        budgetTokens = chatConfig.reasoningBudgetToken32k || 1024;
-      } else if (modelExtendParams.includes('reasoningBudgetToken80k')) {
-        budgetTokens = chatConfig.reasoningBudgetToken80k || 1024;
-      } else {
-        budgetTokens = chatConfig.reasoningBudgetToken || 1024;
-      }
-      extendParams.thinking = {
-        budget_tokens: budgetTokens,
+    const enableReasoningOptions = modelExtendParamOptions?.enableReasoning;
+    const enableReasoning = resolveEnableReasoningValue(
+      chatConfig,
+      enableReasoningOptions?.defaultValue,
+    );
+    const includeBudget = enableReasoningOptions?.includeBudget !== false;
+
+    if (enableReasoning) {
+      const thinking: NonNullable<ModelExtendParams['thinking']> = {
         type: 'enabled',
       };
+
+      if (includeBudget) {
+        // Determine which budget field to use based on model support
+        let budgetTokens: number | undefined;
+        if (modelExtendParams.includes('reasoningBudgetToken32k')) {
+          budgetTokens = chatConfig.reasoningBudgetToken32k || 1024;
+        } else if (modelExtendParams.includes('reasoningBudgetToken80k')) {
+          budgetTokens = chatConfig.reasoningBudgetToken80k || 1024;
+        } else {
+          budgetTokens = chatConfig.reasoningBudgetToken || 1024;
+        }
+
+        thinking.budget_tokens = budgetTokens;
+      }
+
+      extendParams.thinking = thinking;
     } else {
-      extendParams.thinking = {
-        budget_tokens: 0,
+      const thinking: NonNullable<ModelExtendParams['thinking']> = {
         type: 'disabled',
       };
+
+      if (includeBudget) {
+        thinking.budget_tokens = 0;
+      }
+
+      extendParams.thinking = thinking;
     }
   } else if (modelExtendParams.includes('reasoningBudgetToken32k')) {
     // For models that only have reasoningBudgetToken32k without enableReasoning
@@ -146,12 +203,23 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
   }
 
+  if (
+    modelExtendParams.includes('deepseekV4ReasoningEffort') &&
+    chatConfig.deepseekV4ReasoningEffort
+  ) {
+    extendParams.reasoning_effort = chatConfig.deepseekV4ReasoningEffort;
+  }
+
   if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
   }
 
   if (modelExtendParams.includes('effort') && chatConfig.effort) {
     extendParams.effort = chatConfig.effort;
+  }
+
+  if (modelExtendParams.includes('opus47Effort') && chatConfig.opus47Effort) {
+    extendParams.effort = chatConfig.opus47Effort;
   }
 
   // Text verbosity
@@ -168,24 +236,24 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingBudget = chatConfig.thinkingBudget;
   }
 
-  if (modelExtendParams.includes('thinkingLevel') && chatConfig.thinkingLevel) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel;
+  const supportedThinkingLevelParams = modelExtendParams.filter(
+    (extendParam): extendParam is keyof typeof THINKING_LEVEL_PARAM_TO_CONFIG_KEY =>
+      extendParam in THINKING_LEVEL_PARAM_TO_CONFIG_KEY,
+  );
+
+  for (const supportedThinkingLevelParam of supportedThinkingLevelParams) {
+    const configKey = THINKING_LEVEL_PARAM_TO_CONFIG_KEY[supportedThinkingLevelParam];
+    const value = chatConfig[configKey];
+
+    if (typeof value === 'string') {
+      extendParams.thinkingLevel = value;
+      break;
+    }
   }
 
-  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel4') && chatConfig.thinkingLevel4) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel4;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel5') && chatConfig.thinkingLevel5) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel5;
+  if (!extendParams.thinkingLevel && supportedThinkingLevelParams.length > 0) {
+    extendParams.thinkingLevel =
+      DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[supportedThinkingLevelParams[0]];
   }
 
   // URL context

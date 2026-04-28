@@ -119,6 +119,26 @@ describe('TaskModel', () => {
       expect(task2.seq).toBe(1);
     });
 
+    it('should persist createdByAgentId when provided', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agent-creator');
+      const result = await model.create({
+        createdByAgentId: 'agent-creator',
+        instruction: 'Created via agent tool',
+      });
+
+      expect(result.createdByAgentId).toBe('agent-creator');
+      expect(result.createdByUserId).toBe(userId);
+    });
+
+    it('should default createdByAgentId to null when omitted', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const result = await model.create({ instruction: 'Created via UI' });
+
+      expect(result.createdByAgentId).toBeNull();
+      expect(result.createdByUserId).toBe(userId);
+    });
+
     it('should handle concurrent creates without seq collision', async () => {
       const model = new TaskModel(serverDB, userId);
 
@@ -231,15 +251,28 @@ describe('TaskModel', () => {
       expect(tasks).toHaveLength(2);
     });
 
-    it('should filter by status', async () => {
+    it('should filter by statuses', async () => {
       const model = new TaskModel(serverDB, userId);
-      const task = await model.create({ instruction: 'Task 1' });
-      await model.updateStatus(task.id, 'running', { startedAt: new Date() });
-      await model.create({ instruction: 'Task 2' });
+      const t1 = await model.create({ instruction: 'Task 1' });
+      await model.updateStatus(t1.id, 'running', { startedAt: new Date() });
+      const t2 = await model.create({ instruction: 'Task 2' });
+      await model.updateStatus(t2.id, 'paused');
+      await model.create({ instruction: 'Task 3' }); // backlog
 
-      const { tasks } = await model.list({ status: 'running' });
-      expect(tasks).toHaveLength(1);
-      expect(tasks[0].status).toBe('running');
+      const { tasks } = await model.list({ statuses: ['running', 'paused'] });
+      expect(tasks).toHaveLength(2);
+      expect(tasks.map((t) => t.status).sort()).toEqual(['paused', 'running']);
+    });
+
+    it('should filter by priorities', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({ instruction: 'Urgent task', priority: 1 });
+      await model.create({ instruction: 'High task', priority: 2 });
+      await model.create({ instruction: 'Low task', priority: 4 });
+
+      const { tasks } = await model.list({ priorities: [1, 2] });
+      expect(tasks).toHaveLength(2);
+      expect(tasks.map((t) => t.priority).sort()).toEqual([1, 2]);
     });
 
     it('should filter root tasks only', async () => {

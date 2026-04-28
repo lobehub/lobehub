@@ -1,8 +1,9 @@
 import type { DiscordAdapter } from '@chat-adapter/discord';
 import { createDiscordAdapter } from '@chat-adapter/discord';
-import type { Chat as ChatBot } from 'chat';
+import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
   BOT_RUNTIME_STATUSES,
   getRuntimeStatusErrorMessage,
@@ -205,21 +206,134 @@ class DiscordGatewayClient implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const channelId = extractChannelId(platformThreadId);
+    const threadId = platformThreadId.split(':')[3];
+    const discord = this.discord;
     return {
-      createMessage: (content) => this.discord.createMessage(channelId, content).then(() => {}),
-      editMessage: (messageId, content) => this.discord.editMessage(channelId, messageId, content),
-      removeReaction: (messageId, emoji) =>
-        this.discord.removeOwnReaction(channelId, messageId, emoji),
-      triggerTyping: () => this.discord.triggerTyping(channelId),
+      addReaction: (messageId, emoji) => discord.createReaction(channelId, messageId, emoji),
+      createMessage: (content) => discord.createMessage(channelId, content).then(() => {}),
+      editMessage: (messageId, content) => discord.editMessage(channelId, messageId, content),
+      removeReaction: (messageId, emoji) => discord.removeOwnReaction(channelId, messageId, emoji),
+      replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
+        if (prevEmoji === nextEmoji) return;
+        // Add first so the user always sees at least one bot reaction; if
+        // the add fails, the previous emoji survives as a readable state.
+        if (nextEmoji) await discord.createReaction(channelId, messageId, nextEmoji);
+        if (prevEmoji) await discord.removeOwnReaction(channelId, messageId, prevEmoji);
+      },
+      triggerTyping: () => discord.triggerTyping(channelId),
       updateThreadName: (name) => {
-        const threadId = platformThreadId.split(':')[3];
-        return threadId ? this.discord.updateChannelName(threadId, name) : Promise.resolve();
+        return threadId ? discord.updateChannelName(threadId, name) : Promise.resolve();
       },
     };
   }
 
+  /**
+   * Resolve attachments on an inbound Discord message into `AttachmentSource[]`.
+   *
+   * Discord is the easiest case: attachments come with a public CDN URL
+   * (`https://cdn.discordapp.com/...`) that requires no auth, and the URL
+   * field IS preserved by `Message.toJSON`. So this method just walks the
+   * surviving attachment metadata and forwards URLs to `ingestAttachment`,
+   * which `fetch()`es them with no special handling.
+   *
+   * Discord ALSO has the `referenced_message.attachments` quirk: if a user
+   * @-mentions the bot while replying to an earlier message that had
+   * attachments, the chat-sdk only exposes the current message's
+   * attachments. We dig into `message.raw.referenced_message.attachments`
+   * to recover the quoted message's files. The Discord webhook payload
+   * uses snake_case (`content_type`, `filename`), so we normalize them.
+   */
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    type DiscordRefAttachment = {
+      content_type?: string;
+      filename?: string;
+      size?: number;
+      url?: string;
+    };
+    type DirectAttachment = {
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      type?: string;
+      url?: string;
+    };
+
+    const directAttachments = (message as any).attachments as DirectAttachment[] | undefined;
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    const refAttachments = raw?.referenced_message?.attachments as
+      | DiscordRefAttachment[]
+      | undefined;
+
+    log(
+      'extractFiles: msgId=%s, direct=%d, referenced=%d',
+      (message as any).id,
+      directAttachments?.length ?? 0,
+      refAttachments?.length ?? 0,
+    );
+
+    const results: AttachmentSource[] = [];
+
+    // 1. Direct attachments on the current message
+    for (const att of directAttachments ?? []) {
+      if (!att.url) continue;
+      results.push({
+        mimeType: att.mimeType,
+        name: att.name,
+        size: att.size,
+        url: att.url,
+      });
+    }
+
+    // 2. Attachments from a quoted (referenced) message
+    for (const att of refAttachments ?? []) {
+      if (!att.url) continue;
+      results.push({
+        mimeType: att.content_type,
+        name: att.filename,
+        size: att.size,
+        url: att.url,
+      });
+    }
+
+    return results.length > 0 ? results : undefined;
+  }
+
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
+  }
+
+  /**
+   * Resolve the message sender's preferred Discord locale.
+   *
+   * Discord intentionally does **not** include `User.locale` in MESSAGE_CREATE
+   * Gateway events: the field is only populated by `GET /users/@me` for the
+   * authenticated user and is gated behind the `identify` OAuth2 scope. There
+   * is no member-, presence-, or guild-membership event that surfaces another
+   * user's preferred language either. So for DMs and group `@mentions` we
+   * cannot detect locale at all — the router will fall back to the channel's
+   * platform default.
+   *
+   * The two fields we *can* read both live on `INTERACTION_CREATE` payloads
+   * (slash commands, message components):
+   * - `raw.locale` — the invoking user's client locale (`pt-BR`, `zh-CN`, …)
+   * - `raw.guild_locale` — the guild's `preferred_locale`; used as a soft
+   *   fallback for community guilds when the user-level field is missing
+   *
+   * Returns `undefined` outside those interaction paths so the router can
+   * apply the platform default.
+   */
+  extractAuthorLocale(message: Message): string | undefined {
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    if (!raw) return undefined;
+    const interactionLocale = raw.locale;
+    if (typeof interactionLocale === 'string' && interactionLocale.length > 0) {
+      return interactionLocale;
+    }
+    const guildLocale = raw.guild_locale;
+    if (typeof guildLocale === 'string' && guildLocale.length > 0) {
+      return guildLocale;
+    }
+    return undefined;
   }
 
   formatReply(body: string, stats?: UsageStats): string {
@@ -245,6 +359,24 @@ class DiscordGatewayClient implements PlatformClient {
     return threadId;
   }
 
+  /**
+   * Surface the parent channel for the group allowlist. When the bot is
+   * @-mentioned in a parent channel, Discord spawns an auto-reply thread
+   * and `thread.channelId` resolves to the **thread** (segment 3 of the
+   * composite). Operators, however, paste the *parent* channel ID
+   * (segment 2 — what Discord's "Copy Channel ID" returns). Returning the
+   * parent here lets `shouldHandleGroup` accept either form.
+   */
+  extraGroupAllowlistChannels(platformThreadId: string): string[] {
+    const parts = platformThreadId.split(':');
+    // Format: discord:guildId:channelId[:discordThreadId]
+    // Only when there's a thread segment is the parent distinct from
+    // `thread.channelId` (which already maps to the thread). For
+    // top-level channels the router already supplies `parts[2]`.
+    if (parts.length === 4 && parts[2]) return [parts[2]];
+    return [];
+  }
+
   sanitizeUserInput(text: string): string {
     return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
   }
@@ -254,7 +386,11 @@ class DiscordGatewayClient implements PlatformClient {
   }
 
   async registerBotCommands(
-    commands: Array<{ command: string; description: string }>,
+    commands: Array<{
+      command: string;
+      description: string;
+      options?: Array<{ description: string; name: string; required?: boolean }>;
+    }>,
   ): Promise<void> {
     await this.discord.registerCommands(this.applicationId, commands);
     log('DiscordBot appId=%s registered %d commands', this.applicationId, commands.length);

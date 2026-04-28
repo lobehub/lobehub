@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "لـ Nano Banana 2؛ يتحكم في نسبة العرض إلى الارتفاع للصور المُنشأة (يدعم النسب العريضة جدًا 1:4، 4:1، 1:8، 8:1).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "لنماذج توليد الصور من Gemini 3؛ يتحكم في دقة الصور المُولدة.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "لـ نماذج الصور Gemini 3.1 Flash؛ يتحكم في دقة الصور المُنشأة (يدعم 512 بكسل).",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "خاص بـ Claude Opus 4.7؛ يتحكم في مستوى الجهد (منخفض/متوسط/عال/عالٍ جداً/أقصى).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "لنماذج Claude وQwen3 وما شابهها؛ يتحكم في ميزانية الرموز المخصصة للاستدلال.",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "لـ GLM-5 و GLM-4.7؛ يتحكم في ميزانية الرموز للتفكير (الحد الأقصى 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "لسلسلة Qwen3؛ يتحكم في ميزانية الرموز للتفكير (الحد الأقصى 80k).",

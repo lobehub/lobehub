@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "Chiudi schede a sinistra",
   "tab.closeOtherTabs": "Chiudi altre schede",
   "tab.closeRightTabs": "Chiudi schede a destra",
+  "tab.newTab": "Nuova scheda",
+  "tab.running": "L’agente è in esecuzione",
+  "tab.unread": "Nuovo messaggio",
   "updater.checkingUpdate": "Verifica aggiornamenti in corso",
   "updater.checkingUpdateDesc": "Recupero informazioni sulla versione...",
   "updater.downloadNewVersion": "Scarica nuova versione",
@@ -133,5 +136,7 @@
   "window.close": "Chiudi finestra",
   "window.maximize": "Massimizza finestra",
   "window.minimize": "Minimizza finestra",
-  "window.restore": "Ripristina finestra"
+  "window.pinToTop": "Fissa in alto",
+  "window.restore": "Ripristina finestra",
+  "window.unpinFromTop": "Rimuovi dalla parte superiore"
 }

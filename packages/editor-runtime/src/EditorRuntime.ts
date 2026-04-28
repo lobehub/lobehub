@@ -19,6 +19,37 @@ import type {
 
 const log = debug('lobe:editor-runtime');
 
+interface InspectableEditor {
+  dataTypeMap?: Map<string, unknown> | Record<string, unknown>;
+  editor?: unknown;
+  getLexicalEditor?: () => unknown | null;
+  plugins?: unknown[];
+  pluginsInstances?: unknown[];
+}
+
+export interface EditorRuntimeDebugSnapshot {
+  currentDocId?: string;
+  dataSourceTypes: string[];
+  hasBeforeMutateHandler: boolean;
+  hasEditor: boolean;
+  hasLexicalEditor: boolean;
+  hasTitleGetter: boolean;
+  hasTitleSetter: boolean;
+  pluginCount?: number;
+  pluginInstanceCount?: number;
+}
+
+const getDataSourceTypes = (editor: InspectableEditor): string[] => {
+  const dataTypeMap = editor.dataTypeMap;
+  if (!dataTypeMap) return [];
+
+  if (dataTypeMap instanceof Map) {
+    return [...dataTypeMap.keys()].sort();
+  }
+
+  return Object.keys(dataTypeMap).sort();
+};
+
 /**
  * Editor Execution Runtime
  * Handles the execution logic for editor operations including:
@@ -33,12 +64,14 @@ export class EditorRuntime {
   private titleSetter: ((title: string) => void) | null = null;
   private titleGetter: (() => string) | null = null;
   private currentDocId: string | undefined = undefined;
+  private beforeMutateHandler: (() => void | Promise<void>) | null = null;
 
   /**
    * Set the current editor instance
    */
   setEditor(editor: IEditor | null) {
     this.editor = editor;
+    log('[EditorRuntime] setEditor', this.getDebugSnapshot());
   }
 
   /**
@@ -47,6 +80,7 @@ export class EditorRuntime {
   setCurrentDocId(docId: string | undefined) {
     log('Setting current doc ID:', docId);
     this.currentDocId = docId;
+    log('[EditorRuntime] setCurrentDocId', this.getDebugSnapshot());
   }
 
   /**
@@ -57,11 +91,59 @@ export class EditorRuntime {
   }
 
   /**
+   * Set a handler to be called before any mutating operation.
+   * This can be used to save history or perform other pre-mutation tasks.
+   */
+  setBeforeMutateHandler(handler: (() => void | Promise<void>) | null) {
+    this.beforeMutateHandler = handler;
+    log('[EditorRuntime] setBeforeMutateHandler', this.getDebugSnapshot());
+  }
+
+  /**
    * Set the title setter and getter functions
    */
   setTitleHandlers(setter: ((title: string) => void) | null, getter: (() => string) | null) {
     this.titleSetter = setter;
     this.titleGetter = getter;
+    log('[EditorRuntime] setTitleHandlers', this.getDebugSnapshot());
+  }
+
+  /**
+   * Lightweight runtime snapshot for page-agent tool call diagnostics.
+   * This intentionally avoids reading document content.
+   */
+  getDebugSnapshot(): EditorRuntimeDebugSnapshot {
+    const inspectableEditor = this.editor as InspectableEditor | null;
+    const hasLexicalEditor = (() => {
+      try {
+        return !!inspectableEditor?.getLexicalEditor?.();
+      } catch {
+        return false;
+      }
+    })();
+
+    return {
+      currentDocId: this.currentDocId,
+      dataSourceTypes: inspectableEditor ? getDataSourceTypes(inspectableEditor) : [],
+      hasBeforeMutateHandler: !!this.beforeMutateHandler,
+      hasEditor: !!this.editor,
+      hasLexicalEditor,
+      hasTitleGetter: !!this.titleGetter,
+      hasTitleSetter: !!this.titleSetter,
+      pluginCount: inspectableEditor?.plugins?.length,
+      pluginInstanceCount: inspectableEditor?.pluginsInstances?.length,
+    };
+  }
+
+  isReady(): boolean {
+    if (!this.editor) return false;
+
+    const inspectableEditor = this.editor as InspectableEditor;
+    try {
+      return !!inspectableEditor.getLexicalEditor?.();
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -91,17 +173,28 @@ export class EditorRuntime {
    * @returns Raw result with nodeCount and extractedTitle
    */
   async initPage(args: InitDocumentArgs): Promise<InitPageRuntimeResult> {
+    log('[EditorRuntime] initPage:start', {
+      markdownLength: args.markdown.length,
+      snapshot: this.getDebugSnapshot(),
+    });
+
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const editor = this.getEditor();
 
     let markdown = args.markdown;
     let extractedTitle: string | undefined;
 
     // Check if markdown starts with a # title heading
-    const titleMatch = /^#\s+(.+)(?:\r?\n|$)/.exec(markdown);
-    if (titleMatch) {
-      extractedTitle = titleMatch[1].trim();
+    if (markdown.startsWith('# ')) {
+      const endOfLine = markdown.search(/\r?\n/);
+      const titleLine = endOfLine === -1 ? markdown : markdown.slice(0, endOfLine);
+      extractedTitle = titleLine.slice(2).trim();
       // Remove the title line from markdown
-      markdown = markdown.slice(titleMatch[0].length).trimStart();
+      markdown = markdown.slice(titleLine.length).trimStart();
 
       // Set the title separately if title handlers are available
       if (this.titleSetter) {
@@ -116,7 +209,14 @@ export class EditorRuntime {
     const jsonState = editor.getDocument('json') as any;
     const nodeCount = jsonState?.children?.length || 0;
 
-    return { extractedTitle, nodeCount };
+    const result = { extractedTitle, nodeCount };
+    log('[EditorRuntime] initPage:success', {
+      nodeCount,
+      snapshot: this.getDebugSnapshot(),
+      titleExtracted: !!extractedTitle,
+    });
+
+    return result;
   }
 
   // ==================== Metadata ====================
@@ -126,13 +226,29 @@ export class EditorRuntime {
    * @returns Raw result with newTitle and previousTitle
    */
   async editTitle(args: EditTitleArgs): Promise<EditTitleRuntimeResult> {
+    log('[EditorRuntime] editTitle:start', {
+      snapshot: this.getDebugSnapshot(),
+      titleLength: args.title.length,
+    });
+
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const { setter, getter } = this.getTitleHandlers();
     const previousTitle = getter();
 
     // Update the title
     setter(args.title);
 
-    return { newTitle: args.title, previousTitle };
+    const result = { newTitle: args.title, previousTitle };
+    log('[EditorRuntime] editTitle:success', {
+      snapshot: this.getDebugSnapshot(),
+      titleLength: args.title.length,
+    });
+
+    return result;
   }
 
   // ==================== Query & Read ====================
@@ -142,6 +258,11 @@ export class EditorRuntime {
    * @returns Raw result with document content and metadata
    */
   async getPageContent(args: GetPageContentArgs): Promise<GetPageContentRuntimeResult> {
+    log('[EditorRuntime] getPageContent:start', {
+      format: args.format,
+      snapshot: this.getDebugSnapshot(),
+    });
+
     const context = this.getPageContentContext(args.format);
 
     return {
@@ -193,6 +314,23 @@ export class EditorRuntime {
    * @returns Raw result with results, successCount and totalCount
    */
   async modifyNodes(args: ModifyNodesArgs): Promise<ModifyNodesRuntimeResult> {
+    const rawOperations = Array.isArray(args.operations)
+      ? args.operations
+      : args.operations
+        ? [args.operations]
+        : [];
+
+    log('[EditorRuntime] modifyNodes:start', {
+      operationActions: rawOperations.map((op) => op.action),
+      operationCount: rawOperations.length,
+      snapshot: this.getDebugSnapshot(),
+    });
+
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const editor = this.getEditor();
     let { operations } = args;
 
@@ -273,7 +411,14 @@ export class EditorRuntime {
     const successCount = results.filter((r) => r.success).length;
     const totalCount = results.length;
 
-    return { results, successCount, totalCount };
+    const result = { results, successCount, totalCount };
+    log('[EditorRuntime] modifyNodes:success', {
+      snapshot: this.getDebugSnapshot(),
+      successCount,
+      totalCount,
+    });
+
+    return result;
   }
 
   // ==================== Text Operations ====================
@@ -448,6 +593,11 @@ export class EditorRuntime {
    * @returns Raw result with modifiedNodeIds and replacementCount
    */
   async replaceText(args: ReplaceTextArgs): Promise<ReplaceTextRuntimeResult> {
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const editor = this.getEditor();
     const { searchText, newText, useRegex = false, replaceAll = true, nodeIds } = args;
 
@@ -531,8 +681,9 @@ export class EditorRuntime {
 
         // Build the updated LiteXML for this node
         // Extract attributes from the original fullMatch
-        const attrMatch = /<\w+\s+([^>]*)>/.exec(node.fullMatch);
-        const attributes = attrMatch ? attrMatch[1] : `id="${node.id}"`;
+        const firstSpace = node.fullMatch.indexOf(' ');
+        const attributes =
+          firstSpace > 0 ? node.fullMatch.slice(firstSpace + 1, -1) : `id="${node.id}"`;
 
         const updatedLitexml = `<${node.tagName} ${attributes}>${newContent}</${node.tagName}>`;
         litexmlUpdates.push(updatedLitexml);

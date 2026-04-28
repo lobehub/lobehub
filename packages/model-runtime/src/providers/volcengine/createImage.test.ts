@@ -425,6 +425,128 @@ describe('createVolcengineImage', () => {
         }),
       );
     });
+
+    it('should allow overriding watermark when watermark is provided', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        watermark: true,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          watermark: true,
+        }),
+      );
+    });
+
+    it('should enable web search tool when webSearch is true', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.model = 'doubao-seedream-5-0-260128';
+      payload.params.webSearch = true;
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tools: [{ type: 'web_search' }],
+        }),
+      );
+    });
+
+    it('should disable web search tool by default when webSearch is undefined', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      await createVolcengineImage(payload, options);
+
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          tools: [{ type: 'web_search' }],
+        }),
+      );
+    });
+
+    it('should disable web search tool when webSearch is false', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        webSearch: false,
+      };
+
+      await createVolcengineImage(payload, options);
+
+      const requestOptions = mockGenerate.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(requestOptions.tools).toBeUndefined();
+      expect(requestOptions.webSearch).toBeUndefined();
+    });
+
+    it('should add optimize_prompt_options if promptExtend is provided and not "off"', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        promptExtend: 'fast',
+      };
+
+      await createVolcengineImage(payload, options);
+
+      const requestOptions = mockGenerate.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(requestOptions.optimize_prompt_options).toEqual({ mode: 'fast' });
+      expect(requestOptions.promptExtend).toBeUndefined();
+    });
+
+    it('should not add optimize_prompt_options if promptExtend is "off"', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+        promptExtend: 'off',
+      };
+
+      await createVolcengineImage(payload, options);
+
+      const requestOptions = mockGenerate.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(requestOptions.optimize_prompt_options).toBeUndefined();
+    });
+
+    it('should not add optimize_prompt_options if promptExtend is undefined', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/test.jpg' }],
+      };
+      mockGenerate.mockResolvedValue(mockResponse);
+
+      payload.params = {
+        prompt: 'test prompt',
+      };
+
+      await createVolcengineImage(payload, options);
+
+      const requestOptions = mockGenerate.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(requestOptions.optimize_prompt_options).toBeUndefined();
+    });
   });
 
   describe('size extraction', () => {

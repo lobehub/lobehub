@@ -1,18 +1,27 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import { type ReactElement, type ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef } from 'react';
-import { type VListHandle } from 'virtua';
+import type { ReactElement, ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import type { VListHandle } from 'virtua';
 import { VList } from 'virtua';
+import { useShallow } from 'zustand/react/shallow';
+
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import WideScreenContainer from '../../../WideScreenContainer';
-import { dataSelectors, useConversationStore, virtuaListSelectors } from '../../store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+  virtuaListSelectors,
+} from '../../store';
 import {
   CONVERSATION_SPACER_TRANSITION_MS,
-  useConversationSpacer,
-} from '../hooks/useConversationSpacer';
-import { useScrollToUserMessage } from '../hooks/useScrollToUserMessage';
+  useConversationScroll,
+} from '../hooks/useConversationScroll';
+import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
+import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector';
@@ -32,14 +41,35 @@ interface VirtualizedListProps {
 const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Per-topic scroll restoration. Provider does not remount on topic switch,
+  // so we key the scroll snapshot by the message-map key derived from
+  // ConversationStore's `context`.
+  const contextKey = useConversationStore((s) => messageMapKey(s.context));
+  const { recordScroll } = useTopicScrollPersist({
+    contextKey,
+    dataSourceLength: dataSource.length,
+    virtuaRef,
+  });
+
+  // Second-to-last message is the user turn when sending (user + assistant pair)
+  const isSecondLastMessageFromUser = useConversationStore(
+    dataSelectors.isSecondLastMessageFromUser,
+  );
+
   const {
-    handleScrollOffset,
+    isScrollShrinking,
     isSpacerMessage,
     listData,
-    scrollShrinking,
-    spacerHeight,
+    onScrollOffset,
+    registerSpacerNode,
     spacerActive,
-  } = useConversationSpacer(dataSource);
+    spacerHeight,
+  } = useConversationScroll({
+    dataSource,
+    isSecondLastMessageFromUser,
+    virtuaRef,
+  });
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
   // Store actions
@@ -59,7 +89,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     const viewportSize = ref.viewportSize;
 
     return scrollSize - scrollOffset - viewportSize <= AT_BOTTOM_THRESHOLD;
-  }, [AT_BOTTOM_THRESHOLD]);
+  }, []);
 
   // Handle scroll events
   const handleScroll = useCallback(() => {
@@ -78,12 +108,16 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     // Shrink spacer on scroll up when not streaming
     const ref = virtuaRef.current;
     if (ref) {
-      handleScrollOffset(ref.scrollOffset);
+      onScrollOffset(ref.scrollOffset);
     }
 
     // Check if at bottom
     const isAtBottom = checkAtBottom();
     setScrollState({ atBottom: isAtBottom });
+
+    if (ref) {
+      recordScroll(ref.scrollOffset, isAtBottom);
+    }
 
     // Clear existing timer
     if (scrollEndTimerRef.current) {
@@ -94,7 +128,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     scrollEndTimerRef.current = setTimeout(() => {
       setScrollState({ isScrolling: false });
     }, 150);
-  }, [activeIndex, checkAtBottom, handleScrollOffset, setActiveIndex, setScrollState]);
+  }, [activeIndex, checkAtBottom, onScrollOffset, recordScroll, setActiveIndex, setScrollState]);
 
   const handleScrollEnd = useCallback(() => {
     setScrollState({ isScrolling: false });
@@ -136,27 +170,34 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     };
   }, [resetVisibleItems]);
 
-  // Get the second-to-last message to check if it's a user message
-  // (When sending a message, user + assistant messages are created as a pair)
-  const displayMessages = useConversationStore(dataSelectors.displayMessages);
-  const secondLastMessage = displayMessages.at(-2);
-  const isSecondLastMessageFromUser = secondLastMessage?.role === 'user';
+  // Keep currently-streaming items mounted so vlist recycling never triggers
+  // Markdown animation replay when the user scrolls them back into view.
+  const streamingIndices = useConversationStore(
+    useShallow((s) => {
+      const indices: number[] = [];
+      for (let i = 0; i < dataSource.length; i++) {
+        const id = dataSource[i];
+        if (!id) continue;
+        if (messageStateSelectors.isMessageGenerating(id)(s)) indices.push(i);
+      }
+      return indices;
+    }),
+  );
 
-  // Auto scroll to user message when user sends a new message
-  // Only scroll when 2 new messages are added and second-to-last is from user
-  useScrollToUserMessage({
-    dataSourceLength: dataSource.length,
-    isSecondLastMessageFromUser,
-    scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
-    spacerActive,
-  });
+  // Also keep items that host the active text selection — unmounting a node
+  // containing a Selection endpoint would silently drop the user's highlight.
+  const selectionMessageIds = useSelectionMessageIds();
 
-  // Scroll to bottom on initial render
-  useEffect(() => {
-    if (virtuaRef.current && dataSource.length > 0) {
-      virtuaRef.current.scrollToIndex(dataSource.length - 1, { align: 'end' });
+  const keepMountedIndices = useMemo(() => {
+    if (selectionMessageIds.size === 0) return streamingIndices;
+    const merged = new Set<number>(streamingIndices);
+    for (let i = 0; i < dataSource.length; i++) {
+      const id = dataSource[i];
+      if (id && selectionMessageIds.has(id)) merged.add(i);
     }
-  }, []);
+    if (merged.size === streamingIndices.length) return streamingIndices;
+    return [...merged].sort((a, b) => a - b);
+  }, [dataSource, streamingIndices, selectionMessageIds]);
 
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
@@ -168,6 +209,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
         data={listData}
+        keepMounted={keepMountedIndices}
         ref={virtuaRef}
         style={{ height: '100%', overflowAnchor: 'none', paddingBottom: 24 }}
         onScroll={handleScroll}
@@ -175,16 +217,23 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       >
         {(messageId, index): ReactElement => {
           if (isSpacerMessage(messageId)) {
+            // Only animate the collapse-to-zero (unmount). Any non-zero height
+            // change (initial mount, shrink as assistant grows) is applied
+            // instantly so virtua's scrollSize updates in a single frame and
+            // scrollToIndex can reach the user message without trailing behind
+            // a 200ms transition.
+            const shouldAnimate = !isScrollShrinking && spacerHeight === 0;
             return (
               <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                 <div
                   aria-hidden
+                  ref={registerSpacerNode}
                   style={{
                     height: spacerHeight,
                     pointerEvents: 'none',
-                    transition: scrollShrinking
-                      ? 'none'
-                      : `height ${CONVERSATION_SPACER_TRANSITION_MS}ms ease`,
+                    transition: shouldAnimate
+                      ? `height ${CONVERSATION_SPACER_TRANSITION_MS}ms ease`
+                      : 'none',
                     width: '100%',
                   }}
                 />

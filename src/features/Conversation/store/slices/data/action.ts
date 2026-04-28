@@ -15,6 +15,28 @@ import { dataSelectors } from './selectors';
 
 const log = debug('lobe-render:features:Conversation');
 
+const mergeFetchedMessagesWithLocalState = (
+  fetchedMessages: UIChatMessage[],
+  localMessages: UIChatMessage[],
+): UIChatMessage[] => {
+  if (localMessages.length === 0 || fetchedMessages.length === 0) return fetchedMessages;
+
+  const localById = new Map(localMessages.map((message) => [message.id, message]));
+  let changed = false;
+
+  const mergedMessages = fetchedMessages.map((message) => {
+    const localMessage = localById.get(message.id);
+
+    if (!localMessage) return message;
+    if (localMessage.updatedAt <= message.updatedAt) return message;
+
+    changed = true;
+    return localMessage;
+  });
+
+  return changed ? mergedMessages : fetchedMessages;
+};
+
 /**
  * Data Actions
  *
@@ -184,30 +206,31 @@ export const dataSlice: StateCreator<
           if (!context.topicId) return;
 
           const prevDbMessages = get().dbMessages;
+          const mergedMessages = mergeFetchedMessagesWithLocalState(data, prevDbMessages);
           const storeContextKey = messageMapKey(get().context);
 
           // Parse messages using conversation-flow
-          const { flatList } = parse(data);
+          const { flatList } = parse(mergedMessages);
 
           log(
             '[useFetchMessages] onData | requestContextKey=%s | storeContextKey=%s | prevCount=%d | fetchedCount=%d | displayCount=%d | messageIds=%o',
             contextKey,
             storeContextKey,
             prevDbMessages.length,
-            data.length,
+            mergedMessages.length,
             flatList.length,
-            data.slice(0, 5).map((m) => m.id),
+            mergedMessages.slice(0, 5).map((m) => m.id),
           );
 
           set({
-            dbMessages: data,
+            dbMessages: mergedMessages,
             displayMessages: flatList,
             messagesInit: true,
           });
 
           // Call onMessagesChange callback with the request context (not current context)
           // This ensures data is stored to the correct topic even if user switched topics
-          get().onMessagesChange?.(data, context);
+          get().onMessagesChange?.(mergedMessages, context);
         },
       },
     );

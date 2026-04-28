@@ -24,6 +24,12 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));
 
+vi.mock('@/components/AntdStaticMethods', () => ({
+  message: { error: vi.fn(), success: vi.fn() },
+  modal: { confirm: vi.fn() },
+  notification: { error: vi.fn() },
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   useTaskStore.setState({
@@ -70,7 +76,7 @@ describe('TaskDetailSliceAction', () => {
         instruction: 'Do something',
         name: 'Test',
       });
-      expect(result).toBe('T-1');
+      expect(result?.identifier).toBe('T-1');
     });
 
     it('should set isCreatingTask during creation', async () => {
@@ -83,11 +89,12 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
 
-    it('should return null on error', async () => {
+    it('should throw on error and reset isCreatingTask', async () => {
       vi.mocked(taskService.create).mockRejectedValue(new Error('fail'));
 
-      const result = await useTaskStore.getState().createTask({ instruction: 'Test' });
-      expect(result).toBeNull();
+      await expect(useTaskStore.getState().createTask({ instruction: 'Test' })).rejects.toThrow(
+        'fail',
+      );
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
   });
@@ -110,8 +117,9 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
     });
 
-    it('should refresh on error', async () => {
+    it('should propagate error, reset saveStatus, refresh, and toast on failure', async () => {
       const { mutate } = await import('@/libs/swr');
+      const { message } = await import('@/components/AntdStaticMethods');
       useTaskStore.setState({
         taskDetailMap: {
           'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
@@ -120,15 +128,18 @@ describe('TaskDetailSliceAction', () => {
 
       vi.mocked(taskService.update).mockRejectedValue(new Error('fail'));
 
-      await useTaskStore.getState().updateTask('T-1', { name: 'New' });
+      await expect(useTaskStore.getState().updateTask('T-1', { name: 'New' })).rejects.toThrow(
+        'fail',
+      );
 
       expect(useTaskStore.getState().taskSaveStatus).toBe('idle');
       expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(message.error).toHaveBeenCalled();
     });
   });
 
   describe('deleteTask', () => {
-    it('should remove from map and clear activeTaskId', async () => {
+    it('should remove from map, clear activeTaskId, and return deleted task data', async () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
@@ -136,10 +147,15 @@ describe('TaskDetailSliceAction', () => {
         },
       });
 
-      vi.mocked(taskService.delete).mockResolvedValue({ success: true } as any);
+      vi.mocked(taskService.delete).mockResolvedValue({
+        data: { identifier: 'T-1', name: 'Test Task' },
+        success: true,
+      } as any);
 
-      await useTaskStore.getState().deleteTask('T-1');
+      const result = await useTaskStore.getState().deleteTask('T-1');
 
+      expect(result?.identifier).toBe('T-1');
+      expect(result?.name).toBe('Test Task');
       expect(useTaskStore.getState().taskDetailMap['T-1']).toBeUndefined();
       expect(useTaskStore.getState().activeTaskId).toBeUndefined();
     });
@@ -153,10 +169,27 @@ describe('TaskDetailSliceAction', () => {
 
       vi.mocked(taskService.delete).mockImplementation(async () => {
         expect(useTaskStore.getState().isDeletingTask).toBe(true);
-        return { success: true } as any;
+        return { data: { identifier: 'T-1' }, success: true } as any;
       });
 
       await useTaskStore.getState().deleteTask('T-1');
+      expect(useTaskStore.getState().isDeletingTask).toBe(false);
+    });
+
+    it('should rollback optimistic delete and propagate error on failure', async () => {
+      const snapshot = {
+        identifier: 'T-1',
+        instruction: 'Test',
+        name: 'Original',
+        status: 'backlog',
+      };
+      useTaskStore.setState({ taskDetailMap: { 'T-1': snapshot as any } });
+
+      vi.mocked(taskService.delete).mockRejectedValue(new Error('server down'));
+
+      await expect(useTaskStore.getState().deleteTask('T-1')).rejects.toThrow('server down');
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toEqual(snapshot);
       expect(useTaskStore.getState().isDeletingTask).toBe(false);
     });
   });
@@ -181,6 +214,26 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().addDependency('T-1', 'T-2', 'blocks');
 
       expect(taskService.addDependency).toHaveBeenCalledWith('T-1', 'T-2', 'blocks');
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+    });
+
+    it('should propagate error from service', async () => {
+      vi.mocked(taskService.addDependency).mockRejectedValue(new Error('cycle detected'));
+
+      await expect(useTaskStore.getState().addDependency('T-1', 'T-2', 'blocks')).rejects.toThrow(
+        'cycle detected',
+      );
+    });
+  });
+
+  describe('removeDependency', () => {
+    it('should call service and refresh detail', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.removeDependency).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().removeDependency('T-1', 'T-2');
+
+      expect(taskService.removeDependency).toHaveBeenCalledWith('T-1', 'T-2');
       expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
     });
   });

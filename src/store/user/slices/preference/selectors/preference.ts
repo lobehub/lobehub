@@ -3,8 +3,11 @@ import { DEFAULT_PREFERENCE } from '@lobechat/const';
 import { type UserStore } from '@/store/user';
 
 const useCmdEnterToSend = (s: UserStore): boolean => s.preference.useCmdEnterToSend || false;
-const topicDisplayMode = (s: UserStore) =>
-  s.preference.topicDisplayMode || DEFAULT_PREFERENCE.topicDisplayMode;
+const topicGroupMode = (s: UserStore) =>
+  s.preference.topicGroupMode || DEFAULT_PREFERENCE.topicGroupMode!;
+const topicSortBy = (s: UserStore) => s.preference.topicSortBy || DEFAULT_PREFERENCE.topicSortBy!;
+const topicIncludeCompleted = (s: UserStore): boolean =>
+  s.preference.topicIncludeCompleted ?? false;
 
 const hideSyncAlert = (s: UserStore) => s.preference.hideSyncAlert;
 
@@ -24,6 +27,8 @@ export const preferenceSelectors = {
   isPreferenceInit,
   shouldTriggerFileInKnowledgeBaseTip,
   showUploadFileInKnowledgeBaseTip,
-  topicDisplayMode,
+  topicGroupMode,
+  topicIncludeCompleted,
+  topicSortBy,
   useCmdEnterToSend,
 };

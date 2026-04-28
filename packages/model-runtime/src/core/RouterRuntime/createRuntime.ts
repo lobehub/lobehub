@@ -15,8 +15,10 @@ import type {
   ChatMethodOptions,
   ChatStreamCallbacks,
   ChatStreamPayload,
+  CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
+  CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResponse,
   EmbeddingsOptions,
@@ -162,6 +164,12 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     ) => ChatStreamPayload;
   };
   routers: Routers;
+  shouldStopFallback?: (params: {
+    error: unknown;
+    metadata?: Record<string, unknown>;
+    model: string;
+    optionIndex: number;
+  }) => boolean | Promise<boolean>;
 }
 
 export const createRouterRuntime = ({
@@ -254,7 +262,11 @@ export const createRouterRuntime = ({
     }> {
       const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
       const resolvedApiType = optionApiType ?? router.apiType;
-      const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
+      const finalOptions = {
+        ...this._params,
+        ...this._options,
+        ...optionOverrides,
+      };
 
       /**
        * Vertex AI uses GoogleGenAI credentials flow rather than API keys.
@@ -400,6 +412,25 @@ export const createRouterRuntime = ({
             throw error;
           }
 
+          try {
+            const shouldStopFallback = await params.shouldStopFallback?.({
+              error,
+              metadata,
+              model,
+              optionIndex: index,
+            });
+
+            if (shouldStopFallback) {
+              throw error;
+            }
+          } catch (fallbackError) {
+            if (fallbackError === error) {
+              throw error;
+            }
+
+            log('shouldStopFallback callback error: %O', fallbackError);
+          }
+
           if (attempt < totalOptions) {
             log(
               'attempt %d/%d failed (model=%s apiType=%s channelId=%s remark=%s), trying next',
@@ -482,12 +513,20 @@ export const createRouterRuntime = ({
       }
     }
 
-    async createImage(payload: CreateImagePayload) {
-      return this.runWithFallback(payload.model, (runtime) => runtime.createImage!(payload));
+    async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.createImage!(payload),
+        options?.metadata,
+      );
     }
 
-    async createVideo(payload: CreateVideoPayload) {
-      return this.runWithFallback(payload.model, (runtime) => runtime.createVideo!(payload));
+    async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.createVideo!(payload),
+        options?.metadata,
+      );
     }
 
     async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {

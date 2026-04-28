@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "بستن زبانه‌های سمت چپ",
   "tab.closeOtherTabs": "بستن سایر زبانه‌ها",
   "tab.closeRightTabs": "بستن زبانه‌های سمت راست",
+  "tab.newTab": "برگه جدید",
+  "tab.running": "عامل در حال اجراست",
+  "tab.unread": "پیام جدید",
   "updater.checkingUpdate": "در حال بررسی به‌روزرسانی",
   "updater.checkingUpdateDesc": "در حال دریافت اطلاعات نسخه...",
   "updater.downloadNewVersion": "دانلود نسخه جدید",
@@ -133,5 +136,7 @@
   "window.close": "بستن پنجره",
   "window.maximize": "حداکثر کردن پنجره",
   "window.minimize": "حداقل کردن پنجره",
-  "window.restore": "بازیابی پنجره"
+  "window.pinToTop": "سنجاق به بالا",
+  "window.restore": "بازیابی پنجره",
+  "window.unpinFromTop": "برداشتن سنجاق از بالا"
 }

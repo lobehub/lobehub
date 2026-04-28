@@ -1,13 +1,19 @@
 import type { TaskDetailData } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
+import { t } from 'i18next';
 
+import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
+import { useTaskStore } from '../../store';
 import type { TaskDetailDispatch } from './reducer';
 import { taskDetailReducer } from './reducer';
+
+type CreatedTask = NonNullable<Awaited<ReturnType<typeof taskService.create>>['data']>;
+type DeletedTask = NonNullable<Awaited<ReturnType<typeof taskService.delete>>['data']>;
 
 // config / heartbeatInterval / heartbeatTimeout are not exposed here:
 // - model/provider goes through configSlice.updateTaskModelConfig
@@ -23,6 +29,20 @@ export interface TaskUpdatePayload {
 }
 
 const FETCH_TASK_DETAIL_KEY = 'fetchTaskDetail';
+const TASK_DETAIL_POLL_INTERVAL = 10_000;
+
+// Poll while the task itself or any topic activity is still in flight, so the
+// UI picks up status transitions (running → completed/failed) without needing
+// a manual refresh. Returns false once everything settles so SWR stops polling.
+const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
+  if (!detail) return false;
+  if (detail.status === 'running' || detail.status === 'pending') return true;
+  return (
+    detail.activities?.some(
+      (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
+    ) ?? false
+  );
+};
 
 type Setter = StoreSetter<TaskStore>;
 
@@ -50,6 +70,18 @@ export class TaskDetailSliceActionImpl {
     await this.internal_refreshTaskDetail(taskId);
   };
 
+  deleteComment = async (commentId: string, taskId?: string): Promise<void> => {
+    await taskService.deleteComment(commentId);
+    const id = taskId ?? this.#get().activeTaskId;
+    if (id) await this.internal_refreshTaskDetail(id);
+  };
+
+  updateComment = async (commentId: string, content: string, taskId?: string): Promise<void> => {
+    await taskService.updateComment(commentId, content);
+    const id = taskId ?? this.#get().activeTaskId;
+    if (id) await this.internal_refreshTaskDetail(id);
+  };
+
   addDependency = async (
     taskId: string,
     dependsOnId: string,
@@ -59,42 +91,84 @@ export class TaskDetailSliceActionImpl {
     await this.internal_refreshTaskDetail(taskId);
   };
 
+  fetchTaskDetail = async (taskId?: string): Promise<TaskDetailData> => {
+    const resolvedId = taskId ?? this.#get().activeTaskId;
+
+    if (!resolvedId) {
+      throw new Error('No task identifier provided and no current task context.');
+    }
+
+    const result = await taskService.getDetail(resolvedId);
+    const detail = result.data;
+
+    if (!detail) {
+      throw new Error(`Task not found: ${resolvedId}`);
+    }
+
+    this.internal_dispatchTaskDetail({
+      id: detail.identifier,
+      type: 'setTaskDetail',
+      value: detail,
+    });
+
+    // When looked up by raw DB id (e.g. `task_xxx`), also store under that key
+    // so `activeTaskId` → `taskDetailMap[activeTaskId]` resolves correctly.
+    if (resolvedId !== detail.identifier) {
+      this.internal_dispatchTaskDetail({
+        id: resolvedId,
+        type: 'setTaskDetail',
+        value: detail,
+      });
+    }
+
+    return detail;
+  };
+
   createTask = async (params: {
     assigneeAgentId?: string;
+    createdByAgentId?: string;
     description?: string;
     instruction: string;
     name?: string;
     parentTaskId?: string;
     priority?: number;
-  }): Promise<string | null> => {
+  }): Promise<CreatedTask | null> => {
     this.#set({ isCreatingTask: true }, false, 'createTask/start');
     try {
       const result = await taskService.create(params);
       await this.#get().refreshTaskList();
-      return result.data?.identifier ?? null;
-    } catch (error) {
-      console.error('[TaskStore] Failed to create task:', error);
-      return null;
+      if (params.parentTaskId) {
+        await this.internal_refreshTaskDetail(params.parentTaskId);
+      }
+      return result.data ?? null;
     } finally {
       this.#set({ isCreatingTask: false }, false, 'createTask/end');
     }
   };
 
-  deleteTask = async (id: string): Promise<void> => {
+  deleteTask = async (identifier: string): Promise<DeletedTask | null> => {
+    const snapshot = this.#get().taskDetailMap[identifier];
     this.#set({ isDeletingTask: true }, false, 'deleteTask/start');
     try {
-      this.internal_dispatchTaskDetail({ id, type: 'deleteTaskDetail' });
+      this.internal_dispatchTaskDetail({ id: identifier, type: 'deleteTaskDetail' });
 
-      await taskService.delete(id);
+      const result = await taskService.delete(identifier);
 
-      if (this.#get().activeTaskId === id) {
+      if (this.#get().activeTaskId === identifier) {
         this.#set({ activeTaskId: undefined }, false, 'deleteTask/clearActive');
       }
 
       await this.#get().refreshTaskList();
+      return result.data ?? null;
     } catch (error) {
-      console.error('[TaskStore] Failed to delete task:', error);
-      await this.internal_refreshTaskDetail(id);
+      if (snapshot) {
+        this.internal_dispatchTaskDetail({
+          id: identifier,
+          type: 'setTaskDetail',
+          value: snapshot,
+        });
+      }
+      throw error;
     } finally {
       this.#set({ isDeletingTask: false }, false, 'deleteTask/end');
     }
@@ -117,7 +191,21 @@ export class TaskDetailSliceActionImpl {
 
   setActiveTaskId = (taskId?: string): void => {
     if (this.#get().activeTaskId === taskId) return;
-    this.#set({ activeTaskId: taskId }, false, 'setActiveTaskId');
+    this.#set(
+      { activeTaskId: taskId, activeTopicDrawerTopicId: undefined },
+      false,
+      'setActiveTaskId',
+    );
+  };
+
+  openTopicDrawer = (topicId: string): void => {
+    if (this.#get().activeTopicDrawerTopicId === topicId) return;
+    this.#set({ activeTopicDrawerTopicId: topicId }, false, 'openTopicDrawer');
+  };
+
+  closeTopicDrawer = (): void => {
+    if (!this.#get().activeTopicDrawerTopicId) return;
+    this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
   };
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {
@@ -126,39 +214,48 @@ export class TaskDetailSliceActionImpl {
   };
 
   updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
-    // Optimistic update — all fields in TaskUpdatePayload directly map to TaskDetailData
-    this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: data });
+    const { assigneeAgentId, ...rest } = data;
+    const optimistic: Partial<TaskDetailData> = {
+      ...rest,
+      ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
+    };
+    this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
     this.#set({ taskSaveStatus: 'saving' }, false, 'updateTask/saving');
 
     try {
       await taskService.update(id, data);
       this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
+      if (assigneeAgentId !== undefined) {
+        await this.#get().refreshTaskList();
+      }
     } catch (error) {
-      console.error('[TaskStore] Failed to update task:', error);
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
       // Revert by refreshing from server
       await this.internal_refreshTaskDetail(id);
+      message.error(
+        t('taskDetail.updateFailed', {
+          defaultValue: 'Failed to update task',
+          ns: 'chat',
+        }),
+      );
+      throw error;
     }
   };
 
   useFetchTaskDetail = (taskId?: string) => {
+    // Drive polling from a reactive boolean. SWR's function-form refreshInterval
+    // is a trap here: it's only re-evaluated after a timer fires, so if the first
+    // call (with undefined cache data) returns 0, no timer is ever scheduled and
+    // polling never starts — even once real data arrives.
+    const shouldPoll = useTaskStore((s) => {
+      const detail = taskId ? s.taskDetailMap[taskId] : undefined;
+      return hasInFlightActivity(detail);
+    });
+
     return useClientDataSWR(
       taskId ? [FETCH_TASK_DETAIL_KEY, taskId] : null,
-      async ([, id]: [string, string]) => {
-        const result = await taskService.getDetail(id);
-        return result.data;
-      },
-      {
-        onSuccess: (data: TaskDetailData) => {
-          if (data && taskId) {
-            this.internal_dispatchTaskDetail({
-              id: taskId,
-              type: 'setTaskDetail',
-              value: data,
-            });
-          }
-        },
-      },
+      async ([, id]: [string, string]) => this.fetchTaskDetail(id),
+      { refreshInterval: shouldPoll ? TASK_DETAIL_POLL_INTERVAL : 0 },
     );
   };
 

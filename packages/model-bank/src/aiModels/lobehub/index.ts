@@ -7,7 +7,12 @@ export { lobehubChatModels } from './chat';
 export { lobehubEmbeddingModels } from './embedding';
 export { lobehubImageModels } from './image';
 export * from './utils';
-export { lobehubVideoModels, seedance15ProParams, seedance20Params } from './video';
+export {
+  lobehubVideoModels,
+  seedance15ProParams,
+  seedance20FastParams,
+  seedance20Params,
+} from './video';
 
 export const allModels = [
   ...lobehubChatModels,

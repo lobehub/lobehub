@@ -1,5 +1,7 @@
 import type {
   CheckpointConfig,
+  NewTask,
+  TaskItem,
   WorkspaceData,
   WorkspaceDocNode,
   WorkspaceTreeNode,
@@ -8,7 +10,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 
 import { merge } from '@/utils/merge';
 
-import type { NewTask, NewTaskComment, TaskCommentItem, TaskItem } from '../schemas/task';
+import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 
@@ -217,13 +219,22 @@ export class TaskModel {
     limit?: number;
     offset?: number;
     parentTaskId?: string | null;
-    status?: string;
+    priorities?: number[];
+    statuses?: string[];
   }): Promise<{ tasks: TaskItem[]; total: number }> {
-    const { status, parentTaskId, assigneeAgentId, limit = 50, offset = 0 } = options || {};
+    const {
+      statuses,
+      priorities,
+      parentTaskId,
+      assigneeAgentId,
+      limit = 50,
+      offset = 0,
+    } = options || {};
 
     const conditions = [eq(tasks.createdByUserId, this.userId)];
 
-    if (status) conditions.push(eq(tasks.status, status));
+    if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
+    if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
 
     if (parentTaskId === null) {
@@ -307,7 +318,7 @@ export class TaskModel {
       SELECT * FROM task_tree
     `);
 
-    return result.rows as TaskItem[];
+    return result.rows as unknown as TaskItem[];
   }
 
   /**
@@ -399,6 +410,22 @@ export class TaskModel {
     const current = (task.config as Record<string, unknown>) || {};
     const config = merge(current, partial);
     return this.update(id, { config });
+  }
+
+  // ========== Context (runtime state) ==========
+
+  /**
+   * Deep-merge into the task's context JSONB. Used by the heartbeat scheduler
+   * to update `context.scheduler.{tickMessageId, consecutiveFailures, ...}`
+   * without disturbing other namespaces under context.
+   */
+  async updateContext(id: string, partial: Record<string, unknown>): Promise<TaskItem | null> {
+    const task = await this.findById(id);
+    if (!task) return null;
+
+    const current = (task.context as Record<string, unknown>) || {};
+    const context = merge(current, partial);
+    return this.update(id, { context });
   }
 
   // ========== Checkpoint ==========
@@ -680,5 +707,14 @@ export class TaskModel {
 
       .returning();
     return result.length > 0;
+  }
+
+  async updateComment(id: string, content: string): Promise<TaskCommentItem | undefined> {
+    const [comment] = await this.db
+      .update(taskComments)
+      .set({ content, updatedAt: new Date() })
+      .where(and(eq(taskComments.id, id), eq(taskComments.userId, this.userId)))
+      .returning();
+    return comment;
   }
 }

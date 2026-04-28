@@ -1,6 +1,34 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDuration, formatTokens, formatUsageStats } from './utils';
+import type { PlatformDefinition } from './types';
+import {
+  formatDuration,
+  formatTokens,
+  formatUsageStats,
+  resolveBotProviderConfig,
+  resolveConnectionMode,
+} from './utils';
+
+function makePlatform(overrides: Partial<PlatformDefinition> = {}): PlatformDefinition {
+  return {
+    clientFactory: {} as any,
+    connectionMode: 'websocket',
+    id: 'slack',
+    name: 'Slack',
+    schema: [
+      {
+        key: 'settings',
+        label: 'Settings',
+        properties: [
+          { default: 'websocket', key: 'connectionMode', type: 'string' },
+          { default: 4000, key: 'charLimit', type: 'number' },
+        ],
+        type: 'object',
+      },
+    ] as any,
+    ...overrides,
+  };
+}
 
 describe('formatTokens', () => {
   it('should return raw number for < 1000', () => {
@@ -61,5 +89,54 @@ describe('formatUsageStats', () => {
     expect(
       formatUsageStats({ llmCalls: 1, toolCalls: 0, totalCost: 0.001, totalTokens: 100 }),
     ).toBe('100 tokens · $0.0010');
+  });
+});
+
+describe('resolveBotProviderConfig', () => {
+  it('applies schema defaults when settings field is missing', () => {
+    const result = resolveBotProviderConfig(makePlatform(), {
+      applicationId: 'app-1',
+      credentials: { botToken: 't' },
+      settings: null,
+    });
+
+    expect(result.settings.connectionMode).toBe('websocket');
+    expect(result.settings.charLimit).toBe(4000);
+    expect(result.connectionMode).toBe('websocket');
+    expect(result.config).toEqual({
+      applicationId: 'app-1',
+      credentials: { botToken: 't' },
+      platform: 'slack',
+      settings: { charLimit: 4000, connectionMode: 'websocket' },
+    });
+  });
+
+  it('user settings override schema defaults', () => {
+    const result = resolveBotProviderConfig(makePlatform(), {
+      applicationId: 'app-2',
+      credentials: { botToken: 't' },
+      settings: { connectionMode: 'webhook' },
+    });
+
+    expect(result.settings.connectionMode).toBe('webhook');
+    expect(result.settings.charLimit).toBe(4000);
+    expect(result.connectionMode).toBe('webhook');
+  });
+});
+
+describe('resolveConnectionMode', () => {
+  it('returns schema default when raw settings have no mode (slack)', () => {
+    expect(resolveConnectionMode(makePlatform(), null)).toBe('websocket');
+    expect(resolveConnectionMode(makePlatform(), undefined)).toBe('websocket');
+    expect(resolveConnectionMode(makePlatform(), {})).toBe('websocket');
+  });
+
+  it('returns user-set value when present', () => {
+    expect(resolveConnectionMode(makePlatform(), { connectionMode: 'webhook' })).toBe('webhook');
+  });
+
+  it('falls back to webhook when platform definition is missing', () => {
+    expect(resolveConnectionMode(undefined, null)).toBe('webhook');
+    expect(resolveConnectionMode(undefined, { connectionMode: 'websocket' })).toBe('websocket');
   });
 });

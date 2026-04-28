@@ -8,6 +8,8 @@ import {
 } from '@/business/client/BusinessDesktopRoutes';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
+const agentChatElement = dynamicElement(() => import('@/routes/(main)/agent'), 'Desktop > Chat');
+const isDev = process.env.NODE_ENV === 'development';
 // Desktop router configuration (declarative mode)
 export const desktopRoutes: RouteObject[] = [
   {
@@ -22,8 +24,51 @@ export const desktopRoutes: RouteObject[] = [
           {
             children: [
               {
-                element: dynamicElement(() => import('@/routes/(main)/agent'), 'Desktop > Chat'),
-                index: true,
+                children: [
+                  {
+                    element: agentChatElement,
+                    index: true,
+                  },
+                  {
+                    children: [
+                      {
+                        element: agentChatElement,
+                        index: true,
+                      },
+                      {
+                        children: [
+                          {
+                            element: dynamicElement(
+                              () => import('@/routes/(main)/agent/[topicId]/page'),
+                              'Desktop > Chat > Topic > Page > Redirect',
+                            ),
+                            index: true,
+                          },
+                          {
+                            element: dynamicElement(
+                              () => import('@/routes/(main)/agent/[topicId]/page/[docId]'),
+                              'Desktop > Chat > Topic > Page > Doc',
+                            ),
+                            path: ':docId',
+                          },
+                        ],
+                        path: 'page',
+                      },
+                    ],
+                    path: ':topicId',
+                  },
+                ],
+                element: dynamicLayout(
+                  () => import('@/routes/(main)/agent/(chat)/_layout'),
+                  'Desktop > Chat > ChatLayout',
+                ),
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/page'),
+                  'Desktop > Chat > Invalid Page Redirect',
+                ),
+                path: 'page',
               },
               {
                 element: dynamicElement(
@@ -51,7 +96,7 @@ export const desktopRoutes: RouteObject[] = [
               () => import('@/routes/(main)/agent/_layout'),
               'Desktop > Chat > Layout',
             ),
-            errorElement: <ErrorBoundary resetPath="/agent" />,
+            errorElement: <ErrorBoundary />,
             path: ':aid',
           },
         ],
@@ -86,7 +131,7 @@ export const desktopRoutes: RouteObject[] = [
               () => import('@/routes/(main)/group/_layout'),
               'Desktop > Group > Layout',
             ),
-            errorElement: <ErrorBoundary resetPath="/group" />,
+            errorElement: <ErrorBoundary />,
             path: ':gid',
           },
         ],
@@ -246,7 +291,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/community/_layout'),
           'Desktop > Discover > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/community" />,
+        errorElement: <ErrorBoundary />,
         path: 'community',
       },
 
@@ -298,7 +343,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/resource/_layout'),
           'Desktop > Resource > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/resource" />,
+        errorElement: <ErrorBoundary />,
         path: 'resource',
       },
 
@@ -344,7 +389,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/settings/_layout'),
           'Desktop > Settings > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/settings" />,
+        errorElement: <ErrorBoundary />,
         path: 'settings',
       },
 
@@ -398,7 +443,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/memory/_layout'),
           'Desktop > Memory > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/memory" />,
+        errorElement: <ErrorBoundary />,
         path: 'memory',
       },
 
@@ -417,7 +462,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/(create)/video/_layout'),
           'Desktop > Video > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/video" />,
+        errorElement: <ErrorBoundary />,
         path: 'video',
       },
 
@@ -436,7 +481,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/(create)/image/_layout'),
           'Desktop > Image > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/image" />,
+        errorElement: <ErrorBoundary />,
         path: 'image',
       },
 
@@ -510,8 +555,43 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/eval/_layout'),
           'Desktop > Eval > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/eval" />,
+        errorElement: <ErrorBoundary />,
         path: 'eval',
+      },
+
+      // Tasks routes (cross-agent)
+      {
+        children: [
+          {
+            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks'),
+            index: true,
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/tasks/_layout'),
+          'Desktop > Tasks > Layout',
+        ),
+        errorElement: <ErrorBoundary resetPath="/" />,
+        path: 'tasks',
+      },
+
+      // Task detail route (cross-agent entry — resolves by task identifier)
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/task/[taskId]'),
+              'Desktop > Task Detail',
+            ),
+            path: ':taskId',
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/task/_layout'),
+          'Desktop > Task > Layout',
+        ),
+        errorElement: <ErrorBoundary resetPath="/tasks" />,
+        path: 'task',
       },
 
       // Pages routes
@@ -533,7 +613,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/page/_layout'),
           'Desktop > Page > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/page" />,
+        errorElement: <ErrorBoundary />,
         path: 'page',
       },
 
@@ -548,7 +628,7 @@ export const desktopRoutes: RouteObject[] = [
       },
     ],
     element: dynamicLayout(() => import('@/routes/(main)/_layout'), 'Desktop > Main > Layout'),
-    errorElement: <ErrorBoundary resetPath="/" />,
+    errorElement: <ErrorBoundary />,
     path: '/',
   },
   // Onboarding route (outside main layout)
@@ -569,11 +649,41 @@ export const desktopRoutes: RouteObject[] = [
     ),
     path: '/share/t',
   },
+
+  // Devtools route (outside main layout, dev-only)
+  ...(isDev
+    ? [
+        {
+          children: [
+            {
+              element: dynamicElement(
+                () => import('@/routes/(main)/devtools'),
+                'Desktop > Devtools > Index',
+              ),
+              index: true,
+            },
+            {
+              element: dynamicElement(
+                () => import('@/routes/(main)/devtools/[identifier]'),
+                'Desktop > Devtools > Toolset',
+              ),
+              path: ':identifier',
+            },
+          ],
+          element: dynamicLayout(
+            () => import('@/routes/(main)/devtools/_layout'),
+            'Desktop > Devtools > Layout',
+          ),
+          errorElement: <ErrorBoundary />,
+          path: '/devtools',
+        },
+      ]
+    : []),
 ];
 
 desktopRoutes.push({
   element: dynamicElement(() => import('@/routes/onboarding'), 'Desktop > Onboarding'),
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/onboarding',
 });
 
@@ -582,7 +692,7 @@ desktopRoutes.push({
     () => import('@/routes/onboarding/agent'),
     'Desktop > Onboarding > Agent',
   ),
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/onboarding/agent',
 });
 
@@ -591,6 +701,6 @@ desktopRoutes.push({
     () => import('@/routes/onboarding/classic'),
     'Desktop > Onboarding > Classic',
   ),
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/onboarding/classic',
 });

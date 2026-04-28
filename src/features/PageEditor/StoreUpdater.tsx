@@ -3,6 +3,7 @@
 import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
 import { type PublicState } from './store';
@@ -55,7 +56,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // Initialize meta (title/emoji) with dirty tracking
     useEffect(() => {
       initMeta(title, emoji);
-    }, [pageId, title, emoji]);
+    }, [pageId, title, emoji, initMeta]);
 
     // Connect editor to page agent runtime
     useEffect(() => {
@@ -75,10 +76,18 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
       pageAgentRuntime.setCurrentDocId(pageId);
       pageAgentRuntime.setTitleHandlers(storeApi.getState().setTitle, titleGetter);
+      pageAgentRuntime.setBeforeMutateHandler(() => {
+        documentHistoryQueueService.enqueueEditorSnapshot({
+          documentId: pageId,
+          editor: storeApi.getState().editor,
+        });
+      });
 
       return () => {
         pageAgentRuntime.setCurrentDocId(undefined);
         pageAgentRuntime.setTitleHandlers(null, null);
+        pageAgentRuntime.setBeforeMutateHandler(null);
+        void documentHistoryQueueService.flush();
       };
     }, [pageId, storeApi]);
 

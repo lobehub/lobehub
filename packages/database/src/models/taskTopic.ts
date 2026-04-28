@@ -44,6 +44,26 @@ export class TaskTopicModel {
       );
   }
 
+  /**
+   * Atomically cancel a topic only if it is still in `running` status.
+   * Returns true if a row was actually updated.
+   */
+  async cancelIfRunning(taskId: string, topicId: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status: 'canceled' })
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.status, 'running'),
+          eq(taskTopics.userId, this.userId),
+        ),
+      )
+      .returning();
+    return result.length > 0;
+  }
+
   async updateOperationId(taskId: string, topicId: string, operationId?: string): Promise<void> {
     await this.db
       .update(taskTopics)
@@ -155,16 +175,20 @@ export class TaskTopicModel {
       .orderBy(desc(taskTopics.seq));
   }
 
-  async findWithHandoff(taskId: string, limit = 4) {
+  async findWithHandoff(taskId: string, limit: number) {
+    const { topics } = await import('../schemas/topic');
     return this.db
       .select({
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
+        metadata: topics.metadata,
         seq: taskTopics.seq,
         status: taskTopics.status,
+        title: topics.title,
         topicId: taskTopics.topicId,
       })
       .from(taskTopics)
+      .leftJoin(topics, eq(taskTopics.topicId, topics.id))
       .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
       .orderBy(desc(taskTopics.seq))
       .limit(limit);

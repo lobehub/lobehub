@@ -1,29 +1,29 @@
-import { join } from 'node:path';
+import path from 'node:path';
 
 import { app } from 'electron';
 
-export const mainDir = join(__dirname);
+export const mainDir = path.join(__dirname);
 
-export const preloadDir = join(mainDir, '../preload');
+export const preloadDir = path.join(mainDir, '../preload');
 
-export const resourcesDir = join(mainDir, '../../resources');
+export const resourcesDir = path.join(mainDir, '../../resources');
 
-export const buildDir = join(mainDir, '../../build');
+export const buildDir = path.join(mainDir, '../../build');
 
 export const binDir = app.isPackaged
-  ? join(process.resourcesPath, 'bin')
-  : join(resourcesDir, 'bin');
+  ? path.join(process.resourcesPath, 'bin')
+  : path.join(resourcesDir, 'bin');
 
 const appPath = app.getAppPath();
 
-export const rendererDir = join(appPath, 'dist', 'renderer');
+export const rendererDir = path.join(appPath, 'dist', 'renderer');
 
 export const userDataDir = app.getPath('userData');
 
-export const appStorageDir = join(userDataDir, 'lobehub-storage');
+export const appStorageDir = path.join(userDataDir, 'lobehub-storage');
 
 // Legacy local database directory used in older desktop versions
-export const legacyLocalDbDir = join(appStorageDir, 'lobehub-local-db');
+export const legacyLocalDbDir = path.join(appStorageDir, 'lobehub-local-db');
 
 // ------  Application storage directory ---- //
 

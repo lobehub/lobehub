@@ -1,18 +1,9 @@
 import { type HomeStore } from '@/store/home/store';
 
-const recentTopics = (s: HomeStore) => s.recentTopics;
-const recentResources = (s: HomeStore) => s.recentResources;
-const recentPages = (s: HomeStore) => s.recentPages;
-
-const isRecentTopicsInit = (s: HomeStore) => s.isRecentTopicsInit;
-const isRecentResourcesInit = (s: HomeStore) => s.isRecentResourcesInit;
-const isRecentPagesInit = (s: HomeStore) => s.isRecentPagesInit;
+const recents = (s: HomeStore) => s.recents;
+const isRecentsInit = (s: HomeStore) => s.isRecentsInit;
 
 export const homeRecentSelectors = {
-  isRecentPagesInit,
-  isRecentResourcesInit,
-  isRecentTopicsInit,
-  recentPages,
-  recentResources,
-  recentTopics,
+  isRecentsInit,
+  recents,
 };

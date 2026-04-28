@@ -97,8 +97,8 @@ jobs:
     if: needs.check-duplicate-run.outputs.should_skip != 'true'
     strategy:
       matrix:
-        shard: [1, 2]
-    name: Test App (shard ${{ matrix.shard }}/2)
+        shard: [1, 2, 3]
+    name: Test App (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -110,7 +110,7 @@ jobs:
         run: pnpm install
 
       - name: Run tests
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/3
 
       - name: Upload blob report
         if: ${{ !cancelled() }}

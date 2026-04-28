@@ -1,5 +1,8 @@
 import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 
+const ARTIFACT_TAG_REGEX_GLOBAL =
+  /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
+
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
  */
@@ -48,8 +51,8 @@ export const processWithArtifact = (input: string = '') => {
 
   // If the input contains `lobeArtifact` tags, replace all line breaks with an empty string
   // Use global regex to handle multiple artifacts in the same message
-  const ARTIFACT_TAG_REGEX_GLOBAL =
-    /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
+  // Keep artifact markup as one raw HTML segment for the rehype artifact plugin. Preserving
+  // script block newlines here can make Markdown parse script text outside the custom tag.
   output = output.replaceAll(ARTIFACT_TAG_REGEX_GLOBAL, (match) =>
     match.replaceAll(/\r?\n|\r/g, ''),
   );

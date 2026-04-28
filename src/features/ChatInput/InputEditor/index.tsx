@@ -1,13 +1,15 @@
 import { isDesktop } from '@lobechat/const';
+import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { chainInputCompletion } from '@lobechat/prompts';
-import { HotkeyEnum, KeyEnum } from '@lobechat/types';
 import { isCommandPressed, merge } from '@lobechat/utils';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
 import Fuse from 'fuse.js';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { KEY_ESCAPE_COMMAND } from 'lexical';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
@@ -32,7 +34,7 @@ import {
 } from './ActionTag';
 import { createMentionMenu } from './MentionMenu';
 import type { MentionMenuState } from './MentionMenu/types';
-import Placeholder from './Placeholder';
+import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useMentionCategories } from './useMentionCategories';
@@ -43,7 +45,11 @@ const className = cx(css`
   }
 `);
 
-const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
+const InputEditor = memo<{
+  defaultRows?: number;
+  placeholder?: ReactNode;
+  placeholderVariant?: PlaceholderVariant;
+}>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
   const [editor, slashMenuRef, send, updateMarkdownContent, expand, slashPlacement] =
     useChatInputStore((s) => [
       s.editor,
@@ -102,6 +108,15 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
   const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const heterogeneousType = useAgentStore(
+    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
+  );
+  const heterogeneousName = heterogeneousType
+    ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+    : undefined;
+  // Heterogeneous agents (e.g. Claude Code) don't yet support @-assigning to other agents
+  const showAgentAssignmentHint =
+    !heterogeneousName && categories.some((category) => category.id === 'agent');
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   // Listen to editor's paste event for file uploads
@@ -164,6 +179,10 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
 
       if (!input.trim()) return null;
 
+      // Skip when cursor is not at end of paragraph — inserting a placeholder
+      // mid-text causes nested editor updates that freeze the input
+      if (afterText.trim()) return null;
+
       const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
         useUserStore.getState(),
       );
@@ -193,7 +212,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
 
       return result.trimEnd() || null;
     },
-    [],
+    [isComposingRef],
   );
 
   const autoCompletePlugin = useMemo(
@@ -282,20 +301,38 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       {...{ slashPlacement }}
       {...richRenderProps}
       mentionOption={mentionOption}
-      placeholder={<Placeholder />}
       slashOption={slashOption}
       type={'text'}
       variant={'chat'}
+      placeholder={
+        placeholder ?? (
+          <Placeholder
+            heterogeneousName={heterogeneousName}
+            showAgentAssignmentHint={showAgentAssignmentHint}
+            variant={placeholderVariant}
+          />
+        )
+      }
       style={{
         minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
       }}
       onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
-      onCompositionStart={({ event }) => compositionProps.onCompositionStart(event)}
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
       }}
       onChange={() => {
         updateMarkdownContent();
+      }}
+      onCompositionStart={({ event }) => {
+        compositionProps.onCompositionStart(event);
+        // Clear autocomplete placeholder nodes before IME composition starts —
+        // composing next to placeholder inline nodes freezes the editor.
+        if (isAutoCompleteEnabled) {
+          editor?.dispatchCommand(
+            KEY_ESCAPE_COMMAND,
+            new KeyboardEvent('keydown', { key: 'Escape' }),
+          );
+        }
       }}
       onContextMenu={async ({ event: e, editor }) => {
         if (isDesktop) {

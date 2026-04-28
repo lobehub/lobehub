@@ -56,6 +56,7 @@ const Action = memo<ActionProps>(
           placement: 'bottom',
         }}
         onClick={(e) => {
+          if (disabled || loading) return;
           if (onClick) return onClick(e);
           setShow(true);
         }}
@@ -87,6 +88,7 @@ const Action = memo<ActionProps>(
     if (popover)
       return (
         <ActionPopover
+          loading={loading}
           open={show}
           trigger={trigger}
           onOpenChange={setShow}

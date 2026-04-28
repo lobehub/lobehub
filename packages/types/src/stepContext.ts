@@ -75,6 +75,26 @@ export interface InitialPageEditorContext {
 }
 
 /**
+ * Active topic document context
+ * Captured when a user leaves the topic page editor but continues the same
+ * topic conversation from the regular chat surface.
+ */
+export interface RuntimeActiveTopicDocumentContext {
+  /**
+   * Agent-document row ID used by lobe-agent-documents read/patch/edit APIs.
+   */
+  agentDocumentId?: string;
+  /**
+   * Underlying documents.id used by topic page routes.
+   */
+  documentId: string;
+  /**
+   * Human-readable title for model disambiguation.
+   */
+  title?: string | null;
+}
+
+/**
  * User-selected skill context for the current request
  * Captured from slash-menu skill action tags before send
  */
@@ -195,6 +215,11 @@ export interface InjectedToolManifest {
  */
 export interface RuntimeInitialContext {
   /**
+   * Active topic document carried from page route to regular chat route.
+   * This lets the model continue document work without page-editor tools.
+   */
+  activeTopicDocument?: RuntimeActiveTopicDocumentContext;
+  /**
    * Ad-hoc tool manifests injected by callers for the current request.
    * Merged into the tool resolution output without passing through ToolsEngine.
    * Deduplication: manifests whose identifier already appears in enabledToolIds are skipped.
@@ -221,4 +246,15 @@ export interface RuntimeInitialContext {
    * This constrains the available tools for the current runtime execution
    */
   selectedTools?: RuntimeSelectedTool[];
+  /**
+   * Task Manager page context, built from the tasks list/detail page the user
+   * is currently viewing. Injected into the last user message so the LLM can
+   * answer questions about the on-screen tasks without extra tool calls.
+   */
+  taskManager?: InitialTaskManagerContext;
+}
+
+export interface InitialTaskManagerContext {
+  /** Prebuilt prompt describing the tasks shown on the page. */
+  contextPrompt: string;
 }

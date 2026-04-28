@@ -5,8 +5,9 @@ import type { FixedPricingUnit, LookupPricingUnit, Pricing } from 'model-bank';
 const log = debug('lobe-cost:computeVideoCost');
 
 export interface VideoGenerationParams {
-  [key: string]: any;
+  [key: string]: unknown;
   generateAudio?: boolean;
+  resolution?: string;
 }
 
 export interface VideoCostResult {
@@ -36,7 +37,7 @@ export const computeVideoCost = (
   }
 
   const currency = pricing.currency || 'USD';
-  let pricePerMillionTokens = 0;
+  let pricePerMillionTokens: number;
   let lookupKey: string | undefined;
 
   switch (videoGenUnit.strategy) {
@@ -76,7 +77,9 @@ export const computeVideoCost = (
       }
 
       pricePerMillionTokens = lookupPrice;
-      log(`Lookup pricing for key "${lookupKey}": ${pricePerMillionTokens} per million tokens (${currency})`);
+      log(
+        `Lookup pricing for key "${lookupKey}": ${pricePerMillionTokens} per million tokens (${currency})`,
+      );
       break;
     }
     default: {

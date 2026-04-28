@@ -7,6 +7,7 @@ import type { ChatStreamCallbacks, ChatStreamPayload, ModelRuntimeHooks } from '
 import { LobeOpenAI, ModelRuntime } from '../index';
 import { providerRuntimeMap } from '../runtimeMap';
 import type { CreateImagePayload } from '../types/image';
+import type { CreateVideoPayload } from '../types/video';
 
 /**
  * Mock createTraceOptions for testing purposes.
@@ -28,9 +29,10 @@ const specialProviders = [
     id: ModelProvider.Azure,
     payload: {
       apiKey: 'user-azure-key',
-      baseURL: 'user-azure-endpoint',
+      baseURL: 'https://user-azure.openai.azure.com',
       apiVersion: '2024-06-01',
     },
+    runtimeBaseURL: 'https://user-azure.openai.azure.com/openai/v1',
   },
   {
     id: ModelProvider.AzureAI,
@@ -57,7 +59,7 @@ const specialProviders = [
   },
 ];
 
-const testRuntime = (providerId: string, payload?: any) => {
+const testRuntime = (providerId: string, payload?: any, runtimeBaseURL?: string) => {
   describe(`${providerId} provider runtime`, () => {
     it('should initialize correctly', async () => {
       const jwtPayload: ClientSecretPayload = { apiKey: 'user-key', ...payload };
@@ -67,7 +69,7 @@ const testRuntime = (providerId: string, payload?: any) => {
       expect(runtime['_runtime']).toBeInstanceOf(providerRuntimeMap[providerId]);
 
       if (payload?.baseURL) {
-        expect(runtime['_runtime'].baseURL).toBe(payload.baseURL);
+        expect(runtime['_runtime'].baseURL).toBe(runtimeBaseURL ?? payload.baseURL);
       }
     });
   });
@@ -92,7 +94,9 @@ describe('ModelRuntime', () => {
       testRuntime(provider);
     });
 
-    specialProviders.forEach(({ id, payload }) => testRuntime(id, payload));
+    specialProviders.forEach(({ id, payload, runtimeBaseURL }) =>
+      testRuntime(id, payload, runtimeBaseURL),
+    );
   });
 
   describe('ModelRuntime chat method', () => {
@@ -248,7 +252,7 @@ describe('ModelRuntime', () => {
 
       const result = await mockModelRuntime.createImage(payload);
 
-      expect(LobeOpenAI.prototype.createImage).toHaveBeenCalledWith(payload);
+      expect(LobeOpenAI.prototype.createImage).toHaveBeenCalledWith(payload, undefined);
       expect(result).toBe(mockResponse);
     });
 
@@ -271,6 +275,58 @@ describe('ModelRuntime', () => {
       mockModelRuntime['_runtime'] = runtimeWithoutCreateImage;
 
       const result = await mockModelRuntime.createImage(payload);
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should forward options to the underlying runtime', async () => {
+      const payload: CreateImagePayload = {
+        model: 'dall-e-3',
+        params: { prompt: 'a cat', width: 512, height: 512 },
+      };
+      const mockResponse = { imageUrl: 'x', width: 512, height: 512 };
+      const createImage = vi.fn().mockResolvedValue(mockResponse);
+
+      // @ts-ignore - injecting a minimal runtime for this case
+      mockModelRuntime['_runtime'] = { createImage };
+
+      const options = { metadata: { trigger: 'image' } };
+      const result = await mockModelRuntime.createImage(payload, options);
+
+      expect(createImage).toHaveBeenCalledWith(payload, options);
+      expect(result).toBe(mockResponse);
+    });
+  });
+
+  describe('ModelRuntime createVideo method', () => {
+    it('should forward payload and options to the underlying runtime', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+      const mockResponse = { inferenceId: 'job-1' };
+      const createVideo = vi.fn().mockResolvedValue(mockResponse);
+
+      // @ts-ignore - injecting a minimal runtime for this case
+      mockModelRuntime['_runtime'] = { createVideo };
+
+      const options = { metadata: { trigger: 'video' } };
+      const result = await mockModelRuntime.createVideo(payload, options);
+
+      expect(createVideo).toHaveBeenCalledWith(payload, options);
+      expect(result).toBe(mockResponse);
+    });
+
+    it('should handle undefined createVideo method gracefully', async () => {
+      const payload: CreateVideoPayload = {
+        model: 'sora-1',
+        params: { prompt: 'a cat' } as any,
+      };
+
+      // @ts-ignore - testing edge case
+      mockModelRuntime['_runtime'] = { createVideo: undefined };
+
+      const result = await mockModelRuntime.createVideo(payload);
 
       expect(result).toBeUndefined();
     });

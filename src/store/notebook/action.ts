@@ -3,9 +3,10 @@ import { type DocumentItem } from '@lobechat/database/schemas';
 import { type NotebookDocument } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
-import { mutate } from 'swr';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { notebookSWRKeys } from '@/services/document/swrKeys';
 import { notebookService } from '@/services/notebook';
 import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
@@ -15,7 +16,7 @@ import { type NotebookStore } from './store';
 
 const n = setNamespace('notebook');
 
-const SWR_USE_FETCH_NOTEBOOK_DOCUMENTS = 'SWR_USE_FETCH_NOTEBOOK_DOCUMENTS';
+export { SWR_USE_FETCH_NOTEBOOK_DOCUMENTS } from '@/services/document/swrKeys';
 
 type ExtendedDocumentType = DocumentType | 'agent/plan';
 
@@ -53,8 +54,11 @@ export class NotebookActionImpl {
   createDocument = async (params: CreateDocumentParams): Promise<DocumentItem> => {
     const document = await notebookService.createDocument(params);
 
-    // Refresh the documents list
-    await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, params.topicId]);
+    await invalidateDocumentMutation({
+      cause: 'notebook',
+      documentId: document.id,
+      topicId: params.topicId,
+    });
 
     return document;
   };
@@ -69,12 +73,11 @@ export class NotebookActionImpl {
     // Call API to delete
     await notebookService.deleteDocument(id);
 
-    // Refresh the documents list
-    await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId]);
+    await invalidateDocumentMutation({ cause: 'notebook', documentId: id, topicId });
   };
 
   refreshDocuments = async (topicId: string): Promise<void> => {
-    await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId]);
+    await mutate(notebookSWRKeys.documents(topicId));
   };
 
   updateDocument = async (
@@ -83,15 +86,14 @@ export class NotebookActionImpl {
   ): Promise<DocumentItem | undefined> => {
     const document = await notebookService.updateDocument(params);
 
-    // Refresh the documents list
-    await mutate([SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId]);
+    await invalidateDocumentMutation({ cause: 'notebook', documentId: params.id, topicId });
 
     return document;
   };
 
   useFetchDocuments = (topicId: string | undefined): SWRResponse<NotebookDocument[]> => {
     return useClientDataSWR<NotebookDocument[]>(
-      topicId ? [SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId] : null,
+      topicId ? notebookSWRKeys.documents(topicId) : null,
       async () => {
         if (!topicId) return [];
 

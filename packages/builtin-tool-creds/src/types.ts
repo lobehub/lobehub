@@ -2,6 +2,12 @@ import type { CredType } from '@lobechat/types';
 
 export const CredsApiName = {
   /**
+   * Connect a Klavis integration service via OAuth
+   * Initiates Klavis OAuth flow for third-party services like Notion, Gmail, etc.
+   */
+  connectKlavisService: 'connectKlavisService',
+
+  /**
    * Get plaintext value of a credential
    * Use when AI needs to access credential value for API calls
    */
@@ -136,6 +142,34 @@ export interface SaveCredsState {
    * Whether save was successful
    */
   success: boolean;
+}
+
+// ==================== Klavis Service Types ====================
+
+export interface ConnectKlavisServiceParams {
+  /**
+   * The Klavis service identifier to connect (e.g., 'notion', 'gmail', 'google-calendar')
+   */
+  service: string;
+}
+
+export interface ConnectKlavisServiceState {
+  /**
+   * Whether the service is now connected
+   */
+  connected: boolean;
+  /**
+   * The service identifier
+   */
+  identifier: string;
+  /**
+   * OAuth URL (only present when authorization is needed)
+   */
+  oauthUrl?: string;
+  /**
+   * The service display name
+   */
+  serviceName: string;
 }
 
 // ==================== Context Types ====================

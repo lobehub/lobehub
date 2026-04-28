@@ -21,7 +21,7 @@ export class FlatListBuilder {
     private branchResolver: BranchResolver,
     private messageCollector: MessageCollector,
     private messageTransformer: MessageTransformer,
-  ) { }
+  ) {}
 
   /**
    * Generate flatList from messages array
@@ -812,12 +812,15 @@ export class FlatListBuilder {
           'outputImageTokens',
           'outputReasoningTokens',
           'outputTextTokens',
+          // Nested canonical shape — see splitMetadata
+          'performance',
           'rejectedPredictionTokens',
           'totalInputTokens',
           'totalOutputTokens',
           'totalTokens',
           'tps',
           'ttft',
+          'usage',
         ]);
 
         Object.entries(assistant.metadata).forEach(([key, value]) => {
@@ -955,12 +958,15 @@ export class FlatListBuilder {
         'outputImageTokens',
         'outputReasoningTokens',
         'outputTextTokens',
+        // Nested canonical shape — see splitMetadata
+        'performance',
         'rejectedPredictionTokens',
         'totalInputTokens',
         'totalOutputTokens',
         'totalTokens',
         'tps',
         'ttft',
+        'usage',
       ]);
 
       Object.entries(message.metadata).forEach(([key, value]) => {

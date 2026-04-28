@@ -5,16 +5,26 @@ export enum RequestTrigger {
   Cron = 'cron',
   Eval = 'eval',
   FileEmbedding = 'file_embedding',
+  Image = 'image',
   Memory = 'memory',
   SemanticSearch = 'semantic_search',
   Topic = 'topic',
+  Video = 'video',
 }
 
 // ******* Runtime Biz Error ******* //
 export const AgentRuntimeErrorType = {
   AgentRuntimeError: 'AgentRuntimeError', // Agent Runtime module runtime error
+  /**
+   * The `parent_id` referenced by an assistant / tool message no longer exists
+   * in the database — typically because the parent message was deleted during
+   * operation execution. The conversation chain is broken, so the runtime
+   * stops fail-fast instead of letting the next step hit another FK violation.
+   */
+  ConversationParentMissing: 'ConversationParentMissing',
   LocationNotSupportError: 'LocationNotSupportError',
 
+  AccountDeactivated: 'AccountDeactivated',
   QuotaLimitReached: 'QuotaLimitReached',
   InsufficientQuota: 'InsufficientQuota',
 

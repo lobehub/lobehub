@@ -54,6 +54,32 @@ describe('agentDocuments checks', () => {
     expect(composed.policy.context?.keywords).toEqual(['risk']);
   });
 
+  it('resolves document position from policyLoadPosition fallback', () => {
+    expect(
+      resolveDocumentLoadPosition({
+        policy: { context: {} },
+        policyLoadPosition: DocumentLoadPosition.AFTER_KNOWLEDGE,
+      }),
+    ).toBe(DocumentLoadPosition.AFTER_KNOWLEDGE);
+
+    expect(
+      resolveDocumentLoadPosition({
+        policy: null,
+        policyLoadPosition: undefined as any,
+      }),
+    ).toBe(DocumentLoadPosition.BEFORE_FIRST_USER);
+  });
+
+  it('composes tool policy with rule/format from existing context when not in rule', () => {
+    const composed = composeToolPolicyUpdate(
+      { context: { policyLoadFormat: DocumentLoadFormat.FILE, rule: DocumentLoadRule.BY_REGEXP } },
+      {},
+    );
+
+    expect(composed.policyLoadFormat).toBe(DocumentLoadFormat.FILE);
+    expect(composed.policyLoadRule).toBe(DocumentLoadRule.BY_REGEXP);
+  });
+
   it('parses load rules and resolves document position', () => {
     const doc = {
       policy: {

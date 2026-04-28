@@ -30,6 +30,13 @@ export const LobeAnalyticsProviderWrapper = memo<Props>(({ children }) => {
         key: analytics?.posthog?.key ?? '',
         person_profiles: 'always',
       }}
+      xAdsConfig={{
+        debug: isDev,
+        eventIds: analytics?.xAds?.eventIds,
+        enabled: !!analytics?.xAds?.pixelId,
+        pixelId: analytics?.xAds?.pixelId ?? '',
+        purchaseEventId: analytics?.xAds?.purchaseEventId,
+      }}
     >
       {children}
     </LobeAnalyticsProvider>

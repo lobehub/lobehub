@@ -7,7 +7,24 @@
 
 import type { AgentHookEvent, AgentHookType } from '@lobechat/agent-runtime';
 
-export type { AgentHookEvent, AgentHookType } from '@lobechat/agent-runtime';
+export type {
+  AfterCallAgentHookEvent,
+  AfterCompactHookEvent,
+  AfterHumanInterventionHookEvent,
+  AfterToolCallHookEvent,
+  AgentHookEvent,
+  AgentHookType,
+  AnyHookEvent,
+  BeforeCallAgentHookEvent,
+  BeforeCompactHookEvent,
+  BeforeHumanInterventionHookEvent,
+  BeforeToolCallObservationEvent,
+  CallAgentErrorHookEvent,
+  CompactErrorHookEvent,
+  StopByHumanInterventionHookEvent,
+  ToolCallErrorHookEvent,
+  ToolCallHookEvent,
+} from '@lobechat/agent-runtime';
 
 // ── Server-side Hook Types ───────────────────────────────
 
@@ -20,6 +37,9 @@ export interface AgentHookWebhook {
 
   /** Delivery method: 'fetch' (plain HTTP) or 'qstash' (guaranteed delivery). Default: 'qstash' */
   delivery?: 'fetch' | 'qstash';
+
+  /** Event fields to include in the webhook payload. Defaults to all serializable event fields. */
+  eventFields?: (keyof AgentHookEvent)[];
 
   /** Webhook endpoint URL (relative or absolute) */
   url: string;

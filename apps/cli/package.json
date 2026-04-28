@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.3",
+  "version": "0.0.8",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -28,6 +28,7 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
+    "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@trpc/client": "^11.8.1",

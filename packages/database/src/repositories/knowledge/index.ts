@@ -1,10 +1,10 @@
 import type { QueryFileListParams } from '@lobechat/types';
 import { FilesTabs, SortType } from '@lobechat/types';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
-import { documents, files, knowledgeBaseFiles } from '../../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 export interface KnowledgeItem {
@@ -277,7 +277,7 @@ export class KnowledgeRepo {
     if (sourceType === 'file') {
       await this.fileModel.delete(id);
     } else {
-      await this.documentModel.delete(id);
+      await this.deleteDocumentWithRelations(id);
     }
   }
 
@@ -293,7 +293,7 @@ export class KnowledgeRepo {
     await Promise.all([
       fileIds.length > 0 ? this.fileModel.deleteMany(fileIds) : Promise.resolve(),
       documentIds.length > 0
-        ? Promise.all(documentIds.map((id) => this.documentModel.delete(id)))
+        ? Promise.all(documentIds.map((id) => this.deleteDocumentWithRelations(id)))
         : Promise.resolve(),
     ]);
   }
@@ -308,6 +308,35 @@ export class KnowledgeRepo {
       return this.documentModel.findById(id);
     }
   }
+
+  private deleteDocumentWithRelations = async (id: string): Promise<void> => {
+    const document = await this.documentModel.findById(id);
+    if (!document) return;
+
+    if (document.fileType === DOCUMENT_FOLDER_TYPE) {
+      const children = await this.db.query.documents.findMany({
+        where: and(eq(documents.parentId, id), eq(documents.userId, this.userId)),
+      });
+
+      for (const child of children) {
+        await this.deleteDocumentWithRelations(child.id);
+      }
+
+      const childFiles = await this.db.query.files.findMany({
+        where: and(eq(files.parentId, id), eq(files.userId, this.userId)),
+      });
+
+      for (const file of childFiles) {
+        await this.fileModel.delete(file.id);
+      }
+    }
+
+    if (document.fileId) {
+      await this.fileModel.delete(document.fileId);
+    }
+
+    await this.documentModel.delete(id);
+  };
 
   private buildFileQuery({
     category,

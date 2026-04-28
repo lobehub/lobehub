@@ -1,9 +1,35 @@
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentStreamEvent } from '@/libs/agent-stream';
+import { aiAgentService } from '@/services/aiAgent';
 
 import type { GatewayConnection } from '../gateway';
 import { GatewayActionImpl } from '../gateway';
+
+vi.mock('@/services/aiAgent', () => ({
+  aiAgentService: {
+    execAgentTask: vi.fn(),
+    interruptTask: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/message', () => ({
+  messageService: {
+    getMessages: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock('@/services/topic', () => ({
+  topicService: {
+    updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: {
+    getState: vi.fn(() => ({ preference: { lab: {} } })),
+  },
+}));
 
 // ─── Mock Client Factory ───
 
@@ -27,6 +53,7 @@ function createMockClient(): GatewayConnection['client'] & {
       set.add(listener);
     }),
     sendInterrupt: vi.fn(),
+    sendToolResult: vi.fn(() => true),
   };
 }
 
@@ -234,6 +261,206 @@ describe('GatewayActionImpl', () => {
     it('should return undefined for unknown operationId', () => {
       const { action } = createTestAction();
       expect(action.getGatewayConnectionStatus('nonexistent')).toBeUndefined();
+    });
+  });
+
+  describe('executeGatewayAgent', () => {
+    function createExecuteTestAction() {
+      const mockClient = createMockClient();
+      const state: Record<string, any> = { gatewayConnections: {} };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') {
+          Object.assign(state, updater(state));
+        } else {
+          Object.assign(state, updater);
+        }
+      });
+
+      const get = vi.fn(() => ({
+        ...state,
+        startOperation: vi.fn(() => ({ operationId: 'gw-op-1' })),
+        associateMessageWithOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        internal_updateTopicLoading: vi.fn(),
+        onOperationCancel: vi.fn(),
+        replaceMessages: vi.fn(),
+        switchTopic: vi.fn(),
+      })) as any;
+
+      // Set up window.global_serverConfigStore
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({
+            serverConfig: { agentGatewayUrl: 'https://gateway.test.com' },
+          }),
+        },
+      };
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => mockClient);
+
+      return { action, get, mockClient, set, state };
+    }
+
+    afterEach(() => {
+      delete (globalThis as any).window;
+    });
+
+    it('should forward parentMessageId to execAgentTask for regeneration', async () => {
+      const { action } = createExecuteTestAction();
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Original question',
+        parentMessageId: 'user-msg-123',
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentMessageId: 'user-msg-123',
+          prompt: 'Original question',
+        }),
+      );
+    });
+
+    it('should not include parentMessageId when not provided (normal send)', async () => {
+      const { action } = createExecuteTestAction();
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Hello',
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentMessageId: undefined,
+          prompt: 'Hello',
+        }),
+      );
+    });
+
+    it('should forward empty prompt for continue generation', async () => {
+      const { action } = createExecuteTestAction();
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: '',
+        parentMessageId: 'assistant-msg-456',
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentMessageId: 'assistant-msg-456',
+          prompt: '',
+        }),
+      );
+    });
+
+    it('registers a cancel handler that calls aiAgentService.interruptTask with the server operationId', async () => {
+      const onOperationCancel = vi.fn();
+      const startOperation = vi.fn(() => ({ operationId: 'gw-op-local' }));
+
+      const mockClient = createMockClient();
+      const state: Record<string, any> = { gatewayConnections: {} };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        internal_updateTopicLoading: vi.fn(),
+        onOperationCancel,
+        replaceMessages: vi.fn(),
+        startOperation,
+        switchTopic: vi.fn(),
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => mockClient);
+      const interruptTaskSpy = vi
+        .mocked(aiAgentService.interruptTask)
+        .mockResolvedValue({ operationId: 'server-op-xyz', success: true });
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-xyz',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Hello',
+      });
+
+      // Handler was registered against the local operation id...
+      expect(onOperationCancel).toHaveBeenCalledWith('gw-op-local', expect.any(Function));
+
+      // ...and, when invoked, fires tRPC interruptTask with the *server-side* operation id
+      const [, handler] = onOperationCancel.mock.calls[0];
+      await handler();
+      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'server-op-xyz' });
     });
   });
 });

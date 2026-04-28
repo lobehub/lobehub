@@ -233,4 +233,46 @@ describe('resolveTopicReferences', () => {
     expect(result![0].summary).toBeUndefined();
     expect(result![0].recentMessages).toBeUndefined();
   });
+
+  // Regression: historical messages may carry non-string content (e.g. multimodal
+  // content parts array, or `null` from a tool-only assistant turn). The fallback
+  // path used to call `m.content?.trim()` / `m.content!.trim()` directly, which
+  // throws `e.trim is not a function` when content is an array. Skipping those
+  // messages is safer than crashing the whole context engine.
+  it('should skip messages whose content is not a string (array / object)', async () => {
+    const lookup = vi.fn().mockResolvedValue({ historySummary: null, title: 'T' });
+    const lookupMessages = vi.fn().mockResolvedValue([
+      // multimodal content as an array of parts — realistic shape from DB
+      { content: [{ text: 'ignored', type: 'text' }] as any, role: 'user' },
+      { content: { some: 'object' } as any, role: 'assistant' },
+      { content: 'plain text message', role: 'user' },
+    ]);
+
+    const result = await resolveTopicReferences(
+      [{ content: '<refer_topic name="T" id="t1" />' }],
+      lookup,
+      lookupMessages,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result![0].recentMessages).toEqual([{ content: 'plain text message', role: 'user' }]);
+  });
+
+  it('should not throw when every fallback message has non-string content', async () => {
+    const lookup = vi.fn().mockResolvedValue({ historySummary: null, title: 'T' });
+    const lookupMessages = vi.fn().mockResolvedValue([
+      { content: [{ text: 'a', type: 'text' }] as any, role: 'user' },
+      { content: null, role: 'assistant' },
+    ]);
+
+    // Must not throw — falls through to "no-context" like the empty-array case.
+    const result = await resolveTopicReferences(
+      [{ content: '<refer_topic name="T" id="t1" />' }],
+      lookup,
+      lookupMessages,
+    );
+
+    expect(result![0].summary).toBeUndefined();
+    expect(result![0].recentMessages).toBeUndefined();
+  });
 });

@@ -35,7 +35,7 @@
     "remark-html": "^16.0.1",
     "tokenx": "^1.2.1",
     "ua-parser-js": "^1.0.41",
-    "uuid": "^11.1.0",
+    "uuid": "^14.0.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {

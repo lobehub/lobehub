@@ -8,7 +8,7 @@ import { PageSelectionSchema } from './message/ui/params';
 import type { OpenAIChatMessage } from './openai/chat';
 import type { LobeUniformTool } from './tool';
 import { LobeUniformToolSchema } from './tool';
-import type { ChatTopic } from './topic';
+import type { ChatTopic, ChatTopicMetadata } from './topic';
 import type { ChatThreadType } from './topic/thread';
 import { ThreadType } from './topic/thread';
 
@@ -57,7 +57,7 @@ export interface SendMessageServerParams {
      * Message metadata (e.g., isSupervisor for group orchestration)
      */
     metadata?: Record<string, unknown>;
-    model: string;
+    model?: string;
     provider: string;
   };
   /**
@@ -66,14 +66,34 @@ export interface SendMessageServerParams {
    */
   newThread?: CreateThreadWithMessageParams;
   newTopic?: {
+    /**
+     * Topic metadata persisted at creation time. For CC/heterogeneous
+     * agents this carries `workingDirectory` so the topic is bound to a
+     * project from the moment it's created (used by By-Project grouping
+     * and CC `--resume` cwd verification), instead of waiting for the
+     * post-execution metadata write which can be skipped on cancel/error.
+     */
+    metadata?: ChatTopicMetadata;
     title?: string;
     topicMessageIds?: string[];
+    trigger?: string;
   };
   newUserMessage: SendNewMessage;
   preloadMessages?: SendPreloadMessage[];
   sessionId?: string;
   threadId?: string;
-  // if there is activeTopicId，then add topicId to message
+  /**
+   * Filters applied to the topic list returned alongside the message.
+   * Callers pass whatever filter the active sidebar is using so the server
+   * doesn't echo back topics the UI was already excluding (e.g. completed
+   * status), which would overwrite the filtered list in `topicDataMap`.
+   */
+  topicFilter?: {
+    excludeStatuses?: string[];
+    excludeTriggers?: string[];
+    includeTriggers?: string[];
+  };
+  // if there is activeTopicId, then add topicId to message
   topicId?: string;
 }
 
@@ -111,8 +131,10 @@ export const AiSendMessageServerSchema = z.object({
   newThread: CreateThreadWithMessageSchema.optional(),
   newTopic: z
     .object({
+      metadata: z.custom<ChatTopicMetadata>().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
+      trigger: z.string().optional(),
     })
     .optional(),
   preloadMessages: z.array(SendPreloadMessageSchema).optional(),
@@ -125,6 +147,13 @@ export const AiSendMessageServerSchema = z.object({
   }),
   sessionId: z.string().optional(),
   threadId: z.string().optional(),
+  topicFilter: z
+    .object({
+      excludeStatuses: z.array(z.string()).optional(),
+      excludeTriggers: z.array(z.string()).optional(),
+      includeTriggers: z.array(z.string()).optional(),
+    })
+    .optional(),
   topicId: z.string().optional(),
 });
 

@@ -1,16 +1,11 @@
-import { nativeTheme } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '../../App';
 import { Tray } from '../Tray';
 import { TrayManager } from '../TrayManager';
 
-// Mock electron modules
-vi.mock('electron', () => ({
-  nativeTheme: {
-    shouldUseDarkColorsForSystemIntegratedUI: false,
-  },
-}));
+// Mock electron modules (empty shim — TrayManager no longer reads nativeTheme)
+vi.mock('electron', () => ({}));
 
 // Mock logger
 vi.mock('@/utils/logger', () => ({
@@ -50,12 +45,17 @@ describe('TrayManager', () => {
       identifier: 'main',
       broadcast: vi.fn(),
       destroy: vi.fn(),
+      setMenu: vi.fn(),
       updateIcon: vi.fn(),
       updateTooltip: vi.fn(),
     };
 
-    // Mock App
-    mockApp = {} as unknown as App;
+    // Mock App — initializeTrays now pulls a prebuilt menu from MenuManager.
+    mockApp = {
+      menuManager: {
+        buildTrayMenu: vi.fn(() => ({ _mockMenu: true }) as any),
+      },
+    } as unknown as App;
 
     // Mock Tray constructor
     vi.mocked(Tray).mockImplementation(() => mockTray);
@@ -86,46 +86,29 @@ describe('TrayManager', () => {
 
       expect(spy).toHaveBeenCalled();
     });
+
+    it('should attach the platform tray menu to the main tray', () => {
+      trayManager.initializeTrays();
+
+      expect(mockApp.menuManager.buildTrayMenu).toHaveBeenCalled();
+      expect(mockTray.setMenu).toHaveBeenCalledWith({ _mockMenu: true });
+    });
   });
 
   describe('initializeMainTray', () => {
-    it('should create main tray with dark icon on macOS when dark mode is enabled', () => {
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColorsForSystemIntegratedUI', {
-        value: true,
-        writable: true,
-        configurable: true,
-      });
-
+    it('should create main tray with a template image on macOS', () => {
       const result = trayManager.initializeMainTray();
 
       expect(Tray).toHaveBeenCalledWith(
         expect.objectContaining({
-          iconPath: 'tray-dark.png',
+          iconPath: 'trayTemplate.png',
           identifier: 'main',
+          isTemplateImage: true,
           tooltip: 'test-app',
         }),
         mockApp,
       );
       expect(result).toBe(mockTray);
-    });
-
-    it('should create main tray with light icon on macOS when light mode is enabled', () => {
-      Object.defineProperty(nativeTheme, 'shouldUseDarkColorsForSystemIntegratedUI', {
-        value: false,
-        writable: true,
-        configurable: true,
-      });
-
-      trayManager.initializeMainTray();
-
-      expect(Tray).toHaveBeenCalledWith(
-        expect.objectContaining({
-          iconPath: 'tray-light.png',
-          identifier: 'main',
-          tooltip: 'test-app',
-        }),
-        mockApp,
-      );
     });
 
     it('should add created tray to trays map', () => {

@@ -1,4 +1,4 @@
-import type { DiscordChannelInfo, DiscordGuildInfo } from '@lobechat/prompts';
+import type { DiscordChannelInfo, DiscordGuildInfo, DiscordThreadInfo } from '@lobechat/prompts';
 import { formatDiscordContext } from '@lobechat/prompts';
 import debug from 'debug';
 
@@ -10,6 +10,7 @@ const log = debug('context-engine:provider:DiscordContextProvider');
 export interface DiscordContext {
   channel?: DiscordChannelInfo;
   guild?: DiscordGuildInfo;
+  thread?: DiscordThreadInfo;
 }
 
 export interface DiscordContextProviderConfig {
@@ -33,7 +34,7 @@ export class DiscordContextProvider extends BaseFirstUserContentProvider {
       return null;
     }
 
-    const { guild, channel } = this.config.context;
+    const { guild, channel, thread } = this.config.context;
     if (!guild && !channel) {
       log('No guild or channel info, skipping');
       return null;
@@ -41,6 +42,6 @@ export class DiscordContextProvider extends BaseFirstUserContentProvider {
 
     log('Discord context prepared for injection');
 
-    return formatDiscordContext({ channel, guild });
+    return formatDiscordContext({ channel, guild, thread });
   }
 }

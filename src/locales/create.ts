@@ -4,23 +4,36 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 import { isRtlLang } from 'rtl-detect';
 
-// Sync load default language (en-US) from JSON to avoid Suspense on first render.
-// locales/default/*.ts is for type inference only, not used as runtime values.
 import chat from '@/../locales/en-US/chat.json';
 import common from '@/../locales/en-US/common.json';
 import error from '@/../locales/en-US/error.json';
 import { DEFAULT_LANG } from '@/const/locale';
 import { getDebugConfig } from '@/envs/debug';
+// Sync load bundled fallback resources without Suspense on first render.
+// Use src/locales/default/*.ts as the runtime fallback source, then overlay
+// locales/en-US/*.json so dev-preview JSON can still customize English copy
+// without dropping newly added default keys.
+import defaultChat from '@/locales/default/chat';
+import defaultCommon from '@/locales/default/common';
+import defaultError from '@/locales/default/error';
 import { normalizeLocale } from '@/locales/resources';
 import { isOnServerSide } from '@/utils/env';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 
 import { loadI18nNamespaceModule } from '../utils/i18n/loadI18nNamespaceModule';
 
+const mergeNamespace = (
+  fallbackResources: Record<string, string>,
+  localeResources: Record<string, string>,
+) => ({
+  ...fallbackResources,
+  ...localeResources,
+});
+
 const createBundledResources = () => ({
-  chat: { ...chat },
-  common: { ...common },
-  error: { ...error },
+  chat: mergeNamespace(defaultChat, chat),
+  common: mergeNamespace(defaultCommon, common),
+  error: mergeNamespace(defaultError, error),
 });
 
 const defaultResources = createBundledResources();

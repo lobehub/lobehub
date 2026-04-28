@@ -207,6 +207,166 @@ describe('TopicModel - Query', () => {
       expect(ids).toContain('null-trigger');
       expect(ids).not.toContain('cron-topic');
     });
+
+    it('should include only topics with specified triggers via includeTriggers', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'normal-topic', sessionId, userId, title: 'Normal' },
+        { id: 'cron-topic', sessionId, userId, title: 'Cron', trigger: 'cron' },
+        { id: 'eval-topic', sessionId, userId, title: 'Eval', trigger: 'eval' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        includeTriggers: ['cron'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('cron-topic');
+    });
+
+    it('should prioritize includeTriggers over excludeTriggers when both are provided', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'cron-topic', sessionId, userId, title: 'Cron', trigger: 'cron' },
+        { id: 'eval-topic', sessionId, userId, title: 'Eval', trigger: 'eval' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        excludeTriggers: ['cron'],
+        includeTriggers: ['cron'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('cron-topic');
+    });
+
+    it('should only return topics with matching triggers when triggers is set', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'normal-topic', sessionId, userId, title: 'Normal' },
+        { id: 'cron-topic', sessionId, userId, title: 'Cron', trigger: 'cron' },
+        { id: 'eval-topic', sessionId, userId, title: 'Eval', trigger: 'eval' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        triggers: ['cron'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('cron-topic');
+    });
+
+    it('should exclude topics with matching status via excludeStatuses, keeping null status', async () => {
+      const completedAt = new Date('2024-01-05');
+      await serverDB.insert(topics).values([
+        { id: 'active-topic', sessionId, userId, title: 'Active', status: 'active' },
+        {
+          id: 'completed-topic',
+          sessionId,
+          userId,
+          title: 'Completed',
+          status: 'completed',
+          completedAt,
+        },
+        { id: 'archived-topic', sessionId, userId, title: 'Archived', status: 'archived' },
+        { id: 'null-status-topic', sessionId, userId, title: 'No status' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        excludeStatuses: ['completed'],
+      });
+
+      const ids = result.items.map((t) => t.id);
+      expect(ids).toHaveLength(3);
+      expect(ids).toContain('active-topic');
+      expect(ids).toContain('archived-topic');
+      expect(ids).toContain('null-status-topic');
+      expect(ids).not.toContain('completed-topic');
+    });
+
+    it('should select status and completedAt on returned topics', async () => {
+      const completedAt = new Date('2024-02-01T10:00:00Z');
+      await serverDB.insert(topics).values([
+        {
+          id: 'with-status',
+          sessionId,
+          userId,
+          title: 'With Status',
+          status: 'completed',
+          completedAt,
+        },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].status).toBe('completed');
+      expect(result.items[0].completedAt?.toISOString()).toBe(completedAt.toISOString());
+    });
+
+    it('should apply excludeStatuses on the agent query branch', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([{ id: 'status-agent', userId, title: 'Status Agent' }]);
+        await trx.insert(topics).values([
+          {
+            id: 'agent-active',
+            userId,
+            agentId: 'status-agent',
+            status: 'active',
+            updatedAt: new Date('2024-01-01'),
+          },
+          {
+            id: 'agent-completed',
+            userId,
+            agentId: 'status-agent',
+            status: 'completed',
+            updatedAt: new Date('2024-01-02'),
+          },
+        ]);
+      });
+
+      const result = await topicModel.query({
+        agentId: 'status-agent',
+        excludeStatuses: ['completed'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('agent-active');
+      expect(result.total).toBe(1);
+    });
+
+    it('should apply excludeStatuses on the groupId query branch', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values([{ id: 'status-group', title: 'Status Group', userId }]);
+        await trx.insert(topics).values([
+          {
+            id: 'group-active',
+            userId,
+            groupId: 'status-group',
+            status: 'active',
+            updatedAt: new Date('2024-01-01'),
+          },
+          {
+            id: 'group-completed',
+            userId,
+            groupId: 'status-group',
+            status: 'completed',
+            updatedAt: new Date('2024-01-02'),
+          },
+        ]);
+      });
+
+      const result = await topicModel.query({
+        groupId: 'status-group',
+        excludeStatuses: ['completed'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('group-active');
+    });
   });
 
   describe('query with agentId filter', () => {
