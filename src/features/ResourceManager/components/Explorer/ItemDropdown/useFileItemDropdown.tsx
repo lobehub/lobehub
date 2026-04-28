@@ -17,11 +17,11 @@ import { shallow } from 'zustand/shallow';
 import RepoIcon from '@/components/LibIcon';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { revalidateResourceTreeParent } from '@/features/ResourceManager/tree/resourceTreeBridge';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
-import { useTreeStore } from '@/store/tree';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import MoveToFolderModal from '../MoveToFolderModal';
@@ -310,8 +310,8 @@ export const useFileItemDropdownFactory = () => {
 
                   // Revalidate tree for the parent folder
                   const { queryParams } = useFileStore.getState();
-                  const parentId = queryParams?.parentId ?? '';
-                  void useTreeStore.getState().revalidate(parentId);
+                  const parentId = queryParams?.parentId ?? null;
+                  void revalidateResourceTreeParent(parentId);
                   await refreshFileList({ revalidateResources: false });
 
                   message.success(t('FileManager.actions.deleteSuccess'));

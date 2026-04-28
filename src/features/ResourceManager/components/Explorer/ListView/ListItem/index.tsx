@@ -199,7 +199,6 @@ const FileListItem = ({
     id,
     isPendingRename: resourceManagerState.isPendingRename,
     isFolder,
-    libraryId: resourceManagerState.libraryId,
     name,
     refreshFileList: fileStoreState.refreshFileList,
     setPendingRenameItemId: resourceManagerState.setPendingRenameItemId,

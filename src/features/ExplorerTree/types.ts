@@ -73,6 +73,7 @@ export interface ExplorerTreeProps<TData = unknown> {
   }) => void;
   onMove?: (event: ExplorerTreeMoveEvent<TData>) => void | Promise<void>;
   onNodeClick?: (node: ExplorerTreeNode<TData>, event: MouseEvent<HTMLElement>) => void;
+  onNodeDragStart?: (node: ExplorerTreeNode<TData>, event: DragEvent<HTMLElement>) => void;
   onRenameError?: (error: unknown, node: ExplorerTreeNode<TData>) => void;
   onSelectedChange?: (ids: string[]) => void;
   overscan?: number;

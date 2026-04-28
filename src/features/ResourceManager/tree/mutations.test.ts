@@ -204,6 +204,20 @@ describe('createResourceTreeMutations', () => {
       expect(deps.refreshFileList).toHaveBeenCalledTimes(1);
       expect(deps.revalidateParent).toHaveBeenCalledWith('folder-a');
     });
+
+    it('revalidates both source and destination parents when source parent is known', async () => {
+      const childrenByParentId = new Map<string | null, ResourceTreeNode[]>();
+      const deps = createDeps(childrenByParentId);
+
+      mockMoveResource.mockResolvedValue(undefined);
+      deps.revalidateParent.mockResolvedValue(undefined);
+
+      await createResourceTreeMutations(deps).moveExternalItems(['file-a'], 'folder-b', 'folder-a');
+
+      expect(mockMoveResource).toHaveBeenCalledWith('file-a', 'folder-b');
+      expect(deps.revalidateParent).toHaveBeenCalledWith('folder-a');
+      expect(deps.revalidateParent).toHaveBeenCalledWith('folder-b');
+    });
   });
 
   describe('renameNode', () => {

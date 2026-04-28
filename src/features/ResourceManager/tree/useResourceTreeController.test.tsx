@@ -279,6 +279,55 @@ describe('useResourceTreeController', () => {
     });
   });
 
+  it('continues loading expanded ancestor folders as they become visible', async () => {
+    const getKnowledgeItemsSpy = vi.spyOn(fileService, 'getKnowledgeItems');
+
+    getKnowledgeItemsSpy.mockImplementation(async ({ parentId }) => {
+      if (parentId === null) {
+        return {
+          items: [createKnowledgeItem('folder-a', 'Folder A', null, 'custom/folder')],
+        };
+      }
+
+      if (parentId === 'folder-a') {
+        return {
+          items: [createKnowledgeItem('folder-b', 'Folder B', 'folder-a', 'custom/folder')],
+        };
+      }
+
+      if (parentId === 'folder-b') {
+        return {
+          items: [createKnowledgeItem('file-c', 'File C.md', 'folder-b')],
+        };
+      }
+
+      return { items: [] };
+    });
+
+    const { result } = renderHook(() => useResourceTreeController({ libraryId: 'library-a' }));
+
+    act(() => {
+      result.current.setExpandedIds(['folder-a', 'folder-b']);
+    });
+
+    await waitFor(() => {
+      expect(result.current.childrenByParentId.get('folder-b')?.map((node) => node.id)).toEqual([
+        'file-c',
+      ]);
+    });
+
+    expect(getKnowledgeItemsSpy).toHaveBeenCalledWith({
+      knowledgeBaseId: 'library-a',
+      parentId: 'folder-a',
+      showFilesInKnowledgeBase: false,
+    });
+    expect(getKnowledgeItemsSpy).toHaveBeenCalledWith({
+      knowledgeBaseId: 'library-a',
+      parentId: 'folder-b',
+      showFilesInKnowledgeBase: false,
+    });
+  });
+
   it('keeps selected tree ids as local state that changes independently', () => {
     const { result } = renderHook(() => useResourceTreeController({ libraryId: null }));
 

@@ -109,13 +109,22 @@ export const createResourceTreeMutations = (deps: ResourceTreeMutationDeps) => {
     await revalidateAffectedParentsSettled(deps.revalidateParent, affectedParents);
   };
 
-  const moveExternalItems = async (ids: string[], newParentId: string | null): Promise<void> => {
+  const moveExternalItems = async (
+    ids: string[],
+    newParentId: string | null,
+    oldParentId?: string | null,
+  ): Promise<void> => {
     if (ids.length === 0) return;
 
     assertMoveTarget(deps.childrenByParentId, ids, newParentId);
 
     await Promise.all(ids.map((id) => resourceService.moveResource(id, newParentId)));
-    await runBestEffort([deps.refreshFileList, () => deps.revalidateParent(newParentId)]);
+    await runBestEffort([
+      deps.refreshFileList,
+      ...getAffectedParents(oldParentId ?? null, newParentId).map(
+        (parentId) => () => deps.revalidateParent(parentId),
+      ),
+    ]);
   };
 
   const renameNode = async (id: string, parentId: string | null, name: string): Promise<void> => {

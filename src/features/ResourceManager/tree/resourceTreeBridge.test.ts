@@ -85,4 +85,15 @@ describe('resourceTreeBridge', () => {
     expect(firstMoveExternalItems).not.toHaveBeenCalled();
     expect(secondMoveExternalItems).toHaveBeenCalledWith(['file-e'], 'folder-d');
   });
+
+  it('forwards the optional previous parent for external moves', () => {
+    const moveExternalItems = vi.fn();
+    const revalidateParent = vi.fn();
+
+    bindResourceTreeBridge({ moveExternalItems, revalidateParent });
+
+    moveExternalResourceTreeItems(['file-a'], 'folder-b', 'folder-a');
+
+    expect(moveExternalItems).toHaveBeenCalledWith(['file-a'], 'folder-b', 'folder-a');
+  });
 });

@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
 import FolderTree from '@/features/ResourceManager/components/FolderTree';
+import { moveExternalResourceTreeItems } from '@/features/ResourceManager/tree/resourceTreeBridge';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
-import { useTreeStore } from '@/store/tree';
 
 interface MoveToFolderModalProps {
   fileId: string;
@@ -25,12 +25,11 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
     const [folders, setFolders] = useState<FolderTreeItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-    const [loadedFolders, setLoadedFolders] = useState<Set<string>>(new Set());
+    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
+    const [loadedFolders, setLoadedFolders] = useState<Set<string>>(() => new Set());
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
     const createFolder = useFileStore((s) => s.createFolder);
-    const moveItem = useTreeStore((s) => s.moveItem);
 
     // Sort items: folders only
     const sortItems = useCallback((items: FolderTreeItem[]): FolderTreeItem[] => {
@@ -221,16 +220,9 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
     const handleMove = () => {
       if (!selectedFolderId) return;
-      const { children } = useTreeStore.getState();
-      let fromParent = '';
-      for (const [parentKey, items] of Object.entries(children)) {
-        if (items.some((i) => i.id === fileId)) {
-          fromParent = parentKey;
-          break;
-        }
-      }
+      const fromParent = useFileStore.getState().queryParams?.parentId ?? null;
 
-      void moveItem(fileId, fromParent, selectedFolderId).catch(() => {
+      void moveExternalResourceTreeItems([fileId], selectedFolderId, fromParent)?.catch(() => {
         message.error(t('FileManager.actions.moveError'));
       });
       message.success(t('FileManager.actions.moveSuccess'));
@@ -238,16 +230,9 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
     };
 
     const handleMoveToRoot = () => {
-      const { children } = useTreeStore.getState();
-      let fromParent = '';
-      for (const [parentKey, items] of Object.entries(children)) {
-        if (items.some((i) => i.id === fileId)) {
-          fromParent = parentKey;
-          break;
-        }
-      }
+      const fromParent = useFileStore.getState().queryParams?.parentId ?? null;
 
-      void moveItem(fileId, fromParent, '').catch(() => {
+      void moveExternalResourceTreeItems([fileId], null, fromParent)?.catch(() => {
         message.error(t('FileManager.actions.moveError'));
       });
       message.success(t('FileManager.actions.moveSuccess'));

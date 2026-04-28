@@ -2,6 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { App } from 'antd';
+import type { DragEvent } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -9,7 +10,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { ExplorerTreeHandle, ExplorerTreeNode } from '@/features/ExplorerTree';
 import { ExplorerTree } from '@/features/ExplorerTree';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
-import { useCurrentDrag } from '@/routes/(main)/resource/features/DndContextWrapper';
+import {
+  getTransparentDragImage,
+  useCurrentDrag,
+  useSetCurrentDrag,
+} from '@/routes/(main)/resource/features/DndContextWrapper';
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 
@@ -46,6 +51,7 @@ const LibraryHierarchyTree = memo(() => {
   const { message } = App.useApp();
   const treeRef = useRef<ExplorerTreeHandle>(null);
   const currentDrag = useCurrentDrag();
+  const setCurrentDrag = useSetCurrentDrag();
   const getFileItemDropdown = useFileItemDropdownFactory();
   const { currentFolderSlug } = useFolderPath();
   const resolvedFolder = useResolvedResourceFolder(currentFolderSlug);
@@ -138,12 +144,13 @@ const LibraryHierarchyTree = memo(() => {
     ({ targetNode }: { targetNode: ExplorerTreeNode<ResourceTreeNode> | null }) => {
       const target = targetNode?.data;
       if (!target?.isFolder || !currentDrag) return;
+      if (currentDrag.data?.origin === 'resource-tree') return;
 
       const isDraggingSelection = selectedFileIds.includes(currentDrag.id);
       const ids = isDraggingSelection ? selectedFileIds : [currentDrag.id];
       if (ids.includes(target.id) || currentDrag.parentKey === target.id) return;
 
-      void moveExternalItems(ids, target.id)
+      void moveExternalItems(ids, target.id, currentDrag.parentKey || null)
         .then(() => {
           message.success(t('FileManager.actions.moveSuccess'));
           if (isDraggingSelection) setSelectedFileIds([]);
@@ -153,6 +160,31 @@ const LibraryHierarchyTree = memo(() => {
         });
     },
     [currentDrag, message, moveExternalItems, selectedFileIds, setSelectedFileIds, t],
+  );
+
+  const handleNodeDragStart = useCallback(
+    (node: ExplorerTreeNode<ResourceTreeNode>, event: DragEvent<HTMLElement>) => {
+      const item = node.data;
+      if (!item) return;
+
+      setCurrentDrag({
+        data: {
+          fileType: item.fileType,
+          isFolder: item.isFolder,
+          name: item.name,
+          origin: 'resource-tree',
+          sourceType: item.sourceType,
+        },
+        id: item.id,
+        parentKey: item.parentId ?? '',
+        type: item.isFolder ? 'folder' : 'file',
+      });
+
+      const img = getTransparentDragImage();
+      if (img) event.dataTransfer.setDragImage(img, 0, 0);
+      event.dataTransfer.effectAllowed = 'move';
+    },
+    [setCurrentDrag],
   );
 
   const handleMove = useCallback(
@@ -198,6 +230,7 @@ const LibraryHierarchyTree = memo(() => {
         onExternalDrop={handleExternalDrop}
         onMove={(event) => handleMove(event.sourceIds, event.oldParentId, event.newParentId)}
         onNodeClick={handleNodeClick}
+        onNodeDragStart={handleNodeDragStart}
         onSelectedChange={setSelectedTreeIds}
         onCommitRename={async (node, nextName) => {
           const name = nextName.trim();

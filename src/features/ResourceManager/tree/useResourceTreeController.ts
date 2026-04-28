@@ -139,29 +139,30 @@ export const useResourceTreeController = ({ libraryId }: UseResourceTreeControll
     [loadChildren],
   );
 
-  const setExpandedIds = useCallback(
-    (ids: string[]) => {
-      setExpandedIdsState(ids);
+  const setExpandedIds = useCallback((ids: string[]) => {
+    setExpandedIdsState(ids);
+  }, []);
 
-      const expandedIdSet = new Set(ids);
-      const loadedNodes = [...childrenByParentId.values()].flat();
-      const missingExpandedFolderIds = loadedNodes
-        .filter(
-          (node) =>
-            node.isFolder &&
-            expandedIdSet.has(node.id) &&
-            !childrenByParentId.has(node.id) &&
-            !activeRequestByParentRef.current.has(getParentRequestKey(node.id)) &&
-            statusByParentId.get(node.id) !== 'loading',
-        )
-        .map((node) => node.id);
+  useEffect(() => {
+    if (!libraryId || expandedIds.length === 0) return;
 
-      for (const id of missingExpandedFolderIds) {
-        void loadChildren(id);
-      }
-    },
-    [childrenByParentId, loadChildren, statusByParentId],
-  );
+    const expandedIdSet = new Set(expandedIds);
+    const loadedNodes = [...childrenByParentId.values()].flat();
+    const missingExpandedFolderIds = loadedNodes
+      .filter(
+        (node) =>
+          node.isFolder &&
+          expandedIdSet.has(node.id) &&
+          !childrenByParentId.has(node.id) &&
+          !activeRequestByParentRef.current.has(getParentRequestKey(node.id)) &&
+          statusByParentId.get(node.id) !== 'loading',
+      )
+      .map((node) => node.id);
+
+    for (const id of missingExpandedFolderIds) {
+      void loadChildren(id);
+    }
+  }, [childrenByParentId, expandedIds, libraryId, loadChildren, statusByParentId]);
 
   const expandedIdSet = useMemo(() => new Set(expandedIds), [expandedIds]);
 

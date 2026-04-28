@@ -349,7 +349,6 @@ function ExplorerTreeInner<TData>(
       }
       return;
     }
-    if (renamingRef.current) return; // defer reset while a rename is pending
     let nextExpandedIds = propsRef.current.expandedIds;
     if (!nextExpandedIds) {
       nextExpandedIds = [];
@@ -477,6 +476,19 @@ function ExplorerTreeInner<TData>(
     });
   };
 
+  const handleDragStart = (event: DragEvent<HTMLElement>) => {
+    const onNodeDragStart = propsRef.current.onNodeDragStart;
+    if (!onNodeDragStart) return;
+    const itemPath = getItemPathFromHostEvent(event);
+    if (!itemPath) return;
+    const a = adapterRef.current;
+    const id = a.idByPath.get(itemPath);
+    if (!id) return;
+    const node = a.nodeById.get(id);
+    if (!node) return;
+    onNodeDragStart(node, event);
+  };
+
   return (
     <PierreFileTree
       className={props.className}
@@ -485,6 +497,7 @@ function ExplorerTreeInner<TData>(
       renderContextMenu={renderContextMenu as never}
       style={props.style}
       onClick={handleClick}
+      onDragStart={handleDragStart}
       onDropCapture={handleDropCapture}
     />
   );

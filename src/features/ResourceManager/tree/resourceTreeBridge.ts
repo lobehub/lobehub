@@ -1,5 +1,9 @@
 type RevalidateParent = (parentId: string | null) => void | Promise<void>;
-type MoveExternalItems = (ids: string[], parentId: string | null) => void | Promise<void>;
+type MoveExternalItems = (
+  ids: string[],
+  parentId: string | null,
+  previousParentId?: string | null,
+) => void | Promise<void>;
 
 interface ResourceTreeBridgeBinding {
   moveExternalItems: MoveExternalItems;
@@ -27,5 +31,11 @@ export const bindResourceTreeBridge = (handlers: {
 export const revalidateResourceTreeParent = (parentId: string | null) =>
   currentBinding?.revalidateParent(parentId);
 
-export const moveExternalResourceTreeItems = (ids: string[], parentId: string | null) =>
-  currentBinding?.moveExternalItems(ids, parentId);
+export const moveExternalResourceTreeItems = (
+  ids: string[],
+  parentId: string | null,
+  previousParentId?: string | null,
+) =>
+  previousParentId === undefined
+    ? currentBinding?.moveExternalItems(ids, parentId)
+    : currentBinding?.moveExternalItems(ids, parentId, previousParentId);
