@@ -47,18 +47,18 @@ export const formatScheduleTime = (hour: number, minute: number): string =>
  * the cron-edit form.
  */
 export const parseCronPattern = (cronPattern: string): ParsedSchedule => {
-  const parts = cronPattern.split(' ');
+  const parts = cronPattern.trim().split(/\s+/);
   if (parts.length !== 5) {
     return { scheduleType: 'daily', triggerHour: 0, triggerMinute: 0 };
   }
 
   const [minute, hour, , , weekday] = parts;
-  const rawMinute = minute === '*' ? 0 : Number.parseInt(minute);
+  const rawMinute = minute === '*' ? 0 : Number.parseInt(minute, 10);
   const triggerMinute = normalizeMinuteToHalfHour(rawMinute);
 
   // Hourly: 0 * * * * or 0 */N * * *
   if (hour.startsWith('*/')) {
-    const interval = Number.parseInt(hour.slice(2));
+    const interval = Number.parseInt(hour.slice(2), 10);
     return {
       hourlyInterval: interval,
       scheduleType: 'hourly',
@@ -75,11 +75,11 @@ export const parseCronPattern = (cronPattern: string): ParsedSchedule => {
     };
   }
 
-  const triggerHour = Number.parseInt(hour);
+  const triggerHour = Number.parseInt(hour, 10);
 
   // Weekly: has specific weekday(s)
   if (weekday !== '*') {
-    const weekdays = weekday.split(',').map((d) => Number.parseInt(d));
+    const weekdays = weekday.split(',').map((d) => Number.parseInt(d, 10));
     return {
       scheduleType: 'weekly',
       triggerHour,
@@ -121,7 +121,10 @@ export const buildCronPattern = (
       return `${minute} ${hour} * * *`;
     }
     case 'weekly': {
-      const days = weekdays && weekdays.length > 0 ? weekdays.sort().join(',') : ALL_WEEKDAYS;
+      const days =
+        weekdays && weekdays.length > 0
+          ? [...weekdays].sort((a, b) => a - b).join(',')
+          : ALL_WEEKDAYS;
       return `${minute} ${hour} * * ${days}`;
     }
   }
