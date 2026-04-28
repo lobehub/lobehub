@@ -225,7 +225,9 @@ export class AiAgentService {
     this.klavisService = new KlavisService({ db, userId });
   }
 
-  private async resolveOperationTaskId(idOrIdentifier?: string): Promise<string | undefined> {
+  private async resolveOperationTaskId(
+    idOrIdentifier?: string | null,
+  ): Promise<string | undefined> {
     if (!idOrIdentifier) return;
 
     // Task detail routes use human-readable identifiers such as `T-1`, while
