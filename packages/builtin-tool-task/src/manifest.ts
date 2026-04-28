@@ -20,6 +20,11 @@ export const TaskManifest: BuiltinToolManifest = {
             description: 'Detailed instruction for what the task should accomplish.',
             type: 'string',
           },
+          assigneeAgentId: {
+            description:
+              'Optional agent ID to assign the task to. In task management context, omit it to create an unassigned task.',
+            type: 'string',
+          },
           name: {
             description: 'A short, descriptive name for the task.',
             type: 'string',
@@ -45,13 +50,13 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List tasks. Without any filters, returns top-level unfinished tasks of the current agent. If you provide any filter, omitted filters are not applied implicitly.',
+        'List tasks. Without any filters, returns top-level unfinished tasks. In agent conversations it defaults to the current agent; in task manager context it spans all agents. If you provide any filter, omitted filters are not applied implicitly.',
       name: TaskApiName.listTasks,
       parameters: {
         properties: {
           assigneeAgentId: {
             description:
-              'Restrict to tasks assigned to this agent. When omitted, no assignee filter is applied unless listTasks is called without any filters, which defaults to the current agent.',
+              'Restrict to tasks assigned to this agent. When omitted, no assignee filter is applied unless listTasks is called without any filters in an agent conversation, which defaults to the current agent.',
             type: 'string',
           },
           limit: { description: `Max 1-100. Default ${DEFAULT_LIST_TASK_LIMIT}.`, type: 'number' },
@@ -106,6 +111,10 @@ export const TaskManifest: BuiltinToolManifest = {
               'Identifiers of tasks this task should block on (e.g. ["TASK-2", "TASK-3"]).',
             items: { type: 'string' },
             type: 'array',
+          },
+          assigneeAgentId: {
+            description: 'Assign the task to this agent ID. Pass null to clear the assignee.',
+            type: ['string', 'null'],
           },
           description: {
             description:

@@ -1,3 +1,4 @@
+import { normalizeListTasksParams, UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createTaskRuntime } from '../task';
@@ -7,6 +8,59 @@ vi.mock('@/server/routers/lambda/task', () => ({
 }));
 
 describe('createTaskRuntime', () => {
+  describe('normalizeListTasksParams', () => {
+    it('defaults to top-level unfinished tasks for the current agent', () => {
+      const result = normalizeListTasksParams({}, { currentAgentId: 'agt-1' });
+
+      expect(result.query).toMatchObject({
+        assigneeAgentId: 'agt-1',
+        parentTaskId: null,
+        statuses: UNFINISHED_TASK_STATUSES,
+      });
+      expect(result.displayFilters).toMatchObject({
+        assigneeAgentId: 'agt-1',
+        isDefaultScope: true,
+        isForCurrentAgent: true,
+      });
+    });
+
+    it('can default to top-level unfinished tasks across all agents', () => {
+      const result = normalizeListTasksParams(
+        {},
+        { currentAgentId: 'agt-1', defaultScope: 'allAgents' },
+      );
+
+      expect(result.query).toMatchObject({
+        assigneeAgentId: undefined,
+        parentTaskId: null,
+        statuses: UNFINISHED_TASK_STATUSES,
+      });
+      expect(result.displayFilters).toMatchObject({
+        isDefaultScope: true,
+        isForAllAgents: true,
+        isForCurrentAgent: false,
+      });
+    });
+
+    it('does not apply implicit assignee when explicit filters are present', () => {
+      const result = normalizeListTasksParams(
+        { statuses: ['completed'] },
+        { currentAgentId: 'agt-1' },
+      );
+
+      expect(result.query).toMatchObject({
+        assigneeAgentId: undefined,
+        parentTaskId: undefined,
+        statuses: ['completed'],
+      });
+      expect(result.displayFilters).toMatchObject({
+        isDefaultScope: false,
+        isForAllAgents: false,
+        isForCurrentAgent: false,
+      });
+    });
+  });
+
   describe('createTask', () => {
     const fakeTask = {
       id: 'task-1',
@@ -72,6 +126,55 @@ describe('createTaskRuntime', () => {
       );
     });
 
+    it('does not default assigneeAgentId in task manager scope', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentId: 'agt-xyz',
+        scope: 'task',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService,
+      });
+
+      await runtime.createTask({
+        instruction: 'Do something',
+        name: 'Test',
+      });
+
+      expect(deps.taskModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assigneeAgentId: undefined,
+          createdByAgentId: 'agt-xyz',
+        }),
+      );
+    });
+
+    it('uses explicit assigneeAgentId in task manager scope', async () => {
+      const deps = makeDeps();
+
+      const runtime = createTaskRuntime({
+        agentId: 'agt-manager',
+        scope: 'task',
+        taskCaller: deps.taskCaller,
+        taskModel: deps.taskModel as any,
+        taskService: deps.taskService,
+      });
+
+      await runtime.createTask({
+        assigneeAgentId: 'agt-worker',
+        instruction: 'Do something',
+        name: 'Test',
+      });
+
+      expect(deps.taskModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assigneeAgentId: 'agt-worker',
+          createdByAgentId: 'agt-manager',
+        }),
+      );
+    });
+
     it('resolves and uses parentTaskId when parentIdentifier is provided', async () => {
       const deps = makeDeps();
       deps.taskModel.resolve = vi.fn().mockResolvedValue({ id: 'parent-id', identifier: 'T-99' });
@@ -116,6 +219,28 @@ describe('createTaskRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(deps.taskModel.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listTasks', () => {
+    it('uses all-agent default scope in task manager context', async () => {
+      const taskCaller = { list: vi.fn().mockResolvedValue({ data: [] }) };
+      const runtime = createTaskRuntime({
+        agentId: 'agt-xyz',
+        scope: 'task',
+        taskCaller: taskCaller as any,
+        taskModel: {} as any,
+        taskService: {} as any,
+      });
+
+      await runtime.listTasks({});
+
+      expect(taskCaller.list).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assigneeAgentId: undefined,
+          parentTaskId: null,
+        }),
+      );
     });
   });
 });

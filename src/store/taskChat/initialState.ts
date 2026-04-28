@@ -13,6 +13,7 @@ import { type ChatTopic } from '@/types/topic';
  */
 export interface TaskChatState {
   activeTopicId: string | null;
+  selectedAgentId?: string;
   /**
    * `undefined` means topics have not been fetched yet (loading state).
    */
@@ -21,5 +22,6 @@ export interface TaskChatState {
 
 export const initialState: TaskChatState = {
   activeTopicId: null,
+  selectedAgentId: undefined,
   topics: undefined,
 };

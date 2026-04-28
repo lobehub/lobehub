@@ -3,7 +3,6 @@ import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { topicService } from '@/services/topic';
-import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
 import { type ChatTopic } from '@/types/topic';
 import { setNamespace } from '@/utils/storeDebug';
@@ -34,6 +33,15 @@ export class TaskChatActionImpl {
     this.#set({ activeTopicId: id }, false, n('switchTopic'));
   };
 
+  switchAgent = (id: string): void => {
+    if (this.#get().selectedAgentId === id) return;
+    this.#set(
+      { activeTopicId: null, selectedAgentId: id, topics: undefined },
+      false,
+      n('switchAgent'),
+    );
+  };
+
   /**
    * Called by `ConversationHooks.onTopicCreated` after the backend creates
    * a new topic from this panel's sendMessage. Writes the new id into the
@@ -45,11 +53,11 @@ export class TaskChatActionImpl {
   };
 
   refreshTopics = async (): Promise<void> => {
-    const { activeAgentId } = useChatStore.getState();
-    if (!activeAgentId) return;
+    const { selectedAgentId } = this.#get();
+    if (!selectedAgentId) return;
     await mutate(
       (key) =>
-        Array.isArray(key) && key[0] === SWR_USE_FETCH_TASK_TOPICS && key[1] === activeAgentId,
+        Array.isArray(key) && key[0] === SWR_USE_FETCH_TASK_TOPICS && key[1] === selectedAgentId,
     );
   };
 

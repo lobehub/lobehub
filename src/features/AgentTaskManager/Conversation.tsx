@@ -1,5 +1,6 @@
 'use client';
 
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { type ConversationContext } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import debug from 'debug';
@@ -8,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useMatch } from 'react-router-dom';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
+import Loading from '@/components/Loading/BrandTextLoading';
 import { TopicTrigger } from '@/const/topic';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
 import { ActionBarContext } from '@/features/ChatInput/ActionBar/context';
@@ -19,13 +21,15 @@ import {
 import { ChatInput, ChatList, ConversationProvider } from '@/features/Conversation';
 import { type ConversationHooks } from '@/features/Conversation/types';
 import CopilotModelSelect from '@/features/PageEditor/Copilot/CopilotModelSelect';
+import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useTaskChatStore } from '@/store/taskChat';
 
+import AgentSelectorAction from './AgentSelectorAction';
 import Toolbar from './Toolbar';
 
 const log = debug('lobe-render:agent-task-manager:Conversation');
@@ -52,32 +56,43 @@ const Welcome = memo(() => {
 Welcome.displayName = 'Welcome';
 
 const Conversation = memo(() => {
-  const activeAgentId = useChatStore((s) => s.activeAgentId);
-  const taskTopicId = useTaskChatStore((s) => s.activeTopicId);
+  useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.taskAgent);
 
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(activeAgentId)(s));
-  const provider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(activeAgentId)(s),
-  );
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const taskAgentId = useAgentStore(builtinAgentSelectors.taskAgentId);
+  const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+  const selectedAgentId = useTaskChatStore((s) => s.selectedAgentId);
+  const taskTopicId = useTaskChatStore((s) => s.activeTopicId);
+  const switchAgent = useTaskChatStore((s) => s.switchAgent);
+
+  const effectiveAgentId = selectedAgentId || taskAgentId;
+  const conversationAgentId = effectiveAgentId || '';
 
   useEffect(() => {
-    useTaskChatStore.getState().switchTopic(null);
-  }, [activeAgentId]);
+    if (!taskAgentId || selectedAgentId) return;
+    switchAgent(taskAgentId);
+  }, [selectedAgentId, switchAgent, taskAgentId]);
+
+  useFetchAgentConfig(true, conversationAgentId);
+
+  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(conversationAgentId)(s));
+  const provider = useAgentStore((s) =>
+    agentByIdSelectors.getAgentModelProviderById(conversationAgentId)(s),
+  );
+  const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   const detailMatch = useMatch('/task/:taskId');
   const viewedTaskId = detailMatch?.params.taskId;
 
   const context = useMemo<ConversationContext>(
     () => ({
-      agentId: activeAgentId,
+      agentId: conversationAgentId,
       isolatedTopic: true,
-      scope: 'main',
+      scope: 'task',
       topicId: taskTopicId,
       topicTrigger: TopicTrigger.TaskManager,
-      viewedTask: viewedTaskId ? { taskId: viewedTaskId, type: 'detail' } : undefined,
+      viewedTask: viewedTaskId ? { taskId: viewedTaskId, type: 'detail' } : { type: 'list' },
     }),
-    [activeAgentId, taskTopicId, viewedTaskId],
+    [conversationAgentId, taskTopicId, viewedTaskId],
   );
 
   const chatKey = messageMapKey(context);
@@ -91,14 +106,19 @@ const Conversation = memo(() => {
     () => (
       <ActionBarContext value={COMPACT_ACTION_BAR_CONTEXT}>
         <Flexbox horizontal align={'center'} gap={2}>
+          <AgentSelectorAction onAgentChange={switchAgent} />
           <Search />
         </Flexbox>
       </ActionBarContext>
     ),
-    [],
+    [switchAgent],
   );
 
   const modelSelector = useMemo(() => <CopilotModelSelect />, []);
+
+  const hasAgent = !!effectiveAgentId;
+
+  if (!hasAgent) return <Loading debugId="AgentTaskManager" />;
 
   return (
     <ConversationProvider

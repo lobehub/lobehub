@@ -88,6 +88,7 @@ export const formatTaskCreated = (
 export interface TaskListFilters {
   assigneeAgentId?: string;
   isDefaultScope?: boolean;
+  isForAllAgents?: boolean;
   isForCurrentAgent?: boolean;
   parentIdentifier?: string;
   priorities?: number[];
@@ -96,6 +97,7 @@ export interface TaskListFilters {
 
 const buildTaskListLabel = (filters: TaskListFilters): string => {
   if (filters.isDefaultScope) {
+    if (filters.isForAllAgents) return 'top-level unfinished tasks across all agents';
     return filters.isForCurrentAgent
       ? 'top-level unfinished tasks of the current agent'
       : 'top-level unfinished tasks';

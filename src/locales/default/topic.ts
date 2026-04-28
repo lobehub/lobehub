@@ -59,6 +59,7 @@ export default {
   'renameModal.title': 'Rename Topic',
   'searchPlaceholder': 'Search Topics...',
   'searchResultEmpty': 'No search results found.',
+  'taskManager.agent': 'Task Agent',
   'taskManager.welcome': 'Ask me about your tasks',
   'temp': 'Temporary',
   'title': 'Topic',

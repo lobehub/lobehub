@@ -9,6 +9,7 @@ import {
   generateSystemPrompt,
   RemoteDeviceManifest,
 } from '@lobechat/builtin-tool-remote-device';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
 import type {
@@ -383,6 +384,25 @@ export class AiAgentService {
         enableHistoryCount: false,
       };
       log('execAgent: injected page-agent runtime for page scope');
+    }
+
+    if (appContext?.scope === 'task' && agentSlug !== BUILTIN_AGENT_SLUGS.taskAgent) {
+      const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {
+        model: agentConfig.model,
+        plugins: agentConfig.plugins ?? [],
+      });
+      const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
+
+      if (taskAgentSystemRole) {
+        agentConfig.systemRole = agentConfig.systemRole
+          ? `${agentConfig.systemRole}\n\n${taskAgentSystemRole}`
+          : taskAgentSystemRole;
+      }
+
+      agentConfig.plugins = agentConfig.plugins?.includes(TaskIdentifier)
+        ? agentConfig.plugins
+        : [TaskIdentifier, ...(agentConfig.plugins ?? [])];
+      log('execAgent: injected task-agent runtime for task scope');
     }
 
     await throwIfExecutionAborted('agent configuration');

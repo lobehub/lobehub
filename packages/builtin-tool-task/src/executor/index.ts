@@ -27,6 +27,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   createTask = async (
     params: {
       instruction: string;
+      assigneeAgentId?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
@@ -39,7 +40,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const parentIdentifier = params.parentIdentifier?.trim() || undefined;
 
       const task = await getTaskStoreState().createTask({
-        assigneeAgentId: ctx?.agentId,
+        assigneeAgentId:
+          params.assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
@@ -110,6 +112,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   editTask = async (
     params: {
       addDependencies?: string[];
+      assigneeAgentId?: string | null;
       description?: string;
       identifier: string;
       instruction?: string;
@@ -129,6 +132,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       const updateData: {
         description?: string;
+        assigneeAgentId?: string | null;
         instruction?: string;
         name?: string;
         priority?: number;
@@ -136,6 +140,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       if (params.name !== undefined) {
         updateData.name = params.name;
         changes.push(`name → "${params.name}"`);
+      }
+      if (params.assigneeAgentId !== undefined) {
+        updateData.assigneeAgentId = params.assigneeAgentId;
+        changes.push(
+          params.assigneeAgentId
+            ? `assignee agent → ${params.assigneeAgentId}`
+            : 'assignee cleared',
+        );
       }
       if (params.instruction !== undefined) {
         updateData.instruction = params.instruction;
@@ -201,6 +213,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       const normalized = normalizeListTasksParams(params, {
         currentAgentId: ctx?.agentId,
+        defaultScope: ctx?.scope === 'task' ? 'allAgents' : 'currentAgent',
       });
 
       const result = await getTaskStoreState().fetchTaskList(normalized.query);
@@ -225,12 +238,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
   updateTaskStatus = async (
     params: { error?: string; identifier?: string; status: TaskStatus },
-    _ctx?: BuiltinToolContext,
+    ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] updateTaskStatus - params:', params);
 
-      const id = await getTaskStoreState().updateTaskStatus(params.identifier, params.status, {
+      const identifier = params.identifier ?? ctx?.taskId ?? undefined;
+      const id = await getTaskStoreState().updateTaskStatus(identifier, params.status, {
         error: params.error,
       });
 
@@ -255,12 +269,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
   viewTask = async (
     params: { identifier?: string },
-    _ctx?: BuiltinToolContext,
+    ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] viewTask - params:', params);
 
-      const detail = await getTaskStoreState().fetchTaskDetail(params.identifier);
+      const detail = await getTaskStoreState().fetchTaskDetail(
+        params.identifier ?? ctx?.taskId ?? undefined,
+      );
 
       return {
         content: formatTaskDetail(detail),

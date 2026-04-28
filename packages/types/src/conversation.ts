@@ -6,6 +6,7 @@ import type { IThreadType } from './topic/thread';
  * - thread: Agent thread conversation
  * - group: Group main conversation
  * - group_agent: Agent conversation within a group
+ * - task: Task manager side panel conversation
  * - sub_agent: Agent-to-agent communication (non-group, uses subAgentId for config/display only)
  */
 export type MessageMapScope =
@@ -15,6 +16,7 @@ export type MessageMapScope =
   | 'group_agent'
   | 'group_agent_builder'
   | 'page'
+  | 'task'
   | 'agent_builder'
   | 'sub_agent';
 
@@ -154,6 +156,7 @@ export interface ConversationContext {
    * - 'thread': Agent thread conversation
    * - 'group': Group main conversation
    * - 'group_agent': Agent conversation within a group
+   * - 'task': Task manager side panel conversation
    * @default 'main' (auto-detected based on threadId)
    */
   scope?: MessageMapScope;

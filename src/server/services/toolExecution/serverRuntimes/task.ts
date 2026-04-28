@@ -19,12 +19,14 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const createTaskRuntime = ({
   agentId,
+  scope,
   taskId,
   taskCaller,
   taskModel,
   taskService,
 }: {
   agentId?: string;
+  scope?: string | null;
   taskId?: string;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskModel: TaskModel;
@@ -32,6 +34,7 @@ export const createTaskRuntime = ({
 }) => ({
   createTask: async (args: {
     instruction: string;
+    assigneeAgentId?: string;
     name: string;
     parentIdentifier?: string;
     priority?: number;
@@ -49,7 +52,7 @@ export const createTaskRuntime = ({
     }
 
     const task = await taskModel.create({
-      assigneeAgentId: agentId,
+      assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
       createdByAgentId: agentId,
       instruction: args.instruction,
       name: args.name,
@@ -85,6 +88,7 @@ export const createTaskRuntime = ({
 
   editTask: async (args: {
     addDependencies?: string[];
+    assigneeAgentId?: string | null;
     description?: string;
     identifier: string;
     instruction?: string;
@@ -102,6 +106,12 @@ export const createTaskRuntime = ({
     if (args.name !== undefined) {
       updateData.name = args.name;
       changes.push(`name → "${args.name}"`);
+    }
+    if (args.assigneeAgentId !== undefined) {
+      updateData.assigneeAgentId = args.assigneeAgentId;
+      changes.push(
+        args.assigneeAgentId ? `assignee agent → ${args.assigneeAgentId}` : 'assignee cleared',
+      );
     }
     if (args.instruction !== undefined) {
       updateData.instruction = args.instruction;
@@ -172,6 +182,7 @@ export const createTaskRuntime = ({
   }) => {
     const normalized = normalizeListTasksParams(args, {
       currentAgentId: agentId,
+      defaultScope: scope === 'task' ? 'allAgents' : 'currentAgent',
     });
 
     try {
@@ -255,6 +266,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
 
     return createTaskRuntime({
       agentId: context.agentId,
+      scope: context.scope,
       taskCaller,
       taskId: context.taskId,
       taskModel,
