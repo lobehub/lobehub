@@ -251,7 +251,9 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const handleEnableChange = useCallback(
     (checked: boolean) => {
       if (!finalTaskId) return;
-      setAutomationMode(finalTaskId, checked ? 'heartbeat' : null);
+      // Schedule (cron) is the more common, predictable choice; users who want
+      // a fixed interval can switch to the heartbeat tab from there.
+      setAutomationMode(finalTaskId, checked ? 'schedule' : null);
     },
     [finalTaskId, setAutomationMode],
   );
