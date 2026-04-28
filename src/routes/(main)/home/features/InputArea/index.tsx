@@ -31,9 +31,14 @@ const InputArea = () => {
   const showSkillBanner = (isLobehubSkillEnabled || isKlavisEnabled) && !isSkillBannerDismissed;
   const chatInputRef = useRef<HTMLDivElement>(null);
 
-  // Get agent's model info for vision support check
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  // Get agent's model info for vision support check. Falls back to an empty
+  // id while the agent id resolves; the selectors return DEFAULT_MODEL /
+  // DEFAULT_PROVIDER for unknown ids.
+  const resolvedAgentId = agentId ?? '';
+  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(resolvedAgentId)(s));
+  const provider = useAgentStore((s) =>
+    agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(s),
+  );
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   // A slot to insert content above the chat input

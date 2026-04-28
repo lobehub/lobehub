@@ -5,12 +5,11 @@ import type { SendButtonHandler } from '@/features/ChatInput/store/initialState'
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+
+import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 
 /**
  * Make sure the agent's config is hydrated into `agentMap` before we call
@@ -30,8 +29,6 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
 
 export const useSend = () => {
   const router = useQueryRoute();
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const selectedAgentId = useGlobalStore(systemStatusSelectors.homeSelectedAgentId);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearChatUploadFileList = useFileStore((s) => s.clearChatUploadFileList);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
@@ -39,8 +36,10 @@ export const useSend = () => {
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
 
   // Resolve the agent that the home input is currently bound to. Defaults to the
-  // inbox agent; AgentSelect can override by setting selectedAgentId in home store.
-  const activeAgentId = selectedAgentId ?? inboxAgentId;
+  // inbox agent; AgentSelect can override via systemStatus.homeSelectedAgentId.
+  // The hook also rewrites stale ids (e.g. left over from a different account
+  // on the same browser) back to inbox so we don't try to send to a missing id.
+  const { agentId: activeAgentId } = useResolvedHomeAgentId();
 
   const send = useCallback<SendButtonHandler>(
     async ({ getEditorData }) => {

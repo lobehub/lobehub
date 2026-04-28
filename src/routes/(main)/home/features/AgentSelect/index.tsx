@@ -13,11 +13,11 @@ import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentList from './AgentList';
+import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -45,11 +45,10 @@ const AgentSelect = memo(() => {
 
   const isLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const selectedAgentId = useGlobalStore(systemStatusSelectors.homeSelectedAgentId);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const displayAgentId = selectedAgentId ?? inboxAgentId ?? '';
-  const isInboxDisplay = !!inboxAgentId && displayAgentId === inboxAgentId;
+  const { agentId: resolvedAgentId, isInbox: isInboxDisplay } = useResolvedHomeAgentId();
+  const displayAgentId = resolvedAgentId ?? '';
 
   // Pull metadata for the displayed agent. Inbox uses agentSelectors directly;
   // non-inbox agents are looked up via the home agent list (sidebar-shaped meta)
