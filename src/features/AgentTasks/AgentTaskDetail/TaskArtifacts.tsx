@@ -1,72 +1,74 @@
 import type { TaskDetailWorkspaceNode } from '@lobechat/types';
 import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { ConfigProvider, Tree } from 'antd';
-import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
-import { ChevronDown, FileText, FolderClosed, Package } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import FileIcon from '@/components/FileIcon';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from '../shared/style';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 
-const formatSize = (size?: number | null): string | undefined => {
-  if (size == null) return undefined;
-  if (size < 1000) return `${size} chars`;
-  return `${(size / 1000).toFixed(1)}k chars`;
-};
+const formatSizeValue = (size: number): string =>
+  size < 1000 ? String(size) : `${(size / 1000).toFixed(1)}k`;
 
-const ArtifactTitle = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
-  const isFolder = (node.children?.length ?? 0) > 0;
-  const sizeLabel = formatSize(node.size);
+const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspaceNode[] =>
+  nodes.flatMap((node) => [
+    node,
+    ...(node.children?.length ? flattenWorkspace(node.children) : []),
+  ]);
+
+const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
+  const { t } = useTranslation('chat');
+  const openPageDrawer = useTaskStore((s) => s.openPageDrawer);
+  const title = node.title || 'Untitled';
+  const sizeLabel =
+    node.size == null
+      ? undefined
+      : t('taskDetail.artifactSize', { value: formatSizeValue(node.size) });
+  const fileName = title.includes('.') ? title : `${title}.md`;
 
   return (
-    <Flexbox
+    <Block
+      clickable
       horizontal
       align="center"
-      gap={8}
-      style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}
+      gap={12}
+      paddingBlock={12}
+      paddingInline={12}
+      variant="outlined"
+      onClick={() => openPageDrawer(node.documentId)}
     >
-      <Icon
-        color={cssVar.colorTextDescription}
-        icon={isFolder ? FolderClosed : FileText}
-        size={14}
-        style={{ flex: 'none' }}
-      />
-      <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
-        {node.title || 'Untitled'}
-      </Text>
-      {sizeLabel && (
-        <Text style={{ color: cssVar.colorTextQuaternary, flex: 'none', fontSize: 12 }}>
-          {sizeLabel}
-        </Text>
-      )}
-      {node.sourceTaskIdentifier && (
-        <Tag size="small" style={{ flexShrink: 0 }}>
-          {node.sourceTaskIdentifier}
-        </Tag>
-      )}
-    </Flexbox>
+      <FileIcon fileName={fileName} size={32} />
+      <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
+        <Text ellipsis>{title}</Text>
+        <Flexbox horizontal align="center" gap={6}>
+          {sizeLabel && (
+            <Text fontSize={12} type="secondary">
+              {sizeLabel}
+            </Text>
+          )}
+          {node.sourceTaskIdentifier && (
+            <Tag size="small" style={{ flexShrink: 0 }}>
+              {node.sourceTaskIdentifier}
+            </Tag>
+          )}
+        </Flexbox>
+      </Flexbox>
+    </Block>
   );
 });
-
-const toTreeData = (nodes: TaskDetailWorkspaceNode[]): DataNode[] =>
-  nodes.map((node) => ({
-    children: node.children?.length ? toTreeData(node.children) : undefined,
-    key: node.documentId,
-    title: <ArtifactTitle node={node} />,
-  }));
 
 const TaskArtifacts = memo(() => {
   const { t } = useTranslation('chat');
   const workspace = useTaskStore(taskDetailSelectors.activeTaskWorkspace);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const treeData = useMemo(() => toTreeData(workspace), [workspace]);
+  const items = useMemo(() => flattenWorkspace(workspace), [workspace]);
 
-  if (workspace.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
     <Flexbox gap={8}>
@@ -86,30 +88,16 @@ const TaskArtifacts = memo(() => {
           <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
             {t('taskDetail.artifacts')}
           </Text>
-          <Tag size="small">{workspace.length}</Tag>
-          <Icon
-            color={cssVar.colorTextDescription}
-            icon={ChevronDown}
-            size={14}
-            style={{
-              transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-              transition: 'transform 200ms',
-            }}
-          />
+          <Tag size="small">{items.length}</Tag>
+          <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
         </Block>
       </Flexbox>
       {isExpanded && (
-        <ConfigProvider theme={{ components: { Tree: { titleHeight: 32 } } }}>
-          <Tree
-            blockNode
-            defaultExpandAll
-            showLine
-            className={styles.subtaskTree}
-            selectable={false}
-            switcherIcon={<Icon icon={ChevronDown} size={14} />}
-            treeData={treeData}
-          />
-        </ConfigProvider>
+        <Flexbox gap={8} paddingInline={12}>
+          {items.map((node) => (
+            <ArtifactCard key={node.documentId} node={node} />
+          ))}
+        </Flexbox>
       )}
     </Flexbox>
   );

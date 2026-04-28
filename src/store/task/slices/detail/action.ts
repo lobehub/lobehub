@@ -192,7 +192,11 @@ export class TaskDetailSliceActionImpl {
   setActiveTaskId = (taskId?: string): void => {
     if (this.#get().activeTaskId === taskId) return;
     this.#set(
-      { activeTaskId: taskId, activeTopicDrawerTopicId: undefined },
+      {
+        activePageDrawerPageId: undefined,
+        activeTaskId: taskId,
+        activeTopicDrawerTopicId: undefined,
+      },
       false,
       'setActiveTaskId',
     );
@@ -206,6 +210,22 @@ export class TaskDetailSliceActionImpl {
   closeTopicDrawer = (): void => {
     if (!this.#get().activeTopicDrawerTopicId) return;
     this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
+  };
+
+  openPageDrawer = (pageId: string): void => {
+    if (this.#get().activePageDrawerPageId === pageId) return;
+    // Page and topic drawers share right-side floating real estate; close the
+    // other one so they don't stack.
+    this.#set(
+      { activePageDrawerPageId: pageId, activeTopicDrawerTopicId: undefined },
+      false,
+      'openPageDrawer',
+    );
+  };
+
+  closePageDrawer = (): void => {
+    if (!this.#get().activePageDrawerPageId) return;
+    this.#set({ activePageDrawerPageId: undefined }, false, 'closePageDrawer');
   };
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {

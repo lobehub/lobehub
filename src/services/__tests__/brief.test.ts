@@ -4,7 +4,6 @@ import { briefService } from '../brief';
 
 const mockQuery = vi.fn();
 const mockBriefMutate = vi.fn();
-const mockTaskMutate = vi.fn();
 
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
@@ -12,9 +11,6 @@ vi.mock('@/libs/trpc/client', () => ({
       listUnresolved: { query: (...args: any[]) => mockQuery(...args) },
       markRead: { mutate: (...args: any[]) => mockBriefMutate(...args) },
       resolve: { mutate: (...args: any[]) => mockBriefMutate(...args) },
-    },
-    task: {
-      addComment: { mutate: (...args: any[]) => mockTaskMutate(...args) },
     },
   },
 }));
@@ -65,32 +61,6 @@ describe('BriefService', () => {
       await briefService.markRead('brief-1');
 
       expect(mockBriefMutate).toHaveBeenCalledWith({ id: 'brief-1' });
-    });
-  });
-
-  describe('addComment', () => {
-    it('should call task.addComment with correct params', async () => {
-      mockTaskMutate.mockResolvedValueOnce({ data: {}, success: true });
-
-      await briefService.addComment('task-1', 'my feedback', 'brief-1');
-
-      expect(mockTaskMutate).toHaveBeenCalledWith({
-        briefId: 'brief-1',
-        content: 'my feedback',
-        id: 'task-1',
-      });
-    });
-
-    it('should call task.addComment without briefId when not provided', async () => {
-      mockTaskMutate.mockResolvedValueOnce({ data: {}, success: true });
-
-      await briefService.addComment('task-1', 'feedback text');
-
-      expect(mockTaskMutate).toHaveBeenCalledWith({
-        briefId: undefined,
-        content: 'feedback text',
-        id: 'task-1',
-      });
     });
   });
 });

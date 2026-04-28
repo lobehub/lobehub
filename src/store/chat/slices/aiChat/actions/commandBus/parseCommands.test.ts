@@ -5,6 +5,7 @@ import {
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
+  parseSingleAgentMentionDirectRoute,
 } from './parseCommands';
 
 describe('parseCommandsFromEditorData', () => {
@@ -498,5 +499,161 @@ describe('parseMentionedAgentsFromEditorData', () => {
     expect(parseMentionedAgentsFromEditorData(editorData)).toEqual([
       { id: 'agent-no-label', name: 'agent-no-label' },
     ]);
+  });
+});
+
+describe('parseSingleAgentMentionDirectRoute', () => {
+  it('should return undefined for undefined editorData', () => {
+    expect(parseSingleAgentMentionDirectRoute(undefined)).toBeUndefined();
+  });
+
+  it('should detect a single leading agent mention', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                label: 'Agent B',
+                metadata: { id: 'agent-b', type: 'agent' },
+                type: 'mention',
+              },
+              { text: ' please review this', type: 'text' },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(parseSingleAgentMentionDirectRoute(editorData)).toEqual({
+      agent: { id: 'agent-b', name: 'Agent B' },
+    });
+  });
+
+  it('should allow whitespace before the leading agent mention', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              { text: ' \n\t ', type: 'text' },
+              {
+                label: 'Agent B',
+                metadata: { id: 'agent-b', type: 'agent' },
+                type: 'mention',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(parseSingleAgentMentionDirectRoute(editorData)).toEqual({
+      agent: { id: 'agent-b', name: 'Agent B' },
+    });
+  });
+
+  it('should reject an agent mention when text appears first', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              { text: 'please ask ', type: 'text' },
+              {
+                label: 'Agent B',
+                metadata: { id: 'agent-b', type: 'agent' },
+                type: 'mention',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(parseSingleAgentMentionDirectRoute(editorData)).toBeUndefined();
+  });
+
+  it('should reject multiple mention nodes even when only one is an agent', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                label: 'Agent B',
+                metadata: { id: 'agent-b', type: 'agent' },
+                type: 'mention',
+              },
+              {
+                label: 'Topic X',
+                metadata: { id: 'topic-x', type: 'topic' },
+                type: 'mention',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(parseSingleAgentMentionDirectRoute(editorData)).toBeUndefined();
+  });
+
+  it('should reject a single non-agent mention', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                label: 'Topic X',
+                metadata: { id: 'topic-x', type: 'topic' },
+                type: 'mention',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(parseSingleAgentMentionDirectRoute(editorData)).toBeUndefined();
+  });
+
+  it('should reject when an action tag appears before the mention', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                actionCategory: 'skill',
+                actionLabel: 'User Memory',
+                actionType: 'user_memory',
+                type: 'action-tag',
+              },
+              {
+                label: 'Agent B',
+                metadata: { id: 'agent-b', type: 'agent' },
+                type: 'mention',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(parseSingleAgentMentionDirectRoute(editorData)).toBeUndefined();
   });
 });

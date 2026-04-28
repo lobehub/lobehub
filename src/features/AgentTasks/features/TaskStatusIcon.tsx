@@ -27,7 +27,7 @@ const STATUS_META: Record<TaskStatus, StatusMeta> = {
   failed: { color: cssVar.colorError, icon: CircleX },
   paused: { color: cssVar.colorInfo, icon: HandIcon },
   running: { color: cssVar.colorWarning, icon: CircleDot },
-  scheduled: { color: cssVar.colorTextDescription, icon: Clock },
+  scheduled: { color: cssVar.colorWarning, icon: Clock },
 };
 
 interface TaskStatusIconProps {

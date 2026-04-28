@@ -10,8 +10,8 @@ import {
   displayToolCallsField,
   makeDmPolicyField,
   makeGroupPolicyFields,
-  serverIdField,
-  userIdField,
+  makeServerIdField,
+  makeUserIdField,
 } from '../const';
 import type { FieldSchema } from '../types';
 import { DEFAULT_SLACK_CONNECTION_MODE, MAX_SLACK_HISTORY_LIMIT } from './const';
@@ -56,6 +56,8 @@ export const schema: FieldSchema[] = [
     key: 'settings',
     label: 'channel.settings',
     properties: [
+      makeUserIdField('slack'),
+      makeServerIdField('slack'),
       {
         key: 'connectionMode',
         default: DEFAULT_SLACK_CONNECTION_MODE,
@@ -115,8 +117,6 @@ export const schema: FieldSchema[] = [
         minimum: MIN_BOT_HISTORY_LIMIT,
         type: 'number',
       },
-      serverIdField,
-      userIdField,
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,

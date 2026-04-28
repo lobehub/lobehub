@@ -5,6 +5,19 @@ import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
 
+// Default values applied when a task is switched into a mode for the first time
+// — keeps the popover summary, the cron runtime and the persisted record in
+// sync rather than leaving the task in a "mode enabled but unconfigured" state.
+const DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 600;
+const DEFAULT_SCHEDULE_PATTERN = '0 9 * * *';
+const resolveDefaultTimezone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+};
+
 type Setter = StoreSetter<TaskStore>;
 
 export const createTaskConfigSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
@@ -116,8 +129,21 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // Switch between automation modes; null = disable automation.
+  // Switch between automation modes; null = disable automation. When entering a
+  // mode that has never been configured, also persist the mode's defaults so the
+  // popover summary, cron runtime and DB row stay aligned.
   setAutomationMode = async (id: string, mode: TaskAutomationMode | null): Promise<void> => {
+    const detail = this.#get().taskDetailMap[id];
+
+    const update: Parameters<typeof taskService.update>[1] = { automationMode: mode };
+    if (mode === 'heartbeat' && !detail?.heartbeat?.interval) {
+      update.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL_SECONDS;
+    }
+    if (mode === 'schedule') {
+      if (!detail?.schedule?.pattern) update.schedulePattern = DEFAULT_SCHEDULE_PATTERN;
+      if (!detail?.schedule?.timezone) update.scheduleTimezone = resolveDefaultTimezone();
+    }
+
     // Optimistic update so the Segmented reflects the new tab immediately
     this.#get().internal_dispatchTaskDetail({
       id,
@@ -126,7 +152,7 @@ export class TaskConfigSliceActionImpl {
     });
 
     try {
-      await taskService.update(id, { automationMode: mode });
+      await taskService.update(id, update);
       await this.#get().internal_refreshTaskDetail(id);
     } catch (error) {
       console.error('[TaskStore] Failed to update automation mode:', error);

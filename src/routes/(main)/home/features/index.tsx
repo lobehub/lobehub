@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import RecommendTaskTemplates from '@/business/client/RecommendTaskTemplates';
 import DailyBrief from '@/features/DailyBrief';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
@@ -31,8 +32,9 @@ const Home = memo(() => {
       <Welcome />
       <InputArea />
       {isLogin && (
-        <Flexbox style={{ display: hideOtherModules ? 'none' : undefined }}>
+        <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
           <DailyBrief />
+          <RecommendTaskTemplates />
         </Flexbox>
       )}
       {/* Use CSS visibility to hide instead of unmounting to prevent data re-fetching */}

@@ -1,8 +1,9 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
-import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import { memo } from 'react';
+import { Check, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -53,6 +54,10 @@ interface BriefCardProps {
 const BriefCard = memo<BriefCardProps>(
   ({ brief, enableNavigation = true, onAfterResolve, onAfterAddComment }) => {
     const navigate = useNavigate();
+    const { t } = useTranslation('home');
+    const isResolved = Boolean(brief.resolvedAction);
+    const [expanded, setExpanded] = useState(false);
+    const showFull = !isResolved || expanded;
 
     const canNavigate = enableNavigation && Boolean(brief.taskId);
 
@@ -79,19 +84,42 @@ const BriefCard = memo<BriefCardProps>(
             </Text>
             <Time date={brief.createdAt} />
           </Flexbox>
-          {brief.agents.length > 0 && <AgentAvatars agents={brief.agents} />}
+          <Flexbox horizontal align={'center'} gap={8}>
+            {isResolved && !expanded && (
+              <Flexbox horizontal align={'center'} gap={4}>
+                <Icon color={cssVar.colorTextQuaternary} icon={Check} size={14} />
+                <Text className={styles.resolvedTag}>{t('brief.resolved')}</Text>
+              </Flexbox>
+            )}
+            {brief.agents.length > 0 && <AgentAvatars agents={brief.agents} />}
+            {isResolved && (
+              <ActionIcon
+                icon={expanded ? ChevronUpIcon : ChevronDownIcon}
+                size={'small'}
+                title={expanded ? t('brief.collapse') : t('brief.expandAll')}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setExpanded((v) => !v);
+                }}
+              />
+            )}
+          </Flexbox>
         </Flexbox>
-        <Divider dashed style={{ marginBlock: 0 }} />
-        <BriefCardSummary summary={brief.summary} />
-        <BriefCardActions
-          actions={brief.actions}
-          briefId={brief.id}
-          briefType={brief.type}
-          resolvedAction={brief.resolvedAction}
-          taskId={brief.taskId}
-          onAfterAddComment={onAfterAddComment}
-          onAfterResolve={onAfterResolve}
-        />
+        {showFull && (
+          <>
+            <Divider dashed style={{ marginBlock: 0 }} />
+            <BriefCardSummary summary={brief.summary} />
+            <BriefCardActions
+              actions={brief.actions}
+              briefId={brief.id}
+              briefType={brief.type}
+              resolvedAction={brief.resolvedAction}
+              taskId={brief.taskId}
+              onAfterAddComment={onAfterAddComment}
+              onAfterResolve={onAfterResolve}
+            />
+          </>
+        )}
       </Block>
     );
   },

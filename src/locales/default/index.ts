@@ -36,6 +36,7 @@ import setting from './setting';
 import spend from './spend';
 import subscription from './subscription';
 import suggestQuestions from './suggestQuestions';
+import taskTemplate from './taskTemplate';
 import thread from './thread';
 import tool from './tool';
 import topic from './topic';
@@ -56,16 +57,14 @@ const resources = {
   'desktop-onboarding': desktopOnboarding,
   discover,
   editor,
-  'eval': eval_,
   electron,
   error,
+  'eval': eval_,
   file,
   home,
   hotkey,
-
   image,
   knowledgeBase,
-
   labs,
   marketAuth,
   memory,
@@ -84,6 +83,7 @@ const resources = {
   spend,
   subscription,
   suggestQuestions,
+  taskTemplate,
   thread,
   tool,
   topic,

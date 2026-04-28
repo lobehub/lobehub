@@ -1,10 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
 class BriefService {
-  addComment = async (taskId: string, content: string, briefId?: string) => {
-    return lambdaClient.task.addComment.mutate({ briefId, content, id: taskId });
-  };
-
   listUnresolved = async () => {
     return lambdaClient.brief.listUnresolved.query();
   };

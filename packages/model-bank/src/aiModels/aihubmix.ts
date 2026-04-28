@@ -1,6 +1,7 @@
-import { type AIChatModelCard } from '../types/aiModel';
+import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
+import { gptImage2Schema } from './lobehub';
 
-const aihubmixModels: AIChatModelCard[] = [
+const aihubmixChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
@@ -802,6 +803,87 @@ const aihubmixModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
       ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 2_000_000,
+    description: 'A non-reasoning variant for simple use cases',
+    displayName: 'Grok 4.20 (Non-Reasoning)',
+    enabled: true,
+    id: 'grok-4-20-non-reasoning',
+    maxOutput: 2_000_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-09',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 2_000_000,
+    description: 'Intelligent, blazing-fast model that reasons before responding',
+    displayName: 'Grok 4.20',
+    enabled: true,
+    id: 'grok-4-20-reasoning',
+    maxOutput: 2_000_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-09',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 2_000_000,
+    description:
+      'A team of 4 or 16 agents, Excels at research use cases, Does not currently support client-side tools. Only supports xAI server side tools (eg X Search, Web Search tools) and remote MCP tools.',
+    displayName: 'Grok 4.20 Multi-Agent',
+    enabled: true,
+    id: 'grok-4.20-multi-agent-0309',
+    maxOutput: 2_000_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-09',
+    settings: {
+      extendParams: ['grok4_20ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -1830,4 +1912,30 @@ const aihubmixModels: AIChatModelCard[] = [
   },
 ];
 
-export default aihubmixModels;
+const aihubmixImageModels: AIImageModelCard[] = [
+  {
+    description:
+      "OpenAI's next-generation multimodal image model with native reasoning, up to 4K resolution, near-perfect text rendering, and high-fidelity multilingual support.",
+    displayName: 'GPT Image 2',
+    enabled: true,
+    id: 'gpt-image-2',
+    parameters: gptImage2Schema,
+    pricing: {
+      // Medium quality at 1024x1024: ~1767 output tokens * $30/M = $0.053 per image.
+      // Source: https://aihubmix.com/model/gpt-image-2
+      approximatePricePerImage: 0.053,
+      units: [
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-21',
+    type: 'image',
+  },
+];
+
+export const allModels = [...aihubmixChatModels, ...aihubmixImageModels];
+
+export default allModels;
