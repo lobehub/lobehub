@@ -123,6 +123,11 @@ export interface SystemStatus {
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
+  /**
+   * Agent picked from the home AgentSelect dropdown. When unset the home page
+   * falls back to the inbox agent. Persisted so the choice survives reloads.
+   */
+  homeSelectedAgentId?: string;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';

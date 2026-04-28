@@ -1,21 +1,34 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, Flexbox, Popover, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Avatar, Block, Popover, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import { memo, Suspense, useMemo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
-import SkeletonList, { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
-import List from '@/routes/(main)/home/_layout/Body/Agent/List';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
+import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
+import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 
-const styles = createStaticStyles(({ cssVar, css }) => ({
+import AgentList from './AgentList';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  chevron: css`
+    opacity: 0;
+    transition: opacity 0.2s ${cssVar.motionEaseOut};
+  `,
   trigger: css`
+    &:hover .agent-select-chevron,
+    &[data-popup-open] .agent-select-chevron {
+      opacity: 1;
+    }
+
     &[data-popup-open] {
       background: ${cssVar.colorFillTertiary};
     }
@@ -24,43 +37,56 @@ const styles = createStaticStyles(({ cssVar, css }) => ({
 
 const AgentSelect = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
-  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
 
-  const [isLoading, isInbox, title, avatar, backgroundColor] = useAgentStore((s) => [
-    agentSelectors.isAgentConfigLoading(s),
-    builtinAgentSelectors.isInboxAgent(s),
-    agentSelectors.currentAgentTitle(s),
-    agentSelectors.currentAgentAvatar(s),
-    agentSelectors.currentAgentBackgroundColor(s),
-  ]);
+  // Trigger fetching the home agent list so the popover content is ready when opened.
+  useFetchAgentList();
 
-  const displayTitle = isInbox
-    ? title || 'Lobe AI'
-    : title || t('defaultSession', { ns: 'common' });
+  const isLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const selectedAgentId = useGlobalStore(systemStatusSelectors.homeSelectedAgentId);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const popoverContent = useMemo(
-    () => (
-      <Suspense fallback={<SkeletonList rows={6} />}>
-        <AgentModalProvider>
-          <Flexbox gap={4} padding={8} style={{ maxHeight: '50vh', overflowY: 'auto' }}>
-            <List onMoreClick={() => navigate('/')} />
-          </Flexbox>
-        </AgentModalProvider>
-      </Suspense>
-    ),
-    [navigate],
-  );
+  const displayAgentId = selectedAgentId ?? inboxAgentId ?? '';
+  const isInboxDisplay = !!inboxAgentId && displayAgentId === inboxAgentId;
+
+  // Pull metadata for the displayed agent. Inbox uses agentSelectors directly;
+  // non-inbox agents are looked up via the home agent list (sidebar-shaped meta)
+  // with a fallback to agentSelectors when the agent map is hydrated for that id.
+  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
+  const sidebarItem = useHomeStore(homeAgentListSelectors.getAgentById(displayAgentId));
+  const agentMapMeta = useAgentStore(agentSelectors.getAgentMetaById(displayAgentId));
+
+  const displayMeta = isInboxDisplay ? inboxMeta : (sidebarItem ?? agentMapMeta);
+
+  const fallbackTitle = isInboxDisplay ? 'Lobe AI' : t('defaultSession', { ns: 'common' });
+  const displayTitle = displayMeta?.title || fallbackTitle;
+  const displayAvatar =
+    (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
+    (isInboxDisplay ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
+  const displayBackground = displayMeta?.backgroundColor || undefined;
+
+  const handleSelect = (agentId: string) => {
+    // Persist selection (localStorage via systemStatus) so the home ChatInput
+    // + send logic uses this agent across reloads. We always store a concrete
+    // agent id — including inbox — because lodash `merge` skips `undefined`
+    // source values, so we cannot clear the field by passing `undefined`.
+    updateSystemStatus({ homeSelectedAgentId: agentId });
+    setOpen(false);
+  };
 
   if (isLoading) return <SkeletonItem height={40} padding={0} />;
 
   return (
     <Popover
       classNames={{ trigger: styles.trigger }}
-      content={popoverContent}
+      content={<AgentList activeAgentId={displayAgentId} onSelect={handleSelect} />}
       nativeButton={false}
+      open={open}
       placement="bottomLeft"
       styles={{ content: { padding: 0, width: 240 } }}
       trigger="click"
+      onOpenChange={setOpen}
     >
       <Block
         clickable
@@ -71,16 +97,16 @@ const AgentSelect = memo(() => {
         style={{ marginInlineStart: -4, width: 'fit-content' }}
         variant={'borderless'}
       >
-        <Avatar
-          avatar={isInbox ? avatar || DEFAULT_INBOX_AVATAR : avatar || DEFAULT_AVATAR}
-          background={backgroundColor || undefined}
-          shape={'square'}
-          size={32}
-        />
+        <Avatar avatar={displayAvatar} background={displayBackground} shape={'square'} size={32} />
         <Text fontSize={16} weight={600}>
           {displayTitle}
         </Text>
-        <ActionIcon icon={ChevronsUpDownIcon} size={{ blockSize: 24, size: 14 }} />
+        <ActionIcon
+          className={`${styles.chevron} agent-select-chevron`}
+          color={cssVar.colorTextDescription}
+          icon={ChevronsUpDownIcon}
+          size={{ blockSize: 24, size: 14 }}
+        />
       </Block>
     </Popover>
   );

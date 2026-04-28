@@ -27,7 +27,7 @@ import { useSend } from './useSend';
 const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
 
 const InputArea = () => {
-  const { loading, send, inboxAgentId } = useSend();
+  const { loading, send, agentId } = useSend();
   const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
@@ -52,10 +52,8 @@ const InputArea = () => {
   }, [inputActiveMode]);
 
   // Get agent's model info for vision support check
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(inboxAgentId)(s));
-  const provider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(inboxAgentId)(s),
-  );
+  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
+  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   // A slot to insert content above the chat input
@@ -102,7 +100,7 @@ const InputArea = () => {
           onUploadFiles={handleUploadFiles}
         >
           <ChatInputProvider
-            agentId={inboxAgentId}
+            agentId={agentId}
             allowExpand={false}
             leftActions={leftActions}
             slashPlacement="bottom"
