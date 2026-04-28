@@ -5,7 +5,7 @@ import type { MarketEnv } from './env';
 
 export type MarketDatabase = Pick<
   NodePgDatabase<typeof schema>,
-  'delete' | 'insert' | 'select' | 'update'
+  'delete' | 'insert' | 'select' | 'transaction' | 'update'
 >;
 
 export interface TrustedClientPayload {
