@@ -93,6 +93,10 @@ const createMockApp = () => {
       }),
     },
     browserManager: {
+      getMainWindow: vi.fn(() => ({
+        broadcast: vi.fn(),
+        show: vi.fn(),
+      })),
       showMainWindow: vi.fn(),
       retrieveByIdentifier: vi.fn(() => ({
         show: vi.fn(),
@@ -198,6 +202,19 @@ describe('LinuxMenu', () => {
       expect(template.length).toBeGreaterThan(0);
       expect(template.some((item: any) => item.label?.includes('Open'))).toBe(true);
       expect(template.some((item: any) => item.label === 'Quit')).toBe(true);
+    });
+
+    it('should open settings in the main window from tray menu', () => {
+      linuxMenu.buildTrayMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const preferencesItem = template.find((item: any) => item.label === 'Preferences');
+      preferencesItem.click();
+
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results[0].value;
+      expect(mockApp.browserManager.retrieveByIdentifier).not.toHaveBeenCalled();
+      expect(mainWindow.show).toHaveBeenCalled();
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('navigate', { path: '/settings' });
     });
   });
 
