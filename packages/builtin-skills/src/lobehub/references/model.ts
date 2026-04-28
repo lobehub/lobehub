@@ -19,7 +19,7 @@ The \`--type\` filter accepts the following values:
 
 | Type | Description |
 |------|-------------|
-| \`chat\` | Text chat / LLM models (default listing) |
+| \`chat\` | Text chat / LLM models |
 | \`embedding\` | Text embedding models |
 | \`tts\` | Text-to-speech models |
 | \`stt\` | Speech-to-text models |
@@ -31,7 +31,7 @@ The \`--type\` filter accepts the following values:
 ## Tips
 
 - Models belong to providers; always specify \`--provider\` when needed
-- \`lh model list\` without \`--type\` only returns \`chat\` models by default — always pass \`--type video\` (or the relevant type) when looking for non-chat models
+- \`lh model list\` without \`--type\` returns all model types; use \`--type video\` (or the relevant type) to narrow results when looking for non-chat models
 - Use \`--enabled\` to filter only active models
 \`;
 
