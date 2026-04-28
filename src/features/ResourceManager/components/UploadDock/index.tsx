@@ -101,7 +101,7 @@ const UploadDock = memo(() => {
     if (isUploading) setShow(true);
   }, [isUploading, show]);
 
-  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isUploading || overviewUploadingStatus === 'pending') {
