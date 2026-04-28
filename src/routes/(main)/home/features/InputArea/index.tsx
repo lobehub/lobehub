@@ -1,6 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { AnimatePresence, m } from 'motion/react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
@@ -10,16 +9,12 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHomeStore } from '@/store/home';
 import {
-  featureFlagsSelectors,
   serverConfigSelectors,
   useServerConfigStore,
 } from '@/store/serverConfig';
 
-import CommunityRecommend from '../CommunityRecommend';
 import SuggestQuestions from '../SuggestQuestions';
-import ModeTag from './ModeTag';
 import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
@@ -28,28 +23,13 @@ const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
 
 const InputArea = () => {
   const { loading, send, agentId } = useSend();
-  const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const isSkillBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),
   );
   const showSkillBanner = (isLobehubSkillEnabled || isKlavisEnabled) && !isSkillBannerDismissed;
   const chatInputRef = useRef<HTMLDivElement>(null);
-
-  // When a starter mode is activated (e.g. Create Agent / Create Group / Write),
-  // the SuggestQuestions panel renders below the ChatInput and may push the total
-  // content height beyond the viewport, causing the ChatInput to scroll out of view.
-  // Re-focus the editor and scroll it into view so the user can type immediately.
-  useEffect(() => {
-    if (!inputActiveMode) return;
-
-    requestAnimationFrame(() => {
-      chatInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      useChatStore.getState().mainInputEditor?.focus();
-    });
-  }, [inputActiveMode]);
 
   // Get agent's model info for vision support check
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
@@ -70,23 +50,9 @@ const InputArea = () => {
     [],
   );
 
-  const hideStarterList = inputActiveMode && ['agent', 'group', 'write'].includes(inputActiveMode);
-  const showSuggestQuestions = inputActiveMode
-    ? ['agent', 'group', 'write'].includes(inputActiveMode)
-    : !enableAgentTask;
-
-  const extraActionItems = useMemo(
-    () =>
-      inputActiveMode
-        ? [
-            {
-              children: <ModeTag />,
-              key: 'mode-tag',
-            },
-          ]
-        : [],
-    [inputActiveMode],
-  );
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
+  // Whitelist users get DailyBrief + an upcoming auto-generated module instead.
+  const showSuggestQuestions = !enableAgentTask;
 
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
@@ -121,7 +87,6 @@ const InputArea = () => {
           >
             <DesktopChatInput
               dropdownPlacement="bottomLeft"
-              extraActionItems={extraActionItems}
               inputContainerProps={inputContainerProps}
               showRuntimeConfig={false}
             />
@@ -129,30 +94,12 @@ const InputArea = () => {
         </DragUploadZone>
       </Flexbox>
 
-      {/* Keep StarterList mounted to prevent useInitBuiltinAgent hooks from re-running */}
-      <div style={{ display: hideStarterList ? 'none' : undefined }}>
-        <StarterList />
-      </div>
-      <AnimatePresence mode="popLayout">
-        {showSuggestQuestions && (
-          <m.div
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98, y: 8 }}
-            initial={{ opacity: 0, scale: 0.98, y: 8 }}
-            key={inputActiveMode ?? 'chat'}
-            style={{ marginTop: inputActiveMode ? 0 : 24 }}
-            transition={{
-              duration: 0.2,
-              ease: [0.4, 0, 0.2, 1],
-            }}
-          >
-            <Flexbox gap={24}>
-              <SuggestQuestions mode={inputActiveMode} />
-              <CommunityRecommend mode={inputActiveMode} />
-            </Flexbox>
-          </m.div>
-        )}
-      </AnimatePresence>
+      <StarterList />
+      {showSuggestQuestions && (
+        <Flexbox style={{ marginTop: 24 }}>
+          <SuggestQuestions />
+        </Flexbox>
+      )}
     </Flexbox>
   );
 };
