@@ -11,20 +11,19 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { useGlobalStore } from '@/store/global';
 
-import { useTaskAgentTopic } from './TaskAgentProvider';
-
 const Toolbar = memo(() => {
   const { t } = useTranslation('topic');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
-  const { setTopicId, topicId } = useTaskAgentTopic();
 
   useChatStore((s) => s.useFetchTopics)(true, { agentId });
 
-  const topics = useChatStore((s) =>
-    agentId ? topicSelectors.getTopicsByAgentId(agentId)(s) : undefined,
-  );
-  const currentTopic = topics?.find((topic) => topic.id === topicId);
+  const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
+    s.activeTopicId,
+    s.switchTopic,
+    topicSelectors.currentTopics(s),
+  ]);
+  const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
 
   const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
 
@@ -33,7 +32,7 @@ const Toolbar = memo(() => {
   const hasTopics = !!topics && topics.length > 0;
 
   const handleCreate = () => {
-    setTopicId(null);
+    switchTopic(null, { scope: 'task' });
   };
 
   return (
@@ -75,12 +74,12 @@ const Toolbar = memo(() => {
                 >
                   {topics!.map((topic) => (
                     <TopicItem
-                      active={topic.id === topicId}
+                      active={topic.id === activeTopicId}
                       key={topic.id}
                       topicId={topic.id}
                       topicTitle={topic.title}
                       onClose={() => setTopicPopoverOpen(false)}
-                      onTopicChange={setTopicId}
+                      onTopicChange={(id) => switchTopic(id)}
                     />
                   ))}
                 </Flexbox>
