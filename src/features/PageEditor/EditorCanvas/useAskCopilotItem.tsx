@@ -76,7 +76,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
 
               // Open right panel if not opened
               setRightPanelMode('copilot');
-              useGlobalStore.getState().toggleRightPanel(true);
+              useGlobalStore.getState().togglePageAgentPanel(true);
 
               // Focus on chat input after a short delay to ensure panel is opened
               setTimeout(() => {

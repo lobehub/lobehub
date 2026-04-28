@@ -21,7 +21,7 @@ const Toolbar = memo(() => {
   const [activeTopicId, switchTopic] = useTaskChatStore((s) => [s.activeTopicId, s.switchTopic]);
   const topics = useTaskChatStore((s) => s.topics);
 
-  const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
+  const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
 
   const isLoadingTopics = topics === undefined;
   const topicTitle = topics?.find((topic) => topic.id === activeTopicId)?.title || t('title');
@@ -108,7 +108,7 @@ const Toolbar = memo(() => {
           <ActionIcon
             icon={PanelRightCloseIcon}
             size={DESKTOP_HEADER_ICON_SIZE}
-            onClick={() => toggleRightPanel()}
+            onClick={() => toggleTaskAgentPanel()}
           />
         </>
       }

@@ -80,6 +80,20 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showLeftPanel }, n('toggleLeftPanel', newValue));
   };
 
+  togglePageAgentPanel = (newValue?: boolean): void => {
+    const showPageAgentPanel =
+      typeof newValue === 'boolean' ? newValue : !this.#get().status.showPageAgentPanel;
+
+    this.#get().updateSystemStatus({ showPageAgentPanel }, n('togglePageAgentPanel', newValue));
+  };
+
+  toggleTaskAgentPanel = (newValue?: boolean): void => {
+    const showTaskAgentPanel =
+      typeof newValue === 'boolean' ? newValue : !this.#get().status.showTaskAgentPanel;
+
+    this.#get().updateSystemStatus({ showTaskAgentPanel }, n('toggleTaskAgentPanel', newValue));
+  };
+
   toggleMobilePortal = (newValue?: boolean): void => {
     const mobileShowPortal =
       typeof newValue === 'boolean' ? newValue : !this.#get().status.mobileShowPortal;
