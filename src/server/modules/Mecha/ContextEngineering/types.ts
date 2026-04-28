@@ -9,12 +9,14 @@ import type {
   FileContent,
   KnowledgeBaseInfo,
   LobeToolManifest,
+  OnboardingContext,
   SkillMeta,
+  ToolDiscoveryConfig,
   TopicReferenceItem,
   UserMemoryData,
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
-import type { UIChatMessage } from '@lobechat/types';
+import type { RuntimeInitialContext, UIChatMessage } from '@lobechat/types';
 
 /**
  * Model capability checker functions for server-side
@@ -42,6 +44,8 @@ export interface ServerKnowledgeConfig {
  * Tools configuration for server context engineering
  */
 export interface ServerToolsConfig {
+  /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
+  disabledToolIdentifiers?: string[];
   /** Tool manifests with systemRole and API definitions */
   manifests?: LobeToolManifest[];
   /** Enabled tool IDs (kept for compatibility) */
@@ -86,6 +90,9 @@ export interface ServerMessagesEngineParams {
   // ========== Eval context ==========
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  // ========== Onboarding context ==========
+  /** Onboarding context for injecting phase guidance and documents */
+  onboardingContext?: OnboardingContext;
 
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */
@@ -102,6 +109,8 @@ export interface ServerMessagesEngineParams {
   historySummary?: string;
   /** Input template */
   inputTemplate?: string;
+  /** Initial runtime context captured at operation start */
+  initialContext?: RuntimeInitialContext;
   // ========== Knowledge ==========
   /** Knowledge configuration */
   knowledge?: ServerKnowledgeConfig;
@@ -124,6 +133,8 @@ export interface ServerMessagesEngineParams {
   // ========== Skills ==========
   /** Skills configuration for <available_skills> injection */
   skillsConfig?: { enabledSkills?: SkillMeta[] };
+  /** Tool discovery configuration for <available_tools> injection */
+  toolDiscoveryConfig?: ToolDiscoveryConfig;
   // ========== Tools ==========
   /** Tools configuration */
   toolsConfig?: ServerToolsConfig;

@@ -6,6 +6,11 @@ export type CreateImagePayload = {
   params: RuntimeImageGenParams;
 };
 
+export interface CreateImageMethodOptions {
+  /** Metadata passed to hooks (billing, tracing, etc.) */
+  metadata?: Record<string, unknown>;
+}
+
 /**
  * Why return width and height?
  * 1. The configured width may differ from the actual generated width, which needs to be stored in the generation asset

@@ -1,13 +1,18 @@
+import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { type ChatStreamPayload, type LobeTool, type UIChatMessage } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { act } from '@testing-library/react';
+import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
+import { agentDocumentService } from '@/services/agentDocument';
+import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors } from '@/store/aiInfra';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -106,10 +111,16 @@ beforeEach(async () => {
   vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
     () => ({ plugins: [], systemRole: '' }) as any,
   );
+  vi.spyOn(agentSelectors, 'getAgentDocumentsById').mockImplementation(
+    (agentId: string) => (state) => state.agentDocumentsMap[agentId],
+  );
   vi.spyOn(agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
   vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
     () => ({ searchMode: 'off' }) as any,
   );
+  useAgentStore.setState({ activeAgentId: undefined, agentDocumentsMap: {} } as any);
+  useAiInfraStore.setState({ enabledAiModels: [] });
+  useChatStore.setState({ activeAgentId: undefined } as any);
 });
 
 // mock auth
@@ -526,7 +537,16 @@ describe('ChatService', () => {
               {
                 content: [
                   {
+                    // NOTE: `vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(true)`
+                    // above does not actually flow through to MessageContentProcessor
+                    // — the capability function reaches the processor via an object
+                    // literal captured in contextEngineering.ts at import time, so the
+                    // spy has no effect on the downstream pipeline. The effective
+                    // behavior is therefore vision=disabled, and the image is
+                    // downgraded to a placeholder (see LOBE-7214).
                     text: `Hello
+
+[image omitted: not supported by this model]
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
 <context.instruction>following part contains context information injected by the system. Please follow these instructions:
@@ -988,35 +1008,39 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
+            tools: seoTools,
             top_p: 1,
-            tools: [
-              {
-                type: 'function',
-                function: {
-                  description: 'Get data from users',
-                  name: 'seo____getData',
-                  parameters: {
-                    properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                    required: ['keyword', 'url'],
-                    type: 'object',
-                  },
-                },
-              },
-            ],
-            messages: [
-              {
-                content: expect.stringContaining(getCurrentDateContent()),
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).toContain(
+          'Use the runSkill tool to activate a skill when needed.',
+        );
+        expect(requestMessages[0].content).toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
 
@@ -1133,35 +1157,36 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
+            tools: seoTools,
             top_p: 1,
-            tools: [
-              {
-                type: 'function',
-                function: {
-                  description: 'Get data from users',
-                  name: 'seo____getData',
-                  parameters: {
-                    properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                    required: ['keyword', 'url'],
-                    type: 'object',
-                  },
-                },
-              },
-            ],
-            messages: [
-              {
-                content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
 
@@ -1184,22 +1209,36 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
             tools: undefined,
             top_p: 1,
-            messages: [
-              {
-                content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
     });
@@ -1427,6 +1466,88 @@ describe('ChatService', () => {
         );
       });
     });
+
+    describe('agent documents readiness', () => {
+      it('should ensure agent documents before assistant generation when cache is empty', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+          {
+            content: 'Project setup steps',
+            filename: 'setup.md',
+            id: 'doc-1',
+            loadRules: [],
+            policy: null,
+            policyLoadFormat: null,
+            policyLoadPosition: null,
+            templateId: null,
+            title: 'Setup',
+          },
+        ] as any);
+
+        await chatService.createAssistantMessage({
+          agentId: 'agent-1',
+          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
+
+        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'agent-1' });
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentDocuments: [
+              expect.objectContaining({
+                content: 'Project setup steps',
+                filename: 'setup.md',
+                id: 'doc-1',
+              }),
+            ],
+          }),
+        );
+      });
+
+      it('should resolve agent builder documents from the edited agent', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+          {
+            content: 'Edited agent setup',
+            filename: 'builder-target.md',
+            id: 'doc-1',
+            loadRules: [],
+            policy: null,
+            policyLoadFormat: null,
+            policyLoadPosition: null,
+            templateId: null,
+            title: 'Builder Target',
+          },
+        ] as any);
+
+        useChatStore.setState({ activeAgentId: 'edited-agent' } as any);
+
+        await chatService.createAssistantMessage({
+          agentId: 'builder-agent',
+          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+          resolvedAgentConfig: createMockResolvedConfig({
+            enabledToolIds: [AgentBuilderIdentifier],
+          }),
+        });
+
+        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'edited-agent' });
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentDocuments: [
+              expect.objectContaining({
+                content: 'Edited agent setup',
+              }),
+            ],
+          }),
+        );
+      });
+    });
   });
 
   describe('getChatCompletion', () => {
@@ -1495,6 +1616,37 @@ describe('ChatService', () => {
       );
     });
 
+    it('should preserve Azure Responses-only logical model and pass deploymentName separately', async () => {
+      useAiInfraStore.setState({
+        enabledAiModels: [
+          {
+            config: { deploymentName: 'prod-gpt-54' },
+            id: 'gpt-5.4',
+            providerId: ModelProvider.Azure,
+          },
+        ],
+      } as any);
+
+      const params: Partial<ChatStreamPayload> = {
+        messages: [],
+        model: 'gpt-5.4',
+        provider: ModelProvider.Azure,
+      };
+
+      await chatService.getChatCompletion(params, {});
+
+      const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
+
+      expect(payload).toEqual(
+        expect.objectContaining({
+          apiMode: 'chatCompletion',
+          deploymentName: 'prod-gpt-54',
+          messages: [],
+          model: 'gpt-5.4',
+        }),
+      );
+    });
+
     it('should return InvalidAccessCode error when enableFetchOnClient is true and auth is enabled but user is not signed in', async () => {
       // Mock fetchSSE to call onErrorHandle with the error
       const { fetchSSE } = await import('@lobechat/fetch-sse');
@@ -1536,24 +1688,23 @@ describe('ChatService', () => {
     // Add more test cases to cover different scenarios and edge cases
   });
 
-  describe('runPluginApi', () => {
-    it('should make a POST request and return the result text', async () => {
-      const params = { identifier: 'test-plugin', apiName: '1' }; // Add more properties if needed
-      const options = {};
-      const mockResponse = new Response('Plugin Result', { status: 200 });
+  describe('fetchPresetTaskResult', () => {
+    it('should not wait for agent documents on preset task chains', async () => {
+      vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+      vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([]);
 
-      global.fetch = vi.fn(() => Promise.resolve(mockResponse));
+      await chatService.fetchPresetTaskResult({
+        abortController: new AbortController(),
+        params: {
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-4',
+          provider: 'openai',
+        },
+      });
 
-      const result = await chatService.runPluginApi(params, options);
-
-      expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
-      expect(result.text).toBe('Plugin Result');
+      expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
     });
 
-    // Add more test cases to cover different scenarios and edge cases
-  });
-
-  describe('fetchPresetTaskResult', () => {
     it('should handle successful chat completion response', async () => {
       // Mock getChatCompletion to simulate successful completion
       const getChatCompletionSpy = vi

@@ -50,6 +50,8 @@ export const responsesAPIModels = new Set([
   'gpt-5.4-mini',
   'gpt-5.4-nano',
   'gpt-5.4-pro',
+  'gpt-5.5',
+  'gpt-5.5-pro',
 ]);
 
 /**
@@ -112,4 +114,25 @@ export const temperatureTopPConflictModelPatterns: RegExp[] = [
 
 export const hasTemperatureTopPConflict = (model: string): boolean => {
   return temperatureTopPConflictModelPatterns.some((pattern) => pattern.test(model));
+};
+
+/**
+ * Regex patterns for models that reject any non-default temperature / top_p / top_k.
+ * These sampling parameters must be omitted from the request payload entirely;
+ * otherwise the API returns a 400 error.
+ *
+ * Ref: https://platform.claude.com/docs/en/about-claude/models/migration-guide
+ */
+export const omitSamplingParamsModelPatterns: RegExp[] = [
+  // Claude Opus 4.7 - Anthropic API (also LobeHub provider pass-through)
+  /^claude-opus-4-7/,
+  // OpenRouter formats use dot notation (e.g. anthropic/claude-opus-4.7)
+  /^anthropic\/claude-opus-4\.7/,
+  /^anthropic\/claude-4\.7-opus/,
+  // AWS Bedrock formats (e.g. anthropic.claude-opus-4-7, us.anthropic.claude-opus-4-7-v1)
+  /anthropic\.claude-opus-4-7/,
+];
+
+export const shouldOmitSamplingParams = (model: string): boolean => {
+  return omitSamplingParamsModelPatterns.some((pattern) => pattern.test(model));
 };

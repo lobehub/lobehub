@@ -528,6 +528,8 @@ const hunyuanImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',

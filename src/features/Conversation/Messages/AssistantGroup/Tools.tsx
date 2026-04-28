@@ -3,6 +3,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import Tool from './Tool';
+import { shouldRenderToolCall } from './toolRenderRules';
 
 interface ToolsRendererProps {
   disableEditing?: boolean;
@@ -13,9 +14,13 @@ interface ToolsRendererProps {
 export const Tools = memo<ToolsRendererProps>(({ disableEditing, messageId, tools }) => {
   if (!tools || tools.length === 0) return null;
 
+  const visibleTools = tools.filter(shouldRenderToolCall);
+
+  if (visibleTools.length === 0) return null;
+
   return (
     <Flexbox gap={8}>
-      {tools.map((tool) => (
+      {visibleTools.map((tool) => (
         <Tool
           apiName={tool.apiName}
           arguments={tool.arguments}

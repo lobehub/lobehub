@@ -1,4 +1,3 @@
-import { AGENT_ONBOARDING_ENABLED } from '@lobechat/business-const';
 import {
   ChartNetworkIcon,
   CodeXmlIcon,
@@ -12,11 +11,10 @@ import {
 
 /** Default target when the user opens `/onboarding`. Flip to `'agent'` when agent onboarding is ready to ship as the primary flow. */
 export type DefaultOnboardingEntryVariant = 'agent' | 'classic';
-export { AGENT_ONBOARDING_ENABLED };
 export const DEFAULT_ONBOARDING_ENTRY_VARIANT: DefaultOnboardingEntryVariant = 'classic';
 
 const resolveDefaultOnboardingPath = (variant: DefaultOnboardingEntryVariant) =>
-  variant === 'agent' && AGENT_ONBOARDING_ENABLED ? '/onboarding/agent' : '/onboarding/classic';
+  variant === 'agent' ? '/onboarding/agent' : '/onboarding/classic';
 
 export const DEFAULT_ONBOARDING_PATH: '/onboarding/agent' | '/onboarding/classic' =
   resolveDefaultOnboardingPath(DEFAULT_ONBOARDING_ENTRY_VARIANT);

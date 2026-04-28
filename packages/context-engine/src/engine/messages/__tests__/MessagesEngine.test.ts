@@ -500,6 +500,148 @@ Document content here.
     });
   });
 
+  describe('Active Topic Document context', () => {
+    it('should inject active topic document context to the last user message', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: '继续修改刚才的文档',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        initialContext: {
+          activeTopicDocument: {
+            agentDocumentId: 'agd_123',
+            documentId: 'docs_123',
+            title: 'Topic Plan',
+          },
+        },
+        messages,
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+      const userMessage = result.messages.find((m) => m.role === 'user');
+
+      expect(userMessage?.content).toContain('<active_topic_document>');
+      expect(userMessage?.content).toContain('document_id="docs_123"');
+      expect(userMessage?.content).toContain('agent_document_id="agd_123"');
+      expect(userMessage?.content).toContain('target="currentTopic"');
+      expect(userMessage?.content).toContain('Do not use PageAgent editor tools');
+      expect(result.metadata.activeTopicDocumentContextInjected).toBe(true);
+    });
+
+    it('should skip active topic document context when page editor context is enabled', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Question',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        initialContext: {
+          activeTopicDocument: {
+            agentDocumentId: 'agd_123',
+            documentId: 'docs_123',
+            title: 'Topic Plan',
+          },
+          pageEditor: {
+            markdown: '# Page',
+            metadata: { title: 'Page' },
+            xml: '<root />',
+          },
+        },
+        messages,
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+      const userMessage = result.messages.find((m) => m.role === 'user');
+
+      expect(userMessage?.content).not.toContain('<active_topic_document>');
+      expect(result.metadata.activeTopicDocumentContextInjected).toBeUndefined();
+      expect(result.metadata.pageEditorContextInjected).toBe(true);
+    });
+  });
+
+  describe('Disabled tool call filtering', () => {
+    it('should remove historical PageAgent tool calls when the tool is disabled', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: '先更新表格',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: 'msg-2',
+          role: 'assistant',
+          tool_calls: [
+            {
+              function: {
+                arguments: '{}',
+                name: 'lobe-page-agent____modifyNodes____builtin',
+              },
+              id: 'call_1',
+              type: 'function',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: 'Successfully executed 1 modify.',
+          createdAt: Date.now(),
+          id: 'msg-3',
+          role: 'tool',
+          tool_call_id: 'call_1',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '继续修改文档',
+          createdAt: Date.now(),
+          id: 'msg-4',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        messages,
+        toolsConfig: {
+          disabledToolIdentifiers: ['lobe-page-agent'],
+          tools: ['lobe-agent-documents'],
+        },
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages.some((m) => m.role === 'tool')).toBe(false);
+      expect(
+        result.messages.some(
+          (m) =>
+            m.role === 'assistant' &&
+            JSON.stringify(m).includes('lobe-page-agent____modifyNodes____builtin'),
+        ),
+      ).toBe(false);
+      expect(result.metadata.disabledToolCallFilter).toEqual({
+        filteredAssistantMessages: 1,
+        filteredToolCalls: 1,
+      });
+    });
+  });
+
   describe('Page Selections', () => {
     it('should inject page selections to each user message that has them', async () => {
       const messages: UIChatMessage[] = [

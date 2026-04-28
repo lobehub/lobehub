@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.1-canary.14",
+  "version": "0.0.8",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -28,6 +28,7 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
+    "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@trpc/client": "^11.8.1",
@@ -37,6 +38,7 @@
     "debug": "^4.4.0",
     "diff": "^8.0.3",
     "fast-glob": "^3.3.3",
+    "ignore": "^7.0.5",
     "picocolors": "^1.1.1",
     "superjson": "^2.2.6",
     "tsdown": "^0.21.4",

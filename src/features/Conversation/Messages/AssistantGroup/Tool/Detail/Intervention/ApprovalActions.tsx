@@ -34,23 +34,21 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     // Disable actions while message is still being created (temp ID)
     const isMessageCreating = messageId.startsWith('tmp_');
 
-    const [approveToolCall, rejectToolCall, rejectAndContinueToolCall] = useConversationStore(
-      (s) => [s.approveToolCall, s.rejectToolCall, s.rejectAndContinueToolCall],
-    );
+    const [approveToolCall, rejectAndContinueToolCall] = useConversationStore((s) => [
+      s.approveToolCall,
+      s.rejectAndContinueToolCall,
+    ]);
     const addToolToAllowList = useUserStore((s) => s.addToolToAllowList);
 
     const handleApprove = async (remember?: boolean) => {
       setApproveLoading(true);
       try {
-        // 0. Flush pending saves from intervention components (e.g., debounced saves)
         if (onBeforeApprove) {
           await onBeforeApprove();
         }
 
-        // 1. Update intervention status
         await approveToolCall(messageId, assistantGroupId ?? '');
 
-        // 2. If remembered, add to allowList
         if (remember) {
           const toolKey = `${identifier}/${apiName}`;
           await addToolToAllowList(toolKey);
@@ -61,14 +59,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     };
 
     const handleReject = async (reason?: string) => {
-      setRejectLoading(true);
-      await rejectToolCall(messageId, reason);
-      setRejectLoading(false);
-      setRejectPopoverOpen(false);
-      setRejectReason('');
-    };
-
-    const handleRejectAndContinue = async (reason?: string) => {
       setRejectLoading(true);
       await rejectAndContinueToolCall(messageId, reason);
       setRejectLoading(false);
@@ -87,25 +77,14 @@ const ApprovalActions = memo<ApprovalActionsProps>(
               <Flexbox horizontal align={'center'} justify={'space-between'}>
                 <div>{t('tool.intervention.rejectTitle')}</div>
 
-                <Space>
-                  <Button
-                    color={'default'}
-                    loading={rejectLoading}
-                    size="small"
-                    variant={'filled'}
-                    onClick={() => handleReject(rejectReason)}
-                  >
-                    {t('tool.intervention.rejectOnly')}
-                  </Button>
-                  <Button
-                    loading={rejectLoading}
-                    size="small"
-                    type="primary"
-                    onClick={() => handleRejectAndContinue(rejectReason)}
-                  >
-                    {t('tool.intervention.rejectAndContinue')}
-                  </Button>
-                </Space>
+                <Button
+                  loading={rejectLoading}
+                  size="small"
+                  type="primary"
+                  onClick={() => handleReject(rejectReason)}
+                >
+                  {t('tool.intervention.rejectAndContinue')}
+                </Button>
               </Flexbox>
               <Input.TextArea
                 autoFocus

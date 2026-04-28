@@ -2,6 +2,7 @@ import { type UIChatMessage } from '@lobechat/types';
 import { template } from 'es-toolkit/compat';
 
 import { LOADING_FLAT } from '@/const/message';
+import { normalizeThinkTags, processWithArtifact } from '@/features/Conversation/utils/markdown';
 import { type FieldType } from '@/features/ShareModal/ShareText/type';
 
 const markdownTemplate = template(
@@ -72,7 +73,11 @@ export const generateMarkdown = ({
     messages: messages
       .filter((m) => m.content !== LOADING_FLAT)
       .filter((m) => (!includeUser ? m.role !== 'user' : true))
-      .filter((m) => (!includeTool ? m.role !== 'tool' : true)),
+      .filter((m) => (!includeTool ? m.role !== 'tool' : true))
+      .map((message) => ({
+        ...message,
+        content: normalizeThinkTags(processWithArtifact(message.content)),
+      })),
     systemRole: withSystemRole ? systemRole : undefined,
     title,
     withRole,

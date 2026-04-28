@@ -71,7 +71,6 @@ describe('createContextInner', () => {
     const context = await createContextInner();
 
     expect(context).toMatchObject({
-      authorizationHeader: undefined,
       marketAccessToken: undefined,
       oidcAuth: undefined,
       userAgent: undefined,
@@ -84,14 +83,6 @@ describe('createContextInner', () => {
     const context = await createContextInner({ userId: 'user-123' });
 
     expect(context.userId).toBe('user-123');
-  });
-
-  it('should create context with authorization header', async () => {
-    const context = await createContextInner({
-      authorizationHeader: 'Bearer token-abc',
-    });
-
-    expect(context.authorizationHeader).toBe('Bearer token-abc');
   });
 
   it('should create context with user agent', async () => {
@@ -123,7 +114,6 @@ describe('createContextInner', () => {
 
   it('should create context with all parameters combined', async () => {
     const params = {
-      authorizationHeader: 'Bearer token',
       userId: 'user-123',
       userAgent: 'Test Agent',
       marketAccessToken: 'mp-token',
@@ -136,7 +126,6 @@ describe('createContextInner', () => {
     const context = await createContextInner(params);
 
     expect(context).toMatchObject({
-      authorizationHeader: 'Bearer token',
       userId: 'user-123',
       userAgent: 'Test Agent',
       marketAccessToken: 'mp-token',

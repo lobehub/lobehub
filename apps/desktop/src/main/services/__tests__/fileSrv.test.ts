@@ -432,9 +432,9 @@ describe('FileService', () => {
     });
 
     it('should handle partial failures in batch deletion', async () => {
-      let callCount = 0;
+      let _callCount = 0;
       mockFsUnlink.mockImplementation((path: any, callback: any) => {
-        callCount++;
+        _callCount++;
         // Fail on a specific file
         if (path.includes('file2.txt') && !path.includes('.meta')) {
           callback(new Error('Permission denied'));

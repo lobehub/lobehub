@@ -6,8 +6,10 @@ import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
+import type * as AgentStoreModule from '@/store/agent';
 import { getAgentStoreState } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
+import type * as SessionStoreModule from '@/store/session';
 import { getSessionStoreState } from '@/store/session';
 
 // Mock dependencies
@@ -20,18 +22,29 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   },
 }));
 
-vi.mock('@/store/session', () => ({
-  getSessionStoreState: vi.fn(() => ({
-    activeId: 'test-session',
-    switchSession: vi.fn(),
-  })),
-}));
+vi.mock('@/store/session', async (importOriginal) => {
+  const actual = await importOriginal<typeof SessionStoreModule>();
 
-vi.mock('@/store/agent', () => ({
-  getAgentStoreState: vi.fn(() => ({
-    setActiveAgentId: vi.fn(),
-  })),
-}));
+  return {
+    ...actual,
+    getSessionStoreState: vi.fn(() => ({
+      activeId: 'test-session',
+      switchSession: vi.fn(),
+    })),
+  };
+});
+
+vi.mock('@/store/agent', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStoreModule>();
+
+  return {
+    ...actual,
+    getAgentStoreState: vi.fn(() => ({
+      setActiveAgentId: vi.fn(),
+    })),
+    useAgentStore: actual.useAgentStore,
+  };
+});
 
 afterEach(() => {
   vi.restoreAllMocks();

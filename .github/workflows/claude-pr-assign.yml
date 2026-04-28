@@ -21,7 +21,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Check if author is a team member
+        id: check-team
+        run: |
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          if grep -iq "^${PR_AUTHOR}$" .github/maintainers.txt; then
+            echo "is_team=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_team=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Copy prompts
+        if: steps.check-team.outputs.is_team == 'false'
         run: |
           mkdir -p /tmp/claude-prompts
           cp .claude/prompts/pr-assign.md /tmp/claude-prompts/
@@ -29,6 +40,7 @@ jobs:
           cp .claude/prompts/security-rules.md /tmp/claude-prompts/
 
       - name: Run Claude Code for PR Reviewer Assignment
+        if: steps.check-team.outputs.is_team == 'false'
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GH_TOKEN }}

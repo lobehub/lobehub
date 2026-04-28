@@ -30,6 +30,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
   const { t } = useTranslation('common');
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
   const pageId = usePageEditorStore((s) => s.documentId);
+  const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
 
   return useMemo(() => {
     if (!editor) return [];
@@ -74,6 +75,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
               });
 
               // Open right panel if not opened
+              setRightPanelMode('copilot');
               useGlobalStore.getState().toggleRightPanel(true);
 
               // Focus on chat input after a short delay to ensure panel is opened
@@ -100,5 +102,5 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
         onClick: () => {},
       },
     ];
-  }, [addSelectionContext, editor, pageId, t]);
+  }, [addSelectionContext, editor, pageId, setRightPanelMode, t]);
 };

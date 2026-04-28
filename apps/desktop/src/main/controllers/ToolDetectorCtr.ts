@@ -1,7 +1,18 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+import type {
+  ClaudeAuthStatus,
+  DetectHeterogeneousAgentCommandParams,
+} from '@lobechat/electron-client-ipc';
+
 import type { ToolCategory, ToolStatus } from '@/core/infrastructure/ToolDetectorManager';
+import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
+
+const execFilePromise = promisify(execFile);
 
 const logger = createLogger('controllers:ToolDetectorCtr');
 
@@ -25,6 +36,14 @@ export default class ToolDetectorCtr extends ControllerModule {
   async detectTool(name: string, force = false): Promise<ToolStatus> {
     logger.debug(`Detecting tool: ${name}, force: ${force}`);
     return this.manager.detect(name, force);
+  }
+
+  @IpcMethod()
+  async detectHeterogeneousAgentCommand(
+    params: DetectHeterogeneousAgentCommandParams,
+  ): Promise<ToolStatus> {
+    logger.debug('Detecting heterogeneous agent command:', params);
+    return detectHeterogeneousCliCommand(params.agentType, params.command);
   }
 
   /**
@@ -111,5 +130,25 @@ export default class ToolDetectorCtr extends ControllerModule {
       name: detector.name,
       priority: detector.priority,
     }));
+  }
+
+  /**
+   * Get Claude Code CLI auth/account status by running `claude auth status --json`.
+   * Returns null if the CLI is unavailable or the command fails.
+   */
+  @IpcMethod()
+  async getClaudeAuthStatus(command = 'claude'): Promise<ClaudeAuthStatus | null> {
+    const resolvedCommand = command.trim() || 'claude';
+
+    try {
+      const { stdout } = await execFilePromise(resolvedCommand, ['auth', 'status', '--json'], {
+        timeout: 5000,
+        windowsHide: true,
+      });
+      return JSON.parse(stdout.trim()) as ClaudeAuthStatus;
+    } catch (error) {
+      logger.debug('Failed to get claude auth status:', error);
+      return null;
+    }
   }
 }

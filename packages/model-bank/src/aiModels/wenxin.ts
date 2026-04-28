@@ -1772,6 +1772,7 @@ const wenxinImageModels: AIImageModelCard[] = [
           '1104x1472',
         ],
       },
+      promptExtend: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1791,6 +1792,7 @@ const wenxinImageModels: AIImageModelCard[] = [
         default: '',
       },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1812,6 +1814,7 @@ const wenxinImageModels: AIImageModelCard[] = [
         default: '',
       },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1834,6 +1837,8 @@ const wenxinImageModels: AIImageModelCard[] = [
       seed: { default: null },
       steps: { default: 25, max: 50, min: 1 },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1855,6 +1860,8 @@ const wenxinImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1876,6 +1883,7 @@ const wenxinImageModels: AIImageModelCard[] = [
       seed: { default: null },
       steps: { default: 25, max: 50, min: 1 },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1899,6 +1907,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1918,6 +1928,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1937,6 +1949,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1956,6 +1970,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1974,6 +1990,8 @@ const wenxinVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',

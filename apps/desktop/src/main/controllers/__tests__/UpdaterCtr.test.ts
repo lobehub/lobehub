@@ -4,11 +4,16 @@ import type { App } from '@/core/App';
 
 import UpdaterCtr from '../UpdaterCtr';
 
-// 模拟 logger
+// Mock logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
+    warn: vi.fn(),
   }),
+}));
+
+vi.mock('@/modules/updater/configs', () => ({
+  UPDATE_CHANNEL: 'stable',
 }));
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
@@ -21,18 +26,28 @@ vi.mock('electron', () => ({
   },
 }));
 
-// 模拟 App 及其依赖项
+// Mock App and its dependencies
 const mockCheckForUpdates = vi.fn();
 const mockDownloadUpdate = vi.fn();
 const mockInstallNow = vi.fn();
 const mockInstallLater = vi.fn();
+const mockGetUpdaterState = vi.fn();
+const mockSwitchChannel = vi.fn();
+const mockStoreGet = vi.fn();
+const mockStoreSet = vi.fn();
 
 const mockApp = {
+  storeManager: {
+    get: mockStoreGet,
+    set: mockStoreSet,
+  },
   updaterManager: {
     checkForUpdates: mockCheckForUpdates,
     downloadUpdate: mockDownloadUpdate,
+    getUpdaterState: mockGetUpdaterState,
     installNow: mockInstallNow,
     installLater: mockInstallLater,
+    switchChannel: mockSwitchChannel,
   },
 } as unknown as App;
 
@@ -42,6 +57,8 @@ describe('UpdaterCtr', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ipcMainHandleMock.mockClear();
+    mockStoreGet.mockReset();
+    mockStoreSet.mockReset();
     updaterCtr = new UpdaterCtr(mockApp);
   });
 
@@ -73,13 +90,43 @@ describe('UpdaterCtr', () => {
     });
   });
 
-  // 测试错误处理
+  describe('update channel', () => {
+    it('should return stored update channel', async () => {
+      mockStoreGet.mockReturnValueOnce('canary');
+
+      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('canary');
+    });
+
+    it('should return default update channel when store is empty', async () => {
+      mockStoreGet.mockReturnValueOnce(undefined);
+
+      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('stable');
+    });
+
+    it('should keep canary input unchanged', async () => {
+      await updaterCtr.setUpdateChannel('canary');
+
+      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'canary');
+      expect(mockSwitchChannel).toHaveBeenCalledWith('canary');
+    });
+
+    it('should ignore invalid legacy input', async () => {
+      await updaterCtr.setUpdateChannel(
+        'nightly' as unknown as Parameters<UpdaterCtr['setUpdateChannel']>[0],
+      );
+
+      expect(mockStoreSet).not.toHaveBeenCalled();
+      expect(mockSwitchChannel).not.toHaveBeenCalled();
+    });
+  });
+
+  // Test error handling
   describe('error handling', () => {
     it('should handle errors when checking for updates', async () => {
       const error = new Error('Network error');
       mockCheckForUpdates.mockRejectedValueOnce(error);
 
-      // 由于控制器并未明确处理并返回错误，这里我们只验证调用发生且错误正确冒泡
+      // Since the controller does not explicitly handle and return errors, we only verify that the call occurs and the error propagates correctly
       await expect(updaterCtr.checkForUpdates()).rejects.toThrow(error);
     });
 

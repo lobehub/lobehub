@@ -1,32 +1,50 @@
-import {
-  type AgentDocumentPolicy,
-  type DOCUMENT_TEMPLATES,
-  DocumentLoadPosition,
-  type DocumentLoadRules,
-  type DocumentTemplateSet,
-  getDocumentTemplate,
+import type {
+  AgentDocumentPolicy,
+  DOCUMENT_TEMPLATES,
+  DocumentLoadRules,
+  DocumentTemplateSet,
+  PolicyLoad,
 } from '@lobechat/agent-templates';
+import { DocumentLoadPosition, getDocumentTemplate } from '@lobechat/agent-templates';
 import type { LobeChatDatabase } from '@lobechat/database';
 
+import type {
+  AgentDocument,
+  AgentDocumentWithRules,
+  ToolUpdateLoadRule,
+} from '@/database/models/agentDocuments';
 import {
   AgentDocumentModel,
-  type AgentDocumentWithRules,
-  type ToolUpdateLoadRule,
+  buildDocumentFilename,
+  extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
-import { buildDocumentFilename } from '@/database/models/agentDocuments';
+import { TopicDocumentModel } from '@/database/models/topicDocument';
+
+import {
+  type AgentDocumentLiteXMLOperation,
+  applyLiteXMLOperations,
+  createMarkdownEditorSnapshot,
+  exportEditorDataSnapshot,
+} from './agentDocuments/headlessEditor';
+import { DocumentService } from './document';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 
 interface UpsertDocumentParams {
   agentId: string;
   content: string;
+  createdAt?: Date;
   filename: string;
   loadPosition?: DocumentLoadPosition;
   loadRules?: DocumentLoadRules;
   metadata?: Record<string, any>;
   policy?: AgentDocumentPolicy;
+  policyLoad?: PolicyLoad;
   templateId?: string;
+  updatedAt?: Date;
 }
+
+type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
 
 /**
  * Service for managing agent documents with reusable template sets.
@@ -34,25 +52,68 @@ interface UpsertDocumentParams {
  */
 export class AgentDocumentsService {
   private agentDocumentModel: AgentDocumentModel;
+  private documentService: DocumentService;
+  private topicDocumentModel: TopicDocumentModel;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.agentDocumentModel = new AgentDocumentModel(db, userId);
+    this.documentService = new DocumentService(db, userId);
+    this.topicDocumentModel = new TopicDocumentModel(db, userId);
+  }
+
+  private async projectDocumentContent<T extends AgentDocument | AgentDocumentWithRules>(
+    doc: T,
+  ): Promise<T>;
+  private async projectDocumentContent<T extends AgentDocument | AgentDocumentWithRules>(
+    doc: T | undefined,
+  ): Promise<T | undefined>;
+  private async projectDocumentContent<T extends AgentDocument | AgentDocumentWithRules>(
+    doc: T | undefined,
+  ): Promise<T | undefined> {
+    if (!doc?.editorData) return doc;
+
+    try {
+      const snapshot = await exportEditorDataSnapshot({
+        editorData: doc.editorData,
+        fallbackContent: doc.content,
+      });
+
+      return { ...doc, content: snapshot.content };
+    } catch (error) {
+      console.error('[AgentDocumentsService] Failed to project editorData to Markdown:', error);
+      return doc;
+    }
+  }
+
+  private async projectDocuments<T extends AgentDocument | AgentDocumentWithRules>(
+    docs: T[],
+  ): Promise<T[]> {
+    return Promise.all(docs.map((doc) => this.projectDocumentContent(doc)));
+  }
+
+  private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {
+    const snapshot = await exportEditorDataSnapshot({
+      editorData: doc.editorData,
+      fallbackContent: doc.content,
+      litexml: true,
+    });
+
+    return { ...doc, content: snapshot.content, litexml: snapshot.litexml };
   }
 
   private async createWithUniqueFilename(
     agentId: string,
     title: string,
     content: string,
-    loadPosition?: DocumentLoadPosition,
-    loadRules?: DocumentLoadRules,
-    templateId?: string,
-    metadata?: Record<string, any>,
-    policy?: AgentDocumentPolicy,
+    params?: {
+      loadPosition?: DocumentLoadPosition;
+      loadRules?: DocumentLoadRules;
+      metadata?: Record<string, any>;
+      policy?: AgentDocumentPolicy;
+      templateId?: string;
+    },
   ) {
     const baseFilename = buildDocumentFilename(title);
-    const extensionMatch = baseFilename.match(/(\.[^./\\]+)$/);
-    const extension = extensionMatch?.[1] || '.txt';
-    const baseName = baseFilename.slice(0, -extension.length);
 
     let filename = baseFilename;
     let suffix = 2;
@@ -64,20 +125,17 @@ export class AgentDocumentsService {
         );
       }
 
-      filename = `${baseName}-${suffix}${extension}`;
+      filename = `${baseFilename}-${suffix}`;
       suffix += 1;
     }
 
-    return this.agentDocumentModel.create(
-      agentId,
-      filename,
-      content,
-      loadPosition,
-      loadRules,
-      templateId,
-      metadata,
-      policy,
-    );
+    const snapshot = await createMarkdownEditorSnapshot(content);
+
+    return this.agentDocumentModel.create(agentId, filename, snapshot.content, {
+      ...params,
+      editorData: snapshot.editorData,
+      title,
+    });
   }
 
   /**
@@ -90,22 +148,19 @@ export class AgentDocumentsService {
     const templateSet = getDocumentTemplate(templateId);
 
     for (const template of templateSet.templates) {
-      await this.agentDocumentModel.upsert(
+      await this.upsertDocument({
         agentId,
-        template.filename,
-        template.content,
-        template.loadPosition,
-        template.loadRules,
-        templateId,
-        template.metadata,
-        template.policyLoadFormat
-          ? {
-              context: {
-                policyLoadFormat: template.policyLoadFormat,
-              },
-            }
+        content: template.content,
+        filename: template.filename,
+        loadPosition: template.loadPosition,
+        loadRules: template.loadRules,
+        metadata: template.metadata,
+        policy: template.policyLoadFormat
+          ? { context: { policyLoadFormat: template.policyLoadFormat } }
           : undefined,
-      );
+        policyLoad: template.policyLoad,
+        templateId,
+      });
     }
   }
 
@@ -114,22 +169,19 @@ export class AgentDocumentsService {
    */
   async initializeFromCustomTemplate(agentId: string, templateSet: DocumentTemplateSet) {
     for (const template of templateSet.templates) {
-      await this.agentDocumentModel.upsert(
+      await this.upsertDocument({
         agentId,
-        template.filename,
-        template.content,
-        template.loadPosition,
-        template.loadRules,
-        templateSet.id,
-        template.metadata,
-        template.policyLoadFormat
-          ? {
-              context: {
-                policyLoadFormat: template.policyLoadFormat,
-              },
-            }
+        content: template.content,
+        filename: template.filename,
+        loadPosition: template.loadPosition,
+        loadRules: template.loadRules,
+        metadata: template.metadata,
+        policy: template.policyLoadFormat
+          ? { context: { policyLoadFormat: template.policyLoadFormat } }
           : undefined,
-      );
+        policyLoad: template.policyLoad,
+        templateId: templateSet.id,
+      });
     }
   }
 
@@ -167,14 +219,16 @@ export class AgentDocumentsService {
   }
 
   async getAgentDocuments(agentId: string): Promise<AgentDocumentWithRules[]> {
-    return this.agentDocumentModel.findByAgent(agentId);
+    const docs = await this.agentDocumentModel.findByAgent(agentId);
+    return this.projectDocuments(docs);
   }
 
   async getDocumentsByTemplate(
     agentId: string,
     templateId: string,
   ): Promise<AgentDocumentWithRules[]> {
-    return this.agentDocumentModel.findByTemplate(agentId, templateId);
+    const docs = await this.agentDocumentModel.findByTemplate(agentId, templateId);
+    return this.projectDocuments(docs);
   }
 
   async getDocumentsByPolicy(agentId: string, policyId: string): Promise<AgentDocumentWithRules[]> {
@@ -182,11 +236,28 @@ export class AgentDocumentsService {
   }
 
   async getDocument(agentId: string, filename: string) {
-    return this.agentDocumentModel.findByFilename(agentId, filename);
+    const doc = await this.agentDocumentModel.findByFilename(agentId, filename);
+    return this.projectDocumentContent(doc);
   }
 
   async getDocumentById(id: string, expectedAgentId?: string) {
     return this.getDocumentByIdInAgent(id, expectedAgentId);
+  }
+
+  async getDocumentSnapshotById(id: string, expectedAgentId?: string) {
+    const doc = await this.agentDocumentModel.findById(id);
+
+    if (!doc) return undefined;
+    if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
+
+    return this.attachLiteXML(doc);
+  }
+
+  async getDocumentSnapshotByFilename(agentId: string, filename: string) {
+    const doc = await this.agentDocumentModel.findByFilename(agentId, filename);
+    if (!doc) return undefined;
+
+    return this.attachLiteXML(doc);
   }
 
   private async getDocumentByIdInAgent(documentId: string, expectedAgentId?: string) {
@@ -195,7 +266,7 @@ export class AgentDocumentsService {
     if (!doc) return undefined;
     if (expectedAgentId && doc.agentId !== expectedAgentId) return undefined;
 
-    return doc;
+    return this.projectDocumentContent(doc);
   }
 
   async upsertDocument({
@@ -207,21 +278,44 @@ export class AgentDocumentsService {
     templateId,
     metadata,
     policy,
+    policyLoad,
+    createdAt,
+    updatedAt,
   }: UpsertDocumentParams) {
-    return this.agentDocumentModel.upsert(
-      agentId,
-      filename,
-      content,
+    const snapshot = await createMarkdownEditorSnapshot(content);
+
+    return this.agentDocumentModel.upsert(agentId, filename, snapshot.content, {
+      createdAt,
+      editorData: snapshot.editorData,
       loadPosition,
       loadRules,
-      templateId,
       metadata,
       policy,
-    );
+      policyLoad,
+      templateId,
+      updatedAt,
+    });
+  }
+
+  async associateDocument(agentId: string, documentId: string): Promise<{ id: string }> {
+    return this.agentDocumentModel.associate({ agentId, documentId });
   }
 
   async createDocument(agentId: string, title: string, content: string) {
-    return this.createWithUniqueFilename(agentId, title, content);
+    const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
+    const finalTitle = extractedTitle || title;
+    return this.createWithUniqueFilename(agentId, finalTitle, strippedContent);
+  }
+
+  async createForTopic(agentId: string, title: string, content: string, topicId: string) {
+    const doc = await this.createDocument(agentId, title, content);
+
+    await this.topicDocumentModel.associate({
+      documentId: doc.documentId,
+      topicId,
+    });
+
+    return doc;
   }
 
   async deleteDocument(documentId: string) {
@@ -255,19 +349,40 @@ export class AgentDocumentsService {
       currentTime?: Date;
     },
   ): Promise<AgentDocumentWithRules[]> {
-    return this.agentDocumentModel.getInjectableDocuments(agentId, context);
+    const docs = await this.agentDocumentModel.getInjectableDocuments(agentId, context);
+    return this.projectDocuments(docs);
   }
 
   async getDocumentsByPosition(agentId: string) {
-    return this.agentDocumentModel.getDocumentsByPosition(agentId);
+    const grouped = await this.agentDocumentModel.getDocumentsByPosition(agentId);
+    const projected = new Map<DocumentLoadPosition, AgentDocumentWithRules[]>();
+
+    for (const [position, docs] of grouped.entries()) {
+      projected.set(position, await this.projectDocuments(docs));
+    }
+
+    return projected;
   }
 
   async getAgentContext(agentId: string): Promise<string> {
-    return this.agentDocumentModel.getAgentContext(agentId);
+    const docs = await this.getInjectableDocuments(agentId, {});
+
+    if (docs.length === 0) return '';
+
+    const contextParts: string[] = [];
+    for (const doc of docs) {
+      if (doc.content) {
+        contextParts.push(`--- ${doc.filename} ---`);
+        contextParts.push(doc.content);
+        contextParts.push('');
+      }
+    }
+
+    return contextParts.join('\n').trim();
   }
 
   async getDocumentsMap(agentId: string) {
-    const docs = await this.agentDocumentModel.findByAgent(agentId);
+    const docs = await this.getAgentDocuments(agentId);
     return new Map(docs.map((doc) => [doc.filename, doc.content]));
   }
 
@@ -324,6 +439,7 @@ export class AgentDocumentsService {
   async listDocuments(agentId: string) {
     const docs = await this.agentDocumentModel.findByAgent(agentId);
     return docs.map((d) => ({
+      documentId: d.documentId,
       filename: d.filename,
       id: d.id,
       loadPosition: d.policy?.context?.position,
@@ -331,8 +447,27 @@ export class AgentDocumentsService {
     }));
   }
 
+  async listDocumentsForTopic(agentId: string, topicId: string) {
+    const topicDocs = await this.topicDocumentModel.findByTopicId(topicId);
+    const documentIds = topicDocs.map((doc) => doc.id);
+    const docs = await this.agentDocumentModel.findByDocumentIds(agentId, documentIds);
+    const docsByDocumentId = new Map(docs.map((doc) => [doc.documentId, doc]));
+
+    return topicDocs
+      .map((topicDoc) => docsByDocumentId.get(topicDoc.id))
+      .filter((doc): doc is AgentDocumentWithRules => Boolean(doc))
+      .map((doc) => ({
+        documentId: doc.documentId,
+        filename: doc.filename,
+        id: doc.id,
+        loadPosition: doc.policy?.context?.position,
+        title: doc.title,
+      }));
+  }
+
   async getDocumentByFilename(agentId: string, filename: string) {
-    return this.agentDocumentModel.findByFilename(agentId, filename);
+    const doc = await this.agentDocumentModel.findByFilename(agentId, filename);
+    return this.projectDocumentContent(doc);
   }
 
   async upsertDocumentByFilename({
@@ -344,20 +479,67 @@ export class AgentDocumentsService {
     content: string;
     filename: string;
   }) {
-    return this.agentDocumentModel.upsert(agentId, filename, content);
+    const existing = await this.agentDocumentModel.findByFilename(agentId, filename);
+    const projectedExisting = await this.projectDocumentContent(existing);
+    const snapshot = await createMarkdownEditorSnapshot(content);
+
+    if (existing && projectedExisting?.content !== snapshot.content) {
+      await this.documentService.trySaveCurrentDocumentHistory(existing.documentId, 'llm_call');
+    }
+
+    return this.agentDocumentModel.upsert(agentId, filename, snapshot.content, {
+      editorData: snapshot.editorData,
+    });
   }
 
   async editDocumentById(documentId: string, content: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
+    const snapshot = await createMarkdownEditorSnapshot(content);
 
-    await this.agentDocumentModel.update(documentId, content);
-    return this.agentDocumentModel.findById(documentId);
+    if (doc.content !== snapshot.content) {
+      await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
+    }
+
+    await this.agentDocumentModel.update(documentId, {
+      content: snapshot.content,
+      editorData: snapshot.editorData,
+    });
+    return this.getDocumentByIdInAgent(documentId, expectedAgentId);
+  }
+
+  async modifyDocumentNodesById(
+    documentId: string,
+    operations: AgentDocumentLiteXMLOperation[],
+    expectedAgentId?: string,
+  ) {
+    const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
+    if (!doc) return undefined;
+
+    await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
+
+    const snapshot = await applyLiteXMLOperations({
+      editorData: doc.editorData,
+      fallbackContent: doc.content,
+      operations,
+    });
+
+    await this.agentDocumentModel.update(documentId, {
+      content: snapshot.content,
+      editorData: snapshot.editorData,
+    });
+
+    return this.getDocumentByIdInAgent(documentId, expectedAgentId);
   }
 
   async renameDocumentById(documentId: string, newTitle: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
+
+    const title = newTitle.trim();
+    if (title && title !== doc.title) {
+      await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
+    }
 
     return this.agentDocumentModel.rename(documentId, newTitle);
   }

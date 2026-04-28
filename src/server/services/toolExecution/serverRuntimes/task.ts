@@ -1,25 +1,32 @@
-import { TaskIdentifier } from '@lobechat/builtin-tool-task';
+import { normalizeListTasksParams, TaskIdentifier } from '@lobechat/builtin-tool-task';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
   formatTaskCreated,
+  formatTaskDeleted,
   formatTaskDetail,
   formatTaskEdited,
   formatTaskList,
   priorityLabel,
 } from '@lobechat/prompts';
+import type { TaskStatus } from '@lobechat/types';
 
 import { TaskModel } from '@/database/models/task';
+import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
 
 import { type ServerRuntimeRegistration } from './types';
 
-const createTaskRuntime = ({
+export const createTaskRuntime = ({
+  agentId,
   taskId,
+  taskCaller,
   taskModel,
   taskService,
 }: {
+  agentId?: string;
   taskId?: string;
+  taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskModel: TaskModel;
   taskService: TaskService;
 }) => ({
@@ -29,16 +36,9 @@ const createTaskRuntime = ({
     parentIdentifier?: string;
     priority?: number;
     sortOrder?: number;
-    review?: {
-      autoRetry?: boolean;
-      criteria?: Array<{ name: string; threshold: number }>;
-      enabled?: boolean;
-      maxIterations?: number;
-    };
   }) => {
     let parentTaskId: string | undefined;
     let parentLabel: string | undefined;
-    let parentConfig: Record<string, any> | undefined;
 
     if (args.parentIdentifier) {
       const parent = await taskModel.resolve(args.parentIdentifier);
@@ -46,24 +46,11 @@ const createTaskRuntime = ({
         return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
       parentTaskId = parent.id;
       parentLabel = parent.identifier;
-      parentConfig = parent.config as Record<string, any>;
-    } else if (taskId) {
-      parentTaskId = taskId;
-      const current = await taskModel.findById(taskId);
-      parentLabel = current?.identifier || taskId;
-      parentConfig = current?.config as Record<string, any>;
-    }
-
-    // Build config: explicit review > inherited from parent
-    let config: Record<string, any> | undefined;
-    if (args.review) {
-      config = { review: { enabled: true, ...args.review } };
-    } else if (parentConfig?.review) {
-      config = { review: parentConfig.review };
     }
 
     const task = await taskModel.create({
-      ...(config && { config }),
+      assigneeAgentId: agentId,
+      createdByAgentId: agentId,
       instruction: args.instruction,
       name: args.name,
       parentTaskId,
@@ -91,30 +78,26 @@ const createTaskRuntime = ({
     await taskModel.delete(task.id);
 
     return {
-      content: `Task ${task.identifier} "${task.name || ''}" has been deleted.`,
+      content: formatTaskDeleted(task.identifier, task.name),
       success: true,
     };
   },
 
   editTask: async (args: {
-    addDependency?: string;
+    addDependencies?: string[];
+    description?: string;
     identifier: string;
     instruction?: string;
     name?: string;
     priority?: number;
-    removeDependency?: string;
-    review?: {
-      autoRetry?: boolean;
-      criteria?: Array<{ name: string; threshold: number }>;
-      enabled?: boolean;
-      maxIterations?: number;
-    };
+    removeDependencies?: string[];
   }) => {
     const task = await taskModel.resolve(args.identifier);
     if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
     const updateData: Record<string, any> = {};
     const changes: string[] = [];
+    const ops: Promise<unknown>[] = [];
 
     if (args.name !== undefined) {
       updateData.name = args.name;
@@ -124,68 +107,91 @@ const createTaskRuntime = ({
       updateData.instruction = args.instruction;
       changes.push(`instruction updated`);
     }
+    if (args.description !== undefined) {
+      updateData.description = args.description;
+      changes.push('description updated');
+    }
     if (args.priority !== undefined) {
       updateData.priority = args.priority;
       changes.push(`priority → ${priorityLabel(args.priority)}`);
     }
-    if (args.review) {
-      await taskModel.updateTaskConfig(task.id, { review: { enabled: true, ...args.review } });
-      changes.push('review config updated');
-    }
 
     if (Object.keys(updateData).length > 0) {
-      await taskModel.update(task.id, updateData);
+      ops.push(taskModel.update(task.id, updateData));
     }
 
-    // Handle dependencies
-    if (args.addDependency) {
-      const dep = await taskModel.resolve(args.addDependency);
-      if (!dep)
-        return { content: `Dependency task not found: ${args.addDependency}`, success: false };
-      await taskModel.addDependency(task.id, dep.id);
-      changes.push(formatDependencyAdded(task.identifier, dep.identifier));
+    const applyDeps = async (
+      ids: string[],
+      apply: (depId: string) => Promise<unknown>,
+      onChange: (depIdentifier: string) => void,
+    ): Promise<string | undefined> => {
+      const resolved = await Promise.all(
+        ids.map((id) => taskModel.resolve(id).then((r) => ({ id, resolved: r }))),
+      );
+      const missing = resolved.find((r) => !r.resolved);
+      if (missing) return `Dependency task not found: ${missing.id}`;
+
+      await Promise.all(resolved.map(({ resolved: dep }) => apply(dep!.id)));
+      resolved.forEach(({ resolved: dep }) => onChange(dep!.identifier));
+    };
+
+    const depResults: Promise<string | undefined>[] = [];
+    if (args.addDependencies?.length) {
+      depResults.push(
+        applyDeps(
+          args.addDependencies,
+          (depId) => taskModel.addDependency(task.id, depId),
+          (depIdentifier) => changes.push(formatDependencyAdded(task.identifier, depIdentifier)),
+        ),
+      );
+    }
+    if (args.removeDependencies?.length) {
+      depResults.push(
+        applyDeps(
+          args.removeDependencies,
+          (depId) => taskModel.removeDependency(task.id, depId),
+          (depIdentifier) => changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
+        ),
+      );
     }
 
-    if (args.removeDependency) {
-      const dep = await taskModel.resolve(args.removeDependency);
-      if (!dep)
-        return { content: `Dependency task not found: ${args.removeDependency}`, success: false };
-      await taskModel.removeDependency(task.id, dep.id);
-      changes.push(formatDependencyRemoved(task.identifier, dep.identifier));
-    }
+    const [, depErrors] = await Promise.all([Promise.all(ops), Promise.all(depResults)]);
+    const firstDepError = depErrors.find((e) => e);
+    if (firstDepError) return { content: firstDepError, success: false };
 
     return { content: formatTaskEdited(task.identifier, changes), success: true };
   },
 
-  listTasks: async (args: { parentIdentifier?: string; status?: string }) => {
-    let parentId: string | undefined;
-    let parentLabel = 'current task';
+  listTasks: async (args: {
+    assigneeAgentId?: string;
+    limit?: number;
+    offset?: number;
+    parentIdentifier?: string;
+    priorities?: number[];
+    statuses?: TaskStatus[];
+  }) => {
+    const normalized = normalizeListTasksParams(args, {
+      currentAgentId: agentId,
+    });
 
-    if (args.parentIdentifier) {
-      const parent = await taskModel.resolve(args.parentIdentifier);
-      if (!parent)
-        return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
-      parentId = parent.id;
-      parentLabel = parent.identifier;
-    } else {
-      parentId = taskId;
+    try {
+      const result = await taskCaller.list(normalized.query);
+
+      return {
+        content: formatTaskList(result.data, normalized.displayFilters),
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to list tasks';
+
+      return {
+        content: `Failed to list tasks: ${message}`,
+        success: false,
+      };
     }
-
-    if (!parentId) return { content: 'No task context available.', success: false };
-
-    const subtasks = await taskModel.findSubtasks(parentId);
-    let filtered = subtasks;
-    if (args.status) {
-      filtered = subtasks.filter((t) => t.status === args.status);
-    }
-
-    return {
-      content: formatTaskList(filtered, parentLabel, args.status),
-      success: true,
-    };
   },
 
-  updateTaskStatus: async (args: { identifier?: string; status: string }) => {
+  updateTaskStatus: async (args: { error?: string; identifier?: string; status: TaskStatus }) => {
     const id = args.identifier || taskId;
     if (!id) {
       return {
@@ -194,16 +200,28 @@ const createTaskRuntime = ({
       };
     }
 
-    const task = await taskModel.resolve(id);
-    if (!task) return { content: `Task not found: ${id}`, success: false };
+    try {
+      const result = await taskCaller.updateStatus({
+        error: args.error,
+        id,
+        status: args.status,
+      });
 
-    const updated = await taskModel.updateStatus(task.id, args.status);
-    if (!updated) return { content: `Failed to update task ${task.identifier}`, success: false };
+      return {
+        content:
+          args.status === 'failed' && args.error
+            ? `Task ${result.data.identifier} status updated to failed. Error: ${args.error}`
+            : `Task ${result.data.identifier} status updated to ${args.status}.`,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update task status';
 
-    return {
-      content: `Task ${task.identifier} status updated to ${args.status}.`,
-      success: true,
-    };
+      return {
+        content: `Failed to update task status: ${message}`,
+        success: false,
+      };
+    }
   },
 
   viewTask: async (args: { identifier?: string }) => {
@@ -233,8 +251,15 @@ export const taskRuntime: ServerRuntimeRegistration = {
 
     const taskModel = new TaskModel(context.serverDB, context.userId);
     const taskService = new TaskService(context.serverDB, context.userId);
+    const taskCaller = taskRouter.createCaller({ userId: context.userId });
 
-    return createTaskRuntime({ taskId: context.taskId, taskModel, taskService });
+    return createTaskRuntime({
+      agentId: context.agentId,
+      taskCaller,
+      taskId: context.taskId,
+      taskModel,
+      taskService,
+    });
   },
   identifier: TaskIdentifier,
 };

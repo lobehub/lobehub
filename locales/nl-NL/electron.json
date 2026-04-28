@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "Tabbladen links sluiten",
   "tab.closeOtherTabs": "Andere tabbladen sluiten",
   "tab.closeRightTabs": "Tabbladen rechts sluiten",
+  "tab.newTab": "Nieuw tabblad",
+  "tab.running": "Agent wordt uitgevoerd",
+  "tab.unread": "Nieuw bericht",
   "updater.checkingUpdate": "Controleren op updates",
   "updater.checkingUpdateDesc": "Versie-informatie wordt opgehaald...",
   "updater.downloadNewVersion": "Nieuwe versie downloaden",
@@ -133,5 +136,7 @@
   "window.close": "Venster sluiten",
   "window.maximize": "Venster maximaliseren",
   "window.minimize": "Venster minimaliseren",
-  "window.restore": "Venster herstellen"
+  "window.pinToTop": "Vastmaken bovenaan",
+  "window.restore": "Venster herstellen",
+  "window.unpinFromTop": "Losmaken van bovenaan"
 }

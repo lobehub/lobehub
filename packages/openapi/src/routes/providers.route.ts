@@ -18,7 +18,7 @@ const ProviderRoutes = new Hono();
 ProviderRoutes.get(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_READ'), '您没有权限查看 Provider 列表'),
+  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_READ'), 'You do not have permission to view provider list'),
   zValidator('query', ProviderListQuerySchema),
   (c) => {
     const controller = new ProviderController();
@@ -29,7 +29,7 @@ ProviderRoutes.get(
 ProviderRoutes.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_READ'), '您没有权限查看 Provider 详情'),
+  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_READ'), 'You do not have permission to view provider details'),
   zValidator('param', ProviderIdParamSchema),
   (c) => {
     const controller = new ProviderController();
@@ -40,7 +40,7 @@ ProviderRoutes.get(
 ProviderRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_CREATE'), '您没有权限创建 Provider'),
+  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_CREATE'), 'You do not have permission to create a provider'),
   zValidator('json', CreateProviderRequestSchema),
   (c) => {
     const controller = new ProviderController();
@@ -51,7 +51,7 @@ ProviderRoutes.post(
 ProviderRoutes.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_UPDATE'), '您没有权限更新 Provider'),
+  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_UPDATE'), 'You do not have permission to update a provider'),
   zValidator('param', ProviderIdParamSchema),
   zValidator('json', UpdateProviderRequestSchema),
   (c) => {
@@ -63,7 +63,7 @@ ProviderRoutes.patch(
 ProviderRoutes.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_DELETE'), '您没有权限删除 Provider'),
+  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_DELETE'), 'You do not have permission to delete a provider'),
   zValidator('param', ProviderIdParamSchema),
   (c) => {
     const controller = new ProviderController();

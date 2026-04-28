@@ -1,22 +1,20 @@
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
+import { getStableNavigate } from '@/utils/stableNavigate';
 
 type Setter = StoreSetter<HomeStore>;
 export const createGroupSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
   new GroupActionImpl(set, get, _api);
 
 export class GroupActionImpl {
-  readonly #get: () => HomeStore;
-
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
     void set;
-    this.#get = get;
+    void get;
   }
 
   switchToGroup = (groupId: string): void => {
-    const { navigate } = this.#get();
-    navigate?.(`/group/${groupId}`);
+    getStableNavigate()?.(`/group/${groupId}`);
   };
 }
 

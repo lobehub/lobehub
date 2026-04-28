@@ -1,3 +1,4 @@
+import type { LobeAgentChatConfig } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as aiInfraStore from '@/store/aiInfra';
@@ -7,6 +8,10 @@ import { resolveModelExtendParams } from './modelParamsResolver';
 
 describe('resolveModelExtendParams', () => {
   const mockAiInfraStoreState = { someState: true };
+  const createChatConfig = (config: Partial<LobeAgentChatConfig> = {}): LobeAgentChatConfig => ({
+    autoCreateTopicThreshold: 2,
+    ...config,
+  });
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -122,6 +127,96 @@ describe('resolveModelExtendParams', () => {
         expect(result.thinking).toEqual({
           budget_tokens: 0,
           type: 'disabled',
+        });
+      });
+
+      it('should use model default for enableReasoning when chat config is unset', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig(),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'enabled',
+        });
+      });
+
+      it('should allow explicit chat config to override model enableReasoning default', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig({
+            enableReasoning: false,
+          }),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'disabled',
+        });
+      });
+
+      it('should preserve legacy thinking disabled when enableReasoning is unset', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig({
+            thinking: 'disabled',
+          }),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'disabled',
+        });
+      });
+
+      it('should preserve legacy thinking enabled when enableReasoning is unset', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: false,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig({
+            thinking: 'enabled',
+          }),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'enabled',
         });
       });
     });
@@ -334,6 +429,39 @@ describe('resolveModelExtendParams', () => {
         expect(result.reasoning_effort).toBe('high');
       });
     });
+
+    describe('deepseekV4ReasoningEffort param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'deepseekV4ReasoningEffort',
+        ]);
+      });
+
+      it('should set reasoning_effort for deepseek-v4 variant', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            deepseekV4ReasoningEffort: 'max',
+          } as any,
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.reasoning_effort).toBe('max');
+      });
+
+      it('should not set reasoning_effort when deepseekV4ReasoningEffort is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.reasoning_effort).toBeUndefined();
+      });
+    });
   });
 
   describe('text verbosity', () => {
@@ -479,7 +607,7 @@ describe('resolveModelExtendParams', () => {
           provider: 'provider',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
       });
     });
 
@@ -498,7 +626,7 @@ describe('resolveModelExtendParams', () => {
           chatConfig: {
             thinkingLevel2: 'low',
           } as any,
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3.1-pro-preview',
           provider: 'google',
         });
 
@@ -508,23 +636,11 @@ describe('resolveModelExtendParams', () => {
       it('should not set thinkingLevel when thinkingLevel2 is not configured', () => {
         const result = resolveModelExtendParams({
           chatConfig: {} as any,
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3.1-pro-preview',
           provider: 'google',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
-      });
-
-      it('should not read from thinkingLevel config key', () => {
-        const result = resolveModelExtendParams({
-          chatConfig: {
-            thinkingLevel: 'high',
-          } as any,
-          model: 'gemini-3-pro-preview',
-          provider: 'google',
-        });
-
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
       });
     });
 
@@ -557,19 +673,134 @@ describe('resolveModelExtendParams', () => {
           provider: 'google',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
+      });
+    });
+
+    describe('thinkingLevel4 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel4',
+        ]);
       });
 
-      it('should not read from thinkingLevel config key', () => {
+      it('should set thinkingLevel from thinkingLevel4 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel4: 'minimal',
+          } as any,
+          model: 'gemini-3.1-flash-image-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
+      });
+
+      it('should use the default thinkingLevel when thinkingLevel4 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-flash-image-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
+      });
+    });
+
+    describe('thinkingLevel5 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel5',
+        ]);
+      });
+
+      it('should set thinkingLevel from thinkingLevel5 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel5: 'medium',
+          } as any,
+          model: 'gemini-3.1-flash-lite-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('medium');
+      });
+
+      it('should use the default thinkingLevel when thinkingLevel5 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-flash-lite-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
+      });
+    });
+
+    describe('thinkingLevel selection order', () => {
+      it('should use the first configured thinkingLevel* extend param in modelExtendParams order', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel',
+          'thinkingLevel3',
+        ]);
+
         const result = resolveModelExtendParams({
           chatConfig: {
             thinkingLevel: 'high',
+            thinkingLevel3: 'medium',
           } as any,
           model: 'gemini-3.1-pro-preview',
           provider: 'google',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
+      });
+
+      it('should prefer the first configured thinkingLevel param before defaulting', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel',
+          'thinkingLevel3',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel3: 'medium',
+          } as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('medium');
+      });
+
+      it('should fall back to the first supported thinkingLevel default when none are configured', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel4',
+          'thinkingLevel3',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
       });
     });
   });
@@ -1141,7 +1372,7 @@ describe('resolveModelExtendParams', () => {
         expect(result.reasoning_effort).toBeUndefined();
         expect(result.verbosity).toBeUndefined();
         expect(result.thinkingBudget).toBeUndefined();
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
         expect(result.urlContext).toBeUndefined();
         expect(result.imageAspectRatio).toBeUndefined();
         expect(result.imageResolution).toBeUndefined();

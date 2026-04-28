@@ -1,16 +1,16 @@
+import { ChatInput } from '@lobehub/editor/react';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
 import InterventionContent from './InterventionContent';
 import InterventionTabBar from './InterventionTabBar';
-import { useStyles } from './style';
+import { styles } from './style';
 
 interface InterventionBarProps {
   interventions: PendingIntervention[];
 }
 
 const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
-  const { styles } = useStyles();
   const [activeId, setActiveId] = useState<string | null>(null);
 
   // Derive the active index from the stored toolCallId.
@@ -34,7 +34,7 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
   if (!activeIntervention) return null;
 
   return (
-    <div className={styles.container}>
+    <ChatInput className={styles.container} maxHeight={'50vh' as any} resize={false}>
       {interventions.length > 1 && (
         <InterventionTabBar
           activeIndex={activeIndex}
@@ -43,7 +43,7 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
         />
       )}
       <InterventionContent intervention={activeIntervention} key={activeIntervention.toolCallId} />
-    </div>
+    </ChatInput>
   );
 });
 

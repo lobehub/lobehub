@@ -15,7 +15,14 @@ export interface RunCommandOptions {
 }
 
 export async function runCommand(
-  { command, cwd, description, run_in_background, timeout = 120_000 }: RunCommandParams,
+  {
+    command,
+    cwd,
+    description,
+    env: extraEnv,
+    run_in_background,
+    timeout = 120_000,
+  }: RunCommandParams,
   { processManager, logger }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
@@ -23,13 +30,14 @@ export async function runCommand(
 
   const effectiveTimeout = Math.min(Math.max(timeout, 1000), 600_000);
   const shellConfig = getShellConfig(command);
+  const childEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
 
   try {
     if (run_in_background) {
       const shellId = randomUUID();
       const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
         cwd,
-        env: process.env,
+        env: childEnv,
         shell: false,
       });
 
@@ -61,7 +69,7 @@ export async function runCommand(
       return new Promise<RunCommandResult>((resolve) => {
         const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
           cwd,
-          env: process.env,
+          env: childEnv,
           shell: false,
         });
 

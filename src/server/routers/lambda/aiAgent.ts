@@ -1,7 +1,7 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { ThreadStatus, ThreadType, UserInterventionConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -18,6 +18,54 @@ import { AiChatService } from '@/server/services/aiChat';
 import { nanoid } from '@/utils/uuid';
 
 const log = debug('lobe-server:ai-agent-router');
+
+const extractTaskErrorMessage = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+
+  const taskError = error as Record<string, any>;
+  const candidates = [
+    taskError.body?.error?.message,
+    taskError.body?.message,
+    taskError.error?.error?.message,
+    taskError.error?.message,
+    taskError.message,
+    taskError.type,
+    taskError.errorType,
+    taskError.name,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate !== '[object Object]' && candidate !== 'error') {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
+const formatTaskError = (error: unknown): Record<string, unknown> | undefined => {
+  if (!error) return undefined;
+
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+    };
+  }
+
+  if (typeof error === 'string') {
+    return { message: error };
+  }
+
+  if (typeof error !== 'object') {
+    return { message: String(error) };
+  }
+
+  const taskError = error as Record<string, unknown>;
+  const message = extractTaskErrorMessage(error);
+
+  return message ? { ...taskError, message } : taskError;
+};
 
 // Zod schemas for agent operation
 const CreateAgentOperationSchema = z.object({
@@ -43,7 +91,7 @@ const GetOperationStatusSchema = z.object({
 });
 
 const ProcessHumanInterventionSchema = z.object({
-  action: z.enum(['approve', 'reject', 'input', 'select']),
+  action: z.enum(['approve', 'reject', 'reject_continue', 'input', 'select']),
   data: z
     .object({
       approvedToolCall: z.any().optional(),
@@ -54,6 +102,13 @@ const ProcessHumanInterventionSchema = z.object({
   operationId: z.string(),
   reason: z.string().optional(),
   stepIndex: z.number().optional().default(0),
+  /**
+   * ID of the pending `role='tool'` message targeted by this intervention.
+   * Required for approve / reject / reject_continue so the server can update
+   * the message's intervention status, content, and — on approve — hand the
+   * id to the `call_tool` short-circuit via `skipCreateToolMessage`.
+   */
+  toolMessageId: z.string().optional(),
 });
 
 const GetPendingInterventionsSchema = z
@@ -82,6 +137,7 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        documentId: z.string().optional().nullable(),
         groupId: z.string().optional().nullable(),
         scope: z.string().optional().nullable(),
         sessionId: z.string().optional(),
@@ -91,12 +147,48 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Runtime of the client initiating this request.
+     * 'desktop' enables `executor: 'client'` tools (local-system, stdio MCP)
+     * to be dispatched over the Agent Gateway WS.
+     */
+    clientRuntime: z.enum(['desktop', 'web']).optional(),
+    /** Explicit device ID to bind to the topic and activate for this run */
+    deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
+    /** File IDs of already-uploaded attachments to attach to the new user message */
+    fileIds: z.array(z.string()).optional(),
+    /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
+    parentMessageId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
+    /**
+     * Resume a previous op paused on `human_approve_required`. When set, the
+     * new op writes the decision to the target tool message and either runs
+     * the approved tool (`approved`), halts with reason=`human_rejected`
+     * (`rejected`), or surfaces the rejection as user feedback so the LLM
+     * can continue (`rejected_continue`).
+     */
+    resumeApproval: z
+      .object({
+        decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+        /** ID of the pending `role='tool'` message this decision targets. */
+        parentMessageId: z.string(),
+        /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+        rejectionReason: z.string().optional(),
+        /** tool_call_id of the pending tool call being approved/rejected. */
+        toolCallId: z.string(),
+      })
+      .optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
+    /**
+     * User intervention configuration for tool approvals.
+     * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
+     * so tool calls auto-execute without waiting for human approval.
+     */
+    userInterventionConfig: UserInterventionConfigSchema.optional(),
   })
   .refine((data) => data.agentId || data.slug, {
     message: 'Either agentId or slug must be provided',
@@ -518,7 +610,20 @@ export const aiAgentRouter = router({
     }),
 
   execAgent: aiAgentProcedure.input(ExecAgentSchema).mutation(async ({ input, ctx }) => {
-    const { agentId, slug, prompt, appContext, autoStart = true, existingMessageIds = [] } = input;
+    const {
+      agentId,
+      slug,
+      prompt,
+      appContext,
+      autoStart = true,
+      clientRuntime,
+      deviceId,
+      existingMessageIds = [],
+      fileIds,
+      parentMessageId,
+      resumeApproval,
+      userInterventionConfig,
+    } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
 
@@ -527,9 +632,18 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        clientRuntime,
+        deviceId,
         existingMessageIds,
+        fileIds,
+        parentMessageId,
         prompt,
+        // When parentMessageId is provided, this is a regeneration/continue or a
+        // human-approval resume — either way, skip user message creation.
+        resume: !!parentMessageId,
+        resumeApproval,
         slug,
+        userInterventionConfig,
       });
     } catch (error: any) {
       console.error('execAgent failed: %O', error);
@@ -567,15 +681,28 @@ export const aiAgentRouter = router({
       task: (typeof tasks)[number],
       taskIndex: number,
     ): Promise<TaskResult> => {
-      const { agentId, slug, prompt, appContext, autoStart = true, existingMessageIds = [] } = task;
+      const {
+        agentId,
+        slug,
+        prompt,
+        appContext,
+        autoStart = true,
+        deviceId,
+        existingMessageIds = [],
+        parentMessageId,
+      } = task;
 
       try {
         const result = await ctx.aiAgentService.execAgent({
           agentId,
           appContext,
           autoStart,
+          deviceId,
           existingMessageIds,
+          parentMessageId,
           prompt,
+          // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
+          resume: !!parentMessageId,
           slug,
         });
 
@@ -857,13 +984,8 @@ export const aiAgentRouter = router({
 
             log('getSubAgentTaskStatus: marked thread %s as completed', threadId);
           } else if (realtimeStatus.hasError || redisState.status === 'error') {
-            // Format error properly to avoid [object Object] in serialization
-            const errorObj = redisState.error as any;
-            const formattedError = errorObj
-              ? typeof errorObj === 'object' && 'message' in errorObj
-                ? { message: errorObj.message, ...errorObj }
-                : { message: String(errorObj) }
-              : undefined;
+            // Normalize nested runtime errors so task metadata keeps a readable message.
+            const formattedError = formatTaskError(redisState.error);
 
             updatedMetadata.error = formattedError;
             updatedMetadata.completedAt = new Date().toISOString();
@@ -904,7 +1026,7 @@ export const aiAgentRouter = router({
       const updatedTaskStatus = threadStatusToTaskStatus[updatedStatus] || 'processing';
 
       if (updatedTaskStatus === 'failed') {
-        console.error('getSubAgentTaskStatus: failed task metadata for thread %s: %O', threadId, {
+        log('getSubAgentTaskStatus: returning failed task status for thread %s: %O', threadId, {
           updatedMetadata,
           error: updatedMetadata?.error,
           updatedStatus,
@@ -1029,7 +1151,7 @@ export const aiAgentRouter = router({
   processHumanIntervention: aiAgentProcedure
     .input(ProcessHumanInterventionSchema)
     .mutation(async ({ input, ctx }) => {
-      const { operationId, action, data, reason, stepIndex } = input;
+      const { operationId, action, data, reason, stepIndex, toolMessageId } = input;
 
       log(`Processing ${action} for operation ${operationId}`);
 
@@ -1038,6 +1160,7 @@ export const aiAgentRouter = router({
         action,
         operationId,
         stepIndex,
+        toolMessageId,
       };
 
       switch (action) {
@@ -1049,10 +1172,16 @@ export const aiAgentRouter = router({
             });
           }
           interventionParams.approvedToolCall = data.approvedToolCall;
+          // toolMessageId is required for the server to persist the
+          // intervention + short-circuit into call_tool; the handler itself
+          // no-ops when missing, so keep the schema permissive for legacy
+          // callers that haven't been updated yet.
           break;
         }
-        case 'reject': {
+        case 'reject':
+        case 'reject_continue': {
           interventionParams.rejectionReason = reason || 'Tool call rejected by user';
+          interventionParams.rejectAndContinue = action === 'reject_continue';
           break;
         }
         case 'input': {
@@ -1204,5 +1333,28 @@ export const aiAgentRouter = router({
           message: `Failed to update client task thread status: ${error.message}`,
         });
       }
+    }),
+
+  /**
+   * Refresh Gateway JWT token for an existing operation.
+   * Used when reconnecting after page reload (original token expired).
+   */
+  refreshGatewayToken: aiAgentProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      // Verify the topic belongs to this user and has a running operation
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic?.metadata?.runningOperation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No running operation found on this topic',
+        });
+      }
+
+      const { signUserJWT } = await import('@/libs/trpc/utils/internalJwt');
+      const token = await signUserJWT(ctx.userId);
+
+      return { token };
     }),
 });

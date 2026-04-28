@@ -9,11 +9,42 @@ import { slack } from './slack/definition';
 import { telegram } from './telegram/definition';
 import { wechat } from './wechat/definition';
 
+export {
+  allowFromField,
+  type BotReplyLocale,
+  displayToolCallsField,
+  type DmDecision,
+  type DmPolicy,
+  type DmSettings,
+  extractDmSettings,
+  extractGroupSettings,
+  extractUserAllowlist,
+  getBotReplyLocale,
+  getStepReactionEmoji,
+  type GroupPolicy,
+  type GroupSettings,
+  makeDmPolicyField,
+  makeGroupPolicyFields,
+  normalizeAllowFromEntries,
+  normalizeBotReplyLocale,
+  RECEIVED_REACTION_EMOJI,
+  serverIdField,
+  shouldAllowSender,
+  shouldHandleDm,
+  shouldHandleGroup,
+  THINKING_REACTION_EMOJI,
+  type UserAllowlist,
+  userIdField,
+  validateAccessSettings,
+  WORKING_REACTION_EMOJI,
+} from './const';
 export { PlatformRegistry } from './registry';
 export type {
   BotPlatformRedisClient,
   BotPlatformRuntimeContext,
   BotProviderConfig,
+  ConnectionMode,
+  ExtractFilesResult,
   FieldSchema,
   PlatformClient,
   PlatformDefinition,
@@ -24,14 +55,18 @@ export type {
   ValidationResult,
 } from './types';
 export { ClientFactory } from './types';
+export type { ProviderConfigInput, ResolvedBotProviderConfig } from './utils';
 export {
   buildRuntimeKey,
   extractDefaults,
   formatDuration,
   formatTokens,
   formatUsageStats,
+  getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
+  resolveBotProviderConfig,
+  resolveConnectionMode,
 } from './utils';
 
 // --------------- Platform definitions ---------------

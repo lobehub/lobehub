@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_OPERATION_STATE } from '../types/operation';
+import { DEFAULT_MESSAGE_OPERATION_STATE, DEFAULT_OPERATION_STATE } from '../types/operation';
 import { type State } from './initialState';
 import { conversationSelectors } from './selectors';
 
@@ -228,6 +228,87 @@ describe('conversationSelectors', () => {
 
         const hookSelector = conversationSelectors.hook('onBeforeSendMessage');
         expect(hookSelector(store)).toBeUndefined();
+      });
+    });
+  });
+
+  describe('Message State Selectors', () => {
+    describe('isMessageGenerating', () => {
+      it('only checks the requested message id', () => {
+        const store = createMockState({
+          displayMessages: [
+            {
+              children: [
+                { content: 'first', id: 'block-1' },
+                { content: 'second', id: 'block-2' },
+              ],
+              content: '',
+              id: 'group-1',
+              role: 'assistantGroup',
+            } as any,
+          ],
+          operationState: {
+            ...DEFAULT_OPERATION_STATE,
+            getMessageOperationState: (messageId) => ({
+              ...DEFAULT_MESSAGE_OPERATION_STATE,
+              isGenerating: messageId === 'block-2',
+            }),
+          },
+        });
+
+        expect(conversationSelectors.isMessageGenerating('group-1')(store)).toBe(false);
+      });
+    });
+
+    describe('isAssistantGroupItemGenerating', () => {
+      it('returns true for an assistantGroup when any child block is generating', () => {
+        const store = createMockState({
+          displayMessages: [
+            {
+              children: [
+                { content: 'first', id: 'block-1' },
+                { content: 'second', id: 'block-2' },
+              ],
+              content: '',
+              id: 'group-1',
+              role: 'assistantGroup',
+            } as any,
+          ],
+          operationState: {
+            ...DEFAULT_OPERATION_STATE,
+            getMessageOperationState: (messageId) => ({
+              ...DEFAULT_MESSAGE_OPERATION_STATE,
+              isGenerating: messageId === 'block-2',
+            }),
+          },
+        });
+
+        expect(conversationSelectors.isAssistantGroupItemGenerating('group-1')(store)).toBe(true);
+      });
+
+      it('returns true for a child block when its assistantGroup is generating', () => {
+        const store = createMockState({
+          displayMessages: [
+            {
+              children: [
+                { content: 'first', id: 'block-1' },
+                { content: 'second', id: 'block-2' },
+              ],
+              content: '',
+              id: 'group-1',
+              role: 'assistantGroup',
+            } as any,
+          ],
+          operationState: {
+            ...DEFAULT_OPERATION_STATE,
+            getMessageOperationState: (messageId) => ({
+              ...DEFAULT_MESSAGE_OPERATION_STATE,
+              isGenerating: messageId === 'group-1',
+            }),
+          },
+        });
+
+        expect(conversationSelectors.isAssistantGroupItemGenerating('block-2')(store)).toBe(true);
       });
     });
   });

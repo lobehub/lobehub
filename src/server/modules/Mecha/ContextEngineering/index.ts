@@ -1,3 +1,4 @@
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { MessagesEngine } from '@lobechat/context-engine';
 import { type OpenAIChatMessage } from '@lobechat/types';
 
@@ -58,9 +59,11 @@ export const serverMessagesEngine = async ({
   historyCount,
   historySummary,
   formatHistorySummary,
+  initialContext,
   knowledge,
   agentDocuments,
   skillsConfig,
+  toolDiscoveryConfig,
   toolsConfig,
   capabilities,
   userMemory,
@@ -69,6 +72,7 @@ export const serverMessagesEngine = async ({
   discordContext,
   evalContext,
   agentManagementContext,
+  onboardingContext,
   pageContentContext,
   topicReferences,
   additionalVariables,
@@ -99,6 +103,8 @@ export const serverMessagesEngine = async ({
 
     inputTemplate,
 
+    initialContext,
+
     // Knowledge injection
     knowledge: {
       fileContents: knowledge?.fileContents,
@@ -119,7 +125,11 @@ export const serverMessagesEngine = async ({
     timezone: userTimezone,
 
     // Tools configuration
+    toolDiscoveryConfig,
     toolsConfig: {
+      disabledToolIdentifiers:
+        toolsConfig?.disabledToolIdentifiers ??
+        (toolsConfig?.tools?.includes(PageAgentIdentifier) ? undefined : [PageAgentIdentifier]),
       manifests: toolsConfig?.manifests,
       tools: toolsConfig?.tools,
     },
@@ -152,6 +162,7 @@ export const serverMessagesEngine = async ({
     ...(botPlatformContext && { botPlatformContext }),
     ...(discordContext && { discordContext }),
     ...(evalContext && { evalContext }),
+    ...(onboardingContext && { onboardingContext }),
     ...(agentManagementContext && { agentManagementContext }),
     ...(pageContentContext && { pageContentContext }),
   });

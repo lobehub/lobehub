@@ -6,12 +6,12 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import type {
-  BotPlatformRuntimeContext,
-  BotProviderConfig,
-  PlatformDefinition,
+import type { BotPlatformRuntimeContext } from '@/server/services/bot/platforms';
+import {
+  platformRegistry,
+  resolveBotProviderConfig,
+  resolveConnectionMode,
 } from '@/server/services/bot/platforms';
-import { platformRegistry } from '@/server/services/bot/platforms';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
 const log = debug('lobe-server:bot:gateway:cron');
@@ -28,12 +28,6 @@ const waitUntil = (task: Promise<unknown>) => {
   after(() => task);
 };
 
-function getGatewayPlatforms(): PlatformDefinition[] {
-  return platformRegistry
-    .listPlatforms()
-    .filter((platform) => (platform.connectionMode ?? 'webhook') === 'persistent');
-}
-
 function createRuntimeContext(): BotPlatformRuntimeContext {
   return {
     appUrl: process.env.APP_URL,
@@ -45,21 +39,23 @@ function createGatewayBot(
   platform: string,
   applicationId: string,
   credentials: Record<string, string>,
+  settings: Record<string, unknown> | null | undefined,
 ) {
-  const config: BotProviderConfig = {
+  const definition = platformRegistry.getPlatform(platform);
+  if (!definition) {
+    throw new Error(`Unsupported platform: ${platform}`);
+  }
+
+  const { config } = resolveBotProviderConfig(definition, {
     applicationId,
     credentials,
-    platform,
-    settings: {},
-  };
+    settings,
+  });
 
   return platformRegistry.createClient(platform, config, createRuntimeContext());
 }
 
-async function processConnectQueue(
-  remainingMs: number,
-  gatewayPlatformIds: Set<string>,
-): Promise<number> {
+async function processConnectQueue(remainingMs: number): Promise<number> {
   const queue = new BotConnectQueue();
   const items = await queue.popAll();
 
@@ -73,8 +69,9 @@ async function processConnectQueue(
 
   for (const item of items) {
     try {
-      if (!gatewayPlatformIds.has(item.platform)) {
-        log('Skipping queued non-gateway platform=%s appId=%s', item.platform, item.applicationId);
+      const definition = platformRegistry.getPlatform(item.platform);
+      if (!definition) {
+        log('Skipping queued unknown platform=%s appId=%s', item.platform, item.applicationId);
         await queue.remove(item.platform, item.applicationId);
         continue;
       }
@@ -88,7 +85,23 @@ async function processConnectQueue(
         continue;
       }
 
-      const bot = createGatewayBot(item.platform, provider.applicationId, provider.credentials);
+      const effectiveMode = resolveConnectionMode(definition, provider.settings);
+      if (effectiveMode === 'webhook') {
+        log(
+          'Skipping queued webhook-mode provider platform=%s appId=%s',
+          item.platform,
+          item.applicationId,
+        );
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
+
+      const bot = createGatewayBot(
+        item.platform,
+        provider.applicationId,
+        provider.credentials,
+        provider.settings,
+      );
 
       await bot.start({
         durationMs: remainingMs,
@@ -118,8 +131,18 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const platforms = getGatewayPlatforms();
-  const gatewayPlatformIds = new Set(platforms.map((platform) => platform.id));
+  // When the external message gateway is enabled, sync connections via gateway.
+  if (process.env.MESSAGE_GATEWAY_URL && process.env.MESSAGE_GATEWAY_SERVICE_TOKEN) {
+    const { GatewayService } = await import('@/server/services/gateway');
+    const service = new GatewayService();
+
+    if (service.useMessageGateway) {
+      await service.ensureRunning();
+      return Response.json({ ensureRunning: true });
+    }
+  }
+
+  const platforms = platformRegistry.listPlatforms();
 
   const serverDB = await getServerDB();
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -138,13 +161,24 @@ export async function GET(request: NextRequest) {
     log('Found %d enabled %s providers', providers.length, platform.name);
 
     let platformStarted = 0;
-    total += providers.length;
+    let platformTotal = 0;
 
     for (const provider of providers) {
-      const { applicationId, credentials } = provider;
+      const { applicationId, credentials, settings } = provider;
+
+      // Per-provider mode overrides the platform default. Webhook providers
+      // never need a persistent listener even if the platform default is gateway.
+      const effectiveMode = resolveConnectionMode(platform, settings);
+      if (effectiveMode === 'webhook') {
+        log('Skipping webhook-mode provider platform=%s appId=%s', platform.id, applicationId);
+        continue;
+      }
+
+      platformTotal++;
+      total++;
 
       try {
-        const bot = createGatewayBot(platform.id, applicationId, credentials);
+        const bot = createGatewayBot(platform.id, applicationId, credentials, settings);
 
         await bot.start({
           durationMs: GATEWAY_DURATION_MS,
@@ -164,10 +198,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    stats.push({ platform: platform.id, started: platformStarted, total: providers.length });
+    stats.push({ platform: platform.id, started: platformStarted, total: platformTotal });
   }
 
-  const queued = await processConnectQueue(GATEWAY_DURATION_MS, gatewayPlatformIds);
+  const queued = await processConnectQueue(GATEWAY_DURATION_MS);
 
   after(async () => {
     const pollEnd = Date.now() + GATEWAY_DURATION_MS;
@@ -177,7 +211,7 @@ export async function GET(request: NextRequest) {
       if (Date.now() >= pollEnd) break;
 
       const remainingMs = pollEnd - Date.now();
-      await processConnectQueue(remainingMs, gatewayPlatformIds);
+      await processConnectQueue(remainingMs);
     }
   });
 

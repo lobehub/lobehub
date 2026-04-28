@@ -2,6 +2,7 @@ import type {
   ActivatedStepSkill,
   ActivatedStepTool,
   OperationToolSet,
+  ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
@@ -122,6 +123,9 @@ export interface AgentState {
   stepCount: number;
 
   systemRole?: string;
+  /** Tool executor map for routing tool execution between server and client */
+  toolExecutorMap?: Record<string, ToolExecutor>;
+
   toolManifestMap: Record<string, any>;
 
   tools?: any[];
@@ -151,6 +155,12 @@ export interface ToolsCalling {
     name: string; // A JSON string of arguments
   };
   id: string;
+  /**
+   * Gemini 3.x thought signature, captured from `functionCall.thoughtSignature` in the
+   * streaming response. Must be round-tripped back in subsequent requests or Gemini will
+   * 400 with a misleading "ordering" error. Optional; only set for Gemini 3.x tool calls.
+   */
+  thoughtSignature?: string;
   type: 'function';
 }
 

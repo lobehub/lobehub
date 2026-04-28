@@ -539,7 +539,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       ]);
     });
 
-    it('should boost current agent topics in relevance', async () => {
+    it('should only return topics of the current agent when agentId is provided', async () => {
       const results = await searchRepo.search({
         agentId: testAgentId,
         query: 'testing',
@@ -547,45 +547,101 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
 
       const topicResults = results.filter((r) => r.type === 'topic');
 
-      // Current agent's topics should have better relevance (0.5-0.7)
-      const currentAgentTopics = topicResults.filter(
-        (t) => t.type === 'topic' && t.agentId === testAgentId,
-      );
-      const otherTopics = topicResults.filter(
-        (t) => t.type === 'topic' && t.agentId !== testAgentId,
-      );
-
-      expect(currentAgentTopics.length).toBeGreaterThan(0);
-      expect(otherTopics.length).toBeGreaterThan(0);
-
-      // Current agent topics should have lower relevance scores (higher priority)
-      currentAgentTopics.forEach((topic) => {
-        expect(topic.relevance).toBeLessThan(1);
-      });
-
-      otherTopics.forEach((topic) => {
-        expect(topic.relevance).toBeGreaterThanOrEqual(1);
+      expect(topicResults.length).toBeGreaterThan(0);
+      topicResults.forEach((topic) => {
+        if (topic.type === 'topic') {
+          expect(topic.agentId).toBe(testAgentId);
+        }
       });
     });
 
-    it('should show all user topics but rank current agent topics first', async () => {
+    it('should include topics from all agents when agentId is not provided', async () => {
       const results = await searchRepo.search({
-        agentId: testAgentId,
         query: 'testing',
       });
 
       const topicResults = results.filter((r) => r.type === 'topic');
-
-      // Should include topics from all agents (current, other, and no agent)
       const agentIds = new Set(topicResults.map((t) => (t.type === 'topic' ? t.agentId : null)));
+
       expect(agentIds.has(testAgentId)).toBe(true);
       expect(agentIds.has(otherAgentId)).toBe(true);
-      expect(agentIds.has(null)).toBe(true);
+    });
 
-      // First results should be from current agent
-      expect(topicResults[0].type).toBe('topic');
-      if (topicResults[0].type === 'topic') {
-        expect(topicResults[0].agentId).toBe(testAgentId);
+    it('should populate agent metadata on topic results', async () => {
+      // Add avatar/background to an existing agent so we can assert join output
+      const [decoratedAgent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🤖',
+          backgroundColor: '#123456',
+          slug: 'decorated-agent',
+          title: 'Decorated Agent',
+          userId,
+        })
+        .returning();
+
+      await serverDB.insert(topics).values({
+        agentId: decoratedAgent.id,
+        title: 'Testing Decorated Agent',
+        userId,
+      });
+
+      const results = await searchRepo.search({ query: 'decorated' });
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const decoratedTopic = topicResults.find(
+        (t) => t.type === 'topic' && t.agentId === decoratedAgent.id,
+      );
+
+      expect(decoratedTopic).toBeDefined();
+      if (decoratedTopic && decoratedTopic.type === 'topic') {
+        expect(decoratedTopic.agent).toEqual({
+          avatar: '🤖',
+          backgroundColor: '#123456',
+          title: 'Decorated Agent',
+        });
+      }
+
+      // Topic without an agent should have a null agent field
+      const orphanTopic = topicResults.find((t) => t.type === 'topic' && t.agentId === null);
+      if (orphanTopic && orphanTopic.type === 'topic') {
+        expect(orphanTopic.agent).toBeNull();
+      }
+    });
+
+    it('should not leak agent metadata when topic.agentId points to another user', async () => {
+      // Foreign agent owned by a different user
+      const [foreignAgent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🕵️',
+          backgroundColor: '#abcdef',
+          slug: 'foreign-agent',
+          title: 'Foreign Agent',
+          userId: otherUserId,
+        })
+        .returning();
+
+      // Topic owned by the current user but carrying the foreign agent id —
+      // simulates state reachable via crafted/migrated rows (e.g. topic
+      // creation persists input.agentId even when resolveContext fails).
+      await serverDB.insert(topics).values({
+        agentId: foreignAgent.id,
+        title: 'Cross-tenant probe',
+        userId,
+      });
+
+      const results = await searchRepo.search({ query: 'cross-tenant' });
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const probeTopic = topicResults.find(
+        (t) => t.type === 'topic' && t.title === 'Cross-tenant probe',
+      );
+
+      expect(probeTopic).toBeDefined();
+      if (probeTopic && probeTopic.type === 'topic') {
+        // The raw agentId is preserved (used for navigation), but no
+        // foreign agent metadata is surfaced to the renderer.
+        expect(probeTopic.agentId).toBe(foreignAgent.id);
+        expect(probeTopic.agent).toBeNull();
       }
     });
 
@@ -652,14 +708,13 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expect(topicResults.length).toBeLessThanOrEqual(3);
     });
 
-    it('should not boost topics when agentId is not provided', async () => {
+    it('should return topics with normal relevance range (1-3) when agentId is not provided', async () => {
       const results = await searchRepo.search({
         query: 'testing',
       });
 
       const topicResults = results.filter((r) => r.type === 'topic');
 
-      // All topics should have normal relevance (1-3)
       topicResults.forEach((topic) => {
         expect(topic.relevance).toBeGreaterThanOrEqual(1);
         expect(topic.relevance).toBeLessThanOrEqual(3);

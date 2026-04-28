@@ -67,8 +67,10 @@ const waitForNextReady = async () => {
 };
 
 const prewarmNextRootCompile = async () => {
+  const startedAt = Date.now();
   const response = await fetch(NEXT_ROOT_URL, { signal: AbortSignal.timeout(120_000) });
-  console.log(`✅ Next prewarm request finished (${response.status}) ${NEXT_ROOT_URL}`);
+  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(2);
+  console.log(`✅ Next prewarm request finished (${response.status}) in ${elapsed}s ${NEXT_ROOT_URL}`);
 };
 
 const runNextBackgroundTasks = () => {

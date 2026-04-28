@@ -8,13 +8,15 @@ import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import CommunityRecommend from '../CommunityRecommend';
 import SuggestQuestions from '../SuggestQuestions';
 import ModeTag from './ModeTag';
-import SkillInstallBanner from './SkillInstallBanner';
+import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
@@ -25,7 +27,10 @@ const InputArea = () => {
   const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
-  const showSkillBanner = isLobehubSkillEnabled || isKlavisEnabled;
+  const isSkillBannerDismissed = useGlobalStore(
+    systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),
+  );
+  const showSkillBanner = (isLobehubSkillEnabled || isKlavisEnabled) && !isSkillBannerDismissed;
   const chatInputRef = useRef<HTMLDivElement>(null);
 
   // When a starter mode is activated (e.g. Create Agent / Create Group / Write),

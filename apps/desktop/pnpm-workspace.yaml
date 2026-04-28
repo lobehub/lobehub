@@ -1,8 +1,13 @@
 packages:
+  - '../cli'
+  - '../../packages/agent-gateway-client'
+  - '../../packages/const'
   - '../../packages/electron-server-ipc'
   - '../../packages/electron-client-ipc'
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
   - '../../packages/device-gateway-client'
   - '../../packages/local-file-shell'
+  - './stubs/business-const'
+  - './stubs/types'
   - '.'

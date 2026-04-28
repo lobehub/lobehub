@@ -1,39 +1,31 @@
-import { Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import List from './List';
 
-interface AttachKnowledgeModalProps {
-  open?: boolean;
-  setOpen: (open: boolean) => void;
-}
-
-export const AttachKnowledgeModal = memo<AttachKnowledgeModalProps>(({ setOpen, open }) => {
-  const { t } = useTranslation('chat');
+const Content = memo(() => {
   const mobile = useServerConfigStore((s) => s.isMobile);
 
   return (
-    <Modal
-      allowFullscreen
-      footer={null}
-      open={open}
-      styles={{ body: { overflow: 'hidden' } }}
-      title={t('knowledgeBase.library.title')}
-      width={600}
-      onCancel={() => {
-        setOpen(false);
-      }}
+    <Flexbox
+      gap={mobile ? 8 : 16}
+      style={{ maxHeight: mobile ? '-webkit-fill-available' : 'inherit' }}
+      width={'100%'}
     >
-      <Flexbox
-        gap={mobile ? 8 : 16}
-        style={{ maxHeight: mobile ? '-webkit-fill-available' : 'inherit' }}
-        width={'100%'}
-      >
-        <List />
-      </Flexbox>
-    </Modal>
+      <List />
+    </Flexbox>
   );
 });
+
+export const openAttachKnowledgeModal = (): ModalInstance =>
+  createModal({
+    content: <Content />,
+    footer: false,
+    styles: { content: { overflow: 'hidden' } },
+    title: t('knowledgeBase.library.title', { ns: 'chat' }),
+    width: 600,
+  });

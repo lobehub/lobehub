@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "適用於 Nano Banana 2；控制生成影像的長寬比（支持超寬 1:4、4:1、1:8、8:1）。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "適用於 Gemini 3 圖像生成模型；控制生成圖像的解析度。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "適用於 Gemini 3.1 Flash Image 模型；控制生成影像的解析度（支持 512px）。",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "適用於 Claude Opus 4.7；用於控制努力程度（low／medium／high／xhigh／max）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "適用於 Claude、Qwen3 等模型；控制推理所用的 Token 預算。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "適用於 GLM-5 和 GLM-4.7；控制推理的 Token 預算（最大 32k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "適用於 Qwen3 系列；控制推理的 Token 預算（最大 80k）。",

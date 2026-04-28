@@ -6,6 +6,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   AgentCouncilFlattenProcessor,
   CompressedGroupRoleTransformProcessor,
+  DisabledToolCallFilter,
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
@@ -22,6 +23,7 @@ import {
   ToolMessageReorder,
 } from '../../processors';
 import {
+  ActiveTopicDocumentContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -39,17 +41,22 @@ import {
   GTDTodoInjector,
   HistorySummaryProvider,
   KnowledgeInjector,
+  OnboardingActionHintInjector,
+  OnboardingContextInjector,
+  OnboardingSyntheticStateInjector,
   PageEditorContextInjector,
   PageSelectionsInjector,
   SelectedSkillInjector,
   SkillContextProvider,
   SystemDateProvider,
   SystemRoleInjector,
+  TaskManagerContextInjector,
   ToolDiscoveryProvider,
   ToolSystemRoleProvider,
   TopicReferenceContextInjector,
   UserMemoryInjector,
 } from '../../providers';
+import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
 import type { ContextProcessor } from '../../types';
 import { ToolNameResolver } from '../tools';
 import type { MessagesEngineParams, MessagesEngineResult } from './types';
@@ -138,6 +145,7 @@ export class MessagesEngine {
       knowledge,
       skillsConfig,
       selectedSkills,
+      selectedTools,
       toolDiscoveryConfig,
       toolsConfig,
       capabilities,
@@ -148,6 +156,7 @@ export class MessagesEngine {
       botPlatformContext,
       discordContext,
       evalContext,
+      onboardingContext,
       agentManagementContext,
       groupAgentBuilderContext,
       agentGroup,
@@ -171,10 +180,12 @@ export class MessagesEngine {
       isAgentGroupEnabled || !!agentGroup?.currentAgentId || !!agentGroup?.members;
     const isUserMemoryEnabled = !!(userMemory?.enabled && userMemory?.memories);
     const hasSelectedSkills = (selectedSkills?.length ?? 0) > 0;
+    const hasSelectedTools = (selectedTools?.length ?? 0) > 0;
 
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
+    const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
     // GTD is enabled if gtd.enabled is true and either plan or todos is provided
     const isGTDPlanEnabled = gtd?.enabled && gtd?.plan;
     const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
@@ -294,6 +305,11 @@ export class MessagesEngine {
         enabled: isGroupAgentBuilderEnabled,
         groupContext: groupAgentBuilderContext,
       }),
+      // Onboarding context (phase guidance + document contents — stable, cacheable)
+      new OnboardingContextInjector({
+        enabled: !!onboardingContext?.phaseGuidance,
+        onboardingContext,
+      }),
 
       // =============================================
       // Phase 4: User Message Augmentation
@@ -302,8 +318,15 @@ export class MessagesEngine {
 
       // Agent documents → after-first-user, context-end
       new AgentDocumentMessageInjector(agentDocConfig),
+      // Active topic document → last user message, for continuing document work outside page scope
+      new ActiveTopicDocumentContextInjector({
+        activeTopicDocument: initialContext?.activeTopicDocument,
+        enabled: hasActiveTopicDocument && !isPageEditorEnabled,
+      }),
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
+      // Selected tools (ephemeral user-selected @tool for this request)
+      new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Page selections (inject user-selected text into each user message)
       new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
       // Page Editor context (inject current page content to last user message)
@@ -323,6 +346,11 @@ export class MessagesEngine {
               }
             : undefined),
       }),
+      // Task Manager page context (inject current tasks list/detail to last user message)
+      new TaskManagerContextInjector({
+        contextPrompt: initialContext?.taskManager?.contextPrompt,
+        enabled: !!initialContext?.taskManager?.contextPrompt,
+      }),
       // GTD Todo (at end of last user message)
       new GTDTodoInjector({ enabled: !!isGTDTodoEnabled, todos: gtd?.todos }),
       // Topic Reference context (referenced topic summaries to last user message)
@@ -332,14 +360,28 @@ export class MessagesEngine {
       }),
 
       // =============================================
+      // Phase 4.5: Virtual Tail Guidance
+      // Inject high-churn runtime guidance at the tail to preserve stable prefix caching
+      // =============================================
+
+      // Onboarding synthetic state (fake getOnboardingState tool call pair to drive action loop)
+      new OnboardingSyntheticStateInjector({
+        enabled: !!onboardingContext?.phaseGuidance,
+        onboardingContext,
+      }),
+      // Onboarding action hints (phase-specific tool call reminders)
+      new OnboardingActionHintInjector({
+        enabled: !!onboardingContext?.phaseGuidance,
+        onboardingContext,
+      }),
+
+      // =============================================
       // Phase 5: Message Transformation
       // Flattens group/task messages, applies templates and variables
       // =============================================
 
       // Input template processing
       new InputTemplateProcessor({ inputTemplate }),
-      // Placeholder variables processing
-      new PlaceholderVariablesProcessor({ variableGenerators: variableGenerators || {} }),
       // AgentCouncil message flatten
       new AgentCouncilFlattenProcessor(),
       // Group message flatten
@@ -373,6 +415,16 @@ export class MessagesEngine {
             }),
           ]
         : []),
+      // Placeholder variables processing — MUST run AFTER all flatten / role
+      // transform steps. AssistantGroup / Supervisor messages keep their real
+      // content (including any `{{...}}` placeholders inside tool results)
+      // nested under `children[].tools[].result.content`. The flatten processors
+      // hoist that nested content into top-level `role: 'tool'` messages.
+      // PlaceholderVariablesProcessor only walks `message.content`, so it MUST
+      // run after the hoist or it would silently miss every placeholder buried
+      // inside an assistantGroup. (Regression discovered while wiring lobehub
+      // skill identity placeholders — see LOBE-6882.)
+      new PlaceholderVariablesProcessor({ variableGenerators: variableGenerators || {} }),
 
       // =============================================
       // Phase 6: Content Processing
@@ -395,6 +447,10 @@ export class MessagesEngine {
         isCanUseFC: capabilities?.isCanUseFC || (() => true),
         model,
         provider,
+      }),
+      // Disabled historical tool calls (for scope-specific tool removal)
+      new DisabledToolCallFilter({
+        disabledToolIdentifiers: toolsConfig?.disabledToolIdentifiers,
       }),
 
       // =============================================

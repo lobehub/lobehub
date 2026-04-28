@@ -1,5 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import {
+  type UpdateDocumentArgs,
   WebOnboardingApiName,
   WebOnboardingIdentifier,
 } from '@lobechat/builtin-tool-web-onboarding';
@@ -64,21 +65,48 @@ class WebOnboardingExecutor extends BaseExecutor<typeof WebOnboardingApiName> {
     return createDocumentReadResult(params.type, result.content, result.id);
   };
 
-  updateDocument = async (
+  writeDocument = async (
     params: { content: string; type: 'soul' | 'persona' },
     _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const result = await userService.updateOnboardingDocument(params.type, params.content);
 
     if (!result.id) {
-      return { content: `Failed to update ${params.type} document.`, success: false };
+      return { content: `Failed to write ${params.type} document.`, success: false };
     }
 
     return {
-      content: `Updated ${params.type} document (${result.id}).`,
+      content: `Wrote ${params.type} document (${result.id}).`,
       state: { id: result.id, type: params.type },
       success: true,
     };
+  };
+
+  updateDocument = async (
+    params: UpdateDocumentArgs,
+    _ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      const result = await userService.patchOnboardingDocument(params.type, params.hunks);
+
+      if (!result.id) {
+        return { content: `Failed to update ${params.type} document.`, success: false };
+      }
+
+      return {
+        content: `Updated ${params.type} document (${result.id}). Applied ${result.applied} hunk(s).`,
+        state: { applied: result.applied, id: result.id, type: params.type },
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: message,
+        error: { message, type: 'MarkdownPatchError' },
+        state: { type: params.type },
+        success: false,
+      };
+    }
   };
 }
 

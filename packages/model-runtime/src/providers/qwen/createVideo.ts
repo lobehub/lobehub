@@ -31,11 +31,11 @@ const image2VideoModels = [
   /^wanx2\.(0|1)-i2v-/,
   /img2video$/,
   /reference2video$/,
+  /i2v$/,
   /it2v$/,
-  /r2v$/,
 ];
 const keyframe2VideoModels = [/^wan2\.(2|5)-kf2v-/, /start-end2video$/, /kf2v$/];
-const reference2VideoModels = [/^wan2\.6-r2v/];
+const reference2VideoModels = [/r2v$/];
 
 /**
  * Query the status of a video generation task
@@ -117,7 +117,7 @@ async function createVideoTask(
   baseUrl: string,
 ): Promise<string> {
   const { model, params } = payload;
-  const { prompt, imageUrl, endImageUrl } = params;
+  const { prompt, imageUrl, imageUrls, endImageUrl } = params;
 
   // Determine the endpoint based on task type
   const url = `${baseUrl}/api/v1/services/aigc/${taskType}/video-synthesis`;
@@ -158,6 +158,14 @@ async function createVideoTask(
         url: imageUrl,
       });
     }
+    if (imageUrls && imageUrls.length > 0) {
+      imageUrls.forEach((url) =>
+        media.push({
+          type: 'image',
+          url,
+        }),
+      );
+    }
     if (endImageUrl) {
       media.push({
         type: 'image',
@@ -175,6 +183,21 @@ async function createVideoTask(
         url: imageUrl,
       });
     }
+    if (imageUrls && imageUrls.length > 0) {
+      if (imageUrls.length === 1 && endImageUrl) {
+        media.push({
+          type: 'first_frame',
+          url: imageUrls[0],
+        });
+      } else {
+        imageUrls.forEach((url) =>
+          media.push({
+            type: 'refer',
+            url,
+          }),
+        );
+      }
+    }
     if (endImageUrl) {
       media.push({
         type: 'last_frame',
@@ -185,15 +208,22 @@ async function createVideoTask(
       input.media = media;
     }
   } else if (model.startsWith('pixverse/')) {
-    if (imageUrl && !endImageUrl) {
-      input.media = [
-        {
+    const media = [];
+    if (imageUrls && imageUrls.length > 0) {
+      imageUrls.forEach((url) =>
+        media.push({
           type: 'image_url',
-          url: imageUrl,
-        },
-      ];
+          url,
+        }),
+      );
+    }
+    if (imageUrl && !endImageUrl) {
+      media.push({
+        type: 'image_url',
+        url: imageUrl,
+      });
     } else if (imageUrl && endImageUrl) {
-      input.media = [
+      media.push(
         {
           type: 'first_frame',
           url: imageUrl,
@@ -202,14 +232,51 @@ async function createVideoTask(
           type: 'last_frame',
           url: endImageUrl,
         },
-      ];
+      );
+    }
+    if (media.length > 0) {
+      input.media = media;
+    }
+  } else if (model.startsWith('wan2.7')) {
+    const media = [];
+    if (imageUrl) {
+      media.push({
+        type: 'first_frame',
+        url: imageUrl,
+      });
+    }
+    if (imageUrls && imageUrls.length > 0) {
+      imageUrls.forEach((url) =>
+        media.push({
+          type: 'reference_image',
+          url,
+        }),
+      );
+    }
+    if (endImageUrl) {
+      media.push({
+        type: 'last_frame',
+        url: endImageUrl,
+      });
+    }
+    if (media.length > 0) {
+      input.media = media;
     }
   } else if (matchesModelPattern(model, reference2VideoModels)) {
-    input.reference_urls = [imageUrl];
+    if (imageUrl) {
+      input.reference_urls = [imageUrl];
+    }
+    if (imageUrls && imageUrls.length > 0) {
+      input.reference_urls = imageUrls;
+    }
   } else if (matchesModelPattern(model, keyframe2VideoModels)) {
-    input.first_frame_url = imageUrl;
-    input.last_frame_url = endImageUrl;
-  } else if (matchesModelPattern(model, image2VideoModels)) {
+    if (imageUrl) {
+      input.first_frame_url = imageUrl;
+    }
+    if (endImageUrl) {
+      input.last_frame_url = endImageUrl;
+    }
+  } else if (matchesModelPattern(model, image2VideoModels) && imageUrl) {
     input.img_url = imageUrl;
   }
 
@@ -218,7 +285,12 @@ async function createVideoTask(
 
   // Add optional parameters
   if (params.aspectRatio) {
-    parameters.aspectRatio = params.aspectRatio;
+    if (model.startsWith('wan2.7')) {
+      // Wan2.7 models use "ratio" parameter instead of "aspectRatio"
+      parameters.ratio = params.aspectRatio;
+    } else {
+      parameters.aspectRatio = params.aspectRatio;
+    }
   }
 
   if (params.size) {
@@ -241,6 +313,14 @@ async function createVideoTask(
     } else {
       parameters.resolution = params.resolution;
     }
+  }
+
+  if (params.promptExtend) {
+    parameters.prompt_extend = params.promptExtend;
+  }
+
+  if (params.watermark) {
+    parameters.watermark = params.watermark;
   }
 
   const response = await fetch(url, {

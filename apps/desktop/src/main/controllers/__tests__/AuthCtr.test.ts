@@ -29,6 +29,11 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: ipcMainHandleMock,
   },
+  net: {
+    fetch: vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      global.fetch(input as any, init as any),
+    ),
+  },
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
   },
@@ -59,7 +64,7 @@ vi.mock('@/const/env', () => ({
 let randomBytesCounter = 0;
 vi.mock('node:crypto', () => ({
   default: {
-    randomBytes: vi.fn((size: number) => {
+    randomBytes: vi.fn((_size: number) => {
       randomBytesCounter++;
       return {
         toString: vi.fn(() => `mock-random-${randomBytesCounter}`),

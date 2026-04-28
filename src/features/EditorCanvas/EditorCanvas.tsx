@@ -117,6 +117,12 @@ export interface EditorCanvasProps {
   toolbarExtraItems?: ChatInputActionsProps['items'];
 
   /**
+   * Topic ID for notebook documents.
+   * Used to preserve active topic document context after leaving the page route.
+   */
+  topicId?: string | null;
+
+  /**
    * Unsaved changes guard for documentId mode.
    */
   unsavedChangesGuard?: UnsavedChangesGuardOptions;

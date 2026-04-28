@@ -120,6 +120,21 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
         return { shell_id: params.commandId };
       }
 
+      case 'readLocalFile': {
+        const loc: [number, number] | undefined =
+          params.startLine !== undefined || params.endLine !== undefined
+            ? [params.startLine ?? 0, params.endLine ?? 200]
+            : undefined;
+        return { fullContent: params.fullContent, loc, path: params.path };
+      }
+
+      case 'globLocalFiles': {
+        return {
+          pattern: params.pattern,
+          scope: params.directory,
+        };
+      }
+
       default: {
         return params;
       }

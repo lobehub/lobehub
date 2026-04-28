@@ -8,6 +8,7 @@ import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useSessionStore } from '@/store/session';
@@ -569,6 +570,8 @@ describe('topic action', () => {
           messagesMap: {
             [newKey]: [{ id: 'msg-1' }, { id: 'msg-2' }] as any,
           },
+          portalStack: [{ type: PortalViewType.Home }],
+          showPortal: true,
         });
       });
 
@@ -592,6 +595,8 @@ describe('topic action', () => {
 
       // Verify activeTopicId is now null
       expect(useChatStore.getState().activeTopicId).toBeNull();
+      expect(useChatStore.getState().portalStack).toEqual([]);
+      expect(useChatStore.getState().showPortal).toBe(false);
     });
 
     it('should clear new key data when switching to null (group scope)', async () => {
@@ -746,6 +751,23 @@ describe('topic action', () => {
 
       // Verify activeTopicId is set to the new topic
       expect(useChatStore.getState().activeTopicId).toBe('new-created-topic-id');
+    });
+
+    it('should skip refreshMessages for superseded overlapping switches', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const refreshSpy = vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
+
+      // Fire two overlapping switches: the sync body of both runs before
+      // either yields, so by the microtask boundary the second has already
+      // bumped the epoch and the first should bail out before fetching.
+      await act(async () => {
+        const p1 = result.current.switchTopic('topic-a');
+        const p2 = result.current.switchTopic('topic-b');
+        await Promise.all([p1, p2]);
+      });
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      expect(useChatStore.getState().activeTopicId).toBe('topic-b');
     });
   });
   describe('removeSessionTopics', () => {
@@ -1085,6 +1107,46 @@ describe('topic action', () => {
 
       expect(getMessagesSpy).toHaveBeenCalledWith({ agentId: activeAgentId, topicId });
       expect(summaryTopicTitleSpy).toHaveBeenCalledWith(topicId, messages);
+    });
+  });
+
+  describe('internal_updateTopics', () => {
+    it('should preserve excludeStatuses/excludeTriggers from existing topicDataMap entry', () => {
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      // Seed the entry as the SWR onData handler would, with filter fields.
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              excludeStatuses: ['completed'],
+              excludeTriggers: ['cron', 'eval'],
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [{ id: 'topic-1', title: 'old' } as ChatTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      // Simulate the post-sendMessage write-back which previously dropped filters.
+      act(() => {
+        result.current.internal_updateTopics(agentId, {
+          items: [{ id: 'topic-2', title: 'new' } as ChatTopic],
+          pageSize: 20,
+          total: 2,
+        });
+      });
+
+      const next = useChatStore.getState().topicDataMap[key];
+      expect(next.excludeStatuses).toEqual(['completed']);
+      expect(next.excludeTriggers).toEqual(['cron', 'eval']);
+      expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
     });
   });
 });

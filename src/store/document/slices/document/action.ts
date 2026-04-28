@@ -8,6 +8,7 @@ import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
+import { documentSWRKeys } from '@/services/document/swrKeys';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -29,6 +30,7 @@ export interface InitDocumentParams {
   documentId: string;
   editor: IEditor;
   editorData?: unknown;
+
   sourceType: DocumentSourceType;
   topicId?: string;
 }
@@ -49,6 +51,10 @@ export interface UseFetchDocumentOptions {
    * Source type for the document. Defaults to 'page'.
    */
   sourceType?: DocumentSourceType;
+  /**
+   * Topic ID for notebook documents.
+   */
+  topicId?: string | null;
 }
 
 type Setter = StoreSetter<DocumentStore>;
@@ -71,7 +77,7 @@ export class DocumentActionImpl {
       const debouncedFn = debounce(
         async () => {
           try {
-            await this.#get().performSave(documentId);
+            await this.#get().performSave(documentId, undefined, { saveSource: 'autosave' });
           } catch (error) {
             console.error('[DocumentStore] Failed to auto-save:', error);
           }
@@ -130,7 +136,7 @@ export class DocumentActionImpl {
    * Content is loaded into editor via onEditorInit when Editor component is ready.
    */
   initDocumentWithEditor = (params: InitDocumentParams): void => {
-    const { documentId, sourceType, content, editorData, topicId, autoSave, editor } = params;
+    const { autoSave, content, documentId, editor, editorData, sourceType, topicId } = params;
 
     const { internal_dispatchDocument } = this.#get();
 
@@ -142,6 +148,7 @@ export class DocumentActionImpl {
         autoSave,
         content: content ?? undefined,
         editorData,
+
         lastSavedContent: content ?? undefined,
         lastSavedEditorData: editorData,
         sourceType,
@@ -151,7 +158,18 @@ export class DocumentActionImpl {
 
     // Update activeDocumentId and editor
     this.#set(
-      { activeDocumentId: documentId, editor },
+      {
+        activeDocumentId: documentId,
+        editor,
+        ...(sourceType === 'notebook' && topicId
+          ? {
+              lastActiveTopicDocumentIdByTopicId: {
+                ...this.#get().lastActiveTopicDocumentIdByTopicId,
+                [topicId]: documentId,
+              },
+            }
+          : {}),
+      },
       false,
       n('initDocumentWithEditor:setActive'),
     );
@@ -172,8 +190,8 @@ export class DocumentActionImpl {
     documentId: string | undefined,
     options: UseFetchDocumentOptions = {},
   ): SWRResponse<DocumentItem | null> => {
-    const { autoSave = true, editor, sourceType = 'page' } = options;
-    const swrKey = documentId && editor ? ['document/editor', documentId] : null;
+    const { autoSave = true, editor, sourceType = 'page', topicId } = options;
+    const swrKey = documentId && editor ? documentSWRKeys.editor(documentId) : null;
 
     return useClientDataSWRWithSync<DocumentItem | null>(
       swrKey,
@@ -209,7 +227,9 @@ export class DocumentActionImpl {
             documentId,
             editor,
             editorData: document.editorData,
+
             sourceType,
+            topicId: topicId ?? undefined,
           });
         },
         revalidateOnFocus: true,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Form, FormGroup, FormItem, Tag } from '@lobehub/ui';
+import { Flexbox, Form, FormGroup, FormItem, Tag, Text } from '@lobehub/ui';
 import {
   Button,
   Form as AntdForm,
@@ -11,7 +11,7 @@ import {
   Switch,
 } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { RotateCcw } from 'lucide-react';
+import { Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,8 +20,10 @@ import type {
   FieldSchema,
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
+import { isDev } from '@/utils/env';
 
 import { platformCredentialBodyMap } from '../platform/registry';
+import { extractSettingsDefaults } from './formState';
 import type { ChannelFormValues } from './index';
 
 const prefixCls = 'ant';
@@ -91,6 +93,12 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
     t(field.label)
   );
 
+  // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
+  // be expressed as a single control inside a name-bound FormItem.
+  if (field.type === 'array' && field.items?.type === 'object') {
+    return <ObjectListField divider={divider} field={field} label={label} parentKey={parentKey} />;
+  }
+
   let children: React.ReactNode;
   switch (field.type) {
     case 'password': {
@@ -115,10 +123,26 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
     }
     case 'string': {
       if (field.enum) {
+        const hasDescriptions = field.enumDescriptions?.some(Boolean);
         children = (
           <Select
             placeholder={field.placeholder}
+            optionRender={
+              hasDescriptions
+                ? (item) => (
+                    <Flexbox horizontal align="center" gap={12} justify="space-between">
+                      <span>{item.label}</span>
+                      {item.data.description ? (
+                        <Text fontSize={12} type="secondary">
+                          {item.data.description}
+                        </Text>
+                      ) : null}
+                    </Flexbox>
+                  )
+                : undefined
+            }
             options={field.enum.map((value, i) => ({
+              description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
               label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
               value,
             }))}
@@ -143,11 +167,105 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
       minWidth={'max(50%, 400px)'}
       name={[parentKey, field.key]}
       rules={buildRules(field, t)}
-      tag={field.key}
+      tag={isDev ? field.key : undefined}
       valuePropName={field.type === 'boolean' ? 'checked' : undefined}
       variant="borderless"
     >
       {children}
+    </FormItem>
+  );
+});
+
+// --------------- Object-list field (e.g. allowFrom: [{id, name?}]) ---------------
+
+interface ObjectListFieldProps {
+  divider?: boolean;
+  field: FieldSchema;
+  label: React.ReactNode;
+  parentKey: string;
+}
+
+const ObjectListField = memo<ObjectListFieldProps>(({ field, parentKey, divider, label }) => {
+  const { t: _t } = useTranslation('agent');
+  const t = _t as (key: string) => string;
+
+  // The runtime ignores anything beyond `id`, but the editor renders every
+  // declared property so future additions (e.g. a per-row note tag) flow
+  // through without code changes here.
+  const itemProps = field.items?.type === 'object' ? (field.items.properties ?? []) : [];
+
+  // Convention: the schema field key drives the per-list copy keys
+  // (`allowFrom` → `channel.allowFromAdd` / `channel.allowFromEmpty`).
+  // Avoids overloading FieldSchema with cosmetic strings while keeping each
+  // list's "Add user" / "Add channel" wording distinct.
+  const addLabel = t(`${field.label}Add` as 'channel.allowFromAdd');
+  const emptyLabel = t(`${field.label}Empty` as 'channel.allowFromEmpty');
+  const removeLabel = t('channel.allowListRemove');
+
+  return (
+    <FormItem
+      desc={field.description ? t(field.description) : undefined}
+      divider={divider}
+      label={label}
+      minWidth={'max(50%, 400px)'}
+      tag={isDev ? field.key : undefined}
+      variant="borderless"
+    >
+      <AntdForm.List initialValue={field.default as unknown[]} name={[parentKey, field.key]}>
+        {(rows, { add, remove }) => (
+          <Flexbox gap={8} style={{ width: '100%' }}>
+            {rows.length === 0 && (
+              <Flexbox style={{ fontSize: 12, opacity: 0.6, paddingBlock: 4 }}>
+                {emptyLabel}
+              </Flexbox>
+            )}
+            {rows.map(({ key, name }) => (
+              <Flexbox horizontal align="center" gap={8} key={key}>
+                {itemProps.map((sub) => (
+                  // `noStyle` skips the antd FormItem chrome that the parent
+                  // form's 50%-width override targets — without it each cell
+                  // collapses to half the row, leaving a wide gap between
+                  // the id and name inputs. The flex:1 wrapper takes over
+                  // sizing, and `minWidth:0` lets the input actually shrink.
+                  <div key={sub.key} style={{ flex: 1, minWidth: 0 }}>
+                    <AntdForm.Item
+                      noStyle
+                      name={[name, sub.key]}
+                      rules={
+                        sub.required
+                          ? [{ message: t(sub.label), required: true, whitespace: true }]
+                          : undefined
+                      }
+                    >
+                      <FormInput
+                        placeholder={
+                          sub.placeholder
+                            ? t(sub.placeholder as 'channel.allowFromIdPlaceholder')
+                            : t(sub.label)
+                        }
+                      />
+                    </AntdForm.Item>
+                  </div>
+                ))}
+                <Button
+                  aria-label={removeLabel}
+                  icon={<Trash2 size={14} />}
+                  type="text"
+                  onClick={() => remove(name)}
+                />
+              </Flexbox>
+            ))}
+            <Button
+              block
+              icon={<Plus size={14} />}
+              type="dashed"
+              onClick={() => add({ id: '', name: '' })}
+            >
+              {addLabel}
+            </Button>
+          </Flexbox>
+        )}
+      </AntdForm.List>
     </FormItem>
   );
 });
@@ -166,7 +284,7 @@ const ApplicationIdField = memo<{ field: FieldSchema }>(({ field }) => {
       minWidth={'max(50%, 400px)'}
       name="applicationId"
       rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
-      tag="applicationId"
+      tag={isDev ? 'applicationId' : undefined}
       variant="borderless"
     >
       <FormInput placeholder={field.placeholder || t(field.label)} />
@@ -242,14 +360,10 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onA
   const [settingsActive, setSettingsActive] = useState(false);
 
   const handleResetSettings = useCallback(() => {
-    const defaults: Record<string, any> = {};
-    for (const field of settingsFields) {
-      if (field.default !== undefined) {
-        defaults[field.key] = field.default;
-      }
-    }
-    form.setFieldsValue({ settings: defaults });
-  }, [form, settingsFields]);
+    form.setFieldsValue({
+      settings: extractSettingsDefaults(platformDef.schema) as Record<string, {} | undefined>,
+    });
+  }, [form, platformDef.schema]);
 
   return (
     <Form

@@ -1,8 +1,12 @@
+import { DEFAULT_AVATAR } from '@lobechat/const';
 import { Avatar, Tag } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 
 import { useCommandMenuContext } from '../CommandMenuContext';
 import { styles } from '../styles';
@@ -23,10 +27,16 @@ const CommandInput = memo(() => {
     setTypeFilter,
     selectedAgent,
     setSelectedAgent,
+    activeAgentId,
   } = useCommandMenuContext();
+
+  const activeAgentMeta = useAgentStore((s) =>
+    activeAgentId ? agentSelectors.getAgentMetaById(activeAgentId)(s) : undefined,
+  );
 
   const hasPages = pages.length > 0;
   const hasSelectedAgent = !!selectedAgent;
+  const hasActiveAgent = !!activeAgentId && menuContext === 'agent';
 
   // Get localized context name
   const contextName = t(`cmdk.context.${menuContext}`, { defaultValue: menuContext });
@@ -49,7 +59,24 @@ const CommandInput = memo(() => {
     <>
       {(menuContext !== 'general' || typeFilter) && !hasPages && !hasSelectedAgent && (
         <div className={styles.contextWrapper}>
-          {menuContext !== 'general' && <Tag className={styles.contextTag}>{contextName}</Tag>}
+          {hasActiveAgent ? (
+            <Tag
+              className={styles.contextTag}
+              icon={
+                <Avatar
+                  emojiScaleWithBackground
+                  avatar={activeAgentMeta?.avatar || DEFAULT_AVATAR}
+                  background={activeAgentMeta?.backgroundColor}
+                  shape="square"
+                  size={14}
+                />
+              }
+            >
+              {activeAgentMeta?.title || t('defaultAgent')}
+            </Tag>
+          ) : (
+            menuContext !== 'general' && <Tag className={styles.contextTag}>{contextName}</Tag>
+          )}
           {typeFilter && (
             <Tag
               className={styles.backTag}

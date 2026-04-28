@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
       humanInput,
       approvedToolCall,
       rejectionReason,
+      rejectAndContinue,
+      toolMessageId,
     } = body;
 
     if (!operationId) {
@@ -60,8 +62,10 @@ export async function POST(request: NextRequest) {
       externalRetryCount,
       humanInput,
       operationId,
+      rejectAndContinue,
       rejectionReason,
       stepIndex,
+      toolMessageId,
     });
 
     // Step is currently being executed by another instance — tell QStash to retry later

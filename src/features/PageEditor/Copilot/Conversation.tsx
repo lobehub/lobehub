@@ -6,6 +6,11 @@ import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
 import { ActionBarContext } from '@/features/ChatInput/ActionBar/context';
 import {
+  COMPACT_ACTION_BAR_CONTEXT,
+  COMPACT_ACTION_BAR_STYLE,
+  COMPACT_SEND_BUTTON_PROPS,
+} from '@/features/ChatInput/compactPreset';
+import {
   ChatInput,
   ChatList,
   conversationSelectors,
@@ -16,18 +21,13 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
-import CopilotModelSelector from './CopilotModelSelector';
+import CopilotModelSelect from './CopilotModelSelect';
 import CopilotToolbar from './Toolbar';
 import Welcome from './Welcome';
 
 const Search = actionMap['search'];
 
 const EMPTY_LEFT_ACTIONS: [] = [];
-
-const COMPACT_ACTION_SIZE = { blockSize: 28, size: 16 };
-const COMPACT_CONTEXT_VALUE = { actionSize: COMPACT_ACTION_SIZE };
-const COMPACT_ACTION_BAR_STYLE = { paddingLeft: 4, paddingRight: 4 };
-const COMPACT_SEND_BUTTON_PROPS = { size: 28 };
 
 const Conversation = memo(() => {
   const [setActiveAgentId, useFetchAgentConfig] = useAgentStore((s) => [
@@ -73,7 +73,7 @@ const Conversation = memo(() => {
 
   const leftContent = useMemo(
     () => (
-      <ActionBarContext value={COMPACT_CONTEXT_VALUE}>
+      <ActionBarContext value={COMPACT_ACTION_BAR_CONTEXT}>
         <Flexbox horizontal align={'center'} gap={2}>
           <AgentSelectorAction onAgentChange={handleAgentChange} />
           <Search />
@@ -83,7 +83,7 @@ const Conversation = memo(() => {
     [handleAgentChange],
   );
 
-  const modelSelector = useMemo(() => <CopilotModelSelector />, []);
+  const modelSelector = useMemo(() => <CopilotModelSelect />, []);
 
   return (
     <DragUploadZone

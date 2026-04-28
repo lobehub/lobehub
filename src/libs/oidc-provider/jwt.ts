@@ -23,7 +23,7 @@ export const getJWKS = (): object => {
 
     if (!jwksString) {
       throw new Error(
-        'JWKS_KEY 环境变量是必需的。请使用 scripts/generate-oidc-jwk.mjs 生成 JWKS。',
+        'JWKS_KEY environment variable is required. Please use scripts/generate-oidc-jwk.mjs to generate JWKS.',
       );
     }
 
@@ -32,19 +32,19 @@ export const getJWKS = (): object => {
 
     // Check if JWKS format is valid
     if (!jwks.keys || !Array.isArray(jwks.keys) || jwks.keys.length === 0) {
-      throw new Error('JWKS 格式无效: 缺少或为空的 keys 数组');
+      throw new Error('Invalid JWKS format: missing or empty keys array');
     }
 
     // Check if there is an RS256 algorithm key
     const hasRS256Key = jwks.keys.some((key: any) => key.alg === 'RS256' && key.kty === 'RSA');
     if (!hasRS256Key) {
-      throw new Error('JWKS 中没有找到 RS256 算法的 RSA 密钥');
+      throw new Error('No RSA key with RS256 algorithm found in JWKS');
     }
 
     return jwks;
   } catch (error) {
-    console.error('解析 JWKS 失败:', error);
-    throw new Error(`JWKS_KEY 解析错误: ${(error as Error).message}`, { cause: error });
+    console.error('Failed to parse JWKS:', error);
+    throw new Error(`JWKS_KEY parse error: ${(error as Error).message}`, { cause: error });
   }
 };
 
@@ -53,18 +53,18 @@ const getVerificationKey = async () => {
     const jwksString = getJwksKeyString();
 
     if (!jwksString) {
-      throw new Error('JWKS_KEY 环境变量未设置');
+      throw new Error('JWKS_KEY environment variable is not set');
     }
 
     const jwks = JSON.parse(jwksString);
 
     if (!jwks.keys || !Array.isArray(jwks.keys) || jwks.keys.length === 0) {
-      throw new Error('JWKS 格式无效: 缺少或为空的 keys 数组');
+      throw new Error('Invalid JWKS format: missing or empty keys array');
     }
 
     const privateRsaKey = jwks.keys.find((key: any) => key.alg === 'RS256' && key.kty === 'RSA');
     if (!privateRsaKey) {
-      throw new Error('JWKS 中没有找到 RS256 算法的 RSA 密钥');
+      throw new Error('No RSA key with RS256 algorithm found in JWKS');
     }
 
     // Create a “clean” JWK object containing only public key components.
@@ -88,8 +88,10 @@ const getVerificationKey = async () => {
     // Now, in any environment, `importJWK` will correctly identify this object as a public key.
     return await importJWK(publicKeyJwk, 'RS256');
   } catch (error) {
-    log('获取 JWKS 公钥失败: %O', error);
-    throw new Error(`JWKS_KEY 公钥获取失败: ${(error as Error).message}`, { cause: error });
+    log('Failed to get JWKS public key: %O', error);
+    throw new Error(`JWKS_KEY public key retrieval failed: ${(error as Error).message}`, {
+      cause: error,
+    });
   }
 };
 
@@ -99,22 +101,23 @@ const getVerificationKey = async () => {
  * @returns Parsed token payload and user information
  */
 export const validateOIDCJWT = async (token: string) => {
+  log('Starting OIDC JWT token validation');
+
+  // JWKS / signing key retrieval is an infrastructure concern (misconfigured
+  // env, malformed JWKS, key import failure). Let these errors propagate as
+  // plain Error so upstream middleware maps them to 500 and triggers ops
+  // alerts — treating them as 401 would incorrectly ask clients to re-auth
+  // while the real problem is server-side.
+  const publicKey = await getVerificationKey();
+
   try {
-    log('开始验证 OIDC JWT token');
-
-    // Get public key
-    const publicKey = await getVerificationKey();
-
-    // Verify JWT
     const { jwtVerify } = await import('jose');
     const { payload } = await jwtVerify(token, publicKey, {
       algorithms: ['RS256'],
-      // Additional validation options can be added, such as issuer, audience, etc.
     });
 
-    log('JWT 验证成功，payload: %O', payload);
+    log('JWT validation successful, payload: %O', payload);
 
-    // Extract user information
     const userId = payload.sub;
     const clientId = payload.client_id;
     const aud = payload.aud;
@@ -122,7 +125,7 @@ export const validateOIDCJWT = async (token: string) => {
     if (!userId) {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
-        message: 'JWT token 中缺少用户 ID (sub)',
+        message: 'JWT token is missing user ID (sub)',
       });
     }
 
@@ -145,11 +148,14 @@ export const validateOIDCJWT = async (token: string) => {
       throw error;
     }
 
-    log('JWT 验证失败: %O', error);
+    log('JWT validation failed: %O', error);
 
+    // Preserve the original jose error via `cause` so upstream middleware
+    // can still inspect specific codes like `ERR_JWT_EXPIRED`.
     throw new TRPCError({
+      cause: error,
       code: 'UNAUTHORIZED',
-      message: `JWT token 验证失败: ${(error as Error).message}`,
+      message: `JWT token validation failed: ${(error as Error).message}`,
     });
   }
 };

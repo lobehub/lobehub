@@ -1,13 +1,15 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { Jimeng } from '@lobehub/icons';
 import { type ButtonProps } from '@lobehub/ui';
 import { Button, Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, ImageIcon, PenLineIcon, VideoIcon } from 'lucide-react';
+import { BotIcon, ImageIcon, PenLineIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
+import { useStableNavigate } from '@/hooks/useStableNavigate';
 import { type StarterMode } from '@/store/home';
 import { useHomeStore } from '@/store/home';
 
@@ -52,10 +54,10 @@ const StarterList = memo(() => {
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.groupAgentBuilder);
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
-  const [inputActiveMode, setInputActiveMode, navigate] = useHomeStore((s) => [
+  const navigate = useStableNavigate();
+  const [inputActiveMode, setInputActiveMode] = useHomeStore((s) => [
     s.inputActiveMode,
     s.setInputActiveMode,
-    s.navigate,
   ]);
 
   const items: StarterItem[] = useMemo(
@@ -76,12 +78,14 @@ const StarterList = memo(() => {
         titleKey: 'starter.write',
       },
       {
+        hot: true,
         icon: ImageIcon,
         key: 'image',
         titleKey: 'starter.imageGeneration',
       },
       {
-        icon: VideoIcon,
+        hot: true,
+        icon: Jimeng.Color,
         key: 'video',
         titleKey: 'starter.videoGeneration',
       },
@@ -98,12 +102,12 @@ const StarterList = memo(() => {
   const handleClick = useCallback(
     (key: StarterMode) => {
       if (key === 'video') {
-        navigate?.('/video');
+        navigate('/video?model=dreamina-seedance-2-0-260128');
         return;
       }
 
       if (key === 'image') {
-        navigate?.('/image?model=gemini-3.1-flash-image-preview:image');
+        navigate('/image?model=gpt-image-2');
         return;
       }
 
@@ -114,7 +118,7 @@ const StarterList = memo(() => {
         setInputActiveMode(key);
       }
     },
-    [inputActiveMode, setInputActiveMode, navigate],
+    [inputActiveMode, navigate, setInputActiveMode],
   );
 
   return (

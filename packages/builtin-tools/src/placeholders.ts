@@ -24,6 +24,23 @@ export const BuiltinToolPlaceholders: Record<string, Record<string, any>> = {
   [WebBrowsingManifest.identifier]: WebBrowsingPlaceholders as Record<string, any>,
 };
 
+export interface BuiltinPlaceholderRegistryEntry {
+  apiName: string;
+  identifier: string;
+  placeholder: BuiltinPlaceholder;
+}
+
+export const listBuiltinPlaceholderEntries = (): BuiltinPlaceholderRegistryEntry[] =>
+  Object.entries(BuiltinToolPlaceholders).flatMap(([identifier, toolset]) =>
+    Object.entries(toolset)
+      .filter((entry): entry is [string, BuiltinPlaceholder] => !!entry[1])
+      .map(([apiName, placeholder]) => ({
+        apiName,
+        identifier,
+        placeholder,
+      })),
+  );
+
 /**
  * Get builtin placeholder component for a specific API
  * @param identifier - Tool identifier (e.g., 'lobe-local-system')

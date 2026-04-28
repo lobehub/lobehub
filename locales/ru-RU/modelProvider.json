@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Для Nano Banana 2; управляет соотношением сторон создаваемых изображений (поддерживает сверхширокие 1:4, 4:1, 1:8, 8:1).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Для моделей генерации изображений Gemini 3; управляет разрешением создаваемых изображений.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Для моделей Gemini 3.1 Flash Image; управляет разрешением создаваемых изображений (поддерживает 512px).",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "Для Claude Opus 4.7; контролирует уровень усилий (низкий/средний/высокий/очень высокий/максимальный).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Для моделей Claude, Qwen3 и аналогичных; управляет бюджетом токенов для рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Для GLM-5 и GLM-4.7; управляет бюджетом токенов для рассуждений (максимум 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Для серии Qwen3; управляет бюджетом токенов для рассуждений (максимум 80k).",

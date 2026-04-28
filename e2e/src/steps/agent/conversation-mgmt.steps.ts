@@ -312,21 +312,21 @@ When('用户输入新的对话名称 {string}', async function (this: CustomWorl
   // Wait a short moment for the popover to render
   await this.page.waitForTimeout(300);
 
-  // Try to find the popover input using various selectors
-  // @lobehub/ui Popover uses antd's Popover internally
-  const popoverInputSelectors = [
-    // antd popover structure
+  // The rename UI can render as a dialog/modal in CI, not only as a popover.
+  const renameInputSelectors = [
+    '[role="dialog"] input[type="text"]',
+    '.ant-modal input[type="text"]',
+    '[data-testid="editing-popover"] input',
     '.ant-popover-inner input',
     '.ant-popover-content input',
     '.ant-popover input',
-    // Generic input that's visible and not the chat input
-    'input:not([data-testid="chat-input"] input)',
+    'input[type="text"]:visible',
   ];
 
   let renameInput = null;
 
-  // Wait for any popover input to appear
-  for (const selector of popoverInputSelectors) {
+  // Wait for any rename input to appear
+  for (const selector of renameInputSelectors) {
     try {
       const locator = this.page.locator(selector).first();
       await locator.waitFor({ state: 'visible', timeout: 2000 });
@@ -348,18 +348,23 @@ When('用户输入新的对话名称 {string}', async function (this: CustomWorl
     for (let i = 0; i < count; i++) {
       const input = allInputs.nth(i);
       const placeholder = await input.getAttribute('placeholder').catch(() => '');
-      const testId = await input.dataset.testid.catch(() => '');
+      const testId = await input.getAttribute('data-testid').catch(() => '');
 
       // Skip search inputs and chat inputs
       if (placeholder?.includes('Search') || placeholder?.includes('搜索')) continue;
       if (testId === 'chat-input') continue;
 
-      // Check if it's inside a popover-like container
-      const isInPopover = await input.evaluate((el) => {
-        return el.closest('.ant-popover') !== null || el.closest('[class*="popover"]') !== null;
+      // Prefer inputs rendered inside rename containers.
+      const isInRenameContainer = await input.evaluate((el) => {
+        return (
+          el.closest('[role="dialog"]') !== null ||
+          el.closest('.ant-modal') !== null ||
+          el.closest('.ant-popover') !== null ||
+          el.closest('[class*="popover"]') !== null
+        );
       });
 
-      if (isInPopover || count === 1) {
+      if (isInRenameContainer || count === 1) {
         renameInput = input;
         console.log(`   📍 Found candidate input at index ${i}`);
         break;
@@ -374,8 +379,21 @@ When('用户输入新的对话名称 {string}', async function (this: CustomWorl
     await renameInput.fill(newName);
     console.log(`   📍 Filled input with "${newName}"`);
 
-    // Press Enter to confirm
-    await renameInput.press('Enter');
+    const saveButton = this.page
+      .locator('[role="dialog"]')
+      .getByRole('button', { exact: true, name: /^(Save|保存)$/ })
+      .first();
+
+    try {
+      await saveButton.waitFor({ state: 'visible', timeout: 1000 });
+      await saveButton.click();
+      console.log('   📍 Clicked save button');
+    } catch {
+      // Popover-based rename UIs still confirm with Enter.
+      await renameInput.press('Enter');
+      console.log('   📍 Confirmed rename with Enter');
+    }
+
     console.log(`   ✅ 已输入新名称 "${newName}"`);
   } else {
     // Last resort: the input should have autoFocus, so keyboard should work

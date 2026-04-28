@@ -3,11 +3,18 @@ import { describe, expect, it } from 'vitest';
 import type { RenderStepParams } from '../replyTemplate';
 import {
   formatTokens,
+  renderCommandReply,
+  renderDmRejected,
   renderError,
+  renderErrorWithDetails,
   renderFinalReply,
+  renderGroupRejected,
+  renderInlineError,
   renderLLMGenerating,
+  renderSenderRejected,
   renderStart,
   renderStepProgress,
+  renderStopped,
   renderToolExecuting,
   splitMessage,
   summarizeOutput,
@@ -327,10 +334,166 @@ describe('replyTemplate', () => {
   // ==================== renderError ====================
 
   describe('renderError', () => {
-    it('should wrap error in markdown code block', () => {
-      expect(renderError('Something went wrong')).toBe(
-        '**Agent Execution Failed**\n```\nSomething went wrong\n```',
+    it('should include the operation id when provided', () => {
+      expect(renderError('op-abc-123')).toBe(
+        '**Agent Execution Failed**\nOperation ID: `op-abc-123`',
       );
+    });
+
+    it('should fall back to a generic header when no operation id is provided', () => {
+      expect(renderError()).toBe('**Agent Execution Failed**');
+    });
+
+    it('renders Chinese copy when locale is zh-CN', () => {
+      expect(renderError(undefined, 'zh-CN')).toBe('**Agent 执行失败**');
+      expect(renderError('op-1', 'zh-CN')).toContain('Agent 执行失败');
+      expect(renderError('op-1', 'zh-CN')).toContain('op-1');
+    });
+
+    it('falls back to English for locales without a translated dictionary', () => {
+      expect(renderError(undefined, 'ja-JP')).toBe('**Agent Execution Failed**');
+    });
+  });
+
+  // ==================== renderStopped ====================
+
+  describe('renderStopped', () => {
+    it('returns the default English message when no message is supplied', () => {
+      expect(renderStopped()).toBe('Execution stopped.');
+    });
+
+    it('returns the default Chinese message when locale is zh-CN', () => {
+      expect(renderStopped(undefined, 'zh-CN')).toBe('执行已停止。');
+    });
+
+    it('passes through an explicit message regardless of locale', () => {
+      expect(renderStopped('Stopped by user.', 'zh-CN')).toBe('Stopped by user.');
+    });
+  });
+
+  // ==================== renderDmRejected ====================
+
+  describe('renderDmRejected', () => {
+    it('renders disabled and allowlist English copy', () => {
+      expect(renderDmRejected('disabled')).toContain("isn't accepting direct messages");
+      expect(renderDmRejected('allowlist')).toContain("aren't authorized");
+    });
+
+    it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
+      expect(renderDmRejected('disabled', 'zh-CN')).toContain('不接受私信');
+      expect(renderDmRejected('allowlist', 'zh-CN')).toContain('没有私信该机器人的权限');
+    });
+  });
+
+  // ==================== renderGroupRejected ====================
+
+  describe('renderGroupRejected', () => {
+    it('renders disabled and allowlist English copy', () => {
+      expect(renderGroupRejected('disabled')).toContain("doesn't respond in groups or channels");
+      expect(renderGroupRejected('allowlist')).toContain("isn't enabled in this channel");
+    });
+
+    it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
+      expect(renderGroupRejected('disabled', 'zh-CN')).toContain('不在群组或频道中响应');
+      expect(renderGroupRejected('allowlist', 'zh-CN')).toContain('未在此频道启用');
+    });
+  });
+
+  // ==================== renderSenderRejected ====================
+
+  describe('renderSenderRejected', () => {
+    it("uses generic 'interact with this bot' phrasing — never 'direct messages'", () => {
+      // The notice is shown out-of-band when a user @-mentioned in a
+      // group; saying "you aren't authorized to send direct messages"
+      // would misdescribe what the user actually did.
+      const en = renderSenderRejected();
+      expect(en).toContain("aren't authorized");
+      expect(en).toContain('interact with this bot');
+      expect(en).not.toContain('direct messages');
+    });
+
+    it('renders Chinese copy when locale is zh-CN, also avoiding DM phrasing', () => {
+      const zh = renderSenderRejected('zh-CN');
+      expect(zh).toContain('交互的权限');
+      expect(zh).not.toContain('私信');
+    });
+  });
+
+  // ==================== renderInlineError / renderErrorWithDetails ====================
+
+  describe('renderInlineError', () => {
+    it('formats a compact **Error** line in English by default', () => {
+      expect(renderInlineError('boom')).toBe('**Error**: boom');
+    });
+
+    it('uses Chinese copy when locale is zh-CN', () => {
+      expect(renderInlineError('boom', 'zh-CN')).toBe('**错误**：boom');
+    });
+  });
+
+  describe('renderErrorWithDetails', () => {
+    it('embeds the raw detail block in English by default', () => {
+      const out = renderErrorWithDetails('stack trace');
+      expect(out).toContain('Agent Execution Failed');
+      expect(out).toContain('Details:');
+      expect(out).toContain('stack trace');
+    });
+
+    it('embeds the raw detail block with Chinese label when locale is zh-CN', () => {
+      const out = renderErrorWithDetails('stack trace', 'zh-CN');
+      expect(out).toContain('Agent 执行失败');
+      expect(out).toContain('详细信息');
+      expect(out).toContain('stack trace');
+    });
+  });
+
+  // ==================== renderCommandReply ====================
+
+  describe('renderCommandReply', () => {
+    it('returns the English copy for each command key by default', () => {
+      expect(renderCommandReply('cmdNewReset')).toContain('Conversation reset');
+      expect(renderCommandReply('cmdStopNotActive')).toContain('No active execution');
+      expect(renderCommandReply('cmdStopRequested')).toBe('Stop requested.');
+      expect(renderCommandReply('cmdStopUnable')).toContain('Unable to stop');
+    });
+
+    it('returns the Chinese copy when locale is zh-CN', () => {
+      expect(renderCommandReply('cmdNewReset', 'zh-CN')).toContain('对话已重置');
+      expect(renderCommandReply('cmdStopNotActive', 'zh-CN')).toContain('没有正在执行');
+      expect(renderCommandReply('cmdStopRequested', 'zh-CN')).toBe('已发出停止请求。');
+      expect(renderCommandReply('cmdStopUnable', 'zh-CN')).toContain('无法停止');
+    });
+  });
+
+  // ==================== renderStepProgress locale ====================
+
+  describe('renderStepProgress locale', () => {
+    it('uses Chinese "处理中…" placeholder in zh-CN', () => {
+      const out = renderStepProgress(makeParams({ stepType: 'call_llm' }), 'zh-CN');
+      expect(out).toContain('处理中…');
+      expect(out).not.toContain('Processing...');
+    });
+
+    it('uses Chinese tools-calling header in zh-CN', () => {
+      const out = renderStepProgress(
+        makeParams({
+          stepType: 'call_tool',
+          totalToolCalls: 3,
+          elapsedMs: 1500,
+        }),
+        'zh-CN',
+      );
+      expect(out).toContain('共 **3** 次工具调用');
+    });
+  });
+
+  // ==================== renderStart locale ====================
+
+  describe('renderStart locale', () => {
+    it('returns a Chinese ack phrase when locale is zh-CN', () => {
+      // The zh fallback list is small and flat — every entry is non-Latin.
+      const phrase = renderStart('hi', { lng: 'zh-CN' });
+      expect(/[\u4E00-\u9FFF]/.test(phrase)).toBe(true);
     });
   });
 

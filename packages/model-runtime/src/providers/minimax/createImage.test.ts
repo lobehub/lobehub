@@ -66,6 +66,8 @@ describe('createMiniMaxImage', () => {
           model: 'image-01',
           n: 1,
           prompt: 'A beautiful sunset over the mountains',
+          aigc_watermark: false,
+          prompt_optimizer: false,
         }),
       });
 
@@ -113,6 +115,8 @@ describe('createMiniMaxImage', () => {
             model: 'image-01',
             n: 1,
             prompt: 'Abstract digital art',
+            aigc_watermark: false,
+            prompt_optimizer: false,
           }),
         }),
       );
@@ -161,6 +165,8 @@ describe('createMiniMaxImage', () => {
             model: 'image-01',
             n: 1,
             prompt: 'Reproducible image with seed',
+            aigc_watermark: false,
+            prompt_optimizer: false,
             seed: 42,
           }),
         }),
@@ -211,6 +217,8 @@ describe('createMiniMaxImage', () => {
             model: 'image-01',
             n: 1,
             prompt: 'Image with seed 0',
+            aigc_watermark: false,
+            prompt_optimizer: false,
             seed: 0,
           }),
         }),
@@ -331,6 +339,8 @@ describe('createMiniMaxImage', () => {
             model: 'image-01',
             n: 1,
             prompt: 'A girl looking into the distance from a library window',
+            aigc_watermark: false,
+            prompt_optimizer: false,
             subject_reference: [
               {
                 type: 'character',
@@ -389,6 +399,8 @@ describe('createMiniMaxImage', () => {
             model: 'image-01',
             n: 1,
             prompt: 'A girl looking into the distance from a library window',
+            aigc_watermark: false,
+            prompt_optimizer: false,
             subject_reference: referenceImageUrls.map((url) => ({
               type: 'character',
               image_file: url,

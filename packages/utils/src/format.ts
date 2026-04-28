@@ -25,26 +25,10 @@ export const formatSize = (bytes: number, fractionDigits: number = 1): string =>
 export const formatSpeed = (byte: number, fractionDigits = 2) => {
   if (!byte && byte !== 0) return '--';
 
-  let word = '';
-
-  // Byte
-  if (byte <= 1000) {
-    word = byte.toFixed(fractionDigits) + ' Byte/s';
-  }
-  // KB
-  else if (byte / 1024 <= 1000) {
-    word = (byte / 1024).toFixed(fractionDigits) + ' KB/s';
-  }
-  // MB
-  else if (byte / 1024 / 1024 <= 1000) {
-    word = (byte / 1024 / 1024).toFixed(fractionDigits) + ' MB/s';
-  }
-  // GB
-  else {
-    word = (byte / 1024 / 1024 / 1024).toFixed(fractionDigits) + ' GB/s';
-  }
-
-  return word;
+  if (byte <= 1000) return byte.toFixed(fractionDigits) + ' Byte/s';
+  if (byte / 1024 <= 1000) return (byte / 1024).toFixed(fractionDigits) + ' KB/s';
+  if (byte / 1024 / 1024 <= 1000) return (byte / 1024 / 1024).toFixed(fractionDigits) + ' MB/s';
+  return (byte / 1024 / 1024 / 1024).toFixed(fractionDigits) + ' GB/s';
 };
 
 export const formatTime = (timeInSeconds: number): string => {
@@ -118,7 +102,15 @@ export const formatPrice = (price: number, fractionDigits: number = 2) => {
 
   if (fractionDigits === 0) return numeral(price).format('0,0');
 
-  const [a, b] = price.toFixed(fractionDigits).split('.');
+  // Expand precision when a positive price would round to zero at the requested
+  // precision (e.g. $0.003625 → "0.00"), so users can tell it isn't actually free.
+  // Cap at 100 because Number.prototype.toFixed throws RangeError beyond that.
+  let digits = fractionDigits;
+  if (price > 0 && Number(price.toFixed(fractionDigits)) === 0) {
+    digits = Math.min(100, Math.ceil(-Math.log10(price)));
+  }
+
+  const [a, b] = price.toFixed(digits).split('.');
   return `${numeral(a).format('0,0')}.${b}`;
 };
 

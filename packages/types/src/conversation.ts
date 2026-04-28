@@ -119,6 +119,12 @@ export interface MessageMapContext {
 export interface ConversationContext {
   agentId: string;
   /**
+   * Current document ID for page-scoped conversations.
+   * Used by page editor integrations to distinguish the active document from
+   * other agent resources tied to the same topic.
+   */
+  documentId?: string;
+  /**
    * Group ID for group conversations
    * Used when scope is 'group' or 'group_agent'
    */
@@ -128,6 +134,13 @@ export interface ConversationContext {
    * Used for optimistic updates
    */
   isNew?: boolean;
+  /**
+   * When true, sendMessage will NOT update the global `useChatStore.activeTopicId`
+   * after creating a new topic — the caller is responsible for tracking the new
+   * topic id (e.g. via `ConversationHooks.onTopicCreated`). Used by isolated
+   * panels (Task Manager) that maintain their own topic pointer.
+   */
+  isolatedTopic?: boolean;
   /**
    * Whether the current agent is the Supervisor in group orchestration
    * - Used to mark assistant messages with metadata.isSupervisor
@@ -188,4 +201,15 @@ export interface ConversationContext {
    * When present, allows unauthenticated access to topic messages
    */
   topicShareId?: string;
+  /**
+   * Trigger value applied when sendMessage creates a new topic from this
+   * context (e.g. `'task_manager'`). Stamped on the topic row to support
+   * page-specific filtering. Only consumed during new-topic creation.
+   */
+  topicTrigger?: string;
+  /**
+   * Task Manager page the user is currently viewing. When set, streamingExecutor
+   * builds `RuntimeInitialContext.taskManager` from the task store.
+   */
+  viewedTask?: { type: 'list' } | { taskId: string; type: 'detail' };
 }

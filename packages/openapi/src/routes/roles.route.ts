@@ -44,7 +44,7 @@ RolesRoutes.get(
 RolesRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_CREATE', ['ALL']), '您没有权限创建角色'),
+  requireAnyPermission(getScopePermissions('RBAC_ROLE_CREATE', ['ALL']), 'You do not have permission to create a role'),
   zValidator('json', CreateRoleRequestSchema),
   async (c) => {
     const roleController = new RoleController();
@@ -100,7 +100,7 @@ RolesRoutes.get(
 RolesRoutes.patch(
   '/:id/permissions',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']), '您没有权限更新角色权限'),
+  requireAnyPermission(getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']), 'You do not have permission to update role permissions'),
   zValidator('param', RoleIdParamSchema),
   zValidator('json', UpdateRolePermissionsRequestSchema),
   async (c) => {
@@ -137,7 +137,7 @@ RolesRoutes.delete(
 RolesRoutes.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']), '您没有权限更新角色信息'),
+  requireAnyPermission(getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']), 'You do not have permission to update role information'),
   zValidator('param', RoleIdParamSchema),
   zValidator('json', UpdateRoleRequestSchema),
   async (c) => {
@@ -154,7 +154,7 @@ RolesRoutes.patch(
 RolesRoutes.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_DELETE', ['ALL']), '您没有权限删除角色'),
+  requireAnyPermission(getScopePermissions('RBAC_ROLE_DELETE', ['ALL']), 'You do not have permission to delete a role'),
   zValidator('param', RoleIdParamSchema),
   async (c) => {
     const roleController = new RoleController();

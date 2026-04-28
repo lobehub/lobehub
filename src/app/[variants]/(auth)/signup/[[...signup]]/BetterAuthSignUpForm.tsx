@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AuthCard } from '../../../../../features/AuthCard';
+import { trackLoginOrSignupClicked } from '../../../../../features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { type SignUpFormValues } from './useSignUp';
 import { useSignUp } from './useSignUp';
 
@@ -27,7 +28,17 @@ const BetterAuthSignUpForm = () => {
   const footer = (
     <Text>
       {t('betterAuth.signup.hasAccount')}{' '}
-      <Link href={`/signin?${searchParams.toString()}`}>{t('betterAuth.signup.signinLink')}</Link>
+      <Link
+        href={`/signin?${searchParams.toString()}`}
+        onClick={(event) => {
+          event.preventDefault();
+          void trackLoginOrSignupClicked({ spm: 'signup.go_to_signin.click' }).finally(() => {
+            window.location.href = `/signin?${searchParams.toString()}`;
+          });
+        }}
+      >
+        {t('betterAuth.signup.signinLink')}
+      </Link>
     </Text>
   );
 

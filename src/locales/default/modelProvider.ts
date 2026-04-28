@@ -5,8 +5,9 @@ export default {
   'azure.azureApiVersion.title': 'Azure API Version',
   'azure.empty': 'Please enter a model ID to add the first model',
   'azure.endpoint.desc':
-    "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section",
-  'azure.endpoint.placeholder': 'https://docs-test-001.openai.azure.com',
+    "When checking resources from the Azure portal, you can find this value in the 'Keys and Endpoints' section. Azure OpenAI endpoints from the Responses API path are also supported.",
+  'azure.endpoint.placeholder':
+    'https://your-resource.cognitiveservices.azure.com/openai/responses',
   'azure.endpoint.title': 'Azure API Address',
   'azure.modelListPlaceholder': 'Select or add the OpenAI model you deployed',
   'azure.title': 'Azure OpenAI',
@@ -266,6 +267,8 @@ export default {
     'For GPT-5.2 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
     'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
+  'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint':
+    'For DeepSeek V4 thinking mode; controls reasoning intensity. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':
@@ -274,6 +277,8 @@ export default {
     'For Gemini 3 image generation models; controls resolution of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageResolution2.hint':
     'For Gemini 3.1 Flash Image models; controls resolution of generated images (supports 512px).',
+  'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint':
+    'For Claude Opus 4.7; controls effort level (low/medium/high/xhigh/max).',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
     'For Claude, Qwen3 and similar; controls token budget for reasoning.',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint':

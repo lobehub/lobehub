@@ -17,7 +17,8 @@ import { sessionGroupSelectors } from '@/store/session/slices/sessionGroup/selec
 export const getCachedDataForReference = (reference: PageReference): CachedPageData | undefined => {
   switch (reference.type) {
     case 'agent':
-    case 'agent-topic': {
+    case 'agent-topic':
+    case 'agent-topic-page': {
       const agentId = 'agentId' in reference.params ? reference.params.agentId : undefined;
       if (!agentId) return undefined;
 
@@ -25,7 +26,10 @@ export const getCachedDataForReference = (reference: PageReference): CachedPageD
       if (!meta || Object.keys(meta).length === 0) return undefined;
 
       let title = meta.title;
-      if (reference.type === 'agent-topic' && 'topicId' in reference.params) {
+      if (
+        (reference.type === 'agent-topic' || reference.type === 'agent-topic-page') &&
+        'topicId' in reference.params
+      ) {
         const topicId = reference.params.topicId;
         const topicDataMap = useChatStore.getState().topicDataMap;
         for (const data of Object.values(topicDataMap)) {

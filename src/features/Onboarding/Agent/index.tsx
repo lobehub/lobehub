@@ -1,7 +1,7 @@
 'use client';
 
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { SESSION_CHAT_URL } from '@lobechat/const';
+import { SESSION_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
@@ -94,7 +94,7 @@ const AgentOnboardingPage = memo(() => {
   const onboardingFinished = !!agentOnboarding?.finishedAt;
   const finishTargetUrl = useMemo(() => {
     if (!onboardingFinished || !inboxAgentId || !effectiveTopicId) return undefined;
-    return `${SESSION_CHAT_URL(inboxAgentId)}?topic=${effectiveTopicId}`;
+    return SESSION_CHAT_TOPIC_URL(inboxAgentId, effectiveTopicId);
   }, [onboardingFinished, inboxAgentId, effectiveTopicId]);
 
   const viewingHistoricalTopic =
@@ -134,80 +134,81 @@ const AgentOnboardingPage = memo(() => {
 
   return (
     <OnboardingContainer>
-      <Flexbox
-        gap={24}
-        style={{ height: '100%', maxWidth: 840, position: 'relative', width: '100%' }}
-      >
-        <Flexbox flex={1} gap={16} style={{ minHeight: 0 }}>
-          <OnboardingConversationProvider
-            agentId={onboardingAgentId}
-            frozen={onboardingFinished}
-            topicId={effectiveTopicId}
-            hooks={
-              onboardingFinished
-                ? undefined
-                : {
-                    onAfterSendMessage: async () => {
-                      await syncOnboardingContext();
-                      await Promise.all([
-                        refreshUserState(),
-                        refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
-                      ]);
-                    },
-                  }
-            }
-          >
-            <ErrorBoundary fallbackRender={() => null}>
-              <AgentOnboardingConversation
-                finishTargetUrl={finishTargetUrl}
-                onboardingFinished={onboardingFinished}
-                readOnly={viewingHistoricalTopic}
-              />
-            </ErrorBoundary>
-          </OnboardingConversationProvider>
-          {isDev && historyTopics.length > 0 && (
-            <Drawer
-              open={historyDrawerOpen}
-              title={t('agent.history.title')}
-              onClose={() => setHistoryDrawerOpen(false)}
-            >
-              <HistoryPanel
-                activeTopicId={activeTopicId}
-                selectedTopicId={effectiveTopicId}
-                topics={historyTopics}
-                onSelectTopic={(id) => {
-                  setSelectedTopicId(id);
-                  setHistoryDrawerOpen(false);
-                }}
-              />
-            </Drawer>
-          )}
-        </Flexbox>
-        <ModeSwitch
-          actions={
-            isDev ? (
-              <>
-                <AgentOnboardingDebugExportButton
-                  agentId={onboardingAgentId}
-                  topicId={effectiveTopicId}
-                />
-                {historyTopics.length > 0 && (
-                  <Button
-                    icon={<History size={14} />}
-                    size={'small'}
-                    onClick={() => setHistoryDrawerOpen(true)}
-                  >
-                    {t('agent.history.title')}
-                  </Button>
-                )}
-                <Button danger loading={isResetting} size={'small'} onClick={handleReset}>
-                  {t('agent.modeSwitch.reset')}
-                </Button>
-              </>
-            ) : undefined
+      <Flexbox height={'100%'} width={'100%'}>
+        <OnboardingConversationProvider
+          agentId={onboardingAgentId}
+          frozen={onboardingFinished}
+          topicId={effectiveTopicId}
+          hooks={
+            onboardingFinished
+              ? undefined
+              : {
+                  onAfterSendMessage: async () => {
+                    await syncOnboardingContext();
+                    await Promise.all([
+                      refreshUserState(),
+                      refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
+                    ]);
+                  },
+                }
           }
-        />
+        >
+          <ErrorBoundary fallbackRender={() => null}>
+            <AgentOnboardingConversation
+              discoveryUserMessageCount={data?.context?.discoveryUserMessageCount}
+              feedbackSubmitted={!!data?.feedbackSubmitted}
+              finishTargetUrl={finishTargetUrl}
+              onboardingFinished={onboardingFinished}
+              phase={data?.context?.phase}
+              readOnly={viewingHistoricalTopic}
+              showFeedback={!viewingHistoricalTopic}
+              topicId={effectiveTopicId}
+              onAfterWrapUp={syncOnboardingContext}
+            />
+          </ErrorBoundary>
+        </OnboardingConversationProvider>
+        {isDev && historyTopics.length > 0 && (
+          <Drawer
+            open={historyDrawerOpen}
+            title={t('agent.history.title')}
+            onClose={() => setHistoryDrawerOpen(false)}
+          >
+            <HistoryPanel
+              activeTopicId={activeTopicId}
+              selectedTopicId={effectiveTopicId}
+              topics={historyTopics}
+              onSelectTopic={(id) => {
+                setSelectedTopicId(id);
+                setHistoryDrawerOpen(false);
+              }}
+            />
+          </Drawer>
+        )}
       </Flexbox>
+      <ModeSwitch
+        actions={
+          isDev ? (
+            <>
+              <AgentOnboardingDebugExportButton
+                agentId={onboardingAgentId}
+                topicId={effectiveTopicId}
+              />
+              {historyTopics.length > 0 && (
+                <Button
+                  icon={<History size={14} />}
+                  size={'small'}
+                  onClick={() => setHistoryDrawerOpen(true)}
+                >
+                  {t('agent.history.title')}
+                </Button>
+              )}
+              <Button danger loading={isResetting} size={'small'} onClick={handleReset}>
+                {t('agent.modeSwitch.reset')}
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
     </OnboardingContainer>
   );
 });

@@ -180,14 +180,26 @@ export class ResponsesService extends BaseService {
       if (msg.role === 'assistant') {
         const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
 
+        // Emit message item for assistant text content (even when tool_calls are present)
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        if (content) {
+          outputText = content;
+          output.push({
+            content: [
+              { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
+            ],
+            id: `msg_${responseId}_${itemCounter++}`,
+            role: 'assistant' as const,
+            status: 'completed' as const,
+            type: 'message' as const,
+          });
+        }
+
         // Handle tool_calls from assistant
         if (hasToolCalls) {
           for (const toolCall of msg.tool_calls) {
-            // Convert internal tool names: lobe-client-fn____get_weather → get_weather
-            let fnName = toolCall.function?.name ?? '';
-            if (fnName.startsWith('lobe-client-fn____')) {
-              fnName = fnName.slice('lobe-client-fn____'.length);
-            }
+            // Decode internal tool name format back to display name
+            const fnName = this.decodeToolName(toolCall.function?.name ?? '');
             output.push({
               arguments: toolCall.function?.arguments ?? '{}',
               call_id: toolCall.id ?? `call_${itemCounter}`,
@@ -195,23 +207,6 @@ export class ResponsesService extends BaseService {
               name: fnName,
               status: 'completed' as const,
               type: 'function_call' as const,
-            });
-          }
-        }
-
-        // Only emit message item for assistant messages WITHOUT tool_calls (i.e., final text response)
-        if (!hasToolCalls) {
-          const content = typeof msg.content === 'string' ? msg.content : '';
-          if (content) {
-            outputText = content;
-            output.push({
-              content: [
-                { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
-              ],
-              id: `msg_${responseId}_${itemCounter++}`,
-              role: 'assistant' as const,
-              status: 'completed' as const,
-              type: 'message' as const,
             });
           }
         }
@@ -227,6 +222,25 @@ export class ResponsesService extends BaseService {
     }
 
     return { output, outputText };
+  }
+
+  /**
+   * Decode internal tool name format to display name.
+   * - lobe-client-fn____get_weather → get_weather
+   * - lobe-cloud-sandbox____executeCode____builtin → lobe-cloud-sandbox/executeCode
+   * - my-plugin____myApi → my-plugin/myApi
+   */
+  private decodeToolName(rawName: string): string {
+    const SEPARATOR = '____';
+    if (rawName.startsWith(`lobe-client-fn${SEPARATOR}`)) {
+      return rawName.slice(`lobe-client-fn${SEPARATOR}`.length);
+    }
+    const parts = rawName.split(SEPARATOR);
+    if (parts.length >= 2) {
+      // parts[0] = identifier, parts[1] = apiName, parts[2+] = type (ignored for display)
+      return `${parts[0]}/${parts[1]}`;
+    }
+    return rawName;
   }
 
   /**
@@ -467,6 +481,12 @@ export class ResponsesService extends BaseService {
       let currentOutputIndex = 0;
       let itemCounter = 0;
       let textMessageStarted = false;
+
+      // Track active (in-progress) tool calls for proper incremental streaming
+      const activeToolCalls = new Map<
+        string,
+        { fcItemId: string; name: string; outputIndex: number; prevArguments: string }
+      >();
       let currentTextItemId = '';
 
       const startTextMessage = function* (seq: { n: number }) {
@@ -532,6 +552,35 @@ export class ResponsesService extends BaseService {
         currentOutputIndex++;
       };
 
+      const finishActiveToolCalls = function* (seq: { n: number }) {
+        for (const [callId, tc] of activeToolCalls) {
+          yield {
+            arguments: tc.prevArguments || '{}',
+            item_id: tc.fcItemId,
+            output_index: tc.outputIndex,
+            sequence_number: seq.n++,
+            type: 'response.function_call_arguments.done' as const,
+          };
+          yield {
+            item: {
+              arguments: tc.prevArguments || '{}',
+              call_id: callId,
+              id: tc.fcItemId,
+              name: tc.name,
+              status: 'completed' as const,
+              type: 'function_call' as const,
+            } as OutputItem,
+            output_index: tc.outputIndex,
+            sequence_number: seq.n++,
+            type: 'response.output_item.done' as const,
+          };
+        }
+        if (activeToolCalls.size > 0) {
+          currentOutputIndex += activeToolCalls.size;
+          activeToolCalls.clear();
+        }
+      };
+
       // Shared mutable sequence counter for generators
       const seq = { n: sequenceNumber };
 
@@ -563,69 +612,77 @@ export class ResponsesService extends BaseService {
               yield* finishTextMessage(seq, accumulatedText);
               accumulatedText = '';
 
-              // Emit function_call output items for each tool call
+              // Stream tool call deltas incrementally within stable output items
               for (const toolCall of chunk.toolsCalling) {
-                const fcItemId = `fc_${responseId}_${itemCounter++}`;
-                // Client function tools use original name; hosted tools use identifier/apiName
-                const isClientTool = toolCall.identifier === 'lobe-client-fn';
-                const toolDisplayName = isClientTool
-                  ? toolCall.apiName
-                  : `${toolCall.identifier}/${toolCall.apiName}`;
-                yield {
-                  item: {
-                    arguments: toolCall.arguments ?? '{}',
-                    call_id: toolCall.id,
-                    id: fcItemId,
-                    name: toolDisplayName,
-                    status: 'in_progress' as const,
-                    type: 'function_call' as const,
-                  } as OutputItem,
-                  output_index: currentOutputIndex,
-                  sequence_number: seq.n++,
-                  type: 'response.output_item.added' as const,
-                };
+                const callId = toolCall.id;
+                const existing = activeToolCalls.get(callId);
 
-                // Emit arguments delta
-                if (toolCall.arguments) {
+                if (!existing) {
+                  // First time seeing this tool call — emit output_item.added
+                  const fcItemId = `fc_${responseId}_${itemCounter++}`;
+                  const isClientTool = toolCall.identifier === 'lobe-client-fn';
+                  const toolDisplayName = isClientTool
+                    ? toolCall.apiName
+                    : `${toolCall.identifier}/${toolCall.apiName}`;
+                  const outputIndex = currentOutputIndex + activeToolCalls.size;
+
+                  activeToolCalls.set(callId, {
+                    fcItemId,
+                    name: toolDisplayName,
+                    outputIndex,
+                    prevArguments: '',
+                  });
+
                   yield {
-                    delta: toolCall.arguments,
-                    item_id: fcItemId,
-                    output_index: currentOutputIndex,
+                    item: {
+                      arguments: '',
+                      call_id: callId,
+                      id: fcItemId,
+                      name: toolDisplayName,
+                      status: 'in_progress' as const,
+                      type: 'function_call' as const,
+                    } as OutputItem,
+                    output_index: outputIndex,
                     sequence_number: seq.n++,
-                    type: 'response.function_call_arguments.delta' as const,
+                    type: 'response.output_item.added' as const,
                   };
+
+                  // Emit initial delta if arguments already present
+                  if (toolCall.arguments) {
+                    activeToolCalls.get(callId)!.prevArguments = toolCall.arguments;
+                    yield {
+                      delta: toolCall.arguments,
+                      item_id: fcItemId,
+                      output_index: outputIndex,
+                      sequence_number: seq.n++,
+                      type: 'response.function_call_arguments.delta' as const,
+                    };
+                  }
+                } else {
+                  // Subsequent chunk — compute incremental delta
+                  const currentArgs = toolCall.arguments ?? '';
+                  const delta = currentArgs.slice(existing.prevArguments.length);
+
+                  if (delta) {
+                    existing.prevArguments = currentArgs;
+                    yield {
+                      delta,
+                      item_id: existing.fcItemId,
+                      output_index: existing.outputIndex,
+                      sequence_number: seq.n++,
+                      type: 'response.function_call_arguments.delta' as const,
+                    };
+                  }
                 }
-
-                // Emit arguments done
-                yield {
-                  arguments: toolCall.arguments ?? '{}',
-                  item_id: fcItemId,
-                  output_index: currentOutputIndex,
-                  sequence_number: seq.n++,
-                  type: 'response.function_call_arguments.done' as const,
-                };
-
-                // Complete the function_call item
-                yield {
-                  item: {
-                    arguments: toolCall.arguments ?? '{}',
-                    call_id: toolCall.id,
-                    id: fcItemId,
-                    name: toolDisplayName,
-                    status: 'completed' as const,
-                    type: 'function_call' as const,
-                  } as OutputItem,
-                  output_index: currentOutputIndex,
-                  sequence_number: seq.n++,
-                  type: 'response.output_item.done' as const,
-                };
-                currentOutputIndex++;
               }
             } else if (chunk.chunkType === 'reasoning' && chunk.reasoning) {
               // Emit reasoning as text delta (within a text message)
               yield* startTextMessage(seq);
             }
           } else if (event.type === 'tool_end') {
+            // Finalize any remaining active tool calls before emitting tool output
+            yield* finishActiveToolCalls(seq);
+
             // Emit function_call_output for completed tool execution
             const toolData = event.data as {
               isSuccess: boolean;
@@ -659,9 +716,16 @@ export class ResponsesService extends BaseService {
               type: 'response.output_item.done' as const,
             };
             currentOutputIndex++;
+          } else if (event.type === 'stream_retry') {
+            // LLM retry — discard stale tool call state from the failed attempt
+            // so we don't emit phantom function_calls on final flush
+            activeToolCalls.clear();
           }
         }
       }
+
+      // Finalize any in-progress tool calls
+      yield* finishActiveToolCalls(seq);
 
       // Close any remaining open text message
       yield* finishTextMessage(seq, accumulatedText);

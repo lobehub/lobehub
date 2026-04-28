@@ -11,9 +11,10 @@ import { type ChatGroupStore } from '@/store/agentGroup/store';
 import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
+import { type ResetableStore } from '@/store/utils/resetableStore';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type ChatGroupState } from './initialState';
+import { type ChatGroupState, initialChatGroupState } from './initialState';
 import { type ChatGroupDispatchPayloads, type ChatGroupReducer } from './reducers';
 import { chatGroupReducers } from './reducers';
 import { ChatGroupCurdAction } from './slices/curd';
@@ -35,7 +36,7 @@ const toAgentGroupDetail = (group: ChatGroupItem): AgentGroupDetail =>
   }) as AgentGroupDetail;
 
 type Setter = StoreSetter<ChatGroupStore>;
-class ChatGroupInternalAction {
+class ChatGroupInternalAction implements ResetableStore {
   readonly #get: () => ChatGroupState;
   readonly #set: Setter;
 
@@ -46,6 +47,10 @@ class ChatGroupInternalAction {
     this.#set = set;
     this.#get = get;
   }
+
+  reset: ResetableStore['reset'] = () => {
+    this.#set(initialChatGroupState, false, n('reset'));
+  };
 
   internal_dispatchChatGroup = <T extends keyof ChatGroupDispatchPayloads>(payload: {
     payload: ChatGroupDispatchPayloads[T];

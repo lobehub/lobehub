@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Nano Banana 2 için; oluşturulan görüntülerin en-boy oranını kontrol eder (ekstra geniş 1:4, 4:1, 1:8, 8:1 desteklenir).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Gemini 3 görsel üretim modelleri için; oluşturulan görsellerin çözünürlüğünü kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Gemini 3.1 Flash Image modelleri için; oluşturulan görüntülerin çözünürlüğünü kontrol eder (512px desteklenir).",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "Claude Opus 4.7 için; çaba düzeyini kontrol eder (düşük/orta/yüksek/çok yüksek/azami).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Claude, Qwen3 ve benzeri modeller için; akıl yürütme için ayrılan token bütçesini kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "GLM-5 ve GLM-4.7 için; akıl yürütme için token bütçesini kontrol eder (maksimum 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Qwen3 serisi için; akıl yürütme için token bütçesini kontrol eder (maksimum 80k).",

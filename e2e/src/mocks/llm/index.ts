@@ -112,6 +112,22 @@ export class LLMMockManager {
   }
 
   /**
+   * Merge partial config overrides. Used by tests that need a slower or faster
+   * stream than the defaults (e.g. to simulate mid-stream user interactions).
+   */
+  setConfig(partial: Partial<LLMMockConfig>): void {
+    this.config = { ...this.config, ...partial };
+  }
+
+  /**
+   * Reset config to factory defaults. Call from `After` hooks so a test's
+   * timing overrides do not bleed into the next scenario.
+   */
+  resetConfig(): void {
+    this.config = { ...defaultConfig };
+  }
+
+  /**
    * Clear all custom responses
    */
   clearResponses(): void {
@@ -231,6 +247,18 @@ export const presetResponses = {
   codeHelp: 'I can help you with coding! Please share the code you would like me to review.',
   error: 'I apologize, but I encountered an error processing your request.',
   greeting: 'Hello! I am Lobe AI, your AI assistant. How can I help you today?',
+
+  // Much longer response so the chat surely exceeds the viewport and scroll
+  // behavior is observable (used by @AGENT-SCROLL-* scenarios).
+  longScrollArticle: Array.from({ length: 30 }, (_, i) => `这是第 ${i + 1} 段内容。`)
+    .concat(
+      Array.from(
+        { length: 30 },
+        (_, i) =>
+          `段落 ${i + 1}：人工智能是计算机科学的一个分支，它企图了解智能的实质，并生产出一种新的能以人类智能相似的方式做出反应的智能机器。研究领域包括机器人、语言识别、图像识别、自然语言处理和专家系统等。`,
+      ),
+    )
+    .join('\n\n'),
 
   // Long response for stop generation test
   longArticle:

@@ -1,3 +1,4 @@
+import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
 import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -34,6 +35,7 @@ export class UserService {
     agentId: string;
     agentOnboarding: UserAgentOnboarding;
     context: UserAgentOnboardingContext;
+    feedbackSubmitted: boolean;
     topicId: string;
   }> => {
     return lambdaClient.user.getOrCreateOnboardingState.query();
@@ -59,6 +61,10 @@ export class UserService {
 
   updateOnboardingDocument = async (type: 'soul' | 'persona', content: string) => {
     return lambdaClient.user.updateOnboardingDocument.mutate({ content, type });
+  };
+
+  patchOnboardingDocument = async (type: 'soul' | 'persona', hunks: MarkdownPatchHunk[]) => {
+    return lambdaClient.user.patchOnboardingDocument.mutate({ hunks, type });
   };
 
   makeUserOnboarded = async () => {

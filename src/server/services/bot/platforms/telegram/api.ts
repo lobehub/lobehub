@@ -115,6 +115,44 @@ export class TelegramApi {
     return data.result;
   }
 
+  // ==================== File Download ====================
+
+  /**
+   * Resolve a Telegram `file_id` to a `file_path` so it can be downloaded.
+   * Two-step Bot API flow: getFile → fetch from /file/bot<token>/<file_path>.
+   */
+  async getFile(fileId: string): Promise<{ file_path?: string; file_size?: number }> {
+    log('getFile: fileId=%s', fileId);
+    const data = await this.call('getFile', { file_id: fileId });
+    return data.result;
+  }
+
+  /**
+   * Download a Telegram media attachment by file_id.
+   *
+   * The Chat SDK's `Attachment.fetchData` closure is stripped when messages
+   * are serialized into the queue/Redis (functions are not JSON-serializable),
+   * so we need a way to re-download the original media after a debounce
+   * round-trip. This is the platform-native fallback path used by
+   * `TelegramWebhookClient.refetchAttachment`.
+   */
+  async downloadFile(fileId: string): Promise<Buffer> {
+    const file = await this.getFile(fileId);
+    if (!file.file_path) {
+      throw new Error(`Telegram getFile returned no file_path for ${fileId}`);
+    }
+    const url = `${TELEGRAM_API_BASE}/file/bot${this.botToken}/${file.file_path}`;
+    log('downloadFile: fileId=%s, file_path=%s', fileId, file.file_path);
+    const response = await fetch(url);
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `Failed to download Telegram file ${fileId}: ${response.status} ${text}`.trim(),
+      );
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
   // ==================== Forum Topics (Threads) ====================
 
   async createForumTopic(

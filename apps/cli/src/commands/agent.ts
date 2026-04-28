@@ -4,8 +4,14 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { getAuthInfo } from '../api/http';
-import { replayAgentEvents, streamAgentEvents } from '../utils/agentStream';
+import { getAgentStreamAuthInfo } from '../api/http';
+import { resolveAgentGatewayUrl } from '../settings';
+import {
+  replayAgentEvents,
+  streamAgentEvents,
+  streamAgentEventsViaWebSocket,
+} from '../utils/agentStream';
+import { resolveLocalDeviceId } from '../utils/device';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log, setVerbose } from '../utils/logger';
 
@@ -248,17 +254,29 @@ export function registerAgentCommand(program: Command) {
     .option('-p, --prompt <text>', 'User prompt')
     .option('-t, --topic-id <id>', 'Reuse an existing topic')
     .option('--no-auto-start', 'Do not auto-start the agent')
+    .option(
+      '--device <target>',
+      'Target device ID, or use "local" for the current connected device',
+    )
+    .option(
+      '--no-headless',
+      "Disable headless mode and wait for human approval on tool calls (default: headless — tools auto-run, matching the CLI's non-interactive nature)",
+    )
     .option('--json', 'Output full JSON event stream')
     .option('-v, --verbose', 'Show detailed tool call info')
     .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
+    .option('--sse', 'Force SSE stream instead of WebSocket gateway')
     .action(
       async (options: {
         agentId?: string;
         autoStart?: boolean;
+        device?: string;
+        headless?: boolean;
         json?: boolean;
         prompt?: string;
         replay?: string;
         slug?: string;
+        sse?: boolean;
         topicId?: string;
         verbose?: boolean;
       }) => {
@@ -285,12 +303,53 @@ export function registerAgentCommand(program: Command) {
 
         const client = await getTrpcClient();
 
+        let deviceId: string | undefined;
+        if (options.device !== undefined) {
+          if (options.device === 'local') {
+            deviceId = resolveLocalDeviceId();
+            if (!deviceId) {
+              log.error(
+                "No local device found. Run 'lh connect' first, then retry with --device local.",
+              );
+              process.exit(1);
+              return;
+            }
+          } else {
+            deviceId = options.device;
+          }
+
+          const devices = await client.device.listDevices.query();
+          const matchedDevice = devices.find(
+            (device: { deviceId?: string; online?: boolean }) => device.deviceId === deviceId,
+          );
+          if (!matchedDevice) {
+            log.error(`Device "${deviceId}" was not found. Check 'lh device list' and try again.`);
+            process.exit(1);
+            return;
+          }
+          if (!matchedDevice.online) {
+            log.error(
+              options.device === 'local'
+                ? `Local device "${deviceId}" is not online. Reconnect with 'lh connect' and try again.`
+                : `Device "${deviceId}" is not online. Bring it online and try again.`,
+            );
+            process.exit(1);
+            return;
+          }
+        }
+
         // 1. Exec agent to get operationId
         const input: Record<string, any> = { prompt: options.prompt };
         if (options.agentId) input.agentId = options.agentId;
+        if (deviceId) input.deviceId = deviceId;
         if (options.slug) input.slug = options.slug;
         if (options.topicId) input.appContext = { topicId: options.topicId };
         if (options.autoStart === false) input.autoStart = false;
+        // commander's --no-headless sets `headless` to false. Anything else
+        // (undefined, true) → headless mode is on and tool calls auto-execute.
+        if (options.headless !== false) {
+          input.userInterventionConfig = { approvalMode: 'headless' };
+        }
 
         const result = await client.aiAgent.execAgent.mutate(input as any);
         const r = result as any;
@@ -305,14 +364,27 @@ export function registerAgentCommand(program: Command) {
           log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
         }
 
-        // 2. Connect to SSE stream
-        const { serverUrl, headers } = await getAuthInfo();
-        const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
+        // 2. Connect to stream (WebSocket via Gateway, or fallback to SSE)
+        const { serverUrl, headers, token, tokenType } = await getAgentStreamAuthInfo();
+        const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
 
-        await streamAgentEvents(streamUrl, headers, {
-          json: options.json,
-          verbose: options.verbose,
-        });
+        if (agentGatewayUrl) {
+          await streamAgentEventsViaWebSocket({
+            gatewayUrl: agentGatewayUrl,
+            json: options.json,
+            operationId,
+            serverUrl,
+            token,
+            tokenType,
+            verbose: options.verbose,
+          });
+        } else {
+          const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
+          await streamAgentEvents(streamUrl, headers, {
+            json: options.json,
+            verbose: options.verbose,
+          });
+        }
       },
     );
 

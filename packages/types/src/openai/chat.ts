@@ -62,6 +62,10 @@ export interface OpenAIChatMessage {
  */
 export interface ChatStreamPayload {
   /**
+   * Provider deployment name
+   */
+  deploymentName?: string;
+  /**
    * Whether search is enabled
    */
   enabledSearch?: boolean;

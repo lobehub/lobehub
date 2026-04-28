@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { type ActionIconProps } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -12,7 +13,6 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { HotkeyEnum } from '@/types/hotkey';
 
 export const TOGGLE_BUTTON_ID = 'toggle_left_panel_button';
 

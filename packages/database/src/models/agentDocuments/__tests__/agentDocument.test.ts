@@ -39,17 +39,104 @@ beforeEach(async () => {
 });
 
 describe('AgentDocumentModel', () => {
+  describe('associate', () => {
+    it('should link an existing document to an agent and return the new id', async () => {
+      // Create a document in the documents table directly
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'crawled content',
+          fileType: 'article',
+          filename: 'page.html',
+          source: 'https://example.com',
+          sourceType: 'web',
+          title: 'Example Page',
+          totalCharCount: 15,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const result = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+
+      expect(result.id).toBeDefined();
+      expect(result.id).not.toBe('');
+
+      // Verify the agentDocuments row was created
+      const [row] = await serverDB
+        .select()
+        .from(agentDocuments)
+        .where(eq(agentDocuments.id, result.id));
+
+      expect(row).toBeDefined();
+      expect(row?.agentId).toBe(agentId);
+      expect(row?.documentId).toBe(doc!.id);
+      expect(row?.userId).toBe(userId);
+      expect(row?.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+    });
+
+    it('should be idempotent (onConflictDoNothing)', async () => {
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'content',
+          fileType: 'article',
+          filename: 'dup.html',
+          source: 'https://example.com/dup',
+          sourceType: 'web',
+          title: 'Dup Page',
+          totalCharCount: 7,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const first = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+      const second = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+
+      expect(first.id).toBeDefined();
+      // Second call should not throw, id may be undefined due to onConflictDoNothing
+      expect(second).toBeDefined();
+    });
+
+    it('should not create documents row — only the link', async () => {
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'existing',
+          fileType: 'article',
+          filename: 'existing.html',
+          source: 'https://example.com/existing',
+          sourceType: 'web',
+          title: 'Existing',
+          totalCharCount: 8,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const countBefore = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.userId, userId));
+      await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+      const countAfter = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.userId, userId));
+
+      expect(countAfter.length).toBe(countBefore.length);
+    });
+  });
+
   describe('create', () => {
     it('should create an agent document with normalized policy and linked document row', async () => {
-      const result = await agentDocumentModel.create(
-        agentId,
-        'identity.md',
-        'line1\nline2',
-        DocumentLoadPosition.BEFORE_SYSTEM,
-        { maxTokens: 1024, priority: 2, rule: DocumentLoadRule.ALWAYS },
-        'claw',
-        { description: 'Identity policy', domain: 'ops' },
-      );
+      const result = await agentDocumentModel.create(agentId, 'identity.md', 'line1\nline2', {
+        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
+        loadRules: { maxTokens: 1024, priority: 2, rule: DocumentLoadRule.ALWAYS },
+        metadata: { description: 'Identity policy', domain: 'ops' },
+        templateId: 'claw',
+      });
 
       expect(result.agentId).toBe(agentId);
       expect(result.filename).toBe('identity.md');
@@ -80,7 +167,7 @@ describe('AgentDocumentModel', () => {
       expect(result.policy?.context?.position).toBe(DocumentLoadPosition.BEFORE_FIRST_USER);
       expect(result.policy?.context?.rule).toBe(DocumentLoadRule.ALWAYS);
       expect(result.policyLoadFormat).toBe(DocumentLoadFormat.RAW);
-      expect(result.policyLoad).toBe(PolicyLoad.ALWAYS);
+      expect(result.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
       expect(result.accessShared).toBe(0);
       expect(result.accessPublic).toBe(0);
     });
@@ -104,28 +191,46 @@ describe('AgentDocumentModel', () => {
       const byFilename = await agentDocumentModel.findByFilename(agentId, 'own.md');
       expect(byFilename?.id).toBe(ownDoc.id);
     });
+
+    it('should find current-agent records by underlying document ids', async () => {
+      const ownDoc = await agentDocumentModel.create(agentId, 'own.md', 'own content');
+      const secondAgentDoc = await agentDocumentModel.create(
+        secondAgentId,
+        'second.md',
+        'second content',
+      );
+      const otherUserDoc = await otherAgentDocumentModel.create(
+        otherAgentId,
+        'other.md',
+        'other content',
+      );
+
+      const result = await agentDocumentModel.findByDocumentIds(agentId, [
+        ownDoc.documentId,
+        secondAgentDoc.documentId,
+        otherUserDoc.documentId,
+        'missing-document',
+      ]);
+
+      expect(result.map((doc) => doc.id)).toEqual([ownDoc.id]);
+    });
   });
 
   describe('update and upsert', () => {
     it('should update content, metadata and policy projections', async () => {
-      const created = await agentDocumentModel.create(
-        agentId,
-        'policy.md',
-        'old',
-        DocumentLoadPosition.BEFORE_FIRST_USER,
-        { maxTokens: 100, priority: 8 },
-        undefined,
-        { description: 'old desc', topic: 'old' },
-      );
+      const created = await agentDocumentModel.create(agentId, 'policy.md', 'old', {
+        loadPosition: DocumentLoadPosition.BEFORE_FIRST_USER,
+        loadRules: { maxTokens: 100, priority: 8 },
+        metadata: { description: 'old desc', topic: 'old' },
+      });
 
-      await agentDocumentModel.update(
-        created.id,
-        'new\ncontent',
-        DocumentLoadPosition.AFTER_KNOWLEDGE,
-        { maxTokens: 500, priority: 1 },
-        { description: 'new desc', topic: 'new' },
-        { context: { policyLoadFormat: DocumentLoadFormat.FILE } },
-      );
+      await agentDocumentModel.update(created.id, {
+        content: 'new\ncontent',
+        loadPosition: DocumentLoadPosition.AFTER_KNOWLEDGE,
+        loadRules: { maxTokens: 500, priority: 1 },
+        metadata: { description: 'new desc', topic: 'new' },
+        policy: { context: { policyLoadFormat: DocumentLoadFormat.FILE } },
+      });
 
       const updated = await agentDocumentModel.findById(created.id);
       expect(updated?.content).toBe('new\ncontent');
@@ -146,26 +251,30 @@ describe('AgentDocumentModel', () => {
       expect(updatedDoc?.description).toBe('new desc');
     });
 
-    it('should upsert by filename and merge metadata on updates', async () => {
-      const first = await agentDocumentModel.upsert(
-        agentId,
-        'policy-upsert.md',
-        'v1',
-        DocumentLoadPosition.BEFORE_FIRST_USER,
-        { priority: 9 },
-        undefined,
-        { a: 1, description: 'v1' },
-      );
+    it('should upsert by creating a new document when filename does not exist', async () => {
+      const result = await agentDocumentModel.upsert(agentId, 'new-upsert.md', 'fresh', {
+        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
+        loadRules: { priority: 5 },
+        templateId: 'claw',
+      });
 
-      const second = await agentDocumentModel.upsert(
-        agentId,
-        'policy-upsert.md',
-        'v2',
-        undefined,
-        { priority: 1, maxTokens: 900 },
-        undefined,
-        { b: 2, description: 'v2' },
-      );
+      expect(result.filename).toBe('new-upsert.md');
+      expect(result.content).toBe('fresh');
+      expect(result.templateId).toBe('claw');
+      expect(result.policy?.context?.position).toBe(DocumentLoadPosition.BEFORE_SYSTEM);
+    });
+
+    it('should upsert by filename and merge metadata on updates', async () => {
+      const first = await agentDocumentModel.upsert(agentId, 'policy-upsert.md', 'v1', {
+        loadPosition: DocumentLoadPosition.BEFORE_FIRST_USER,
+        loadRules: { priority: 9 },
+        metadata: { a: 1, description: 'v1' },
+      });
+
+      const second = await agentDocumentModel.upsert(agentId, 'policy-upsert.md', 'v2', {
+        loadRules: { priority: 1, maxTokens: 900 },
+        metadata: { b: 2, description: 'v2' },
+      });
 
       expect(second.id).toBe(first.id);
       expect(second.content).toBe('v2');
@@ -176,65 +285,80 @@ describe('AgentDocumentModel', () => {
   });
 
   describe('rename and copy', () => {
-    it('should rename and preserve extension for filename/source', async () => {
+    it('should rename and preserve human-readable filename/source', async () => {
       const created = await agentDocumentModel.create(agentId, 'old-name.md', 'hello');
 
       const renamed = await agentDocumentModel.rename(created.id, 'New Name');
 
       expect(renamed?.title).toBe('New Name');
-      expect(renamed?.filename).toBe('new-name.md');
+      expect(renamed?.filename).toBe('New Name');
 
       const [doc] = await serverDB
         .select()
         .from(documents)
         .where(eq(documents.id, created.documentId));
 
-      expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('new-name.md')}`);
+      expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('New Name')}`);
+    });
+
+    it('uses the new title verbatim as filename when renaming', async () => {
+      const created = await agentDocumentModel.create(agentId, 'identity.md', 'hello');
+
+      const renamed = await agentDocumentModel.rename(created.id, 'IDENTITY 2');
+
+      expect(renamed?.filename).toBe('IDENTITY 2');
     });
 
     it('should copy into a new record and keep policy/template metadata', async () => {
-      const created = await agentDocumentModel.create(
-        agentId,
-        'copy-source.md',
-        'copy me',
-        DocumentLoadPosition.BEFORE_SYSTEM,
-        { maxTokens: 200, priority: 3 },
-        'claw',
-        { description: 'source desc', domain: 'A' },
-      );
+      const created = await agentDocumentModel.create(agentId, 'copy-source.md', 'copy me', {
+        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
+        loadRules: { maxTokens: 200, priority: 3 },
+        metadata: { description: 'source desc', domain: 'A' },
+        templateId: 'claw',
+      });
 
       const copied = await agentDocumentModel.copy(created.id, 'Copied Title');
 
       expect(copied).toBeDefined();
       expect(copied?.id).not.toBe(created.id);
       expect(copied?.documentId).not.toBe(created.documentId);
-      expect(copied?.filename).toBe('copied-title.md');
+      expect(copied?.filename).toBe('Copied Title');
       expect(copied?.templateId).toBe('claw');
       expect(copied?.policy?.context?.maxTokens).toBe(200);
       expect(copied?.metadata).toMatchObject({ description: 'source desc', domain: 'A' });
+    });
+
+    it('should preserve policyLoad when copying a document', async () => {
+      const created = await agentDocumentModel.create(agentId, 'always-doc.md', 'content', {
+        policyLoad: PolicyLoad.ALWAYS,
+      });
+
+      const copied = await agentDocumentModel.copy(created.id, 'Always Copy');
+
+      expect(copied?.policyLoad).toBe(PolicyLoad.ALWAYS);
     });
   });
 
   describe('findByAgent and findByTemplate', () => {
     it('should return matched docs with parsed loadRules', async () => {
-      await agentDocumentModel.create(agentId, 'a.md', 'A', undefined, {
-        maxTokens: 100,
-        priority: 2,
+      await agentDocumentModel.create(agentId, 'a.md', 'A', {
+        loadRules: { maxTokens: 100, priority: 2 },
       });
-      await agentDocumentModel.create(agentId, 'b.md', 'B', undefined, {
-        maxTokens: 50,
-        priority: 1,
+      await agentDocumentModel.create(agentId, 'b.md', 'B', {
+        loadRules: { maxTokens: 50, priority: 1 },
       });
-      await agentDocumentModel.create(agentId, 'c.md', 'C', undefined, { priority: 9 }, 'claw');
-      await agentDocumentModel.create(agentId, 'd.md', 'D', undefined, { priority: 8 }, 'claw');
-      await agentDocumentModel.create(
-        secondAgentId,
-        'e.md',
-        'E',
-        undefined,
-        { priority: 7 },
-        'claw',
-      );
+      await agentDocumentModel.create(agentId, 'c.md', 'C', {
+        loadRules: { priority: 9 },
+        templateId: 'claw',
+      });
+      await agentDocumentModel.create(agentId, 'd.md', 'D', {
+        loadRules: { priority: 8 },
+        templateId: 'claw',
+      });
+      await agentDocumentModel.create(secondAgentId, 'e.md', 'E', {
+        loadRules: { priority: 7 },
+        templateId: 'claw',
+      });
 
       const byAgent = await agentDocumentModel.findByAgent(agentId);
       expect(byAgent).toHaveLength(4);
@@ -272,20 +396,14 @@ describe('AgentDocumentModel', () => {
 
   describe('updateToolLoadRule and loadable queries', () => {
     it('should apply tool load rule and exclude manual docs from loadable results', async () => {
-      const alwaysDoc = await agentDocumentModel.create(
-        agentId,
-        'always.md',
-        'always',
-        DocumentLoadPosition.BEFORE_FIRST_USER,
-        { priority: 2 },
-      );
-      const manualDoc = await agentDocumentModel.create(
-        agentId,
-        'manual.md',
-        'manual',
-        DocumentLoadPosition.BEFORE_FIRST_USER,
-        { priority: 1 },
-      );
+      const alwaysDoc = await agentDocumentModel.create(agentId, 'always.md', 'always', {
+        loadPosition: DocumentLoadPosition.BEFORE_FIRST_USER,
+        loadRules: { priority: 2 },
+      });
+      const manualDoc = await agentDocumentModel.create(agentId, 'manual.md', 'manual', {
+        loadPosition: DocumentLoadPosition.BEFORE_FIRST_USER,
+        loadRules: { priority: 1 },
+      });
 
       const updated = await agentDocumentModel.updateToolLoadRule(manualDoc.id, {
         keywordMatchMode: 'all',
@@ -326,21 +444,29 @@ describe('AgentDocumentModel', () => {
       expect(context).not.toContain('--- manual.md ---');
     });
 
+    it('should preserve progressive policyLoad when updating load rule without mode', async () => {
+      const doc = await agentDocumentModel.create(agentId, 'progressive.md', 'content');
+      expect(doc.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+
+      const updated = await agentDocumentModel.updateToolLoadRule(doc.id, {
+        rule: 'by-keywords',
+        keywords: ['test'],
+      });
+
+      expect(updated?.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+      expect(updated?.policy?.context?.keywords).toEqual(['test']);
+      expect(updated?.policyLoadRule).toBe(DocumentLoadRule.BY_KEYWORDS);
+    });
+
     it('should group docs by position and sort by priority ascending', async () => {
-      await agentDocumentModel.create(
-        agentId,
-        'p2.md',
-        'p2',
-        DocumentLoadPosition.BEFORE_KNOWLEDGE,
-        { priority: 2 },
-      );
-      await agentDocumentModel.create(
-        agentId,
-        'p1.md',
-        'p1',
-        DocumentLoadPosition.BEFORE_KNOWLEDGE,
-        { priority: 1 },
-      );
+      await agentDocumentModel.create(agentId, 'p2.md', 'p2', {
+        loadPosition: DocumentLoadPosition.BEFORE_KNOWLEDGE,
+        loadRules: { priority: 2 },
+      });
+      await agentDocumentModel.create(agentId, 'p1.md', 'p1', {
+        loadPosition: DocumentLoadPosition.BEFORE_KNOWLEDGE,
+        loadRules: { priority: 1 },
+      });
 
       const grouped = await agentDocumentModel.getDocumentsByPosition(agentId);
       const docsAtPosition = grouped.get(DocumentLoadPosition.BEFORE_KNOWLEDGE) || [];
@@ -379,23 +505,18 @@ describe('AgentDocumentModel', () => {
       expect(rawDoc).toBeDefined();
     });
 
+    it('should return empty string from getAgentContext when no loadable docs exist', async () => {
+      const context = await agentDocumentModel.getAgentContext(agentId);
+      expect(context).toBe('');
+    });
+
     it('should soft delete by agent and by template', async () => {
-      const templateDoc = await agentDocumentModel.create(
-        agentId,
-        'template-a.md',
-        'A',
-        undefined,
-        undefined,
-        'claw',
-      );
-      const otherTemplateDoc = await agentDocumentModel.create(
-        agentId,
-        'template-b.md',
-        'B',
-        undefined,
-        undefined,
-        'other',
-      );
+      const templateDoc = await agentDocumentModel.create(agentId, 'template-a.md', 'A', {
+        templateId: 'claw',
+      });
+      const otherTemplateDoc = await agentDocumentModel.create(agentId, 'template-b.md', 'B', {
+        templateId: 'other',
+      });
       const secondAgentDoc = await agentDocumentModel.create(secondAgentId, 'agent-2.md', 'C');
 
       await agentDocumentModel.deleteByTemplate(agentId, 'claw', 'template cleanup');

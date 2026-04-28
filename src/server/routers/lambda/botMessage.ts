@@ -16,6 +16,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
 import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
@@ -99,10 +100,14 @@ const resolveBot = async (
   if (!provider.enabled) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: `Bot is disabled: ${botId}` });
   }
+  const definition = platformRegistry.getPlatform(provider.platform);
+  const settings = definition
+    ? mergeWithDefaults(definition.schema, provider.settings as Record<string, unknown> | undefined)
+    : ((provider.settings as Record<string, unknown>) ?? {});
   return {
     platform: provider.platform as MessagePlatformType,
     service: createServiceForBot(provider),
-    settings: (provider.settings as Record<string, unknown>) ?? {},
+    settings,
   };
 };
 

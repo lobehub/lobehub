@@ -18,6 +18,8 @@ export type OperationType =
   // === AI generation ===
   | 'execAgentRuntime' // Execute agent runtime (client-side, entire agent runtime execution)
   | 'execServerAgentRuntime' // Execute server agent runtime (server-side, e.g., Group Chat)
+  | 'execHeterogeneousAgent'
+  | 'subagentThread' // Per-spawn subagent Thread context (child of execHeterogeneousAgent); carries thread-scoped ConversationContext so dispatches resolve to the Thread's messagesMap bucket. NOT in AI_RUNTIME_OPERATION_TYPES — it's a context container, not an independent loading state.
   | 'createAssistantMessage' // Create assistant message (sub-operation of execAgentRuntime)
   // === LLM execution (sub-operations) ===
   | 'callLLM' // Call LLM streaming response (sub-operation of execAgentRuntime)
@@ -190,6 +192,8 @@ export interface Operation {
 export interface QueuedMessage {
   content: string;
   createdAt: number;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
   files?: string[];
   id: string;
   interruptMode: 'soft' | 'hard';
@@ -200,8 +204,84 @@ export interface QueuedMessage {
  */
 export interface MergedQueuedMessage {
   content: string;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
   files: string[];
 }
+
+const createTextNode = (text: string) => ({
+  detail: 0,
+  format: 0,
+  mode: 'normal',
+  style: '',
+  text,
+  type: 'text',
+  version: 1,
+});
+
+const createParagraphNode = (text = '') => ({
+  children: text ? [createTextNode(text)] : [],
+  direction: 'ltr',
+  format: '',
+  indent: 0,
+  type: 'paragraph',
+  version: 1,
+});
+
+const createEditorDataFromContent = (content: string): Record<string, any> | undefined => {
+  if (!content) return undefined;
+
+  return {
+    root: {
+      children: content.split('\n').map((line) => createParagraphNode(line)),
+      direction: 'ltr',
+      format: '',
+      indent: 0,
+      type: 'root',
+      version: 1,
+    },
+  };
+};
+
+const normalizeQueuedEditorData = (message: QueuedMessage): Record<string, any> | undefined => {
+  if (message.editorData?.root) return message.editorData;
+
+  return createEditorDataFromContent(message.content);
+};
+
+const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> | undefined => {
+  const mergedChildren: any[] = [];
+  let baseRoot: Record<string, any> | undefined;
+
+  for (const message of messages) {
+    const editorData = normalizeQueuedEditorData(message);
+    const root = editorData?.root;
+    const children = root?.children;
+
+    if (!Array.isArray(children) || children.length === 0) continue;
+
+    if (!baseRoot) {
+      baseRoot = structuredClone(root);
+    }
+
+    if (mergedChildren.length > 0) {
+      mergedChildren.push(createParagraphNode());
+    }
+
+    mergedChildren.push(...structuredClone(children));
+  }
+
+  if (mergedChildren.length === 0) return undefined;
+
+  return {
+    root: {
+      ...baseRoot,
+      children: mergedChildren,
+      type: 'root',
+      version: baseRoot?.version ?? 1,
+    },
+  };
+};
 
 /**
  * Merge multiple queued messages into a single message.
@@ -211,6 +291,7 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
   const sorted = [...messages].sort((a, b) => a.createdAt - b.createdAt);
   return {
     content: sorted.map((m) => m.content).join('\n\n'),
+    editorData: mergeQueuedEditorData(sorted),
     files: sorted.flatMap((m) => m.files ?? []),
   };
 };
@@ -236,10 +317,12 @@ export interface OperationFilter {
  *
  * Includes:
  * - execAgentRuntime: Client-side agent execution (single chat)
+ * - execHeterogeneousAgent: Heterogeneous agent execution (Claude Code CLI, etc.)
  * - execServerAgentRuntime: Server-side agent execution (Group Chat)
  */
 export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
   'execAgentRuntime',
+  'execHeterogeneousAgent',
   'execServerAgentRuntime',
 ];
 

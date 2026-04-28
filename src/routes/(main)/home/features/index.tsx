@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import DailyBrief from '@/features/DailyBrief';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -11,9 +12,6 @@ import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selec
 
 import CommunityAgents from './CommunityAgents';
 import InputArea from './InputArea';
-import RecentPage from './RecentPage';
-import RecentResource from './RecentResource';
-import RecentTopic from './RecentTopic';
 import WelcomeText from './WelcomeText';
 
 const Home = memo(() => {
@@ -32,16 +30,14 @@ const Home = memo(() => {
     <Flexbox gap={40}>
       <Welcome />
       <InputArea />
+      {isLogin && (
+        <Flexbox style={{ display: hideOtherModules ? 'none' : undefined }}>
+          <DailyBrief />
+        </Flexbox>
+      )}
       {/* Use CSS visibility to hide instead of unmounting to prevent data re-fetching */}
       <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
-        {isDevMode && isLogin && (
-          <>
-            <RecentTopic />
-            <RecentPage />
-          </>
-        )}
         {isDevMode && <CommunityAgents />}
-        {isDevMode && isLogin && <RecentResource />}
       </Flexbox>
     </Flexbox>
   );

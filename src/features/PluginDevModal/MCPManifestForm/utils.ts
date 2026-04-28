@@ -1,4 +1,4 @@
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
@@ -14,7 +14,7 @@ interface McpServers {
 }
 
 interface ParsedMcpInput {
-  manifest?: LobeChatPluginManifest;
+  manifest?: ToolManifest;
   mcpServers?: McpServers;
 }
 

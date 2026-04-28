@@ -781,31 +781,6 @@ describe('chatMessage actions', () => {
     });
   });
 
-  describe('internal_toggleMessageLoading', () => {
-    it('should add message id to messageLoadingIds when loading is true', () => {
-      const { result } = renderHook(() => useChatStore());
-      const messageId = 'message-id';
-
-      act(() => {
-        result.current.internal_toggleMessageLoading(true, messageId);
-      });
-
-      expect(result.current.messageLoadingIds).toContain(messageId);
-    });
-
-    it('should remove message id from messageLoadingIds when loading is false', () => {
-      const { result } = renderHook(() => useChatStore());
-      const messageId = 'ddd-id';
-
-      act(() => {
-        result.current.internal_toggleMessageLoading(true, messageId);
-        result.current.internal_toggleMessageLoading(false, messageId);
-      });
-
-      expect(result.current.messageLoadingIds).not.toContain(messageId);
-    });
-  });
-
   describe('modifyMessageContent', () => {
     it('should call internal_traceMessage with correct parameters before updating', async () => {
       const messageId = 'message-id';
