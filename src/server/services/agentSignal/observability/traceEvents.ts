@@ -64,6 +64,15 @@ export const toAgentSignalTraceEvents = (input: {
       attemptStatus: result.attempt.status,
       detail: result.detail,
       errorCode: result.status === 'failed' ? result.error.code : undefined,
+      errorMessage: result.status === 'failed' ? result.error.message : undefined,
+      outputDecision:
+        result.output &&
+        typeof result.output === 'object' &&
+        'decision' in result.output &&
+        result.output.decision &&
+        typeof result.output.decision === 'object'
+          ? result.output.decision
+          : undefined,
       runId: 'runId' in result.attempt ? result.attempt.runId : undefined,
       status: result.status,
     },

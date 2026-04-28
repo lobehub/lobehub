@@ -36,10 +36,6 @@ export const createSkillMount = (db: LobeChatDatabase, userId: string) => {
       agentDocumentModel,
       documentService,
     }),
-    'agent-topic': new ProviderSkillsAgentDocument('agent-topic', {
-      agentDocumentModel,
-      documentService,
-    }),
     'builtin': new ProviderSkillsBuiltin(),
     'installed-active': new ProviderSkillsInstalledActive({
       agentModel,

@@ -39,7 +39,6 @@ const { mockTrpcClient } = vi.hoisted(() => ({
     agentSkills: {
       createSkill: { mutate: vi.fn() },
       deleteSkill: { mutate: vi.fn() },
-      promoteSkill: { mutate: vi.fn() },
       updateSkill: { mutate: vi.fn() },
     },
     aiAgent: {
@@ -1036,12 +1035,12 @@ describe('agent command', () => {
         .mockResolvedValueOnce([
           {
             mode: 8,
-            name: 'agent-topic',
-            path: './lobe/skills/agent-topic',
+            name: 'builtin',
+            path: './lobe/skills/builtin',
             type: 'directory',
           },
         ])
-        .mockRejectedValueOnce(new Error('Topic ID is required for the agent-topic namespace'));
+        .mockRejectedValueOnce(new Error('Failed to list builtin skills'));
 
       const program = createProgram();
       await program.parseAsync([
@@ -1063,12 +1062,10 @@ describe('agent command', () => {
       });
       expect(mockTrpcClient.agentDocument.listDocumentsByPath.query).toHaveBeenNthCalledWith(2, {
         agentId: 'a1',
-        path: './lobe/skills/agent-topic',
+        path: './lobe/skills/builtin',
         topicId: undefined,
       });
-      expect(log.warn).toHaveBeenCalledWith(
-        './lobe/skills/agent-topic: Topic ID is required for the agent-topic namespace',
-      );
+      expect(log.warn).toHaveBeenCalledWith('./lobe/skills/builtin: Failed to list builtin skills');
     });
 
     it('should read SKILL.md when cat targets a skill directory alias', async () => {

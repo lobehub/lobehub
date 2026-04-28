@@ -77,34 +77,24 @@ const toolLoadRuleSchema = z.object({
 const readFormatSchema = z.enum(['xml', 'markdown', 'both']).optional();
 const writeCreateModeSchema = z.enum(['always-new', 'if-missing', 'must-exist']).optional();
 const recursiveSchema = z.boolean().optional();
-const mountedSkillNamespaceSchema = z.enum(['agent', 'agent-topic']);
+const mountedSkillNamespaceSchema = z.literal('agent');
 
 const createMountedSkillSchema = z.object({
   agentId: z.string(),
   content: z.string(),
   skillName: z.string().min(1),
   targetNamespace: mountedSkillNamespaceSchema,
-  topicId: z.string().optional(),
 });
 
 const deleteMountedSkillSchema = z.object({
   agentId: z.string(),
   path: z.string(),
-  topicId: z.string().optional(),
-});
-
-const promoteMountedSkillSchema = z.object({
-  agentId: z.string(),
-  path: z.string(),
-  targetName: z.string().optional(),
-  topicId: z.string(),
 });
 
 const updateMountedSkillSchema = z.object({
   agentId: z.string(),
   content: z.string(),
   path: z.string(),
-  topicId: z.string().optional(),
 });
 
 const liteXMLOperationSchema = z.union([
@@ -442,7 +432,6 @@ export const agentDocumentRouter = router({
           input.content,
           {
             agentId: input.agentId,
-            topicId: input.topicId,
           },
           { createMode: 'always-new' },
         );
@@ -460,7 +449,6 @@ export const agentDocumentRouter = router({
           input.content,
           {
             agentId: input.agentId,
-            topicId: input.topicId,
           },
           { createMode: 'must-exist' },
         );
@@ -475,25 +463,7 @@ export const agentDocumentRouter = router({
       try {
         await ctx.agentDocumentVfsService.delete(input.path, {
           agentId: input.agentId,
-          topicId: input.topicId,
         });
-      } catch (error) {
-        handleAgentDocumentVfsError(error);
-      }
-    }),
-
-  promoteSkillByPath: agentDocumentProcedure
-    .input(promoteMountedSkillSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        return await ctx.agentDocumentVfsService.promoteSkill(
-          input.path,
-          {
-            agentId: input.agentId,
-            topicId: input.topicId,
-          },
-          { targetName: input.targetName },
-        );
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }

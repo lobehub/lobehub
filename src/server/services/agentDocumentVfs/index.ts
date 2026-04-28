@@ -315,8 +315,6 @@ export class AgentDocumentVfsService {
       );
 
       if (existing) {
-        await this.assertUniqueOrdinarySibling(ctx.agentId, parentId, segment, existing.id);
-
         if (existing.fileType !== DOCUMENT_FOLDER_TYPE) {
           throw new AgentDocumentVfsError(
             `Path segment is not a directory: ${nextPath}`,
@@ -333,8 +331,6 @@ export class AgentDocumentVfsService {
       if (!isLeaf && !options.recursive) {
         throw new AgentDocumentVfsError(`Parent path not found: ${nextPath}`, 'BAD_REQUEST');
       }
-
-      await this.assertNoOrdinarySiblingConflict(ctx.agentId, parentId, segment);
 
       const created = await this.agentDocumentModel.create(ctx.agentId, segment, '', {
         fileType: DOCUMENT_FOLDER_TYPE,
@@ -501,39 +497,6 @@ export class AgentDocumentVfsService {
   }
 
   /**
-   * Promotes a topic-scoped skill into an agent-scoped mounted skill.
-   *
-   * Use when:
-   * - Router APIs need the old promote behavior through the unified VFS path surface
-   *
-   * Returns:
-   * - The promoted mounted skill metadata
-   */
-  async promoteSkill(path: string, ctx: AgentDocumentVfsContext, options: { targetName?: string }) {
-    const normalizedPath = normalizeAgentDocumentPath(path);
-
-    if (!isSkillPath(normalizedPath)) {
-      throw new AgentDocumentVfsError(`Path is not a skill mount path: ${path}`, 'BAD_REQUEST');
-    }
-
-    if (!ctx.topicId) {
-      throw new AgentDocumentVfsError(
-        'Topic ID is required to promote a topic skill',
-        'BAD_REQUEST',
-      );
-    }
-
-    const nextNode = await this.skillMount.promote({
-      agentId: ctx.agentId,
-      path: normalizedPath,
-      targetName: options.targetName,
-      topicId: ctx.topicId,
-    });
-
-    return this.toMountedStats(nextNode);
-  }
-
-  /**
    * Lists agent-scoped trash entries.
    *
    * Use when:
@@ -586,7 +549,6 @@ export class AgentDocumentVfsService {
 
     const ancestors = await this.collectDeletedAncestors(root, ctx.agentId);
     const subtree = await this.collectOrdinarySubtree(root, ctx.agentId, true);
-    await this.assertNoRestoreConflicts([...ancestors, ...subtree], ctx.agentId);
 
     for (const ancestor of ancestors.reverse()) {
       if (ancestor.deletedAt) {
@@ -671,10 +633,12 @@ export class AgentDocumentVfsService {
   ): Promise<AgentDocumentNode[]> {
     const docs = await this.agentDocumentModel.listByParent(agentId, parentId, {
       cursor: options.cursor,
-      limit: normalizeListLimit(options.limit),
     });
+    const visibleDocs = selectOldestByFilename(docs);
     return applyListLimit(
-      docs.map((doc) => this.toOrdinaryNode(doc, buildOrdinaryPath(parentPath, doc.filename))),
+      visibleDocs.map((doc) =>
+        this.toOrdinaryNode(doc, buildOrdinaryPath(parentPath, doc.filename)),
+      ),
       options,
     );
   }
@@ -704,15 +668,10 @@ export class AgentDocumentVfsService {
         segment,
         {
           ...options,
-          limit: 2,
         },
       );
 
-      if (candidates.length > 1) {
-        throw new AgentDocumentVfsError(`Duplicate VFS path segment: ${segment}`, 'CONFLICT');
-      }
-
-      current = candidates[0];
+      current = selectOldestAgentDocument(candidates);
       if (!current) return undefined;
       parentId = current.documentId;
     }
@@ -827,13 +786,6 @@ export class AgentDocumentVfsService {
         throw new AgentDocumentVfsError(`Path is not a file: ${path}`, 'BAD_REQUEST');
       }
 
-      await this.assertUniqueOrdinarySibling(
-        ctx.agentId,
-        existing.parentId,
-        existing.filename,
-        existing.id,
-      );
-
       if (createMode === 'always-new') {
         throw new AgentDocumentVfsError(`Path already exists: ${path}`, 'BAD_REQUEST');
       }
@@ -878,12 +830,6 @@ export class AgentDocumentVfsService {
         'BAD_REQUEST',
       );
     }
-
-    await this.assertNoOrdinarySiblingConflict(
-      ctx.agentId,
-      parentNode?.documentId ?? null,
-      filename,
-    );
 
     const snapshot = await createMarkdownEditorSnapshot(content);
     const created = await this.agentDocumentModel.create(ctx.agentId, filename, snapshot.content, {
@@ -958,8 +904,6 @@ export class AgentDocumentVfsService {
     }
 
     const parentId = parentNode?.documentId ?? null;
-    await this.assertNoOrdinarySiblingConflict(ctx.agentId, parentId, filename);
-
     const moved = await this.agentDocumentModel.movePath(sourceNode.id, {
       filename,
       parentId,
@@ -1068,7 +1012,6 @@ export class AgentDocumentVfsService {
         this.createSyntheticDirectoryNode('./lobe/skills/builtin', 'builtin'),
         this.createSyntheticDirectoryNode('./lobe/skills/installed', 'installed'),
         this.createSyntheticDirectoryNode('./lobe/skills/agent', 'agent'),
-        this.createSyntheticDirectoryNode('./lobe/skills/agent-topic', 'agent-topic'),
       ];
     }
 
@@ -1144,67 +1087,6 @@ export class AgentDocumentVfsService {
     return ancestors;
   }
 
-  private async assertNoRestoreConflicts(nodes: AgentDocument[], agentId: string): Promise<void> {
-    for (const node of nodes) {
-      if (!node.deletedAt) continue;
-
-      const liveNode = await this.agentDocumentModel.findByParentAndFilename(
-        agentId,
-        node.parentId,
-        node.filename,
-      );
-
-      if (liveNode && liveNode.id !== node.id) {
-        throw new AgentDocumentVfsError(
-          `Cannot restore over live path: ${node.filename}`,
-          'CONFLICT',
-        );
-      }
-
-      await this.assertUniqueOrdinarySibling(agentId, node.parentId, node.filename, node.id);
-    }
-  }
-
-  private async assertNoOrdinarySiblingConflict(
-    agentId: string,
-    parentId: string | null,
-    filename: string,
-  ): Promise<void> {
-    const conflicts = await this.agentDocumentModel.listByParentAndFilename(
-      agentId,
-      parentId,
-      filename,
-      {
-        limit: 1,
-      },
-    );
-
-    if (conflicts.length > 0) {
-      throw new AgentDocumentVfsError(`Path already exists: ${filename}`, 'CONFLICT');
-    }
-  }
-
-  private async assertUniqueOrdinarySibling(
-    agentId: string,
-    parentId: string | null,
-    filename: string,
-    expectedAgentDocumentId: string,
-  ): Promise<void> {
-    const conflicts = await this.agentDocumentModel.listByParentAndFilename(
-      agentId,
-      parentId,
-      filename,
-      {
-        limit: 2,
-      },
-    );
-    const unexpectedConflicts = conflicts.filter((node) => node.id !== expectedAgentDocumentId);
-
-    if (unexpectedConflicts.length > 0) {
-      throw new AgentDocumentVfsError(`Duplicate VFS path segment: ${filename}`, 'CONFLICT');
-    }
-  }
-
   private async buildOrdinaryPathFromNode(node: AgentDocument, agentId: string): Promise<string> {
     const segments = [node.filename];
     let parentId = node.parentId;
@@ -1225,7 +1107,7 @@ export class AgentDocumentVfsService {
   private async deleteMountedSkill(path: string, ctx: AgentDocumentVfsContext) {
     const { namespace, skillName } = inferMountedSkillIdentity(resolveWritableMountedPath(path));
 
-    if (namespace !== 'agent' && namespace !== 'agent-topic') {
+    if (namespace !== 'agent') {
       throw new AgentDocumentVfsError(`Path is read-only: ${path}`, 'FORBIDDEN');
     }
 
@@ -1273,6 +1155,29 @@ const normalizeListLimit = (limit?: number) => {
 const applyListLimit = <T>(items: T[], options: AgentDocumentListOptions) =>
   items.slice(0, normalizeListLimit(options.limit));
 
+const compareAgentDocumentAge = (left: AgentDocument, right: AgentDocument) => {
+  const leftCreatedAt = left.createdAt?.getTime?.() ?? 0;
+  const rightCreatedAt = right.createdAt?.getTime?.() ?? 0;
+
+  if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
+
+  return left.id.localeCompare(right.id);
+};
+
+const selectOldestAgentDocument = (documents: AgentDocument[]) =>
+  [...documents].sort(compareAgentDocumentAge)[0];
+
+const selectOldestByFilename = (documents: AgentDocument[]) => {
+  const visibleByFilename = new Map<string, AgentDocument>();
+
+  for (const document of [...documents].sort(compareAgentDocumentAge)) {
+    if (visibleByFilename.has(document.filename)) continue;
+    visibleByFilename.set(document.filename, document);
+  }
+
+  return [...visibleByFilename.values()];
+};
+
 const isDescendantPath = (parentPath: string, childPath: string) =>
   childPath !== parentPath && childPath.startsWith(`${parentPath}/`);
 
@@ -1294,7 +1199,7 @@ const assertNotSelfReferentialCopy = (
 };
 
 const inferMountedSkillIdentity = (path: string) => {
-  for (const namespace of ['agent', 'agent-topic'] as const) {
+  for (const namespace of ['agent'] as const) {
     const prefix = getUnifiedSkillNamespaceRootPath(namespace);
 
     if (path === prefix || !path.startsWith(`${prefix}/`)) continue;
@@ -1348,12 +1253,6 @@ const resolveSkillMountSource = (namespace: SkillNamespace) => {
 
 const SKILL_MOUNT_ACCESS = {
   'agent': AgentAccess.READ | AgentAccess.LIST | AgentAccess.WRITE | AgentAccess.DELETE,
-  'agent-topic':
-    AgentAccess.READ |
-    AgentAccess.LIST |
-    AgentAccess.WRITE |
-    AgentAccess.DELETE |
-    AgentAccess.EXECUTE,
   'builtin': AgentAccess.READ | AgentAccess.LIST,
   'installed-active': AgentAccess.READ | AgentAccess.LIST,
   'installed-all': AgentAccess.READ | AgentAccess.LIST,
@@ -1366,13 +1265,7 @@ const skillNodeToMode = (node: SkillMountNode): AgentAccess => {
 const resolveWritableMountedPath = (path: string) => {
   if (!isSkillPath(path)) return path;
 
-  for (const namespace of [
-    'agent',
-    'agent-topic',
-    'builtin',
-    'installed-active',
-    'installed-all',
-  ] as const) {
+  for (const namespace of ['agent', 'builtin', 'installed-active', 'installed-all'] as const) {
     const prefix = getUnifiedSkillNamespaceRootPath(namespace);
 
     if (path === prefix) {

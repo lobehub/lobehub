@@ -7,7 +7,7 @@ export interface SkillMountNode {
   content?: string;
   contentType?: 'text/markdown';
   name: string;
-  namespace: 'builtin' | 'installed-all' | 'installed-active' | 'agent' | 'agent-topic';
+  namespace: 'builtin' | 'installed-all' | 'installed-active' | 'agent';
   path: string;
   readOnly: boolean;
   size?: number;

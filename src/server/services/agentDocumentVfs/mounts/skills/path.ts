@@ -4,7 +4,6 @@ export type SkillNamespace = SkillMountNode['namespace'];
 
 export const SKILL_NAMESPACES = [
   'agent',
-  'agent-topic',
   'builtin',
   'installed-active',
   'installed-all',
@@ -14,7 +13,6 @@ const UNIFIED_SKILL_ROOT_PREFIX = './lobe/skills';
 
 const SKILL_NAMESPACE_SEGMENTS = {
   'agent': ['agent', 'skills'],
-  'agent-topic': ['agent-topic', 'skills'],
   'builtin': ['builtin', 'skills'],
   'installed-active': ['installed', 'active', 'skills'],
   'installed-all': ['installed', 'all', 'skills'],

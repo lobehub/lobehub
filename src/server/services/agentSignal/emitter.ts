@@ -7,6 +7,7 @@ import { AgentSignalWorkflow } from '@/server/workflows/agentSignal';
 
 import { isAgentSignalEnabledForUser } from './featureGate';
 import type { GeneratedAgentSignalEmissionResult } from './orchestrator';
+import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
 import { AgentSignalScopeKey } from './scopeKey';
 import type { EmitSourceEventInput } from './sources';
 import type {
@@ -48,8 +49,18 @@ export interface AgentSignalSourceEventInput<
 }
 
 /** One AgentSignal emission execution option set. */
+export interface AgentSignalPolicyOptionOverrides extends Omit<
+  Partial<CreateDefaultAgentSignalPoliciesOptions>,
+  'skillManagement'
+> {
+  skillManagement?: Partial<
+    NonNullable<CreateDefaultAgentSignalPoliciesOptions['skillManagement']>
+  >;
+}
+
 export interface AgentSignalEmitOptions {
   ignoreError?: boolean;
+  policyOptions?: AgentSignalPolicyOptionOverrides;
 }
 
 /** One AgentSignal async handoff result. */
@@ -88,6 +99,20 @@ export const resolveSourceScopeKey = (payload: Record<string, unknown>) => {
   });
 };
 
+const withSelfIterationPolicy = (
+  options: AgentSignalEmitOptions,
+  selfIterationEnabled: boolean,
+): AgentSignalEmitOptions => ({
+  ...options,
+  policyOptions: {
+    ...options.policyOptions,
+    skillManagement: {
+      ...options.policyOptions?.skillManagement,
+      selfIterationEnabled,
+    },
+  },
+});
+
 /**
  * Emits one source event into the AgentSignal pipeline and executes matching policies.
  *
@@ -106,13 +131,15 @@ export const emitAgentSignalSourceEvent = async <TSourceType extends AgentSignal
   context: AgentSignalExecutionContext,
   options: AgentSignalEmitOptions = {},
 ): Promise<DedupedSourceEventResult | GeneratedAgentSignalEmissionResult | undefined> => {
-  if (!(await isAgentSignalEnabledForUser(context.db, context.userId))) {
+  const selfIterationEnabled = await isAgentSignalEnabledForUser(context.db, context.userId);
+
+  if (!selfIterationEnabled) {
     return undefined;
   }
 
   const { executeAgentSignalSourceEvent } = await import('./orchestrator');
 
-  return executeAgentSignalSourceEvent(input, context, options);
+  return executeAgentSignalSourceEvent(input, context, withSelfIterationPolicy(options, true));
 };
 
 /**

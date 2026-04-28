@@ -17,10 +17,7 @@ import {
 } from './emitter';
 import { projectAgentSignalObservability } from './observability/projector';
 import { persistAgentSignalObservability } from './observability/store';
-import {
-  createDefaultAgentSignalPolicies,
-  type CreateDefaultAgentSignalPoliciesOptions,
-} from './policies';
+import { createDefaultAgentSignalPolicies } from './policies';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 import { emitSourceEvent } from './sources';
@@ -30,7 +27,6 @@ import type { AgentSignalSourceEventStore } from './store/types';
 export { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 
 interface ExecuteAgentSignalSourceEventOptions extends AgentSignalEmitOptions {
-  policyOptions?: Partial<CreateDefaultAgentSignalPoliciesOptions>;
   runtimeGuardBackend?: RuntimeGuardBackend;
   store?: AgentSignalSourceEventStore;
 }
@@ -126,6 +122,13 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
         userMemory: {
           db: context.db,
           ...options.policyOptions?.userMemory,
+          userId: context.userId,
+        },
+        skillManagement: {
+          db: context.db,
+          ...options.policyOptions?.skillManagement,
+          selfIterationEnabled:
+            options.policyOptions?.skillManagement?.selfIterationEnabled ?? false,
           userId: context.userId,
         },
       }),

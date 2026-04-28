@@ -13,6 +13,7 @@ import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 import { MessageModel } from '@/database/models/message';
 import { getServerDB } from '@/database/server';
 import { extractTraceContext } from '@/libs/observability/traceparent';
+import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import type { GeneratedAgentSignalEmissionResult } from '@/server/services/agentSignal/orchestrator';
 import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal/orchestrator';
@@ -442,12 +443,14 @@ export const runAgentSignalWorkflow = async (
           const createGuardBackend =
             deps.createRuntimeGuardBackend ?? createRedisRuntimeGuardBackend;
           const snapshotStore = (deps.createSnapshotStore ?? createDefaultSnapshotStore)();
+          let selfIterationEnabled = false;
 
           const db = await getDb();
           const normalizedSourceEvent = await tracer.startActiveSpan(
             'agent_signal.workflow.normalize',
             async (normalizeSpan) => {
               try {
+                selfIterationEnabled = await isAgentSignalEnabledForUser(db, payload.userId);
                 const result = await normalizeWorkflowSourceEvent(payload.sourceEvent, {
                   db,
                   userId: payload.userId,
@@ -485,6 +488,11 @@ export const runAgentSignalWorkflow = async (
                         userId: payload.userId,
                       },
                       {
+                        policyOptions: {
+                          skillManagement: {
+                            selfIterationEnabled,
+                          },
+                        },
                         runtimeGuardBackend: createGuardBackend(),
                       },
                     ),

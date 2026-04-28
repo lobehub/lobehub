@@ -14,7 +14,6 @@ const SKILL_FILE_NAME = 'SKILL.md';
 
 const SKILL_NAMESPACE_PREFIXES = {
   'agent': './lobe/skills/agent/skills',
-  'agent-topic': './lobe/skills/agent-topic/skills',
   'builtin': './lobe/skills/builtin/skills',
   'installed-active': './lobe/skills/installed/active/skills',
   'installed-all': './lobe/skills/installed/all/skills',
@@ -26,8 +25,6 @@ const FS_PATH_ALIASES = {
   'skills': 'agent',
   'installed-active': 'installed-active',
   'installed-all': 'installed-all',
-  'topic-skills': 'agent-topic',
-  'topic': 'agent-topic',
 } as const;
 
 type SkillFsNamespace = keyof typeof SKILL_NAMESPACE_PREFIXES;
@@ -94,7 +91,7 @@ function resolveAgentFsPath(input = 'agent:/'): AgentFsResolvedPath {
 
     if (!target) {
       exitWithError(
-        `Unknown fs namespace "${aliasMatch[1]}". Use agent, skills, topic-skills, builtin, installed-all, or installed-active.`,
+        `Unknown fs namespace "${aliasMatch[1]}". Use agent, skills, builtin, installed-all, or installed-active.`,
       );
     }
 
@@ -156,12 +153,6 @@ function resolveAgentFsPath(input = 'agent:/'): AgentFsResolvedPath {
   };
 }
 
-function requireTopicId(namespace: SkillFsNamespace | undefined, topicId?: string) {
-  if (namespace === 'agent-topic' && !topicId) {
-    exitWithError('--topic-id is required for agent-topic fs paths.');
-  }
-}
-
 function requireSkillNamespace(resolved: AgentFsResolvedPath): SkillFsNamespace {
   if (!resolved.namespace) {
     exitWithError(`Expected a skill namespace path, but received "${resolved.path}".`);
@@ -191,8 +182,7 @@ function toDisplayPath(path: string) {
   for (const [namespace, prefix] of Object.entries(SKILL_NAMESPACE_PREFIXES) as Array<
     [SkillFsNamespace, string]
   >) {
-    const alias =
-      namespace === 'agent' ? 'skills' : namespace === 'agent-topic' ? 'topic-skills' : namespace;
+    const alias = namespace === 'agent' ? 'skills' : namespace;
     if (path === prefix) return `${alias}:/`;
     if (path.startsWith(`${prefix}/`)) return `${alias}:/${path.slice(prefix.length + 1)}`;
   }
@@ -316,7 +306,6 @@ async function getFsNode(client: AgentFsClient, context: AgentFsContext, path: s
 
 async function readFsFile(client: AgentFsClient, context: AgentFsContext, inputPath: string) {
   const resolved = resolveAgentFsPath(inputPath);
-  requireTopicId(resolved.namespace, context.topicId);
 
   const readPath =
     resolved.skillName && !resolved.filePath
@@ -349,7 +338,6 @@ async function writeFsFile(
   content: string,
 ) {
   const resolved = resolveAgentFsPath(inputPath);
-  requireTopicId(resolved.namespace, context.topicId);
   const existing = await getFsNode(
     client,
     context,
@@ -376,7 +364,6 @@ async function mkdirFsPath(
   options?: { recursive?: boolean },
 ) {
   const resolved = resolveAgentFsPath(inputPath);
-  requireTopicId(resolved.namespace, context.topicId);
 
   return client.agentDocument.mkdirDocumentByPath.mutate({
     agentId: context.agentId,
@@ -393,7 +380,6 @@ async function deleteFsPath(
   options?: { force?: boolean; recursive?: boolean },
 ) {
   const resolved = resolveAgentFsPath(inputPath);
-  requireTopicId(resolved.namespace, context.topicId);
 
   return client.agentDocument.deleteDocumentByPath.mutate({
     agentId: context.agentId,
@@ -414,9 +400,6 @@ async function copyFsPath(
   const sourceResolved = resolveAgentFsPath(source);
   const destinationResolved = resolveAgentFsPath(destination);
 
-  requireTopicId(sourceResolved.namespace, context.topicId);
-  requireTopicId(destinationResolved.namespace, context.topicId);
-
   return client.agentDocument.copyDocumentByPath.mutate({
     agentId: context.agentId,
     force,
@@ -436,9 +419,6 @@ async function renameFsPath(
   const sourceResolved = resolveAgentFsPath(source);
   const destinationResolved = resolveAgentFsPath(destination);
 
-  requireTopicId(sourceResolved.namespace, context.topicId);
-  requireTopicId(destinationResolved.namespace, context.topicId);
-
   return client.agentDocument.renameDocumentByPath.mutate({
     agentId: context.agentId,
     force,
@@ -450,7 +430,6 @@ async function renameFsPath(
 
 async function listTrashFsPath(client: AgentFsClient, context: AgentFsContext, inputPath?: string) {
   const resolved = resolveAgentFsPath(inputPath || 'agent:/');
-  requireTopicId(resolved.namespace, context.topicId);
 
   return (await client.agentDocument.listTrashDocumentsByPath.query({
     agentId: context.agentId,
@@ -465,7 +444,6 @@ async function restoreTrashFsPath(
   inputPath: string,
 ) {
   const resolved = resolveAgentFsPath(inputPath);
-  requireTopicId(resolved.namespace, context.topicId);
 
   return client.agentDocument.restoreDocumentFromTrashByPath.mutate({
     agentId: context.agentId,
@@ -481,7 +459,6 @@ async function deleteTrashFsPath(
   options?: { force?: boolean; recursive?: boolean },
 ) {
   const resolved = resolveAgentFsPath(inputPath);
-  requireTopicId(resolved.namespace, context.topicId);
 
   return client.agentDocument.deleteDocumentPermanentlyByPath.mutate({
     agentId: context.agentId,
@@ -531,7 +508,6 @@ function registerFsCommands(fsCommand: Command) {
     .option('-l, --long', 'Use long listing format')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('--cursor <cursor>', 'Directory pagination cursor')
     .option('-L, --limit <n>', 'Maximum number of entries')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
@@ -552,7 +528,6 @@ function registerFsCommands(fsCommand: Command) {
         const client = await getTrpcClient();
         const context = await resolveAgentFsContext(client, options);
         const resolved = resolveAgentFsPath(inputPath || 'agent:/');
-        requireTopicId(resolved.namespace, context.topicId);
 
         const nodes = ((await client.agentDocument.listDocumentsByPath.query({
           agentId: context.agentId,
@@ -590,7 +565,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Print a tree view of the VFS')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .action(
       async (
         inputPath: string | undefined,
@@ -599,7 +573,6 @@ function registerFsCommands(fsCommand: Command) {
         const client = await getTrpcClient();
         const context = await resolveAgentFsContext(client, options);
         const resolved = resolveAgentFsPath(inputPath || 'agent:/');
-        requireTopicId(resolved.namespace, context.topicId);
 
         console.log(pc.bold(toDisplayPath(resolved.path)));
         const warnings: string[] = [];
@@ -616,7 +589,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Read a VFS file')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .action(
       async (inputPath: string, options: { agentId?: string; slug?: string; topicId?: string }) => {
         const client = await getTrpcClient();
@@ -631,7 +603,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Show VFS node metadata')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (
@@ -646,7 +617,6 @@ function registerFsCommands(fsCommand: Command) {
         const client = await getTrpcClient();
         const context = await resolveAgentFsContext(client, options);
         const resolved = resolveAgentFsPath(inputPath);
-        requireTopicId(resolved.namespace, context.topicId);
 
         const node = await getFsNode(client, context, resolved.path);
 
@@ -669,7 +639,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Create or update a VFS file')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('-c, --content <content>', 'File content')
     .option('-F, --content-file <path>', 'Read content from a local file')
     .action(
@@ -696,7 +665,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Write content to a VFS file')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('-c, --content <content>', 'File content')
     .option('-F, --content-file <path>', 'Read content from a local file')
     .action(
@@ -723,7 +691,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Create a VFS directory')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('-p, --parents', 'Create parent directories as needed')
     .action(
       async (
@@ -746,7 +713,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Delete a VFS node into trash')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('-r, --recursive', 'Recursively delete a directory subtree')
     .option('-f, --force', 'Forward force semantics to the VFS delete primitive')
     .option('--yes', 'Skip confirmation prompt')
@@ -785,7 +751,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Copy a VFS node')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic source or destination paths')
     .option('-f, --force', 'Overwrite the destination if it exists')
     .action(
       async (
@@ -807,7 +772,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Move or rename a VFS node')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic source or destination paths')
     .option('-f, --force', 'Overwrite the destination if it exists')
     .action(
       async (
@@ -839,7 +803,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('List trashed VFS nodes')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (
@@ -875,7 +838,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Restore a soft-deleted VFS node')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .action(
       async (inputPath: string, options: { agentId?: string; slug?: string; topicId?: string }) => {
         const client = await getTrpcClient();
@@ -892,7 +854,6 @@ function registerFsCommands(fsCommand: Command) {
     .description('Permanently delete a trashed VFS node')
     .option('-A, --agent-id <id>', 'Agent ID')
     .option('-s, --slug <slug>', 'Agent slug')
-    .option('-t, --topic-id <id>', 'Topic ID for agent-topic paths')
     .option('-r, --recursive', 'Recursively delete a directory subtree')
     .option('-f, --force', 'Forward force semantics to the permanent delete primitive')
     .option('--yes', 'Skip confirmation prompt')

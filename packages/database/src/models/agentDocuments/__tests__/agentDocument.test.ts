@@ -129,8 +129,8 @@ describe('AgentDocumentModel', () => {
       expect(countAfter.length).toBe(countBefore.length);
     });
 
-    it('should reject associating a document when a live sibling already owns the same path', async () => {
-      await agentDocumentModel.create(agentId, 'associated.md', 'managed');
+    it('should allow associating documents when a live sibling already owns the same filename', async () => {
+      const existing = await agentDocumentModel.create(agentId, 'associated.md', 'managed');
       const [doc] = await serverDB
         .insert(documents)
         .values({
@@ -146,9 +146,15 @@ describe('AgentDocumentModel', () => {
         })
         .returning();
 
-      await expect(
-        agentDocumentModel.associate({ agentId, documentId: doc!.id }),
-      ).rejects.toThrow();
+      const associated = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+      const matched = await agentDocumentModel.listByParentAndFilename(
+        agentId,
+        null,
+        'associated.md',
+      );
+
+      expect(associated.id).toBeDefined();
+      expect(matched.map((item) => item.documentId)).toEqual([existing.documentId, doc!.id]);
     });
   });
 
@@ -195,10 +201,22 @@ describe('AgentDocumentModel', () => {
       expect(result.accessPublic).toBe(0);
     });
 
-    it('should reject duplicate live siblings at the database boundary', async () => {
-      await agentDocumentModel.create(agentId, 'duplicate.md', 'first');
+    it('should allow duplicate live sibling filenames at the database boundary', async () => {
+      const first = await agentDocumentModel.create(agentId, 'duplicate.md', 'first', {
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+      const second = await agentDocumentModel.create(agentId, 'duplicate.md', 'second', {
+        createdAt: new Date('2024-01-02T00:00:00.000Z'),
+      });
 
-      await expect(agentDocumentModel.create(agentId, 'duplicate.md', 'second')).rejects.toThrow();
+      const matched = await agentDocumentModel.listByParentAndFilename(
+        agentId,
+        null,
+        'duplicate.md',
+      );
+
+      expect(second.documentId).not.toBe(first.documentId);
+      expect(matched.map((item) => item.documentId)).toEqual([first.documentId, second.documentId]);
     });
 
     it('should allow different agents to use the same root filename', async () => {
@@ -221,13 +239,11 @@ describe('AgentDocumentModel', () => {
       expect(second.content).toBe('second');
     });
 
-    it('should allow callers to opt out of sibling uniqueness for managed mount documents', async () => {
+    it('should allow managed mount documents to reuse storage filenames', async () => {
       const first = await agentDocumentModel.create(agentId, 'skills', '', {
-        uniqueSibling: false,
         metadata: { mount: { namespace: 'topic', role: 'root' } },
       });
       const second = await agentDocumentModel.create(agentId, 'skills', '', {
-        uniqueSibling: false,
         metadata: { mount: { namespace: 'agent', role: 'root' } },
       });
 
@@ -396,22 +412,31 @@ describe('AgentDocumentModel', () => {
       expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('new.md')}`);
     });
 
-    it('should reject moving a document over an existing live sibling path', async () => {
+    it('should allow moving a document over an existing live sibling filename', async () => {
       const folder = await agentDocumentModel.create(agentId, 'move-folder', '', {
         fileType: DOCUMENT_FOLDER_TYPE,
         title: 'move-folder',
       });
       const source = await agentDocumentModel.create(agentId, 'source.md', 'source');
-      await agentDocumentModel.create(agentId, 'target.md', 'target', {
+      const target = await agentDocumentModel.create(agentId, 'target.md', 'target', {
         parentId: folder.documentId,
       });
 
-      await expect(
-        agentDocumentModel.movePath(source.id, {
-          filename: 'target.md',
-          parentId: folder.documentId,
-        }),
-      ).rejects.toThrow();
+      const moved = await agentDocumentModel.movePath(source.id, {
+        filename: 'target.md',
+        parentId: folder.documentId,
+      });
+      const matched = await agentDocumentModel.listByParentAndFilename(
+        agentId,
+        folder.documentId,
+        'target.md',
+      );
+
+      expect(moved?.id).toBe(source.id);
+      expect(matched.map((item) => item.documentId)).toEqual([
+        source.documentId,
+        target.documentId,
+      ]);
     });
 
     it('should copy into a new record and keep policy/template metadata', async () => {
@@ -610,13 +635,20 @@ describe('AgentDocumentModel', () => {
       expect(rawDoc).toBeDefined();
     });
 
-    it('should reject restoring a deleted document over an existing live sibling path', async () => {
+    it('should restore a deleted document even when a live sibling has the same filename', async () => {
       const first = await agentDocumentModel.create(agentId, 'restore-conflict.md', 'first');
 
       await agentDocumentModel.delete(first.id, 'replace');
-      await agentDocumentModel.create(agentId, 'restore-conflict.md', 'second');
+      const second = await agentDocumentModel.create(agentId, 'restore-conflict.md', 'second');
 
-      await expect(agentDocumentModel.restore(first.id)).rejects.toThrow();
+      await agentDocumentModel.restore(first.id);
+      const matched = await agentDocumentModel.listByParentAndFilename(
+        agentId,
+        null,
+        'restore-conflict.md',
+      );
+
+      expect(matched.map((item) => item.documentId)).toEqual([first.documentId, second.documentId]);
     });
 
     it('should return empty string from getAgentContext when no loadable docs exist', async () => {

@@ -75,6 +75,16 @@ describe('AgentDocumentVfsService', () => {
         id: 'agent-doc-1',
         updatedAt: new Date('2024-01-02T00:00:00.000Z'),
       },
+      {
+        accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
+        content: 'newer duplicate',
+        createdAt: new Date('2024-01-02T00:00:00.000Z'),
+        documentId: 'documents-duplicate',
+        fileType: 'agent/document',
+        filename: 'SOUL.md',
+        id: 'agent-doc-duplicate',
+        updatedAt: new Date('2024-01-03T00:00:00.000Z'),
+      },
     ]);
 
     const service = new AgentDocumentVfsService(db, userId);
@@ -82,7 +92,6 @@ describe('AgentDocumentVfsService', () => {
 
     expect(mockAgentDocumentModel.listByParent).toHaveBeenCalledWith('agent-1', null, {
       cursor: undefined,
-      limit: 100,
     });
     expect(nodes).toEqual([
       expect.objectContaining({
@@ -100,6 +109,7 @@ describe('AgentDocumentVfsService', () => {
         type: 'directory',
       }),
     ]);
+    expect(nodes).toHaveLength(2);
   });
 
   it('stats the unified VFS root as a synthetic directory', async () => {
@@ -168,7 +178,7 @@ describe('AgentDocumentVfsService', () => {
       'agent-1',
       null,
       'SOUL.md',
-      { limit: 2 },
+      {},
     );
     expect(node).toEqual(
       expect.objectContaining({
@@ -217,11 +227,12 @@ describe('AgentDocumentVfsService', () => {
     );
   });
 
-  it('rejects ordinary path resolution when duplicate siblings own the path segment', async () => {
+  it('resolves duplicate ordinary path segments to the oldest sibling', async () => {
     mockAgentDocumentModel.listByParentAndFilename.mockResolvedValue([
       {
         accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
         content: 'first',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
         documentId: 'documents-first',
         fileType: 'agent/document',
         filename: 'notes.md',
@@ -230,6 +241,7 @@ describe('AgentDocumentVfsService', () => {
       {
         accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
         content: 'second',
+        createdAt: new Date('2024-01-02T00:00:00.000Z'),
         documentId: 'documents-second',
         fileType: 'agent/document',
         filename: 'notes.md',
@@ -238,10 +250,9 @@ describe('AgentDocumentVfsService', () => {
     ]);
 
     const service = new AgentDocumentVfsService(db, userId);
+    const stats = await service.stat('./notes.md', { agentId: 'agent-1' });
 
-    await expect(service.stat('./notes.md', { agentId: 'agent-1' })).rejects.toMatchObject({
-      code: 'CONFLICT',
-    });
+    expect(stats.documentId).toBe('documents-first');
     expect(mockAgentDocumentModel.create).not.toHaveBeenCalled();
   });
 
@@ -524,7 +535,7 @@ describe('AgentDocumentVfsService', () => {
     });
   });
 
-  it('rejects restore when a live node already owns the target parent filename', async () => {
+  it('restores trash entries when a live sibling already owns the same filename', async () => {
     mockAgentDocumentModel.findByIdWithOptions.mockResolvedValue({
       accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
       content: 'deleted',
@@ -549,15 +560,37 @@ describe('AgentDocumentVfsService', () => {
       parentId: null,
       updatedAt: new Date('2024-01-04T00:00:00.000Z'),
     });
+    mockAgentDocumentModel.listByParentAndFilename.mockResolvedValue([
+      {
+        accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
+        content: 'deleted',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        documentId: 'deleted-doc-1',
+        fileType: 'agent/document',
+        filename: 'draft.md',
+        id: 'deleted-agent-doc-1',
+        parentId: null,
+        updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+      },
+      {
+        accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
+        content: 'live',
+        createdAt: new Date('2024-01-04T00:00:00.000Z'),
+        documentId: 'live-doc-1',
+        fileType: 'agent/document',
+        filename: 'draft.md',
+        id: 'live-agent-doc-1',
+        parentId: null,
+        updatedAt: new Date('2024-01-04T00:00:00.000Z'),
+      },
+    ]);
 
     const service = new AgentDocumentVfsService(db, userId);
 
-    await expect(
-      service.restoreFromTrash('deleted-agent-doc-1', { agentId: 'agent-1' }),
-    ).rejects.toMatchObject({
-      code: 'CONFLICT',
-    });
-    expect(mockAgentDocumentModel.restore).not.toHaveBeenCalled();
+    const stats = await service.restoreFromTrash('deleted-agent-doc-1', { agentId: 'agent-1' });
+
+    expect(stats.documentId).toBe('deleted-doc-1');
+    expect(mockAgentDocumentModel.restore).toHaveBeenCalledWith('deleted-agent-doc-1');
   });
 
   it('permanently deletes ordinary directory subtrees child-first', async () => {
@@ -665,7 +698,6 @@ describe('AgentDocumentVfsService', () => {
     expect(mockAgentDocumentModel.listByParent).toHaveBeenCalledTimes(1);
     expect(mockAgentDocumentModel.listByParent).toHaveBeenCalledWith('agent-1', null, {
       cursor: undefined,
-      limit: 100,
     });
     expect(mockAgentDocumentModel.findByParentAndFilename).not.toHaveBeenCalled();
   });

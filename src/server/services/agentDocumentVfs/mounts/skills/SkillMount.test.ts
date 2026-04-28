@@ -50,33 +50,32 @@ describe('SkillMount', () => {
     expect(result).toEqual([{ name: 'installed-skill' }]);
   });
 
-  it('creates agent-topic skills through the writable provider', async () => {
-    const agentTopicProvider = {
-      create: vi.fn().mockResolvedValue({ path: './lobe/skills/agent-topic/skills/a/SKILL.md' }),
+  it('creates agent skills through the writable provider', async () => {
+    const agentProvider = {
+      create: vi.fn().mockResolvedValue({ path: './lobe/skills/agent/skills/a/SKILL.md' }),
       delete: vi.fn(),
       get: vi.fn(),
       list: vi.fn(),
-      promote: vi.fn(),
       update: vi.fn(),
     };
-    const service = new SkillMount({ 'agent-topic': agentTopicProvider } as any);
+    const service = new SkillMount({ agent: agentProvider } as any);
 
     const result = await service.create({
       agentId: 'agent-1',
       content: '# A',
       skillName: 'a',
-      targetNamespace: 'agent-topic',
+      targetNamespace: 'agent',
       topicId: 'topic-1',
     });
 
-    expect(agentTopicProvider.create).toHaveBeenCalledWith({
+    expect(agentProvider.create).toHaveBeenCalledWith({
       agentId: 'agent-1',
       content: '# A',
       skillName: 'a',
-      targetNamespace: 'agent-topic',
+      targetNamespace: 'agent',
       topicId: 'topic-1',
     });
-    expect(result.path).toContain('/agent-topic/skills/a/SKILL.md');
+    expect(result.path).toContain('/agent/skills/a/SKILL.md');
   });
 
   it('routes updateSkill and deleteSkill by path namespace', async () => {
@@ -115,35 +114,6 @@ describe('SkillMount', () => {
     expect(updateResult.path).toBe('./lobe/skills/agent/skills/a/SKILL.md');
   });
 
-  it('routes promoteSkill through the agent-topic writable provider', async () => {
-    const agentTopicProvider = {
-      create: vi.fn(),
-      delete: vi.fn(),
-      get: vi.fn(),
-      list: vi.fn(),
-      promote: vi
-        .fn()
-        .mockResolvedValue({ path: './lobe/skills/agent/skills/promoted-a/SKILL.md' }),
-      update: vi.fn(),
-    };
-    const service = new SkillMount({ 'agent-topic': agentTopicProvider } as any);
-
-    const result = await service.promote({
-      agentId: 'agent-1',
-      path: './lobe/skills/agent-topic/skills/a/SKILL.md',
-      targetName: 'promoted-a',
-      topicId: 'topic-1',
-    });
-
-    expect(agentTopicProvider.promote).toHaveBeenCalledWith({
-      agentId: 'agent-1',
-      path: './lobe/skills/agent-topic/skills/a/SKILL.md',
-      targetName: 'promoted-a',
-      topicId: 'topic-1',
-    });
-    expect(result.path).toBe('./lobe/skills/agent/skills/promoted-a/SKILL.md');
-  });
-
   it('rejects write operations for non-writable namespaces', async () => {
     const builtinProvider = { get: vi.fn(), list: vi.fn() };
     const service = new SkillMount({ builtin: builtinProvider } as any);
@@ -155,24 +125,5 @@ describe('SkillMount', () => {
         path: './lobe/skills/builtin/skills/a/SKILL.md',
       }),
     ).rejects.toThrow('Namespace "builtin" is not writable');
-  });
-
-  it('rejects promoteSkill when the writable provider does not support promotion', async () => {
-    const agentProvider = {
-      create: vi.fn(),
-      delete: vi.fn(),
-      get: vi.fn(),
-      list: vi.fn(),
-      update: vi.fn(),
-    };
-    const service = new SkillMount({ agent: agentProvider } as any);
-
-    await expect(
-      service.promote({
-        agentId: 'agent-1',
-        path: './lobe/skills/agent/skills/a/SKILL.md',
-        topicId: 'topic-1',
-      }),
-    ).rejects.toThrow('Namespace "agent" does not support promote');
   });
 });

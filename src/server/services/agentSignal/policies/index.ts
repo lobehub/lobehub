@@ -1,6 +1,9 @@
 import type { AgentSignalMiddleware } from '../runtime/middleware';
 import { createAnalyzeIntentPolicy } from './analyzeIntent';
-import type { UserMemoryActionHandlerOptions } from './analyzeIntent/actions';
+import type {
+  SkillManagementActionHandlerOptions,
+  UserMemoryActionHandlerOptions,
+} from './analyzeIntent/actions';
 import type { CreateFeedbackDomainJudgePolicyOptions } from './analyzeIntent/feedbackDomain';
 import type { CreateFeedbackSatisfactionJudgePolicyOptions } from './analyzeIntent/feedbackSatisfaction';
 
@@ -15,6 +18,7 @@ export * from './types';
 
 export interface CreateDefaultAgentSignalPoliciesOptions extends CreateFeedbackDomainJudgePolicyOptions {
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
+  skillManagement?: SkillManagementActionHandlerOptions;
   userMemory?: UserMemoryActionHandlerOptions;
 }
 

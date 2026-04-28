@@ -8,12 +8,7 @@ import { getUnifiedSkillNamespaceRootPath } from '../path';
 import type { SkillMountNode } from '../types';
 
 export interface AgentSkillDocumentModelLike {
-  associate: (params: {
-    agentId: string;
-    documentId: string;
-    policyLoad?: PolicyLoad;
-    uniqueSibling?: boolean;
-  }) => Promise<{
+  associate: (params: { agentId: string; documentId: string; policyLoad?: PolicyLoad }) => Promise<{
     id: string;
   }>;
   delete: (documentId: string, deleteReason?: string) => Promise<void>;
@@ -74,31 +69,24 @@ export interface CreateSkillTreeInput {
   content: string;
   documentService: DocumentTreeServiceLike;
   editorData: Record<string, any>;
-  lineage?: LobeSkillMetadata['lineage'];
-  namespace: 'agent' | 'agent-topic';
+  namespace: 'agent';
   skillName: string;
-  topicId?: string;
 }
 
 export interface LobeSkillMetadata {
-  lineage?: {
-    sourceDocumentId: string;
-    sourceNamespace: 'agent-topic';
-    sourceSkillName?: string;
-    sourceTopicId?: string;
-  };
-  namespace: 'agent' | 'agent-topic';
+  namespace: 'agent';
   role: 'namespace-root' | 'skill-file' | 'skill-folder';
   skillName?: string;
-  topicId?: string;
 }
 
 export const EMPTY_EDITOR_DATA = { root: { children: [], type: 'root' } };
 
 export const SKILL_FILE_NAME = 'SKILL.md';
 
+export const SKILL_INDEX_FILE_TYPE = 'skill/index';
+
 export const buildSkillDirectoryNode = (
-  namespace: Extract<SkillMountNode['namespace'], 'agent' | 'agent-topic'>,
+  namespace: Extract<SkillMountNode['namespace'], 'agent'>,
   skillName: string,
 ): SkillMountNode => ({
   name: skillName,
@@ -109,7 +97,7 @@ export const buildSkillDirectoryNode = (
 });
 
 export const buildSkillNamespaceRootNode = (
-  namespace: Extract<SkillMountNode['namespace'], 'agent' | 'agent-topic'>,
+  namespace: Extract<SkillMountNode['namespace'], 'agent'>,
 ): SkillMountNode => ({
   name: 'skills',
   namespace,
@@ -124,7 +112,7 @@ export const buildSkillFileNode = ({
   skillName,
 }: {
   content?: string;
-  namespace: Extract<SkillMountNode['namespace'], 'agent' | 'agent-topic'>;
+  namespace: Extract<SkillMountNode['namespace'], 'agent'>;
   skillName: string;
 }): SkillMountNode => ({
   ...(content !== undefined ? { content } : {}),
@@ -156,17 +144,6 @@ export const getValidatedSkillName = (
   }
 
   return trimmed;
-};
-
-export const getRequiredTopicId = (topicId?: string) => {
-  if (!topicId) {
-    throw new AgentDocumentVfsError(
-      'Topic ID is required for the agent-topic namespace',
-      'BAD_REQUEST',
-    );
-  }
-
-  return topicId;
 };
 
 export const getResolvedSkillName = (skillName?: string, filePath?: string) => {
@@ -208,8 +185,7 @@ export const isManagedSkillDocument = (document: Pick<AgentDocument, 'metadata'>
 
 export const isSkillDocumentInScope = (
   document: Pick<AgentDocument, 'metadata'>,
-  namespace: 'agent' | 'agent-topic',
-  topicId?: string,
+  namespace: 'agent',
 ) => {
   const metadata = getSkillMetadata(document);
 
@@ -217,37 +193,25 @@ export const isSkillDocumentInScope = (
     return false;
   }
 
-  if (namespace === 'agent-topic') {
-    return metadata.topicId === topicId;
-  }
-
-  return !metadata.topicId;
+  return true;
 };
 
-export const getScopedSkillDocuments = (
-  documents: AgentDocument[],
-  namespace: 'agent' | 'agent-topic',
-  topicId?: string,
-) => documents.filter((document) => isSkillDocumentInScope(document, namespace, topicId));
+export const getScopedSkillDocuments = (documents: AgentDocument[], namespace: 'agent') =>
+  documents.filter((document) => isSkillDocumentInScope(document, namespace));
 
-export const getNamespaceRoot = (
-  documents: AgentDocument[],
-  namespace: 'agent' | 'agent-topic',
-  topicId?: string,
-) =>
-  getScopedSkillDocuments(documents, namespace, topicId).find(
+export const getNamespaceRoot = (documents: AgentDocument[], namespace: 'agent') =>
+  getScopedSkillDocuments(documents, namespace).find(
     (document) => getSkillMetadata(document)?.role === 'namespace-root',
   );
 
 export const getSkillFolder = (
   documents: AgentDocument[],
-  namespace: 'agent' | 'agent-topic',
+  namespace: 'agent',
   skillName: string,
-  topicId?: string,
 ) => {
-  const root = getNamespaceRoot(documents, namespace, topicId);
+  const root = getNamespaceRoot(documents, namespace);
 
-  return getScopedSkillDocuments(documents, namespace, topicId).find((document) => {
+  return getScopedSkillDocuments(documents, namespace).find((document) => {
     const metadata = getSkillMetadata(document);
 
     return (
@@ -258,15 +222,10 @@ export const getSkillFolder = (
   });
 };
 
-export const getSkillFile = (
-  documents: AgentDocument[],
-  namespace: 'agent' | 'agent-topic',
-  skillName: string,
-  topicId?: string,
-) => {
-  const folder = getSkillFolder(documents, namespace, skillName, topicId);
+export const getSkillFile = (documents: AgentDocument[], namespace: 'agent', skillName: string) => {
+  const folder = getSkillFolder(documents, namespace, skillName);
 
-  return getScopedSkillDocuments(documents, namespace, topicId).find((document) => {
+  return getScopedSkillDocuments(documents, namespace).find((document) => {
     const metadata = getSkillMetadata(document);
 
     return (
@@ -277,14 +236,10 @@ export const getSkillFile = (
   });
 };
 
-export const listScopedSkillFolders = (
-  documents: AgentDocument[],
-  namespace: 'agent' | 'agent-topic',
-  topicId?: string,
-) => {
-  const root = getNamespaceRoot(documents, namespace, topicId);
+export const listScopedSkillFolders = (documents: AgentDocument[], namespace: 'agent') => {
+  const root = getNamespaceRoot(documents, namespace);
 
-  return getScopedSkillDocuments(documents, namespace, topicId).filter((document) => {
+  return getScopedSkillDocuments(documents, namespace).filter((document) => {
     const metadata = getSkillMetadata(document);
 
     return metadata?.role === 'skill-folder' && (!root || document.parentId === root.documentId);
@@ -299,19 +254,11 @@ export const assertSkillDocument = <T>(document: T | undefined, message = 'Skill
   return document;
 };
 
-export const createSkillMetadata = ({
-  lineage,
-  namespace,
-  role,
-  skillName,
-  topicId,
-}: LobeSkillMetadata) => ({
+export const createSkillMetadata = ({ namespace, role, skillName }: LobeSkillMetadata) => ({
   lobeSkill: {
-    ...(lineage ? { lineage } : {}),
     namespace,
     role,
     ...(skillName ? { skillName } : {}),
-    ...(topicId ? { topicId } : {}),
   } satisfies LobeSkillMetadata,
 });
 
@@ -320,16 +267,14 @@ export const ensureNamespaceRoot = async ({
   agentDocumentModel,
   documentService,
   namespace,
-  topicId,
 }: {
   agentDocumentModel: AgentSkillDocumentModelLike;
   agentId: string;
   documentService: DocumentTreeServiceLike;
-  namespace: 'agent' | 'agent-topic';
-  topicId?: string;
+  namespace: 'agent';
 }): Promise<{ documentId: string }> => {
   const documents = await agentDocumentModel.findByAgent(agentId);
-  const existingRoot = getNamespaceRoot(documents, namespace, topicId);
+  const existingRoot = getNamespaceRoot(documents, namespace);
 
   if (existingRoot) {
     return { documentId: existingRoot.documentId };
@@ -338,7 +283,7 @@ export const ensureNamespaceRoot = async ({
   const root = await documentService.createDocument({
     editorData: EMPTY_EDITOR_DATA,
     fileType: DOCUMENT_FOLDER_TYPE,
-    metadata: createSkillMetadata({ namespace, role: 'namespace-root', topicId }),
+    metadata: createSkillMetadata({ namespace, role: 'namespace-root' }),
     title: 'skills',
   });
 
@@ -346,7 +291,6 @@ export const ensureNamespaceRoot = async ({
     agentId,
     documentId: root.id,
     policyLoad: PolicyLoad.DISABLED,
-    uniqueSibling: false,
   });
 
   return { documentId: root.id };
@@ -358,14 +302,17 @@ export const createSkillTree = async ({
   content,
   documentService,
   editorData,
-  lineage,
   namespace,
   skillName,
-  topicId,
 }: CreateSkillTreeInput) => {
   const existingDocuments = await agentDocumentModel.findByAgent(agentId);
-  const existingRoot = getNamespaceRoot(existingDocuments, namespace, topicId);
-  const existingFolder = getSkillFolder(existingDocuments, namespace, skillName, topicId);
+  const existingRoot = getNamespaceRoot(existingDocuments, namespace);
+  const existingFolder = getSkillFolder(existingDocuments, namespace, skillName);
+  const existingFile = getSkillFile(existingDocuments, namespace, skillName);
+
+  if (existingFolder || existingFile) {
+    throw new AgentDocumentVfsError('Skill already exists', 'CONFLICT');
+  }
 
   const root = existingRoot
     ? { documentId: existingRoot.documentId }
@@ -374,7 +321,6 @@ export const createSkillTree = async ({
         agentId,
         documentService,
         namespace,
-        topicId,
       });
 
   const createdRootId: string | undefined = existingRoot ? undefined : root.documentId;
@@ -382,48 +328,40 @@ export const createSkillTree = async ({
   let createdFileId: string | undefined;
 
   try {
-    const folder = existingFolder
-      ? { id: existingFolder.documentId }
-      : await documentService.createDocument({
-          editorData: EMPTY_EDITOR_DATA,
-          fileType: DOCUMENT_FOLDER_TYPE,
-          metadata: createSkillMetadata({
-            lineage,
-            namespace,
-            role: 'skill-folder',
-            skillName,
-            topicId,
-          }),
-          parentId: root.documentId,
-          title: skillName,
-        });
+    const folder = await documentService.createDocument({
+      editorData: EMPTY_EDITOR_DATA,
+      fileType: DOCUMENT_FOLDER_TYPE,
+      metadata: createSkillMetadata({
+        namespace,
+        role: 'skill-folder',
+        skillName,
+      }),
+      parentId: root.documentId,
+      title: skillName,
+    });
 
-    if (!existingFolder) {
-      createdFolderId = folder.id;
-      await agentDocumentModel.associate({
-        agentId,
-        documentId: folder.id,
-        policyLoad: PolicyLoad.DISABLED,
-        uniqueSibling: false,
-      });
-    }
+    createdFolderId = folder.id;
+    await agentDocumentModel.associate({
+      agentId,
+      documentId: folder.id,
+      policyLoad: PolicyLoad.DISABLED,
+    });
 
     const file = await documentService.createDocument({
       content,
       editorData,
+      fileType: SKILL_INDEX_FILE_TYPE,
       metadata: createSkillMetadata({
-        lineage,
         namespace,
         role: 'skill-file',
         skillName,
-        topicId,
       }),
       parentId: folder.id,
       title: SKILL_FILE_NAME,
     });
 
     createdFileId = file.id;
-    await agentDocumentModel.associate({ agentId, documentId: file.id, uniqueSibling: false });
+    await agentDocumentModel.associate({ agentId, documentId: file.id });
 
     return { fileDocumentId: file.id, folderDocumentId: folder.id };
   } catch (error) {

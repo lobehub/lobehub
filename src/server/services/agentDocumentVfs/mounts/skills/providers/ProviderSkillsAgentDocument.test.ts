@@ -79,19 +79,12 @@ describe('Agent skill VFS providers', () => {
           parentId: 'folder-1',
         }),
         createAgentDocument({
-          documentId: 'topic-folder',
+          documentId: 'plain-folder',
           fileType: 'custom/folder',
-          filename: 'topic-skill',
-          id: 'agent-doc-topic-folder',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-folder',
-              skillName: 'topic-skill',
-              topicId: 'topic-1',
-            },
-          },
-          parentId: 'root-topic',
+          filename: 'plain-folder',
+          id: 'agent-doc-plain-folder',
+          metadata: null,
+          parentId: null,
         }),
       ]);
 
@@ -175,6 +168,7 @@ describe('Agent skill VFS providers', () => {
       expect(documentService.createDocument).toHaveBeenNthCalledWith(3, {
         content: '# Skill',
         editorData: { markdown: '# Skill' },
+        fileType: 'skill/index',
         metadata: { lobeSkill: { namespace: 'agent', role: 'skill-file', skillName: 'writer' } },
         parentId: 'folder-1',
         title: 'SKILL.md',
@@ -183,20 +177,78 @@ describe('Agent skill VFS providers', () => {
         agentId: 'agent-1',
         documentId: 'root-1',
         policyLoad: 'disabled',
-        uniqueSibling: false,
       });
       expect(agentDocumentModel.associate).toHaveBeenNthCalledWith(2, {
         agentId: 'agent-1',
         documentId: 'folder-1',
         policyLoad: 'disabled',
-        uniqueSibling: false,
       });
       expect(agentDocumentModel.associate).toHaveBeenNthCalledWith(3, {
         agentId: 'agent-1',
         documentId: 'file-1',
-        uniqueSibling: false,
       });
       expect(result.path).toBe('./lobe/skills/agent/skills/writer/SKILL.md');
+    });
+
+    /**
+     * @example
+     * A partially-created skill folder reserves the package name and blocks duplicate creation.
+     */
+    it('rejects creating a skill when the managed skill folder already exists without SKILL.md', async () => {
+      const provider = new ProviderSkillsAgentDocument('agent', {
+        agentDocumentModel,
+        documentService,
+      });
+      agentDocumentModel.findByAgent.mockResolvedValue([
+        {
+          documentId: 'root-doc',
+          filename: 'skills',
+          id: 'root-binding',
+          metadata: {
+            lobeSkill: {
+              namespace: 'agent',
+              role: 'namespace-root',
+            },
+          },
+          parentId: null,
+        },
+        {
+          documentId: 'folder-doc',
+          filename: 'writer',
+          id: 'folder-binding',
+          metadata: {
+            lobeSkill: {
+              namespace: 'agent',
+              role: 'skill-folder',
+              skillName: 'writer',
+            },
+          },
+          parentId: 'root-doc',
+        },
+      ] as never);
+
+      await expect(
+        provider.create({
+          agentId: 'agent-1',
+          content: '# Writer',
+          resolvedPath: {
+            filePath: undefined,
+            namespace: 'agent',
+            skillName: 'writer',
+          },
+          skillName: 'writer',
+          targetNamespace: 'agent',
+        }),
+      ).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: 'Skill already exists',
+      });
+
+      expect(documentService.createDocument).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'SKILL.md',
+        }),
+      );
     });
 
     it('updates an agent skill through the document model and saves history when content changes', async () => {
@@ -265,273 +317,6 @@ describe('Agent skill VFS providers', () => {
       });
 
       expect(documentService.deleteDocument).toHaveBeenCalledWith('folder-1');
-    });
-  });
-
-  describe('ProviderSkillsAgentDocument agent-topic namespace', () => {
-    it('lists only topic-matching tree-backed skills', async () => {
-      agentDocumentModel.findByAgent.mockResolvedValue([
-        createAgentDocument({
-          documentId: 'topic-folder-1',
-          fileType: 'custom/folder',
-          filename: 'topic-skill-a',
-          id: 'agent-doc-topic-a',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-folder',
-              skillName: 'topic-skill-a',
-              topicId: 'topic-1',
-            },
-          },
-          parentId: 'root-topic-1',
-        }),
-        createAgentDocument({
-          documentId: 'topic-folder-2',
-          fileType: 'custom/folder',
-          filename: 'topic-skill-b',
-          id: 'agent-doc-topic-b',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-folder',
-              skillName: 'topic-skill-b',
-              topicId: 'topic-2',
-            },
-          },
-          parentId: 'root-topic-2',
-        }),
-      ]);
-
-      const provider = new ProviderSkillsAgentDocument('agent-topic', {
-        agentDocumentModel,
-        documentService,
-      });
-
-      const result = await provider.list({
-        agentId: 'agent-1',
-        path: './lobe/skills/agent-topic/skills',
-        resolvedPath: { namespace: 'agent-topic', relativePath: '' },
-        topicId: 'topic-1',
-      });
-
-      expect(result).toEqual([
-        expect.objectContaining({
-          name: 'topic-skill-a',
-          namespace: 'agent-topic',
-          path: './lobe/skills/agent-topic/skills/topic-skill-a',
-        }),
-      ]);
-    });
-
-    it('creates a topic skill with metadata scoped to the topic', async () => {
-      agentDocumentModel.findByAgent.mockResolvedValue([]);
-      documentService.createDocument
-        .mockResolvedValueOnce({
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'root-topic-1',
-          metadata: {
-            lobeSkill: { namespace: 'agent-topic', role: 'namespace-root', topicId: 'topic-1' },
-          },
-          parentId: null,
-          title: 'skills',
-        })
-        .mockResolvedValueOnce({
-          fileType: 'custom/folder',
-          filename: 'topic-skill',
-          id: 'topic-folder-1',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-folder',
-              skillName: 'topic-skill',
-              topicId: 'topic-1',
-            },
-          },
-          parentId: 'root-topic-1',
-          title: 'topic-skill',
-        })
-        .mockResolvedValueOnce({
-          content: 'topic content',
-          fileType: 'custom/document',
-          filename: 'SKILL.md',
-          id: 'topic-file-1',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-file',
-              skillName: 'topic-skill',
-              topicId: 'topic-1',
-            },
-          },
-          parentId: 'topic-folder-1',
-          title: 'SKILL.md',
-        });
-
-      const provider = new ProviderSkillsAgentDocument('agent-topic', {
-        agentDocumentModel,
-        documentService,
-      });
-
-      const result = await provider.create({
-        agentId: 'agent-1',
-        content: 'topic content',
-        skillName: 'topic-skill',
-        targetNamespace: 'agent-topic',
-        topicId: 'topic-1',
-      });
-
-      expect(documentService.createDocument).toHaveBeenNthCalledWith(2, {
-        editorData: { root: { children: [], type: 'root' } },
-        fileType: 'custom/folder',
-        metadata: {
-          lobeSkill: {
-            namespace: 'agent-topic',
-            role: 'skill-folder',
-            skillName: 'topic-skill',
-            topicId: 'topic-1',
-          },
-        },
-        parentId: 'root-topic-1',
-        title: 'topic-skill',
-      });
-      expect(result.path).toBe('./lobe/skills/agent-topic/skills/topic-skill/SKILL.md');
-    });
-
-    it('soft-deletes the topic skill subtree without touching other topics', async () => {
-      agentDocumentModel.findByAgent.mockResolvedValue([
-        createAgentDocument({
-          documentId: 'topic-folder-1',
-          fileType: 'custom/folder',
-          filename: 'topic-skill',
-          id: 'agent-doc-topic-folder',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-folder',
-              skillName: 'topic-skill',
-              topicId: 'topic-1',
-            },
-          },
-          parentId: 'root-topic-1',
-        }),
-        createAgentDocument({
-          documentId: 'topic-file-1',
-          filename: 'SKILL.md',
-          id: 'agent-doc-topic-file',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-file',
-              skillName: 'topic-skill',
-              topicId: 'topic-1',
-            },
-          },
-          parentId: 'topic-folder-1',
-        }),
-      ]);
-
-      const provider = new ProviderSkillsAgentDocument('agent-topic', {
-        agentDocumentModel,
-        documentService,
-      });
-
-      await provider.delete({
-        agentId: 'agent-1',
-        path: './lobe/skills/agent-topic/skills/topic-skill/SKILL.md',
-        topicId: 'topic-1',
-      });
-
-      expect(documentService.deleteDocument).toHaveBeenCalledWith('topic-folder-1');
-    });
-
-    it('promotes a topic skill by copying it into the agent namespace', async () => {
-      agentDocumentModel.findByAgent.mockResolvedValue([
-        createAgentDocument({
-          content: 'topic content',
-          documentId: 'topic-file-1',
-          filename: 'SKILL.md',
-          id: 'agent-doc-topic-file',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent-topic',
-              role: 'skill-file',
-              skillName: 'topic-skill',
-              topicId: 'topic-1',
-            },
-          },
-          parentId: 'topic-folder-1',
-        }),
-      ]);
-      documentService.createDocument
-        .mockResolvedValueOnce({
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'root-agent-1',
-          metadata: { lobeSkill: { namespace: 'agent', role: 'namespace-root' } },
-          parentId: null,
-          title: 'skills',
-        })
-        .mockResolvedValueOnce({
-          fileType: 'custom/folder',
-          filename: 'promoted-skill',
-          id: 'agent-folder-1',
-          metadata: {
-            lobeSkill: { namespace: 'agent', role: 'skill-folder', skillName: 'promoted-skill' },
-          },
-          parentId: 'root-agent-1',
-          title: 'promoted-skill',
-        })
-        .mockResolvedValueOnce({
-          content: 'topic content',
-          fileType: 'custom/document',
-          filename: 'SKILL.md',
-          id: 'agent-file-1',
-          metadata: {
-            lobeSkill: { namespace: 'agent', role: 'skill-file', skillName: 'promoted-skill' },
-          },
-          parentId: 'agent-folder-1',
-          title: 'SKILL.md',
-        });
-
-      const provider = new ProviderSkillsAgentDocument('agent-topic', {
-        agentDocumentModel,
-        documentService,
-      });
-
-      if (!provider.promote) {
-        throw new Error('Expected agent-topic provider to support skill promotion');
-      }
-
-      const result = await provider.promote({
-        agentId: 'agent-1',
-        path: './lobe/skills/agent-topic/skills/topic-skill/SKILL.md',
-        targetName: 'promoted-skill',
-        topicId: 'topic-1',
-      });
-
-      expect(documentService.createDocument).toHaveBeenNthCalledWith(2, {
-        editorData: { root: { children: [], type: 'root' } },
-        fileType: 'custom/folder',
-        metadata: {
-          lobeSkill: {
-            lineage: {
-              sourceDocumentId: 'topic-file-1',
-              sourceNamespace: 'agent-topic',
-              sourceSkillName: 'topic-skill',
-              sourceTopicId: 'topic-1',
-            },
-            namespace: 'agent',
-            role: 'skill-folder',
-            skillName: 'promoted-skill',
-          },
-        },
-        parentId: 'root-agent-1',
-        title: 'promoted-skill',
-      });
-      expect(result.namespace).toBe('agent');
-      expect(result.path).toBe('./lobe/skills/agent/skills/promoted-skill/SKILL.md');
     });
   });
 });

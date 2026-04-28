@@ -1,5 +1,6 @@
 import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
+import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import { chainAgentSignalAnalyzeIntentFeedbackSatisfaction } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -8,7 +9,6 @@ import { z } from 'zod';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
-import { buildGenerateObjectSchema } from '../../../../../../packages/memory-user-memory/src/utils/zod';
 import { defineSourceHandler } from '../../runtime/middleware';
 import { AGENT_SIGNAL_SOURCE_TYPES, type SourceAgentUserMessage } from '../../sourceTypes';
 import {
@@ -35,6 +35,33 @@ const FeedbackSatisfactionStagePayloadSchema = z.object({
 type FeedbackSatisfactionStagePayloadResult = z.infer<
   typeof FeedbackSatisfactionStagePayloadSchema
 >;
+
+const FeedbackSatisfactionGenerateObjectSchema = {
+  name: 'agent_signal_feedback_satisfaction',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      confidence: { maximum: 1, minimum: 0, type: 'number' },
+      evidence: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            cue: { type: 'string' },
+            excerpt: { type: 'string' },
+          },
+          required: ['cue', 'excerpt'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+      reason: { type: 'string' },
+      result: { enum: ['neutral', 'not_satisfied', 'satisfied'], type: 'string' },
+    },
+    required: ['confidence', 'evidence', 'reason', 'result'],
+    type: 'object',
+  },
+  strict: true,
+} satisfies GenerateObjectSchema;
 
 /**
  * One normalized satisfaction-judge input.
@@ -148,9 +175,7 @@ export class FeedbackSatisfactionJudgeAgentService implements FeedbackSatisfacti
       {
         messages: payload.messages as any[],
         model: this.modelConfig.model,
-        schema: buildGenerateObjectSchema(FeedbackSatisfactionStagePayloadSchema, {
-          name: 'agent_signal_feedback_satisfaction',
-        }),
+        schema: FeedbackSatisfactionGenerateObjectSchema,
       },
       { metadata: { trigger: RequestTrigger.Memory } },
     );

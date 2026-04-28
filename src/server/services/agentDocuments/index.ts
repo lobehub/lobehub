@@ -7,6 +7,7 @@ import type {
 } from '@lobechat/agent-templates';
 import { DocumentLoadPosition, getDocumentTemplate } from '@lobechat/agent-templates';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
 
 import type {
   AgentDocument,
@@ -73,6 +74,8 @@ export class AgentDocumentsService {
     doc: T | undefined,
   ): Promise<T | undefined> {
     if (!doc?.editorData) return doc;
+    if (doc.fileType === DOCUMENT_FOLDER_TYPE) return doc;
+    if (isManagedSkillDocument(doc)) return doc;
 
     try {
       const snapshot = await exportEditorDataSnapshot({
@@ -426,6 +429,7 @@ export class AgentDocumentsService {
     const docs = await this.agentDocumentModel.findByAgent(agentId);
     return docs.map((d) => ({
       documentId: d.documentId,
+      fileType: d.fileType,
       filename: d.filename,
       id: d.id,
       loadPosition: d.policy?.context?.position,
@@ -444,6 +448,7 @@ export class AgentDocumentsService {
       .filter((doc): doc is AgentDocumentWithRules => Boolean(doc))
       .map((doc) => ({
         documentId: doc.documentId,
+        fileType: doc.fileType,
         filename: doc.filename,
         id: doc.id,
         loadPosition: doc.policy?.context?.position,

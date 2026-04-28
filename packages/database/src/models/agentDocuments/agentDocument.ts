@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { agentDocuments, documents } from '../../schemas';
@@ -34,23 +34,6 @@ interface AgentDocumentQueryOptions {
   deletedOnly?: boolean;
   includeDeleted?: boolean;
   limit?: number;
-}
-
-/**
- * Options for runtime VFS sibling uniqueness checks.
- */
-interface AgentDocumentSiblingUniquenessOptions {
-  /**
-   * Whether to enforce one live ordinary document per `agentId + parentId + filename`.
-   *
-   * @default true
-   *
-   * NOTICE:
-   * Set this to `false` only for managed mount documents that are not resolved through the
-   * ordinary document VFS tree. Managed mounts can reuse backing storage names such as `skills`
-   * while exposing distinct mounted namespaces.
-   */
-  uniqueSibling?: boolean;
 }
 
 export class AgentDocumentModel {
@@ -121,52 +104,6 @@ export class AgentDocumentModel {
     return [isNull(agentDocuments.deletedAt)];
   }
 
-  /**
-   * Guards the agent-visible VFS sibling invariant before writes.
-   *
-   * Runtime enforcement is required for now because `agentId`/`deletedAt` live on `agent_documents`
-   * while `parentId`/`filename` live on `documents`.
-   */
-  private async assertNoLiveSiblingConflict(
-    db: Pick<LobeChatDatabase, 'select'>,
-    params: {
-      agentId: string;
-      excludeAgentDocumentId?: string;
-      excludeDocumentId?: string;
-      filename: string;
-      parentId: string | null;
-    },
-  ) {
-    const excludeAgentDocument = params.excludeAgentDocumentId
-      ? ne(agentDocuments.id, params.excludeAgentDocumentId)
-      : undefined;
-    const excludeDocument = params.excludeDocumentId
-      ? ne(agentDocuments.documentId, params.excludeDocumentId)
-      : undefined;
-
-    // TODO: Move this extra conflict query to a schema-level invariant when VFS path ownership fields live on one table.
-    const [conflict] = await db
-      .select({ id: agentDocuments.id })
-      .from(agentDocuments)
-      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
-      .where(
-        and(
-          eq(agentDocuments.userId, this.userId),
-          eq(agentDocuments.agentId, params.agentId),
-          eq(documents.filename, params.filename),
-          params.parentId ? eq(documents.parentId, params.parentId) : isNull(documents.parentId),
-          isNull(agentDocuments.deletedAt),
-          ...(excludeAgentDocument ? [excludeAgentDocument] : []),
-          ...(excludeDocument ? [excludeDocument] : []),
-        ),
-      )
-      .limit(1);
-
-    if (conflict) {
-      throw new Error(`Agent document sibling already exists: ${params.filename}`);
-    }
-  }
-
   private normalizeListOffset(cursor?: string): number {
     if (!cursor) return 0;
 
@@ -196,7 +133,7 @@ export class AgentDocumentModel {
           ...this.buildDeletedAtFilters(options),
         ),
       )
-      .orderBy(desc(agentDocuments.updatedAt));
+      .orderBy(asc(agentDocuments.createdAt), asc(agentDocuments.id));
 
     return results.map(({ settings, doc }) => this.toAgentDocument(settings, doc));
   }
@@ -210,22 +147,18 @@ export class AgentDocumentModel {
    *
    * Expects:
    * - `documentId` belongs to the current user.
-   * - `uniqueSibling` defaults to `true` for ordinary VFS documents.
+   * - Duplicate filenames are allowed; path-style callers resolve visible duplicates separately.
    *
    * Returns:
    * - The inserted agent document binding id, or an empty id when the source document is missing.
    *
-   * NOTICE:
-   * Pass `uniqueSibling: false` only for managed mount documents whose visible path is resolved by
-   * the mount provider instead of the ordinary `parentId + filename` VFS tree.
    */
   async associate(params: {
     agentId: string;
     documentId: string;
-    uniqueSibling?: boolean;
     policyLoad?: PolicyLoad;
   }): Promise<{ id: string }> {
-    const { agentId, documentId, uniqueSibling = true, policyLoad } = params;
+    const { agentId, documentId, policyLoad } = params;
 
     return this.db.transaction(async (trx) => {
       const [doc] = await trx
@@ -235,15 +168,6 @@ export class AgentDocumentModel {
         .limit(1);
 
       if (!doc) return { id: '' };
-
-      if (uniqueSibling) {
-        await this.assertNoLiveSiblingConflict(trx, {
-          agentId,
-          excludeDocumentId: documentId,
-          filename: doc.filename ?? '',
-          parentId: doc.parentId ?? null,
-        });
-      }
 
       const [result] = await trx
         .insert(agentDocuments)
@@ -280,14 +204,11 @@ export class AgentDocumentModel {
    *
    * Expects:
    * - `filename` is a single VFS segment supplied by the caller.
-   * - `uniqueSibling` defaults to `true` for ordinary VFS documents.
+   * - Duplicate filenames are allowed; path-style callers resolve visible duplicates separately.
    *
    * Returns:
    * - The created agent document with joined document content and metadata.
    *
-   * NOTICE:
-   * Pass `uniqueSibling: false` only for managed mount documents whose storage filename can
-   * intentionally collide with ordinary-looking names outside the ordinary VFS resolver.
    */
   async create(
     agentId: string,
@@ -306,12 +227,11 @@ export class AgentDocumentModel {
       templateId?: string;
       title?: string;
       updatedAt?: Date;
-    } & AgentDocumentSiblingUniquenessOptions,
+    },
   ): Promise<AgentDocument> {
     const {
       createdAt,
       editorData,
-      uniqueSibling = true,
       fileType = 'agent/document',
       loadPosition,
       loadRules,
@@ -329,14 +249,6 @@ export class AgentDocumentModel {
     const normalizedPolicy = normalizePolicy(loadPosition, loadRules, policy);
 
     return this.db.transaction(async (trx) => {
-      if (uniqueSibling) {
-        await this.assertNoLiveSiblingConflict(trx, {
-          agentId,
-          filename,
-          parentId: parentId ?? null,
-        });
-      }
-
       const documentPayload: NewDocument = {
         content,
         createdAt,
@@ -480,20 +392,13 @@ export class AgentDocumentModel {
    *
    * Expects:
    * - `newTitle` is a human-readable title that can be normalized into a filename.
-   * - `uniqueSibling` defaults to `true` for ordinary VFS documents.
+   * - Duplicate filenames are allowed; path-style callers resolve visible duplicates separately.
    *
    * Returns:
    * - The renamed agent document, or `undefined` when the binding is not visible.
    *
-   * NOTICE:
-   * Pass `uniqueSibling: false` only for managed mount documents whose provider owns collision
-   * handling outside the ordinary document VFS tree.
    */
-  async rename(
-    documentId: string,
-    newTitle: string,
-    options: AgentDocumentSiblingUniquenessOptions = {},
-  ): Promise<AgentDocument | undefined> {
+  async rename(documentId: string, newTitle: string): Promise<AgentDocument | undefined> {
     const existing = await this.findById(documentId);
     if (!existing) return undefined;
 
@@ -502,18 +407,8 @@ export class AgentDocumentModel {
 
     const filename = buildDocumentFilename(title);
     const source = `agent-document://${existing.agentId}/${encodeURIComponent(filename)}`;
-    const { uniqueSibling = true } = options;
 
     await this.db.transaction(async (trx) => {
-      if (uniqueSibling) {
-        await this.assertNoLiveSiblingConflict(trx, {
-          agentId: existing.agentId,
-          excludeAgentDocumentId: existing.id,
-          filename,
-          parentId: existing.parentId,
-        });
-      }
-
       await trx
         .update(documents)
         .set({
@@ -537,18 +432,15 @@ export class AgentDocumentModel {
    * Expects:
    * - `filename` is already validated as a single VFS path segment
    * - `parentId` points to a document row owned by the same user, or `null` for root
-   * - `uniqueSibling` defaults to `true` for ordinary VFS documents
+   * - Duplicate filenames are allowed; path-style callers resolve visible duplicates separately
    *
    * Returns:
    * - The same agent document binding after the backing document row is moved
    *
-   * NOTICE:
-   * Pass `uniqueSibling: false` only for managed mount documents whose provider owns collision
-   * handling outside the ordinary document VFS tree.
    */
   async movePath(
     documentId: string,
-    params: { filename: string; parentId: string | null } & AgentDocumentSiblingUniquenessOptions,
+    params: { filename: string; parentId: string | null },
   ): Promise<AgentDocument | undefined> {
     const existing = await this.findById(documentId);
     if (!existing) return undefined;
@@ -557,18 +449,8 @@ export class AgentDocumentModel {
     if (!filename) return existing;
 
     const source = `agent-document://${existing.agentId}/${encodeURIComponent(filename)}`;
-    const { uniqueSibling = true } = params;
 
     await this.db.transaction(async (trx) => {
-      if (uniqueSibling) {
-        await this.assertNoLiveSiblingConflict(trx, {
-          agentId: existing.agentId,
-          excludeAgentDocumentId: existing.id,
-          filename,
-          parentId: params.parentId,
-        });
-      }
-
       await trx
         .update(documents)
         .set({
@@ -671,14 +553,11 @@ export class AgentDocumentModel {
    *
    * Expects:
    * - `filename` addresses the current agent's ordinary filename lookup.
-   * - `uniqueSibling` is forwarded only to the create path and defaults to `true` there.
+   * - Duplicate filenames are allowed; the first matching filename is the oldest live binding.
    *
    * Returns:
    * - The updated or created agent document.
    *
-   * NOTICE:
-   * Pass `uniqueSibling: false` only when the create path is creating managed mount documents
-   * whose visible uniqueness is enforced by a provider-specific resolver.
    */
   async upsert(
     agentId: string,
@@ -694,12 +573,11 @@ export class AgentDocumentModel {
       policyLoad?: PolicyLoad;
       templateId?: string;
       updatedAt?: Date;
-    } & AgentDocumentSiblingUniquenessOptions,
+    },
   ): Promise<AgentDocument> {
     const {
       createdAt,
       editorData,
-      uniqueSibling,
       loadPosition,
       loadRules,
       metadata,
@@ -734,7 +612,6 @@ export class AgentDocumentModel {
     return this.create(agentId, filename, content, {
       createdAt,
       editorData,
-      uniqueSibling,
       loadPosition,
       loadRules,
       metadata,
@@ -854,7 +731,7 @@ export class AgentDocumentModel {
           ...this.buildDeletedAtFilters(options),
         ),
       )
-      .orderBy(desc(agentDocuments.updatedAt))
+      .orderBy(asc(agentDocuments.createdAt), asc(agentDocuments.id))
       .limit(1);
 
     if (!result) return undefined;
@@ -881,7 +758,7 @@ export class AgentDocumentModel {
           ...this.buildDeletedAtFilters(options),
         ),
       )
-      .orderBy(desc(agentDocuments.updatedAt))
+      .orderBy(asc(agentDocuments.createdAt), asc(agentDocuments.id))
       .limit(1);
 
     if (!result) return undefined;
@@ -893,14 +770,14 @@ export class AgentDocumentModel {
    * Lists agent document bindings that share one tree segment.
    *
    * Use when:
-   * - VFS callers need to reject ambiguous sibling paths before create, write, or restore
+   * - VFS callers need to choose the visible entry for a path segment
    * - Migration checks need to detect duplicate `parentId + filename` rows
    *
    * Expects:
    * - `parentId` is the canonical document row parent id, not the agent document id
    *
    * Returns:
-   * - Matching bindings ordered newest first, optionally capped for conflict probes
+   * - Matching bindings ordered oldest first so duplicate filename resolution is deterministic
    */
   async listByParentAndFilename(
     agentId: string,
@@ -921,7 +798,7 @@ export class AgentDocumentModel {
           ...this.buildDeletedAtFilters(options),
         ),
       )
-      .orderBy(desc(agentDocuments.updatedAt))
+      .orderBy(asc(agentDocuments.createdAt), asc(agentDocuments.id))
       .limit(options?.limit ?? 9999)
       .offset(this.normalizeListOffset(options?.cursor));
 
@@ -970,7 +847,7 @@ export class AgentDocumentModel {
           ...this.buildDeletedAtFilters(options),
         ),
       )
-      .orderBy(desc(agentDocuments.updatedAt))
+      .orderBy(asc(agentDocuments.createdAt), asc(agentDocuments.id))
       .limit(options?.limit ?? 9999)
       .offset(this.normalizeListOffset(options?.cursor));
 
@@ -1080,34 +957,18 @@ export class AgentDocumentModel {
    *
    * Expects:
    * - `documentId` may refer to a deleted binding owned by the current user.
-   * - `uniqueSibling` defaults to `true` for ordinary VFS documents.
+   * - Duplicate filenames are allowed; path-style callers resolve visible duplicates separately.
    *
    * Returns:
    * - Nothing; missing bindings are ignored.
    *
-   * NOTICE:
-   * Pass `uniqueSibling: false` only for managed mount documents whose provider owns restore
-   * collision handling outside the ordinary document VFS tree.
    */
-  async restore(
-    documentId: string,
-    options: AgentDocumentSiblingUniquenessOptions = {},
-  ): Promise<void> {
+  async restore(documentId: string): Promise<void> {
     const existing = await this.findByIdWithOptions(documentId, { includeDeleted: true });
 
     if (!existing) return;
-    const { uniqueSibling = true } = options;
 
     await this.db.transaction(async (trx) => {
-      if (uniqueSibling) {
-        await this.assertNoLiveSiblingConflict(trx, {
-          agentId: existing.agentId,
-          excludeAgentDocumentId: existing.id,
-          filename: existing.filename,
-          parentId: existing.parentId,
-        });
-      }
-
       await trx
         .update(agentDocuments)
         .set({

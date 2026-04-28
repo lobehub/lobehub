@@ -14,6 +14,10 @@ import {
 } from '@/server/workflows/agentSignal/run';
 import { uuid } from '@/utils/uuid';
 
+vi.mock('@/server/services/agentSignal/featureGate', () => ({
+  isAgentSignalEnabledForUser: vi.fn().mockResolvedValue(true),
+}));
+
 const createWorkflowContext = <TPayload>(requestPayload: TPayload) => {
   return {
     requestPayload,
@@ -209,6 +213,17 @@ describe('runAgentSignalWorkflow', () => {
       }),
     );
     expect(executeSourceEvent).toHaveBeenCalledTimes(1);
+    expect(executeSourceEvent).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      expect.objectContaining({
+        policyOptions: {
+          skillManagement: {
+            selfIterationEnabled: true,
+          },
+        },
+      }),
+    );
     expect(capturedSourceEvent?.sourceType).toBe('agent.user.message');
     expect(capturedSourceEvent?.payload.serializedContext).toContain('<feedback_analysis_context>');
     expect(capturedSourceEvent?.payload.serializedContext).not.toContain(

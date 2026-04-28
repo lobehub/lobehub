@@ -7,7 +7,7 @@ export interface CreateSkillInput {
   agentId: string;
   content: string;
   skillName: string;
-  targetNamespace: 'agent' | 'agent-topic';
+  targetNamespace: 'agent';
   topicId?: string;
 }
 
@@ -24,13 +24,6 @@ export interface DeleteSkillInput {
   topicId?: string;
 }
 
-export interface PromoteSkillInput {
-  agentId: string;
-  path: string;
-  targetName?: string;
-  topicId: string;
-}
-
 export interface SkillMountProvider {
   get: (input: SkillMountProviderRequest) => Promise<SkillMountNode>;
   list: (input: SkillMountProviderRequest) => Promise<SkillMountNode[]>;
@@ -39,7 +32,6 @@ export interface SkillMountProvider {
 export interface WritableSkillMountProvider extends SkillMountProvider {
   create: (input: CreateSkillInput) => Promise<SkillMountNode>;
   delete: (input: DeleteSkillInput) => Promise<void>;
-  promote?: (input: PromoteSkillInput) => Promise<SkillMountNode>;
   update: (input: UpdateSkillInput) => Promise<SkillMountNode>;
 }
 
@@ -95,20 +87,6 @@ export class SkillMount {
     const provider = this.getWritableProviderByPath(input.path);
 
     return provider.delete(input);
-  }
-
-  async promote(input: PromoteSkillInput) {
-    const provider = this.getWritableProviderByPath(input.path);
-
-    if (!provider.promote) {
-      const { namespace } = SkillMountPathResolver.resolve(input.path);
-      throw new AgentDocumentVfsError(
-        `Namespace "${namespace}" does not support promote`,
-        'METHOD_NOT_SUPPORTED',
-      );
-    }
-
-    return provider.promote(input);
   }
 
   private getProvider(namespace: SkillMountNode['namespace']) {
