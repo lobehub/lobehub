@@ -190,7 +190,7 @@ export default {
   'channel.userIdHint':
     'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist',
   'channel.userIdMissingDesc':
-    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Fill it in below — the field is in Advanced Settings.",
+    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Fill it in under Advanced Settings.",
   'channel.userIdMissingTitle': 'Add your platform User ID',
   'channel.userIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',

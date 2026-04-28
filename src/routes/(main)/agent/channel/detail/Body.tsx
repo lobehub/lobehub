@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Flexbox, Form, FormGroup, FormItem, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Form, FormGroup, FormItem, Tag, Text } from '@lobehub/ui';
 import {
   Button,
   Form as AntdForm,
@@ -367,36 +367,20 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onA
     [platformDef.schema],
   );
 
-  // Surface a strong reminder when an already-saved bot is missing the
-  // operator's User ID. Without it, AI tools can't push notifications back
-  // to the operator and the pairing approver identity is undefined — both
-  // are silent failures otherwise. Skip on first-time config (`hasConfig`
-  // false) so the alert doesn't yell at users still entering credentials,
-  // and skip on platforms whose schema doesn't expose a userId field
-  // (e.g. WeChat, which auto-manages identity via QR).
-  const hasUserIdField = useMemo(
-    () => settingsFields.some((f) => f.key === 'userId'),
-    [settingsFields],
-  );
-  const watchedUserId = AntdForm.useWatch(['settings', 'userId'], form);
-  // `useWatch` returns `undefined` on the first render — before antd Form
-  // hydrates from the parent's `initialValues`. Without a fallback we'd
-  // briefly render the alert for every saved bot and then hide it once
-  // hydration lands ("flash"). The server-provided `currentConfig.settings`
-  // is the source of truth at that point, so use it until the form
-  // takes over.
-  const savedUserId = currentConfig?.settings?.userId;
-  const effectiveUserId = watchedUserId === undefined ? savedUserId : watchedUserId;
-  const userIdMissing =
-    !!hasConfig &&
-    hasUserIdField &&
-    !(typeof effectiveUserId === 'string' && effectiveUserId.trim());
-
-  // Auto-expand the settings group on mount when the alert is showing so
-  // operators land directly on the missing field instead of a collapsed
-  // section. `defaultActive` is mount-only, so subsequent typing won't
-  // keep flipping the group open and closed.
-  const [settingsActive, setSettingsActive] = useState(userIdMissing);
+  // Auto-expand the settings group on mount when an already-saved bot is
+  // missing its operator User ID, so operators land directly on the field
+  // the Footer alert is asking them to fill in. Driven off the saved value
+  // (not the form watch) because `defaultActive` is mount-only — the form
+  // hasn't hydrated yet at this point — and skipped on platforms without
+  // a `userId` field in their schema (e.g. WeChat).
+  const userIdInitiallyMissing = useMemo(() => {
+    if (!hasConfig) return false;
+    const hasUserIdField = settingsFields.some((f) => f.key === 'userId');
+    if (!hasUserIdField) return false;
+    const savedUserId = currentConfig?.settings?.userId;
+    return !(typeof savedUserId === 'string' && savedUserId.trim());
+  }, [hasConfig, settingsFields, currentConfig?.settings]);
+  const [settingsActive, setSettingsActive] = useState(userIdInitiallyMissing);
 
   const handleResetSettings = useCallback(() => {
     form.setFieldsValue({
@@ -436,7 +420,7 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onA
       {settingsFields.length > 0 && (
         <FormGroup
           collapsible
-          defaultActive={userIdMissing}
+          defaultActive={userIdInitiallyMissing}
           keyValue={`settings-${platformDef.id}`}
           style={{ marginBlockStart: 16 }}
           title={<SettingsTitle schema={platformDef.schema} />}
@@ -456,15 +440,6 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onA
             <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
           ))}
         </FormGroup>
-      )}
-      {userIdMissing && (
-        <Alert
-          showIcon
-          description={t('channel.userIdMissingDesc')}
-          message={t('channel.userIdMissingTitle')}
-          style={{ marginBlockStart: 16 }}
-          type="info"
-        />
       )}
     </Form>
   );
