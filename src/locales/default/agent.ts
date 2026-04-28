@@ -54,7 +54,12 @@ export default {
     'Connect this assistant to LINE Messaging API for direct and group chats.',
   'channel.line.destinationUserId': 'Destination User ID',
   'channel.line.destinationUserIdHint':
-    "The bot's destination user ID (starts with `U`, 33 chars total). Find it in the LINE Developers Console under Basic settings → Your user ID, or in the response of the /v2/bot/info endpoint.",
+    'The bot\'s destination user ID (starts with `U`, 33 chars total). The LINE Developers Console does NOT display this value. Issue a Channel Access Token below first, then click "Fetch from LINE" to auto-fill this field. Note: "Your user ID" in Basic settings is your personal LINE user ID, not the bot\'s.',
+  'channel.line.fetchBotInfo': 'Fetch from LINE',
+  'channel.line.fetchBotInfoSuccess': 'Destination User ID fetched',
+  'channel.line.fetchBotInfoFailed': 'Failed to fetch bot info',
+  'channel.line.fetchBotInfoMissingToken':
+    'Enter the Channel Access Token first, then click "Fetch from LINE".',
   'channel.line.destinationUserIdPlaceholder': 'e.g. U1234567890abcdef1234567890abcdef',
   'channel.line.channelAccessToken': 'Channel Access Token',
   'channel.line.channelAccessTokenHint':

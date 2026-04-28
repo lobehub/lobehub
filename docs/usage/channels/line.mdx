@@ -45,17 +45,16 @@ By connecting a LINE channel to your LobeHub agent, users can interact with the 
 
   ### Note the channel identifiers
 
-  After the channel is created, open the **Basic settings** tab. Copy these two values for Step 4:
+  Open the **Basic settings** tab and copy the **Channel secret** — LobeHub uses it to verify webhook signatures in Step 4.
 
-  - **Channel secret** — LobeHub uses it to verify webhook signatures.
-  - **Your user ID** — the `U`-prefixed user ID (33 chars total) of the bot tied to this channel. Per the LINE API reference: *"You can access your user ID under the Basic settings tab of your channel."* This is the value LobeHub needs as the **Destination User ID**, and it matches the `destination` field on every inbound webhook payload.
+  > **Note:** the **"Your user ID"** field on the same tab is **your own** LINE user ID, **not** the bot's destination user ID. Both have the identical `U` + 32 hex format, but LobeHub needs the bot's, which we'll fetch via the LINE API in Step 2.
 
   Then open the **Messaging API** tab and note:
 
   - **Bot basic ID** — the `@xxxx` short ID users will search for.
 </Steps>
 
-## Step 2: Issue a Channel Access Token
+## Step 2: Issue a Channel Access Token and Fetch the Destination User ID
 
 <Steps>
   ### Open the Messaging API tab
@@ -67,6 +66,29 @@ By connecting a LINE channel to your LobeHub agent, users can interact with the 
   Click **Issue** under "Channel access token (long-lived)". Copy the token immediately — LINE only shows it once.
 
   > **Important:** The Channel Access Token and Channel Secret are sensitive credentials. Never commit them to source control or share them in screenshots.
+
+  ### Fetch the bot's Destination User ID via API
+
+  The LINE Developers Console **does not display** the bot's destination user ID anywhere. Use the token you just issued to call the LINE API:
+
+  ```bash
+  curl -H "Authorization: Bearer <YOUR_CHANNEL_ACCESS_TOKEN>" \
+    https://api.line.me/v2/bot/info
+  ```
+
+  The response looks like:
+
+  ```json
+  {
+    "userId": "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "basicId": "@xxxxxxx",
+    "displayName": "...",
+    "chatMode": "bot",
+    "markAsReadMode": "auto"
+  }
+  ```
+
+  The **`userId`** field (33 chars, starts with `U`) is the **Destination User ID** LobeHub needs, and matches the `destination` field on every inbound webhook payload. Copy it for Step 4.
 </Steps>
 
 ## Step 3: Disable LINE's Built-in Auto-reply and Greeting
@@ -98,11 +120,11 @@ By default the LINE Official Account Manager auto-replies to user messages and s
 
   ### Fill in the credentials
 
-  | Field                    | Value                                                         |
-  | ------------------------ | ------------------------------------------------------------- |
-  | **Destination User ID**  | The bot's `U…` user ID from **Basic settings → Your user ID** |
-  | **Channel Access Token** | The long-lived token issued in Step 2                         |
-  | **Channel Secret**       | The Channel secret from Basic settings                        |
+  | Field                    | Value                                             |
+  | ------------------------ | ------------------------------------------------- |
+  | **Destination User ID**  | The `userId` returned by `/v2/bot/info` in Step 2 |
+  | **Channel Access Token** | The long-lived token issued in Step 2             |
+  | **Channel Secret**       | The Channel secret from Basic settings            |
 
   ### Save Configuration
 
@@ -156,11 +178,11 @@ To use the bot in LINE group chats or multi-person rooms:
 
 ## Configuration Reference
 
-| Field                    | Required | Description                                                                                                                               |
-| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Destination User ID**  | Yes      | The bot's user ID (`U` + 32 hex chars) from **Basic settings → Your user ID**. Used as the bot identity and the webhook URL path segment. |
-| **Channel Access Token** | Yes      | Long-lived token issued from the **Messaging API** tab. Used as the bearer header on every LINE API call.                                 |
-| **Channel Secret**       | Yes      | From the **Basic settings** tab. Used to verify `X-Line-Signature` on every inbound webhook delivery.                                     |
+| Field                    | Required | Description                                                                                                                                                                             |
+| ------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Destination User ID**  | Yes      | The bot's user ID (`U` + 32 hex chars). Fetched via `GET /v2/bot/info` — the LINE Developers Console UI does not display this value. Used as the bot identity and webhook path segment. |
+| **Channel Access Token** | Yes      | Long-lived token issued from the **Messaging API** tab. Used as the bearer header on every LINE API call.                                                                               |
+| **Channel Secret**       | Yes      | From the **Basic settings** tab. Used to verify `X-Line-Signature` on every inbound webhook delivery.                                                                                   |
 
 ## Feature Notes
 
@@ -177,7 +199,7 @@ LINE's Messaging API has a few specifics that LobeHub maps as follows:
 
 - **"Verify" fails in the LINE Developers Console.** The Channel Secret in LobeHub must match the value shown on the LINE Developers Console **Basic settings** tab exactly. Re-paste it, save, and try again.
 - **`Authentication failed.` on Save / Test Connection.** Your Channel Access Token is invalid or expired. Re-issue the long-lived token in the Messaging API tab and paste the new value into LobeHub.
-- **`Channel access token belongs to bot Uxxx, not Uyyy`.** The Destination User ID does not match the token. Open **Basic settings → Your user ID** and copy the exact `U…` value into the Destination User ID field.
+- **`Channel access token belongs to bot Uxxx, not Uyyy`.** The Destination User ID does not match the token. The `Uxxx` shown in the error is the userId the token actually belongs to — copy it directly into the Destination User ID field. You can also re-confirm with `curl -H "Authorization: Bearer <token>" https://api.line.me/v2/bot/info`.
 - **Webhook delivery is rejected with `401 Invalid signature`.** The Channel Secret in LobeHub doesn't match the one in LINE. Update LobeHub with the correct Channel Secret.
 - **Bot doesn't respond.** Check that:
   1. **Use webhook** is toggled **ON** in the Messaging API tab.

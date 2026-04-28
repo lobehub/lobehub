@@ -44,17 +44,16 @@ tags:
 
   ### 记录 channel 的关键标识
 
-  打开 **Basic settings** 选项卡，复制以下两个值供第四步使用：
+  打开 **Basic settings** 选项卡，复制 **Channel secret** —— 用于第四步校验 Webhook 签名。
 
-  - **Channel secret** —— 用于校验 Webhook 签名。
-  - **Your user ID** —— 这个 channel 对应的 bot 用户 ID（以 `U` 开头，共 33 位）。LINE 官方文档说明：*"You can access your user ID under the Basic settings tab of your channel."* 这就是 LobeHub 需要的 **Destination User ID**，也是每条入站 webhook payload 中的 `destination` 字段。
+  > **注意：** 同一选项卡里的 **"Your user ID"** 是**你账号自己的** LINE user ID，**不是** bot 的 destination user ID。两者格式完全一样（都以 `U` 开头共 33 位），但 LobeHub 需要的是 bot 的，会在第二步通过 LINE API 取出。
 
   然后切到 **Messaging API** 选项卡，记下：
 
   - **Bot basic ID** —— 用户搜索机器人时使用的 `@xxxx` 短 ID。
 </Steps>
 
-## 第二步：签发 Channel Access Token
+## 第二步：签发 Channel Access Token 并获取 Destination User ID
 
 <Steps>
   ### 打开 Messaging API 选项卡
@@ -66,6 +65,29 @@ tags:
   在 "Channel access token (long-lived)" 处点击 **Issue**。立即复制 Token —— LINE 只展示一次。
 
   > **重要提示：** Channel Access Token 与 Channel Secret 都是敏感凭据，切勿提交到代码仓库或在截图中泄露。
+
+  ### 通过 API 获取 Destination User ID
+
+  LINE Developers Console 当前界面**不再展示** bot 的 destination user ID，必须用刚拿到的 token 调用 LINE API 取出：
+
+  ```bash
+  curl -H "Authorization: Bearer <你的 channel access token>" \
+    https://api.line.me/v2/bot/info
+  ```
+
+  返回类似:
+
+  ```json
+  {
+    "userId": "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "basicId": "@xxxxxxx",
+    "displayName": "...",
+    "chatMode": "bot",
+    "markAsReadMode": "auto"
+  }
+  ```
+
+  其中 **`userId`** 字段（以 `U` 开头共 33 位）就是 LobeHub 需要的 **Destination User ID**，也是每条入站 Webhook payload 中的 `destination`。复制下来供第四步使用。
 </Steps>
 
 ## 第三步：关闭 LINE 自带的自动回复与欢迎语
@@ -97,11 +119,11 @@ LINE Official Account Manager 默认会自动回复用户消息并在第一次�
 
   ### 填写凭据
 
-  | 字段                       | 值                                           |
-  | ------------------------ | ------------------------------------------- |
-  | **Destination User ID**  | Basic settings 选项卡中的 **Your user ID**（`U…`） |
-  | **Channel Access Token** | 第二步中签发的长期 Token                             |
-  | **Channel Secret**       | Basic settings 选项卡中的 Channel secret         |
+  | 字段                       | 值                                       |
+  | ------------------------ | --------------------------------------- |
+  | **Destination User ID**  | 第二步通过 `/v2/bot/info` 拿到的 `userId`（`U…`） |
+  | **Channel Access Token** | 第二步中签发的长期 Token                         |
+  | **Channel Secret**       | Basic settings 选项卡中的 Channel secret     |
 
   ### 保存配置
 
@@ -155,11 +177,11 @@ LINE Official Account Manager 默认会自动回复用户消息并在第一次�
 
 ## 配置参考
 
-| 字段                       | 是否必需 | 描述                                                                                    |
-| ------------------------ | ---- | ------------------------------------------------------------------------------------- |
-| **Destination User ID**  | 是    | 机器人的用户 ID（`U` + 32 位十六进制），来自 **Basic settings → Your user ID**。同时作为机器人标识与 Webhook 路径。 |
-| **Channel Access Token** | 是    | **Messaging API** 选项卡中签发的长期 Token，用作每个 LINE API 调用的 bearer 头。                         |
-| **Channel Secret**       | 是    | **Basic settings** 选项卡中的 Channel secret，用于校验每条入站 Webhook 的 `X-Line-Signature`。        |
+| 字段                       | 是否必需 | 描述                                                                                                           |
+| ------------------------ | ---- | ------------------------------------------------------------------------------------------------------------ |
+| **Destination User ID**  | 是    | 机器人的用户 ID（`U` + 32 位十六进制）。通过 `GET /v2/bot/info` 取得 ——LINE Developers Console 界面不展示这个值。同时作为机器人标识与 Webhook 路径。 |
+| **Channel Access Token** | 是    | **Messaging API** 选项卡中签发的长期 Token，用作每个 LINE API 调用的 bearer 头。                                                |
+| **Channel Secret**       | 是    | **Basic settings** 选项卡中的 Channel secret，用于校验每条入站 Webhook 的 `X-Line-Signature`。                               |
 
 ## 能力说明
 
@@ -176,7 +198,7 @@ LINE Messaging API 有一些平台层面的限制，LobeHub 的对接行为如�
 
 - **LINE Developers Console 的 "Verify" 失败。** LobeHub 中的 Channel Secret 必须与 **Basic settings** 选项卡显示的值完全一致。重新粘贴、保存后再试。
 - **保存或测试连接时出现 `Authentication failed.`。** Channel Access Token 失效或被撤销。在 Messaging API 选项卡里重新签发长期 Token，并把新值粘贴到 LobeHub。
-- **`Channel access token belongs to bot Uxxx, not Uyyy`。** Destination User ID 与 Token 不匹配。打开 **Basic settings → Your user ID**，把准确的 `U…` 值填进 Destination User ID 字段。
+- **`Channel access token belongs to bot Uxxx, not Uyyy`。** Destination User ID 与 Token 不匹配。错误消息里的 `Uxxx` 就是 Token 实际归属的 bot userId，直接复制它填进 Destination User ID 字段即可（也可以用 `curl -H "Authorization: Bearer <token>" https://api.line.me/v2/bot/info` 自行确认）。
 - **Webhook 投递返回 `401 Invalid signature`。** LobeHub 中的 Channel Secret 与 LINE 的不一致，更新为正确的 Channel Secret。
 - **机器人不回复。** 请依次确认：
   1. Messaging API 选项卡中的 **Use webhook** 已切到 **ON**。
