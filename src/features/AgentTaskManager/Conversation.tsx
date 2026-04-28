@@ -2,7 +2,7 @@
 
 import { isChatGroupSessionId } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
@@ -22,7 +22,6 @@ import {
 import CopilotModelSelect from '@/features/PageEditor/Copilot/CopilotModelSelect';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
 
 import AgentSelectorAction from './AgentSelectorAction';
 import Toolbar from './Toolbar';
@@ -50,24 +49,6 @@ const Conversation = memo(() => {
     s.useFetchAgentConfig,
   ]);
   const currentAgentId = useConversationStore(conversationSelectors.agentId);
-
-  useEffect(() => {
-    if (!currentAgentId) return;
-
-    if (useAgentStore.getState().activeAgentId !== currentAgentId) {
-      setActiveAgentId(currentAgentId);
-    }
-
-    const { activeAgentId, activeTopicId, switchTopic } = useChatStore.getState();
-
-    if (activeAgentId !== currentAgentId) {
-      useChatStore.setState({ activeAgentId: currentAgentId });
-    }
-
-    if (activeAgentId !== currentAgentId || !!activeTopicId) {
-      void switchTopic(null, { scope: 'task', skipRefreshMessage: true });
-    }
-  }, [currentAgentId, setActiveAgentId]);
 
   useFetchAgentConfig(true, currentAgentId);
 
