@@ -255,4 +255,32 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       }),
     );
   });
+
+  it('should forward taskId from appContext to runtime operation context', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-task',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: '',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-task',
+      appContext: {
+        scope: 'task',
+        taskId: 'T-1',
+        topicId: 'topic-1',
+      },
+      prompt: 'Show current task',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.appContext).toMatchObject({
+      scope: 'task',
+      taskId: 'T-1',
+      topicId: 'topic-1',
+    });
+  });
 });

@@ -231,6 +231,7 @@ export class GatewayActionImpl {
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
 
     const isCreateNewTopic = !context.topicId;
+    const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;
 
     const result = await aiAgentService.execAgentTask({
       agentId: context.agentId,
@@ -238,6 +239,7 @@ export class GatewayActionImpl {
         documentId: context.documentId,
         groupId: context.groupId,
         scope: context.scope,
+        taskId,
         threadId: context.threadId,
         topicId: context.topicId,
       },

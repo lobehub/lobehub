@@ -37,6 +37,16 @@ export class AgentModel {
     return this.enrichAgentWithKnowledge(agent);
   };
 
+  existsById = async (id: string): Promise<boolean> => {
+    const rows = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, id), eq(agents.userId, this.userId)))
+      .limit(1);
+
+    return rows.length > 0;
+  };
+
   /**
    * Query non-virtual agents with optional keyword filter.
    * Returns minimal agent info (id, title, description, avatar, backgroundColor).

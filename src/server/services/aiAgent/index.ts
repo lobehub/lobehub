@@ -1543,7 +1543,7 @@ export class AiAgentService {
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
           scope: appContext?.scope,
-          taskId,
+          taskId: taskId ?? appContext?.taskId ?? undefined,
           threadId: appContext?.threadId,
           topicId,
           trigger,

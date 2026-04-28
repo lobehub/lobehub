@@ -13,6 +13,8 @@ export interface ExecAgentAppContext {
   scope?: string | null;
   /** Session ID */
   sessionId?: string;
+  /** Current task identifier when executing from a task detail surface */
+  taskId?: string | null;
   /** Thread ID for threaded conversations */
   threadId?: string | null;
   /** Topic ID */

@@ -141,6 +141,7 @@ const ExecAgentSchema = z
         groupId: z.string().optional().nullable(),
         scope: z.string().optional().nullable(),
         sessionId: z.string().optional(),
+        taskId: z.string().optional().nullable(),
         threadId: z.string().optional().nullable(),
         topicId: z.string().optional().nullable(),
       })
