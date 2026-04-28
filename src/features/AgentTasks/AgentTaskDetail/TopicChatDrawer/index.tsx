@@ -1,21 +1,36 @@
 'use client';
 
 import { type ConversationContext } from '@lobechat/types';
-import { Drawer, Flexbox, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  copyToClipboard,
+  Drawer,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from 'antd-style';
+import { Copy, MoreHorizontal, Share2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
+import { useShareModal } from '@/features/ShareModal';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
 import TopicStatusIcon from '../TopicStatusIcon';
+
+const SharePopover = dynamic(() => import('@/features/SharePopover'));
 
 interface TopicChatDrawerBodyProps {
   agentId: string;
@@ -78,14 +93,49 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
 TopicChatDrawerBody.displayName = 'TopicChatDrawerBody';
 
 const TopicChatDrawer = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const topicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
+  const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const open = !!topicId && !!agentId;
   const status = activity?.status;
+
+  const shareContext = useMemo<Partial<ConversationContext>>(
+    () => ({ agentId: agentId ?? undefined, topicId: topicId ?? undefined }),
+    [agentId, topicId],
+  );
+  const { openShareModal } = useShareModal({ context: shareContext });
+
+  const handleCopyTopicId = useCallback(() => {
+    if (topicId) void copyToClipboard(topicId);
+  }, [topicId]);
+
+  const handleCopyOperationId = useCallback(() => {
+    if (activity?.operationId) void copyToClipboard(activity.operationId);
+  }, [activity?.operationId]);
+
+  const menuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        disabled: !topicId,
+        icon: Copy,
+        key: 'copyTopicId',
+        label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy topic ID' }),
+        onClick: handleCopyTopicId,
+      },
+      {
+        disabled: !activity?.operationId,
+        icon: Copy,
+        key: 'copyOperationId',
+        label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy operation ID' }),
+        onClick: handleCopyOperationId,
+      },
+    ],
+    [t, topicId, activity?.operationId, handleCopyTopicId, handleCopyOperationId],
+  );
 
   const title = (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
@@ -98,13 +148,37 @@ const TopicChatDrawer = memo(() => {
           #{activity.seq}
         </Text>
       )}
+      <DropdownMenu items={menuItems}>
+        <ActionIcon icon={MoreHorizontal} size={'small'} />
+      </DropdownMenu>
     </Flexbox>
   );
+
+  const shareIcon = (
+    <ActionIcon
+      icon={Share2}
+      size={'small'}
+      title={t('share', { ns: 'common' })}
+      onClick={enableTopicLinkShare ? undefined : openShareModal}
+    />
+  );
+
+  const extra = topicId ? (
+    enableTopicLinkShare ? (
+      <SharePopover topicId={topicId} onOpenModal={openShareModal}>
+        {shareIcon}
+      </SharePopover>
+    ) : (
+      shareIcon
+    )
+  ) : null;
 
   return (
     <Drawer
       destroyOnHidden
       containerMaxWidth={'auto'}
+      extra={extra}
+      getContainer={false}
       mask={false}
       open={open}
       placement={'right'}
