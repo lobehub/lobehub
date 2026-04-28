@@ -69,4 +69,19 @@ describe('buildTaskListPrompt', () => {
     expect(result).toMatchSnapshot();
     expect(result).not.toContain('ago');
   });
+
+  it('includes default Lobe AI assignee hint when provided', () => {
+    const result = buildTaskListPrompt(
+      {
+        defaultAssigneeAgentId: 'agt_inbox',
+        tasks: [],
+        total: 0,
+      },
+      NOW,
+    );
+
+    expect(result).toContain('<task_manager_defaults>');
+    expect(result).toContain('Default Lobe AI agent id: agt_inbox');
+    expect(result).toContain('Do not use it as a listTasks filter');
+  });
 });

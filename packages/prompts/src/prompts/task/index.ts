@@ -617,3 +617,5 @@ export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
 export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
+export type { TaskManagerPromptDefaults } from './taskManagerDefaults';
+export { buildTaskManagerDefaultsPrompt } from './taskManagerDefaults';
