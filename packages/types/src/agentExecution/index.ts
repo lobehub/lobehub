@@ -5,6 +5,8 @@ import type { ChatTopic } from '../topic';
  * Application context for message storage
  */
 export interface ExecAgentAppContext {
+  /** Optional default assignee candidate for task manager prompts */
+  defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
   documentId?: string | null;
   /** Group ID for group chat */

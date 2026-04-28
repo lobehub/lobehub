@@ -19,8 +19,10 @@ interface TaskAgentProviderProps {
 }
 
 export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => {
+  useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.inbox);
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.taskAgent);
 
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const taskAgentId = useAgentStore(builtinAgentSelectors.taskAgentId);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
@@ -34,11 +36,12 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
   const context = useMemo<ConversationContext>(
     () => ({
       agentId: selectedAgentId || '',
+      defaultTaskAssigneeAgentId: inboxAgentId,
       scope: 'task',
       topicId: activeTopicId,
       viewedTask: viewedTaskId ? { taskId: viewedTaskId, type: 'detail' } : { type: 'list' },
     }),
-    [activeTopicId, selectedAgentId, viewedTaskId],
+    [activeTopicId, inboxAgentId, selectedAgentId, viewedTaskId],
   );
 
   const chatKey = useMemo(() => messageMapKey(context), [context]);

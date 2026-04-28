@@ -236,6 +236,7 @@ export class GatewayActionImpl {
     const result = await aiAgentService.execAgentTask({
       agentId: context.agentId,
       appContext: {
+        defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
         documentId: context.documentId,
         groupId: context.groupId,
         scope: context.scope,

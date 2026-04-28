@@ -121,6 +121,11 @@ export interface MessageMapContext {
 export interface ConversationContext {
   agentId: string;
   /**
+   * Optional default assignee candidate for task manager conversations.
+   * This is a prompt hint only; task tools still require an explicit assigneeAgentId.
+   */
+  defaultTaskAssigneeAgentId?: string;
+  /**
    * Current document ID for page-scoped conversations.
    * Used by page editor integrations to distinguish the active document from
    * other agent resources tied to the same topic.

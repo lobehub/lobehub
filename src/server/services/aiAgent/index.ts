@@ -20,6 +20,7 @@ import type {
 } from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
 import type {
   ChatFileItem,
   ChatTopicBotContext,
@@ -1426,6 +1427,20 @@ export class AiAgentService {
       }
     }
 
+    if (appContext?.scope === 'task' && appContext.defaultTaskAssigneeAgentId) {
+      initialContext = {
+        ...initialContext,
+        initialContext: {
+          ...initialContext.initialContext,
+          taskManager: {
+            contextPrompt: buildTaskManagerDefaultsPrompt({
+              defaultAssigneeAgentId: appContext.defaultTaskAssigneeAgentId,
+            }),
+          },
+        },
+      };
+    }
+
     // 16b. Human-approval resume — override initialContext based on the
     // user's decision. The DB write above has already persisted the
     // intervention status, so `allMessages` reflects the decision for the
@@ -1540,6 +1555,7 @@ export class AiAgentService {
         userTimezone,
         appContext: {
           agentId: resolvedAgentId,
+          defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
           scope: appContext?.scope,

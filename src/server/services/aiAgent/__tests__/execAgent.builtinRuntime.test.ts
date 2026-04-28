@@ -269,6 +269,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     await service.execAgent({
       agentId: 'agent-task',
       appContext: {
+        defaultTaskAssigneeAgentId: 'agt_inbox',
         scope: 'task',
         taskId: 'T-1',
         topicId: 'topic-1',
@@ -278,9 +279,13 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.appContext).toMatchObject({
+      defaultTaskAssigneeAgentId: 'agt_inbox',
       scope: 'task',
       taskId: 'T-1',
       topicId: 'topic-1',
     });
+    expect(callArgs.initialContext.initialContext.taskManager.contextPrompt).toContain(
+      'Default Lobe AI agent id: agt_inbox',
+    );
   });
 });

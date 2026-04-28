@@ -149,6 +149,7 @@ export interface OperationCreationParams {
   agentConfig?: any;
   appContext: {
     agentId?: string;
+    defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;
     scope?: string | null;
