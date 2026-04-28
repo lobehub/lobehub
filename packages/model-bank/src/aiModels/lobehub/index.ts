@@ -5,6 +5,7 @@ import { lobehubVideoModels } from './video';
 
 export { lobehubChatModels } from './chat';
 export { lobehubEmbeddingModels } from './embedding';
+export * from './findModel';
 export { lobehubImageModels } from './image';
 export * from './utils';
 export {
