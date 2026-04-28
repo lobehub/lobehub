@@ -591,7 +591,6 @@
   "taskSchedule.scheduler": "Scheduler",
   "taskSchedule.schedulerNotReady": "Scheduler is coming soon. Use Recurring for now.",
   "taskSchedule.schedulerTab": "Scheduled",
-  "taskSchedule.seconds": "Seconds",
   "taskSchedule.summary.daily": "Daily at {{time}}",
   "taskSchedule.summary.disabled": "Automation is off",
   "taskSchedule.summary.everyNHours": "Every {{count}} hours{{minute}}",

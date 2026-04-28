@@ -591,7 +591,6 @@
   "taskSchedule.scheduler": "定时任务",
   "taskSchedule.schedulerNotReady": "定时任务即将上线。暂时请使用“循环任务”。",
   "taskSchedule.schedulerTab": "定时任务",
-  "taskSchedule.seconds": "秒",
   "taskSchedule.summary.daily": "每天 {{time}} 执行",
   "taskSchedule.summary.disabled": "自动化未启用",
   "taskSchedule.summary.everyNHours": "每 {{count}} 小时{{minute}}",
