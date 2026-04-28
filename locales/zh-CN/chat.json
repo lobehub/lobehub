@@ -475,7 +475,7 @@
   "taskDetail.activitiesEmpty": "暂无活动记录",
   "taskDetail.addSubtask": "添加子任务",
   "taskDetail.artifactSize": "{{value}} 字符",
-  "taskDetail.artifacts": "作品",
+  "taskDetail.artifacts": "产物",
   "taskDetail.blockedBy": "被 {{id}} 阻塞",
   "taskDetail.cancelSchedule": "取消定时",
   "taskDetail.comment.cancel": "取消",
