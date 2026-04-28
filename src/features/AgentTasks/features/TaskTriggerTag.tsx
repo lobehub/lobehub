@@ -20,17 +20,22 @@ interface TaskTriggerTagProps {
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
   ({ heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
     const { t, i18n } = useTranslation('chat');
-    const data = useMemo(() => {
+    const data = useMemo<
+      | {
+          primary: string;
+          secondary?: string;
+          tooltip: string;
+        }
+      | undefined
+    >(() => {
       if (schedulePattern) {
-        const description = formatScheduleDescription(schedulePattern, t);
-        const tzName = scheduleTimezone ? formatTimezoneName(scheduleTimezone, i18n.language) : '';
-        const text = tzName
-          ? t('taskSchedule.summary.schedule', { description, timezone: tzName })
-          : description;
         return {
+          primary: formatScheduleDescription(schedulePattern, t),
+          secondary: scheduleTimezone
+            ? formatTimezoneName(scheduleTimezone, i18n.language)
+            : undefined,
           // Tooltip exposes the raw cron + IANA id for power users / debugging.
           tooltip: scheduleTimezone ? `${schedulePattern} (${scheduleTimezone})` : schedulePattern,
-          text,
         };
       }
 
@@ -39,8 +44,8 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
           interval: formatIntervalLabel(heartbeatInterval, t),
         });
         return {
+          primary: every,
           tooltip: t('taskSchedule.tag.heartbeat', { every }),
-          text: every,
         };
       }
 
@@ -50,11 +55,23 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
     if (mode === 'inline') {
       return (
         <Tooltip title={data?.tooltip}>
-          <Flexbox horizontal align="center" gap={10}>
-            <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
-            <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
-              {data?.text ?? t('taskSchedule.tag.add')}
-            </Text>
+          <Flexbox horizontal align="flex-start" gap={10}>
+            <Icon
+              color={cssVar.colorTextDescription}
+              icon={ClockIcon}
+              size={16}
+              style={{ marginTop: 2 }}
+            />
+            <Flexbox gap={2}>
+              <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
+                {data?.primary ?? t('taskSchedule.tag.add')}
+              </Text>
+              {data?.secondary && (
+                <Text style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>
+                  {data.secondary}
+                </Text>
+              )}
+            </Flexbox>
           </Flexbox>
         </Tooltip>
       );
@@ -62,6 +79,8 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
 
     if (!data) return null;
 
+    // Pill mode is height-constrained; show the description only and stash the
+    // timezone in the tooltip alongside the raw cron.
     return (
       <Tooltip title={data.tooltip}>
         <Block
@@ -75,7 +94,7 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
         >
           <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
           <Text fontSize={12} type={'secondary'}>
-            {data.text}
+            {data.primary}
           </Text>
         </Block>
       </Tooltip>

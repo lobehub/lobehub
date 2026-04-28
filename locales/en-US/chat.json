@@ -601,7 +601,6 @@
   "taskSchedule.summary.everyNHours": "Every {{count}} hours{{minute}}",
   "taskSchedule.summary.heartbeat": "Runs every {{interval}}",
   "taskSchedule.summary.hourly": "Every hour{{minute}}",
-  "taskSchedule.summary.schedule": "{{description}} · {{timezone}}",
   "taskSchedule.summary.weekly": "Every {{days}} at {{time}}",
   "taskSchedule.tag.add": "Set schedule",
   "taskSchedule.tag.every": "Every {{interval}}",

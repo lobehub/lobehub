@@ -198,18 +198,21 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 
   const enabled = !!automationMode;
 
-  const summary = useMemo(() => {
+  const summary = useMemo<{ primary: string; secondary?: string } | null>(() => {
     if (automationMode === 'heartbeat' && finalCurrentInterval > 0) {
-      return t('taskSchedule.summary.heartbeat', {
-        interval: formatIntervalLabel(finalCurrentInterval, t),
-      });
+      return {
+        primary: t('taskSchedule.summary.heartbeat', {
+          interval: formatIntervalLabel(finalCurrentInterval, t),
+        }),
+      };
     }
     if (automationMode === 'schedule' && schedulePattern) {
-      const description = formatScheduleDescription(schedulePattern, t);
-      const tzName = scheduleTimezone ? formatTimezoneName(scheduleTimezone, i18n.language) : '';
-      return tzName
-        ? t('taskSchedule.summary.schedule', { description, timezone: tzName })
-        : description;
+      return {
+        primary: formatScheduleDescription(schedulePattern, t),
+        secondary: scheduleTimezone
+          ? formatTimezoneName(scheduleTimezone, i18n.language)
+          : undefined,
+      };
     }
     return null;
   }, [automationMode, finalCurrentInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
@@ -273,8 +276,13 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
         <Flexbox flex={1} gap={2}>
           <Text weight={500}>{t('taskSchedule.heading')}</Text>
           <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
-            {summary ?? t('taskSchedule.summary.disabled')}
+            {summary?.primary ?? t('taskSchedule.summary.disabled')}
           </Text>
+          {summary?.secondary && (
+            <Text style={{ color: cssVar.colorTextDescription, fontSize: 11 }}>
+              {summary.secondary}
+            </Text>
+          )}
         </Flexbox>
         <Switch checked={enabled} onChange={handleEnableChange} />
       </Flexbox>
