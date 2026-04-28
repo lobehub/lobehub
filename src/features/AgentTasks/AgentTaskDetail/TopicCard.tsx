@@ -39,8 +39,13 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const isRunning = activity.status === 'running';
 
+  const finalDuration =
+    !isRunning && activity.time && activity.completedAt
+      ? new Date(activity.completedAt).getTime() - new Date(activity.time).getTime()
+      : null;
+
   const [elapsed, setElapsed] = useState(() =>
-    activity.time ? Date.now() - new Date(activity.time).getTime() : 0,
+    isRunning && activity.time ? Date.now() - new Date(activity.time).getTime() : 0,
   );
 
   useEffect(() => {
@@ -60,7 +65,11 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   }, [activity.id]);
 
   const startedAt = activity.time ? dayjs(activity.time).fromNow() : '';
-  const durationText = isRunning ? formatDuration(elapsed) : '';
+  const durationText = isRunning
+    ? formatDuration(elapsed)
+    : finalDuration != null && finalDuration >= 0
+      ? formatDuration(finalDuration)
+      : '';
 
   const menuItems: DropdownItem[] = [
     {

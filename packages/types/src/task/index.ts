@@ -213,6 +213,12 @@ export interface TaskDetailActivity {
   artifacts?: unknown;
   author?: TaskDetailActivityAuthor;
   briefType?: string;
+  /**
+   * Topic-only: ISO timestamp when the topic run terminated (any of
+   * completed / failed / canceled / timeout). Pair with `time` (start) to
+   * compute elapsed duration.
+   */
+  completedAt?: string;
   content?: string;
   createdAt?: string;
   cronJobId?: string | null;

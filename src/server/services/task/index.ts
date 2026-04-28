@@ -215,6 +215,7 @@ export class TaskService {
         const handoff = t.handoff as TaskTopicHandoff | null;
         return {
           author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
+          completedAt: toISO(t.completedAt),
           id: t.topicId ?? undefined,
           runningOperation: t.metadata?.runningOperation ?? null,
           seq: t.seq,
