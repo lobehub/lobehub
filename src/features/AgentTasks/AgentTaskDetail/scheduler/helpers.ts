@@ -144,13 +144,20 @@ export const nextScheduleFiring = (pattern: string, tz: string | null): Dayjs | 
 };
 
 /**
- * Next heartbeat firing = lastAt + interval (or now + interval if never run).
+ * Next heartbeat firing time strictly after now. Catches up by interval steps
+ * when `lastAt` is stale (e.g. task was paused for hours).
  */
 export const nextHeartbeatFiring = (
   lastAt: string | null | undefined,
   intervalSeconds: number,
 ): Dayjs | null => {
   if (!intervalSeconds || intervalSeconds <= 0) return null;
-  const base = lastAt ? dayjs(lastAt) : dayjs();
-  return base.add(intervalSeconds, 'second');
+  const now = dayjs();
+  if (!lastAt) return now.add(intervalSeconds, 'second');
+  const base = dayjs(lastAt);
+  const next = base.add(intervalSeconds, 'second');
+  if (next.isAfter(now)) return next;
+  const intervalMs = intervalSeconds * 1000;
+  const steps = Math.floor(now.diff(base) / intervalMs) + 1;
+  return base.add(steps * intervalSeconds, 'second');
 };
