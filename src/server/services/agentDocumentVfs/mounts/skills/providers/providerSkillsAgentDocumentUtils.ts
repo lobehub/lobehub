@@ -8,10 +8,25 @@ import { getUnifiedSkillNamespaceRootPath } from '../path';
 import type { SkillMountNode } from '../types';
 
 export interface AgentSkillDocumentModelLike {
-  associate: (params: { agentId: string; documentId: string; policyLoad?: PolicyLoad }) => Promise<{
-    id: string;
-  }>;
+  create: (
+    agentId: string,
+    filename: string,
+    content: string,
+    params?: {
+      editorData?: Record<string, any>;
+      fileType?: string;
+      parentId?: string | null;
+      policyLoad?: PolicyLoad;
+      templateId?: string;
+      title?: string;
+    },
+  ) => Promise<AgentDocument>;
   delete: (documentId: string, deleteReason?: string) => Promise<void>;
+  deleteSubtreeByDocumentId: (
+    agentId: string,
+    rootDocumentId: string,
+    deleteReason?: string,
+  ) => Promise<void>;
   findByAgent: (agentId: string) => Promise<AgentDocument[]>;
   update: (
     documentId: string,
@@ -25,37 +40,7 @@ export interface AgentSkillDocumentModelLike {
 }
 
 export interface DocumentTreeServiceLike {
-  createDocument: (params: {
-    content?: string;
-    editorData: Record<string, any>;
-    fileType?: string;
-    metadata?: Record<string, any>;
-    parentId?: string;
-    title: string;
-  }) => Promise<{
-    content: string | null;
-    documentId?: string;
-    editorData: Record<string, any> | null;
-    fileType: string;
-    filename: string | null;
-    id: string;
-    metadata: Record<string, any> | null;
-    parentId: string | null;
-    title: string | null;
-  }>;
-  deleteDocument: (id: string) => Promise<unknown>;
   trySaveCurrentDocumentHistory: (documentId: string, saveSource: 'llm_call') => Promise<unknown>;
-  updateDocument: (
-    id: string,
-    params: {
-      content?: string;
-      editorData?: Record<string, any>;
-      metadata?: Record<string, any>;
-      parentId?: string | null;
-      saveSource?: 'llm_call';
-      title?: string;
-    },
-  ) => Promise<unknown>;
 }
 
 export interface ProviderSkillsAgentDocumentDeps {
@@ -67,19 +52,14 @@ export interface CreateSkillTreeInput {
   agentDocumentModel: AgentSkillDocumentModelLike;
   agentId: string;
   content: string;
-  documentService: DocumentTreeServiceLike;
   editorData: Record<string, any>;
   namespace: 'agent';
   skillName: string;
 }
 
-export interface LobeSkillMetadata {
-  namespace: 'agent';
-  role: 'namespace-root' | 'skill-file' | 'skill-folder';
-  skillName?: string;
-}
-
 export const EMPTY_EDITOR_DATA = { root: { children: [], type: 'root' } };
+
+export const AGENT_SKILL_TEMPLATE_ID = 'agent-skill';
 
 export const SKILL_FILE_NAME = 'SKILL.md';
 
@@ -175,33 +155,18 @@ export const projectDocumentContent = async (document: AgentDocument) => {
   }
 };
 
-export const getSkillMetadata = (document: Pick<AgentDocument, 'metadata'>) => {
-  const metadata = document.metadata as { lobeSkill?: LobeSkillMetadata } | null;
-  return metadata?.lobeSkill;
-};
-
-export const isManagedSkillDocument = (document: Pick<AgentDocument, 'metadata'>) =>
-  Boolean(getSkillMetadata(document));
-
-export const isSkillDocumentInScope = (
-  document: Pick<AgentDocument, 'metadata'>,
-  namespace: 'agent',
-) => {
-  const metadata = getSkillMetadata(document);
-
-  if (!metadata || metadata.namespace !== namespace) {
-    return false;
-  }
-
-  return true;
-};
+export const isManagedSkillDocument = (document: Pick<AgentDocument, 'templateId'>) =>
+  document.templateId === AGENT_SKILL_TEMPLATE_ID;
 
 export const getScopedSkillDocuments = (documents: AgentDocument[], namespace: 'agent') =>
-  documents.filter((document) => isSkillDocumentInScope(document, namespace));
+  namespace === 'agent' ? documents.filter(isManagedSkillDocument) : [];
 
 export const getNamespaceRoot = (documents: AgentDocument[], namespace: 'agent') =>
   getScopedSkillDocuments(documents, namespace).find(
-    (document) => getSkillMetadata(document)?.role === 'namespace-root',
+    (document) =>
+      document.fileType === DOCUMENT_FOLDER_TYPE &&
+      document.filename === 'skills' &&
+      document.parentId === null,
   );
 
 export const getSkillFolder = (
@@ -210,40 +175,33 @@ export const getSkillFolder = (
   skillName: string,
 ) => {
   const root = getNamespaceRoot(documents, namespace);
+  if (!root) return undefined;
 
-  return getScopedSkillDocuments(documents, namespace).find((document) => {
-    const metadata = getSkillMetadata(document);
-
-    return (
-      metadata?.role === 'skill-folder' &&
-      metadata.skillName === skillName &&
-      (!root || document.parentId === root.documentId)
-    );
-  });
+  return getScopedSkillDocuments(documents, namespace).find(
+    (document) =>
+      document.fileType === DOCUMENT_FOLDER_TYPE &&
+      document.filename === skillName &&
+      document.parentId === root.documentId,
+  );
 };
 
 export const getSkillFile = (documents: AgentDocument[], namespace: 'agent', skillName: string) => {
   const folder = getSkillFolder(documents, namespace, skillName);
+  if (!folder) return undefined;
 
-  return getScopedSkillDocuments(documents, namespace).find((document) => {
-    const metadata = getSkillMetadata(document);
-
-    return (
-      metadata?.role === 'skill-file' &&
-      metadata.skillName === skillName &&
-      (!folder || document.parentId === folder.documentId)
-    );
-  });
+  return getScopedSkillDocuments(documents, namespace).find(
+    (document) => document.filename === SKILL_FILE_NAME && document.parentId === folder.documentId,
+  );
 };
 
 export const listScopedSkillFolders = (documents: AgentDocument[], namespace: 'agent') => {
   const root = getNamespaceRoot(documents, namespace);
+  if (!root) return [];
 
-  return getScopedSkillDocuments(documents, namespace).filter((document) => {
-    const metadata = getSkillMetadata(document);
-
-    return metadata?.role === 'skill-folder' && (!root || document.parentId === root.documentId);
-  });
+  return getScopedSkillDocuments(documents, namespace).filter(
+    (document) =>
+      document.fileType === DOCUMENT_FOLDER_TYPE && document.parentId === root.documentId,
+  );
 };
 
 export const assertSkillDocument = <T>(document: T | undefined, message = 'Skill not found') => {
@@ -254,23 +212,13 @@ export const assertSkillDocument = <T>(document: T | undefined, message = 'Skill
   return document;
 };
 
-export const createSkillMetadata = ({ namespace, role, skillName }: LobeSkillMetadata) => ({
-  lobeSkill: {
-    namespace,
-    role,
-    ...(skillName ? { skillName } : {}),
-  } satisfies LobeSkillMetadata,
-});
-
 export const ensureNamespaceRoot = async ({
   agentId,
   agentDocumentModel,
-  documentService,
   namespace,
 }: {
   agentDocumentModel: AgentSkillDocumentModelLike;
   agentId: string;
-  documentService: DocumentTreeServiceLike;
   namespace: 'agent';
 }): Promise<{ documentId: string }> => {
   const documents = await agentDocumentModel.findByAgent(agentId);
@@ -280,27 +228,21 @@ export const ensureNamespaceRoot = async ({
     return { documentId: existingRoot.documentId };
   }
 
-  const root = await documentService.createDocument({
+  const root = await agentDocumentModel.create(agentId, 'skills', '', {
     editorData: EMPTY_EDITOR_DATA,
     fileType: DOCUMENT_FOLDER_TYPE,
-    metadata: createSkillMetadata({ namespace, role: 'namespace-root' }),
+    policyLoad: PolicyLoad.DISABLED,
+    templateId: AGENT_SKILL_TEMPLATE_ID,
     title: 'skills',
   });
 
-  await agentDocumentModel.associate({
-    agentId,
-    documentId: root.id,
-    policyLoad: PolicyLoad.DISABLED,
-  });
-
-  return { documentId: root.id };
+  return { documentId: root.documentId };
 };
 
 export const createSkillTree = async ({
   agentDocumentModel,
   agentId,
   content,
-  documentService,
   editorData,
   namespace,
   skillName,
@@ -319,7 +261,6 @@ export const createSkillTree = async ({
     : await ensureNamespaceRoot({
         agentDocumentModel,
         agentId,
-        documentService,
         namespace,
       });
 
@@ -328,53 +269,45 @@ export const createSkillTree = async ({
   let createdFileId: string | undefined;
 
   try {
-    const folder = await documentService.createDocument({
+    const folder = await agentDocumentModel.create(agentId, skillName, '', {
       editorData: EMPTY_EDITOR_DATA,
       fileType: DOCUMENT_FOLDER_TYPE,
-      metadata: createSkillMetadata({
-        namespace,
-        role: 'skill-folder',
-        skillName,
-      }),
       parentId: root.documentId,
+      policyLoad: PolicyLoad.DISABLED,
+      templateId: AGENT_SKILL_TEMPLATE_ID,
       title: skillName,
     });
 
     createdFolderId = folder.id;
-    await agentDocumentModel.associate({
-      agentId,
-      documentId: folder.id,
-      policyLoad: PolicyLoad.DISABLED,
-    });
 
-    const file = await documentService.createDocument({
-      content,
+    const file = await agentDocumentModel.create(agentId, SKILL_FILE_NAME, content, {
       editorData,
       fileType: SKILL_INDEX_FILE_TYPE,
-      metadata: createSkillMetadata({
-        namespace,
-        role: 'skill-file',
-        skillName,
-      }),
-      parentId: folder.id,
+      parentId: folder.documentId,
+      templateId: AGENT_SKILL_TEMPLATE_ID,
       title: SKILL_FILE_NAME,
     });
 
     createdFileId = file.id;
-    await agentDocumentModel.associate({ agentId, documentId: file.id });
 
-    return { fileDocumentId: file.id, folderDocumentId: folder.id };
+    return { fileDocumentId: file.documentId, folderDocumentId: folder.documentId };
   } catch (error) {
     if (createdFileId) {
-      await documentService.deleteDocument(createdFileId);
+      await agentDocumentModel.delete(createdFileId, 'skill-create-rollback');
     }
 
     if (createdFolderId) {
-      await documentService.deleteDocument(createdFolderId);
+      await agentDocumentModel.delete(createdFolderId, 'skill-create-rollback');
     }
 
     if (createdRootId) {
-      await documentService.deleteDocument(createdRootId);
+      const rootBinding = await agentDocumentModel
+        .findByAgent(agentId)
+        .then((documents) => documents.find((document) => document.documentId === createdRootId));
+
+      if (rootBinding) {
+        await agentDocumentModel.delete(rootBinding.id, 'skill-create-rollback');
+      }
     }
 
     throw error;

@@ -128,26 +128,28 @@ describe('defineSkillManagementActionHandler', () => {
       collectAgentSkillDecisionCandidates([
         {
           documentId: 'folder-doc',
-          filename: 'Review Skill',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent',
-              role: 'skill-folder',
-              skillName: 'review-skill',
-            },
-          },
+          fileType: 'custom/folder',
+          filename: 'review-skill',
+          id: 'folder-binding',
+          parentId: 'root-doc',
+          templateId: 'agent-skill',
           title: 'Review Skill',
+        },
+        {
+          documentId: 'root-doc',
+          fileType: 'custom/folder',
+          filename: 'skills',
+          id: 'root-binding',
+          parentId: null,
+          templateId: 'agent-skill',
+          title: 'skills',
         },
         {
           documentId: 'file-doc',
           filename: 'SKILL.md',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent',
-              role: 'skill-file',
-              skillName: 'review-skill',
-            },
-          },
+          id: 'file-binding',
+          parentId: 'folder-doc',
+          templateId: 'agent-skill',
           title: 'SKILL.md',
         },
       ] as never),

@@ -102,23 +102,35 @@ describe('Skill Router Integration Tests', () => {
 
   const getManagedSkillBindingId = async ({
     agentId,
-    namespace,
     skillName,
   }: {
     agentId: string;
-    namespace: 'agent';
     skillName: string;
   }) => {
     const documents = await agentDocumentModel.findByAgent(agentId);
+    const root = documents.find(
+      (item) =>
+        item.fileType === 'custom/folder' &&
+        item.filename === 'skills' &&
+        item.parentId === null &&
+        item.templateId === 'agent-skill',
+    );
+    const folder = documents.find(
+      (item) =>
+        item.fileType === 'custom/folder' &&
+        item.filename === skillName &&
+        item.parentId === root?.documentId &&
+        item.templateId === 'agent-skill',
+    );
     const document = documents.find(
       (item) =>
         item.filename === 'SKILL.md' &&
-        item.metadata?.lobeSkill?.namespace === namespace &&
-        item.metadata?.lobeSkill?.skillName === skillName,
+        item.parentId === folder?.documentId &&
+        item.templateId === 'agent-skill',
     );
 
     if (!document) {
-      throw new Error(`Expected managed skill document ${namespace}:${skillName} to exist`);
+      throw new Error(`Expected managed skill document agent:${skillName} to exist`);
     }
 
     return document.id;
@@ -596,7 +608,6 @@ describe('Skill Router Integration Tests', () => {
 
       const id = await getManagedSkillBindingId({
         agentId,
-        namespace: 'agent',
         skillName: 'research-helper',
       });
 
@@ -623,7 +634,6 @@ describe('Skill Router Integration Tests', () => {
 
       const id = await getManagedSkillBindingId({
         agentId,
-        namespace: 'agent',
         skillName: 'research-helper',
       });
 

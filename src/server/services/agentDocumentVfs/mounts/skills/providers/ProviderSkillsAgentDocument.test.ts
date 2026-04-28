@@ -34,7 +34,9 @@ const createAgentDocument = (overrides: Record<string, unknown> = {}) =>
 describe('Agent skill VFS providers', () => {
   const agentDocumentModel = {
     associate: vi.fn(),
+    create: vi.fn(),
     delete: vi.fn(),
+    deleteSubtreeByDocumentId: vi.fn(),
     findByAgent: vi.fn(),
     update: vi.fn(),
   };
@@ -57,25 +59,21 @@ describe('Agent skill VFS providers', () => {
           fileType: 'custom/folder',
           filename: 'skills',
           id: 'agent-doc-root',
-          metadata: { lobeSkill: { namespace: 'agent', role: 'namespace-root' } },
+          templateId: 'agent-skill',
         }),
         createAgentDocument({
           documentId: 'folder-1',
           fileType: 'custom/folder',
           filename: 'agent-skill',
           id: 'agent-doc-folder',
-          metadata: {
-            lobeSkill: { namespace: 'agent', role: 'skill-folder', skillName: 'agent-skill' },
-          },
+          templateId: 'agent-skill',
           parentId: 'root-1',
         }),
         createAgentDocument({
           documentId: 'file-1',
           filename: 'SKILL.md',
           id: 'agent-doc-file',
-          metadata: {
-            lobeSkill: { namespace: 'agent', role: 'skill-file', skillName: 'agent-skill' },
-          },
+          templateId: 'agent-skill',
           parentId: 'folder-1',
         }),
         createAgentDocument({
@@ -111,32 +109,36 @@ describe('Agent skill VFS providers', () => {
 
     it('creates a tree-backed agent skill with namespace root, folder, and SKILL.md', async () => {
       agentDocumentModel.findByAgent.mockResolvedValue([]);
-      documentService.createDocument
+      agentDocumentModel.create
         .mockResolvedValueOnce({
+          documentId: 'root-1',
           fileType: 'custom/folder',
           filename: 'skills',
-          id: 'root-1',
-          metadata: { lobeSkill: { namespace: 'agent', role: 'namespace-root' } },
+          id: 'agent-doc-root',
+          metadata: null,
           parentId: null,
+          templateId: 'agent-skill',
           title: 'skills',
         })
         .mockResolvedValueOnce({
+          documentId: 'folder-1',
           fileType: 'custom/folder',
           filename: 'writer',
-          id: 'folder-1',
-          metadata: {
-            lobeSkill: { namespace: 'agent', role: 'skill-folder', skillName: 'writer' },
-          },
+          id: 'agent-doc-folder',
+          metadata: null,
           parentId: 'root-1',
+          templateId: 'agent-skill',
           title: 'writer',
         })
         .mockResolvedValueOnce({
           content: '# Skill',
-          fileType: 'custom/document',
+          documentId: 'file-1',
+          fileType: 'skill/index',
           filename: 'SKILL.md',
-          id: 'file-1',
-          metadata: { lobeSkill: { namespace: 'agent', role: 'skill-file', skillName: 'writer' } },
+          id: 'agent-doc-file',
+          metadata: null,
           parentId: 'folder-1',
+          templateId: 'agent-skill',
           title: 'SKILL.md',
         });
 
@@ -152,41 +154,36 @@ describe('Agent skill VFS providers', () => {
         targetNamespace: 'agent',
       });
 
-      expect(documentService.createDocument).toHaveBeenNthCalledWith(1, {
+      expect(agentDocumentModel.create).toHaveBeenNthCalledWith(1, 'agent-1', 'skills', '', {
         editorData: { root: { children: [], type: 'root' } },
         fileType: 'custom/folder',
-        metadata: { lobeSkill: { namespace: 'agent', role: 'namespace-root' } },
+        policyLoad: 'disabled',
+        templateId: 'agent-skill',
         title: 'skills',
       });
-      expect(documentService.createDocument).toHaveBeenNthCalledWith(2, {
+      expect(agentDocumentModel.create).toHaveBeenNthCalledWith(2, 'agent-1', 'writer', '', {
         editorData: { root: { children: [], type: 'root' } },
         fileType: 'custom/folder',
-        metadata: { lobeSkill: { namespace: 'agent', role: 'skill-folder', skillName: 'writer' } },
         parentId: 'root-1',
+        policyLoad: 'disabled',
+        templateId: 'agent-skill',
         title: 'writer',
       });
-      expect(documentService.createDocument).toHaveBeenNthCalledWith(3, {
-        content: '# Skill',
-        editorData: { markdown: '# Skill' },
-        fileType: 'skill/index',
-        metadata: { lobeSkill: { namespace: 'agent', role: 'skill-file', skillName: 'writer' } },
-        parentId: 'folder-1',
-        title: 'SKILL.md',
-      });
-      expect(agentDocumentModel.associate).toHaveBeenNthCalledWith(1, {
-        agentId: 'agent-1',
-        documentId: 'root-1',
-        policyLoad: 'disabled',
-      });
-      expect(agentDocumentModel.associate).toHaveBeenNthCalledWith(2, {
-        agentId: 'agent-1',
-        documentId: 'folder-1',
-        policyLoad: 'disabled',
-      });
-      expect(agentDocumentModel.associate).toHaveBeenNthCalledWith(3, {
-        agentId: 'agent-1',
-        documentId: 'file-1',
-      });
+      expect(agentDocumentModel.create).toHaveBeenNthCalledWith(
+        3,
+        'agent-1',
+        'SKILL.md',
+        '# Skill',
+        {
+          editorData: { markdown: '# Skill' },
+          fileType: 'skill/index',
+          parentId: 'folder-1',
+          templateId: 'agent-skill',
+          title: 'SKILL.md',
+        },
+      );
+      expect(documentService.createDocument).not.toHaveBeenCalled();
+      expect(agentDocumentModel.associate).not.toHaveBeenCalled();
       expect(result.path).toBe('./lobe/skills/agent/skills/writer/SKILL.md');
     });
 
@@ -202,28 +199,19 @@ describe('Agent skill VFS providers', () => {
       agentDocumentModel.findByAgent.mockResolvedValue([
         {
           documentId: 'root-doc',
+          fileType: 'custom/folder',
           filename: 'skills',
           id: 'root-binding',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent',
-              role: 'namespace-root',
-            },
-          },
           parentId: null,
+          templateId: 'agent-skill',
         },
         {
           documentId: 'folder-doc',
+          fileType: 'custom/folder',
           filename: 'writer',
           id: 'folder-binding',
-          metadata: {
-            lobeSkill: {
-              namespace: 'agent',
-              role: 'skill-folder',
-              skillName: 'writer',
-            },
-          },
           parentId: 'root-doc',
+          templateId: 'agent-skill',
         },
       ] as never);
 
@@ -249,12 +237,28 @@ describe('Agent skill VFS providers', () => {
     it('updates an agent skill through the document model and saves history when content changes', async () => {
       agentDocumentModel.findByAgent.mockResolvedValue([
         createAgentDocument({
+          documentId: 'root-1',
+          fileType: 'custom/folder',
+          filename: 'skills',
+          id: 'agent-doc-root',
+          parentId: null,
+          templateId: 'agent-skill',
+        }),
+        createAgentDocument({
+          documentId: 'folder-1',
+          fileType: 'custom/folder',
+          filename: 'skill-a',
+          id: 'agent-doc-folder',
+          parentId: 'root-1',
+          templateId: 'agent-skill',
+        }),
+        createAgentDocument({
           content: 'old content',
           documentId: 'file-1',
           filename: 'SKILL.md',
           id: 'agent-doc-file',
-          metadata: { lobeSkill: { namespace: 'agent', role: 'skill-file', skillName: 'skill-a' } },
           parentId: 'folder-1',
+          templateId: 'agent-skill',
         }),
       ]);
 
@@ -283,21 +287,27 @@ describe('Agent skill VFS providers', () => {
     it('soft-deletes the folder subtree for an agent skill', async () => {
       agentDocumentModel.findByAgent.mockResolvedValue([
         createAgentDocument({
+          documentId: 'root-1',
+          fileType: 'custom/folder',
+          filename: 'skills',
+          id: 'agent-doc-root',
+          parentId: null,
+          templateId: 'agent-skill',
+        }),
+        createAgentDocument({
           documentId: 'folder-1',
           fileType: 'custom/folder',
           filename: 'skill-a',
           id: 'agent-doc-folder',
-          metadata: {
-            lobeSkill: { namespace: 'agent', role: 'skill-folder', skillName: 'skill-a' },
-          },
           parentId: 'root-1',
+          templateId: 'agent-skill',
         }),
         createAgentDocument({
           documentId: 'file-1',
           filename: 'SKILL.md',
           id: 'agent-doc-file',
-          metadata: { lobeSkill: { namespace: 'agent', role: 'skill-file', skillName: 'skill-a' } },
           parentId: 'folder-1',
+          templateId: 'agent-skill',
         }),
       ]);
 
@@ -311,7 +321,12 @@ describe('Agent skill VFS providers', () => {
         path: './lobe/skills/agent/skills/skill-a/SKILL.md',
       });
 
-      expect(documentService.deleteDocument).toHaveBeenCalledWith('folder-1');
+      expect(agentDocumentModel.deleteSubtreeByDocumentId).toHaveBeenCalledWith(
+        'agent-1',
+        'folder-1',
+        'skill-delete',
+      );
+      expect(documentService.deleteDocument).not.toHaveBeenCalled();
     });
   });
 });

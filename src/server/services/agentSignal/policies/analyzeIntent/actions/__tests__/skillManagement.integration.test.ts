@@ -7,7 +7,6 @@ import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import { createSkillTree } from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
-import { DocumentService } from '@/server/services/document';
 
 import {
   cleanupTestUser,
@@ -46,7 +45,6 @@ describe('runSkillManagementAction integration', () => {
       agentDocumentModel: new AgentDocumentModel(serverDB, userId),
       agentId,
       content: snapshot.content,
-      documentService: new DocumentService(serverDB, userId),
       editorData: snapshot.editorData,
       namespace: 'agent',
       skillName,

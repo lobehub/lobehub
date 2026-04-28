@@ -26,9 +26,7 @@ import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import {
   createSkillTree,
   getSkillFolder,
-  getSkillMetadata,
 } from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
-import { DocumentService } from '@/server/services/document';
 import { SkillMaintainerService } from '@/server/services/skillMaintainer/SkillMaintainerService';
 import { SkillReferenceResolver } from '@/server/services/skillMaintainer/SkillReferenceResolver';
 import { VfsSkillPackageAdapter } from '@/server/services/skillMaintainer/VfsSkillPackageAdapter';
@@ -302,7 +300,7 @@ const toSkillManagementDecision = (
  *
  * Expects:
  * - `documents` come from one agent's document bindings
- * - Managed skill folders store package names in `metadata.lobeSkill.skillName`
+ * - Managed skill folders use their directory filename as the package id
  *
  * Returns:
  * - Agent-scoped candidate ids that are package names for `targetSkillIds`
@@ -313,19 +311,15 @@ export const collectAgentSkillDecisionCandidates = (
   const candidates: SkillManagementCandidateSkill[] = [];
 
   for (const document of documents) {
-    const metadata = getSkillMetadata(document);
+    const folder = getSkillFolder(documents, 'agent', document.filename);
 
-    if (
-      metadata?.namespace !== 'agent' ||
-      metadata.role !== 'skill-folder' ||
-      !metadata.skillName
-    ) {
+    if (!folder || folder.id !== document.id) {
       continue;
     }
 
     candidates.push({
-      id: metadata.skillName,
-      name: document.title ?? document.filename ?? metadata.skillName,
+      id: document.filename,
+      name: document.title ?? document.filename,
       scope: 'agent',
     });
   }
@@ -803,7 +797,6 @@ export const runSkillManagementAction = async (
       agentDocumentModel: new AgentDocumentModel(options.db, options.userId),
       agentId: input.agentId,
       content: snapshot.content,
-      documentService: new DocumentService(options.db, options.userId),
       editorData: snapshot.editorData,
       namespace: 'agent',
       skillName,

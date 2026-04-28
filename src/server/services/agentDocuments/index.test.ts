@@ -570,13 +570,7 @@ describe('AgentDocumentsService', () => {
         content: 'content',
         documentId: 'documents-1',
         id: 'agent-doc-1',
-        metadata: {
-          lobeSkill: {
-            namespace: 'agent',
-            role: 'skill-folder',
-            skillName: 'writer',
-          },
-        },
+        templateId: 'agent-skill',
         title: 'writer',
       });
 
@@ -596,13 +590,7 @@ describe('AgentDocumentsService', () => {
         content: 'content',
         documentId: 'documents-1',
         id: 'agent-doc-1',
-        metadata: {
-          lobeSkill: {
-            namespace: 'agent',
-            role: 'skill-file',
-            skillName: 'writer',
-          },
-        },
+        templateId: 'agent-skill',
         title: 'SKILL.md',
       });
 

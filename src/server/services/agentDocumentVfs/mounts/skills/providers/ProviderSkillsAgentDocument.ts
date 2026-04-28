@@ -21,7 +21,6 @@ import {
   getScopedSkillDocuments,
   getSkillFile,
   getSkillFolder,
-  getSkillMetadata,
   getValidatedSkillName,
   listScopedSkillFolders,
   projectDocumentContent,
@@ -45,7 +44,7 @@ const DOCUMENT_SKILL_PROVIDER_CONFIGS = {
  * - Serving agent-level skills from agent documents.
  *
  * Expects:
- * - Managed skill documents carry `metadata.lobeSkill` with namespace and role.
+ * - Managed skill documents use the agent-skill template id and document tree paths.
  *
  * Returns:
  * - Skill VFS nodes whose paths use the target unified `./lobe/skills/...` layout.
@@ -94,11 +93,7 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
 
     if (!input.resolvedPath.skillName) {
       return sortSkillFolders(listScopedSkillFolders(documents, this.config.namespace)).map(
-        (document) =>
-          buildSkillDirectoryNode(
-            this.config.namespace,
-            getSkillMetadata(document)?.skillName ?? document.filename,
-          ),
+        (document) => buildSkillDirectoryNode(this.config.namespace, document.filename),
       );
     }
 
@@ -130,7 +125,6 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
       agentDocumentModel: this.deps.agentDocumentModel,
       agentId: input.agentId,
       content: snapshot.content,
-      documentService: this.deps.documentService,
       editorData: snapshot.editorData,
       namespace: this.config.namespace,
       skillName,
@@ -179,6 +173,10 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
     );
     const folder = assertSkillDocument(getSkillFolder(documents, this.config.namespace, skillName));
 
-    await this.deps.documentService.deleteDocument(folder.documentId);
+    await this.deps.agentDocumentModel.deleteSubtreeByDocumentId(
+      input.agentId,
+      folder.documentId,
+      'skill-delete',
+    );
   }
 }
