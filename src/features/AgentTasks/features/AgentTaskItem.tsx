@@ -125,6 +125,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
       taskId={task.identifier}
     >
       <TaskTriggerTag
+        automationMode={task.automationMode}
         heartbeatInterval={taskDetail?.heartbeat?.interval}
         schedulePattern={task.schedulePattern}
         scheduleTimezone={task.scheduleTimezone}

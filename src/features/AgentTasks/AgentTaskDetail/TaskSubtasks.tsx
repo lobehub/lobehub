@@ -87,6 +87,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
           onClick={(e) => e.stopPropagation()}
         >
           <TaskTriggerTag
+            automationMode={task.automationMode}
             heartbeatInterval={task.heartbeat?.interval}
             schedulePattern={task.schedule?.pattern}
             scheduleTimezone={task.schedule?.timezone}
