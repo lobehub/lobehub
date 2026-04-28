@@ -28,8 +28,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   list: css`
-    overflow-y: auto;
-    max-height: 50vh;
     padding: 8px;
   `,
 }));
@@ -92,7 +90,11 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, onSelect }) => {
   if (!isInit) return <SkeletonList rows={6} style={{ padding: 8 }} />;
 
   return (
-    <Flexbox className={styles.list} gap={2}>
+    <Flexbox
+      className={styles.list}
+      gap={2}
+      style={{ maxHeight: 360, overflowY: 'auto', width: '100%' }}
+    >
       {rows.map((row) => {
         const isActive = row.id === activeAgentId;
         return (

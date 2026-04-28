@@ -97,7 +97,7 @@ const AgentSelect = memo(() => {
       nativeButton={false}
       open={open}
       placement="bottomLeft"
-      styles={{ content: { padding: 0, width: 240 } }}
+      styles={{ content: { padding: 0, width: 360 } }}
       trigger="click"
       onOpenChange={setOpen}
     >
