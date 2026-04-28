@@ -252,6 +252,8 @@ describe('AgentDocumentVfsService', () => {
     const service = new AgentDocumentVfsService(db, userId);
     const stats = await service.stat('./notes.md', { agentId: 'agent-1' });
 
+    if (!stats) throw new Error('Expected ./notes.md stats to resolve');
+
     expect(stats.documentId).toBe('documents-first');
     expect(mockAgentDocumentModel.create).not.toHaveBeenCalled();
   });

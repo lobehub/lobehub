@@ -231,11 +231,6 @@ describe('Agent skill VFS providers', () => {
         provider.create({
           agentId: 'agent-1',
           content: '# Writer',
-          resolvedPath: {
-            filePath: undefined,
-            namespace: 'agent',
-            skillName: 'writer',
-          },
           skillName: 'writer',
           targetNamespace: 'agent',
         }),
