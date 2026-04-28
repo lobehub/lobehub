@@ -217,5 +217,7 @@ export const sharedOptimizeDeps = {
 
     'ahooks',
     'motion/react',
+    '@pierre/trees',
+    '@pierre/trees/react',
   ],
 };

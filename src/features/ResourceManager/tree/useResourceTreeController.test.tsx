@@ -48,6 +48,11 @@ const createDeferred = <T,>() => {
   return { promise, resolve };
 };
 
+const createKnowledgeResponse = (items: FileListItem[]) => ({
+  hasMore: false,
+  items,
+});
+
 describe('useResourceTreeController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,18 +63,16 @@ describe('useResourceTreeController', () => {
 
     getKnowledgeItemsSpy.mockImplementation(async ({ parentId }) => {
       if (parentId === null) {
-        return {
-          items: [
-            createKnowledgeItem('file-a', 'Alpha.md', null),
-            createKnowledgeItem('folder-b', 'Bravo', null, 'custom/folder'),
-            createKnowledgeItem('folder-a', 'Alpha', null, 'custom/folder'),
-          ],
-        };
+        return createKnowledgeResponse([
+          createKnowledgeItem('file-a', 'Alpha.md', null),
+          createKnowledgeItem('folder-b', 'Bravo', null, 'custom/folder'),
+          createKnowledgeItem('folder-a', 'Alpha', null, 'custom/folder'),
+        ]);
       }
 
-      return {
-        items: [createKnowledgeItem('file-child', 'Child.md', parentId ?? null)],
-      };
+      return createKnowledgeResponse([
+        createKnowledgeItem('file-child', 'Child.md', parentId ?? null),
+      ]);
     });
 
     const { result } = renderHook(() => useResourceTreeController({ libraryId: 'library-a' }));
@@ -109,9 +112,11 @@ describe('useResourceTreeController', () => {
   });
 
   it('clears local tree state on library switch', async () => {
-    vi.spyOn(fileService, 'getKnowledgeItems').mockImplementation(async ({ knowledgeBaseId }) => ({
-      items: [createKnowledgeItem(`${knowledgeBaseId}-folder`, 'Folder', null, 'custom/folder')],
-    }));
+    vi.spyOn(fileService, 'getKnowledgeItems').mockImplementation(async ({ knowledgeBaseId }) =>
+      createKnowledgeResponse([
+        createKnowledgeItem(`${knowledgeBaseId}-folder`, 'Folder', null, 'custom/folder'),
+      ]),
+    );
 
     const { rerender, result } = renderHook(
       ({ libraryId }) => useResourceTreeController({ libraryId }),
@@ -139,14 +144,14 @@ describe('useResourceTreeController', () => {
   });
 
   it('ignores stale responses from a previous library generation', async () => {
-    const libraryAResponse = createDeferred<{ items: FileListItem[] }>();
+    const libraryAResponse = createDeferred<ReturnType<typeof createKnowledgeResponse>>();
 
     vi.spyOn(fileService, 'getKnowledgeItems').mockImplementation(({ knowledgeBaseId }) => {
       if (knowledgeBaseId === 'library-a') return libraryAResponse.promise;
 
-      return Promise.resolve({
-        items: [createKnowledgeItem('library-b-file', 'Current.md', null)],
-      });
+      return Promise.resolve(
+        createKnowledgeResponse([createKnowledgeItem('library-b-file', 'Current.md', null)]),
+      );
     });
 
     const { rerender, result } = renderHook(
@@ -171,9 +176,9 @@ describe('useResourceTreeController', () => {
     });
 
     await act(async () => {
-      libraryAResponse.resolve({
-        items: [createKnowledgeItem('library-a-file', 'Stale.md', null)],
-      });
+      libraryAResponse.resolve(
+        createKnowledgeResponse([createKnowledgeItem('library-a-file', 'Stale.md', null)]),
+      );
       await libraryAResponse.promise;
     });
 
@@ -183,12 +188,13 @@ describe('useResourceTreeController', () => {
   });
 
   it('ignores older same-parent responses when a newer revalidation finishes first', async () => {
-    const staleRootResponse = createDeferred<{ items: FileListItem[] }>();
-    const currentRootResponse = createDeferred<{ items: FileListItem[] }>();
+    const staleRootResponse = createDeferred<ReturnType<typeof createKnowledgeResponse>>();
+    const currentRootResponse = createDeferred<ReturnType<typeof createKnowledgeResponse>>();
     const getKnowledgeItemsSpy = vi.spyOn(fileService, 'getKnowledgeItems');
 
     getKnowledgeItemsSpy
       .mockResolvedValueOnce({
+        hasMore: false,
         items: [createKnowledgeItem('initial-file', 'Initial.md', null)],
       })
       .mockReturnValueOnce(staleRootResponse.promise)
@@ -213,9 +219,9 @@ describe('useResourceTreeController', () => {
     expect(getKnowledgeItemsSpy).toHaveBeenCalledTimes(3);
 
     await act(async () => {
-      currentRootResponse.resolve({
-        items: [createKnowledgeItem('current-file', 'Current.md', null)],
-      });
+      currentRootResponse.resolve(
+        createKnowledgeResponse([createKnowledgeItem('current-file', 'Current.md', null)]),
+      );
       await currentRevalidation;
     });
 
@@ -224,9 +230,9 @@ describe('useResourceTreeController', () => {
     ]);
 
     await act(async () => {
-      staleRootResponse.resolve({
-        items: [createKnowledgeItem('stale-file', 'Stale.md', null)],
-      });
+      staleRootResponse.resolve(
+        createKnowledgeResponse([createKnowledgeItem('stale-file', 'Stale.md', null)]),
+      );
       await staleLoad;
     });
 
@@ -236,14 +242,16 @@ describe('useResourceTreeController', () => {
   });
 
   it('does not issue duplicate folder loads during rapid repeated expansion', async () => {
-    const folderResponse = createDeferred<{ items: FileListItem[] }>();
+    const folderResponse = createDeferred<ReturnType<typeof createKnowledgeResponse>>();
     const getKnowledgeItemsSpy = vi.spyOn(fileService, 'getKnowledgeItems');
 
     getKnowledgeItemsSpy.mockImplementation(({ parentId }) => {
       if (parentId === null) {
-        return Promise.resolve({
-          items: [createKnowledgeItem('folder-a', 'Folder A', null, 'custom/folder')],
-        });
+        return Promise.resolve(
+          createKnowledgeResponse([
+            createKnowledgeItem('folder-a', 'Folder A', null, 'custom/folder'),
+          ]),
+        );
       }
 
       return folderResponse.promise;
@@ -267,9 +275,9 @@ describe('useResourceTreeController', () => {
     ).toHaveLength(1);
 
     await act(async () => {
-      folderResponse.resolve({
-        items: [createKnowledgeItem('file-child', 'Child.md', 'folder-a')],
-      });
+      folderResponse.resolve(
+        createKnowledgeResponse([createKnowledgeItem('file-child', 'Child.md', 'folder-a')]),
+      );
     });
 
     await waitFor(() => {
@@ -284,24 +292,22 @@ describe('useResourceTreeController', () => {
 
     getKnowledgeItemsSpy.mockImplementation(async ({ parentId }) => {
       if (parentId === null) {
-        return {
-          items: [createKnowledgeItem('folder-a', 'Folder A', null, 'custom/folder')],
-        };
+        return createKnowledgeResponse([
+          createKnowledgeItem('folder-a', 'Folder A', null, 'custom/folder'),
+        ]);
       }
 
       if (parentId === 'folder-a') {
-        return {
-          items: [createKnowledgeItem('folder-b', 'Folder B', 'folder-a', 'custom/folder')],
-        };
+        return createKnowledgeResponse([
+          createKnowledgeItem('folder-b', 'Folder B', 'folder-a', 'custom/folder'),
+        ]);
       }
 
       if (parentId === 'folder-b') {
-        return {
-          items: [createKnowledgeItem('file-c', 'File C.md', 'folder-b')],
-        };
+        return createKnowledgeResponse([createKnowledgeItem('file-c', 'File C.md', 'folder-b')]);
       }
 
-      return { items: [] };
+      return createKnowledgeResponse([]);
     });
 
     const { result } = renderHook(() => useResourceTreeController({ libraryId: 'library-a' }));
