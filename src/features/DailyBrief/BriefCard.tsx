@@ -1,5 +1,6 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -80,6 +81,7 @@ const BriefCard = memo<BriefCardProps>(
           </Flexbox>
           {brief.agents.length > 0 && <AgentAvatars agents={brief.agents} />}
         </Flexbox>
+        <Divider dashed style={{ marginBlock: 0 }} />
         <BriefCardSummary summary={brief.summary} />
         <BriefCardActions
           actions={brief.actions}

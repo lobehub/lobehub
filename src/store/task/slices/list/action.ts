@@ -16,9 +16,12 @@ const FETCH_TASK_GROUP_LIST_KEY = 'fetchTaskGroupList';
 export const ALL_AGENTS_LIST_KEY = '__all__';
 
 // Default kanban groups: 5 columns
+// 'scheduled' shares the 'running' column — both represent "automation in
+// progress" from the user's perspective (one is mid-tick, the other is
+// waiting for the next tick).
 const DEFAULT_KANBAN_GROUPS = [
   { key: 'backlog', statuses: ['backlog'] },
-  { key: 'running', statuses: ['running'] },
+  { key: 'running', statuses: ['running', 'scheduled'] },
   { key: 'needsInput', statuses: ['paused', 'failed'] },
   { key: 'done', statuses: ['completed'] },
   { key: 'canceled', statuses: ['canceled'] },

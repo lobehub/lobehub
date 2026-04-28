@@ -82,6 +82,17 @@ export interface SendMessageServerParams {
   preloadMessages?: SendPreloadMessage[];
   sessionId?: string;
   threadId?: string;
+  /**
+   * Filters applied to the topic list returned alongside the message.
+   * Callers pass whatever filter the active sidebar is using so the server
+   * doesn't echo back topics the UI was already excluding (e.g. completed
+   * status), which would overwrite the filtered list in `topicDataMap`.
+   */
+  topicFilter?: {
+    excludeStatuses?: string[];
+    excludeTriggers?: string[];
+    includeTriggers?: string[];
+  };
   // if there is activeTopicId, then add topicId to message
   topicId?: string;
 }
@@ -136,6 +147,13 @@ export const AiSendMessageServerSchema = z.object({
   }),
   sessionId: z.string().optional(),
   threadId: z.string().optional(),
+  topicFilter: z
+    .object({
+      excludeStatuses: z.array(z.string()).optional(),
+      excludeTriggers: z.array(z.string()).optional(),
+      includeTriggers: z.array(z.string()).optional(),
+    })
+    .optional(),
   topicId: z.string().optional(),
 });
 

@@ -624,6 +624,8 @@
   "user.logout": "退出登录",
   "user.myProfile": "我的主页",
   "user.noAgents": "该用户暂未发布助理",
+  "user.noAgents.ownerDescription": "创建你的第一个助理，分享到社区。",
+  "user.noAgents.title": "还没有助理",
   "user.noFavoriteAgents": "暂无收藏的助理",
   "user.noFavoritePlugins": "暂无收藏的插件",
   "user.noForkedAgentGroups": "尚无已派生的代理组",

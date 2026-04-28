@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import SchedulerForm, { type SchedulerFormChange } from './scheduler/SchedulerForm';
+
 type IntervalUnit = 'hours' | 'minutes' | 'seconds';
 
 interface IntervalTabProps {
@@ -104,14 +106,12 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
           <InputNumber
             min={1}
             placeholder="10"
-            size={'small'}
-            style={{ width: 80 }}
+            style={{ width: 100 }}
             value={localValue}
             onChange={handleValueChange}
           />
           <Select
-            size={'small'}
-            style={{ width: 90 }}
+            style={{ width: 110 }}
             value={localUnit}
             variant="outlined"
             options={[
@@ -123,22 +123,36 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
           />
         </Flexbox>
       </Flexbox>
-      {currentInterval > 0 && (
-        <Button size={'small'} onClick={handleClear}>
-          {t('taskSchedule.clear')}
-        </Button>
-      )}
+      {currentInterval > 0 && <Button onClick={handleClear}>{t('taskSchedule.clear')}</Button>}
     </>
   );
 });
 
-const SchedulerTab = memo(() => {
-  const { t } = useTranslation('chat');
+interface SchedulerTabProps {
+  taskId?: string;
+}
+
+const SchedulerTab = memo<SchedulerTabProps>(({ taskId }) => {
+  const updateSchedule = useTaskStore((s) => s.updateSchedule);
+  const pattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
+  const timezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const maxExecutions = useTaskStore(taskDetailSelectors.activeTaskScheduleMaxExecutions);
+
+  const handleChange = useCallback(
+    (change: SchedulerFormChange) => {
+      if (!taskId) return;
+      updateSchedule(taskId, change);
+    },
+    [taskId, updateSchedule],
+  );
 
   return (
-    <Flexbox align="center" justify="center" style={{ minHeight: 80, padding: 16 }}>
-      <Text type="secondary">{t('taskSchedule.schedulerNotReady')}</Text>
-    </Flexbox>
+    <SchedulerForm
+      maxExecutions={maxExecutions}
+      pattern={pattern}
+      timezone={timezone}
+      onChange={handleChange}
+    />
   );
 });
 
@@ -181,27 +195,26 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   );
 
   const content = (
-    <Flexbox gap={12} style={{ minWidth: 240, padding: 4 }} onClick={(e) => e.stopPropagation()}>
+    <Flexbox gap={16} style={{ padding: 8, width: 420 }} onClick={(e) => e.stopPropagation()}>
       <Flexbox horizontal align="center" gap={8}>
         <Text weight={500}>{t('taskSchedule.enable')}</Text>
-        <Switch checked={enabled} size="small" onChange={handleEnableChange} />
+        <Switch checked={enabled} onChange={handleEnableChange} />
       </Flexbox>
       {enabled && (
         <>
           <Segmented
             block
-            size="small"
             value={automationMode ?? 'heartbeat'}
             options={[
-              { label: t('taskSchedule.intervalTab'), value: 'heartbeat' },
               { label: t('taskSchedule.schedulerTab'), value: 'schedule' },
+              { label: t('taskSchedule.intervalTab'), value: 'heartbeat' },
             ]}
             onChange={handleModeChange}
           />
           {automationMode === 'heartbeat' && (
             <IntervalTab currentInterval={finalCurrentInterval} taskId={finalTaskId} />
           )}
-          {automationMode === 'schedule' && <SchedulerTab />}
+          {automationMode === 'schedule' && <SchedulerTab taskId={finalTaskId} />}
         </>
       )}
     </Flexbox>

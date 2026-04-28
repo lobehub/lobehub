@@ -14,7 +14,13 @@ export interface BriefAction {
   url?: string;
 }
 
-/** Default actions by brief type */
+/**
+ * Default actions by brief type.
+ *
+ * Note: `result` briefs intentionally have no defaults — they are terminal and
+ * render a fixed single-button UI (approve → completes the task). Custom
+ * actions on result briefs are dropped at creation time.
+ */
 export const DEFAULT_BRIEF_ACTIONS: Record<string, BriefAction[]> = {
   decision: [
     { key: 'approve', label: '✅ 确认', type: 'resolve' },
@@ -25,10 +31,6 @@ export const DEFAULT_BRIEF_ACTIONS: Record<string, BriefAction[]> = {
     { key: 'feedback', label: '💬 反馈', type: 'comment' },
   ],
   insight: [{ key: 'acknowledge', label: '👍 知悉', type: 'resolve' }],
-  result: [
-    { key: 'approve', label: '✅ 通过', type: 'resolve' },
-    { key: 'feedback', label: '💬 修改意见', type: 'comment' },
-  ],
 };
 
 /** Brief type — must match DEFAULT_BRIEF_ACTIONS keys and DB schema comment */

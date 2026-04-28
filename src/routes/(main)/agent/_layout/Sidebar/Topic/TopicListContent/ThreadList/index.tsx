@@ -7,11 +7,10 @@ import { threadSelectors } from '@/store/chat/selectors';
 
 import ThreadItem from './ThreadItem';
 
-const ThreadList = memo(() => {
-  const [id] = useChatStore((s) => [s.activeTopicId]);
-  const threads = useChatStore(threadSelectors.getThreadsByTopic(id));
+const ThreadList = memo(({ topicId }: { topicId: string }) => {
+  const threads = useChatStore(threadSelectors.getThreadsByTopic(topicId));
 
-  useFetchThreads(id);
+  useFetchThreads(topicId);
 
   if (!threads || threads.length === 0) return;
 

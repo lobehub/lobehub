@@ -60,6 +60,8 @@ const updateSchema = z.object({
   instruction: z.string().optional(),
   name: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
+  schedulePattern: z.string().nullable().optional(),
+  scheduleTimezone: z.string().nullable().optional(),
 });
 
 const listSchema = z.object({

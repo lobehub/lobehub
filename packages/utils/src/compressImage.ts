@@ -3,6 +3,9 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 
 export const COMPRESSIBLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+// JPEG quality for canvas re-encoding (0.85 balances size and quality)
+const JPEG_QUALITY = 0.85;
+
 const compressImage = ({
   img,
   type,
@@ -33,16 +36,23 @@ const compressImage = ({
 
   ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, width, height);
 
-  return canvas.toDataURL(type);
+  // Preserve JPEG format with lossy compression to avoid inflating small JPEGs;
+  // fall back to PNG for other formats (lossless and universally supported).
+  if (type === 'image/jpeg') {
+    return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+  }
+  return canvas.toDataURL('image/png');
 };
 
 export default compressImage;
 
 const dataUrlToFile = (dataUrl: string, name: string): File => {
+  // Extract the actual MIME type from the data URL to keep content and type consistent
+  const mimeType = dataUrl.split(',')[0].split(':')[1].split(';')[0];
   const binary = atob(dataUrl.split(',')[1]);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new File([bytes], name, { type: 'image/png' });
+  return new File([bytes], name, { type: mimeType });
 };
 
 export const compressImageFile = (file: File): Promise<File> =>
@@ -67,7 +77,7 @@ export const compressImageFile = (file: File): Promise<File> =>
       let maxSize = MAX_IMAGE_SIZE;
       let result: File;
       do {
-        const dataUrl = compressImage({ img, maxSize });
+        const dataUrl = compressImage({ img, maxSize, type: file.type });
         result = dataUrlToFile(dataUrl, file.name);
         maxSize = Math.round(maxSize * 0.8);
       } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);

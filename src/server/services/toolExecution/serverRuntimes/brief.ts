@@ -23,7 +23,11 @@ const createBriefRuntime = ({
     title: string;
     type: string;
   }) => {
-    const actions = args.actions || DEFAULT_BRIEF_ACTIONS[args.type] || [];
+    // 'result' briefs are terminal — the UI hardcodes a single approve action
+    // and routes it through BriefService.resolve to complete the task. Custom
+    // actions on result briefs would be ignored, so reject them at the source.
+    const actions =
+      args.type === 'result' ? null : args.actions || DEFAULT_BRIEF_ACTIONS[args.type] || [];
 
     const brief = await briefModel.create({
       actions,

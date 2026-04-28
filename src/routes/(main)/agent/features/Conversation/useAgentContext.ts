@@ -17,6 +17,7 @@ export function useAgentContext(): ConversationContext {
     s.activeTopicId ?? null,
     s.activeThreadId ?? null,
   ]);
+
   const activeTopicDocumentId = useDocumentStore((s) => {
     if (!topicId || threadId) return undefined;
 

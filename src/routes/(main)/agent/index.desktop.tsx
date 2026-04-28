@@ -2,6 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
+import { useParams } from 'react-router-dom';
 
 import TopicInPopupGuard from '@/features/TopicPopupGuard';
 import { useTopicInPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
@@ -10,22 +11,21 @@ import { useChatStore } from '@/store/chat';
 import Conversation from './features/Conversation';
 import ChatHydration from './features/Conversation/ChatHydration';
 import PageTitle from './features/PageTitle';
-import Portal from './features/Portal';
 import TelemetryNotification from './features/TelemetryNotification';
 
 const ChatPage = memo(() => {
+  const { topicId: urlTopicId } = useParams<{ topicId?: string }>();
   const activeAgentId = useChatStore((s) => s.activeAgentId);
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
   const popup = useTopicInPopup({
     agentId: activeAgentId,
-    topicId: activeTopicId ?? '',
+    topicId: urlTopicId ?? '',
   });
 
   // When the same topic is already hosted in a popup window, avoid
   // rendering a second (out-of-sync) instance here — guide the user back
   // to the popup instead.
   const pageContent =
-    activeTopicId && popup ? (
+    urlTopicId && popup ? (
       <>
         <PageTitle />
         <TopicInPopupGuard popup={popup} />
@@ -40,7 +40,6 @@ const ChatPage = memo(() => {
           width={'100%'}
         >
           <Conversation />
-          <Portal />
         </Flexbox>
         <TelemetryNotification mobile={false} />
       </>

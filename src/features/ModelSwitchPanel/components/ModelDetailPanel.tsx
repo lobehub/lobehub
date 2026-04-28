@@ -220,6 +220,7 @@ const ABILITY_CONFIG: AbilityItem[] = [
 export type PricingMode = 'image' | 'video';
 
 interface ModelDetailPanelProps {
+  defaultExpandedKeys?: string[];
   enabledList?: EnabledProviderWithModels[];
   model?: string;
   pricingMode?: PricingMode;
@@ -227,7 +228,13 @@ interface ModelDetailPanelProps {
 }
 
 const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
-  ({ model: modelId, provider, enabledList: enabledListProp, pricingMode }) => {
+  ({
+    defaultExpandedKeys = ['pricing'],
+    model: modelId,
+    provider,
+    enabledList: enabledListProp,
+    pricingMode,
+  }) => {
     const { t } = useTranslation('components');
 
     const enabledListFromHook = useEnabledChatModels();
@@ -242,7 +249,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
     );
 
-    const [expandedKeys, setExpandedKeys] = useState<string[]>(['pricing']);
+    const [expandedKeys, setExpandedKeys] = useState<string[]>(defaultExpandedKeys);
 
     const hasPricing = !!model?.pricing;
     const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;

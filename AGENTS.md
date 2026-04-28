@@ -121,4 +121,8 @@ cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 
 - Add keys to a namespace file under `src/locales/default/` (e.g. `agent.ts`, `auth.ts`)
 - For dev preview: translate `locales/zh-CN/` and `locales/en-US/`
-- Don't run `pnpm i18n` - CI handles it
+- `pnpm i18n` is slow; run it manually when locale keys need updating (e.g. before opening a PR).
+
+### Code Review
+
+Before reviewing a PR / diff / branch change, read the **review-checklist** skill (`.agents/skills/review-checklist/SKILL.md`) — it lists the recurring mistakes specific to this codebase.

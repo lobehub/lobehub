@@ -107,7 +107,9 @@ vi.mock('./useDropdownMenu', () => ({
   useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
 }));
 vi.mock('../../TopicListContent/ThreadList', () => ({
-  default: () => <div data-testid="topic-thread-list" />,
+  default: ({ topicId }: { topicId: string }) => (
+    <div data-testid="topic-thread-list" data-topic-id={topicId} />
+  ),
 }));
 
 describe('TopicItem active state', () => {
@@ -117,12 +119,13 @@ describe('TopicItem active state', () => {
       isInTopicContextRoute: true,
       navigateToTopic: vi.fn(),
       routeTopicId: 'tpc_test',
+      urlTopicId: 'tpc_test',
     });
 
     render(<TopicItem active={false} id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'true');
-    expect(screen.getByTestId('topic-thread-list')).toBeInTheDocument();
+    expect(screen.getByTestId('topic-thread-list')).toHaveAttribute('data-topic-id', 'tpc_test');
   });
 
   it('does not highlight a stale topic while visiting non-topic agent sub-routes', () => {
