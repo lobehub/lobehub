@@ -1,6 +1,6 @@
 import type { FileTreeRowDecoration } from '@pierre/trees';
 import type { MenuProps } from 'antd';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, DragEvent, MouseEvent, ReactNode } from 'react';
 
 export interface ExplorerTreeNode<TData = unknown> {
   children?: ExplorerTreeNode<TData>[];
@@ -66,7 +66,13 @@ export interface ExplorerTreeProps<TData = unknown> {
   nodes: ExplorerTreeNode<TData>[];
   onCommitRename?: (node: ExplorerTreeNode<TData>, newName: string) => void | Promise<void>;
   onExpandedChange?: (ids: string[]) => void;
+  onExternalDrop?: (event: {
+    nativeEvent: DragEvent<HTMLElement>;
+    targetId: string | null;
+    targetNode: ExplorerTreeNode<TData> | null;
+  }) => void;
   onMove?: (event: ExplorerTreeMoveEvent<TData>) => void | Promise<void>;
+  onNodeClick?: (node: ExplorerTreeNode<TData>, event: MouseEvent<HTMLElement>) => void;
   onRenameError?: (error: unknown, node: ExplorerTreeNode<TData>) => void;
   onSelectedChange?: (ids: string[]) => void;
   overscan?: number;

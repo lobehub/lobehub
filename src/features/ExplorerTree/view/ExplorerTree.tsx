@@ -7,14 +7,8 @@ import type {
   FileTreeRowDecoration,
 } from '@pierre/trees';
 import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@pierre/trees/react';
-import {
-  type ForwardedRef,
-  forwardRef,
-  useImperativeHandle,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from 'react';
+import type { DragEvent, ForwardedRef, MouseEvent } from 'react';
+import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 
 import {
   arrayEqual,
@@ -36,6 +30,30 @@ const asDirectory = (
   handle: FileTreeItemHandle | null | undefined,
 ): FileTreeDirectoryHandle | null =>
   handle && handle.isDirectory() ? (handle as FileTreeDirectoryHandle) : null;
+
+type ExplorerTreeHostEvent = DragEvent<HTMLElement> | MouseEvent<HTMLElement>;
+
+const isHTMLElement = (target: EventTarget): target is HTMLElement => target instanceof HTMLElement;
+
+const getComposedPath = (event: ExplorerTreeHostEvent): EventTarget[] => {
+  const path = event.nativeEvent.composedPath();
+  if (path.length > 0) return path;
+
+  return [event.target, event.currentTarget].filter(
+    (target): target is EventTarget => target != null,
+  );
+};
+
+const getItemPathFromHostEvent = (event: ExplorerTreeHostEvent): string | null => {
+  for (const target of getComposedPath(event)) {
+    if (!isHTMLElement(target)) continue;
+    if (target.dataset.type !== 'item') continue;
+    const path = target.dataset.itemPath;
+    if (path) return path;
+  }
+
+  return null;
+};
 
 function ExplorerTreeInner<TData>(
   props: ExplorerTreeProps<TData>,
@@ -431,6 +449,34 @@ function ExplorerTreeInner<TData>(
     };
   }, []);
 
+  const handleClick = (event: MouseEvent<HTMLElement>) => {
+    const onNodeClick = propsRef.current.onNodeClick;
+    if (!onNodeClick) return;
+    const itemPath = getItemPathFromHostEvent(event);
+    if (!itemPath) return;
+    const a = adapterRef.current;
+    const id = a.idByPath.get(itemPath);
+    if (!id) return;
+    const node = a.nodeById.get(id);
+    if (!node) return;
+    onNodeClick(node, event);
+  };
+
+  const handleDropCapture = (event: DragEvent<HTMLElement>) => {
+    const onExternalDrop = propsRef.current.onExternalDrop;
+    if (!onExternalDrop) return;
+    const itemPath = getItemPathFromHostEvent(event);
+    if (!itemPath) return;
+    const a = adapterRef.current;
+    const targetId = a.idByPath.get(itemPath) ?? null;
+    const targetNode = targetId ? (a.nodeById.get(targetId) ?? null) : null;
+    onExternalDrop({
+      nativeEvent: event,
+      targetId,
+      targetNode,
+    });
+  };
+
   return (
     <PierreFileTree
       className={props.className}
@@ -438,6 +484,8 @@ function ExplorerTreeInner<TData>(
       model={model}
       renderContextMenu={renderContextMenu as never}
       style={props.style}
+      onClick={handleClick}
+      onDropCapture={handleDropCapture}
     />
   );
 }
