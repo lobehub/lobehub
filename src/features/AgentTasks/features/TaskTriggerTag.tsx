@@ -1,16 +1,14 @@
 import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import type { TFunction } from 'i18next';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const formatInterval = (seconds: number, t: TFunction<'chat'>) => {
-  if (seconds < 60) return t('taskSchedule.unit.second', { count: seconds });
-  if (seconds % 3600 === 0) return t('taskSchedule.unit.hour', { count: seconds / 3600 });
-  if (seconds % 60 === 0) return t('taskSchedule.unit.minute', { count: seconds / 60 });
-  return t('taskSchedule.unit.second', { count: seconds });
-};
+import {
+  formatIntervalLabel,
+  formatScheduleDescription,
+  formatTimezoneName,
+} from '@/features/AgentTasks/AgentTaskDetail/scheduler/helpers';
 
 interface TaskTriggerTagProps {
   heartbeatInterval?: number | null;
@@ -21,22 +19,24 @@ interface TaskTriggerTagProps {
 
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
   ({ heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
-    const { t } = useTranslation('chat');
+    const { t, i18n } = useTranslation('chat');
     const data = useMemo(() => {
       if (schedulePattern) {
-        const timezone = scheduleTimezone ? ` (${scheduleTimezone})` : '';
+        const description = formatScheduleDescription(schedulePattern, t);
+        const tzName = scheduleTimezone ? formatTimezoneName(scheduleTimezone, i18n.language) : '';
+        const text = tzName
+          ? t('taskSchedule.summary.schedule', { description, timezone: tzName })
+          : description;
         return {
-          tooltip: t('taskSchedule.tag.schedule', {
-            schedule: schedulePattern,
-            timezone,
-          }),
-          text: `${schedulePattern} ${timezone}`,
+          // Tooltip exposes the raw cron + IANA id for power users / debugging.
+          tooltip: scheduleTimezone ? `${schedulePattern} (${scheduleTimezone})` : schedulePattern,
+          text,
         };
       }
 
       if (heartbeatInterval && heartbeatInterval > 0) {
         const every = t('taskSchedule.tag.every', {
-          interval: formatInterval(heartbeatInterval, t),
+          interval: formatIntervalLabel(heartbeatInterval, t),
         });
         return {
           tooltip: t('taskSchedule.tag.heartbeat', { every }),
@@ -45,7 +45,7 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
       }
 
       return undefined;
-    }, [heartbeatInterval, schedulePattern, scheduleTimezone, t]);
+    }, [heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
     if (mode === 'inline') {
       return (
