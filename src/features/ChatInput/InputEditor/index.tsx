@@ -1,14 +1,12 @@
 import { isDesktop } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { chainInputCompletion } from '@lobechat/prompts';
+import { chainInputCompletion, escapeXmlAttr } from '@lobechat/prompts';
 import { isCommandPressed, merge } from '@lobechat/utils';
-import type { ISlashMenuOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
-import debug from 'debug';
 import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -19,8 +17,6 @@ import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { chatService } from '@/services/chat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import {
   labPreferSelectors,
@@ -36,16 +32,12 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
-import {
-  searchProjectFileMentionIndex,
-  warmProjectFileMentionIndex,
-} from './localFileMentionIndex';
 import { createMentionMenu } from './MentionMenu';
-import LocalFileIcon from './MentionMenu/LocalFileIcon';
 import type { MentionMenuState } from './MentionMenu/types';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
+import { useLocalFileMention } from './useLocalFileMention';
 import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(css`
@@ -53,17 +45,6 @@ const className = cx(css`
     margin-block-end: 0;
   }
 `);
-
-const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
-const MAX_LOCAL_FILE_MENTION_ITEMS = 20;
-const localFileMentionLog = debug('chat-input:local-file-mention');
-
-const escapeXmlAttribute = (value: string) =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
 
 const InputEditor = memo<{
   defaultRows?: number;
@@ -99,22 +80,11 @@ const InputEditor = memo<{
   const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
-  const agentPlugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
   const heterogeneousType = useAgentStore(
     (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
   );
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s),
-  );
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
-  const enableLocalFileMention =
-    isDesktop && (!!heterogeneousType || agentPlugins.includes(LOCAL_SYSTEM_IDENTIFIER));
 
-  useEffect(() => {
-    if (!enableLocalFileMention) return;
-    warmProjectFileMentionIndex(workingDirectory);
-  }, [enableLocalFileMention, workingDirectory]);
+  const { enableLocalFileMention, searchLocalFiles } = useLocalFileMention();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
 
@@ -127,62 +97,6 @@ const InputEditor = memo<{
     [allMentionItems],
   );
 
-  const localFileItemsFn = useCallback(
-    async (matchingString: string): Promise<ISlashMenuOption[]> => {
-      const keywords = matchingString.trim();
-      if (!enableLocalFileMention || !keywords) {
-        localFileMentionLog('Skip search', {
-          enableLocalFileMention,
-          hasKeywords: !!keywords,
-          matchingString,
-          workingDirectory,
-        });
-        return [];
-      }
-
-      try {
-        localFileMentionLog('Search indexed local files', {
-          keywords,
-          limit: MAX_LOCAL_FILE_MENTION_ITEMS,
-          workingDirectory,
-        });
-        const files = await searchProjectFileMentionIndex(
-          workingDirectory,
-          keywords,
-          MAX_LOCAL_FILE_MENTION_ITEMS,
-        );
-
-        localFileMentionLog('Search indexed local files completed', {
-          count: files.length,
-          results: files.slice(0, 5).map((file) => ({
-            isDirectory: file.isDirectory,
-            name: file.name,
-            path: file.path,
-          })),
-          workingDirectory,
-        });
-
-        return files.map((file) => ({
-          icon: <LocalFileIcon isDirectory={file.isDirectory} name={file.name} />,
-          key: `local-file-${file.path}`,
-          label: file.name || file.path,
-          metadata: {
-            isDirectory: file.isDirectory,
-            name: file.name || file.path.split('/').pop() || file.path,
-            path: file.path,
-            relativePath: file.relativePath,
-            timestamp: 0,
-            type: 'localFile' as const,
-          },
-        }));
-      } catch (error) {
-        console.error('[InputEditor] Failed to search local files:', error);
-        return [];
-      }
-    },
-    [enableLocalFileMention, workingDirectory],
-  );
-
   const mentionItemsFn = useCallback(
     async (
       search: { leadOffset: number; matchingString: string; replaceableString: string } | null,
@@ -190,24 +104,16 @@ const InputEditor = memo<{
       if (search?.matchingString) {
         stateRef.current = { isSearch: true, matchingString: search.matchingString };
         const [localFileItems, mentionItems] = await Promise.all([
-          localFileItemsFn(search.matchingString),
+          searchLocalFiles(search.matchingString),
           Promise.resolve(fuse.search(search.matchingString).map((r) => r.item)),
         ]);
 
-        const items = [...localFileItems, ...mentionItems];
-        localFileMentionLog('Resolved mention search items', {
-          keywords: search.matchingString,
-          localFileCount: localFileItems.length,
-          mentionCount: mentionItems.length,
-          totalCount: items.length,
-        });
-
-        return items;
+        return [...localFileItems, ...mentionItems];
       }
       stateRef.current = { isSearch: false, matchingString: '' };
       return [...allMentionItems];
     },
-    [allMentionItems, fuse, localFileItemsFn],
+    [allMentionItems, fuse, searchLocalFiles],
   );
 
   const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
@@ -334,8 +240,8 @@ const InputEditor = memo<{
       return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
     }
     if (mention.metadata?.type === 'localFile') {
-      const name = escapeXmlAttribute(String(mention.metadata.name ?? mention.label));
-      const path = escapeXmlAttribute(String(mention.metadata.path ?? ''));
+      const name = escapeXmlAttr(String(mention.metadata.name ?? mention.label));
+      const path = escapeXmlAttr(String(mention.metadata.path ?? ''));
       const isDirectory = mention.metadata.isDirectory ? ' isDirectory' : '';
 
       return `<localFile name="${name}" path="${path}"${isDirectory} />`;
