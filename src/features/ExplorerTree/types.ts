@@ -1,6 +1,6 @@
 import type { FileTreeRowDecoration } from '@pierre/trees';
 import type { MenuProps } from 'antd';
-import type { CSSProperties, HTMLAttributes, MouseEvent, ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export interface ExplorerTreeNode<TData = unknown> {
   children?: ExplorerTreeNode<TData>[];
@@ -65,20 +65,13 @@ export interface ExplorerTreeProps<TData = unknown> {
   canDrop?: (ctx: ExplorerTreeCanDropCtx<TData> | ExplorerTreeLegacyCanDropCtx<TData>) => boolean;
   canRename?: (node: ExplorerTreeNode<TData>) => boolean;
   className?: string;
-  /** @deprecated Use defaultExpandedIds. */
   defaultExpanded?: string[];
-  defaultExpandedIds?: string[];
-  /** @deprecated Use defaultSelectedIds. */
   defaultSelected?: string[];
-  defaultSelectedIds?: string[];
   density?: 'compact' | 'default' | 'relaxed' | number;
-  expandedIds?: string[];
   getContextMenuItems?: (node: ExplorerTreeNode<TData>) => MenuProps['items'];
   getRowDecoration?: (
     ctx: ExplorerTreeRowCtx<TData> | ExplorerTreeRowDecorationCtx<TData>,
   ) => FileTreeRowDecoration | null | undefined;
-  getRowMeta?: (node: ExplorerTreeNode<TData>) => ExplorerTreeRowMeta;
-  getRowProps?: (node: ExplorerTreeNode<TData>) => HTMLAttributes<HTMLElement>;
   header?: ReactNode;
   iconsColored?: boolean;
   iconSet?: 'minimal' | 'standard' | 'complete' | 'none';
@@ -87,12 +80,8 @@ export interface ExplorerTreeProps<TData = unknown> {
   onCommitRename?: (node: ExplorerTreeNode<TData>, newName: string) => void | Promise<void>;
   onExpandedChange?: (ids: string[]) => void;
   onMove?: (event: ExplorerTreeMoveEvent<TData>) => void | Promise<void>;
-  onNodeClick?: (node: ExplorerTreeNode<TData>, event: MouseEvent<HTMLElement>) => void;
   onRenameError?: (error: unknown, node: ExplorerTreeNode<TData>) => void;
   onSelectedChange?: (ids: string[]) => void;
   overscan?: number;
-  renderIcon?: (ctx: ExplorerTreeRowCtx<TData>) => ReactNode;
-  renderLabel?: (ctx: ExplorerTreeRowCtx<TData>) => ReactNode;
-  selectedIds?: string[];
   style?: CSSProperties;
 }
