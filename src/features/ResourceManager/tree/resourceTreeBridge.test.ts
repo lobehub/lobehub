@@ -60,4 +60,29 @@ describe('resourceTreeBridge', () => {
     expect(secondRevalidateParent).toHaveBeenCalledTimes(1);
     expect(secondMoveExternalItems).toHaveBeenCalledTimes(1);
   });
+
+  it('does not clear a later binding that reuses one callback from an earlier binding', () => {
+    const sharedRevalidateParent = vi.fn();
+    const firstMoveExternalItems = vi.fn();
+    const secondMoveExternalItems = vi.fn();
+
+    const cleanupFirst = bindResourceTreeBridge({
+      moveExternalItems: firstMoveExternalItems,
+      revalidateParent: sharedRevalidateParent,
+    });
+
+    bindResourceTreeBridge({
+      moveExternalItems: secondMoveExternalItems,
+      revalidateParent: sharedRevalidateParent,
+    });
+
+    cleanupFirst();
+
+    revalidateResourceTreeParent('folder-d');
+    moveExternalResourceTreeItems(['file-e'], 'folder-d');
+
+    expect(sharedRevalidateParent).toHaveBeenCalledWith('folder-d');
+    expect(firstMoveExternalItems).not.toHaveBeenCalled();
+    expect(secondMoveExternalItems).toHaveBeenCalledWith(['file-e'], 'folder-d');
+  });
 });

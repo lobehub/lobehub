@@ -89,4 +89,40 @@ describe('useResolvedResourceFolder', () => {
       isLoading: false,
     });
   });
+
+  it('clears previous resolved folder state when slug resolution fails', async () => {
+    const failure = new Error('Folder not found');
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    vi.spyOn(fileService, 'getFolderBreadcrumb')
+      .mockResolvedValueOnce([{ id: 'resolved-folder', name: 'Resolved', slug: 'resolved-folder' }])
+      .mockRejectedValueOnce(failure);
+
+    const { rerender, result } = renderHook(({ slug }) => useResolvedResourceFolder(slug), {
+      initialProps: { slug: 'resolved-folder' },
+    });
+
+    await waitFor(() => {
+      expect(result.current).toEqual({
+        ancestorIds: ['resolved-folder'],
+        folderId: 'resolved-folder',
+        isLoading: false,
+      });
+    });
+
+    rerender({ slug: 'missing-folder' });
+
+    await waitFor(() => {
+      expect(result.current).toEqual({
+        ancestorIds: [],
+        folderId: null,
+        isLoading: false,
+      });
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to resolve resource folder for missing-folder:',
+      failure,
+    );
+  });
 });

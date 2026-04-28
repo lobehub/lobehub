@@ -48,7 +48,7 @@ export const useResolvedResourceFolder = (folderSlug?: string | null): ResolvedR
         if (!isActive) return;
 
         console.error(`Failed to resolve resource folder for ${folderSlug}:`, error);
-        setResolvedFolder((previous) => ({ ...previous, isLoading: false }));
+        setResolvedFolder(ROOT_FOLDER_STATE);
       }
     };
 
