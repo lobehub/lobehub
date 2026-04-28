@@ -111,6 +111,11 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
       navigate(`/group/${groupId}/profile?tab=${agentId}`);
     };
 
+    const handleHeaderClick = () => {
+      setOpen(false);
+      navigate(`/agent/${agentId}/profile`);
+    };
+
     const hasDisplay = Boolean(merged.title || merged.avatar || merged.description);
     const showSkeleton = !hasDisplay && isLoading;
 
@@ -197,6 +202,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             </Flexbox>
           ) : undefined
         }
+        onHeaderClick={handleHeaderClick}
       >
         {modelSection}
       </AgentProfileCard>
