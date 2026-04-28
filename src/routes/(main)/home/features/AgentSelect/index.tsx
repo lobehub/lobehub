@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -73,6 +74,19 @@ const AgentSelect = memo(() => {
     // source values, so we cannot clear the field by passing `undefined`.
     updateSystemStatus({ homeSelectedAgentId: agentId });
     setOpen(false);
+
+    // Eagerly hydrate `agentMap` for the picked agent so the home ChatInput's
+    // model/provider/vision selectors reflect the agent's real config, and the
+    // upcoming sendMessage doesn't have to wait on a cold fetch. `useSend` also
+    // awaits this on send as a safety net for the race-clicker case.
+    const agentState = useAgentStore.getState();
+    if (agentState.agentMap[agentId]) return;
+    agentService
+      .getAgentConfigById(agentId)
+      .then((config) => {
+        if (config) agentState.internal_dispatchAgentMap(agentId, config);
+      })
+      .catch((e) => console.error('[AgentSelect] failed to prefetch agent config', e));
   };
 
   if (isLoading) return <SkeletonItem height={40} padding={0} />;

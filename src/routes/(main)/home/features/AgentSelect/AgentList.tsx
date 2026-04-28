@@ -73,6 +73,9 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, onSelect }) => {
     }
 
     for (const item of allAgents as SidebarAgentItem[]) {
+      // Skip chat groups — sendMessage / agent config lookups expect an agent id.
+      // Groups go through their own chat-group flow under /group/:gid.
+      if (item.type !== 'agent') continue;
       if (seen.has(item.id)) continue;
       seen.add(item.id);
       out.push({
