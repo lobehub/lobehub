@@ -6,12 +6,13 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
 import {
-  mergeWithDefaults,
-  platformRegistry,
-  validateAccessSettings,
-} from '@/server/services/bot/platforms';
+  assertBotAccessSettings,
+  invalidateBotAfterUpdate,
+  mergeBotSettingsForPersist,
+} from '@/server/services/bot/agentBotProviderSettings';
+import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
+import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -27,39 +28,19 @@ const agentBotProviderProcedure = authedProcedure.use(serverDatabase).use(async 
 });
 
 /**
- * Merge schema defaults into incoming settings before persisting, so the DB
- * row always carries every declared field. Without this, fields the user
- * never explicitly touched would stay `undefined` in the DB while the UI
- * still renders the schema default — a mismatch that has caused silent
- * connection-mode regressions in the past.
+ * Wrap the shared access-policy validator so violations surface as
+ * `TRPCError(BAD_REQUEST)` — keeps client forms able to highlight the
+ * failing field via the existing TRPC error path.
  */
-function mergeSettingsForPersist(
-  platform: string | undefined,
-  settings: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (settings === undefined) return undefined;
-  if (!platform) return settings;
-  const definition = platformRegistry.getPlatform(platform);
-  if (!definition) return settings;
-  return mergeWithDefaults(definition.schema, settings);
-}
-
-/**
- * Run cross-platform access-policy invariants on settings before they hit
- * the DB. Throws `TRPCError(BAD_REQUEST)` with field-prefixed messages so
- * the client form can surface the failing field. Skipped when `settings`
- * is undefined (update payload didn't touch them).
- */
-function assertAccessSettings(settings: Record<string, unknown> | undefined): void {
-  if (settings === undefined) return;
-  const result = validateAccessSettings(settings);
-  if (result.valid) return;
-  throw new TRPCError({
-    code: 'BAD_REQUEST',
-    message:
-      result.errors?.map((e) => `${e.field}: ${e.message}`).join('; ') ||
-      'Invalid access policy settings',
-  });
+function assertAccessSettingsForTRPC(settings: Record<string, unknown> | undefined): void {
+  try {
+    assertBotAccessSettings(settings);
+  } catch (e) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: (e as Error).message,
+    });
+  }
 }
 
 export const agentBotProviderRouter = router({
@@ -81,9 +62,9 @@ export const agentBotProviderRouter = router({
     .mutation(async ({ input, ctx }) => {
       const payload = {
         ...input,
-        settings: mergeSettingsForPersist(input.platform, input.settings),
+        settings: mergeBotSettingsForPersist(input.platform, input.settings),
       };
-      assertAccessSettings(payload.settings);
+      assertAccessSettingsForTRPC(payload.settings);
       try {
         return await ctx.agentBotProviderModel.create(payload);
       } catch (e: any) {
@@ -255,28 +236,24 @@ export const agentBotProviderRouter = router({
       const existing = await ctx.agentBotProviderModel.findById(id);
 
       if (value.settings !== undefined) {
-        value.settings = mergeSettingsForPersist(
+        value.settings = mergeBotSettingsForPersist(
           value.platform ?? existing?.platform,
           value.settings,
         );
-        assertAccessSettings(value.settings);
+        assertAccessSettingsForTRPC(value.settings);
       }
 
       const result = await ctx.agentBotProviderModel.update(id, value);
 
-      // Invalidate cached bot so it reloads with fresh config on next webhook
       if (existing) {
-        const shouldStopRuntime =
-          value.enabled === false ||
-          (value.applicationId !== undefined && value.applicationId !== existing.applicationId) ||
-          (value.platform !== undefined && value.platform !== existing.platform);
-
-        if (shouldStopRuntime) {
-          const service = new GatewayService();
-          await service.stopClient(existing.platform, existing.applicationId, ctx.userId);
-        }
-
-        await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
+        await invalidateBotAfterUpdate(
+          {
+            applicationId: existing.applicationId,
+            platform: existing.platform,
+            userId: ctx.userId,
+          },
+          value,
+        );
       }
 
       return result;

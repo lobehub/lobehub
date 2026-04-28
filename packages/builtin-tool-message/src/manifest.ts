@@ -5,6 +5,80 @@ import { MessageApiName, MessageToolIdentifier } from './types';
 
 const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
 
+/**
+ * Schema for the bot's `settings` JSON column. Both `createBot` and
+ * `updateBot` accept a partial object — only the keys you pass are written
+ * (everything else preserved). Use this as the single source of truth for
+ * what the AI is allowed to toggle on a bot.
+ */
+const botSettingsSchema = {
+  additionalProperties: true,
+  properties: {
+    allowFrom: {
+      description:
+        'Global user-ID allowlist. When non-empty, ONLY listed users may interact with the bot anywhere — DMs, group @mentions, threads — regardless of dmPolicy/groupPolicy. Empty array means "no user-level filter". Pass the FULL desired list (this field is overwrite-replace, not append): to add or remove a single user, first call getBotDetail to read settings.allowFrom, mutate locally, then write back the entire array.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          id: {
+            description: 'Platform user ID (e.g. Discord snowflake, Telegram user_id)',
+            type: 'string',
+          },
+          name: {
+            description:
+              'Optional human-friendly label so the operator can recognise the entry later (e.g. "Ada from Product"). Runtime ignores this; only id is matched.',
+            type: 'string',
+          },
+        },
+        required: ['id'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    dmPolicy: {
+      description:
+        'Direct-message gate. open=accept DMs from anyone (default); allowlist=only users in allowFrom can DM, fails closed if list is empty; pairing=non-listed senders get a one-time code and the owner runs /approve <code> to add them; disabled=ignore all DMs. pairing requires settings.userId (owner platform ID).',
+      enum: ['open', 'allowlist', 'pairing', 'disabled'],
+      type: 'string',
+    },
+    groupAllowFrom: {
+      description:
+        'Channel/group/thread ID allowlist for group traffic. Only consulted when groupPolicy="allowlist". Same overwrite-replace semantics as allowFrom — read-modify-write to add/remove entries.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          id: {
+            description:
+              'Channel / group / thread ID (e.g. Discord channel ID copied via "Copy Channel ID")',
+            type: 'string',
+          },
+          name: { description: 'Optional human-friendly label.', type: 'string' },
+        },
+        required: ['id'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    groupPolicy: {
+      description:
+        'Group/channel @mention gate. open=respond to @mentions in any channel (default); allowlist=respond only in channels listed in groupAllowFrom; disabled=ignore all non-DM traffic.',
+      enum: ['open', 'allowlist', 'disabled'],
+      type: 'string',
+    },
+    serverId: {
+      description:
+        'Default server / guild / workspace ID used when the AI calls listChannels/getMemberInfo without an explicit serverId. Optional; populated automatically once the bot has been used in a server.',
+      type: 'string',
+    },
+    userId: {
+      description:
+        "The bot owner's platform user ID. Required when dmPolicy='pairing' (used as approver identity and as an implicit member of allowFrom). Also used to push owner-only notifications.",
+      type: 'string',
+    },
+  },
+  type: 'object',
+};
+
 export const MessageManifest: BuiltinToolManifest = {
   api: [
     // ==================== Direct Messaging ====================
@@ -581,13 +655,19 @@ export const MessageManifest: BuiltinToolManifest = {
             enum: platformEnum,
             type: 'string',
           },
+          settings: {
+            ...botSettingsSchema,
+            description:
+              'Optional initial settings (DM policy, allowlists, owner userId, etc.). Omit to use schema defaults — open DMs, no allowlist. See field descriptions for each key.',
+          },
         },
         required: ['platform', 'agentId', 'applicationId', 'credentials'],
         type: 'object',
       },
     },
     {
-      description: 'Update credentials or settings of an existing bot integration.',
+      description:
+        'Update credentials or settings of an existing bot integration. Use this to adjust DM policy (e.g. switch to pairing mode), edit the allowlist, or rotate credentials. Settings is merged at the key level — only keys you pass are written. For array fields like allowFrom/groupAllowFrom, the array is REPLACED, not merged: read-modify-write via getBotDetail before adding/removing entries.',
       name: MessageApiName.updateBot,
       parameters: {
         additionalProperties: false,
@@ -601,8 +681,9 @@ export const MessageManifest: BuiltinToolManifest = {
             type: 'object',
           },
           settings: {
-            description: 'Updated settings (partial update)',
-            type: 'object',
+            ...botSettingsSchema,
+            description:
+              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId).',
           },
         },
         required: ['botId'],
