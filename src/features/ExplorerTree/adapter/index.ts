@@ -1,5 +1,6 @@
 export {
   arrayEqual,
+  isDescendantOf,
   type NormalizedTree,
   normalizeTree,
   remapIdsToPaths,

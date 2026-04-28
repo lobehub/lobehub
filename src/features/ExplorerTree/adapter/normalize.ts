@@ -127,3 +127,16 @@ export const arrayEqual = (a: readonly string[], b: readonly string[]): boolean 
   for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
   return true;
 };
+
+export const isDescendantOf = (
+  nodeId: string,
+  possibleAncestorId: string,
+  parentIdById: Map<string, string | null>,
+): boolean => {
+  let cursor = parentIdById.get(nodeId) ?? null;
+  while (cursor) {
+    if (cursor === possibleAncestorId) return true;
+    cursor = parentIdById.get(cursor) ?? null;
+  }
+  return false;
+};

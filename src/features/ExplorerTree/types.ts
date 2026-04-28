@@ -1,6 +1,6 @@
 import type { FileTreeRowDecoration } from '@pierre/trees';
 import type { MenuProps } from 'antd';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, HTMLAttributes, MouseEvent, ReactNode } from 'react';
 
 export interface ExplorerTreeNode<TData = unknown> {
   children?: ExplorerTreeNode<TData>[];
@@ -12,10 +12,12 @@ export interface ExplorerTreeNode<TData = unknown> {
 }
 
 export interface ExplorerTreeMoveEvent<TData = unknown> {
+  /** @deprecated Transitional compatibility for the current @pierre/trees bridge. */
   index?: number;
   newParentId: string | null;
   oldParentId: string | null;
-  position: 'inside';
+  /** @deprecated Transitional compatibility for the current @pierre/trees bridge. */
+  position?: 'inside';
   sourceIds: string[];
   sourceNodes: ExplorerTreeNode<TData>[];
   targetId: string | null;
@@ -23,8 +25,26 @@ export interface ExplorerTreeMoveEvent<TData = unknown> {
 }
 
 export interface ExplorerTreeCanDropCtx<TData = unknown> {
+  sourceIds: string[];
+  sourceNodes: ExplorerTreeNode<TData>[];
+  targetId: string | null;
+  targetNode: ExplorerTreeNode<TData> | null;
+}
+
+export interface ExplorerTreeLegacyCanDropCtx<TData = unknown> {
   source: ExplorerTreeNode<TData>;
   target: ExplorerTreeNode<TData> | null;
+}
+
+export interface ExplorerTreeRowMeta {
+  active?: boolean;
+  error?: boolean;
+  loading?: boolean;
+}
+
+export interface ExplorerTreeRowCtx<TData = unknown> {
+  meta: ExplorerTreeRowMeta;
+  node: ExplorerTreeNode<TData>;
 }
 
 export interface ExplorerTreeRowDecorationCtx<TData = unknown> {
@@ -42,16 +62,23 @@ export interface ExplorerTreeHandle {
 
 export interface ExplorerTreeProps<TData = unknown> {
   canDrag?: (node: ExplorerTreeNode<TData>) => boolean;
-  canDrop?: (ctx: ExplorerTreeCanDropCtx<TData>) => boolean;
+  canDrop?: (ctx: ExplorerTreeCanDropCtx<TData> | ExplorerTreeLegacyCanDropCtx<TData>) => boolean;
   canRename?: (node: ExplorerTreeNode<TData>) => boolean;
   className?: string;
+  /** @deprecated Use defaultExpandedIds. */
   defaultExpanded?: string[];
+  defaultExpandedIds?: string[];
+  /** @deprecated Use defaultSelectedIds. */
   defaultSelected?: string[];
+  defaultSelectedIds?: string[];
   density?: 'compact' | 'default' | 'relaxed' | number;
+  expandedIds?: string[];
   getContextMenuItems?: (node: ExplorerTreeNode<TData>) => MenuProps['items'];
   getRowDecoration?: (
-    ctx: ExplorerTreeRowDecorationCtx<TData>,
+    ctx: ExplorerTreeRowCtx<TData> | ExplorerTreeRowDecorationCtx<TData>,
   ) => FileTreeRowDecoration | null | undefined;
+  getRowMeta?: (node: ExplorerTreeNode<TData>) => ExplorerTreeRowMeta;
+  getRowProps?: (node: ExplorerTreeNode<TData>) => HTMLAttributes<HTMLElement>;
   header?: ReactNode;
   iconsColored?: boolean;
   iconSet?: 'minimal' | 'standard' | 'complete' | 'none';
@@ -60,8 +87,12 @@ export interface ExplorerTreeProps<TData = unknown> {
   onCommitRename?: (node: ExplorerTreeNode<TData>, newName: string) => void | Promise<void>;
   onExpandedChange?: (ids: string[]) => void;
   onMove?: (event: ExplorerTreeMoveEvent<TData>) => void | Promise<void>;
+  onNodeClick?: (node: ExplorerTreeNode<TData>, event: MouseEvent<HTMLElement>) => void;
   onRenameError?: (error: unknown, node: ExplorerTreeNode<TData>) => void;
   onSelectedChange?: (ids: string[]) => void;
   overscan?: number;
+  renderIcon?: (ctx: ExplorerTreeRowCtx<TData>) => ReactNode;
+  renderLabel?: (ctx: ExplorerTreeRowCtx<TData>) => ReactNode;
+  selectedIds?: string[];
   style?: CSSProperties;
 }
