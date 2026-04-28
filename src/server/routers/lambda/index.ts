@@ -5,6 +5,7 @@ import { accountDeletionRouter } from '@/business/server/lambda-routers/accountD
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
+import { taskTemplateRouter } from '@/business/server/lambda-routers/taskTemplate';
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
@@ -123,6 +124,7 @@ export const lambdaRouter = router({
   referral: referralRouter,
   spend: spendRouter,
   subscription: subscriptionRouter,
+  taskTemplate: taskTemplateRouter,
   topUp: topUpRouter,
 });
 

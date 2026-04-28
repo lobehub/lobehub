@@ -14,6 +14,7 @@ export * from './plugin';
 export * from './recommendedSkill';
 export * from './session';
 export * from './settings';
+export * from './taskTemplate';
 export * from './theme';
 export * from './trace';
 export * from './url';
