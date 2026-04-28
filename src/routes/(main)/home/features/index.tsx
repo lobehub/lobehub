@@ -10,7 +10,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
-import CommunityAgents from './CommunityAgents';
+import AgentSelect from './AgentSelect';
 import InputArea from './InputArea';
 import WelcomeText from './WelcomeText';
 
@@ -24,7 +24,14 @@ const Home = memo(() => {
 
   return (
     <Flexbox gap={40}>
-      <WelcomeText />
+      <Flexbox gap={24}>
+        <Flexbox gap={4}>
+          <AgentSelect />
+          <WelcomeText />
+        </Flexbox>
+        <InputArea />
+      </Flexbox>
+
       <InputArea />
       {isLogin && (
         <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
@@ -32,10 +39,6 @@ const Home = memo(() => {
           <RecommendTaskTemplates />
         </Flexbox>
       )}
-      {/* Use CSS visibility to hide instead of unmounting to prevent data re-fetching */}
-      <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
-        {isDevMode && <CommunityAgents />}
-      </Flexbox>
     </Flexbox>
   );
 });
