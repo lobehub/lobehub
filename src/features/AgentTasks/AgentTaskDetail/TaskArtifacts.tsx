@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
 
 const formatSize = (size?: number | null): string | undefined => {
@@ -88,15 +89,7 @@ const TaskArtifacts = memo(() => {
             {t('taskDetail.artifacts')}
           </Text>
           <Tag size="small">{workspace.length}</Tag>
-          <Icon
-            color={cssVar.colorTextDescription}
-            icon={ChevronDown}
-            size={14}
-            style={{
-              transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-              transition: 'transform 200ms',
-            }}
-          />
+          <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
         </Block>
       </Flexbox>
       {isExpanded && (

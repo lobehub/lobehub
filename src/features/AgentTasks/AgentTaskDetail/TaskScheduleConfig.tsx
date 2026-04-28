@@ -39,6 +39,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
+  popover: css`
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 12px;
+    background: ${cssVar.colorBgContainer};
+  `,
   preview: css`
     padding-block: 12px;
     padding-inline: 14px;
@@ -209,6 +214,13 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     return null;
   }, [automationMode, finalCurrentInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
+  const [nowTick, setNowTick] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const id = setInterval(() => setNowTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, [enabled]);
+
   const nextRun = useMemo(() => {
     if (!enabled) return null;
     if (automationMode === 'heartbeat') {
@@ -225,6 +237,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     finalCurrentInterval,
     schedulePattern,
     scheduleTimezone,
+    nowTick,
   ]);
 
   const nextRunText = useMemo(() => {
@@ -313,18 +326,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   );
 
   return (
-    <Popover
-      content={content}
-      placement="bottomRight"
-      trigger="click"
-      styles={{
-        content: {
-          background: cssVar.colorBgContainer,
-          border: `1px solid ${cssVar.colorBorderSecondary}`,
-          borderRadius: 12,
-        },
-      }}
-    >
+    <Popover className={styles.popover} content={content} placement="bottomRight" trigger="click">
       {children ? (
         <div onClick={(e) => e.stopPropagation()}>{children}</div>
       ) : (
