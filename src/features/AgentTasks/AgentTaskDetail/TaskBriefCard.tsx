@@ -66,12 +66,13 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
       <Block
         className={briefStyles.card}
         gap={12}
-        padding={12}
+        paddingBlock={12}
+        paddingInline={8}
         style={{ borderRadius: cssVar.borderRadiusLG }}
         variant={'outlined'}
       >
         <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
-          <BriefIcon size={20} type={brief.type} />
+          <BriefIcon size={24} type={brief.type} />
           <Text ellipsis style={{ flex: 1 }} weight={500}>
             {brief.title}
           </Text>

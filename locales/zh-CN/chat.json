@@ -478,7 +478,7 @@
   "taskDetail.artifactMenu.deleteConfirm.content": "该产物将不再出现在此任务工作区中。",
   "taskDetail.artifactMenu.deleteConfirm.ok": "移除",
   "taskDetail.artifactMenu.deleteConfirm.title": "移除该产物？",
-  "taskDetail.artifactSize": "{{value}} 字符",
+  "taskDetail.artifactSize": "{{value}} 字",
   "taskDetail.artifacts": "产物",
   "taskDetail.blockedBy": "被 {{id}} 阻塞",
   "taskDetail.cancelSchedule": "取消定时",

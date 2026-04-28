@@ -11,18 +11,14 @@ import {
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import { MoreHorizontal, Package, Trash } from 'lucide-react';
+import { FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FileIcon from '@/components/FileIcon';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
-
-const formatSizeValue = (size: number): string =>
-  size < 1000 ? String(size) : `${(size / 1000).toFixed(1)}k`;
 
 const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspaceNode[] =>
   nodes.flatMap((node) => [
@@ -38,10 +34,7 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const title = node.title || 'Untitled';
   const sizeLabel =
-    node.size == null
-      ? undefined
-      : t('taskDetail.artifactSize', { value: formatSizeValue(node.size) });
-  const fileName = title.includes('.') ? title : `${title}.md`;
+    node.size == null ? undefined : t('taskDetail.artifactSize', { value: node.size });
 
   const handleDelete = useCallback(() => {
     const taskId = node.sourceTaskId ?? activeTaskId;
@@ -81,7 +74,12 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
       variant="outlined"
       onClick={() => openPageModal(node.documentId)}
     >
-      <FileIcon fileName={fileName} size={20} />
+      <Icon
+        color={cssVar.colorTextSecondary}
+        icon={FileTextIcon}
+        size={{ size: 18, strokeWidth: 1.5 }}
+        style={{ flexShrink: 0 }}
+      />
       <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
         {title}
       </Text>
