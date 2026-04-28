@@ -11,12 +11,16 @@ import { type FileServiceImpl } from './type';
  * S3-based file service implementation
  */
 export class S3StaticFileImpl implements FileServiceImpl {
-  private readonly s3: FileS3;
+  private _s3: FileS3 | null = null;
   private readonly db: LobeChatDatabase;
 
   constructor(db: LobeChatDatabase) {
     this.db = db;
-    this.s3 = new FileS3();
+  }
+
+  private get s3(): FileS3 {
+    if (!this._s3) this._s3 = new FileS3();
+    return this._s3;
   }
 
   async deleteFile(key: string) {
