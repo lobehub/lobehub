@@ -7,6 +7,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
+import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
@@ -65,9 +66,11 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
         replaceMessages(msgs, { context: ctx });
       }}
     >
-      <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-        <ChatList disableActionsBar itemContent={itemContent} />
-      </Flexbox>
+      <TaskCardScopeProvider value={true}>
+        <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
+          <ChatList disableActionsBar itemContent={itemContent} />
+        </Flexbox>
+      </TaskCardScopeProvider>
     </ConversationProvider>
   );
 });
