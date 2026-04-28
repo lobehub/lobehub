@@ -104,6 +104,7 @@ const TASK_STATUS_TO_GROUP_MAP: Record<string, NonNullable<TaskGroupMeta['status
   failed: 'failed',
   paused: 'paused',
   running: 'running',
+  scheduled: 'running',
 };
 
 const getPriorityValue = (task: TaskListItem) => task.priority ?? 0;
