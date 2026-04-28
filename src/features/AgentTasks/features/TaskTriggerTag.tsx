@@ -29,13 +29,14 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
       | undefined
     >(() => {
       if (schedulePattern) {
+        const primary = formatScheduleDescription(schedulePattern, t);
+        const tzName = scheduleTimezone
+          ? formatTimezoneName(scheduleTimezone, i18n.language)
+          : undefined;
         return {
-          primary: formatScheduleDescription(schedulePattern, t),
-          secondary: scheduleTimezone
-            ? formatTimezoneName(scheduleTimezone, i18n.language)
-            : undefined,
-          // Tooltip exposes the raw cron + IANA id for power users / debugging.
-          tooltip: scheduleTimezone ? `${schedulePattern} (${scheduleTimezone})` : schedulePattern,
+          primary,
+          secondary: tzName,
+          tooltip: tzName ? `${primary} · ${tzName}` : primary,
         };
       }
 
@@ -79,8 +80,8 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
 
     if (!data) return null;
 
-    // Pill mode is height-constrained; show the description only and stash the
-    // timezone in the tooltip alongside the raw cron.
+    // Pill height (24px) only fits one line — drop the timezone here; the
+    // tooltip surfaces it on hover.
     return (
       <Tooltip title={data.tooltip}>
         <Block
