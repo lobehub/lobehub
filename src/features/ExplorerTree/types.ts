@@ -62,7 +62,7 @@ export interface ExplorerTreeHandle {
 
 export interface ExplorerTreeProps<TData = unknown> {
   canDrag?: (node: ExplorerTreeNode<TData>) => boolean;
-  canDrop?: (ctx: ExplorerTreeCanDropCtx<TData> | ExplorerTreeLegacyCanDropCtx<TData>) => boolean;
+  canDrop?: (ctx: ExplorerTreeLegacyCanDropCtx<TData>) => boolean;
   canRename?: (node: ExplorerTreeNode<TData>) => boolean;
   className?: string;
   defaultExpanded?: string[];
@@ -70,7 +70,7 @@ export interface ExplorerTreeProps<TData = unknown> {
   density?: 'compact' | 'default' | 'relaxed' | number;
   getContextMenuItems?: (node: ExplorerTreeNode<TData>) => MenuProps['items'];
   getRowDecoration?: (
-    ctx: ExplorerTreeRowCtx<TData> | ExplorerTreeRowDecorationCtx<TData>,
+    ctx: ExplorerTreeRowDecorationCtx<TData>,
   ) => FileTreeRowDecoration | null | undefined;
   header?: ReactNode;
   iconsColored?: boolean;

@@ -5,8 +5,6 @@ export type {
   ExplorerTreeMoveEvent,
   ExplorerTreeNode,
   ExplorerTreeProps,
-  ExplorerTreeRowCtx,
   ExplorerTreeRowDecorationCtx,
-  ExplorerTreeRowMeta,
 } from './types';
 export { default as ExplorerTree } from './view/ExplorerTree';
