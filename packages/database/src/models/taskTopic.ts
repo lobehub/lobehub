@@ -214,6 +214,7 @@ export class TaskTopicModel {
         createdAt: taskTopics.createdAt,
         handoff: taskTopics.handoff,
         metadata: topics.metadata,
+        operationId: taskTopics.operationId,
         seq: taskTopics.seq,
         status: taskTopics.status,
         title: topics.title,

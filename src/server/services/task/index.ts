@@ -217,6 +217,7 @@ export class TaskService {
           author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
           completedAt: toISO(t.completedAt),
           id: t.topicId ?? undefined,
+          operationId: t.operationId ?? null,
           runningOperation: t.metadata?.runningOperation ?? null,
           seq: t.seq,
           status: t.status,

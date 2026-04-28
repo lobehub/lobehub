@@ -64,6 +64,10 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.id) void navigator.clipboard.writeText(activity.id);
   }, [activity.id]);
 
+  const handleCopyOperationId = useCallback(() => {
+    if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
+  }, [activity.operationId]);
+
   const startedAt = activity.time ? dayjs(activity.time).fromNow() : '';
   const durationText = isRunning
     ? formatDuration(elapsed)
@@ -84,6 +88,13 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       key: 'copy',
       label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy topic ID' }),
       onClick: handleCopyId,
+    },
+    {
+      disabled: !activity.operationId,
+      icon: Copy,
+      key: 'copyOperationId',
+      label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy operation ID' }),
+      onClick: handleCopyOperationId,
     },
   ];
 
