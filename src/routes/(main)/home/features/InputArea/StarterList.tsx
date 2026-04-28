@@ -31,6 +31,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   newTag: css`
+    padding-inline: 10px !important;
     border-radius: 999px !important;
   `,
 }));
