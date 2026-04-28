@@ -42,38 +42,11 @@ interface TaskTreeNode {
   task: TaskDetailSubtask;
 }
 
-const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] => {
-  if (subtasks.some((item) => (item.children?.length ?? 0) > 0)) {
-    return subtasks.map((task) => ({
-      children: buildTree(task.children ?? []),
-      task,
-    }));
-  }
-
-  const nodeMap = new Map(
-    subtasks.map((task) => [
-      task.identifier,
-      { children: [] as TaskTreeNode[], task } satisfies TaskTreeNode,
-    ]),
-  );
-  const roots: TaskTreeNode[] = [];
-
-  for (const task of subtasks) {
-    const node = nodeMap.get(task.identifier);
-    if (!node) continue;
-
-    const parentIdentifier = task.blockedBy;
-    const parent = parentIdentifier ? nodeMap.get(parentIdentifier) : undefined;
-    if (parent && parent.task.identifier !== task.identifier) {
-      parent.children.push(node);
-      continue;
-    }
-
-    roots.push(node);
-  }
-
-  return roots;
-};
+const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] =>
+  subtasks.map((task) => ({
+    children: buildTree(task.children ?? []),
+    task,
+  }));
 
 const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
   const status = toTaskStatus(task.status);
