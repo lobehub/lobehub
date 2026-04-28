@@ -585,7 +585,6 @@ export default {
   'taskDetail.saveModelConfig': 'Save',
   'taskDetail.instructionPlaceholder': 'Click to edit task instructions...',
   'taskDetail.latestActivity.brief': 'Brief: {{title}}',
-  'taskDetail.latestActivity.briefOnly': 'Brief',
   'taskDetail.latestActivity.briefWithAction': '{{title}} - {{action}}',
   'taskDetail.latestActivity.briefWithType': 'Brief ({{type}}): {{title}}',
   'taskDetail.latestActivity.briefWithTypeOnly': 'Brief ({{type}})',

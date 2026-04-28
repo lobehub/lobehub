@@ -489,7 +489,6 @@
   "taskDetail.instruction": "任务说明",
   "taskDetail.instructionPlaceholder": "点击编辑任务说明…",
   "taskDetail.latestActivity.brief": "简要：{{title}}",
-  "taskDetail.latestActivity.briefOnly": "简要",
   "taskDetail.latestActivity.briefWithAction": "{{title}} - {{action}}",
   "taskDetail.latestActivity.briefWithType": "简要（{{type}}）：{{title}}",
   "taskDetail.latestActivity.briefWithTypeOnly": "简要（{{type}}）",
