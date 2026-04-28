@@ -11,7 +11,11 @@ import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 
 import CommunityRecommend from '../CommunityRecommend';
 import SuggestQuestions from '../SuggestQuestions';
@@ -27,6 +31,7 @@ const InputArea = () => {
   const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const isSkillBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),
   );
@@ -68,8 +73,9 @@ const InputArea = () => {
   );
 
   const hideStarterList = inputActiveMode && ['agent', 'group', 'write'].includes(inputActiveMode);
-  const showSuggestQuestions =
-    !inputActiveMode || ['agent', 'group', 'write'].includes(inputActiveMode);
+  const showSuggestQuestions = inputActiveMode
+    ? ['agent', 'group', 'write'].includes(inputActiveMode)
+    : !enableAgentTask;
 
   const extraActionItems = useMemo(
     () =>
