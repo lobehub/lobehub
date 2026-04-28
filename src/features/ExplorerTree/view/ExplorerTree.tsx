@@ -47,18 +47,28 @@ function ExplorerTreeInner<TData>(
   const adapterRef = useRef<NormalizedTree<TData>>(normalizeTree(props.nodes));
 
   // emitted values so we don't fire feedback loops on change listeners
-  const lastEmittedSelectedIds = useRef<string[]>(props.defaultSelected ?? []);
+  const lastEmittedSelectedIds = useRef<string[]>(
+    props.defaultSelectedIds ?? props.defaultSelected ?? [],
+  );
   const renamingRef = useRef(false);
 
   const initialOptions = useMemo((): FileTreeOptions => {
     const initial = adapterRef.current;
-    const initialExpandedPaths = remapIdsToPaths(props.defaultExpanded, initial.pathById);
-    const initialSelectedPaths = remapIdsToPaths(props.defaultSelected, initial.pathById);
+    const initialExpandedPaths = remapIdsToPaths(
+      props.defaultExpandedIds ?? props.defaultExpanded,
+      initial.pathById,
+    );
+    const initialSelectedPaths = remapIdsToPaths(
+      props.defaultSelectedIds ?? props.defaultSelected,
+      initial.pathById,
+    );
 
     const toNodeOrNull = (path: string | null) =>
       path == null
         ? null
         : (adapterRef.current.nodeById.get(adapterRef.current.idByPath.get(path) ?? '') ?? null);
+    const toIdOrNull = (path: string | null) =>
+      path == null ? null : (adapterRef.current.idByPath.get(path) ?? null);
 
     return {
       density: props.density,
@@ -75,11 +85,25 @@ function ExplorerTreeInner<TData>(
         canDrop: (event) => {
           const fn = propsRef.current.canDrop;
           if (!fn) return true;
-          const target = toNodeOrNull(event.target.directoryPath);
-          const [firstSource] = event.draggedPaths;
-          const source = toNodeOrNull(firstSource ?? null);
-          if (!source) return false;
-          return fn({ source, target });
+          const a = adapterRef.current;
+          const sourceIds = remapPathsToIds(event.draggedPaths, a.idByPath);
+          const sourceNodes = sourceIds
+            .map((id) => a.nodeById.get(id))
+            .filter((n): n is ExplorerTreeNode<TData> => !!n);
+          if (
+            sourceIds.length !== event.draggedPaths.length ||
+            sourceNodes.length !== sourceIds.length
+          ) {
+            return false;
+          }
+          const targetPath = event.target.hoveredPath ?? event.target.directoryPath;
+          const targetId = toIdOrNull(targetPath);
+          return fn({
+            sourceIds,
+            sourceNodes,
+            targetId,
+            targetNode: toNodeOrNull(targetPath),
+          });
         },
         onDropComplete: (event) => {
           const onMove = propsRef.current.onMove;
@@ -98,7 +122,6 @@ function ExplorerTreeInner<TData>(
           const moveEvent: ExplorerTreeMoveEvent<TData> = {
             newParentId,
             oldParentId,
-            position: 'inside',
             sourceIds,
             sourceNodes,
             targetId,
@@ -198,6 +221,48 @@ function ExplorerTreeInner<TData>(
 
   const lastExpandedSignatureRef = useRef<string>('');
 
+  useLayoutEffect(() => {
+    const selectedIds = props.selectedIds;
+    if (!selectedIds) return;
+    const a = adapterRef.current;
+    const nextSelectedPaths = remapIdsToPaths(selectedIds, a.pathById);
+    const nextSelectedIds = remapPathsToIds(nextSelectedPaths, a.idByPath);
+    const currentSelectedPaths = model.getSelectedPaths();
+    const currentSelectedIds = remapPathsToIds(currentSelectedPaths, a.idByPath);
+    if (arrayEqual(currentSelectedIds, nextSelectedIds)) return;
+
+    lastEmittedSelectedIds.current = nextSelectedIds;
+    const nextSelectedPathSet = new Set(nextSelectedPaths);
+    for (const path of currentSelectedPaths) {
+      if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
+    }
+    const currentSelectedPathSet = new Set(currentSelectedPaths);
+    for (const path of nextSelectedPaths) {
+      if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+    }
+  }, [props.selectedIds, model]);
+
+  useLayoutEffect(() => {
+    const expandedIds = props.expandedIds;
+    if (!expandedIds) return;
+    const a = adapterRef.current;
+    const nextExpandedIdSet = new Set(expandedIds);
+    const nextExpandedIds: string[] = [];
+    const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
+    for (const [id, path] of a.pathById) {
+      const dir = asDirectory(model.getItem(path));
+      if (!dir) continue;
+      const shouldExpand = nextExpandedIdSet.has(id);
+      if (shouldExpand) nextExpandedIds.push(id);
+      directoryEntries.push({ dir, shouldExpand });
+    }
+    lastExpandedSignatureRef.current = nextExpandedIds.slice().sort().join('\n');
+    for (const { dir, shouldExpand } of directoryEntries) {
+      if (shouldExpand && !dir.isExpanded()) dir.expand();
+      else if (!shouldExpand && dir.isExpanded()) dir.collapse();
+    }
+  }, [props.expandedIds, model]);
+
   // nodes prop changes → resetPaths
   useLayoutEffect(() => {
     const next = normalizeTree(propsRef.current.nodes);
@@ -207,21 +272,32 @@ function ExplorerTreeInner<TData>(
       return;
     }
     if (renamingRef.current) return; // defer reset while a rename is pending
-    const currentExpandedIds: string[] = [];
-    for (const [id, path] of prev.pathById) {
-      const dir = asDirectory(model.getItem(path));
-      if (dir?.isExpanded()) currentExpandedIds.push(id);
+    let nextExpandedIds = propsRef.current.expandedIds;
+    if (!nextExpandedIds) {
+      nextExpandedIds = [];
+      for (const [id, path] of prev.pathById) {
+        const dir = asDirectory(model.getItem(path));
+        if (dir?.isExpanded()) nextExpandedIds.push(id);
+      }
     }
-    const currentSelectedIds = remapPathsToIds(model.getSelectedPaths(), prev.idByPath);
+    const nextSelectedIds =
+      propsRef.current.selectedIds ?? remapPathsToIds(model.getSelectedPaths(), prev.idByPath);
     const focusedPath = model.getFocusedPath();
     const focusedId = focusedPath ? prev.idByPath.get(focusedPath) : null;
 
     adapterRef.current = next;
+    const initialExpandedPaths = remapIdsToPaths(nextExpandedIds, next.pathById);
+    lastExpandedSignatureRef.current = remapPathsToIds(initialExpandedPaths, next.idByPath)
+      .slice()
+      .sort()
+      .join('\n');
     model.resetPaths(next.paths, {
-      initialExpandedPaths: remapIdsToPaths(currentExpandedIds, next.pathById),
+      initialExpandedPaths,
     });
     // restore selection
-    for (const id of currentSelectedIds) {
+    const nextSelectedPaths = remapIdsToPaths(nextSelectedIds, next.pathById);
+    lastEmittedSelectedIds.current = remapPathsToIds(nextSelectedPaths, next.idByPath);
+    for (const id of nextSelectedIds) {
       const path = next.pathById.get(id);
       if (!path) continue;
       model.getItem(path)?.select();

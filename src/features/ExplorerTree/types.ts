@@ -16,17 +16,17 @@ export interface ExplorerTreeMoveEvent<TData = unknown> {
   index?: number;
   newParentId: string | null;
   oldParentId: string | null;
-  /** @deprecated Transitional compatibility for the current @pierre/trees bridge. */
-  position?: 'inside';
   sourceIds: string[];
   sourceNodes: ExplorerTreeNode<TData>[];
   targetId: string | null;
   targetNode: ExplorerTreeNode<TData> | null;
 }
 
-export interface ExplorerTreeLegacyCanDropCtx<TData = unknown> {
-  source: ExplorerTreeNode<TData>;
-  target: ExplorerTreeNode<TData> | null;
+export interface ExplorerTreeCanDropCtx<TData = unknown> {
+  sourceIds: string[];
+  sourceNodes: ExplorerTreeNode<TData>[];
+  targetId: string | null;
+  targetNode: ExplorerTreeNode<TData> | null;
 }
 
 export interface ExplorerTreeRowDecorationCtx<TData = unknown> {
@@ -44,12 +44,17 @@ export interface ExplorerTreeHandle {
 
 export interface ExplorerTreeProps<TData = unknown> {
   canDrag?: (node: ExplorerTreeNode<TData>) => boolean;
-  canDrop?: (ctx: ExplorerTreeLegacyCanDropCtx<TData>) => boolean;
+  canDrop?: (ctx: ExplorerTreeCanDropCtx<TData>) => boolean;
   canRename?: (node: ExplorerTreeNode<TData>) => boolean;
   className?: string;
+  /** @deprecated Use defaultExpandedIds instead. */
   defaultExpanded?: string[];
+  defaultExpandedIds?: string[];
+  /** @deprecated Use defaultSelectedIds instead. */
   defaultSelected?: string[];
+  defaultSelectedIds?: string[];
   density?: 'compact' | 'default' | 'relaxed' | number;
+  expandedIds?: string[];
   getContextMenuItems?: (node: ExplorerTreeNode<TData>) => MenuProps['items'];
   getRowDecoration?: (
     ctx: ExplorerTreeRowDecorationCtx<TData>,
@@ -65,5 +70,6 @@ export interface ExplorerTreeProps<TData = unknown> {
   onRenameError?: (error: unknown, node: ExplorerTreeNode<TData>) => void;
   onSelectedChange?: (ids: string[]) => void;
   overscan?: number;
+  selectedIds?: string[];
   style?: CSSProperties;
 }
