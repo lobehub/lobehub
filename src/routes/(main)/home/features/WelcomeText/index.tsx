@@ -1,3 +1,4 @@
+import { Flexbox } from '@lobehub/ui';
 import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { LoadingDots } from '@lobehub/ui/chat';
 import { cssVar } from 'antd-style';

@@ -29,7 +29,7 @@ const Home = memo(() => {
       </Flexbox>
 
       {isLogin && enableAgentTask && (
-        <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
+        <Flexbox gap={40}>
           <DailyBrief />
           <RecommendTaskTemplates />
         </Flexbox>
