@@ -3,7 +3,7 @@
 import { EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { memo } from 'react';
 
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
@@ -20,6 +20,17 @@ import PageTitle from './PageTitle';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
 import TitleSection from './TitleSection';
+
+/**
+ * Header slot for PageEditor.
+ * - `undefined` (default): render the built-in `<Header />`
+ * - `null`: render no header
+ * - any other ReactNode: render the provided node in place of the built-in header
+ *
+ * Custom headers are rendered inside the PageEditor provider tree, so they can
+ * call hooks like `usePageEditorStore` and reuse internal pieces such as `useMenu`.
+ */
+type PageEditorHeader = ReactNode | null;
 
 const styles = StyleSheet.create({
   contentWrapper: {
@@ -39,6 +50,7 @@ const styles = StyleSheet.create({
 
 interface PageEditorProps {
   emoji?: string;
+  header?: PageEditorHeader;
   knowledgeBaseId?: string;
   onBack?: () => void;
   onDelete?: () => void;
@@ -50,12 +62,18 @@ interface PageEditorProps {
   title?: string;
 }
 
-const PageEditorCanvas = memo(() => {
+interface PageEditorCanvasProps {
+  header?: PageEditorHeader;
+}
+
+const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header }) => {
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
 
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
+
+  const headerSlot = header === undefined ? <Header /> : header;
 
   return (
     <>
@@ -67,7 +85,7 @@ const PageEditorCanvas = memo(() => {
         width={'100%'}
       >
         <Flexbox flex={1} height={'100%'} style={styles.editorContainer}>
-          <Header />
+          {headerSlot}
           <Flexbox horizontal height={'100%'} style={styles.contentWrapper} width={'100%'}>
             <WideScreenContainer wrapperStyle={{ cursor: 'text' }} onClick={() => editor?.focus()}>
               <Flexbox flex={1} style={styles.editorContent}>
@@ -91,6 +109,7 @@ const PageEditorCanvas = memo(() => {
  */
 export const PageEditor: FC<PageEditorProps> = ({
   pageId,
+  header,
   knowledgeBaseId,
   onDocumentIdChange,
   onEmojiChange,
@@ -117,7 +136,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           onSave={onSave}
           onTitleChange={onTitleChange}
         >
-          <PageEditorCanvas />
+          <PageEditorCanvas header={header} />
         </PageEditorProvider>
       </EditorProvider>
     </PageAgentProvider>
