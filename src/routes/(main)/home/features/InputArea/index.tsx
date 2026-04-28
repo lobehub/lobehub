@@ -6,16 +6,14 @@ import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import {
-  serverConfigSelectors,
-  useServerConfigStore,
-} from '@/store/serverConfig';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import SuggestQuestions from '../SuggestQuestions';
-import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
+import BotIntegrationBanner, { BOT_INTEGRATION_BANNER_ID } from './BotIntegrationBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
@@ -23,12 +21,11 @@ const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
 
 const InputArea = () => {
   const { loading, send, agentId } = useSend();
-  const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
-  const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
-  const isSkillBannerDismissed = useGlobalStore(
-    systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isBotIntegrationBannerDismissed = useGlobalStore(
+    systemStatusSelectors.isBannerDismissed(BOT_INTEGRATION_BANNER_ID),
   );
-  const showSkillBanner = (isLobehubSkillEnabled || isKlavisEnabled) && !isSkillBannerDismissed;
+  const showBotIntegrationBanner = !!inboxAgentId && !isBotIntegrationBannerDismissed;
   const chatInputRef = useRef<HTMLDivElement>(null);
 
   // Get agent's model info for vision support check. Falls back to an empty
@@ -63,9 +60,9 @@ const InputArea = () => {
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
       <Flexbox
         ref={chatInputRef}
-        style={{ paddingBottom: showSkillBanner ? 32 : 0, position: 'relative' }}
+        style={{ paddingBottom: showBotIntegrationBanner ? 32 : 0, position: 'relative' }}
       >
-        {showSkillBanner && <SkillInstallBanner />}
+        {showBotIntegrationBanner && <BotIntegrationBanner />}
         <DragUploadZone
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}
