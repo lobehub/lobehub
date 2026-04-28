@@ -10,7 +10,13 @@ import type { TaskStore } from '../../store';
 // sync rather than leaving the task in a "mode enabled but unconfigured" state.
 const DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 600;
 const DEFAULT_SCHEDULE_PATTERN = '0 9 * * *';
-const DEFAULT_SCHEDULE_TIMEZONE = 'UTC';
+const resolveDefaultTimezone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+};
 
 type Setter = StoreSetter<TaskStore>;
 
@@ -135,7 +141,7 @@ export class TaskConfigSliceActionImpl {
     }
     if (mode === 'schedule') {
       if (!detail?.schedule?.pattern) update.schedulePattern = DEFAULT_SCHEDULE_PATTERN;
-      if (!detail?.schedule?.timezone) update.scheduleTimezone = DEFAULT_SCHEDULE_TIMEZONE;
+      if (!detail?.schedule?.timezone) update.scheduleTimezone = resolveDefaultTimezone();
     }
 
     // Optimistic update so the Segmented reflects the new tab immediately

@@ -165,15 +165,16 @@ describe('TaskConfigSliceAction', () => {
       expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'heartbeat' });
     });
 
-    it('should seed default cron pattern + timezone when entering schedule mode', async () => {
+    it('should seed default cron pattern + local timezone when entering schedule mode', async () => {
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().setAutomationMode('T-1', 'schedule');
 
+      const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       expect(taskService.update).toHaveBeenCalledWith('T-1', {
         automationMode: 'schedule',
         schedulePattern: '0 9 * * *',
-        scheduleTimezone: 'UTC',
+        scheduleTimezone: localTz,
       });
     });
 
