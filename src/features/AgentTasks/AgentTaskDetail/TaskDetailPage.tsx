@@ -11,7 +11,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
-import PageDrawer from './PageDrawer';
+import PageModal from './PageModal';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
@@ -105,7 +105,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
         </WideScreenContainer>
       </Flexbox>
       <TopicChatDrawer />
-      <PageDrawer />
+      <PageModal />
     </Flexbox>
   );
 });

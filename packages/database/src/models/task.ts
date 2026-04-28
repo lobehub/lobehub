@@ -635,6 +635,7 @@ export class TaskModel {
         fileType: row.document_file_type,
         parentId: row.document_parent_id,
         pinnedBy: row.pinned_by,
+        sourceTaskId: row.source_task_id,
         sourceTaskIdentifier: row.source_task_id !== rootTaskId ? row.source_task_identifier : null,
         title: row.document_title || 'Untitled',
         updatedAt: row.document_updated_at,

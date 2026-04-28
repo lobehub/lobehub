@@ -161,6 +161,7 @@ export class TaskService {
           documentId: node.id,
           fileType: doc?.fileType,
           size: doc?.charCount,
+          sourceTaskId: doc?.sourceTaskId,
           sourceTaskIdentifier: doc?.sourceTaskIdentifier,
           title: doc?.title,
         };

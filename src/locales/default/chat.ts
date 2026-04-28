@@ -558,6 +558,12 @@ export default {
   'taskDetail.activities': 'Activities',
   'taskDetail.activitiesEmpty': 'No activity yet',
   'taskDetail.artifacts': 'Artifacts',
+  'taskDetail.untitled': 'Untitled',
+  'taskDetail.artifactMenu.delete': 'Remove from task',
+  'taskDetail.artifactMenu.deleteConfirm.content':
+    'This artifact will no longer appear in this task workspace.',
+  'taskDetail.artifactMenu.deleteConfirm.ok': 'Remove',
+  'taskDetail.artifactMenu.deleteConfirm.title': 'Remove this artifact?',
   'taskDetail.artifactSize': '{{value}} chars',
   'taskDetail.activities.agentTag': 'Agent',
   'taskDetail.activities.fallback.brief': 'posted a brief',
