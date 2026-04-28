@@ -92,11 +92,11 @@ describe('market-api proxy route', () => {
 
     const headers = fetchSpy.mock.calls[0]?.[1]?.headers;
 
-    expect(headers).toBeInstanceOf(Headers);
-    expect(headers).not.toBeUndefined();
-    expect(headers?.get('authorization')).toBe('Bearer token');
-    expect(headers?.get('x-request-id')).toBe('request-1');
-    expect(headers?.has('host')).toBe(false);
+    if (!(headers instanceof Headers)) throw new TypeError('Expected headers to be Headers');
+
+    expect(headers.get('authorization')).toBe('Bearer token');
+    expect(headers.get('x-request-id')).toBe('request-1');
+    expect(headers.has('host')).toBe(false);
   });
 
   it('throws a clear error when MARKET_BASE_URL is missing', async () => {
