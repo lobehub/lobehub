@@ -1,7 +1,6 @@
 import { AgentRuntimeErrorType } from '../types/error';
 
 const NON_RETRYABLE_ERROR_TYPES = new Set<string>([AgentRuntimeErrorType.ExceededContextWindow]);
-const NON_RETRYABLE_STATUS_CODES = new Set([400, 413, 422]);
 const RETRYABLE_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
 const RETRYABLE_ERROR_CODES = new Set([
   'accountdeactivated',
@@ -157,7 +156,5 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
   const statusCodes = collectStatusCodes(error);
   if (statusCodes.some((statusCode) => RETRYABLE_STATUS_CODES.has(statusCode))) return false;
 
-  // 400/413/422 usually mean the request payload itself is invalid. Retrying the same
-  // prompt/schema/tool payload on another RouterRuntime channel only burns fallback quota.
-  return statusCodes.some((statusCode) => NON_RETRYABLE_STATUS_CODES.has(statusCode));
+  return false;
 };

@@ -38,10 +38,10 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
-  it('returns true for bare 400/413/422 request errors', () => {
-    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 400 })).toBe(true);
-    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 413 })).toBe(true);
-    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 422 })).toBe(true);
+  it('returns false for bare 400/413/422 request errors', () => {
+    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 400 })).toBe(false);
+    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 413 })).toBe(false);
+    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 422 })).toBe(false);
   });
 
   it('returns false for retryable rate limit and quota errors', () => {
