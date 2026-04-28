@@ -50,15 +50,13 @@ const assertMoveTarget = (
   }
 };
 
-const revalidateAffectedParents = (
-  revalidateParent: ResourceTreeMutationDeps['revalidateParent'],
-  parentIds: Array<string | null>,
-) => Promise.all(parentIds.map((parentId) => revalidateParent(parentId)));
+const runBestEffort = (tasks: Array<() => Promise<void> | void>) =>
+  Promise.allSettled(tasks.map(async (task) => task()));
 
 const revalidateAffectedParentsSettled = (
   revalidateParent: ResourceTreeMutationDeps['revalidateParent'],
   parentIds: Array<string | null>,
-) => Promise.allSettled(parentIds.map((parentId) => revalidateParent(parentId)));
+) => runBestEffort(parentIds.map((parentId) => () => revalidateParent(parentId)));
 
 export const createResourceTreeMutations = (deps: ResourceTreeMutationDeps) => {
   const getAffectedParents = (oldParentId: string | null, newParentId: string | null) =>
@@ -102,20 +100,22 @@ export const createResourceTreeMutations = (deps: ResourceTreeMutationDeps) => {
 
     try {
       await Promise.all(ids.map((id) => resourceService.moveResource(id, newParentId)));
-      await revalidateAffectedParents(deps.revalidateParent, affectedParents);
     } catch (error) {
       deps.setChildrenByParentId(previous);
       await revalidateAffectedParentsSettled(deps.revalidateParent, affectedParents);
       throw error;
     }
+
+    await revalidateAffectedParentsSettled(deps.revalidateParent, affectedParents);
   };
 
   const moveExternalItems = async (ids: string[], newParentId: string | null): Promise<void> => {
     if (ids.length === 0) return;
 
+    assertMoveTarget(deps.childrenByParentId, ids, newParentId);
+
     await Promise.all(ids.map((id) => resourceService.moveResource(id, newParentId)));
-    await deps.refreshFileList();
-    await deps.revalidateParent(newParentId);
+    await runBestEffort([deps.refreshFileList, () => deps.revalidateParent(newParentId)]);
   };
 
   const renameNode = async (id: string, parentId: string | null, name: string): Promise<void> => {
@@ -133,12 +133,12 @@ export const createResourceTreeMutations = (deps: ResourceTreeMutationDeps) => {
 
     try {
       await resourceService.updateResource(id, { name });
-      await deps.refreshFileList();
-      await deps.revalidateParent(parentId);
     } catch (error) {
       deps.setChildrenByParentId(previous);
       throw error;
     }
+
+    await runBestEffort([deps.refreshFileList, () => deps.revalidateParent(parentId)]);
   };
 
   return {

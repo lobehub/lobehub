@@ -138,5 +138,94 @@ describe('createResourceTreeMutations', () => {
       expect(deps.revalidateParent).toHaveBeenCalledWith('folder-a');
       expect(deps.revalidateParent).toHaveBeenCalledWith('folder-b');
     });
+
+    it('keeps successful backend moves when parent revalidation rejects', async () => {
+      const sourceFile = createResourceNode('file-a', 'Alpha.md', 'folder-a', false);
+      const targetFile = createResourceNode('file-b', 'Bravo.md', 'folder-b', false);
+      const childrenByParentId = new Map<string | null, ResourceTreeNode[]>([
+        ['folder-a', [sourceFile]],
+        ['folder-b', [targetFile]],
+      ]);
+      const deps = createDeps(childrenByParentId);
+
+      mockMoveResource.mockResolvedValue(undefined);
+      deps.revalidateParent.mockRejectedValue(new Error('revalidate failed'));
+
+      await expect(
+        createResourceTreeMutations(deps).moveTreeItems(['file-a'], 'folder-a', 'folder-b'),
+      ).resolves.toBeUndefined();
+
+      expect(deps.setChildrenByParentId).toHaveBeenCalledTimes(1);
+      expect(deps.childrenByParentId).not.toBe(childrenByParentId);
+      expect(deps.childrenByParentId.get('folder-a')).toEqual([]);
+      expect(deps.childrenByParentId.get('folder-b')).toEqual([
+        { ...sourceFile, parentId: 'folder-b' },
+        targetFile,
+      ]);
+    });
+  });
+
+  describe('moveExternalItems', () => {
+    it('rejects moving a folder into itself or its loaded descendant before calling backend', async () => {
+      const folder = createResourceNode('folder-a', 'Folder A', null, true);
+      const child = createResourceNode('folder-b', 'Folder B', 'folder-a', true);
+      const childrenByParentId = new Map<string | null, ResourceTreeNode[]>([
+        [null, [folder]],
+        ['folder-a', [child]],
+      ]);
+      const deps = createDeps(childrenByParentId);
+      const mutations = createResourceTreeMutations(deps);
+
+      await expect(mutations.moveExternalItems(['folder-a'], 'folder-a')).rejects.toThrow(
+        'Cannot move a resource into itself or its descendant.',
+      );
+      await expect(mutations.moveExternalItems(['folder-a'], 'folder-b')).rejects.toThrow(
+        'Cannot move a resource into itself or its descendant.',
+      );
+
+      expect(mockMoveResource).not.toHaveBeenCalled();
+      expect(deps.refreshFileList).not.toHaveBeenCalled();
+      expect(deps.revalidateParent).not.toHaveBeenCalled();
+    });
+
+    it('throws backend move failures but ignores follow-up refresh failures', async () => {
+      const childrenByParentId = new Map<string | null, ResourceTreeNode[]>();
+      const deps = createDeps(childrenByParentId);
+
+      mockMoveResource.mockResolvedValue(undefined);
+      deps.refreshFileList.mockRejectedValue(new Error('refresh failed'));
+      deps.revalidateParent.mockRejectedValue(new Error('revalidate failed'));
+
+      await expect(
+        createResourceTreeMutations(deps).moveExternalItems(['file-a'], 'folder-a'),
+      ).resolves.toBeUndefined();
+
+      expect(mockMoveResource).toHaveBeenCalledWith('file-a', 'folder-a');
+      expect(deps.refreshFileList).toHaveBeenCalledTimes(1);
+      expect(deps.revalidateParent).toHaveBeenCalledWith('folder-a');
+    });
+  });
+
+  describe('renameNode', () => {
+    it('keeps successful renames when refresh and revalidation reject', async () => {
+      const node = createResourceNode('folder-a', 'Old Name', null, true);
+      const childrenByParentId = new Map<string | null, ResourceTreeNode[]>([[null, [node]]]);
+      const deps = createDeps(childrenByParentId);
+
+      mockUpdateResource.mockResolvedValue(undefined);
+      deps.refreshFileList.mockRejectedValue(new Error('refresh failed'));
+      deps.revalidateParent.mockRejectedValue(new Error('revalidate failed'));
+
+      await expect(
+        createResourceTreeMutations(deps).renameNode('folder-a', null, 'New Name'),
+      ).resolves.toBeUndefined();
+
+      expect(mockUpdateResource).toHaveBeenCalledWith('folder-a', { name: 'New Name' });
+      expect(deps.setChildrenByParentId).toHaveBeenCalledTimes(1);
+      expect(deps.childrenByParentId).not.toBe(childrenByParentId);
+      expect(deps.childrenByParentId.get(null)).toEqual([{ ...node, name: 'New Name' }]);
+      expect(deps.refreshFileList).toHaveBeenCalledTimes(1);
+      expect(deps.revalidateParent).toHaveBeenCalledWith(null);
+    });
   });
 });
