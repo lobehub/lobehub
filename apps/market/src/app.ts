@@ -4,7 +4,9 @@ import { logger } from 'hono/logger';
 
 import type { MarketEnv } from './env';
 import { jsonError, MarketHttpError, notImplemented } from './http/errors';
+import { createAgentRoutes } from './http/routes/agents';
 import { createHealthRoutes } from './http/routes/health';
+import { createOidcRoutes } from './http/routes/oidc';
 import type { MarketDatabase, MarketHonoEnv } from './types';
 
 interface CreateMarketAppOptions {
@@ -24,6 +26,8 @@ export const createMarketApp = (options: CreateMarketAppOptions = {}) => {
   app.use('*', logger());
 
   app.route('/', createHealthRoutes());
+  app.route('/lobehub-oidc', createOidcRoutes());
+  app.route('/api/v1/agents', createAgentRoutes());
 
   app.all('/lobehub-oidc/auth', (c) => notImplemented(c, '/lobehub-oidc/auth'));
   app.all('/lobehub-oidc/token', (c) => notImplemented(c, '/lobehub-oidc/token'));
