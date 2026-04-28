@@ -3,6 +3,7 @@ import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { briefService } from '@/services/brief';
+import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
 import { type BriefItem } from '@/store/brief/types';
 import { type StoreSetter } from '@/store/types';
@@ -27,10 +28,6 @@ export class BriefListActionImpl {
     this.#get = get;
   }
 
-  addComment = async (briefId: string, taskId: string, content: string) => {
-    await briefService.addComment(taskId, content, briefId);
-  };
-
   internal_updateBrief = (id: string, data: Partial<BriefItem>) => {
     const briefs = this.#get().briefs;
     const index = briefs.findIndex((b) => b.id === id);
@@ -52,6 +49,23 @@ export class BriefListActionImpl {
       resolvedAction: action,
       resolvedAt: new Date().toISOString(),
     });
+  };
+
+  // Free-form feedback from the brief card: resolve the brief with the
+  // user's text (so the heartbeat re-arm gate in TaskLifecycle no longer
+  // sees an unresolved urgent brief), then re-run the task so the agent
+  // picks up `resolvedComment` in its next prompt. Without this, the brief
+  // stays unresolved and the task is parked forever in `human-waiting`.
+  submitFeedback = async (briefId: string, taskId: string, content: string) => {
+    await this.resolveBrief(briefId, 'feedback', content);
+    try {
+      await taskService.run(taskId);
+    } catch (error) {
+      // CONFLICT means a run is already in flight (e.g. the user resolved
+      // multiple briefs at once) — the in-flight run will read the freshly
+      // resolved comment, so the resolve still does its job.
+      console.warn('[BriefStore] submitFeedback: task.run failed', error);
+    }
   };
 
   useFetchBriefs = (isLogin: boolean | undefined): SWRResponse<BriefItem[]> => {
