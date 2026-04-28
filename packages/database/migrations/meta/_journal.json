@@ -700,6 +700,13 @@
       "when": 1776674965365,
       "tag": "0099_topic_status_tasks_automation_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1777413615053,
+      "tag": "0100_add_market_account_agent_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"

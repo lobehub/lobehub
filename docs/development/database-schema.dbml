@@ -691,6 +691,116 @@ table generations {
   }
 }
 
+table market_accounts {
+  id serial [pk, not null, increment]
+  lobe_user_id text [not null]
+  email text [not null]
+  display_name text
+  user_name varchar(100)
+  namespace varchar(100) [not null]
+  avatar_url text
+  meta jsonb [default: `{}`]
+  follower_count integer [not null, default: 0]
+  following_count integer [not null, default: 0]
+  type text [not null, default: 'user']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    lobe_user_id [name: 'market_accounts_lobe_user_id_unique', unique]
+    email [name: 'market_accounts_email_unique', unique]
+    namespace [name: 'market_accounts_namespace_unique', unique]
+    user_name [name: 'market_accounts_user_name_unique', unique]
+  }
+}
+
+table market_agent_events {
+  id serial [pk, not null, increment]
+  account_id integer
+  agent_id integer [not null]
+  event text [not null]
+  source text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    agent_id [name: 'market_agent_events_agent_id_idx']
+    account_id [name: 'market_agent_events_account_id_idx']
+  }
+}
+
+table market_agent_versions {
+  id serial [pk, not null, increment]
+  agent_id integer [not null]
+  version varchar(64) [not null, default: '1.0.0']
+  version_number integer [not null]
+  is_latest boolean [not null, default: true]
+  is_validated boolean [not null, default: false]
+  a2a_protocol_version text
+  avatar text
+  category text
+  changelog text
+  config jsonb [default: `{}`]
+  default_input_modes text[] [default: `[]`]
+  default_output_modes text[] [default: `[]`]
+  description text [not null, default: '']
+  documentation_url text
+  editor_data jsonb [default: `{}`]
+  extensions jsonb [default: `[]`]
+  has_push_notifications boolean [default: false]
+  has_state_transition_history boolean [default: false]
+  has_streaming boolean [default: false]
+  interfaces jsonb [default: `[]`]
+  name text [not null]
+  preferred_transport text
+  security_requirements jsonb [default: `[]`]
+  security_schemes jsonb [default: `{}`]
+  skills jsonb [default: `[]`]
+  summary text [not null, default: '']
+  supports_authenticated_extended_card boolean [default: false]
+  tags text[] [default: `[]`]
+  token_usage integer [not null, default: 0]
+  url text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (agent_id, version_number) [name: 'market_agent_versions_agent_id_version_number_unique', unique]
+    agent_id [name: 'market_agent_versions_agent_id_idx']
+  }
+}
+
+table market_agents {
+  id serial [pk, not null, increment]
+  identifier varchar(128) [not null]
+  owner_id integer [not null]
+  name text [not null]
+  homepage text
+  status text [not null, default: 'unpublished']
+  visibility text [not null, default: 'public']
+  current_version_id integer
+  forked_from_agent_id integer
+  is_featured boolean [not null, default: false]
+  is_official boolean [not null, default: false]
+  install_count integer [not null, default: 0]
+  fork_count integer [not null, default: 0]
+  like_count integer [not null, default: 0]
+  favorite_count integer [not null, default: 0]
+  rating_count integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    identifier [name: 'market_agents_identifier_unique', unique]
+    owner_id [name: 'market_agents_owner_id_idx']
+    (status, visibility) [name: 'market_agents_status_visibility_idx']
+  }
+}
+
 table message_chunks {
   message_id text
   chunk_id uuid
@@ -1943,7 +2053,6 @@ table user_memory_persona_documents {
   }
 }
 
-
 ref: agent_skills.user_id - users.id
 
 ref: agent_skills.zip_file_hash - global_files.hash_id
@@ -2027,6 +2136,14 @@ ref: generations.user_id - users.id
 ref: generations.generation_batch_id > generation_batches.id
 
 ref: generations.async_task_id - async_tasks.id
+
+ref: market_agents.owner_id > market_accounts.id
+
+ref: market_agent_versions.agent_id > market_agents.id
+
+ref: market_agent_events.account_id > market_accounts.id
+
+ref: market_agent_events.agent_id > market_agents.id
 
 ref: message_groups.user_id - users.id
 
