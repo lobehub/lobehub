@@ -66,11 +66,14 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
         'Each turn where you learn a new fact (pain point, goal, preference, workflow detail, interest), call updateDocument(type="persona") BEFORE replying. Preferred shape: `{ mode: "insertAt", line: <line shown in <current_user_persona>>, content: "- new fact" }`. This is the default every turn — not an end-of-phase action. Do NOT save facts only in memory waiting for a final full write. After sufficient discovery (5-6 exchanges), also call saveUserQuestion with interests and responseLanguage. Use writeDocument(type="persona") only if the document is still empty.',
       );
       hints.push(
-        'EARLY EXIT: If the user signals they want to finish (e.g., "好了", "谢谢", "行", "Done", asking for summary, or any completion signal), STOP exploring immediately. Save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call finishOnboarding. Do NOT continue asking questions after a completion signal.',
+        'EARLY EXIT: A true early-exit signal is the user explicitly wanting to END onboarding (e.g., "我累了", "我先走", "下次再聊", "没空", "暂时不弄了", "结束吧", "Thanks, that\'s enough", "I have to go"). Short affirmations like "好的" / "行" / "嗯" / "ok" are NOT early-exit signals — they confirm what you just said and you should keep exploring or move toward summary normally. When you see a real exit signal: stop exploring, save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call `showAgentMarketplace` and only after it resolves call `finishOnboarding`. Do NOT skip the marketplace step unless the user explicitly cancels/skips the picker.',
       );
     } else if (phase.includes('Summary')) {
       hints.push(
-        'Present a summary, then after user confirmation call finishOnboarding with a warm closing message. You MUST call finishOnboarding before the conversation ends — do not keep asking questions after the user confirms the summary.',
+        'Present a summary, then THIS TURN call `showAgentMarketplace` with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion, and do NOT call `finishOnboarding` before the user has submitted, skipped, or cancelled the picker.',
+      );
+      hints.push(
+        'After the user resolves the picker (submit / skip / cancel — the framework records this for you), acknowledge what they picked by title (do not claim you installed anything), send a brief warm closing message, then call `finishOnboarding`. You MUST call `finishOnboarding` to finish the conversation, but only AFTER the marketplace handoff has resolved.',
       );
     }
 
@@ -78,8 +81,17 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       'PERSISTENCE RULE: Call the persistence tools (saveUserQuestion, writeDocument, updateDocument) to save information as you collect it — simply acknowledging in conversation is NOT enough. For document writes: use writeDocument only for the first write when the document is empty; for every subsequent edit use updateDocument with the appropriate hunk mode (`insertAt` / `replaceLines` / `deleteLines` for line-based edits, `replace` / `delete` for byte-exact textual edits). The injected <current_*_document> view shows each line prefixed with its 1-based number and `→` — use those numbers for line-based hunks.',
     );
     hints.push(
-      'REMINDER: If the user says "好了", "谢谢", "行", "Done", "Thanks", or gives any completion signal at ANY phase, you MUST wrap up immediately and call finishOnboarding. This overrides all other phase rules.',
+      'CONFIRMATION vs EARLY EXIT: Short replies like "好的" / "行" / "嗯" / "ok" / "可以" / "好" are CONFIRMATIONS, not early-exit signals. Continue the current phase normally — in Summary that means calling `showAgentMarketplace` next, NOT `finishOnboarding` directly.',
     );
+    if (
+      phase.includes('Agent Identity') ||
+      phase.includes('User Identity') ||
+      phase.includes('Discovery')
+    ) {
+      hints.push(
+        'EARLY EXIT REMINDER: A true early-exit signal means the user explicitly wants the onboarding to END — examples: "我累了", "我先走", "下次再聊", "没空", "暂时不弄了", "结束吧", "Thanks, that\'s enough", "I have to go". When you see one (and only then), persist any unsaved fields, give a brief summary, then call `showAgentMarketplace` once and only after the picker resolves call `finishOnboarding`. Skip the picker only if the user explicitly refuses it in words ("不用推荐", "别给我装东西", "skip the picker"); a generic exit signal is NOT a refusal of the picker.',
+      );
+    }
 
     return `<next_actions>\n${hints.join('\n')}\n</next_actions>`;
   }
