@@ -75,7 +75,7 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
         variant={'outlined'}
       >
         <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
-          <BriefIcon size={24} type={brief.type} />
+          <BriefIcon muted={isResolved} size={24} type={brief.type} />
           <Text ellipsis style={{ flex: 1 }} weight={500}>
             {brief.title}
           </Text>
