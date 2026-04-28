@@ -601,16 +601,47 @@ describe('LocalFileCtr', () => {
       execaMock.mockResolvedValueOnce({ exitCode: 1, stdout: '' });
       mockSearchService.glob.mockResolvedValue({
         engine: 'fast-glob',
-        files: ['/workspace/project/src/index.ts'],
+        files: ['/workspace/project/src', '/workspace/project/src/index.ts'],
         success: true,
-        total_files: 1,
+        total_files: 2,
       });
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath: string) => ({
+        isDirectory: () => filePath === '/workspace/project/src',
+      }));
 
       const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
 
       expect(result.source).toBe('glob');
       expect(result.entries).toEqual([
         expect.objectContaining({
+          isDirectory: true,
+          path: '/workspace/project/src',
+          relativePath: 'src/',
+        }),
+        expect.objectContaining({
+          isDirectory: false,
+          path: '/workspace/project/src/index.ts',
+          relativePath: 'src/index.ts',
+        }),
+      ]);
+    });
+
+    it('should mark glob entries as files when stat fails', async () => {
+      execaMock.mockResolvedValueOnce({ exitCode: 1, stdout: '' });
+      mockSearchService.glob.mockResolvedValue({
+        engine: 'fast-glob',
+        files: ['/workspace/project/src/index.ts'],
+        success: true,
+        total_files: 1,
+      });
+      vi.mocked(mockFsPromises.stat).mockRejectedValue(new Error('missing'));
+
+      const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
+
+      expect(result.source).toBe('glob');
+      expect(result.entries).toEqual([
+        expect.objectContaining({
+          isDirectory: false,
           path: '/workspace/project/src/index.ts',
           relativePath: 'src/index.ts',
         }),

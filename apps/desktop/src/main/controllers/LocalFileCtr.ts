@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -115,6 +115,18 @@ const collectProjectDirectories = (files: string[], root: string): ProjectFileIn
   }
 
   return [...directories].map((directory) => createProjectFileEntry(root, directory, true));
+};
+
+const createDetectedProjectFileEntry = async (
+  root: string,
+  absolutePath: string,
+): Promise<ProjectFileIndexEntry> => {
+  try {
+    const stats = await stat(absolutePath);
+    return createProjectFileEntry(root, absolutePath, stats.isDirectory());
+  } catch {
+    return createProjectFileEntry(root, absolutePath, false);
+  }
 };
 
 const resolveSafePathRealPrefixes = async (): Promise<string[]> => {
@@ -537,8 +549,8 @@ export default class LocalFileCtr extends ControllerModule {
 
     const fallback = await this.searchService.glob({ pattern: '**/*', scope: requestedScope });
     const files = fallback.files.map((filePath) => path.resolve(filePath));
-    const entries = files.map((filePath) =>
-      createProjectFileEntry(requestedScope, filePath, false),
+    const entries = await Promise.all(
+      files.map((filePath) => createDetectedProjectFileEntry(requestedScope, filePath)),
     );
 
     logger.debug('Project file index built from glob', {
