@@ -1,8 +1,9 @@
 import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 export class MarketHttpError extends Error {
   constructor(
-    public readonly status: number,
+    public readonly status: ContentfulStatusCode,
     public readonly code: string,
     message: string,
   ) {
@@ -11,7 +12,12 @@ export class MarketHttpError extends Error {
   }
 }
 
-export const jsonError = (c: Context, status: number, code: string, message: string) =>
+export const jsonError = (
+  c: Context,
+  status: ContentfulStatusCode,
+  code: string,
+  message: string,
+) =>
   c.json(
     {
       error: {
@@ -19,7 +25,7 @@ export const jsonError = (c: Context, status: number, code: string, message: str
         message,
       },
     },
-    status as never,
+    status,
   );
 
 export const notImplemented = (c: Context, endpoint: string) =>
