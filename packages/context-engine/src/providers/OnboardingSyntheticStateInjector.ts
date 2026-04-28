@@ -74,7 +74,7 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
         {
           function: {
             arguments: '{}',
-            name: 'lobe-web-onboarding____getOnboardingState____builtin',
+            name: 'lobe-web-onboarding____getOnboardingState',
           },
           id: toolCallId,
           type: 'function',
