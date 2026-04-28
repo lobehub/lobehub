@@ -14,9 +14,9 @@ export interface RecentDbItem {
   updatedAt: Date;
 }
 
-// Mirrors `MAIN_SIDEBAR_EXCLUDE_TRIGGERS` in `src/const/topic.ts`. System-trigger
-// topics live in their own surfaces (Task Manager, cron, eval, task runs) and
-// would clutter the main "Recent" list.
+// Mirrors `MAIN_SIDEBAR_EXCLUDE_TRIGGERS` in `src/const/topic.ts` plus the
+// legacy `task_manager` trigger from the previous Task Manager panel.
+// System-trigger topics live in their own surfaces and would clutter Recent.
 const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task'];
 
 // Excluded so file uploads and web-browsing tool scrapes don't surface as

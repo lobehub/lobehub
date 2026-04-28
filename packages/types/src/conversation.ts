@@ -205,12 +205,6 @@ export interface ConversationContext {
    */
   topicShareId?: string;
   /**
-   * Trigger value applied when sendMessage creates a new topic from this
-   * context (e.g. `'task_manager'`). Stamped on the topic row to support
-   * page-specific filtering. Only consumed during new-topic creation.
-   */
-  topicTrigger?: string;
-  /**
    * Task Manager page the user is currently viewing. When set, streamingExecutor
    * builds `RuntimeInitialContext.taskManager` from the task store.
    */

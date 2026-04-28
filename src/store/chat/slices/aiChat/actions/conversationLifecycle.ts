@@ -659,7 +659,6 @@ export class ConversationLifecycleActionImpl {
             ? {
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
-                trigger: context.topicTrigger,
               }
             : undefined,
           agentId: operationContext.agentId,
