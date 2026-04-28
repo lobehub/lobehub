@@ -1,9 +1,8 @@
-import { DeepSeek, Jimeng } from '@lobehub/icons';
+import { DeepSeek, Jimeng, OpenAI } from '@lobehub/icons';
 import { type ButtonProps } from '@lobehub/ui';
-import { Button, Center, Tooltip } from '@lobehub/ui';
+import { Button, Center, Tag, Tooltip } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ImageIcon } from 'lucide-react';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,6 +30,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorBgElevated} !important;
     }
   `,
+  newTag: css`
+    border-radius: 999px !important;
+  `,
 }));
 
 type StarterTitleKey =
@@ -40,7 +42,6 @@ type StarterTitleKey =
 
 interface StarterItem {
   disabled?: boolean;
-  hot?: boolean;
   icon?: ButtonProps['icon'];
   key: StarterKey;
   titleKey: StarterTitleKey;
@@ -57,19 +58,17 @@ const StarterList = memo(() => {
   const items: StarterItem[] = useMemo(
     () => [
       {
-        hot: true,
-        icon: DeepSeek.Color,
+        icon: DeepSeek.Avatar,
         key: 'deepseek-v4-pro',
         titleKey: 'starter.deepseekV4Pro',
       },
       {
-        hot: true,
-        icon: ImageIcon,
+        icon: OpenAI.Avatar,
         key: 'image',
         titleKey: 'starter.imageGeneration',
       },
       {
-        icon: Jimeng.Color,
+        icon: Jimeng.Avatar,
         key: 'video',
         titleKey: 'starter.videoGeneration',
       },
@@ -129,6 +128,9 @@ const StarterList = memo(() => {
 
   return (
     <Center horizontal gap={8}>
+      <Tag className={styles.newTag} size={'small'}>
+        {t('starter.newLabel')}
+      </Tag>
       {items.map((item) => {
         const isLoading = switchingKey === item.key;
         const button = (
@@ -141,13 +143,11 @@ const StarterList = memo(() => {
             shape={'round'}
             variant={'outlined'}
             iconProps={{
-              color: cssVar.colorTextSecondary,
               size: 18,
             }}
             onClick={() => handleClick(item.key)}
           >
             {t(item.titleKey)}
-            {item.hot && ' 🔥'}
           </Button>
         );
 

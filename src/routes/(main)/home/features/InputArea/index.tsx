@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
@@ -10,23 +10,70 @@ import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelec
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 
 import SuggestQuestions from '../SuggestQuestions';
 import BotIntegrationBanner, { BOT_INTEGRATION_BANNER_ID } from './BotIntegrationBanner';
+import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
 const leftActions: ActionKeys[] = ['model', 'search', 'fileUpload', 'tools'];
 
+type BannerKind = 'skill' | 'botIntegration';
+
 const InputArea = () => {
   const { loading, send, agentId } = useSend();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
+  const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
+  const isSkillBannerDismissed = useGlobalStore(
+    systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),
+  );
   const isBotIntegrationBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(BOT_INTEGRATION_BANNER_ID),
   );
-  const showBotIntegrationBanner = !!inboxAgentId && !isBotIntegrationBannerDismissed;
   const chatInputRef = useRef<HTMLDivElement>(null);
+
+  // Wait for both stores to finish hydrating before drawing — server config
+  // (skill flags) and the agent store (inboxAgentId) hydrate at different
+  // times, and picking too early biases the draw toward whichever arrived
+  // first. After picking, dismissing the active banner only hides it for
+  // this mount — re-mounting re-rolls from the still-undismissed pool.
+  const [activeBanner, setActiveBanner] = useState<BannerKind | null>(null);
+  const hasPickedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasPickedRef.current) return;
+    if (!serverConfigInit || !inboxAgentId) return;
+
+    const candidates: BannerKind[] = [];
+    if ((isLobehubSkillEnabled || isKlavisEnabled) && !isSkillBannerDismissed) {
+      candidates.push('skill');
+    }
+    if (!isBotIntegrationBannerDismissed) candidates.push('botIntegration');
+    if (candidates.length === 0) return;
+
+    hasPickedRef.current = true;
+    setActiveBanner(candidates[Math.floor(Math.random() * candidates.length)]);
+  }, [
+    inboxAgentId,
+    isBotIntegrationBannerDismissed,
+    isKlavisEnabled,
+    isLobehubSkillEnabled,
+    isSkillBannerDismissed,
+    serverConfigInit,
+  ]);
+
+  const isActiveBannerDismissed =
+    (activeBanner === 'skill' && isSkillBannerDismissed) ||
+    (activeBanner === 'botIntegration' && isBotIntegrationBannerDismissed);
+  const visibleBanner = isActiveBannerDismissed ? null : activeBanner;
 
   // Get agent's model info for vision support check. Falls back to an empty
   // id while the agent id resolves; the selectors return DEFAULT_MODEL /
@@ -60,9 +107,10 @@ const InputArea = () => {
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
       <Flexbox
         ref={chatInputRef}
-        style={{ paddingBottom: showBotIntegrationBanner ? 32 : 0, position: 'relative' }}
+        style={{ paddingBottom: visibleBanner ? 32 : 0, position: 'relative' }}
       >
-        {showBotIntegrationBanner && <BotIntegrationBanner />}
+        {visibleBanner === 'skill' && <SkillInstallBanner />}
+        {visibleBanner === 'botIntegration' && <BotIntegrationBanner />}
         <DragUploadZone
           style={{ position: 'relative', zIndex: 1 }}
           onUploadFiles={handleUploadFiles}
