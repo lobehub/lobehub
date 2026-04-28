@@ -16,6 +16,8 @@ export interface TaskTemplate {
   icon?: IconType | LucideIcon;
   id: string;
   interests: string[];
+  /** Skills that enrich the brief but are not required to run it. */
+  optionalSkills?: TaskTemplateSkillRequirement[];
   /** Skill dependencies. The `source` field routes the connection flow. */
   requiresSkills?: TaskTemplateSkillRequirement[];
 }
@@ -98,6 +100,13 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'content-creation',
     cronPattern: '0 9 * * *',
     interests: ['writing', 'creator'],
+  },
+  {
+    id: 'content-calendar-weekly',
+    category: 'content-creation',
+    cronPattern: '0 20 * * 0',
+    interests: ['writing', 'creator'],
+    optionalSkills: [{ provider: 'notion', source: 'klavis' }],
   },
 
   // engineering
@@ -541,6 +550,13 @@ export const taskTemplates: TaskTemplate[] = [
     interests: ['parenting', 'finance-legal'],
     requiresSkills: [{ provider: 'google-sheets', source: 'klavis' }],
   },
+  {
+    id: 'family-task-schedule',
+    category: 'parenting',
+    cronPattern: '0 8 * * 1',
+    interests: ['parenting'],
+    optionalSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+  },
 
   // health
   {
@@ -601,5 +617,19 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'personal-life',
     cronPattern: '0 21 * * 0',
     interests: ['personal'],
+  },
+  {
+    id: 'morning-ritual',
+    category: 'personal-life',
+    cronPattern: '0 7 * * *',
+    interests: ['personal'],
+    optionalSkills: [{ provider: 'google-calendar', source: 'klavis' }],
+  },
+  {
+    id: 'bedtime-gratitude',
+    category: 'personal-life',
+    cronPattern: '0 22 * * *',
+    interests: ['personal'],
+    optionalSkills: [{ provider: 'notion', source: 'klavis' }],
   },
 ];

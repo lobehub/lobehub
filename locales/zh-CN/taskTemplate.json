@@ -6,6 +6,7 @@
   "action.creating": "创建中…",
   "action.dismiss.error": "操作失败，请稍后再试",
   "action.dismiss.tooltip": "不感兴趣",
+  "action.optionalConnect.button": "连接 {{provider}} 获取更丰富的内容",
   "ad-creative-inspiration.description": "每天扫一遍竞品和标杆品牌的新广告素材（Meta / Google Ads Library），挖能复刻的 10 条",
   "ad-creative-inspiration.prompt": "每天早上 10:00 扫一遍我的竞品和标杆品牌在 Meta 和 Google Ads Library 上的新素材，挑出 10 条值得复刻的，并说明每条值得的理由。",
 
@@ -18,6 +19,10 @@
   "arxiv-curated-daily.prompt": "每天早上 9:00 帮我从 arXiv 筛 5 篇和我研究方向相关的最新论文，每篇附一句话摘要，帮我判断哪些值得精读。",
 
   "arxiv-curated-daily.title": "ArXiv 精选",
+  "bedtime-gratitude.description": "每天 22 点引导你写下今天三件感谢的事 + 学到的一件事，沉淀进笔记",
+  "bedtime-gratitude.prompt": "每天晚上 22:00 引导我写下今天三件感谢的事和学到的一件事，回我一段温柔的小结。如果连接了 Notion，把这条感恩记录追加到我的日记页。",
+
+  "bedtime-gratitude.title": "睡前感恩",
   "brand-collab-weekly.description": "每周一扫一遍正在找创作者的品牌和公开招募，匹配你的领域和粉丝规模",
   "brand-collab-weekly.prompt": "每周一早上 10:00 扫一遍正在公开招募创作者的品牌，按我的赛道和粉丝量匹配，挑出 5 个值得申请的机会。",
 
@@ -58,6 +63,10 @@
   "competitor-update-daily.prompt": "每天早上 10:00 监测 3-5 个竞品产品的更新：更新日志、新功能、官网文案变化，标出值得深入研究的信号。",
 
   "competitor-update-daily.title": "竞品更新追踪",
+  "content-calendar-weekly.description": "每周日晚帮你规划下周 7 天的发布计划，对齐节日和热点节奏",
+  "content-calendar-weekly.prompt": "每周日晚 20:00 帮我规划下周 7 天的发布计划：把日程对齐近期节日和热点节奏，每个时段给一个建议选题。如果连接了 Notion，把这份计划同步成排期表。",
+
+  "content-calendar-weekly.title": "内容日历",
   "contract-expiry-weekly.description": "每周一检查下个月到期的合同（订阅 / 租赁 / 合作），提前续签或解约",
   "contract-expiry-weekly.prompt": "每周一早上 9:00 列出未来 30 天到期的合同（订阅、租赁、合作），标注哪些需要续签、哪些可以解约。",
 
@@ -114,6 +123,10 @@
   "family-finance-weekly.prompt": "每周日晚 20:00 基于 Google Sheets 流水回顾本周家庭支出结构、预算完成度，并预告下周的大额支出计划。",
 
   "family-finance-weekly.title": "家庭财务周报",
+  "family-task-schedule.description": "每周一早上分配本周家务、采购、接送、缴费，家庭群可同步",
+  "family-task-schedule.prompt": "每周一早上 8:00 帮我排好本周家庭任务计划：家务、采购、接送、缴费，给每项一个暂定责任人和时间段。如果连接了 Google Calendar，建议可直接落进日程的时间块。",
+
+  "family-task-schedule.title": "家庭任务排期",
   "figma-files-cleanup.description": "每周五下班前帮你盘点近期更新的 Figma 文件，标记该归档的、该同步开发的",
   "figma-files-cleanup.prompt": "每周五下午 17:00 盘点近期更新的 Figma 文件，标记哪些该归档、哪些需要同步给开发，还有哪些需要继续打磨。",
 
@@ -202,6 +215,10 @@
   "morning-brief.prompt": "每天早上 8:00 推送：今天日程、待回邮件数、TOP 3 待办、天气，整理成 1 分钟能读完的早报。",
 
   "morning-brief.title": "晨间早报",
+  "morning-ritual.description": "每天 7 点：天气 + 今日日程 + 一条金句 + 一个动一动建议，温柔开启一天",
+  "morning-ritual.prompt": "每天早上 7:00 给我一份温柔的晨间仪式：天气、今日日程、一条短金句、一个轻量运动建议。如果连接了 Google Calendar，把日程锚定在那里。",
+
+  "morning-ritual.title": "晨间仪式",
   "must-read-papers-weekly.description": "每周日晚帮你挑本周被引最多、讨论最热的 3 篇论文，做成精读清单",
   "must-read-papers-weekly.prompt": "每周日晚 20:00 帮我挑本周我研究方向被引最多或讨论最热的 3 篇论文，整理成周末可读完的精读清单。",
 

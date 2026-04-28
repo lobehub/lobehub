@@ -28,7 +28,7 @@ const VALID_INTEREST_KEYS = new Set([
 
 describe('taskTemplates', () => {
   it('has the expected number of templates', () => {
-    expect(taskTemplates).toHaveLength(80);
+    expect(taskTemplates).toHaveLength(84);
   });
 
   it('has unique ids', () => {
@@ -65,6 +65,32 @@ describe('taskTemplates', () => {
     const categories = new Set(taskTemplates.map((t) => t.category));
     for (const fallback of TASK_TEMPLATE_FALLBACK_CATEGORIES) {
       expect(categories.has(fallback), `fallback category ${fallback}`).toBe(true);
+    }
+  });
+
+  it('every optionalSkills entry uses a valid source and non-empty provider', () => {
+    for (const t of taskTemplates) {
+      if (!t.optionalSkills) continue;
+      for (const spec of t.optionalSkills) {
+        expect(['klavis', 'lobehub'], `template ${t.id} optional source`).toContain(spec.source);
+        expect(
+          spec.provider.length,
+          `template ${t.id} optional provider "${spec.provider}"`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('optionalSkills do not duplicate requiresSkills', () => {
+    for (const t of taskTemplates) {
+      if (!t.optionalSkills || !t.requiresSkills) continue;
+      const reqKeys = new Set(t.requiresSkills.map((s) => `${s.source}:${s.provider}`));
+      for (const spec of t.optionalSkills) {
+        expect(
+          reqKeys.has(`${spec.source}:${spec.provider}`),
+          `template ${t.id} duplicate skill ${spec.source}:${spec.provider}`,
+        ).toBe(false);
+      }
     }
   });
 });

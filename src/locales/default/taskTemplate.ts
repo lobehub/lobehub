@@ -6,6 +6,7 @@ export default {
   'action.creating': 'Creating...',
   'action.dismiss.error': 'Failed to dismiss. Please try again.',
   'action.dismiss.tooltip': 'Not interested',
+  'action.optionalConnect.button': 'Connect {{provider}} for richer results',
 
   'schedule.daily': 'Every day at {{time}}',
   'schedule.weekly': 'Every {{weekday}} at {{time}}',
@@ -54,6 +55,12 @@ export default {
     'Tell me 3-5 creators to watch — each morning I track what they shipped and what worked.',
   'competitor-creator-tracking.prompt':
     'Every morning at 09:00, track the 3-5 creators I follow as competitors: what they posted, how it performed, and ideas I could adapt.',
+
+  'content-calendar-weekly.title': 'Weekly content calendar',
+  'content-calendar-weekly.description':
+    'Every Sunday night, plan next week’s 7-day publishing schedule aligned with holidays and trending moments.',
+  'content-calendar-weekly.prompt':
+    'Every Sunday at 20:00, plan next week’s 7-day publishing schedule for me: align slots with upcoming holidays and trending moments, and suggest one angle per slot. If Notion is connected, draft the schedule there.',
 
   // ===== engineering =====
   'oss-intel-daily.title': 'Open-source intel daily',
@@ -452,6 +459,12 @@ export default {
   'family-finance-weekly.prompt':
     'Every Sunday at 20:00, review this week’s family spending: category breakdown from my Google Sheets log, budget completion, and large planned expenses next week.',
 
+  'family-task-schedule.title': 'Family task schedule',
+  'family-task-schedule.description':
+    'Every Monday morning, divvy up this week’s chores, errands, school runs, and bills across the family.',
+  'family-task-schedule.prompt':
+    'Every Monday at 08:00, draft this week’s family task plan: chores, grocery runs, school pickups, bill payments. Assign tentative owners and time slots. If Google Calendar is connected, propose blocks I can drop in.',
+
   // ===== health =====
   'diet-log-companion.title': 'Diet log companion',
   'diet-log-companion.description':
@@ -508,4 +521,16 @@ export default {
     'Every Sunday night, walk through 5 questions: best moment, frustrations, top 3 for next week.',
   'sunday-reflection.prompt':
     'Every Sunday at 21:00, walk me through 5 reflection prompts: most fulfilling thing this week, most frustrating, top 3 priorities for next week, what I learned, what I should drop.',
+
+  'morning-ritual.title': 'Morning ritual',
+  'morning-ritual.description':
+    'Every day at 7: weather, today’s schedule, a thought-of-the-day, and a movement nudge — a gentle start.',
+  'morning-ritual.prompt':
+    'Every morning at 07:00, send me a gentle morning ritual: weather, today’s schedule, one short thought-of-the-day, and a small movement suggestion. If Google Calendar is connected, anchor the schedule there.',
+
+  'bedtime-gratitude.title': 'Bedtime gratitude',
+  'bedtime-gratitude.description':
+    'Every night at 22, prompt 3 things you’re grateful for and one thing you learned today.',
+  'bedtime-gratitude.prompt':
+    'Every evening at 22:00, ask me to share 3 things I’m grateful for today and one thing I learned. Return a gentle one-paragraph reflection. If Notion is connected, append the entry to my journal page.',
 };
