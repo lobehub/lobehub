@@ -1,0 +1,27 @@
+{
+  "name": "@lobechat/market",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run --silent='passed-only'",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.4",
+    "@lobechat/database": "workspace:*",
+    "@lobehub/market-sdk": "0.32.2",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.11.1",
+    "pg": "^8.17.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.16.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

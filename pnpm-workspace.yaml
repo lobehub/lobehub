@@ -3,6 +3,7 @@ packages:
   - .
   - e2e
   - apps/desktop/src/main
+  - apps/market
 
 onlyBuiltDependencies:
   - '@vercel/speed-insights'

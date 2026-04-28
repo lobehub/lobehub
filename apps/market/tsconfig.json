@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/database/*": ["../../packages/database/src/*"]
+    },
+    "strict": true,
+    "target": "ESNext",
+    "types": ["node", "vitest/globals"]
+  },
+  "extends": "../../tsconfig.json",
+  "include": ["src/**/*.ts"]
+}
