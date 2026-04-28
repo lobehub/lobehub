@@ -210,6 +210,7 @@
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",
     "@lobechat/builtin-tool-agent-management": "workspace:*",
+    "@lobechat/builtin-tool-agent-marketplace": "workspace:*",
     "@lobechat/builtin-tool-brief": "workspace:*",
     "@lobechat/builtin-tool-calculator": "workspace:*",
     "@lobechat/builtin-tool-claude-code": "workspace:*",

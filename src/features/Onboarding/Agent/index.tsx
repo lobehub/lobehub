@@ -1,6 +1,7 @@
 'use client';
 
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { setAgentTemplatesFetcher } from '@lobechat/builtin-tool-agent-marketplace';
 import { SESSION_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
@@ -13,6 +14,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
 import OnboardingContainer from '@/routes/onboarding/_layout';
+import { fetchOnboardingAgentTemplates } from '@/services/agentMarketplace';
 import { topicService } from '@/services/topic';
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
@@ -59,6 +61,10 @@ const AgentOnboardingPage = memo(() => {
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
 
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding);
+
+  useEffect(() => {
+    setAgentTemplatesFetcher(fetchOnboardingAgentTemplates);
+  }, []);
 
   const { data: historyData, mutate: mutateHistoryTopics } = useClientDataSWR(
     isDev && onboardingAgentId ? ['agent-onboarding-history-topics', onboardingAgentId] : null,

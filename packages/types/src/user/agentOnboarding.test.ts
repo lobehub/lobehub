@@ -20,6 +20,34 @@ describe('SaveUserQuestionInputSchema', () => {
   it('rejects the old node-scoped payload', () => {
     expect(() => SaveUserQuestionInputSchema.parse({ updates: [] })).toThrow();
   });
+
+  it('treats empty and whitespace strings as missing', () => {
+    const parsed = SaveUserQuestionInputSchema.parse({
+      agentEmoji: '',
+      agentName: '   ',
+      fullName: 'Ada Lovelace',
+      responseLanguage: '',
+    });
+
+    expect(parsed).toEqual({ fullName: 'Ada Lovelace' });
+  });
+
+  it('drops empty interests entries and an all-empty array', () => {
+    const partial = SaveUserQuestionInputSchema.parse({
+      interests: ['AI tooling', '', '   '],
+    });
+    expect(partial).toEqual({ interests: ['AI tooling'] });
+
+    const allEmpty = SaveUserQuestionInputSchema.parse({
+      fullName: 'Ada',
+      interests: ['', '   '],
+    });
+    expect(allEmpty).toEqual({ fullName: 'Ada' });
+  });
+
+  it('accepts a fully empty object as a no-op', () => {
+    expect(SaveUserQuestionInputSchema.parse({})).toEqual({});
+  });
 });
 
 describe('UserAgentOnboardingContextSchema', () => {
