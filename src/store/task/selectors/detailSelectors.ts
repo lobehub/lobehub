@@ -85,7 +85,10 @@ const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
 
 const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
 
+const activePageDrawerPageId = (s: TaskStoreState) => s.activePageDrawerPageId;
+
 export const taskDetailSelectors = {
+  activePageDrawerPageId,
   activeTaskAgentId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
