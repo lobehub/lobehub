@@ -16,6 +16,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
+import InfoTooltip from '@/components/InfoTooltip';
 import type {
   FieldSchema,
   SerializedPlatformDefinition,
@@ -84,14 +85,23 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
   );
   if (field.visibleWhen && watchedValue !== field.visibleWhen.value) return null;
 
-  const label = field.devOnly ? (
-    <Flexbox horizontal align="center" gap={8}>
-      {t(field.label)}
-      <Tag color="gold">Dev Only</Tag>
-    </Flexbox>
-  ) : (
-    t(field.label)
-  );
+  // Compose the label with optional adornments: a `?` tooltip carrying the
+  // long-form "how to find this value" guidance, and a Dev Only tag when
+  // the field is dev-gated. Plain string when neither is needed so antd
+  // can still treat the label as a simple text node.
+  const tooltipNode = field.tooltip ? (
+    <InfoTooltip size={'small'} title={t(field.tooltip)} />
+  ) : null;
+  const label =
+    tooltipNode || field.devOnly ? (
+      <Flexbox horizontal align="center" gap={8}>
+        {t(field.label)}
+        {tooltipNode}
+        {field.devOnly && <Tag color="gold">Dev Only</Tag>}
+      </Flexbox>
+    ) : (
+      t(field.label)
+    );
 
   // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
   // be expressed as a single control inside a name-bound FormItem.
