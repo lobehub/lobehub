@@ -1,0 +1,78 @@
+import type { AIChatModelCard } from '../types/aiModel';
+
+const toweraiChatModels: AIChatModelCard[] = [
+  {
+    abilities: { functionCall: true },
+    contextWindowTokens: 128_000,
+    description: 'GPT-5.4 via Tower AI proxy',
+    displayName: 'GPT-5.4',
+    enabled: true,
+    id: 'gpt-5.4',
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true },
+    contextWindowTokens: 128_000,
+    description: 'GPT-5.2 via Tower AI proxy',
+    displayName: 'GPT-5.2',
+    enabled: true,
+    id: 'gpt-5.2',
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true },
+    contextWindowTokens: 128_000,
+    description: 'GPT-4o via Tower AI proxy',
+    displayName: 'GPT-4o',
+    enabled: true,
+    id: 'gpt-4o',
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, vision: true },
+    contextWindowTokens: 200_000,
+    description: 'Claude Sonnet 4.6 via Tower AI proxy',
+    displayName: 'Claude Sonnet 4.6',
+    enabled: true,
+    id: 'claude-sonnet-4-6',
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, vision: true },
+    contextWindowTokens: 200_000,
+    description: 'Claude Sonnet 4.5 via Tower AI proxy',
+    displayName: 'Claude Sonnet 4.5',
+    enabled: true,
+    id: 'claude-sonnet-4-5-20250929',
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true, vision: true },
+    contextWindowTokens: 1_000_000,
+    description: 'Gemini 3.1 Pro Preview via Tower AI proxy',
+    displayName: 'Gemini 3.1 Pro Preview',
+    enabled: true,
+    id: 'gemini-3.1-pro-preview',
+    type: 'chat',
+  },
+  {
+    abilities: { vision: true },
+    contextWindowTokens: 1_000_000,
+    description: 'Gemini 3.0 Flash via Tower AI proxy',
+    displayName: 'Gemini 3.0 Flash',
+    enabled: true,
+    id: 'gemini-3-flash-preview',
+    type: 'chat',
+  },
+  {
+    abilities: { functionCall: true },
+    contextWindowTokens: 64_000,
+    description: 'DeepSeek V3 via Tower AI proxy',
+    displayName: 'DeepSeek V3',
+    enabled: true,
+    id: 'deepseek-v3-2',
+    type: 'chat',
+  },
+];
+
+export default toweraiChatModels;

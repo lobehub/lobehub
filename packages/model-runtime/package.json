@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./providers/towerai": "./src/providers/towerai/index.ts",
     "./vertexai": "./src/providers/vertexai/index.ts"
   },
   "scripts": {

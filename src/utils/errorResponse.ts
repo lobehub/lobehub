@@ -15,6 +15,9 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
   // InvalidAccessCode / InvalidAzureAPIKey / InvalidOpenAIAPIKey / InvalidZhipuAPIKey ....
   if (errorType.toString().includes('Invalid')) return 401;
 
+  // TowerAIBizError / provider-specific biz errors not in the AgentRuntimeErrorType enum
+  if (errorType.toString().includes('BizError')) return 471;
+
   switch (errorType) {
     case ChatErrorType.SubscriptionPlanLimit:
     case ChatErrorType.FreePlanLimit:

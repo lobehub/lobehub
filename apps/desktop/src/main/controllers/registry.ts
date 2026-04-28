@@ -20,6 +20,7 @@ import ShellCommandCtr from './ShellCommandCtr';
 import ShortcutController from './ShortcutCtr';
 import SystemController from './SystemCtr';
 import ToolDetectorCtr from './ToolDetectorCtr';
+import TowerAICtr from './TowerAICtr';
 import TrayMenuCtr from './TrayMenuCtr';
 import UpdaterCtr from './UpdaterCtr';
 
@@ -44,6 +45,7 @@ export const controllerIpcConstructors = [
   ShortcutController,
   SystemController,
   ToolDetectorCtr,
+  TowerAICtr,
   TrayMenuCtr,
   UpdaterCtr,
 ] as const satisfies readonly IpcServiceConstructor[];

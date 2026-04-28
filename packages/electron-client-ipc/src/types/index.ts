@@ -12,6 +12,7 @@ export * from './shortcut';
 export * from './system';
 export * from './toolDetector';
 export * from './topicPopup';
+export * from './towerai';
 export * from './tray';
 export * from './update';
 export * from './window';
