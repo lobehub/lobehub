@@ -75,7 +75,7 @@ const buildPlannedActions = (signal: BaseSignal): BaseAction[] => {
           signalType: signal.signalType,
         },
         source: signal.source,
-        timestamp: Date.now(),
+        timestamp: signal.timestamp,
       },
     ];
   }
