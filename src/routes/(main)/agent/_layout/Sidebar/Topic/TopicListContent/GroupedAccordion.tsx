@@ -16,6 +16,8 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 import { type GroupedTopic } from '@/types/topic';
 
+import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
+
 export interface GroupItemComponentProps {
   activeThreadId?: string;
   activeTopicId?: string;
@@ -30,7 +32,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
-  const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
+  const { topicGroupMode } = useAgentTopicGroupMode();
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopics(s),

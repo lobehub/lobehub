@@ -15,6 +15,20 @@ const useLocationMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
 const useSearchParamsMock = vi.hoisted(() => vi.fn());
 
+vi.hoisted(() => {
+  const storage = {
+    clear: vi.fn(),
+    getItem: vi.fn(() => null),
+    removeItem: vi.fn(),
+    setItem: vi.fn(),
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: storage,
+  });
+});
+
 vi.mock('react-router-dom', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const actual = (await vi.importActual('react-router-dom')) as typeof import('react-router-dom');
@@ -47,7 +61,7 @@ describe('ChatHydration', () => {
     );
   });
 
-  it('hydrates legacy topic query params into the store and rewrites them to the topic path', async () => {
+  it('ignores topic query params and only hydrates thread from search params', async () => {
     useParamsMock.mockReturnValue({ aid: 'agt_test' });
     useLocationMock.mockReturnValue({
       hash: '#msg_1',
@@ -62,16 +76,13 @@ describe('ChatHydration', () => {
     render(<ChatHydration />);
 
     await waitFor(() => {
-      expect(useChatStore.getState().activeTopicId).toBe('tpc_123');
+      expect(useChatStore.getState().activeTopicId).toBeNull();
       expect(useChatStore.getState().activeThreadId).toBe('thd_456');
-      expect(navigateMock).toHaveBeenCalledWith(
-        '/agent/agt_test/tpc_123?thread=thd_456&mode=single#msg_1',
-        { replace: true },
-      );
+      expect(navigateMock).not.toHaveBeenCalled();
     });
   });
 
-  it('removes duplicate legacy topic query params when the path already carries topicId', async () => {
+  it('hydrates topic from the path even when a stale topic query param exists', async () => {
     useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_123' });
     useLocationMock.mockReturnValue({
       hash: '',
@@ -88,9 +99,33 @@ describe('ChatHydration', () => {
     await waitFor(() => {
       expect(useChatStore.getState().activeTopicId).toBe('tpc_123');
       expect(useChatStore.getState().activeThreadId).toBe('thd_456');
-      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_123?thread=thd_456', {
-        replace: true,
-      });
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it('clears stale topic and thread state when the route has no topic or thread', async () => {
+    useChatStore.setState(
+      {
+        activeThreadId: 'thd_previous',
+        activeTopicId: 'tpc_previous',
+      },
+      false,
+    );
+
+    useParamsMock.mockReturnValue({ aid: 'agt_next' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/agent/agt_next',
+      search: '',
+    });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
+
+    render(<ChatHydration />);
+
+    await waitFor(() => {
+      expect(useChatStore.getState().activeTopicId).toBeNull();
+      expect(useChatStore.getState().activeThreadId).toBeNull();
+      expect(navigateMock).not.toHaveBeenCalled();
     });
   });
 

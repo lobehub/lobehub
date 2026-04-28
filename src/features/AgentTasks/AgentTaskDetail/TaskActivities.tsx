@@ -8,7 +8,6 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
-import BriefCard from '@/features/DailyBrief/BriefCard';
 import type { BriefItem } from '@/features/DailyBrief/types';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
@@ -16,6 +15,7 @@ import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selecto
 import { styles } from '../shared/style';
 import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
+import TaskBriefCard from './TaskBriefCard';
 import TopicCard from './TopicCard';
 
 const ROW_TYPE_ICON = {
@@ -164,9 +164,8 @@ const TaskActivities = memo(() => {
             items.map(({ activity, brief, key }) => {
               if (brief) {
                 return (
-                  <BriefCard
+                  <TaskBriefCard
                     brief={brief}
-                    enableNavigation={false}
                     key={key}
                     onAfterAddComment={refreshActiveTask}
                     onAfterResolve={refreshActiveTask}

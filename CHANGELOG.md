@@ -2,6 +2,31 @@
 
 # Changelog
 
+### [Version 2.1.52](https://github.com/lobehub/lobe-chat/compare/v2.1.51...v2.1.52)
+
+<sup>Released on **2026-04-20**</sup>
+
+#### 👷 Build System
+
+- **database**: add topic status and tasks automation mode.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **database**: add topic status and tasks automation mode, closes [#13994](https://github.com/lobehub/lobe-chat/issues/13994) ([3bcd581](https://github.com/lobehub/lobe-chat/commit/3bcd581))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.1.51](https://github.com/lobehub/lobe-chat/compare/v0.0.0-nightly.pr13850.8503...v2.1.51)
 
 <sup>Released on **2026-04-16**</sup>

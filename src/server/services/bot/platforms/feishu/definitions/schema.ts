@@ -10,7 +10,7 @@ import {
   displayToolCallsField,
   makeDmPolicyField,
   makeGroupPolicyFields,
-  userIdField,
+  makeUserIdField,
 } from '../../const';
 import type { FieldSchema } from '../../types';
 import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
@@ -55,11 +55,16 @@ export const sharedSchema: FieldSchema[] = [
     key: 'settings',
     label: 'channel.settings',
     properties: [
+      makeUserIdField('feishu'),
       {
         key: 'connectionMode',
         default: DEFAULT_FEISHU_CONNECTION_MODE,
         description: 'channel.connectionModeHint',
         enum: ['websocket', 'webhook'],
+        enumDescriptions: [
+          'channel.connectionModeWebSocketHint',
+          'channel.connectionModeWebhookHint',
+        ],
         enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
         label: 'channel.connectionMode',
         type: 'string',
@@ -78,6 +83,7 @@ export const sharedSchema: FieldSchema[] = [
         default: 'queue',
         description: 'channel.concurrencyHint',
         enum: ['queue', 'debounce'],
+        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
         enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
         label: 'channel.concurrency',
         type: 'string',
@@ -109,7 +115,6 @@ export const sharedSchema: FieldSchema[] = [
         minimum: MIN_BOT_HISTORY_LIMIT,
         type: 'number',
       },
-      userIdField,
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,

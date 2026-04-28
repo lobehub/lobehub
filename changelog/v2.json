@@ -1,5 +1,10 @@
 [
   {
+    "children": {},
+    "date": "2026-04-20",
+    "version": "2.1.52"
+  },
+  {
     "children": {
       "fixes": ["fix minify cli.", "recent delete."]
     },

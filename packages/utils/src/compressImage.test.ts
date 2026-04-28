@@ -9,10 +9,12 @@ import compressImage, {
 
 const getContextSpy = vi.spyOn(global.HTMLCanvasElement.prototype, 'getContext');
 const drawImageSpy = vi.spyOn(CanvasRenderingContext2D.prototype, 'drawImage');
+const toDataURLSpy = vi.spyOn(global.HTMLCanvasElement.prototype, 'toDataURL');
 
 beforeEach(() => {
   getContextSpy.mockClear();
   drawImageSpy.mockClear();
+  toDataURLSpy.mockClear();
 });
 
 describe('compressImage', () => {
@@ -56,6 +58,36 @@ describe('compressImage', () => {
     const r = compressImage({ img, type: 'image/jpeg' });
 
     expect(r).toMatch(/^data:image\/jpeg;base64,/);
+  });
+
+  it('should encode JPEG inputs as JPEG with 0.85 quality (preserve format, lossy)', () => {
+    const img = document.createElement('img');
+    img.width = 100;
+    img.height = 100;
+
+    compressImage({ img, type: 'image/jpeg' });
+
+    expect(toDataURLSpy).toHaveBeenCalledWith('image/jpeg', 0.85);
+  });
+
+  it('should encode non-JPEG inputs as PNG without a quality argument (lossless)', () => {
+    const img = document.createElement('img');
+    img.width = 100;
+    img.height = 100;
+
+    compressImage({ img, type: 'image/png' });
+
+    expect(toDataURLSpy).toHaveBeenCalledWith('image/png');
+  });
+
+  it('should default to PNG when no type is provided', () => {
+    const img = document.createElement('img');
+    img.width = 100;
+    img.height = 100;
+
+    compressImage({ img });
+
+    expect(toDataURLSpy).toHaveBeenCalledWith('image/png');
   });
 
   it('should support custom maxSize', () => {
@@ -136,6 +168,52 @@ describe('compressImageFile', () => {
     expect(result).not.toBe(file);
     expect(result.type).toBe('image/png');
     expect(result.name).toBe('large.png');
+    global.Image = originalImage;
+  });
+
+  it('should preserve JPEG type when compressing large JPEG inputs (no PNG re-encoding)', async () => {
+    const file = createMockFile('photo.jpg', 'image/jpeg', 1000);
+
+    const originalImage = global.Image;
+    global.Image = class MockImage extends originalImage {
+      constructor() {
+        super();
+        Object.defineProperty(this, 'width', { value: 3000, writable: false });
+        Object.defineProperty(this, 'height', { value: 2000, writable: false });
+        setTimeout(() => this.dispatchEvent(new Event('load')), 0);
+      }
+    } as any;
+
+    const result = await compressImageFile(file);
+
+    expect(result).not.toBe(file);
+    // Output File MIME type must match the source format — previously this
+    // was hardcoded to 'image/png', which inflated photographic JPEGs.
+    expect(result.type).toBe('image/jpeg');
+    expect(result.name).toBe('photo.jpg');
+    expect(toDataURLSpy).toHaveBeenCalledWith('image/jpeg', 0.85);
+    global.Image = originalImage;
+  });
+
+  it('should preserve WebP inputs as PNG (existing fallback behaviour)', async () => {
+    const file = createMockFile('photo.webp', 'image/webp', 1000);
+
+    const originalImage = global.Image;
+    global.Image = class MockImage extends originalImage {
+      constructor() {
+        super();
+        Object.defineProperty(this, 'width', { value: 3000, writable: false });
+        Object.defineProperty(this, 'height', { value: 2000, writable: false });
+        setTimeout(() => this.dispatchEvent(new Event('load')), 0);
+      }
+    } as any;
+
+    const result = await compressImageFile(file);
+
+    expect(result).not.toBe(file);
+    // WebP isn't supported as a canvas output target, so we still fall back
+    // to lossless PNG. Documents the deliberate choice.
+    expect(result.type).toBe('image/png');
     global.Image = originalImage;
   });
 

@@ -10,6 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
 
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
@@ -28,12 +29,9 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
-import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-  AsyncTaskType,
-} from '@/types/asyncTask';
+import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
+
+import { createVideoTaskSubmitError } from './error';
 
 const log = debug('lobe-video:lambda');
 
@@ -283,11 +281,13 @@ export const videoRouter = router({
     } catch (e) {
       console.error('Failed to submit video generation task:', e);
 
+      const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+        error: e,
+        provider,
+        userId,
+      });
       await asyncTaskModel.update(asyncTaskId, {
-        error: new AsyncTaskError(
-          AsyncTaskErrorType.TaskTriggerError,
-          'Failed to submit video task: ' + (e instanceof Error ? e.message : 'Unknown error'),
-        ),
+        error: createVideoTaskSubmitError(e, providerContentPolicyMessage),
         status: AsyncTaskStatus.Error,
       });
 

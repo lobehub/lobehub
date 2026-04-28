@@ -209,10 +209,19 @@ class TelegramWebhookClient implements PlatformClient {
   }
 
   async registerBotCommands(
-    commands: Array<{ command: string; description: string }>,
+    commands: Array<{
+      command: string;
+      description: string;
+      // Telegram setMyCommands has no options schema (users type free-form
+      // text after the command); the field is accepted for interface
+      // parity with platforms that need it (Discord) and ignored here.
+      options?: Array<{ description: string; name: string; required?: boolean }>;
+    }>,
   ): Promise<void> {
     const telegram = new TelegramApi(this.config.credentials.botToken);
-    await telegram.setMyCommands(commands);
+    await telegram.setMyCommands(
+      commands.map((c) => ({ command: c.command, description: c.description })),
+    );
     log('TelegramBot appId=%s registered %d commands', this.applicationId, commands.length);
   }
 

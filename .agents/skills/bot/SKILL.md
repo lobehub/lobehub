@@ -166,7 +166,7 @@ Each platform exposes a `PlatformDefinition` registered in `platforms/index.ts`:
 }
 ```
 
-`schema` drives both server validation (`mergeWithDefaults`, `extractDefaults`) **and** the auto-generated UI form. Top-level keys `applicationId` / `credentials` / `settings` map to DB columns. Common settings fields live in `platforms/const.ts` (`displayToolCallsField`, `serverIdField`, `userIdField`).
+`schema` drives both server validation (`mergeWithDefaults`, `extractDefaults`) **and** the auto-generated UI form. Top-level keys `applicationId` / `credentials` / `settings` map to DB columns. Common settings fields live in `platforms/const.ts` (`displayToolCallsField`, `makeServerIdField(platform?)`, `makeUserIdField(platform?)`). The `serverId` / `userId` factories take a platform identifier so the field's hint can render platform-specific "how to find this ID" guidance (Discord Developer Mode, Telegram @userinfobot, etc.); pass no argument to fall back to generic copy.
 
 Each platform implements `PlatformClient` (see `platforms/types.ts`):
 

@@ -57,6 +57,11 @@ interface PartitionedBlocks {
   segments: GroupRenderSegment[];
 }
 
+interface LeadingSentenceSplit {
+  lead: string;
+  remainder: string;
+}
+
 const ANSWER_DOM_ID_SUFFIX = '__answer';
 const WORKFLOW_DOM_ID_SUFFIX = '__workflow';
 
@@ -80,6 +85,55 @@ const hasSubstantiveContent = (block: AssistantContentBlock): boolean => {
 
 const hasReasoningContent = (block: AssistantContentBlock): boolean => {
   return !!block.reasoning?.content?.trim();
+};
+
+const isSentenceBoundary = (content: string, index: number): boolean => {
+  const char = content[index];
+  if (!char) return false;
+  if (char === '。' || char === '！' || char === '？' || char === '!' || char === '?') return true;
+  if (char !== '.') return false;
+
+  const prev = content[index - 1] ?? '';
+  const next = content[index + 1] ?? '';
+  if (/[a-z\d]/i.test(prev) && /[a-z\d]/i.test(next)) return false;
+  if (/\d/.test(prev) && /\d/.test(next)) return false;
+
+  return true;
+};
+
+const extractLeadingSentenceSplit = (block: AssistantContentBlock): LeadingSentenceSplit | null => {
+  const content = block.content ?? '';
+  const trimmed = content.trim();
+
+  if (!trimmed || trimmed === LOADING_FLAT) return null;
+
+  let splitIndex = -1;
+
+  for (let i = 0; i < content.length; i++) {
+    if (!isSentenceBoundary(content, i)) continue;
+    splitIndex = i + 1;
+    break;
+  }
+
+  if (splitIndex === -1) {
+    const paragraphBreak = content.search(/\n\s*\n/);
+    if (paragraphBreak >= 0) splitIndex = paragraphBreak;
+  }
+
+  if (splitIndex === -1) {
+    const firstLineBreak = content.indexOf('\n');
+    if (firstLineBreak >= 0) splitIndex = firstLineBreak;
+  }
+
+  if (splitIndex === -1) return null;
+
+  const lead = content.slice(0, splitIndex).trim();
+  const remainder = content.slice(splitIndex).trimStart();
+
+  if (!lead) return null;
+  if (!remainder && !hasTools(block) && !hasReasoningContent(block) && !block.error) return null;
+
+  return { lead, remainder };
 };
 
 const isTrailingReasoningCandidate = (block: AssistantContentBlock): boolean => {
@@ -140,8 +194,37 @@ const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean =
   );
 };
 
-const appendWorkflowRangeBlock = (segments: GroupRenderSegment[], block: AssistantContentBlock) => {
+const appendWorkflowRangeBlock = (
+  segments: GroupRenderSegment[],
+  block: AssistantContentBlock,
+  allowLeadingSentencePromotion = false,
+) => {
   if (!shouldPromoteMixedBlockContent(block)) {
+    const leadingSentenceSplit =
+      allowLeadingSentencePromotion && segments.length === 0 && hasTools(block)
+        ? extractLeadingSentenceSplit(block)
+        : null;
+
+    if (leadingSentenceSplit) {
+      appendAnswerBlock(
+        segments,
+        createAnswerRenderBlock(block, {
+          content: leadingSentenceSplit.lead,
+          error: undefined,
+          imageList: undefined,
+          reasoning: undefined,
+          tools: undefined,
+        }),
+      );
+      appendWorkflowBlock(
+        segments,
+        createWorkflowRenderBlock(block, {
+          content: leadingSentenceSplit.remainder,
+        }),
+      );
+      return;
+    }
+
     appendWorkflowBlock(segments, block);
     return;
   }
@@ -230,6 +313,8 @@ const partitionBlocks = (
     }
   }
 
+  const totalToolCount = blocks.reduce((sum, block) => sum + (block.tools?.length ?? 0), 0);
+
   for (const block of blocks.slice(0, firstToolIndex)) {
     appendAnswerBlock(segments, block);
   }
@@ -248,7 +333,7 @@ const partitionBlocks = (
     }
 
     for (const block of blocks.slice(firstToolIndex, workingEndExclusive)) {
-      appendWorkflowRangeBlock(segments, block);
+      appendWorkflowRangeBlock(segments, block, totalToolCount > 1);
     }
 
     for (const block of blocks.slice(workingEndExclusive)) {
@@ -262,7 +347,7 @@ const partitionBlocks = (
   }
 
   for (const block of blocks.slice(firstToolIndex, lastToolIndex + 1)) {
-    appendWorkflowRangeBlock(segments, block);
+    appendWorkflowRangeBlock(segments, block, totalToolCount > 1);
   }
 
   appendPostToolBlocks(segments, blocks.slice(lastToolIndex + 1));
@@ -280,6 +365,17 @@ const withMarkdownStreamingState = (
   ...block,
   disableMarkdownStreaming: block.disableMarkdownStreaming || block.id === firstBlockId,
 });
+
+const shouldInlineWorkflowSegment = (blocks: RenderableAssistantContentBlock[]): boolean => {
+  let toolCount = 0;
+
+  for (const block of blocks) {
+    toolCount += block.tools?.length ?? 0;
+    if (toolCount > 1) return false;
+  }
+
+  return toolCount === 1;
+};
 
 const Group = memo<GroupChildrenProps>(
   ({
@@ -321,6 +417,24 @@ const Group = memo<GroupChildrenProps>(
           {segments.map((segment, index) => {
             if (segment.kind === 'workflow') {
               if (segment.blocks.length === 0) return null;
+
+              if (shouldInlineWorkflowSegment(segment.blocks)) {
+                return segment.blocks.map((block, blockIndex) => {
+                  const item = withMarkdownStreamingState(block, firstBlockId);
+                  if (!isGenerating && isEmptyBlock(item)) return null;
+
+                  return (
+                    <GroupItem
+                      {...item}
+                      assistantId={id}
+                      contentId={contentId}
+                      disableEditing={disableEditing}
+                      key={item.renderKey ?? `${id}.workflow-inline.${index}.${blockIndex}`}
+                      messageIndex={messageIndex}
+                    />
+                  );
+                });
+              }
 
               return (
                 <WorkflowCollapse

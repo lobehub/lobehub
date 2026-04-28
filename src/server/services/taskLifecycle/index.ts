@@ -101,12 +101,22 @@ export class TaskLifecycleService {
 
       if (reviewTerminated) return;
 
-      // 4. Default: pause for user review.
-      //    A 'result' brief from the agent is a *proposal* of completion — the user
-      //    must explicitly approve via the brief action to transition to 'completed'.
-      //    Auto-complete only happens via the Judge path above.
-      if (currentTask && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
-        await this.taskModel.updateStatus(taskId, 'paused', { error: null });
+      // 4. Default post-tick transition.
+      //    - Automation tasks (heartbeat / schedule) loop running ↔ scheduled, so
+      //      a successful tick parks the task at 'scheduled' to wait for the next
+      //      tick. They never auto-pause on success — only `reason === 'error'`
+      //      below puts them in 'paused' for human attention.
+      //    - Non-automation tasks fall back to the legacy "pause for user review"
+      //      behavior: a 'result' brief from the agent is a *proposal* of
+      //      completion, and the user must explicitly approve via the brief action
+      //      to transition to 'completed'. Auto-complete only happens via the
+      //      Judge path above.
+      if (currentTask) {
+        if (currentTask.automationMode) {
+          await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
+        } else if (this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
+          await this.taskModel.updateStatus(taskId, 'paused', { error: null });
+        }
       }
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
@@ -354,13 +364,9 @@ export class TaskLifecycleService {
 
       // Max iterations reached — surface the (failed) result for human accept/retry.
       // Type is `result` so the user's `approve` action is treated as a terminal
-      // accept signal (force-pass) by BriefService.resolve.
+      // accept signal (force-pass) by BriefService.resolve. Result briefs render
+      // a fixed single-button UI, so no custom actions are persisted.
       await this.briefModel.create({
-        actions: [
-          { key: 'retry', label: '🔄 重试', type: 'resolve' as const },
-          { key: 'approve', label: '✅ 强制通过', type: 'resolve' as const },
-          { key: 'feedback', label: '💬 修改意见', type: 'comment' as const },
-        ],
         priority: 'urgent',
         summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
         taskId,

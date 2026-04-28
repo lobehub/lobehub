@@ -61,7 +61,7 @@ export class TaskService {
     const [allDescendants, dependencies, topics, briefs, comments, workspace] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),
       this.taskModel.getDependencies(task.id),
-      this.taskTopicModel.findWithHandoff(task.id).catch(() => []),
+      this.taskTopicModel.findWithHandoff(task.id, 100).catch(() => []),
       this.briefModel.findByTaskId(task.id).catch(() => []),
       this.taskModel.getComments(task.id).catch(() => []),
       this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
@@ -117,11 +117,16 @@ export class TaskService {
                 },
               }
             : {}),
+          automationMode: s.automationMode,
           blockedBy: depMap.get(s.id),
           children: buildSubtaskTree(s.id),
+          ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
+          ...(s.schedulePattern || s.scheduleTimezone
+            ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
+            : {}),
           status: s.status,
         };
       });
@@ -210,6 +215,7 @@ export class TaskService {
         return {
           author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
           id: t.topicId ?? undefined,
+          runningOperation: t.metadata?.runningOperation ?? null,
           seq: t.seq,
           status: t.status,
           summary: handoff?.summary,
@@ -259,11 +265,14 @@ export class TaskService {
       return a.time.localeCompare(b.time);
     });
 
+    const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
+    const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
+
     return {
       agentId: task.assigneeAgentId,
       automationMode: task.automationMode ?? null,
       checkpoint: this.taskModel.getCheckpointConfig(task),
-      config: task.config ? (task.config as Record<string, unknown>) : undefined,
+      config: taskConfig,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
       dependencies: dependencies.map((d) => {
         const info = depIdToInfo.get(d.dependsOnId);
@@ -289,6 +298,14 @@ export class TaskService {
       parent,
       priority: task.priority,
       review: this.taskModel.getReviewConfig(task),
+      schedule:
+        task.schedulePattern || task.scheduleTimezone || scheduleConfig.maxExecutions != null
+          ? {
+              maxExecutions: scheduleConfig.maxExecutions ?? null,
+              pattern: task.schedulePattern,
+              timezone: task.scheduleTimezone,
+            }
+          : undefined,
       status: task.status,
       userId: task.assigneeUserId,
       subtasks,

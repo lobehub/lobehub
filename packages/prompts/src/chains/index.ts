@@ -1,4 +1,5 @@
 export * from './abstractChunk';
+export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
 export * from './compressContext';
 export * from './inputCompletion';

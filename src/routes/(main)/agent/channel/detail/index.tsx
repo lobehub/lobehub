@@ -38,7 +38,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const omitUndefinedValues = <T extends Record<string, unknown>>(record: T) =>
   Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as T;
 
-interface CurrentConfig {
+export interface CurrentConfig {
   applicationId: string;
   credentials: Record<string, string>;
   enabled: boolean;
@@ -484,6 +484,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         <Footer
           connectResult={connectResult}
           connecting={connecting}
+          currentConfig={currentConfig}
           form={form}
           hasConfig={!!currentConfig}
           platformDef={platformDef}

@@ -134,8 +134,33 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // TODO [LOBE-6587]: Scheduled tasks (cron mode)
-  // updateSchedule(id, { pattern, timezone }) — backend task.update schema does not yet expose schedulePattern/scheduleTimezone
+  // Configure schedule mode: cron pattern + IANA timezone are columns; maxExecutions
+  // (null = unlimited / continuous) lives in `tasks.config.schedule` JSONB pocket.
+  // Whether the schedule actually fires depends on automationMode === 'schedule'.
+  updateSchedule = async (
+    id: string,
+    schedule: { maxExecutions: number | null; pattern: string; timezone: string },
+  ): Promise<void> => {
+    const existingConfig =
+      (this.#get().taskDetailMap[id]?.config as Record<string, unknown> | undefined) ?? {};
+    const existingScheduleConfig =
+      (existingConfig.schedule as Record<string, unknown> | undefined) ?? {};
+
+    try {
+      await taskService.update(id, {
+        config: {
+          ...existingConfig,
+          schedule: { ...existingScheduleConfig, maxExecutions: schedule.maxExecutions },
+        },
+        schedulePattern: schedule.pattern,
+        scheduleTimezone: schedule.timezone,
+      });
+      await this.#get().internal_refreshTaskDetail(id);
+    } catch (error) {
+      console.error('[TaskStore] Failed to update schedule:', error);
+      await this.#get().internal_refreshTaskDetail(id);
+    }
+  };
 }
 
 export type TaskConfigSliceAction = Pick<

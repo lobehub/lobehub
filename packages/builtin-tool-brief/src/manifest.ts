@@ -15,7 +15,7 @@ export const BriefManifest: BuiltinToolManifest = {
         properties: {
           actions: {
             description:
-              'Custom action buttons for the user. If omitted, defaults are generated based on type. Each action has key (identifier), label (display text), and type ("resolve" to close, "comment" to prompt feedback).',
+              'Custom action buttons for the user. Ignored when type is "result" (result briefs render a fixed approve button). For other types, if omitted, defaults are generated based on type. Each action has key (identifier), label (display text), and type ("resolve" to close, "comment" to prompt feedback).',
             items: {
               properties: {
                 key: { description: 'Action identifier, e.g. "approve", "split"', type: 'string' },

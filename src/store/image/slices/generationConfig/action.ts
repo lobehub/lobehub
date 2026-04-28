@@ -254,6 +254,12 @@ export class GenerationConfigActionImpl {
       newParams.aspectRatio = aspectRatio;
     }
 
+    // Preserve resolution if it exists in current parameters (models like nanoBanana2 use resolution enum)
+    // This ensures 4K/2K resolution is maintained when changing aspect ratios
+    if ('resolution' in parameters && parameters.resolution !== undefined) {
+      newParams.resolution = parameters.resolution;
+    }
+
     this.#set(
       { activeAspectRatio: aspectRatio, parameters: newParams },
       false,

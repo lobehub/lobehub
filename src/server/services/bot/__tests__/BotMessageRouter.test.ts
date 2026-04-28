@@ -7,15 +7,38 @@ import { BotMessageRouter } from '../BotMessageRouter';
 const mockFindEnabledByPlatform = vi.hoisted(() => vi.fn());
 const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
+const mockProviderFindById = vi.hoisted(() => vi.fn());
+const mockProviderUpdate = vi.hoisted(() => vi.fn());
+const mockPeekPairingRequest = vi.hoisted(() => vi.fn());
+const mockDeletePairingRequest = vi.hoisted(() => vi.fn());
+const mockReleasePairingClaim = vi.hoisted(() => vi.fn());
+const mockCreateOrGetPairingRequest = vi.hoisted(() => vi.fn());
+const mockGetAgentRuntimeRedisClient = vi.hoisted(() => vi.fn().mockReturnValue(null));
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
 }));
 
-vi.mock('@/database/models/agentBotProvider', () => ({
-  AgentBotProviderModel: {
-    findEnabledByPlatform: mockFindEnabledByPlatform,
-  },
+vi.mock('@/database/models/agentBotProvider', () => {
+  // Constructor returns the same set of instance-method mocks so tests
+  // can assert / configure without grabbing a per-instance reference.
+  const ctor = vi.fn().mockImplementation(() => ({
+    findById: mockProviderFindById,
+    update: mockProviderUpdate,
+  }));
+  // Preserve the static method other tests rely on (load path).
+  (
+    ctor as unknown as { findEnabledByPlatform: typeof mockFindEnabledByPlatform }
+  ).findEnabledByPlatform = mockFindEnabledByPlatform;
+  return { AgentBotProviderModel: ctor };
+});
+
+vi.mock('../dmPairingStore', () => ({
+  consumePairingRequest: vi.fn(),
+  createOrGetPairingRequest: mockCreateOrGetPairingRequest,
+  deletePairingRequest: mockDeletePairingRequest,
+  peekPairingRequest: mockPeekPairingRequest,
+  releasePairingClaim: mockReleasePairingClaim,
 }));
 
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -25,7 +48,7 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 }));
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
-  getAgentRuntimeRedisClient: vi.fn().mockReturnValue(null),
+  getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
 }));
 
 vi.mock('@chat-adapter/state-ioredis', () => ({
@@ -190,10 +213,44 @@ vi.mock('../platforms', () => ({
   extractDmSettings: (settings: Record<string, unknown> | null | undefined) => {
     const rawPolicy = settings?.dmPolicy as string | undefined;
     const policy =
-      rawPolicy === 'allowlist' || rawPolicy === 'open' || rawPolicy === 'disabled'
+      rawPolicy === 'allowlist' ||
+      rawPolicy === 'open' ||
+      rawPolicy === 'disabled' ||
+      rawPolicy === 'pairing'
         ? rawPolicy
         : 'open';
     return { policy };
+  },
+  normalizeAllowFromEntries: (raw: unknown): Array<{ id: string; name?: string }> => {
+    if (typeof raw === 'string') {
+      return raw
+        .split(/[\s,]+/)
+        .map((id: string) => id.trim())
+        .filter(Boolean)
+        .map((id: string) => ({ id }));
+    }
+    if (Array.isArray(raw)) {
+      const out: Array<{ id: string; name?: string }> = [];
+      for (const entry of raw) {
+        if (typeof entry === 'string') {
+          const id = entry.trim();
+          if (id) out.push({ id });
+          continue;
+        }
+        if (entry && typeof entry === 'object' && 'id' in entry) {
+          const id = (entry as { id?: unknown }).id;
+          if (typeof id !== 'string' || !id.trim()) continue;
+          const name = (entry as { name?: unknown }).name;
+          out.push(
+            typeof name === 'string' && name.trim()
+              ? { id: id.trim(), name: name.trim() }
+              : { id: id.trim() },
+          );
+        }
+      }
+      return out;
+    }
+    return [];
   },
   extractGroupSettings: (settings: Record<string, unknown> | null | undefined) => {
     const allowFrom = parseAllowlistMock(settings?.groupAllowFrom);
@@ -226,16 +283,26 @@ vi.mock('../platforms', () => ({
   },
   shouldHandleDm: (params: {
     authorUserId: string | undefined;
-    dmSettings: { policy: 'allowlist' | 'disabled' | 'open' };
+    dmSettings: { policy: 'allowlist' | 'disabled' | 'open' | 'pairing' };
     isDM: boolean;
+    operatorUserId?: string;
     userAllowlist: { ids: string[] };
-  }) => {
-    if (!params.isDM) return true;
-    if (params.dmSettings.policy === 'disabled') return false;
-    if (params.dmSettings.policy === 'open') return true;
-    if (!params.authorUserId) return false;
-    if (params.userAllowlist.ids.length === 0) return false;
-    return params.userAllowlist.ids.includes(params.authorUserId);
+  }): 'allow' | 'pair' | 'reject' => {
+    if (!params.isDM) return 'allow';
+    if (params.dmSettings.policy === 'disabled') return 'reject';
+    if (params.dmSettings.policy === 'open') return 'allow';
+    if (!params.authorUserId) return 'reject';
+    if (
+      params.dmSettings.policy === 'pairing' &&
+      params.operatorUserId &&
+      params.authorUserId === params.operatorUserId
+    ) {
+      return 'allow';
+    }
+    const inList =
+      params.userAllowlist.ids.length > 0 && params.userAllowlist.ids.includes(params.authorUserId);
+    if (inList) return 'allow';
+    return params.dmSettings.policy === 'pairing' ? 'pair' : 'reject';
   },
   shouldHandleGroup: (params: {
     candidateChannelIds: ReadonlyArray<string | undefined>;
@@ -276,6 +343,15 @@ describe('BotMessageRouter', () => {
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockHandleMention.mockResolvedValue(undefined);
     mockHandleSubscribedMessage.mockResolvedValue(undefined);
+    // Reset pairing-store + provider-model mocks to safe defaults so a
+    // previous test's stub doesn't leak into the next one.
+    mockPeekPairingRequest.mockResolvedValue(null);
+    mockDeletePairingRequest.mockResolvedValue(undefined);
+    mockReleasePairingClaim.mockResolvedValue(undefined);
+    mockCreateOrGetPairingRequest.mockResolvedValue({ status: 'redis-unavailable' });
+    mockProviderFindById.mockResolvedValue(undefined);
+    mockProviderUpdate.mockResolvedValue(undefined);
+    mockGetAgentRuntimeRedisClient.mockReturnValue(null);
   });
 
   describe('getWebhookHandler', () => {
@@ -746,6 +822,128 @@ describe('BotMessageRouter', () => {
       expect(mockHandleMention).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).toContain("aren't authorized");
+    });
+
+    it('lets pairing-mode strangers reach the DM gate (does NOT short-circuit on allowFrom)', async () => {
+      // Regression: previously, the global `allowFrom` gate ran first and
+      // rejected anyone not on the list — including strangers DMing a
+      // pairing bot, who never reached the pairing flow. With pairing,
+      // `allowFrom` is the *post-approval* list (managed by `/approve`),
+      // so the global gate must skip on DM threads under pairing.
+      const handler = await loadDmCatchAllHandler({
+        // allowFrom only contains the operator — Lin is a stranger here.
+        allowFrom: [{ id: 'owner-id', name: 'me' }],
+        dmPolicy: 'pairing',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'Lin' },
+        text: 'Hi',
+      };
+
+      await handler(thread, message);
+
+      // No agent dispatch (gate didn't pass through to the agent)
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      // Post was made — but it must NOT be the allowlist rejection text
+      // (which is what the bug rendered). With redis mocked to null in
+      // this suite the pairing flow falls back to the "unavailable"
+      // copy; the important thing is we left the global-allowFrom branch
+      // and entered the pairing branch.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      const text = thread.post.mock.calls[0][0] as string;
+      expect(text).not.toContain("aren't authorized");
+      expect(text).toContain('Pairing');
+    });
+
+    it('owner DMing a pairing bot bypasses the gate via operator-bypass', async () => {
+      // Even with allowFrom not yet populated with anyone but the owner,
+      // the owner themselves must be able to DM the bot to test it /
+      // approve other users.
+      const handler = await loadDmCatchAllHandler({
+        allowFrom: [{ id: 'owner-id' }],
+        dmPolicy: 'pairing',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'owner-id', userName: 'me' },
+        text: 'self test',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('owner bypasses the gate from any channel context (slash-command DM/group safety net)', async () => {
+      // Discord's native slash-command events sometimes deliver DM
+      // invocations with `event.channel.isDM=false`, which would otherwise
+      // route the owner's `/approve` through the group gate and reject
+      // them when their channel isn't in `groupAllowFrom`. The operator
+      // override neutralises this for any inbound from the bot's owner.
+      const handler = await loadDmCatchAllHandler({
+        allowFrom: [{ id: 'owner-id' }],
+        dmPolicy: 'pairing',
+        groupAllowFrom: [{ id: 'allowed-channel' }],
+        groupPolicy: 'allowlist',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      // Mis-reported isDM=false on a DM-y thread — channel id is NOT in
+      // groupAllowFrom; without owner override the group gate would
+      // reject. (The catch-all itself returns early on isDM!==true, so
+      // we use isDM=true here; the assertion is that the DM path lets
+      // owner through under the strictest combination of policies.)
+      const thread = {
+        id: 'discord:dm-channel-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'owner-id', userName: 'me' },
+        text: 'self test',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('previously-approved users on a pairing bot pass straight through (no re-pairing)', async () => {
+      const handler = await loadDmCatchAllHandler({
+        allowFrom: [{ id: 'owner-id' }, { id: 'lin-id', name: 'Lin' }],
+        dmPolicy: 'pairing',
+        userId: 'owner-id',
+      });
+      if (!handler) throw new Error('expected catch-all to be registered');
+      const thread = {
+        id: 'telegram:chat-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'lin-id', userName: 'Lin' },
+        text: 'Hello again',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      // No pairing notice was posted — Lin is already approved.
+      expect(thread.post).not.toHaveBeenCalled();
     });
   });
 
@@ -1493,6 +1691,162 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).toContain('该机器人不接受私信');
+    });
+  });
+
+  describe('/approve persistence failure', () => {
+    /**
+     * The /approve flow used to consume the pairing code from Redis
+     * BEFORE writing the applicant onto allowFrom. If the DB write
+     * failed (transient outage, missing provider row), the code was
+     * lost yet the owner still saw a success message — leaving the
+     * applicant locked out with no recoverable state. These tests pin
+     * the corrected ordering: peek-then-persist-then-delete, with a
+     * clear failure message and the code preserved for retry on
+     * persistence errors.
+     */
+    async function loadApproveHandler(
+      providerOverrides: Record<string, unknown> = {},
+    ): Promise<(event: any) => Promise<void>> {
+      mockGetAgentRuntimeRedisClient.mockReturnValue({} as any);
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({
+          applicationId: 'app-1',
+          settings: {
+            allowFrom: [{ id: 'owner-id' }],
+            dmPolicy: 'pairing',
+            userId: 'owner-id',
+            ...providerOverrides,
+          },
+          userId: 'owner-id',
+        }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const slashApproveCall = mockOnSlashCommand.mock.calls.find((c) => c[0] === '/approve');
+      if (!slashApproveCall) throw new Error('expected /approve to be registered');
+      return slashApproveCall[1] as (event: any) => Promise<void>;
+    }
+
+    function makeApproveEvent() {
+      const channel = {
+        id: 'telegram:dm-channel-1',
+        isDM: true,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+      return {
+        channel,
+        text: 'ABCD2345',
+        user: { isBot: false, userId: 'owner-id', userName: 'owner' },
+      };
+    }
+
+    const PAIRING_ENTRY = {
+      applicantUserId: 'lin-id',
+      applicantUserName: 'Lin',
+      applicationId: 'app-1',
+      code: 'ABCD2345',
+      createdAt: 1_700_000_000_000,
+      platform: 'telegram',
+      replyLocale: 'en-US' as const,
+      threadId: 'telegram:dm-lin',
+    };
+
+    it('reports failure and preserves the code when the DB update throws', async () => {
+      mockPeekPairingRequest.mockResolvedValue(PAIRING_ENTRY);
+      mockProviderFindById.mockResolvedValue({
+        settings: { allowFrom: [{ id: 'owner-id' }] },
+      });
+      mockProviderUpdate.mockRejectedValue(new Error('connection refused'));
+
+      const slashApprove = await loadApproveHandler();
+      const event = makeApproveEvent();
+      await slashApprove(event);
+
+      // Owner sees the failure copy, not the success copy. This is the
+      // core of the bug: a logged-and-swallowed error must NOT render
+      // as a successful approval.
+      expect(event.channel.post).toHaveBeenCalledTimes(1);
+      const reply = event.channel.post.mock.calls[0][0] as string;
+      expect(reply).not.toMatch(/Approved/i);
+      expect(reply).toContain("Couldn't save");
+
+      // Code is still in Redis so the owner can rerun /approve, and the
+      // peek claim was released so the retry isn't blocked behind our
+      // own 60s lock.
+      expect(mockDeletePairingRequest).not.toHaveBeenCalled();
+      expect(mockReleasePairingClaim).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports failure when the provider row is missing', async () => {
+      // Edge case: provider deleted between issuing the code and
+      // approving it. Without this guard, the old code silently no-op'd
+      // and posted "Approved" — now the owner sees the same failure
+      // copy and can investigate.
+      mockPeekPairingRequest.mockResolvedValue(PAIRING_ENTRY);
+      mockProviderFindById.mockResolvedValue(undefined);
+
+      const slashApprove = await loadApproveHandler();
+      const event = makeApproveEvent();
+      await slashApprove(event);
+
+      expect(event.channel.post).toHaveBeenCalledTimes(1);
+      expect(event.channel.post.mock.calls[0][0]).toContain("Couldn't save");
+      expect(mockDeletePairingRequest).not.toHaveBeenCalled();
+      expect(mockProviderUpdate).not.toHaveBeenCalled();
+      expect(mockReleasePairingClaim).toHaveBeenCalledTimes(1);
+    });
+
+    it('happy path: persists, then deletes the code, then reports success', async () => {
+      mockPeekPairingRequest.mockResolvedValue(PAIRING_ENTRY);
+      mockProviderFindById.mockResolvedValue({
+        settings: { allowFrom: [{ id: 'owner-id' }] },
+      });
+      mockProviderUpdate.mockResolvedValue(undefined);
+
+      const slashApprove = await loadApproveHandler();
+      const event = makeApproveEvent();
+      await slashApprove(event);
+
+      // Persist must precede delete — that's the whole point of the
+      // refactor. Use invocationCallOrder to lock the sequence.
+      const updateOrder = mockProviderUpdate.mock.invocationCallOrder[0];
+      const deleteOrder = mockDeletePairingRequest.mock.invocationCallOrder[0];
+      expect(updateOrder).toBeLessThan(deleteOrder);
+
+      expect(mockDeletePairingRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicantUserId: 'lin-id',
+          applicationId: 'app-1',
+          code: 'ABCD2345',
+          platform: 'telegram',
+        }),
+      );
+
+      expect(event.channel.post).toHaveBeenCalledTimes(1);
+      expect(event.channel.post.mock.calls[0][0]).toMatch(/Approved Lin/i);
+    });
+
+    it('skips the DB write when the applicant is already on allowFrom but still cleans up the code', async () => {
+      // Read-modify-write idempotency: a second /approve for the same
+      // user shouldn't fail just because they're already in. The code
+      // gets cleared either way so it can't be reused.
+      mockPeekPairingRequest.mockResolvedValue(PAIRING_ENTRY);
+      mockProviderFindById.mockResolvedValue({
+        settings: { allowFrom: [{ id: 'owner-id' }, { id: 'lin-id', name: 'Lin' }] },
+      });
+
+      const slashApprove = await loadApproveHandler();
+      const event = makeApproveEvent();
+      await slashApprove(event);
+
+      expect(mockProviderUpdate).not.toHaveBeenCalled();
+      expect(mockDeletePairingRequest).toHaveBeenCalledTimes(1);
+      expect(event.channel.post.mock.calls[0][0]).toMatch(/Approved Lin/i);
     });
   });
 });

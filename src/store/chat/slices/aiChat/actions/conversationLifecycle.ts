@@ -46,6 +46,7 @@ import { useUserMemoryStore } from '@/store/userMemory';
 
 import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
+import { topicMapKey } from '../../../utils/topicMapKey';
 import { AI_RUNTIME_OPERATION_TYPES } from '../../operation/types';
 import {
   type CommandSendOverrides,
@@ -117,6 +118,30 @@ export class ConversationLifecycleActionImpl {
     void set;
     this.#get = get;
   }
+
+  /**
+   * Read the active topic-list filter from `topicDataMap` so it can be
+   * forwarded to `sendMessageInServer`. Without this, the server returns
+   * an unfiltered list which `internal_updateTopics` then writes back over
+   * the filtered sidebar — completed/cron topics reappear until the next
+   * SWR revalidation.
+   */
+  #getTopicFilter = (
+    agentId?: string,
+    groupId?: string,
+  ):
+    | { excludeStatuses?: string[]; excludeTriggers?: string[]; includeTriggers?: string[] }
+    | undefined => {
+    if (!agentId && !groupId) return undefined;
+    const data = this.#get().topicDataMap[topicMapKey({ agentId, groupId })];
+    if (!data) return undefined;
+    const { excludeStatuses, excludeTriggers } = data;
+    if (!excludeStatuses?.length && !excludeTriggers?.length) return undefined;
+    return {
+      ...(excludeStatuses?.length ? { excludeStatuses } : {}),
+      ...(excludeTriggers?.length ? { excludeTriggers } : {}),
+    };
+  };
 
   sendMessage = async ({
     message,
@@ -411,6 +436,10 @@ export class ConversationLifecycleActionImpl {
               parentId,
             },
             threadId: operationContext.threadId ?? undefined,
+            topicFilter: this.#getTopicFilter(
+              operationContext.agentId,
+              operationContext.groupId ?? undefined,
+            ),
             topicId: operationContext.topicId ?? undefined,
           },
           abortController,
@@ -602,6 +631,10 @@ export class ConversationLifecycleActionImpl {
           preloadMessages: undefined,
           // if there is topicId, then add topicId to message
           topicId: topicId ?? undefined,
+          topicFilter: this.#getTopicFilter(
+            operationContext.agentId,
+            operationContext.groupId ?? undefined,
+          ),
           threadId: operationContext.threadId ?? undefined,
           // Support creating new thread along with message
           newThread: newThread

@@ -1,4 +1,9 @@
-import { isDesktop } from '@lobechat/const';
+import {
+  GROUP_CHAT_URL,
+  isDesktop,
+  SESSION_CHAT_TOPIC_URL,
+  SESSION_CHAT_URL,
+} from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -8,11 +13,28 @@ import type { ChatStore } from '@/store/chat/store';
 
 import { topicMapKey } from './topicMapKey';
 
-interface DesktopNotificationContext {
+export interface DesktopNotificationContext {
   agentId?: ConversationContext['agentId'];
   groupId?: ConversationContext['groupId'];
   topicId?: ConversationContext['topicId'];
 }
+
+/**
+ * Resolve the SPA path that should be opened when the user clicks a desktop
+ * notification, based on the conversation context. Group chats land on the
+ * group root (topic is selected from store), 1:1 chats deep-link to the
+ * specific topic.
+ */
+export const resolveNotificationNavigatePath = (
+  context: DesktopNotificationContext,
+): string | undefined => {
+  if (context.groupId) return GROUP_CHAT_URL(context.groupId);
+  if (context.agentId && context.topicId) {
+    return SESSION_CHAT_TOPIC_URL(context.agentId, context.topicId);
+  }
+  if (context.agentId) return SESSION_CHAT_URL(context.agentId);
+  return undefined;
+};
 
 const resolveNotificationTitle = (
   get: () => ChatStore,
@@ -47,11 +69,14 @@ export const notifyDesktopHumanApprovalRequired = async (
     const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
     const title = resolveNotificationTitle(get, context);
 
+    const navigatePath = resolveNotificationNavigatePath(context);
+
     await Promise.allSettled([
       desktopNotificationService.setBadgeCount(1),
       desktopNotificationService.showNotification({
         body: t('desktopNotification.humanApprovalRequired.body', { ns: 'chat' }),
         force: true,
+        navigate: navigatePath ? { path: navigatePath } : undefined,
         requestAttention: true,
         title,
       }),

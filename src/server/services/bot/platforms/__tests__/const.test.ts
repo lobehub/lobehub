@@ -9,11 +9,13 @@ import {
   getStepReactionEmoji,
   makeDmPolicyField,
   makeGroupPolicyFields,
+  normalizeAllowFromEntries,
   normalizeBotReplyLocale,
   shouldAllowSender,
   shouldHandleDm,
   shouldHandleGroup,
   THINKING_REACTION_EMOJI,
+  validateAccessSettings,
   WORKING_REACTION_EMOJI,
 } from '../const';
 
@@ -96,13 +98,30 @@ describe('getStepReactionEmoji', () => {
 });
 
 describe('makeDmPolicyField', () => {
-  it('produces a flat dmPolicy field with the supplied default policy and three modes', () => {
+  it('produces a flat dmPolicy field with the supplied default policy and four modes', () => {
     const field = makeDmPolicyField({ policy: 'open' });
 
     expect(field.key).toBe('dmPolicy');
     expect(field.type).toBe('string');
     expect(field.default).toBe('open');
-    expect(field.enum).toEqual(['open', 'allowlist', 'disabled']);
+    expect(field.enum).toEqual(['open', 'allowlist', 'pairing', 'disabled']);
+    // Label keys must be in 1:1 order with `enum` so the form renders the
+    // right text for each option — easy regression to introduce when adding
+    // a fourth policy.
+    expect(field.enumLabels).toEqual([
+      'channel.dmPolicyOpen',
+      'channel.dmPolicyAllowlist',
+      'channel.dmPolicyPairing',
+      'channel.dmPolicyDisabled',
+    ]);
+    // Per-option descriptions render to the right of each option in the
+    // dropdown — must stay 1:1 with `enum`/`enumLabels` for the same reason.
+    expect(field.enumDescriptions).toEqual([
+      'channel.dmPolicyOpenHint',
+      'channel.dmPolicyAllowlistHint',
+      'channel.dmPolicyPairingHint',
+      'channel.dmPolicyDisabledHint',
+    ]);
   });
 
   it('supports the per-platform default override (e.g. opt-in disabled)', () => {
@@ -162,6 +181,7 @@ describe('extractDmSettings', () => {
   it('reads the flat dmPolicy field (not legacy nested settings.dm.policy)', () => {
     expect(extractDmSettings({ dmPolicy: 'disabled' })).toEqual({ policy: 'disabled' });
     expect(extractDmSettings({ dmPolicy: 'allowlist' })).toEqual({ policy: 'allowlist' });
+    expect(extractDmSettings({ dmPolicy: 'pairing' })).toEqual({ policy: 'pairing' });
     // Regression: the original bug stored disabled at `settings.dm.policy` but
     // never read it back. The new shape is flat; nested `dm.policy` is ignored.
     expect(extractDmSettings({ dm: { policy: 'disabled' } })).toEqual({ policy: 'open' });
@@ -319,6 +339,7 @@ describe('shouldHandleDm', () => {
   const open = { policy: 'open' as const };
   const disabled = { policy: 'disabled' as const };
   const allowlist = { policy: 'allowlist' as const };
+  const pairing = { policy: 'pairing' as const };
   const emptyUserAllowlist = { ids: [] as string[] };
   const aliceAndBob = { ids: ['alice-id', 'bob-id'] };
 
@@ -330,10 +351,10 @@ describe('shouldHandleDm', () => {
         isDM: false,
         userAllowlist: emptyUserAllowlist,
       }),
-    ).toBe(true);
+    ).toBe('allow');
   });
 
-  it('blocks DMs when disabled', () => {
+  it('rejects DMs when disabled', () => {
     expect(
       shouldHandleDm({
         authorUserId: 'alice-id',
@@ -341,7 +362,7 @@ describe('shouldHandleDm', () => {
         isDM: true,
         userAllowlist: aliceAndBob,
       }),
-    ).toBe(false);
+    ).toBe('reject');
   });
 
   it('allows DMs under the open policy regardless of allowlist contents', () => {
@@ -352,7 +373,7 @@ describe('shouldHandleDm', () => {
         isDM: true,
         userAllowlist: emptyUserAllowlist,
       }),
-    ).toBe(true);
+    ).toBe('allow');
     // The global gate (shouldAllowSender) is the runtime filter for `open`;
     // shouldHandleDm itself does not re-check it.
     expect(
@@ -362,7 +383,7 @@ describe('shouldHandleDm', () => {
         isDM: true,
         userAllowlist: aliceAndBob,
       }),
-    ).toBe(true);
+    ).toBe('allow');
   });
 
   it('allows DMs in allowlist mode when the sender is on the list', () => {
@@ -373,7 +394,7 @@ describe('shouldHandleDm', () => {
         isDM: true,
         userAllowlist: aliceAndBob,
       }),
-    ).toBe(true);
+    ).toBe('allow');
   });
 
   it('rejects DMs in allowlist mode when the sender is NOT on the list', () => {
@@ -384,10 +405,10 @@ describe('shouldHandleDm', () => {
         isDM: true,
         userAllowlist: aliceAndBob,
       }),
-    ).toBe(false);
+    ).toBe('reject');
   });
 
-  it('fails closed in allowlist mode when allowFrom is empty (no DMs)', () => {
+  it('rejects in allowlist mode when allowFrom is empty (no DMs)', () => {
     // This is the only behavioural difference from `open`: `open` would
     // pass anyone here, `allowlist` rejects everyone.
     expect(
@@ -397,10 +418,10 @@ describe('shouldHandleDm', () => {
         isDM: true,
         userAllowlist: emptyUserAllowlist,
       }),
-    ).toBe(false);
+    ).toBe('reject');
   });
 
-  it('fails closed when the allowlisted policy sees a missing user id', () => {
+  it('rejects when the allowlisted policy sees a missing user id', () => {
     expect(
       shouldHandleDm({
         authorUserId: undefined,
@@ -408,7 +429,69 @@ describe('shouldHandleDm', () => {
         isDM: true,
         userAllowlist: aliceAndBob,
       }),
-    ).toBe(false);
+    ).toBe('reject');
+  });
+
+  it('pairs an unknown sender under pairing policy (so the router can issue a code)', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: 'stranger-id',
+        dmSettings: pairing,
+        isDM: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: aliceAndBob,
+      }),
+    ).toBe('pair');
+  });
+
+  it('pairs unknown senders even when allowFrom is empty (pre-approval starting state)', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: 'stranger-id',
+        dmSettings: pairing,
+        isDM: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('pair');
+  });
+
+  it('allows the operator under pairing even when allowFrom is empty (owner self-DM)', () => {
+    // Without the operator bypass, the owner's first DM to their own
+    // pairing bot would land in `pair` and ask them to approve themselves.
+    expect(
+      shouldHandleDm({
+        authorUserId: 'owner-id',
+        dmSettings: pairing,
+        isDM: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('allow');
+  });
+
+  it('allows pairing senders already on the approved list', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: 'alice-id',
+        dmSettings: pairing,
+        isDM: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: aliceAndBob,
+      }),
+    ).toBe('allow');
+  });
+
+  it('rejects pairing when authorUserId is missing — cannot issue a code without a target', () => {
+    expect(
+      shouldHandleDm({
+        authorUserId: undefined,
+        dmSettings: pairing,
+        isDM: true,
+        operatorUserId: 'owner-id',
+        userAllowlist: emptyUserAllowlist,
+      }),
+    ).toBe('reject');
   });
 });
 
@@ -499,5 +582,84 @@ describe('shouldHandleGroup', () => {
         isDM: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe('normalizeAllowFromEntries', () => {
+  it('returns an empty list for missing / empty input', () => {
+    expect(normalizeAllowFromEntries(undefined)).toEqual([]);
+    expect(normalizeAllowFromEntries(null)).toEqual([]);
+    expect(normalizeAllowFromEntries('')).toEqual([]);
+    expect(normalizeAllowFromEntries([])).toEqual([]);
+  });
+
+  it('preserves both id and name on the current object-list shape', () => {
+    expect(normalizeAllowFromEntries([{ id: 'alice', name: 'Alice' }, { id: 'bob' }])).toEqual([
+      { id: 'alice', name: 'Alice' },
+      { id: 'bob' },
+    ]);
+  });
+
+  it('drops blank names while keeping the id (no point persisting whitespace)', () => {
+    expect(normalizeAllowFromEntries([{ id: 'alice', name: '   ' }])).toEqual([{ id: 'alice' }]);
+  });
+
+  it('lifts legacy string[] entries to nameless objects', () => {
+    expect(normalizeAllowFromEntries(['alice', '  bob  ', ''])).toEqual([
+      { id: 'alice' },
+      { id: 'bob' },
+    ]);
+  });
+
+  it('lifts legacy comma / whitespace-separated strings the same way', () => {
+    expect(normalizeAllowFromEntries('alice, bob\ncarol')).toEqual([
+      { id: 'alice' },
+      { id: 'bob' },
+      { id: 'carol' },
+    ]);
+  });
+
+  it('skips object entries without a usable id', () => {
+    expect(
+      normalizeAllowFromEntries([
+        { id: '', name: 'no-id' },
+        { name: 'no-id-field' } as { id?: string },
+        { id: 'kept' },
+      ]),
+    ).toEqual([{ id: 'kept' }]);
+  });
+});
+
+describe('validateAccessSettings', () => {
+  it('passes when no policy needs cross-field invariants', () => {
+    expect(validateAccessSettings(undefined).valid).toBe(true);
+    expect(validateAccessSettings({}).valid).toBe(true);
+    expect(validateAccessSettings({ dmPolicy: 'open' }).valid).toBe(true);
+    expect(validateAccessSettings({ dmPolicy: 'allowlist' }).valid).toBe(true);
+    expect(validateAccessSettings({ dmPolicy: 'disabled' }).valid).toBe(true);
+  });
+
+  it('passes pairing when the operator (settings.userId) is set', () => {
+    expect(validateAccessSettings({ dmPolicy: 'pairing', userId: 'owner-id' }).valid).toBe(true);
+  });
+
+  it('rejects pairing without a userId — owner is the approver, missing it bricks the flow', () => {
+    const result = validateAccessSettings({ dmPolicy: 'pairing' });
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      {
+        field: 'userId',
+        message: expect.stringContaining('Pairing policy'),
+      },
+    ]);
+  });
+
+  it('treats a blank-string userId the same as missing (whitespace is not an owner)', () => {
+    expect(validateAccessSettings({ dmPolicy: 'pairing', userId: '   ' }).valid).toBe(false);
+  });
+
+  it('does not require userId for allowlist or disabled — they have no approval flow', () => {
+    expect(validateAccessSettings({ dmPolicy: 'allowlist' }).valid).toBe(true);
+    expect(validateAccessSettings({ dmPolicy: 'disabled' }).valid).toBe(true);
   });
 });

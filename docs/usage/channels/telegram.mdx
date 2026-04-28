@@ -79,6 +79,22 @@ Click **Test Connection** in LobeHub's channel settings to verify the integratio
 
 ![](/blog/assets5dd8b54083201bff2494404b66e37df0.webp)
 
+## Set Your Platform Identity (Recommended)
+
+One optional field under **Advanced Settings** carries a lot of weight in day-to-day use — fill it in once and most surprises go away.
+
+### Your Platform User ID
+
+This is your own Telegram numeric user ID, used by:
+
+- **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
+- **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your Telegram account.
+- **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to friends won't accidentally lock you out.
+
+To get it: open Telegram, message [@userinfobot](https://t.me/userinfobot), and it will reply with your numeric user ID. Paste it into **Your Platform User ID** in LobeHub's Advanced Settings.
+
+> Telegram doesn't have a "default server" concept (each chat is its own surface), so the **Default Server** field is not exposed for Telegram channels.
+
 ## Adding the Bot to Group Chats
 
 To use the bot in Telegram groups:
@@ -105,6 +121,7 @@ A populated **Allowed User IDs** field acts as a global gate — DMs *and* group
 
 - **Open (default)** — Anyone on Telegram can DM the bot (subject to the global allowlist when set).
 - **Allowlist** — DMs require the sender to be in **Allowed User IDs**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no DMs).
+- **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed User IDs**. Requires **Your Platform User ID** to be set (the runtime checks the `/approve` sender against it) and a configured Redis backend.
 - **Disabled** — The bot ignores all DMs and only responds to group `@mentions`.
 
 ### Group Policy
@@ -125,7 +142,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **Bot User ID**          | Auto     | Automatically derived from the bot token                                                                       |
 | **Webhook Secret Token** | No       | Optional secret for verifying webhook requests                                                                 |
 | **Allowed User IDs**     | No       | Comma- or whitespace-separated Telegram numeric user IDs. Global gate — applies to DMs and group @mentions     |
-| **DM Policy**            | No       | `open` (default), `allowlist`, or `disabled` — who is allowed to DM the bot                                    |
+| **DM Policy**            | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                         |
 | **Group Policy**         | No       | `open` (default), `allowlist`, or `disabled` — where the bot responds in groups                                |
 | **Allowed Channel IDs**  | No       | Comma- or whitespace-separated Telegram chat IDs (group IDs are negative). Used when Group Policy is Allowlist |
 
