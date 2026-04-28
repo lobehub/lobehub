@@ -129,6 +129,67 @@ describe('MessagesEngine', () => {
       expect(hasHistorySummary).toBe(true);
     });
 
+    it('should replay local-system tool snapshots as tool results', async () => {
+      const now = Date.now();
+      const messages: UIChatMessage[] = [
+        {
+          content: '<localFile name="a.ts" path="/tmp/a.ts" />',
+          createdAt: now,
+          id: 'msg-1',
+          metadata: {
+            localSystemToolSnapshots: [
+              {
+                apiName: 'readLocalFile',
+                arguments: { path: '/tmp/a.ts' },
+                capturedAt: '2026-04-28T12:21:08.785Z',
+                content: 'File: /tmp/a.ts (lines 0-200)\n\nconst a = 1;\n',
+                identifier: 'lobe-local-system',
+                snapshotId: 'local-system-snapshot-1',
+                success: true,
+                toolCallId: 'call_local-system-snapshot-1',
+              },
+            ],
+          },
+          role: 'user',
+          updatedAt: now,
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        capabilities: {
+          isCanUseFC: () => true,
+          isCanUseVideo: () => false,
+          isCanUseVision: () => false,
+        },
+        messages,
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.metadata.LocalSystemToolSnapshotInjectorInjectedCount).toBe(1);
+      expect(result.messages).toContainEqual({
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: '{"path":"/tmp/a.ts"}',
+              name: 'lobe-local-system____readLocalFile____builtin',
+            },
+            id: 'call_local-system-snapshot-1',
+            type: 'function',
+          },
+        ],
+      });
+      expect(result.messages).toContainEqual({
+        content: 'File: /tmp/a.ts (lines 0-200)\n\nconst a = 1;\n',
+        name: 'lobe-local-system____readLocalFile____builtin',
+        role: 'tool',
+        tool_call_id: 'call_local-system-snapshot-1',
+      });
+    });
+
     it('should use custom formatHistorySummary when provided', async () => {
       const historySummary = 'test summary';
       const formatHistorySummary = vi.fn((s: string) => `<custom>${s}</custom>`);

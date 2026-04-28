@@ -20,6 +20,7 @@ export { GTDPlanInjector } from './GTDPlanInjector';
 export { GTDTodoInjector } from './GTDTodoInjector';
 export { HistorySummaryProvider } from './HistorySummary';
 export { KnowledgeInjector } from './KnowledgeInjector';
+export { LocalSystemToolSnapshotInjector } from './LocalSystemToolSnapshotInjector';
 export { OnboardingActionHintInjector } from './OnboardingActionHintInjector';
 export { OnboardingContextInjector } from './OnboardingContextInjector';
 export { OnboardingSyntheticStateInjector } from './OnboardingSyntheticStateInjector';
@@ -90,6 +91,7 @@ export type { GTDPlan, GTDPlanInjectorConfig } from './GTDPlanInjector';
 export type { GTDTodoInjectorConfig, GTDTodoItem, GTDTodoList } from './GTDTodoInjector';
 export type { HistorySummaryConfig } from './HistorySummary';
 export type { KnowledgeInjectorConfig } from './KnowledgeInjector';
+export type { LocalSystemToolSnapshotInjectorConfig } from './LocalSystemToolSnapshotInjector';
 export type {
   OnboardingContext,
   OnboardingContextInjectorConfig,
