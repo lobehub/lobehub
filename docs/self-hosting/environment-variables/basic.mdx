@@ -64,6 +64,12 @@ The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the Lob
 | Special Characters      | `inputTemplate="Hello; I am a bot;"`                                                                                     | Set the input template to `Hello; I am a bot;`.                                                                    |
 | Error Handling          | `model=gpt-4;maxToken`                                                                                                   | Ignore invalid entry `maxToken` and only parse `model=gpt-4`.                                                      |
 | Value Override          | `model=gpt-4;model=gpt-4-1106-preview`                                                                                   | If a key is repeated, use the value that appears last; in this case, the value of `model` is `gpt-4-1106-preview`. |
+| Display Name            | `displayName=My Assistant`                                                                                               | Set the agent's display name shown in the sidebar and chat header.                                                 |
+| Avatar                  | `avatar=https://example.com/avatar.png`                                                                                  | Set the agent's avatar to a custom image URL or emoji.                                                             |
+| Description             | `description=A helpful coding assistant`                                                                                 | Set the agent's description.                                                                                       |
+| Background Color        | `backgroundColor=#4a90d9`                                                                                                | Set the agent's background color (used when no avatar is set).                                                     |
+| Tags                    | `tags=coding,writing`                                                                                                    | Set the agent's tags.                                                                                              |
+| Full Example            | `model=gpt-4;provider=openai;displayName=My Bot;avatar=🤖;systemRole=You are helpful`                                   | Set model, provider, display name, avatar, and system role together.                                               |
 
 Further reading:
 
