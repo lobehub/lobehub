@@ -1,6 +1,12 @@
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+
+import type * as schema from '../../../packages/database/src/schemas/market';
 import type { MarketEnv } from './env';
 
-export type MarketDatabase = Record<PropertyKey, unknown>;
+export type MarketDatabase = Pick<
+  NodePgDatabase<typeof schema>,
+  'delete' | 'insert' | 'select' | 'update'
+>;
 
 export interface TrustedClientPayload {
   clientId: string;

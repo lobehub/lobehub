@@ -2,12 +2,24 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
+import type { MarketEnv } from './env';
 import { jsonError, MarketHttpError, notImplemented } from './http/errors';
 import { createHealthRoutes } from './http/routes/health';
+import type { MarketDatabase, MarketHonoEnv } from './types';
 
-export const createMarketApp = () => {
-  const app = new Hono();
+interface CreateMarketAppOptions {
+  db?: MarketDatabase;
+  env?: Pick<MarketEnv, 'MARKET_TRUSTED_CLIENT_ID' | 'MARKET_TRUSTED_CLIENT_SECRET'>;
+}
 
+export const createMarketApp = (options: CreateMarketAppOptions = {}) => {
+  const app = new Hono<MarketHonoEnv>();
+
+  app.use('*', async (c, next) => {
+    if (options.db) c.set('db', options.db);
+    if (options.env) c.set('marketEnv', options.env);
+    await next();
+  });
   app.use('*', cors());
   app.use('*', logger());
 
