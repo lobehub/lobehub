@@ -178,6 +178,48 @@ describe('TaskConfigSliceAction', () => {
       });
     });
 
+    it('should override DB-default UTC timezone on first-time schedule enable', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      // The tasks table has `schedule_timezone TEXT DEFAULT 'UTC'`, so a row that
+      // has never had its schedule configured still surfaces timezone='UTC'.
+      // First-time enable (no pattern yet) must override with the user's local tz.
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            schedule: { pattern: null, timezone: 'UTC' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'schedule');
+
+      const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      expect(taskService.update).toHaveBeenCalledWith('T-1', {
+        automationMode: 'schedule',
+        schedulePattern: '0 9 * * *',
+        scheduleTimezone: localTz,
+      });
+    });
+
+    it('should preserve user-chosen timezone when re-entering schedule mode', async () => {
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            ...useTaskStore.getState().taskDetailMap['T-1'],
+            schedule: { pattern: '0 8 * * 1', timezone: 'Asia/Shanghai' },
+          },
+        },
+      });
+
+      await useTaskStore.getState().setAutomationMode('T-1', 'schedule');
+
+      expect(taskService.update).toHaveBeenCalledWith('T-1', { automationMode: 'schedule' });
+    });
+
     it('should accept null to disable automation', async () => {
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
 
