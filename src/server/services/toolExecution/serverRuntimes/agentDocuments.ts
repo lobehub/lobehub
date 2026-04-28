@@ -31,7 +31,6 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         pinToTask(await service.createDocument(agentId, title, content)),
       createTopicDocument: async ({ agentId, content, title, topicId }) =>
         pinToTask(await service.createForTopic(agentId, title, content, topicId)),
-      editDocument: ({ agentId, content, id }) => service.editDocumentById(id, content, agentId),
       listDocuments: async ({ agentId }) => {
         const docs = await service.listDocuments(agentId);
         return docs.map((d) => ({
@@ -53,19 +52,17 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       modifyNodes: ({ agentId, id, operations }) =>
         service.modifyDocumentNodesById(id, operations, agentId),
       readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
-      readDocumentByFilename: ({ agentId, filename }) =>
-        service.getDocumentSnapshotByFilename(agentId, filename),
       removeDocument: ({ agentId, id }) => service.removeDocumentById(id, agentId),
       renameDocument: ({ agentId, id, newTitle }) =>
         service.renameDocumentById(id, newTitle, agentId),
+      replaceDocumentContent: ({ agentId, content, id }) =>
+        service.replaceDocumentContentById(id, content, agentId),
       updateLoadRule: ({ agentId, id, rule }) =>
         service.updateLoadRuleById(
           id,
           { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
           agentId,
         ),
-      upsertDocumentByFilename: async ({ agentId, content, filename }) =>
-        pinToTask(await service.upsertDocumentByFilename({ agentId, content, filename })),
     });
   },
   identifier: AgentDocumentsIdentifier,

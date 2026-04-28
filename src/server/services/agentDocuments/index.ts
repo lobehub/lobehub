@@ -108,6 +108,20 @@ export class AgentDocumentsService {
       litexml: true,
     });
 
+    // Hydration of stale editorData (older Lexical schemas) can silently fail
+    // and leave the editor empty. When that happens, hydrate from the markdown
+    // column directly so readDocument never returns an empty doc for a row that
+    // actually has content.
+    if (snapshot.content.trim().length === 0 && doc.content.trim().length > 0) {
+      const fromMarkdown = await exportEditorDataSnapshot({
+        editorData: undefined,
+        fallbackContent: doc.content,
+        litexml: true,
+      });
+      const content = fromMarkdown.content.trim().length > 0 ? fromMarkdown.content : doc.content;
+      return { ...doc, content, litexml: fromMarkdown.litexml };
+    }
+
     return { ...doc, content: snapshot.content, litexml: snapshot.litexml };
   }
 
@@ -483,7 +497,7 @@ export class AgentDocumentsService {
     });
   }
 
-  async editDocumentById(documentId: string, content: string, expectedAgentId?: string) {
+  async replaceDocumentContentById(documentId: string, content: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
     const snapshot = await createMarkdownEditorSnapshot(content);

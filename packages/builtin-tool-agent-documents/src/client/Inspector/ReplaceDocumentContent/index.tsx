@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { EditDocumentArgs, EditDocumentState } from '../../../types';
+import type { ReplaceDocumentContentArgs, ReplaceDocumentContentState } from '../../../types';
 
-export const EditDocumentInspector = memo<
-  BuiltinInspectorProps<EditDocumentArgs, EditDocumentState>
+export const ReplaceDocumentContentInspector = memo<
+  BuiltinInspectorProps<ReplaceDocumentContentArgs, ReplaceDocumentContentState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
   const id = args?.id || partialArgs?.id;
@@ -18,7 +18,7 @@ export const EditDocumentInspector = memo<
   if (isArgumentsStreaming && !id) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent-documents.apiName.editDocument')}</span>
+        <span>{t('builtins.lobe-agent-documents.apiName.replaceDocumentContent')}</span>
       </div>
     );
   }
@@ -30,12 +30,12 @@ export const EditDocumentInspector = memo<
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{t('builtins.lobe-agent-documents.apiName.editDocument')}: </span>
+      <span>{t('builtins.lobe-agent-documents.apiName.replaceDocumentContent')}: </span>
       {id && <span className={highlightTextStyles.primary}>{id}</span>}
     </div>
   );
 });
 
-EditDocumentInspector.displayName = 'EditDocumentInspector';
+ReplaceDocumentContentInspector.displayName = 'ReplaceDocumentContentInspector';
 
-export default EditDocumentInspector;
+export default ReplaceDocumentContentInspector;
