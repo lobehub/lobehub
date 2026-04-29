@@ -1796,7 +1796,7 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'lookup',
           unit: 'millionTokens',
-        }
+        },
       ],
     },
     releasedAt: '2026-04-02',
@@ -2099,7 +2099,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-18',
     settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',

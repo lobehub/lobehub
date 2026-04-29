@@ -72,7 +72,7 @@ const maskSensitiveUrl = (url: string) => {
 const BaseAzureOpenAI = createOpenAICompatibleRuntime({
   chatCompletion: {
     handlePayload: (payload) => {
-      const { deploymentName, enabledSearch, model, ...rest } = payload;
+      const { deploymentName, enabledSearch, model, preserveThinking: _preserveThinking, ...rest } = payload;
       const requestModel = deploymentName ?? model;
 
       if (responsesAPIModels.has(model) || enabledSearch) {
@@ -134,7 +134,15 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.Azure,
   responses: {
     handlePayload: (payload) => {
-      const { deploymentName, enabledSearch, model, tools, verbosity, ...rest } = payload;
+      const {
+        deploymentName,
+        enabledSearch,
+        model,
+        preserveThinking: _preserveThinking,
+        tools,
+        verbosity,
+        ...rest
+      } = payload;
       const requestModel = deploymentName ?? model;
       const updatedMessages = transformAzureSystemMessages(payload.messages, model);
       const azureTools = appendAzureSearchTool(tools, enabledSearch);
