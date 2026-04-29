@@ -3,8 +3,9 @@ import type { BuiltinToolManifest, HumanInterventionRule } from '@lobechat/types
 import { toolSystemPrompt } from './toolSystemRole';
 import { WebOnboardingApiName, WebOnboardingIdentifier } from './types';
 
-// Agent identity (name/emoji) and user profile (fullName/responseLanguage) both
-// surface a confirmation card; interests-only saves bypass intervention.
+// Agent identity (name/emoji) surface a confirmation card;
+// user profile fields (fullName, responseLanguage) and interests
+// saves bypass intervention.
 const saveUserQuestionConfirmationRules: HumanInterventionRule[] = [
   {
     match: {
@@ -15,18 +16,6 @@ const saveUserQuestionConfirmationRules: HumanInterventionRule[] = [
   {
     match: {
       agentEmoji: { pattern: '\\S', type: 'regex' },
-    },
-    policy: 'always',
-  },
-  {
-    match: {
-      fullName: { pattern: '\\S', type: 'regex' },
-    },
-    policy: 'always',
-  },
-  {
-    match: {
-      responseLanguage: { pattern: '\\S', type: 'regex' },
     },
     policy: 'always',
   },
@@ -47,7 +36,7 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Persist structured onboarding fields. agentName/agentEmoji (updates inbox agent title/avatar), fullName, and responseLanguage all require user confirmation; interests-only saves run without confirmation.',
+        'Persist structured onboarding fields. agentName and agentEmoji (updates inbox agent title/avatar) require user confirmation; interests-only saves run without confirmation.',
       humanIntervention: saveUserQuestionConfirmationRules,
       name: WebOnboardingApiName.saveUserQuestion,
       parameters: {

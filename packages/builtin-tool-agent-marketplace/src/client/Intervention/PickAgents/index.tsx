@@ -136,9 +136,7 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
       );
     }
 
-    // const showLoading = isLoading && allTemplates.length === 0;
-    // const showLoading = !!1;
-    const showLoading = !!0;
+    const showLoading = isLoading && allTemplates.length === 0;
     const showEmpty = !isLoading && visibleTemplates.length === 0;
 
     return (
