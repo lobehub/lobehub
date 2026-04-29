@@ -9,7 +9,7 @@ interface ProxyRequestInit extends RequestInit {
 }
 
 const methodsWithoutBody = new Set(['GET', 'HEAD']);
-const proxyHeaderBlocklist = ['host'];
+const proxyHeaderBlocklist = ['cookie', 'host'];
 const responseHeaderBlocklist = ['set-cookie'];
 
 const sanitizeProxyResponse = (response: Response) => {

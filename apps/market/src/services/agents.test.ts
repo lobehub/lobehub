@@ -373,4 +373,31 @@ describe('AgentService', async () => {
       status: 403,
     } satisfies Partial<MarketHttpError>);
   });
+
+  it('ignores moderation fields from user-controlled agent mutations', async () => {
+    const account = await createAccount('moderation-owner', 'Moderation Owner');
+
+    await service.createAgent(account.id, {
+      identifier: 'moderation-agent',
+      isFeatured: true,
+      name: 'Moderation Agent',
+    });
+    await service.createAgentVersion(account.id, {
+      identifier: 'moderation-agent',
+    });
+    await service.modifyAgent(account.id, {
+      identifier: 'moderation-agent',
+      isFeatured: true,
+      isOfficial: true,
+      status: 'published',
+    });
+
+    const detail = await service.getAgentDetail('moderation-agent');
+
+    expect(detail).toMatchObject({
+      identifier: 'moderation-agent',
+      isFeatured: false,
+      isOfficial: false,
+    });
+  });
 });

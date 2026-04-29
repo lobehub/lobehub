@@ -63,6 +63,7 @@ describe('createMarketApp', () => {
     const request = new Request('http://market:3211/api/v1/skills?locale=en-US', {
       headers: {
         'authorization': 'Bearer user-token',
+        'cookie': 'session=secret',
         'host': 'market:3211',
         'x-lobe-trust-token': 'trusted-token',
         'x-request-id': 'request-1',
@@ -85,6 +86,7 @@ describe('createMarketApp', () => {
     expect(headers.get('authorization')).toBe('Bearer user-token');
     expect(headers.get('x-lobe-trust-token')).toBe('trusted-token');
     expect(headers.get('x-request-id')).toBe('request-1');
+    expect(headers.has('cookie')).toBe(false);
     expect(headers.has('host')).toBe(false);
   });
 

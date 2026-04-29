@@ -273,7 +273,6 @@ export class AgentService {
     const agent = await this.model.createAgent({
       homepage: data.homepage,
       identifier: data.identifier,
-      isFeatured: data.isFeatured ?? false,
       name: data.name,
       ownerId,
       status: data.status ?? 'unpublished',
@@ -288,8 +287,6 @@ export class AgentService {
 
     const values: Partial<NewMarketAgent> = {
       homepage: data.homepage,
-      isFeatured: data.isFeatured,
-      isOfficial: data.isOfficial,
       name: data.name,
       status: data.status,
       visibility: data.visibility,
