@@ -464,4 +464,27 @@ describe('AgentSlice Actions', () => {
       expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
     });
   });
+
+  describe('useHydrateAgentConfig', () => {
+    it('should hydrate agent config without changing activeAgentId', async () => {
+      const mockAgentConfig = {
+        id: 'agent-1',
+        model: 'gpt-4',
+        systemRole: 'You are a helpful assistant',
+      } as LobeAgentConfig;
+
+      useAgentStore.setState({ activeAgentId: 'agent-current' });
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
+
+      const { result } = renderHook(() => useAgentStore().useHydrateAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+
+      expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
+      expect(useAgentStore.getState().activeAgentId).toBe('agent-current');
+      expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
+    });
+  });
 });

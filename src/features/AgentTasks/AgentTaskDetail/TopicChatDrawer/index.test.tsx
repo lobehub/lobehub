@@ -9,7 +9,7 @@ import TopicChatDrawer from './index';
 
 const mocks = vi.hoisted(() => ({
   agentState: {
-    useFetchAgentConfig: vi.fn(),
+    useHydrateAgentConfig: vi.fn(),
   },
   chatState: {
     dbMessagesMap: {} as Record<string, unknown[]>,
@@ -132,7 +132,7 @@ vi.mock('../TopicStatusIcon', () => ({
 
 describe('TopicChatDrawer', () => {
   beforeEach(() => {
-    mocks.agentState.useFetchAgentConfig.mockClear();
+    mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
     mocks.taskState.closeTopicDrawer.mockClear();
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
@@ -141,6 +141,6 @@ describe('TopicChatDrawer', () => {
   it('hydrates the task assignee agent config for drawer messages', () => {
     render(<TopicChatDrawer />);
 
-    expect(mocks.agentState.useFetchAgentConfig).toHaveBeenCalledWith(true, 'agt_assignee');
+    expect(mocks.agentState.useHydrateAgentConfig).toHaveBeenCalledWith(true, 'agt_assignee');
   });
 });

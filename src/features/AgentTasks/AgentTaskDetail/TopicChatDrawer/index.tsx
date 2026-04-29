@@ -35,9 +35,9 @@ interface TopicChatDrawerBodyProps {
 
 const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+  const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
-  useFetchAgentConfig(isLogin, agentId);
+  useHydrateAgentConfig(isLogin, agentId);
 
   const context = useMemo<ConversationContext>(
     () => ({
