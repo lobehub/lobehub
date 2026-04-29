@@ -5,7 +5,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
-import { RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
@@ -74,18 +74,18 @@ export const videoRouter = router({
     const { userId, serverDB, asyncTaskModel, fileService } = ctx;
     const { generationTopicId, provider, model, params } = input;
 
+    const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+
     // Reject lobehub model ids that are no longer in the model bank so callers get a
-    // clear error instead of an opaque downstream failure. Validate against the
-    // user-facing model id (pre-mapping) since that is what the agent record stores.
-    if (provider === BRANDING_PROVIDER && !isLobeHubModelAvailable(model, 'video')) {
+    // clear error instead of an opaque downstream failure when the resolved channel
+    // model is no longer in the model bank.
+    if (provider === BRANDING_PROVIDER && !isLobeHubModelAvailable(resolvedModelId, 'video')) {
       throw new TRPCError({
         cause: { data: { modelType: 'video', requestedModel: model } },
         code: 'BAD_REQUEST',
-        message: 'LobeHubModelDeprecated',
+        message: ChatErrorType.LobeHubModelDeprecated,
       });
     }
-
-    const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
     log('Starting video creation process, input: %O', input);
 

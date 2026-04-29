@@ -1,3 +1,4 @@
+import { ChatErrorType } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
@@ -9,7 +10,8 @@ interface LobeHubModelDeprecatedErrorData {
 }
 
 export const handleLobeHubModelDeprecatedError = (error: unknown) => {
-  if (!(error instanceof TRPCClientError) || error.message !== 'LobeHubModelDeprecated') return;
+  if (!(error instanceof TRPCClientError) || error.message !== ChatErrorType.LobeHubModelDeprecated)
+    return;
 
   const requestedModel = (error.data?.errorData as LobeHubModelDeprecatedErrorData | undefined)
     ?.requestedModel;

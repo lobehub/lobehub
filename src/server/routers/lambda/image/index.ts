@@ -1,4 +1,6 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
+import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
@@ -62,14 +64,16 @@ export const imageRouter = router({
 
     log('Starting image creation process, input: %O', input);
 
+    const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+
     // Reject lobehub model ids that are no longer in the model bank so callers get a
     // clear error instead of an opaque downstream failure when the underlying channel
     // can't serve the requested id.
-    if (provider === BRANDING_PROVIDER && !isLobeHubModelAvailable(model, 'image')) {
+    if (provider === BRANDING_PROVIDER && !isLobeHubModelAvailable(resolvedModelId, 'image')) {
       throw new TRPCError({
         cause: { data: { modelType: 'image', requestedModel: model } },
         code: 'BAD_REQUEST',
-        message: 'LobeHubModelDeprecated',
+        message: ChatErrorType.LobeHubModelDeprecated,
       });
     }
 
