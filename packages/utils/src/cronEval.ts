@@ -78,14 +78,18 @@ export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
       // Every hour at a specific minute (e.g. `30 * * * *`)
       if (minutesSince < 60) return false;
     } else if (DAILY_PATTERN_HOUR_REGEX.test(cronHour)) {
-      // Daily at specific hour — dedup by calendar day in the job's timezone
-      const lastLocal = dayjs(last).tz(jobTimezone);
-      const nowLocal = dayjs(currentTime).tz(jobTimezone);
-      if (
-        lastLocal.year() === nowLocal.year() &&
-        lastLocal.month() === nowLocal.month() &&
-        lastLocal.date() === nowLocal.date()
-      ) {
+      // Daily at specific H:M — dedup against today's scheduled target, not
+      // the calendar day. A pre-target manual run (e.g. user clicks "run now"
+      // at 18:00 for a 21:00 schedule) must NOT consume the upcoming tick.
+      const targetHour = Number.parseInt(cronHour, 10);
+      const targetMinute = /^\d+$/.test(cronMinute) ? Number.parseInt(cronMinute, 10) : 0;
+      const todaysTarget = dayjs(currentTime)
+        .tz(jobTimezone)
+        .hour(targetHour)
+        .minute(targetMinute)
+        .second(0)
+        .millisecond(0);
+      if (last.getTime() >= todaysTarget.valueOf()) {
         return false;
       }
     }
@@ -102,13 +106,15 @@ export const isExecutionTime = (input: IsExecutionTimeInput): boolean => {
     let shouldCatchUp: boolean;
 
     if (lastExecutedAt) {
-      const lastLocal = dayjs(lastExecutedAt).tz(jobTimezone);
-      const nowLocal = dayjs(currentTime).tz(jobTimezone);
-      const lastIsToday =
-        lastLocal.year() === nowLocal.year() &&
-        lastLocal.month() === nowLocal.month() &&
-        lastLocal.date() === nowLocal.date();
-      shouldCatchUp = !lastIsToday && hour > targetHour;
+      const targetMinute = /^\d+$/.test(cronMinute) ? Number.parseInt(cronMinute, 10) : 0;
+      const todaysTarget = dayjs(currentTime)
+        .tz(jobTimezone)
+        .hour(targetHour)
+        .minute(targetMinute)
+        .second(0)
+        .millisecond(0);
+      const lastCoveredToday = new Date(lastExecutedAt).getTime() >= todaysTarget.valueOf();
+      shouldCatchUp = !lastCoveredToday && hour > targetHour;
     } else {
       shouldCatchUp = hour > targetHour;
     }
