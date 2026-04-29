@@ -22,6 +22,7 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { isDev } from '@/utils/env';
 
+import AnalyticsBridge from './AnalyticsBridge';
 import { resolveAgentOnboardingContext } from './context';
 import AgentOnboardingConversation from './Conversation';
 import AgentOnboardingDebugExportButton from './DebugExportButton';
@@ -140,6 +141,7 @@ const AgentOnboardingPage = memo(() => {
 
   return (
     <OnboardingContainer>
+      <AnalyticsBridge />
       <Flexbox height={'100%'} width={'100%'}>
         <OnboardingConversationProvider
           agentId={onboardingAgentId}

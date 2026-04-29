@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ONBOARDING_METRICS_EVENTS,
+  ONBOARDING_METRICS_SPM,
   setOnboardingAnalyticsClient,
   trackOnboardingMarketplacePicked,
   trackOnboardingMarketplaceShown,
@@ -27,6 +28,7 @@ describe('onboardingMetrics', () => {
       properties: {
         categoryHints: ['engineering', 'design-creative'],
         requestId: 'req-a',
+        spm: ONBOARDING_METRICS_SPM.MARKETPLACE_SHOWN,
       },
     });
   });
@@ -45,6 +47,7 @@ describe('onboardingMetrics', () => {
         categoryHints: ['engineering'],
         requestId: 'req-b',
         selectedTemplateIds: ['pair-programmer', 'code-reviewer'],
+        spm: ONBOARDING_METRICS_SPM.MARKETPLACE_PICKED,
       },
     });
   });

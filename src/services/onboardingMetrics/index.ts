@@ -3,20 +3,17 @@ export const ONBOARDING_METRICS_EVENTS = {
   MARKETPLACE_SHOWN: 'onboarding_marketplace_shown',
 } as const;
 
+export const ONBOARDING_METRICS_SPM = {
+  MARKETPLACE_PICKED: 'onboarding.marketplace.picked',
+  MARKETPLACE_SHOWN: 'onboarding.marketplace.shown',
+} as const;
+
 interface AnalyticsLike {
   track: (event: { name: string; properties?: Record<string, unknown> }) => unknown;
 }
 
 let analyticsClient: AnalyticsLike | null = null;
 
-// TODO(LOBE-7801): wire this setter from the app bootstrap provider.
-// The picker runtime's `onShown` / `onPicked` hooks already call the `track*`
-// functions below, but without a configured analytics client they no-op.
-// Options for follow-up:
-//   - Inject via a top-level React provider that reads useAnalytics() and
-//     calls setOnboardingAnalyticsClient at mount.
-//   - Or, move to a per-call options pattern matching onboardingFeedback.ts.
-// Until wired, telemetry events are silently dropped.
 export const setOnboardingAnalyticsClient = (client: AnalyticsLike | null): void => {
   analyticsClient = client;
 };
@@ -36,7 +33,10 @@ export interface MarketplaceShownPayload {
 }
 
 export const trackOnboardingMarketplaceShown = (payload: MarketplaceShownPayload): void => {
-  emit(ONBOARDING_METRICS_EVENTS.MARKETPLACE_SHOWN, { ...payload });
+  emit(ONBOARDING_METRICS_EVENTS.MARKETPLACE_SHOWN, {
+    ...payload,
+    spm: ONBOARDING_METRICS_SPM.MARKETPLACE_SHOWN,
+  });
 };
 
 export interface MarketplacePickedPayload {
@@ -46,5 +46,8 @@ export interface MarketplacePickedPayload {
 }
 
 export const trackOnboardingMarketplacePicked = (payload: MarketplacePickedPayload): void => {
-  emit(ONBOARDING_METRICS_EVENTS.MARKETPLACE_PICKED, { ...payload });
+  emit(ONBOARDING_METRICS_EVENTS.MARKETPLACE_PICKED, {
+    ...payload,
+    spm: ONBOARDING_METRICS_SPM.MARKETPLACE_PICKED,
+  });
 };
