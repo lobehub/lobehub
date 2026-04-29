@@ -35,6 +35,17 @@ export interface MessengerPlatformBinder {
     platformUserId: string;
   }) => Promise<void>;
 
+  /**
+   * Register the inbound webhook with the IM platform so messages get pushed to
+   * `webhookUrl`. Implementations must be idempotent — this is called on every
+   * server start (and on every cloud cron tick) and should no-op when the
+   * platform already has the same URL configured.
+   *
+   * Throws on misconfiguration so the caller can log; transient/network errors
+   * should be surfaced too — the router decides what to do per platform.
+   */
+  registerWebhook: (params: { webhookUrl: string }) => Promise<void>;
+
   /** Plain DM reply (used by /agents, /switch, and various command help texts). */
   sendDmText: (chatId: string, text: string) => Promise<void>;
 }

@@ -22,6 +22,24 @@ export async function register() {
     });
   }
 
+  // Register messenger inbound webhooks (Telegram setWebhook, etc.). Independent
+  // of per-user GatewayManager — credentials live in env, registration is
+  // idempotent and cheap (one HTTP call per platform), so we run it on every
+  // non-Vercel start regardless of ENABLE_BOT_IN_DEV. On Vercel this happens in
+  // the /api/agent/gateway cron.
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.DATABASE_URL &&
+    !process.env.VERCEL_ENV
+  ) {
+    const { getMessengerRouter } = await import('./server/services/messenger');
+    getMessengerRouter()
+      .ensureConnected()
+      .catch((err) => {
+        console.error('[Instrumentation] Failed to connect messenger platforms:', err);
+      });
+  }
+
   if (process.env.NODE_ENV !== 'production' && !process.env.ENABLE_TELEMETRY_IN_DEV) {
     return;
   }

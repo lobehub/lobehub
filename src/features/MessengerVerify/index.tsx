@@ -128,7 +128,7 @@ const MessengerVerifyPage = memo(() => {
   }
 
   if (!isSignedIn) {
-    const signInUrl = `/login?callbackUrl=${encodeURIComponent(
+    const signInUrl = `/signin?callbackUrl=${encodeURIComponent(
       `/verify-im?${searchParams.toString()}`,
     )}`;
     return (

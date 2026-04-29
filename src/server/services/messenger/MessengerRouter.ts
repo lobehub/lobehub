@@ -9,6 +9,7 @@ import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLin
 import type { MessengerAccountLinkItem } from '@/database/schemas';
 import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import type { PlatformClient } from '@/server/services/bot/platforms';
@@ -87,6 +88,48 @@ export class MessengerRouter {
   /** List platforms with valid env config (used by UI / TRPC `availablePlatforms`). */
   static listEnabledPlatforms(): MessengerPlatform[] {
     return getEnabledMessengerPlatforms();
+  }
+
+  /**
+   * Connect every enabled messenger platform so inbound messages reach us.
+   * Today this means registering a webhook against
+   * `${WEBHOOK_PUBLIC_URL}/api/agent/messenger/webhooks/<platform>`; future
+   * platforms may use polling or a gateway instead.
+   *
+   * Idempotent — safe to call on every server start and on every cloud cron
+   * tick. Per-platform failures are isolated and logged so a misconfigured
+   * platform never blocks the others.
+   */
+  async ensureConnected(): Promise<void> {
+    const url = appEnv.WEBHOOK_PUBLIC_URL;
+    if (!url) {
+      log('ensureConnected: no WEBHOOK_PUBLIC_URL configured');
+      return;
+    }
+    const trimmedUrl = url.replace(/\/$/, '');
+    const platforms = getEnabledMessengerPlatforms();
+    if (platforms.length === 0) {
+      log('ensureConnected: no enabled messenger platforms');
+      return;
+    }
+
+    await Promise.all(
+      platforms.map(async (platform) => {
+        const binder = this.createBinder(platform);
+        if (!binder) {
+          log('ensureConnected: %s has no binder yet, skipping', platform);
+          return;
+        }
+
+        const webhookUrl = `${trimmedUrl}/api/agent/messenger/webhooks/${platform}`;
+        try {
+          await binder.registerWebhook({ webhookUrl });
+          log('ensureConnected: %s registered -> %s', platform, webhookUrl);
+        } catch (error) {
+          log('ensureConnected: %s failed: %O', platform, error);
+        }
+      }),
+    );
   }
 
   private async getOrCreateBot(
@@ -184,12 +227,12 @@ export class MessengerRouter {
     binder: MessengerPlatformBinder,
     platform: MessengerPlatform,
   ): void {
-    bot.onNewMessage(/./, async (thread, message, _context?: MessageContext) => {
+    const handle = async (thread: any, message: Message): Promise<void> => {
       if (message.author.isBot === true) return;
 
       const senderId = message.author.userId;
       if (!senderId) {
-        log('onNewMessage: missing author.userId, dropping');
+        log('handle: missing author.userId, dropping');
         return;
       }
 
@@ -235,13 +278,34 @@ export class MessengerRouter {
 
         await this.dispatchToAgent(thread, message, client, link, link.activeAgentId, platform);
       } catch (error) {
-        log('onNewMessage: handler error: %O', error);
+        log('handle: handler error: %O', error);
         try {
           await thread.post(renderInlineError('Something went wrong'));
         } catch {
           /* ignore */
         }
       }
+    };
+
+    // Chat SDK routes 1:1 conversations to `onDirectMessage`. Follow-up messages
+    // in a subscribed thread go to `onSubscribedMessage`. Messenger is currently
+    // DM-only, so wire the same handler to both — and `thread.subscribe()` on
+    // first contact so future messages (which arrive as "subscribed" rather
+    // than "direct") still route here. `onNewMessage(/./)` does NOT match DMs;
+    // those fall through to `onNewMention` if `onDirectMessage` is unregistered.
+    bot.onDirectMessage(async (thread, message, _channel, _context?: MessageContext) => {
+      log('onDirectMessage: platform=%s, msgId=%s', platform, (message as any).id);
+      try {
+        await thread.subscribe();
+      } catch {
+        /* idempotent — first contact creates the subscription, later calls no-op */
+      }
+      await handle(thread, message);
+    });
+
+    bot.onSubscribedMessage(async (thread, message, _context?: MessageContext) => {
+      log('onSubscribedMessage: platform=%s, msgId=%s', platform, (message as any).id);
+      await handle(thread, message);
     });
   }
 

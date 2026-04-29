@@ -5,6 +5,7 @@ import { appEnv } from '@/envs/app';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramClientFactory } from '@/server/services/bot/platforms/telegram/client';
+import { setTelegramWebhook } from '@/server/services/bot/platforms/telegram/helpers';
 
 import { issueLinkToken } from '../linkTokenStore';
 import type { MessengerPlatformBinder, UnlinkedMessageContext } from '../types';
@@ -46,11 +47,25 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     );
   }
 
+  async registerWebhook(params: { webhookUrl: string }): Promise<void> {
+    const config = getMessengerTelegramConfig();
+    if (!config) {
+      throw new Error('LOBE_TELEGRAM_BOT_TOKEN is not configured');
+    }
+
+    await setTelegramWebhook(config.botToken, params.webhookUrl, config.webhookSecret);
+    log('registerWebhook: telegram webhook -> %s', params.webhookUrl);
+  }
+
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
     const config = getMessengerTelegramConfig();
     if (!config) return;
 
-    const appUrl = process.env.APP_URL;
+    // The verify-im button takes the user back into LobeHub for the auth /
+    // session-bound binding flow, so it must use APP_URL — same as every other
+    // app-side redirect — not the webhook tunnel URL. (Tunnel URLs are only
+    // used for inbound platform → server webhooks.)
+    const appUrl = appEnv.APP_URL;
     if (!appUrl) {
       log('handleUnlinkedMessage: APP_URL not set, cannot build verify-im link');
       return;
