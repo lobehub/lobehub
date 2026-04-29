@@ -201,8 +201,14 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 
   const enabled = !!automationMode;
   const [isStartingSchedule, setIsStartingSchedule] = useState(false);
+  // Heartbeat tasks are re-armed only by maybeRearmHeartbeat after a topic
+  // completes; there is no dispatcher that picks up `scheduled` heartbeat tasks,
+  // so flipping one to `scheduled` from here would leave it dormant.
   const canStartSchedule =
-    enabled && !!finalTaskId && status !== 'scheduled' && status !== 'running';
+    automationMode === 'schedule' &&
+    !!finalTaskId &&
+    status !== 'scheduled' &&
+    status !== 'running';
 
   const summary = useMemo<{ primary: string; secondary?: string } | null>(() => {
     if (automationMode === 'heartbeat' && finalCurrentInterval > 0) {
