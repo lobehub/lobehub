@@ -43,7 +43,7 @@ const resolveActiveTopicDocument = async (
   try {
     const documents = await agentDocumentService.listDocuments({
       agentId: context.agentId,
-      target: 'currentTopic',
+      scope: 'currentTopic',
       topicId: context.topicId,
     });
     const matchedDocument = documents.find(
