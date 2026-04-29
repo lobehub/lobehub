@@ -2,29 +2,29 @@ import { randomUUID } from 'node:crypto';
 
 import debug from 'debug';
 
-import { getLobeAILinkTokenTtl, type LobeAIPlatform } from '@/config/lobeai';
+import { getMessengerLinkTokenTtl, type MessengerPlatform } from '@/config/messenger';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 
-const log = debug('lobe-server:lobeai:link-token');
+const log = debug('lobe-server:messenger:link-token');
 
 /** Lower-cased random token used as the URL `random_id` query param. */
 export type LinkToken = string;
 
 export interface LinkTokenPayload {
   createdAt: number;
-  platform: LobeAIPlatform;
+  platform: MessengerPlatform;
   platformUserId: string;
   /** Best-effort display name shown on the verify-im confirm screen. */
   platformUsername?: string;
 }
 
-const tokenKey = (token: LinkToken): string => `lobeai:link-token:${token}`;
+const tokenKey = (token: LinkToken): string => `messenger:link-token:${token}`;
 
 /** Existing token reuse map — same `(platform, platformUserId)` shouldn't
  * generate a fresh token each /start; reuse the live one if it hasn't expired
  * so the user's previous "Link Account" button still works. */
-const reuseKey = (platform: LobeAIPlatform, platformUserId: string): string =>
-  `lobeai:link-token-reuse:${platform}:${platformUserId}`;
+const reuseKey = (platform: MessengerPlatform, platformUserId: string): string =>
+  `messenger:link-token-reuse:${platform}:${platformUserId}`;
 
 /**
  * Issue a one-shot link token bound to a platform user. If a live token already
@@ -36,10 +36,10 @@ export const issueLinkToken = async (
 ): Promise<LinkToken> => {
   const redis = getAgentRuntimeRedisClient();
   if (!redis) {
-    throw new Error('Redis is required for LobeAI link token storage');
+    throw new Error('Redis is required for messenger link token storage');
   }
 
-  const ttl = getLobeAILinkTokenTtl();
+  const ttl = getMessengerLinkTokenTtl();
   const existing = await redis.get(reuseKey(payload.platform, payload.platformUserId));
   if (existing) {
     const live = await redis.get(tokenKey(existing));

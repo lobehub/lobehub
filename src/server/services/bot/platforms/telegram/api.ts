@@ -27,7 +27,7 @@ export class TelegramApi {
 
   /**
    * Send a message with a single inline-keyboard URL button. Used by the
-   * LobeAI link flow to surface a "Link Account" CTA that opens the
+   * Messenger link flow to surface a "Link Account" CTA that opens the
    * verify-im page in the user's browser.
    */
   async sendMessageWithUrlButton(

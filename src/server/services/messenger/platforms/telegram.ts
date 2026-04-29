@@ -1,14 +1,15 @@
 import debug from 'debug';
 
-import { getLobeAITelegramConfig } from '@/config/lobeai';
+import { getMessengerTelegramConfig } from '@/config/messenger';
+import { appEnv } from '@/envs/app';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramClientFactory } from '@/server/services/bot/platforms/telegram/client';
 
 import { issueLinkToken } from '../linkTokenStore';
-import type { LobeAIPlatformBinder, UnlinkedMessageContext } from '../types';
+import type { MessengerPlatformBinder, UnlinkedMessageContext } from '../types';
 
-const log = debug('lobe-server:lobeai:telegram');
+const log = debug('lobe-server:messenger:telegram');
 
 const buildVerifyImUrl = (params: {
   appUrl: string;
@@ -19,21 +20,21 @@ const buildVerifyImUrl = (params: {
   url.searchParams.set('im_type', 'telegram');
   url.searchParams.set('im_user_id', params.platformUserId);
   url.searchParams.set('random_id', params.randomId);
-  url.searchParams.set('utm_source', 'lobeai_tg');
+  url.searchParams.set('utm_source', 'messenger_tg');
   return url.toString();
 };
 
 const escapeHtml = (s: string): string =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
-export class LobeAITelegramBinder implements LobeAIPlatformBinder {
+export class MessengerTelegramBinder implements MessengerPlatformBinder {
   createClient(): PlatformClient | null {
-    const config = getLobeAITelegramConfig();
+    const config = getMessengerTelegramConfig();
     if (!config) return null;
 
     return new TelegramClientFactory().createClient(
       {
-        applicationId: 'lobeai-telegram',
+        applicationId: 'messenger-telegram',
         credentials: {
           botToken: config.botToken,
           secretToken: config.webhookSecret ?? '',
@@ -41,12 +42,12 @@ export class LobeAITelegramBinder implements LobeAIPlatformBinder {
         platform: 'telegram',
         settings: {},
       },
-      { appUrl: process.env.APP_URL },
+      { appUrl: appEnv.WEBHOOK_PUBLIC_URL },
     );
   }
 
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
-    const config = getLobeAITelegramConfig();
+    const config = getMessengerTelegramConfig();
     if (!config) return;
 
     const appUrl = process.env.APP_URL;
@@ -67,7 +68,7 @@ export class LobeAITelegramBinder implements LobeAIPlatformBinder {
       const api = new TelegramApi(config.botToken);
       await api.sendMessage(
         ctx.chatId,
-        'LobeAI is temporarily unavailable. Please try again in a moment.',
+        'LobeHub is temporarily unavailable. Please try again in a moment.',
       );
       return;
     }
@@ -79,7 +80,7 @@ export class LobeAITelegramBinder implements LobeAIPlatformBinder {
     });
 
     const text =
-      'Welcome to LobeAI! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, use:\n• /agents to list your agents\n• /switch &lt;n&gt; to change the active one';
+      'Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, use:\n• /agents to list your agents\n• /switch &lt;n&gt; to change the active one';
 
     const api = new TelegramApi(config.botToken);
     await api.sendMessageWithUrlButton(ctx.chatId, text, {
@@ -92,11 +93,11 @@ export class LobeAITelegramBinder implements LobeAIPlatformBinder {
     activeAgentName?: string;
     platformUserId: string;
   }): Promise<void> {
-    const config = getLobeAITelegramConfig();
+    const config = getMessengerTelegramConfig();
     if (!config) return;
 
     const api = new TelegramApi(config.botToken);
-    const headline = '✅ Linked successfully! Your LobeAI account is now connected.';
+    const headline = '✅ Linked successfully! Your LobeHub account is now connected.';
     const tail = params.activeAgentName
       ? `\n\nActive agent: <b>${escapeHtml(params.activeAgentName)}</b>\n\nGo ahead and send your first message — use /switch &lt;n&gt; any time to change agents.`
       : '\n\nUse /agents to list your agents and /switch &lt;n&gt; to pick the active one.';
@@ -109,7 +110,7 @@ export class LobeAITelegramBinder implements LobeAIPlatformBinder {
   }
 
   async sendDmText(chatId: string, text: string): Promise<void> {
-    const config = getLobeAITelegramConfig();
+    const config = getMessengerTelegramConfig();
     if (!config) return;
     try {
       await new TelegramApi(config.botToken).sendMessage(chatId, text);

@@ -82,7 +82,7 @@ import AllTasksPage from '@/routes/(main)/tasks';
 import AllTasksLayout from '@/routes/(main)/tasks/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
-import LobeAIVerifyPage from '@/routes/verify-im';
+import MessengerVerifyPage from '@/routes/verify-im';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -569,7 +569,7 @@ desktopRoutes.push({
 });
 
 desktopRoutes.push({
-  element: <LobeAIVerifyPage />,
+  element: <MessengerVerifyPage />,
   errorElement: <ErrorBoundary />,
   path: '/verify-im',
 });

@@ -343,7 +343,7 @@ export const mobileRoutes: RouteObject[] = [
     path: '/onboarding/classic',
   },
   {
-    element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > LobeAI Verify'),
+    element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > Messenger Verify'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
   },

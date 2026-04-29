@@ -7,6 +7,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
@@ -296,7 +297,7 @@ export class BotMessageRouter {
     );
 
     const runtimeContext: BotPlatformRuntimeContext = {
-      appUrl: process.env.APP_URL,
+      appUrl: appEnv.WEBHOOK_PUBLIC_URL,
       redisClient: getAgentRuntimeRedisClient() as any,
     };
 

@@ -11,13 +11,13 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { lobeAIService } from '@/services/lobeAI';
+import { messengerService } from '@/services/messenger';
 import { useSessionStore } from '@/store/session';
 import { sessionMetaSelectors, sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-type LobeAIPlatform = 'telegram' | 'slack';
+type MessengerPlatform = 'telegram' | 'slack';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -76,31 +76,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const PLATFORM_LABELS: Record<LobeAIPlatform, string> = {
+const PLATFORM_LABELS: Record<MessengerPlatform, string> = {
   slack: 'Slack',
   telegram: 'Telegram',
 };
 
-const PLATFORM_ICONS: Record<LobeAIPlatform, ReactNode> = {
+const PLATFORM_ICONS: Record<MessengerPlatform, ReactNode> = {
   slack: <SlackOutlined style={{ color: '#4A154B' }} />,
   telegram: <SiTelegram color="#229ED9" size={16} />,
 };
 
-const PLATFORM_BRAND_COLOR: Record<LobeAIPlatform, string> = {
+const PLATFORM_BRAND_COLOR: Record<MessengerPlatform, string> = {
   slack: '#4A154B',
   telegram: '#229ED9',
 };
 
-const PlatformBrandIcon = ({ platform }: { platform: LobeAIPlatform }) => {
+const PlatformBrandIcon = ({ platform }: { platform: MessengerPlatform }) => {
   if (platform === 'telegram') return <SiTelegram color="#fff" size={20} />;
   return <SlackOutlined style={{ color: '#fff', fontSize: 20 }} />;
 };
 
 const buildTelegramDeepLink = (botUsername: string): string =>
-  `https://t.me/${botUsername.replace(/^@/, '')}?start=lobeai`;
+  `https://t.me/${botUsername.replace(/^@/, '')}?start=messenger`;
 
-const LobeAIMessengerSettings = memo(() => {
-  const { t } = useTranslation('lobeai');
+const MessengerSettings = memo(() => {
+  const { t } = useTranslation('messenger');
   const { message, modal } = App.useApp();
   const [linkOpen, setLinkOpen] = useState(false);
 
@@ -121,18 +121,18 @@ const LobeAIMessengerSettings = memo(() => {
     [sessions],
   );
 
-  const platformsSWR = useSWR('lobeai:availablePlatforms', () =>
-    lobeAIService.availablePlatforms(),
+  const platformsSWR = useSWR('messenger:availablePlatforms', () =>
+    messengerService.availablePlatforms(),
   );
-  const linksSWR = useSWR('lobeai:listMyLinks', () => lobeAIService.listMyLinks());
+  const linksSWR = useSWR('messenger:listMyLinks', () => messengerService.listMyLinks());
 
   const platforms = platformsSWR.data ?? [];
   const links = linksSWR.data ?? [];
   const linksByPlatform = new Map(links.map((link) => [link.platform, link]));
 
-  const handleSetActive = async (platform: LobeAIPlatform, agentId: string | null) => {
+  const handleSetActive = async (platform: MessengerPlatform, agentId: string | null) => {
     try {
-      await lobeAIService.setActiveAgent({ agentId, platform });
+      await messengerService.setActiveAgent({ agentId, platform });
       await linksSWR.mutate();
       message.success(t('messenger.setActiveSuccess'));
     } catch (error: any) {
@@ -140,13 +140,13 @@ const LobeAIMessengerSettings = memo(() => {
     }
   };
 
-  const handleUnlink = (platform: LobeAIPlatform) => {
+  const handleUnlink = (platform: MessengerPlatform) => {
     modal.confirm({
       content: t('messenger.unlinkConfirm', { platform: PLATFORM_LABELS[platform] }),
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await lobeAIService.unlink({ platform });
+          await messengerService.unlink({ platform });
           await linksSWR.mutate();
           message.success(t('messenger.unlinkSuccess'));
         } catch (error: any) {
@@ -169,7 +169,7 @@ const LobeAIMessengerSettings = memo(() => {
         ) : (
           <Flexbox gap={12}>
             {platforms.map((p) => {
-              const platform = p.platform as LobeAIPlatform;
+              const platform = p.platform as MessengerPlatform;
               const link = linksByPlatform.get(platform);
               const label = PLATFORM_LABELS[platform] ?? platform;
               const activeAgentId = link?.activeAgentId ?? null;
@@ -267,7 +267,7 @@ const LobeAIMessengerSettings = memo(() => {
         <Tabs
           centered
           items={platforms.map((p) => {
-            const platform = p.platform as LobeAIPlatform;
+            const platform = p.platform as MessengerPlatform;
             const platformLabel = PLATFORM_LABELS[platform] ?? platform;
             const isTelegram = platform === 'telegram';
             const deepLink =
@@ -324,6 +324,6 @@ const LobeAIMessengerSettings = memo(() => {
   );
 });
 
-LobeAIMessengerSettings.displayName = 'LobeAIMessengerSettings';
+MessengerSettings.displayName = 'MessengerSettings';
 
-export default LobeAIMessengerSettings;
+export default MessengerSettings;

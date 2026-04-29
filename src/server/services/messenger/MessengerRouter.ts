@@ -3,10 +3,10 @@ import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
 import debug from 'debug';
 import { asc, eq } from 'drizzle-orm';
 
-import { getEnabledLobeAIPlatforms, type LobeAIPlatform } from '@/config/lobeai';
+import { getEnabledMessengerPlatforms, type MessengerPlatform } from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
-import { LobeAIAccountLinkModel } from '@/database/models/lobeAIAccountLink';
-import type { LobeAIAccountLinkItem } from '@/database/schemas';
+import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
+import type { MessengerAccountLinkItem } from '@/database/schemas';
 import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
@@ -14,13 +14,13 @@ import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
-import { LobeAITelegramBinder } from './platforms/telegram';
-import type { LobeAIPlatformBinder } from './types';
+import { MessengerTelegramBinder } from './platforms/telegram';
+import type { MessengerPlatformBinder } from './types';
 
-const log = debug('lobe-server:lobeai:router');
+const log = debug('lobe-server:messenger:router');
 
-interface RegisteredLobeAIBot {
-  binder: LobeAIPlatformBinder;
+interface RegisteredMessengerBot {
+  binder: MessengerPlatformBinder;
   chatBot: Chat<any>;
   client: PlatformClient;
 }
@@ -48,36 +48,36 @@ const parseCommand = (text: string | undefined): CommandMatch | null => {
 };
 
 /**
- * Routes inbound messages from the shared LobeAI bots (one per platform,
+ * Routes inbound messages from the shared Messenger bots (one per platform,
  * credentials in env) to the right LobeHub user + agent.
  *
  * Account model: each user binds their IM account to LobeHub ONCE per
- * platform (one row in `lobeai_account_links`). The `activeAgentId` column
+ * platform (one row in `messenger_account_links`). The `activeAgentId` column
  * tracks which of the user's agents currently receives messages — switchable
  * via `/switch` or the web UI without re-running verify-im.
  */
-export class LobeAIMessageRouter {
-  private bots = new Map<LobeAIPlatform, RegisteredLobeAIBot>();
-  private loadingPromises = new Map<LobeAIPlatform, Promise<RegisteredLobeAIBot | null>>();
+export class MessengerRouter {
+  private bots = new Map<MessengerPlatform, RegisteredMessengerBot>();
+  private loadingPromises = new Map<MessengerPlatform, Promise<RegisteredMessengerBot | null>>();
 
   /**
-   * Webhook handler for `/api/agent/lobeai/webhooks/[platform]`. Returns 404
+   * Webhook handler for `/api/agent/messenger/webhooks/[platform]`. Returns 404
    * if the platform is not enabled (no env credentials configured).
    */
   getWebhookHandler(platform: string): (req: Request) => Promise<Response> {
     return async (req: Request) => {
-      if (!isLobeAIPlatform(platform)) {
-        return new Response(`Unknown LobeAI platform: ${platform}`, { status: 404 });
+      if (!isMessengerPlatform(platform)) {
+        return new Response(`Unknown messenger platform: ${platform}`, { status: 404 });
       }
 
       const bot = await this.getOrCreateBot(platform);
       if (!bot) {
-        return new Response(`LobeAI ${platform} bot not configured`, { status: 404 });
+        return new Response(`Messenger ${platform} bot not configured`, { status: 404 });
       }
 
       const handler = (bot.chatBot.webhooks as any)?.[platform];
       if (!handler) {
-        return new Response(`LobeAI ${platform} webhook unavailable`, { status: 500 });
+        return new Response(`Messenger ${platform} webhook unavailable`, { status: 500 });
       }
 
       return handler(req);
@@ -85,11 +85,13 @@ export class LobeAIMessageRouter {
   }
 
   /** List platforms with valid env config (used by UI / TRPC `availablePlatforms`). */
-  static listEnabledPlatforms(): LobeAIPlatform[] {
-    return getEnabledLobeAIPlatforms();
+  static listEnabledPlatforms(): MessengerPlatform[] {
+    return getEnabledMessengerPlatforms();
   }
 
-  private async getOrCreateBot(platform: LobeAIPlatform): Promise<RegisteredLobeAIBot | null> {
+  private async getOrCreateBot(
+    platform: MessengerPlatform,
+  ): Promise<RegisteredMessengerBot | null> {
     const existing = this.bots.get(platform);
     if (existing) return existing;
 
@@ -106,7 +108,7 @@ export class LobeAIMessageRouter {
     }
   }
 
-  private async loadBot(platform: LobeAIPlatform): Promise<RegisteredLobeAIBot | null> {
+  private async loadBot(platform: MessengerPlatform): Promise<RegisteredMessengerBot | null> {
     const binder = this.createBinder(platform);
     if (!binder) {
       log('loadBot: no binder available for %s', platform);
@@ -133,22 +135,22 @@ export class LobeAIMessageRouter {
           { command: 'start', description: 'Bind your account to LobeHub' },
           { command: 'agents', description: 'List your agents' },
           { command: 'switch', description: 'Switch the active agent (e.g. /switch 2)' },
-          { command: 'help', description: 'Show LobeAI usage' },
+          { command: 'help', description: 'Show usage' },
         ])
         .catch((error) => log('registerBotCommands failed for %s: %O', platform, error));
     }
 
-    const registered: RegisteredLobeAIBot = { binder, chatBot, client };
+    const registered: RegisteredMessengerBot = { binder, chatBot, client };
     this.bots.set(platform, registered);
 
-    log('loadBot: registered LobeAI %s bot', platform);
+    log('loadBot: registered messenger %s bot', platform);
     return registered;
   }
 
-  private createBinder(platform: LobeAIPlatform): LobeAIPlatformBinder | null {
+  private createBinder(platform: MessengerPlatform): MessengerPlatformBinder | null {
     switch (platform) {
       case 'telegram': {
-        return new LobeAITelegramBinder();
+        return new MessengerTelegramBinder();
       }
       default: {
         return null;
@@ -156,18 +158,18 @@ export class LobeAIMessageRouter {
     }
   }
 
-  private createChatBot(adapters: Record<string, any>, platform: LobeAIPlatform): Chat<any> {
+  private createChatBot(adapters: Record<string, any>, platform: MessengerPlatform): Chat<any> {
     const config: any = {
       adapters,
       concurrency: 'queue',
-      userName: `lobeai-bot-${platform}`,
+      userName: `messenger-bot-${platform}`,
     };
 
     const redisClient = getAgentRuntimeRedisClient();
     if (redisClient) {
       config.state = createIoRedisState({
         client: redisClient,
-        keyPrefix: `chat-sdk:lobeai-${platform}`,
+        keyPrefix: `chat-sdk:messenger-${platform}`,
         logger: new ConsoleLogger(),
       });
     }
@@ -179,8 +181,8 @@ export class LobeAIMessageRouter {
     bot: Chat<any>,
     serverDB: LobeChatDatabase,
     client: PlatformClient,
-    binder: LobeAIPlatformBinder,
-    platform: LobeAIPlatform,
+    binder: MessengerPlatformBinder,
+    platform: MessengerPlatform,
   ): void {
     bot.onNewMessage(/./, async (thread, message, _context?: MessageContext) => {
       if (message.author.isBot === true) return;
@@ -192,7 +194,7 @@ export class LobeAIMessageRouter {
       }
 
       const chatId = client.extractChatId(thread.id);
-      const link = await LobeAIAccountLinkModel.findByPlatformUser(serverDB, platform, senderId);
+      const link = await MessengerAccountLinkModel.findByPlatformUser(serverDB, platform, senderId);
 
       try {
         const command = parseCommand(message.text);
@@ -244,18 +246,18 @@ export class LobeAIMessageRouter {
   }
 
   /**
-   * Returns true when the inbound message was a recognized LobeAI command and
+   * Returns true when the inbound message was a recognized messenger command and
    * the router replied (so the caller skips agent dispatch).
    */
   private async handleCommand(params: {
     authorUserId: string;
     authorUserName?: string;
-    binder: LobeAIPlatformBinder;
+    binder: MessengerPlatformBinder;
     chatId: string;
     command: CommandMatch;
-    link: LobeAIAccountLinkItem | undefined;
+    link: MessengerAccountLinkItem | undefined;
     message: Message;
-    platform: LobeAIPlatform;
+    platform: MessengerPlatform;
     serverDB: LobeChatDatabase;
   }): Promise<boolean> {
     const { authorUserId, authorUserName, binder, chatId, command, link, message, serverDB } =
@@ -292,7 +294,7 @@ export class LobeAIMessageRouter {
         await binder.sendDmText(
           chatId,
           [
-            'LobeAI commands:',
+            'Commands:',
             '• /agents — list your agents',
             '• /switch <n> — switch the active agent (e.g. /switch 2)',
             '• /start — bind a different LobeHub account',
@@ -309,9 +311,9 @@ export class LobeAIMessageRouter {
   }
 
   private async handleAgentsCommand(params: {
-    binder: LobeAIPlatformBinder;
+    binder: MessengerPlatformBinder;
     chatId: string;
-    link: LobeAIAccountLinkItem | undefined;
+    link: MessengerAccountLinkItem | undefined;
     serverDB: LobeChatDatabase;
   }): Promise<void> {
     const { binder, chatId, link, serverDB } = params;
@@ -342,9 +344,9 @@ export class LobeAIMessageRouter {
 
   private async handleSwitchCommand(params: {
     args: string;
-    binder: LobeAIPlatformBinder;
+    binder: MessengerPlatformBinder;
     chatId: string;
-    link: LobeAIAccountLinkItem | undefined;
+    link: MessengerAccountLinkItem | undefined;
     serverDB: LobeChatDatabase;
   }): Promise<void> {
     const { args, binder, chatId, link, serverDB } = params;
@@ -378,7 +380,7 @@ export class LobeAIMessageRouter {
       return;
     }
 
-    await LobeAIAccountLinkModel.setActiveAgentById(serverDB, link.id, target.id);
+    await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, target.id);
     await binder.sendDmText(
       chatId,
       `Switched active agent to: ${target.title}. Your next message will go there.`,
@@ -408,9 +410,9 @@ export class LobeAIMessageRouter {
     thread: any,
     message: Message,
     client: PlatformClient,
-    link: LobeAIAccountLinkItem,
+    link: MessengerAccountLinkItem,
     agentId: string,
-    platform: LobeAIPlatform,
+    platform: MessengerPlatform,
   ): Promise<void> {
     log(
       'dispatchToAgent: platform=%s, sender=%s, agent=%s, user=%s',
@@ -426,7 +428,7 @@ export class LobeAIMessageRouter {
     await bridge.handleMention(thread, message, {
       agentId,
       botContext: {
-        applicationId: `lobeai-${platform}`,
+        applicationId: `messenger-${platform}`,
         platform,
         platformThreadId: thread.id,
       },
@@ -435,12 +437,12 @@ export class LobeAIMessageRouter {
   }
 }
 
-const isLobeAIPlatform = (platform: string): platform is LobeAIPlatform =>
+const isMessengerPlatform = (platform: string): platform is MessengerPlatform =>
   platform === 'telegram' || platform === 'slack';
 
-let singleton: LobeAIMessageRouter | undefined;
+let singleton: MessengerRouter | undefined;
 
-export const getLobeAIMessageRouter = (): LobeAIMessageRouter => {
-  if (!singleton) singleton = new LobeAIMessageRouter();
+export const getMessengerRouter = (): MessengerRouter => {
+  if (!singleton) singleton = new MessengerRouter();
   return singleton;
 };

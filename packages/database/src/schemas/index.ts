@@ -12,7 +12,6 @@ export * from './chatGroup';
 export * from './documentHistory';
 export * from './file';
 export * from './generation';
-export * from './lobeAIAccountLink';
 export * from './message';
 export * from './messengerAccountLink';
 export * from './messengerInstallation';

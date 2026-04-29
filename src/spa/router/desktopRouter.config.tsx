@@ -706,7 +706,7 @@ desktopRoutes.push({
 });
 
 desktopRoutes.push({
-  element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > LobeAI Verify'),
+  element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > Messenger Verify'),
   errorElement: <ErrorBoundary />,
   path: '/verify-im',
 });

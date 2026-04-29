@@ -3,34 +3,38 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
-  getEnabledLobeAIPlatforms,
-  isLobeAIPlatformEnabled,
-  lobeAIEnv,
-  type LobeAIPlatform,
-} from '@/config/lobeai';
-import { LobeAIAccountLinkModel } from '@/database/models/lobeAIAccountLink';
+  getEnabledMessengerPlatforms,
+  isMessengerPlatformEnabled,
+  messengerEnv,
+  type MessengerPlatform,
+} from '@/config/messenger';
+import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { agents } from '@/database/schemas';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { consumeLinkToken, LobeAITelegramBinder, peekLinkToken } from '@/server/services/lobeai';
+import {
+  consumeLinkToken,
+  MessengerTelegramBinder,
+  peekLinkToken,
+} from '@/server/services/messenger';
 
-const platformEnum = z.enum(['telegram', 'slack']) satisfies z.ZodType<LobeAIPlatform>;
+const platformEnum = z.enum(['telegram', 'slack']) satisfies z.ZodType<MessengerPlatform>;
 
-const lobeAIProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
     ctx: {
-      lobeAILinkModel: new LobeAIAccountLinkModel(ctx.serverDB, ctx.userId),
+      messengerLinkModel: new MessengerAccountLinkModel(ctx.serverDB, ctx.userId),
     },
   });
 });
 
-export const lobeAIRouter = router({
+export const messengerRouter = router({
   /** Surface available platforms + bot deep-link metadata to the UI. */
   availablePlatforms: publicProcedure.query(() => {
-    const platforms = getEnabledLobeAIPlatforms();
+    const platforms = getEnabledMessengerPlatforms();
     return platforms.map((platform) => ({
-      botUsername: platform === 'telegram' ? lobeAIEnv.LOBE_TELEGRAM_BOT_USERNAME : undefined,
+      botUsername: platform === 'telegram' ? messengerEnv.LOBE_TELEGRAM_BOT_USERNAME : undefined,
       enabled: true,
       platform,
     }));
@@ -59,11 +63,11 @@ export const lobeAIRouter = router({
 
   /**
    * Confirm the account link. Account-level: creates (or overwrites) a single
-   * `lobeai_account_links` row for `(userId, platform)`. `initialAgentId` is
+   * `messenger_account_links` row for `(userId, platform)`. `initialAgentId` is
    * required so the user's first IM message has somewhere to land — they can
    * always change it later via `/switch` or the per-agent UI.
    */
-  confirmLink: lobeAIProcedure
+  confirmLink: messengerProcedure
     .input(
       z.object({
         initialAgentId: z.string().min(1, 'Pick a default agent before confirming'),
@@ -89,7 +93,7 @@ export const lobeAIRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
       }
 
-      const link = await ctx.lobeAILinkModel.upsertForPlatform({
+      const link = await ctx.messengerLinkModel.upsertForPlatform({
         activeAgentId: agentRow.id,
         platform: payload.platform,
         platformUserId: payload.platformUserId,
@@ -106,15 +110,15 @@ export const lobeAIRouter = router({
     }),
 
   /** Get the current user's link for one platform (or null). */
-  getMyLink: lobeAIProcedure
+  getMyLink: messengerProcedure
     .input(z.object({ platform: platformEnum }))
     .query(async ({ input, ctx }) => {
-      return (await ctx.lobeAILinkModel.findByPlatform(input.platform)) ?? null;
+      return (await ctx.messengerLinkModel.findByPlatform(input.platform)) ?? null;
     }),
 
   /** List all the current user's links across platforms. */
-  listMyLinks: lobeAIProcedure.query(async ({ ctx }) => {
-    return ctx.lobeAILinkModel.list();
+  listMyLinks: messengerProcedure.query(async ({ ctx }) => {
+    return ctx.messengerLinkModel.list();
   }),
 
   /**
@@ -122,7 +126,7 @@ export const lobeAIRouter = router({
    * the active agent (next inbound message will get the "/agents to pick"
    * prompt).
    */
-  setActiveAgent: lobeAIProcedure
+  setActiveAgent: messengerProcedure
     .input(
       z.object({
         agentId: z.string().nullable(),
@@ -142,40 +146,40 @@ export const lobeAIRouter = router({
         }
       }
 
-      const updated = await ctx.lobeAILinkModel.setActiveAgent(input.platform, input.agentId);
+      const updated = await ctx.messengerLinkModel.setActiveAgent(input.platform, input.agentId);
       if (!updated) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'No LobeAI link for this platform yet. Send /start in the bot first.',
+          message: 'No messenger link for this platform yet. Send /start in the bot first.',
         });
       }
       return { data: updated, success: true };
     }),
 
   /** Remove the user's account link for a platform. */
-  unlink: lobeAIProcedure
+  unlink: messengerProcedure
     .input(z.object({ platform: platformEnum }))
     .mutation(async ({ input, ctx }) => {
-      if (!isLobeAIPlatformEnabled(input.platform)) {
+      if (!isMessengerPlatformEnabled(input.platform)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: `LobeAI ${input.platform} bot is not configured`,
+          message: `Messenger ${input.platform} bot is not configured`,
         });
       }
-      await ctx.lobeAILinkModel.deleteByPlatform(input.platform);
+      await ctx.messengerLinkModel.deleteByPlatform(input.platform);
       return { success: true };
     }),
 });
 
 const notifyLinkSuccess = async (
-  platform: LobeAIPlatform,
+  platform: MessengerPlatform,
   params: { activeAgentName?: string; platformUserId: string },
 ) => {
   try {
     if (platform === 'telegram') {
-      await new LobeAITelegramBinder().notifyLinkSuccess(params);
+      await new MessengerTelegramBinder().notifyLinkSuccess(params);
     }
   } catch (error) {
-    console.error('[lobeAI:notifyLinkSuccess]', error);
+    console.error('[messenger:notifyLinkSuccess]', error);
   }
 };

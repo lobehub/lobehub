@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import LobeAIMessengerSettings from '@/features/LobeAIMessenger';
+import MessengerSettings from '@/features/Messenger';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
 const Page = () => {
@@ -8,7 +8,7 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.messenger')} />
-      <LobeAIMessengerSettings />
+      <MessengerSettings />
     </>
   );
 };

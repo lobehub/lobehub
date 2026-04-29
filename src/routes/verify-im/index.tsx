@@ -1,3 +1,3 @@
-import LobeAIVerifyPage from '@/features/LobeAIVerify';
+import MessengerVerifyPage from '@/features/MessengerVerify';
 
-export default LobeAIVerifyPage;
+export default MessengerVerifyPage;

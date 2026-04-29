@@ -10,7 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import Loading from '@/components/Loading/BrandTextLoading';
-import { lobeAIService } from '@/services/lobeAI';
+import { messengerService } from '@/services/messenger';
 import { useSessionStore } from '@/store/session';
 import { sessionMetaSelectors, sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
@@ -61,8 +61,8 @@ const PLATFORM_LABELS: Record<string, string> = {
   telegram: 'Telegram',
 };
 
-const LobeAIVerifyPage = memo(() => {
-  const { t } = useTranslation('lobeai');
+const MessengerVerifyPage = memo(() => {
+  const { t } = useTranslation('messenger');
   const [searchParams] = useSearchParams();
   const { message } = App.useApp();
 
@@ -72,7 +72,7 @@ const LobeAIVerifyPage = memo(() => {
   const useFetchSessions = useSessionStore((s) => s.useFetchSessions);
   useFetchSessions(isSignedIn === true, isSignedIn);
 
-  // Filter to agent-type sessions only — LobeAI binds to an agent, not a group
+  // Filter to agent-type sessions only — messenger binds to an agent, not a group
   const sessions = useSessionStore((s) =>
     sessionSelectors.defaultSessions(s).filter((session) => session.type === 'agent'),
   );
@@ -90,8 +90,8 @@ const LobeAIVerifyPage = memo(() => {
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
 
-  const tokenSWR = useSWR(randomId && isSignedIn ? ['lobeai:peek', randomId] : null, async () =>
-    lobeAIService.peekLinkToken(randomId),
+  const tokenSWR = useSWR(randomId && isSignedIn ? ['messenger:peek', randomId] : null, async () =>
+    messengerService.peekLinkToken(randomId),
   );
 
   // Default-select the first agent once loaded (most-recently accessed shows
@@ -105,7 +105,7 @@ const LobeAIVerifyPage = memo(() => {
     if (!randomId || !selectedAgentId) return;
     setConfirming(true);
     try {
-      await lobeAIService.confirmLink({
+      await messengerService.confirmLink({
         initialAgentId: selectedAgentId,
         randomId,
       });
@@ -146,7 +146,7 @@ const LobeAIVerifyPage = memo(() => {
   }
 
   if (tokenSWR.isLoading) {
-    return <Loading debugId="LobeAIVerify" />;
+    return <Loading debugId="MessengerVerify" />;
   }
 
   if (tokenSWR.error || !tokenSWR.data) {
@@ -234,6 +234,6 @@ const LobeAIVerifyPage = memo(() => {
   );
 });
 
-LobeAIVerifyPage.displayName = 'LobeAIVerifyPage';
+MessengerVerifyPage.displayName = 'MessengerVerifyPage';
 
-export default LobeAIVerifyPage;
+export default MessengerVerifyPage;

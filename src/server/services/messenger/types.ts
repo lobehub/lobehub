@@ -10,7 +10,7 @@ export interface UnlinkedMessageContext {
 }
 
 /**
- * Per-platform glue for the shared LobeAI bot. Wires env credentials into a
+ * Per-platform glue for the shared messenger bot. Wires env credentials into a
  * `PlatformClient` (so the existing AgentBridgeService can drive it) plus
  * thin platform-specific reply helpers used by the link / switch flows.
  *
@@ -18,7 +18,7 @@ export interface UnlinkedMessageContext {
  * escaping, parse modes, button rendering live behind the binder so the
  * router stays platform-agnostic.
  */
-export interface LobeAIPlatformBinder {
+export interface MessengerPlatformBinder {
   /** Construct the underlying platform client. Returns null if env config is missing. */
   createClient: () => PlatformClient | null;
 

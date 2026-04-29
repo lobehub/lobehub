@@ -2,13 +2,13 @@ import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
 /**
- * LobeAI shared-bot configuration.
+ * Shared Messenger bot configuration.
  *
  * Distinct from per-user `agent_bot_providers`: a single LobeHub-owned bot is
  * registered on each platform (Telegram, Slack), and users link their account
  * to it via the verify-im flow. Tokens live in env vars (server-only).
  */
-export const getLobeAIConfig = () => {
+export const getMessengerConfig = () => {
   return createEnv({
     client: {},
     runtimeEnv: {
@@ -30,47 +30,47 @@ export const getLobeAIConfig = () => {
   });
 };
 
-export const lobeAIEnv = getLobeAIConfig();
+export const messengerEnv = getMessengerConfig();
 
-export type LobeAIPlatform = 'telegram' | 'slack';
+export type MessengerPlatform = 'telegram' | 'slack';
 
-export interface LobeAITelegramConfig {
+export interface MessengerTelegramConfig {
   botToken: string;
   botUsername?: string;
   webhookSecret?: string;
 }
 
-export interface LobeAISlackConfig {
+export interface MessengerSlackConfig {
   botToken: string;
   signingSecret?: string;
 }
 
-export const getLobeAITelegramConfig = (): LobeAITelegramConfig | null => {
-  const token = lobeAIEnv.LOBE_TELEGRAM_BOT_TOKEN;
+export const getMessengerTelegramConfig = (): MessengerTelegramConfig | null => {
+  const token = messengerEnv.LOBE_TELEGRAM_BOT_TOKEN;
   if (!token) return null;
   return {
     botToken: token,
-    botUsername: lobeAIEnv.LOBE_TELEGRAM_BOT_USERNAME,
-    webhookSecret: lobeAIEnv.LOBE_TELEGRAM_WEBHOOK_SECRET,
+    botUsername: messengerEnv.LOBE_TELEGRAM_BOT_USERNAME,
+    webhookSecret: messengerEnv.LOBE_TELEGRAM_WEBHOOK_SECRET,
   };
 };
 
-export const getLobeAISlackConfig = (): LobeAISlackConfig | null => {
-  const token = lobeAIEnv.LOBE_SLACK_BOT_TOKEN;
+export const getMessengerSlackConfig = (): MessengerSlackConfig | null => {
+  const token = messengerEnv.LOBE_SLACK_BOT_TOKEN;
   if (!token) return null;
   return {
     botToken: token,
-    signingSecret: lobeAIEnv.LOBE_SLACK_SIGNING_SECRET,
+    signingSecret: messengerEnv.LOBE_SLACK_SIGNING_SECRET,
   };
 };
 
-export const isLobeAIPlatformEnabled = (platform: LobeAIPlatform): boolean => {
+export const isMessengerPlatformEnabled = (platform: MessengerPlatform): boolean => {
   switch (platform) {
     case 'telegram': {
-      return !!lobeAIEnv.LOBE_TELEGRAM_BOT_TOKEN;
+      return !!messengerEnv.LOBE_TELEGRAM_BOT_TOKEN;
     }
     case 'slack': {
-      return !!lobeAIEnv.LOBE_SLACK_BOT_TOKEN;
+      return !!messengerEnv.LOBE_SLACK_BOT_TOKEN;
     }
     default: {
       return false;
@@ -78,8 +78,8 @@ export const isLobeAIPlatformEnabled = (platform: LobeAIPlatform): boolean => {
   }
 };
 
-export const getEnabledLobeAIPlatforms = (): LobeAIPlatform[] => {
-  return (['telegram', 'slack'] as const).filter((p) => isLobeAIPlatformEnabled(p));
+export const getEnabledMessengerPlatforms = (): MessengerPlatform[] => {
+  return (['telegram', 'slack'] as const).filter((p) => isMessengerPlatformEnabled(p));
 };
 
-export const getLobeAILinkTokenTtl = (): number => lobeAIEnv.LOBE_LINK_TOKEN_TTL_SECONDS;
+export const getMessengerLinkTokenTtl = (): number => messengerEnv.LOBE_LINK_TOKEN_TTL_SECONDS;
