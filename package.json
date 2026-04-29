@@ -238,6 +238,7 @@
     "@lobechat/business-const": "workspace:*",
     "@lobechat/business-model-runtime": "workspace:*",
     "@lobechat/chat-adapter-feishu": "workspace:*",
+    "@lobechat/chat-adapter-line": "workspace:*",
     "@lobechat/chat-adapter-qq": "workspace:*",
     "@lobechat/chat-adapter-wechat": "workspace:*",
     "@lobechat/config": "workspace:*",

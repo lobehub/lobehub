@@ -1943,6 +1943,7 @@ table user_memory_persona_documents {
   }
 }
 
+
 ref: agent_skills.user_id - users.id
 
 ref: agent_skills.zip_file_hash - global_files.hash_id

@@ -80,6 +80,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Number of historical messages
    */
   historyCount?: number;
+  hy3ReasoningEffort?: 'no_think' | 'low' | 'high';
   /**
    * Image aspect ratio for image generation models
    */
@@ -198,6 +199,7 @@ export const AgentChatConfigSchema = z
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
     deepseekV4ReasoningEffort: z.enum(['high', 'max']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),

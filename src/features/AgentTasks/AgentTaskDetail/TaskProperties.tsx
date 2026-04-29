@@ -96,10 +96,11 @@ const TaskProperties = memo(() => {
           variant={'borderless'}
         >
           <TaskTriggerTag
-            heartbeatInterval={automationMode === 'heartbeat' ? heartbeatInterval : undefined}
+            automationMode={automationMode}
+            heartbeatInterval={heartbeatInterval}
             mode="inline"
-            schedulePattern={automationMode === 'schedule' ? schedulePattern : undefined}
-            scheduleTimezone={automationMode === 'schedule' ? scheduleTimezone : undefined}
+            schedulePattern={schedulePattern}
+            scheduleTimezone={scheduleTimezone}
           />
         </Block>
       </TaskScheduleConfig>

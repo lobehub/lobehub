@@ -185,6 +185,7 @@ describe('HeterogeneousAgentCtr', () => {
       prompt: string,
       sessionOverrides: Record<string, any> = {},
       stdoutLines: string[] = [],
+      sendPromptOverrides: Partial<{ imageList: Array<{ id: string; url: string }> }> = {},
     ) => {
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
@@ -198,7 +199,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId });
+      await ctr.sendPrompt({ prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -259,6 +260,23 @@ describe('HeterogeneousAgentCtr', () => {
       const { options } = await runSendPrompt('hello', { cwd: explicitCwd });
 
       expect(options.cwd).toBe(explicitCwd);
+    });
+
+    it('omits the empty text block when only images are attached', async () => {
+      const { writes } = await runSendPrompt('', {}, [], {
+        imageList: [{ id: 'image-1', url: 'data:image/png;base64,UE5HX1RFU1Q=' }],
+      });
+
+      expect(writes).toHaveLength(1);
+      const msg = JSON.parse(writes[0].trimEnd());
+      // Anthropic rejects `{ text: '', type: 'text' }` with
+      // "messages: text content blocks must be non-empty".
+      expect(msg.message.content).toEqual([
+        {
+          source: { data: 'UE5HX1RFU1Q=', media_type: 'image/png', type: 'base64' },
+          type: 'image',
+        },
+      ]);
     });
 
     it('captures the Claude Code session id from stream-json init events', async () => {

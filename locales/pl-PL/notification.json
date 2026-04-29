@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Twoje zaplanowane zadanie \"{{jobName}}\" nie powiodło się. Otwórz zadanie, aby zobaczyć pełny błąd.",
+  "agent_cron_job_failed_insufficient_budget": "Twoje zaplanowane zadanie \"{{jobName}}\" nie mogło zostać uruchomione, ponieważ na Twoim koncie zabrakło środków. Doładuj je lub ulepsz swój plan, aby wznowić przyszłe uruchomienia.",
+  "agent_cron_job_failed_insufficient_budget_title": "Wstrzymano zaplanowane zadanie: niewystarczające środki",
+  "agent_cron_job_failed_title": "Błąd zaplanowanego zadania",
   "billboard.learnMore": "Dowiedz się więcej",
   "billboard.menuLabel": "Ogłoszenia",
+  "image_generation_completed": "Twój obraz \"{{prompt}}\" jest gotowy.",
+  "image_generation_completed_title": "Generowanie obrazu zakończone",
   "inbox.archiveAll": "Zarchiwizuj wszystko",
   "inbox.empty": "Brak powiadomień",
   "inbox.emptyUnread": "Brak nieprzeczytanych powiadomień",
   "inbox.filterUnread": "Pokaż tylko nieprzeczytane",
   "inbox.markAllRead": "Oznacz wszystkie jako przeczytane",
-  "inbox.title": "Powiadomienia"
+  "inbox.title": "Powiadomienia",
+  "video_generation_completed": "Twój film \"{{prompt}}\" jest gotowy.",
+  "video_generation_completed_title": "Generowanie filmu zakończone"
 }

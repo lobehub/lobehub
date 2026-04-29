@@ -624,6 +624,8 @@
   "user.logout": "Abmelden",
   "user.myProfile": "Mein Profil",
   "user.noAgents": "Dieser Benutzer hat noch keine Agenten veröffentlicht",
+  "user.noAgents.ownerDescription": "Erstelle deinen ersten Agenten und teile ihn mit der Community.",
+  "user.noAgents.title": "Noch keine Agenten",
   "user.noFavoriteAgents": "Noch keine gespeicherten Agenten",
   "user.noFavoritePlugins": "Noch keine gespeicherten Fähigkeiten",
   "user.noForkedAgentGroups": "Noch keine geforkten Agentengruppen",

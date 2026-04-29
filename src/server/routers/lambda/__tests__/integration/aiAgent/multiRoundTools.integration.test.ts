@@ -91,7 +91,7 @@ const createMockResponseWithMultipleTools = (roundNum: number) => {
       item: {
         type: 'function_call',
         call_id: toolCallId1,
-        name: 'lobe-web-browsing____search____builtin',
+        name: 'lobe-web-browsing____search',
         arguments: JSON.stringify({ query: `query_round${roundNum}` }),
       },
     },
@@ -101,7 +101,7 @@ const createMockResponseWithMultipleTools = (roundNum: number) => {
       item: {
         type: 'function_call',
         call_id: toolCallId2,
-        name: 'lobe-web-browsing____crawl____builtin',
+        name: 'lobe-web-browsing____crawl',
         arguments: JSON.stringify({ url: `https://example.com/page${roundNum}` }),
       },
     },
@@ -129,13 +129,13 @@ const createMockResponseWithMultipleTools = (roundNum: number) => {
           {
             type: 'function_call',
             call_id: toolCallId1,
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             arguments: JSON.stringify({ query: `query_round${roundNum}` }),
           },
           {
             type: 'function_call',
             call_id: toolCallId2,
-            name: 'lobe-web-browsing____crawl____builtin',
+            name: 'lobe-web-browsing____crawl',
             arguments: JSON.stringify({ url: `https://example.com/page${roundNum}` }),
           },
         ],

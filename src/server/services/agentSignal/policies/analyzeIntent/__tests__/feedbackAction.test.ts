@@ -179,7 +179,7 @@ describe('feedbackActionPlanner', () => {
     expect(second).toEqual(first);
   });
 
-  it('does not plan actions for unsupported future domains yet', async () => {
+  it('plans skill-management actions for skill domain signals', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
     const skillResult = await handler.handle(
       createDomainSignal({
@@ -192,6 +192,26 @@ describe('feedbackActionPlanner', () => {
       context,
     );
 
+    expect(skillResult).toEqual(
+      expect.objectContaining({
+        actions: [
+          expect.objectContaining({
+            actionType: 'action.skill-management.handle',
+            payload: expect.objectContaining({
+              idempotencyKey: 'source_2:skill:msg_2',
+              message: 'This successful workflow should become a reusable skill.',
+              serializedContext:
+                '<feedback_analysis_context><message>context</message></feedback_analysis_context>',
+            }),
+          }),
+        ],
+        status: 'dispatch',
+      }),
+    );
+  });
+
+  it('does not plan actions for unsupported prompt domain yet', async () => {
+    const handler = createFeedbackActionPlannerSignalHandler();
     const promptResult = await handler.handle(
       createDomainSignal({
         message: 'Stop saying "Below is a detailed analysis" before every answer.',
@@ -203,7 +223,6 @@ describe('feedbackActionPlanner', () => {
       context,
     );
 
-    expect(skillResult).toBeUndefined();
     expect(promptResult).toBeUndefined();
   });
 

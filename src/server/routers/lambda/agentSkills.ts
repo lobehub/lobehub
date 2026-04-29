@@ -55,6 +55,7 @@ const handleSkillImportError = (error: unknown): never => {
 
 const skillProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const skillModel = new AgentSkillModel(ctx.serverDB, ctx.userId);
 
   return opts.next({
     ctx: {
@@ -62,7 +63,16 @@ const skillProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
       fileService: new FileService(ctx.serverDB, ctx.userId),
       marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
       skillImporter: new SkillImporter(ctx.serverDB, ctx.userId),
-      skillModel: new AgentSkillModel(ctx.serverDB, ctx.userId),
+      skillModel,
+    },
+  });
+});
+
+const skillResourceProcedure = skillProcedure.use(async (opts) => {
+  const { ctx } = opts;
+
+  return opts.next({
+    ctx: {
       skillResourceService: new SkillResourceService(ctx.serverDB, ctx.userId),
     },
   });
@@ -207,7 +217,7 @@ export const agentSkillsRouter = router({
       return ctx.skillModel.findAll();
     }),
 
-  listResources: skillProcedure
+  listResources: skillResourceProcedure
     .input(z.object({ id: z.string(), includeContent: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
       const skill = await ctx.skillModel.findById(input.id);
@@ -222,7 +232,7 @@ export const agentSkillsRouter = router({
       return ctx.skillResourceService.listResources(skill.resources, input.includeContent);
     }),
 
-  readResource: skillProcedure
+  readResource: skillResourceProcedure
     .input(
       z.object({
         id: z.string(),

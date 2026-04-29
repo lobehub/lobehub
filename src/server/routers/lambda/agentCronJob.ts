@@ -29,6 +29,10 @@ const batchUpdateStatusSchema = z.object({
 // Create input schema for tRPC that omits server-managed fields
 const createAgentCronJobInputSchema = InsertAgentCronJobSchema.omit({
   userId: true, // Provided by authentication context
+}).extend({
+  // Optional — when set, the cron job is being created from a recommended task template;
+  // the server records it so the same template is excluded from future recommendations.
+  templateId: z.string().max(64).optional(),
 });
 
 /**
@@ -75,8 +79,11 @@ export const agentCronJobRouter = router({
 
       try {
         const cronJobModel = new AgentCronJobModel(db, userId);
+        // `templateId` is accepted for analytics/cloud bookkeeping but not persisted
+        // on the cron job itself.
+        const { templateId: _templateId, ...cronJobInput } = input;
         // Add userId to the input data since it's provided by authentication context
-        const cronJobData = { ...input, userId };
+        const cronJobData = { ...cronJobInput, userId };
         const cronJob = await cronJobModel.create(cronJobData as InsertAgentCronJob);
 
         return {

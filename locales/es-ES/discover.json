@@ -624,6 +624,8 @@
   "user.logout": "Cerrar Sesión",
   "user.myProfile": "Mi Perfil",
   "user.noAgents": "Este usuario aún no ha publicado ningún Agente",
+  "user.noAgents.ownerDescription": "Crea tu primer Agente y compártelo con la Comunidad.",
+  "user.noAgents.title": "Aún no hay Agentes",
   "user.noFavoriteAgents": "Aún no hay Agentes guardados",
   "user.noFavoritePlugins": "Aún no hay Habilidades guardadas",
   "user.noForkedAgentGroups": "Aún no hay grupos de agentes bifurcados",

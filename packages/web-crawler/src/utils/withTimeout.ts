@@ -1,6 +1,8 @@
 import { TimeoutError } from './errorType';
 
-export const DEFAULT_TIMEOUT = 10_000;
+export const DEFAULT_TIMEOUT = process.env.CRAWLER_TIMEOUT
+  ? Number(process.env.CRAWLER_TIMEOUT)
+  : 10_000;
 
 /**
  * Wraps a factory function with a timeout and abort support.

@@ -17,6 +17,10 @@ export interface ParsedActionTag {
 
 export interface ParsedCommand extends ParsedActionTag {}
 
+export interface SingleAgentMentionDirectRoute {
+  agent: RuntimeMentionedAgent;
+}
+
 /**
  * Walk the Lexical JSON tree to find all action-tag nodes.
  * Returns the extracted action tags in document order.
@@ -109,6 +113,52 @@ export const parseMentionedAgentsFromEditorData = (
 };
 
 /**
+ * Detect the direct-route shorthand:
+ * exactly one mention node in the whole document, and that mention is the
+ * first meaningful node and points to an agent.
+ */
+export const parseSingleAgentMentionDirectRoute = (
+  editorData: Record<string, any> | undefined,
+): SingleAgentMentionDirectRoute | undefined => {
+  if (!editorData) return;
+
+  const mentions: Array<{
+    label: string;
+    metadata: Record<string, unknown>;
+    node: any;
+  }> = [];
+  let firstMeaningfulNode: any;
+
+  walkMeaningfulNode(editorData.root, (node) => {
+    firstMeaningfulNode ??= node;
+
+    if (node.type === 'mention' && node.metadata) {
+      mentions.push({
+        label: node.label ?? '',
+        metadata: node.metadata,
+        node,
+      });
+    }
+  });
+
+  if (mentions.length !== 1) return;
+
+  const [mention] = mentions;
+  if (firstMeaningfulNode !== mention.node) return;
+  if (mention.metadata.type !== 'agent') return;
+
+  const id = typeof mention.metadata.id === 'string' ? mention.metadata.id : undefined;
+  if (!id) return;
+
+  return {
+    agent: {
+      id,
+      name: mention.label || id,
+    },
+  };
+};
+
+/**
  * Check if editorData contains any meaningful text content
  * besides action-tag nodes (whitespace-only counts as empty).
  */
@@ -145,6 +195,32 @@ function walkMentionNode(
       walkMentionNode(child, cb);
     }
   }
+}
+
+function walkMeaningfulNode(node: any, cb: (node: any) => void): void {
+  if (!node) return;
+
+  if (isMeaningfulNode(node)) {
+    cb(node);
+  }
+
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) {
+      walkMeaningfulNode(child, cb);
+    }
+  }
+}
+
+function isMeaningfulNode(node: any): boolean {
+  if (!node?.type || Array.isArray(node.children)) return false;
+
+  if (node.type === 'text') {
+    return typeof node.text === 'string' && node.text.trim().length > 0;
+  }
+
+  if (node.type === 'linebreak') return false;
+
+  return true;
 }
 
 function walkNode(node: any, out: ParsedActionTag[]): void {

@@ -4,7 +4,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { UploadIcon, XIcon } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fileManagerSelectors, useFileStore } from '@/store/file';
@@ -100,6 +100,28 @@ const UploadDock = memo(() => {
     if (show) return;
     if (isUploading) setShow(true);
   }, [isUploading, show]);
+
+  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isUploading || overviewUploadingStatus === 'pending') {
+      if (autoDismissTimerRef.current) {
+        clearTimeout(autoDismissTimerRef.current);
+      }
+      return;
+    }
+
+    autoDismissTimerRef.current = setTimeout(() => {
+      setShow(false);
+      dispatchDockFileList({ ids: fileList.map((item) => item.id), type: 'removeFiles' });
+    }, 3000);
+
+    return () => {
+      if (autoDismissTimerRef.current) {
+        clearTimeout(autoDismissTimerRef.current);
+      }
+    };
+  }, [isUploading, overviewUploadingStatus, fileList, dispatchDockFileList]);
 
   if (count === 0 || !show) return;
 

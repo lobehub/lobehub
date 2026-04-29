@@ -1,11 +1,10 @@
 import type { BaseAction, BaseSignal } from '@lobechat/agent-signal';
-
 import type {
   SourceAgentExecutionCompleted,
   SourceAgentExecutionFailed,
   SourceRuntimeAfterStep,
   SourceRuntimeBeforeStep,
-} from '../sourceTypes';
+} from '@lobechat/agent-signal/source';
 
 /** Server-owned built-in AgentSignal policy identifiers. */
 export const AGENT_SIGNAL_POLICIES = {
@@ -33,6 +32,7 @@ export const AGENT_SIGNAL_POLICY_SIGNAL_TYPES = {
 export const AGENT_SIGNAL_POLICY_ACTION_TYPES = {
   nudgeHandle: 'action.nudge.handle',
   personaHandle: 'action.persona.handle',
+  skillManagementHandle: 'action.skill-management.handle',
   userMemoryHandle: 'action.user-memory.handle',
 } as const;
 
@@ -213,6 +213,18 @@ export interface AgentSignalPolicyActionPayloadMap {
     topicId?: string;
     update?: Record<string, unknown>;
   };
+  [AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle]: {
+    agentId?: string;
+    conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
+    evidence?: AgentSignalFeedbackEvidence[];
+    feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
+    idempotencyKey: string;
+    message: string;
+    reason?: string;
+    serializedContext?: string;
+    sourceHints?: AgentSignalFeedbackSourceHints;
+    topicId?: string;
+  };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle]: {
     agentId?: string;
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
@@ -289,6 +301,10 @@ export type ActionUserMemoryHandle = AgentSignalPolicyActionVariant<'action.user
 
 /** Server-owned alias for persona updates. */
 export type ActionPersonaHandle = AgentSignalPolicyActionVariant<'action.persona.handle'>;
+
+/** Server-owned alias for skill-management actions. */
+export type ActionSkillManagementHandle =
+  AgentSignalPolicyActionVariant<'action.skill-management.handle'>;
 
 /** Server-owned alias for memory-nudge actions. */
 export type ActionNudgeHandle = AgentSignalPolicyActionVariant<'action.nudge.handle'>;

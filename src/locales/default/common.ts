@@ -31,6 +31,8 @@ export default {
   'back': 'Back',
   'batchDelete': 'Batch Delete',
   'blog': 'Product Blog',
+  'botIntegrationBanner.dismiss': 'Dismiss',
+  'botIntegrationBanner.title': 'Add Channels to LobeAI',
   'branching': 'Create Subtopic',
   'branchingDisable':
     'The "Sub-topic" feature is unavailable in the current mode. To use this feature, please switch to Postgres/Pglite DB mode or use LobeHub Cloud.',
@@ -508,6 +510,7 @@ export default {
   'tab.discover': 'Discover',
   'tab.eval': 'Eval Lab',
   'tab.files': 'Files',
+  'tab.generation': 'Generation',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
   'tab.marketplace': 'Marketplace',

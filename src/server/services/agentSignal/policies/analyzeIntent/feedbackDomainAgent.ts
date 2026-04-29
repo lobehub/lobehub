@@ -1,4 +1,5 @@
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
+import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import { chainAgentSignalAnalyzeIntentRoute } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -7,7 +8,6 @@ import { z } from 'zod';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
-import { buildGenerateObjectSchema } from '../../../../../../packages/memory-user-memory/src/utils/zod';
 import type {
   AgentSignalFeedbackEvidence,
   AgentSignalFeedbackPhase1DomainTarget,
@@ -35,6 +35,45 @@ const FeedbackDomainJudgeAgentResultSchema = z.object({
 });
 
 export type FeedbackDomainJudgeAgentResult = z.infer<typeof FeedbackDomainJudgeAgentResultSchema>;
+
+const FeedbackDomainGenerateObjectSchema = {
+  name: 'agent_signal_feedback_domain_route',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      targets: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            confidence: { maximum: 1, minimum: 0, type: 'number' },
+            evidence: {
+              items: {
+                additionalProperties: false,
+                properties: {
+                  cue: { type: 'string' },
+                  excerpt: { type: 'string' },
+                },
+                required: ['cue', 'excerpt'],
+                type: 'object',
+              },
+              type: 'array',
+            },
+            reason: { type: 'string' },
+            target: { enum: ['memory', 'none', 'prompt', 'skill'], type: 'string' },
+          },
+          required: ['confidence', 'evidence', 'reason', 'target'],
+          type: 'object',
+        },
+        maxItems: 4,
+        minItems: 1,
+        type: 'array',
+      },
+    },
+    required: ['targets'],
+    type: 'object',
+  },
+  strict: true,
+} satisfies GenerateObjectSchema;
 
 export interface FeedbackDomainJudgeAgentModelConfig {
   model: string;
@@ -107,9 +146,7 @@ export class FeedbackDomainJudgeAgentService {
       {
         messages: payload.messages as any[],
         model: this.modelConfig.model,
-        schema: buildGenerateObjectSchema(FeedbackDomainJudgeAgentResultSchema, {
-          name: 'agent_signal_feedback_domain_route',
-        }),
+        schema: FeedbackDomainGenerateObjectSchema,
       },
       { metadata: { trigger: RequestTrigger.Memory } },
     );

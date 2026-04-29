@@ -1,6 +1,9 @@
 import { defineAgentSignalHandlers } from '../../runtime/middleware';
-import type { UserMemoryActionHandlerOptions } from './actions';
-import { defineUserMemoryActionHandler } from './actions';
+import type {
+  SkillManagementActionHandlerOptions,
+  UserMemoryActionHandlerOptions,
+} from './actions';
+import { defineSkillManagementActionHandler, defineUserMemoryActionHandler } from './actions';
 import { createFeedbackActionPlannerSignalHandler } from './feedbackAction';
 import type { CreateFeedbackDomainJudgePolicyOptions } from './feedbackDomain';
 import {
@@ -13,6 +16,7 @@ import { createFeedbackSatisfactionJudgeProcessor } from './feedbackSatisfaction
 export interface CreateAnalyzeIntentPolicyOptions {
   feedbackDomainJudge?: CreateFeedbackDomainJudgePolicyOptions['feedbackDomainJudge'];
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
+  skillManagement?: SkillManagementActionHandlerOptions;
   userMemory?: UserMemoryActionHandlerOptions;
 }
 
@@ -27,6 +31,9 @@ export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOpti
       resolveDomains: feedbackDomainResolver,
     }),
     createFeedbackActionPlannerSignalHandler(),
+    ...(options.skillManagement
+      ? [defineSkillManagementActionHandler(options.skillManagement)]
+      : []),
     ...(options.userMemory ? [defineUserMemoryActionHandler(options.userMemory)] : []),
   ]);
 };

@@ -111,6 +111,8 @@
   "response.PluginServerError": "Yetenek sunucusu isteği hata ile döndü. Lütfen aşağıdaki hata bilgilerine göre manifest dosyasını, yapılandırmayı veya sunucu uygulamasını kontrol edin.",
   "response.PluginSettingsInvalid": "Bu yeteneği kullanmadan önce doğru şekilde yapılandırılmalıdır. Lütfen ayarlarınızı kontrol edin.",
   "response.ProviderBizError": "{{provider}} hizmeti istek hatası. Lütfen aşağıdaki bilgilere göre sorun giderin veya tekrar deneyin.",
+  "response.ProviderContentModeration": "İçerik politikası kontrolü başarısız oldu. Lütfen isteminizi gözden geçirip yeniden deneyin.",
+  "response.ProviderContentModerationWarning": "Tekrarlanan politika ihlalleri tespit edildi. Daha fazla yanlış kullanım hesabınızın kısıtlanmasına neden olabilir.",
   "response.QuotaLimitReached": "Üzgünüz, bu anahtar için belirlenen kota sınırına ulaşıldı. Lütfen kotayı artırın veya daha sonra tekrar deneyin.",
   "response.QuotaLimitReachedCloud": "Model hizmeti şu anda yoğun bir yük altında. Lütfen daha sonra tekrar deneyin.",
   "response.ServerAgentRuntimeError": "Üzgünüz, Ajan hizmeti şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin veya destek için bizimle iletişime geçin.",

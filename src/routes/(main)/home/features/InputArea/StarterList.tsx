@@ -1,23 +1,24 @@
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { Jimeng } from '@lobehub/icons';
+import { DeepSeek, Jimeng, OpenAI } from '@lobehub/icons';
 import { type ButtonProps } from '@lobehub/ui';
-import { Button, Center, Tooltip } from '@lobehub/ui';
-import { GroupBotSquareIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, ImageIcon, PenLineIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { Button, Center, Tag, Tooltip } from '@lobehub/ui';
+import { App } from 'antd';
+import { createStaticStyles, cx } from 'antd-style';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
 import { useStableNavigate } from '@/hooks/useStableNavigate';
-import { type StarterMode } from '@/store/home';
-import { useHomeStore } from '@/store/home';
+import { agentService } from '@/services/agent';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
+
+import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
+
+const DEEPSEEK_V4_PRO_MODEL = 'deepseek-v4-pro';
+const DEEPSEEK_V4_PRO_PROVIDER = 'lobehub';
+
+type StarterKey = 'image' | 'video' | 'deepseek-v4-pro';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  active: css`
-    border-color: ${cssVar.colorFillSecondary} !important;
-    background: ${cssVar.colorBgElevated} !important;
-  `,
   button: css`
     height: 40px;
     border-color: ${cssVar.colorFillSecondary};
@@ -29,78 +30,55 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorBgElevated} !important;
     }
   `,
+  newTag: css`
+    padding-inline: 10px !important;
+    border-radius: 999px !important;
+  `,
 }));
 
 type StarterTitleKey =
-  | 'starter.createAgent'
-  | 'starter.createGroup'
-  | 'starter.write'
   | 'starter.imageGeneration'
   | 'starter.videoGeneration'
-  | 'starter.deepResearch';
+  | 'starter.deepseekV4Pro';
 
 interface StarterItem {
   disabled?: boolean;
-  hot?: boolean;
   icon?: ButtonProps['icon'];
-  key: StarterMode;
+  key: StarterKey;
   titleKey: StarterTitleKey;
 }
 
 const StarterList = memo(() => {
   const { t } = useTranslation('home');
-
-  useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.agentBuilder);
-  useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.groupAgentBuilder);
-  useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
-
   const navigate = useStableNavigate();
-  const [inputActiveMode, setInputActiveMode] = useHomeStore((s) => [
-    s.inputActiveMode,
-    s.setInputActiveMode,
-  ]);
+  const { message } = App.useApp();
+  const { agentId: activeAgentId } = useResolvedHomeAgentId();
+  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  const [switchingKey, setSwitchingKey] = useState<StarterKey | null>(null);
 
   const items: StarterItem[] = useMemo(
     () => [
       {
-        icon: BotIcon,
-        key: 'agent',
-        titleKey: 'starter.createAgent',
+        icon: DeepSeek.Avatar,
+        key: 'deepseek-v4-pro',
+        titleKey: 'starter.deepseekV4Pro',
       },
       {
-        icon: GroupBotSquareIcon,
-        key: 'group',
-        titleKey: 'starter.createGroup',
-      },
-      {
-        icon: PenLineIcon,
-        key: 'write',
-        titleKey: 'starter.write',
-      },
-      {
-        hot: true,
-        icon: ImageIcon,
+        icon: OpenAI.Avatar,
         key: 'image',
         titleKey: 'starter.imageGeneration',
       },
       {
-        hot: true,
-        icon: Jimeng.Color,
+        icon: Jimeng.Avatar,
         key: 'video',
         titleKey: 'starter.videoGeneration',
       },
-      // {
-      //   disabled: true,
-      //   icon: MicroscopeIcon,
-      //   key: 'research',
-      //   titleKey: 'starter.deepResearch',
-      // },
     ],
     [],
   );
 
   const handleClick = useCallback(
-    (key: StarterMode) => {
+    async (key: StarterKey) => {
       if (key === 'video') {
         navigate('/video?model=dreamina-seedance-2-0-260128');
         return;
@@ -111,35 +89,66 @@ const StarterList = memo(() => {
         return;
       }
 
-      // Toggle mode: if clicking the active mode, clear it; otherwise set it
-      if (inputActiveMode === key) {
-        setInputActiveMode(null);
-      } else {
-        setInputActiveMode(key);
+      if (key === 'deepseek-v4-pro') {
+        if (!activeAgentId || switchingKey) return;
+        setSwitchingKey(key);
+        try {
+          // Hydrate the agent's config before mutating so the optimistic update
+          // doesn't drop pre-existing fields the home input never loaded.
+          let agentState = useAgentStore.getState();
+          if (!agentState.agentMap[activeAgentId]) {
+            const config = await agentService.getAgentConfigById(activeAgentId);
+            if (config) agentState.internal_dispatchAgentMap(activeAgentId, config);
+            agentState = useAgentStore.getState();
+          }
+
+          const currentModel = agentByIdSelectors.getAgentModelById(activeAgentId)(agentState);
+          const currentProvider =
+            agentByIdSelectors.getAgentModelProviderById(activeAgentId)(agentState);
+          if (
+            currentModel === DEEPSEEK_V4_PRO_MODEL &&
+            currentProvider === DEEPSEEK_V4_PRO_PROVIDER
+          ) {
+            message.info(t('starter.deepseekV4ProAlready'));
+            return;
+          }
+
+          await updateAgentConfigById(activeAgentId, {
+            model: DEEPSEEK_V4_PRO_MODEL,
+            provider: DEEPSEEK_V4_PRO_PROVIDER,
+          });
+          message.success(t('starter.deepseekV4ProSwitched'));
+        } finally {
+          setSwitchingKey(null);
+        }
+        return;
       }
     },
-    [inputActiveMode, navigate, setInputActiveMode],
+    [navigate, activeAgentId, updateAgentConfigById, switchingKey, message, t],
   );
 
   return (
     <Center horizontal gap={8}>
+      <Tag className={styles.newTag} size={'small'}>
+        {t('starter.newLabel')}
+      </Tag>
       {items.map((item) => {
+        const isLoading = switchingKey === item.key;
         const button = (
           <Button
-            className={cx(styles.button, inputActiveMode === item.key && styles.active)}
-            disabled={item.disabled}
+            className={cx(styles.button)}
+            disabled={item.disabled || (!!switchingKey && !isLoading)}
             icon={item.icon}
             key={item.key}
+            loading={isLoading}
             shape={'round'}
             variant={'outlined'}
             iconProps={{
-              color: inputActiveMode === item.key ? cssVar.colorText : cssVar.colorTextSecondary,
               size: 18,
             }}
             onClick={() => handleClick(item.key)}
           >
             {t(item.titleKey)}
-            {item.hot && ' 🔥'}
           </Button>
         );
 

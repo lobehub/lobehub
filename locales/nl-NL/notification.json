@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Uw geplande taak \"{{jobName}}\" is mislukt. Open de taak om de volledige foutmelding te bekijken.",
+  "agent_cron_job_failed_insufficient_budget": "Uw geplande taak \"{{jobName}}\" kon niet worden uitgevoerd omdat uw account geen credits meer heeft. Vul aan of upgrade uw abonnement om toekomstige taken te hervatten.",
+  "agent_cron_job_failed_insufficient_budget_title": "Geplande taak gepauzeerd: onvoldoende credits",
+  "agent_cron_job_failed_title": "Geplande taak mislukt",
   "billboard.learnMore": "Meer informatie",
   "billboard.menuLabel": "Aankondigingen",
+  "image_generation_completed": "Uw afbeelding \"{{prompt}}\" is klaar.",
+  "image_generation_completed_title": "Afbeeldingsgeneratie voltooid",
   "inbox.archiveAll": "Alles archiveren",
   "inbox.empty": "Nog geen meldingen",
   "inbox.emptyUnread": "Geen ongelezen meldingen",
   "inbox.filterUnread": "Alleen ongelezen tonen",
   "inbox.markAllRead": "Alles als gelezen markeren",
-  "inbox.title": "Meldingen"
+  "inbox.title": "Meldingen",
+  "video_generation_completed": "Uw video \"{{prompt}}\" is klaar.",
+  "video_generation_completed_title": "Videogeneratie voltooid"
 }

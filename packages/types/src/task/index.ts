@@ -36,6 +36,7 @@ export interface WorkspaceDocNode {
   fileType: string;
   parentId: string | null;
   pinnedBy: string;
+  sourceTaskId: string;
   sourceTaskIdentifier: string | null;
   title: string;
   updatedAt: string | null;
@@ -186,6 +187,7 @@ export interface TaskDetailWorkspaceNode {
   documentId: string;
   fileType?: string;
   size?: number | null;
+  sourceTaskId?: string;
   sourceTaskIdentifier?: string | null;
   title?: string;
 }
@@ -211,10 +213,23 @@ export interface TaskDetailActivity {
   artifacts?: unknown;
   author?: TaskDetailActivityAuthor;
   briefType?: string;
+  /**
+   * Topic-only: ISO timestamp when the topic run terminated (any of
+   * completed / failed / canceled / timeout). Pair with `time` (start) to
+   * compute elapsed duration.
+   */
+  completedAt?: string;
   content?: string;
   createdAt?: string;
   cronJobId?: string | null;
   id?: string;
+  /**
+   * Topic-only: persisted Gateway operation ID for the task topic, sourced
+   * from `task_topics.operationId`. Survives across runs (created on add,
+   * updated on resume) so it remains available after the topic completes —
+   * unlike `runningOperation`, which is cleared when the run terminates.
+   */
+  operationId?: string | null;
   priority?: string | null;
   readAt?: string | null;
   resolvedAction?: string | null;

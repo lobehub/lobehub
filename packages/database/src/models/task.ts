@@ -6,7 +6,7 @@ import type {
   WorkspaceDocNode,
   WorkspaceTreeNode,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
@@ -478,6 +478,22 @@ export class TaskModel {
       .where(eq(tasks.id, id));
   }
 
+  // Tasks eligible for cron-based dispatch.
+  // Excludes terminal/paused/running — `paused` requires user attention,
+  // `running` is already in flight (and `runTask` would CONFLICT anyway).
+  static async getScheduledTasks(db: LobeChatDatabase): Promise<TaskItem[]> {
+    return db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.automationMode, 'schedule'),
+          isNotNull(tasks.schedulePattern),
+          notInArray(tasks.status, ['canceled', 'completed', 'failed', 'paused', 'running']),
+        ),
+      );
+  }
+
   // Find stuck tasks (running but heartbeat timed out)
   // Only checks tasks that have both lastHeartbeatAt and heartbeatTimeout set
   static async findStuckTasks(db: LobeChatDatabase): Promise<TaskItem[]> {
@@ -635,6 +651,7 @@ export class TaskModel {
         fileType: row.document_file_type,
         parentId: row.document_parent_id,
         pinnedBy: row.pinned_by,
+        sourceTaskId: row.source_task_id,
         sourceTaskIdentifier: row.source_task_id !== rootTaskId ? row.source_task_identifier : null,
         title: row.document_title || 'Untitled',
         updatedAt: row.document_updated_at,

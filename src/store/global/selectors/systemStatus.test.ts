@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { merge } from '@/utils/merge';
 
-import { type GlobalState } from '../initialState';
-import { INITIAL_STATUS, initialState } from '../initialState';
+import type { GlobalState } from '../initialState';
+import {
+  DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
+  INITIAL_STATUS,
+  initialState,
+} from '../initialState';
 import { DEFAULT_SIDEBAR_ITEMS, reorderSidebarItems, systemStatusSelectors } from './systemStatus';
 
 // Mock version constants
@@ -89,13 +93,48 @@ describe('systemStatusSelectors', () => {
     });
   });
 
+  describe('modelDetailPanelExpandedKeys', () => {
+    it('should expand pricing and config by default', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: {
+          ...initialState.status,
+          modelDetailPanelExpandedKeys: undefined,
+        },
+      };
+
+      expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(
+        DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
+      );
+    });
+
+    it('should return stored user preference when set', () => {
+      const s: GlobalState = merge(initialState, {
+        status: {
+          modelDetailPanelExpandedKeys: ['pricing'],
+        },
+      });
+
+      expect(systemStatusSelectors.modelDetailPanelExpandedKeys(s)).toEqual(['pricing']);
+    });
+  });
+
   describe('sidebarItems', () => {
     it('should return DEFAULT_SIDEBAR_ITEMS when no data is set', () => {
       expect(systemStatusSelectors.sidebarItems(initialState)).toEqual(DEFAULT_SIDEBAR_ITEMS);
     });
 
     it('should return stored items when set', () => {
-      const custom = ['agent', 'recents', 'pages', 'tasks', 'community', 'resource', 'memory'];
+      const custom = [
+        'agent',
+        'recents',
+        'pages',
+        'tasks',
+        'image',
+        'community',
+        'resource',
+        'memory',
+      ];
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: custom },
       });
@@ -127,6 +166,7 @@ describe('systemStatusSelectors', () => {
         'pages',
         'agent',
         'recents',
+        'image',
         'community',
         'resource',
         'memory',

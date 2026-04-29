@@ -316,12 +316,17 @@ export class StreamingExecutorActionImpl {
 
         if (viewedTask.type === 'list') {
           contextPrompt = buildTaskListPrompt({
+            defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
             tasks: taskState.tasks,
             total: taskState.tasksTotal || taskState.tasks.length,
           });
         } else {
           const detail = taskState.taskDetailMap[viewedTask.taskId];
-          if (detail) contextPrompt = buildTaskDetailPrompt({ task: detail });
+          if (detail)
+            contextPrompt = buildTaskDetailPrompt({
+              defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
+              task: detail,
+            });
         }
 
         if (contextPrompt) {

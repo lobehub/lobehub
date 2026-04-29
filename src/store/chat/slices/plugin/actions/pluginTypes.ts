@@ -86,6 +86,8 @@ export class PluginTypesActionImpl {
       let groupId = operation?.context?.groupId ?? rootRuntimeOperationContext?.groupId;
       const documentId = operation?.context?.documentId ?? rootRuntimeOperationContext?.documentId;
       const scope = operation?.context?.scope ?? rootRuntimeOperationContext?.scope;
+      const viewedTask = operation?.context?.viewedTask ?? rootRuntimeOperationContext?.viewedTask;
+      const taskId = viewedTask?.type === 'detail' ? viewedTask.taskId : undefined;
       const topicId = operation?.context?.topicId ?? rootRuntimeOperationContext?.topicId;
 
       // For agent-builder tools, inject activeAgentId from store if not in context
@@ -138,6 +140,7 @@ export class PluginTypesActionImpl {
         operationId,
         rootRuntimeOperationId,
         scope,
+        taskId,
         topicId,
       });
 
@@ -154,6 +157,7 @@ export class PluginTypesActionImpl {
           scope,
           signal: operation?.abortController?.signal,
           stepContext,
+          taskId,
           topicId,
         });
 

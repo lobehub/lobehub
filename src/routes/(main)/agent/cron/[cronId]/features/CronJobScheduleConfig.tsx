@@ -1,5 +1,6 @@
 'use client';
 
+import { type ScheduleType } from '@lobechat/utils/cron';
 import { Checkbox, Flexbox, FormGroup, Text } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
 import { Divider, InputNumber, TimePicker } from 'antd';
@@ -9,7 +10,6 @@ import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ScheduleType } from '../CronConfig';
 import { SCHEDULE_TYPE_OPTIONS, TIMEZONE_OPTIONS } from '../CronConfig';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

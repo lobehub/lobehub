@@ -1,0 +1,349 @@
+{
+  "action.connect.button": "连接 {{provider}}",
+  "action.create.error": "创建任务失败，请稍后再试",
+  "action.create.success": "定时任务已创建，可在 Lobe AI 中查看",
+  "action.createButton": "添加为定时任务",
+  "action.creating": "创建中…",
+  "action.dismiss.error": "操作失败，请稍后再试",
+  "action.dismiss.tooltip": "不感兴趣",
+  "action.optionalConnect.button": "连接 {{provider}} 获取更丰富的内容",
+  "ad-creative-inspiration.description": "每天扫一遍竞品和标杆品牌的新广告素材（Meta / Google Ads Library），挖能复刻的 10 条",
+  "ad-creative-inspiration.prompt": "每天早上 10:00 扫一遍我的竞品和标杆品牌在 Meta 和 Google Ads Library 上的新素材，挑出 10 条值得复刻的，并说明每条值得的理由。",
+
+  "ad-creative-inspiration.title": "投放素材灵感",
+  "aigc-prompt-inspiration.description": "每天 5 组精选 Prompt（Midjourney / SD / Flux），按风格分类，今天就能试",
+  "aigc-prompt-inspiration.prompt": "每天早上 10:00 给我 5 组精选 Prompt（Midjourney / Stable Diffusion / Flux），按风格分类，每条都要可以直接复制使用。",
+
+  "aigc-prompt-inspiration.title": "AIGC Prompt 灵感",
+  "arxiv-curated-daily.description": "每天早上帮你筛 5 篇最新论文 + 一句话摘要，刷论文时间省一半",
+  "arxiv-curated-daily.prompt": "每天早上 9:00 帮我从 arXiv 筛 5 篇和我研究方向相关的最新论文，每篇附一句话摘要，帮我判断哪些值得精读。",
+
+  "arxiv-curated-daily.title": "ArXiv 精选",
+  "bedtime-gratitude.description": "每天 22 点引导你写下今天三件感谢的事 + 学到的一件事，沉淀进笔记",
+  "bedtime-gratitude.prompt": "每天晚上 22:00 引导我写下今天三件感谢的事和学到的一件事，回我一段温柔的小结。如果连接了 Notion，把这条感恩记录追加到我的日记页。",
+
+  "bedtime-gratitude.title": "睡前感恩",
+  "brand-collab-weekly.description": "每周一扫一遍正在找创作者的品牌和公开招募，匹配你的领域和粉丝规模",
+  "brand-collab-weekly.prompt": "每周一早上 10:00 扫一遍正在公开招募创作者的品牌，按我的赛道和粉丝量匹配，挑出 5 个值得申请的机会。",
+
+  "brand-collab-weekly.title": "品牌合作机会",
+  "brand-mention-daily.description": "告诉我要追踪的品牌 / 关键词，每天傍晚汇总当天提及量、情绪、热门发言者",
+  "brand-mention-daily.prompt": "每天傍晚 18:00 在 X (Twitter) 上汇总我追踪的品牌和关键词当天的提及量、情绪、TOP 发言者，标出异常波动。",
+
+  "brand-mention-daily.title": "品牌声量日报",
+  "brand-watch-weekly.description": "每周一追踪 10 家大厂品牌升级、Logo 改版、官网重设计，附拆解视角",
+  "brand-watch-weekly.prompt": "每周一早上 10:00 追踪 10 家我关注的品牌动态：品牌升级、Logo 改版、官网重设计，每条附一段拆解。",
+
+  "brand-watch-weekly.title": "大厂品牌动态",
+  "calendar-conflict-check.description": "每天早上检查日程有没有冲突、间隔太紧、通勤不够",
+  "calendar-conflict-check.prompt": "每天早上 7:30 检查我今天的日历，找出冲突、连背靠背会议、通勤或缓冲时间不够的情况，给出建议调整方案。",
+
+  "calendar-conflict-check.title": "日历冲突检查",
+  "cashflow-weekly.description": "每周一扫一下本周该收的款、该付的账、下周大额支出预警",
+  "cashflow-weekly.prompt": "每周一早上 9:00 扫一遍本周应收款、应付账，并预警下周的大额支出。",
+
+  "cashflow-weekly.title": "现金流周报",
+  "child-growth-weekly.description": "告诉我孩子年龄，每周一给你本周发育重点、亲子活动建议、注意事项",
+  "child-growth-weekly.prompt": "每周一早上 9:00 根据我孩子的年龄，给出本周的发育重点、亲子活动建议和需要留心的注意事项。",
+
+  "child-growth-weekly.title": "孩子成长周报",
+  "child-study-weekly.description": "告诉我孩子在学的科目，每周日帮你回顾本周完成情况 + 下周重点",
+  "child-study-weekly.prompt": "每周日晚 20:00 回顾我孩子本周的学习进度，并梳理下周的学习重点，按科目给出练习建议。",
+
+  "child-study-weekly.title": "孩子学习追踪",
+  "competitor-creator-tracking.description": "告诉我 3-5 个你关注的创作者，每天看他们发了什么、数据怎样，挖能复刻的思路",
+  "competitor-creator-tracking.prompt": "每天早上 9:00 追踪我设定的 3-5 个对标创作者：他们发了什么内容、数据如何，挖出我可以复刻的思路。",
+
+  "competitor-creator-tracking.title": "竞品创作者追踪",
+  "competitor-radar-daily.description": "告诉我 3-5 个竞争对手，每天帮你盯他们的官网更新、产品发布、招聘信号、社媒动态",
+  "competitor-radar-daily.prompt": "每天早上 9:00 追踪我设定的 3-5 个竞争对手：官网更新、产品发布、招聘信号、社媒动态，分析每个动作的战略含义。",
+
+  "competitor-radar-daily.title": "竞品动态追踪",
+  "competitor-update-daily.description": "告诉我 3-5 个竞品，每天看他们的更新日志、新功能、官网变化",
+  "competitor-update-daily.prompt": "每天早上 10:00 监测 3-5 个竞品产品的更新：更新日志、新功能、官网文案变化，标出值得深入研究的信号。",
+
+  "competitor-update-daily.title": "竞品更新追踪",
+  "content-calendar-weekly.description": "每周日晚帮你规划下周 7 天的发布计划，对齐节日和热点节奏",
+  "content-calendar-weekly.prompt": "每周日晚 20:00 帮我规划下周 7 天的发布计划：把日程对齐近期节日和热点节奏，每个时段给一个建议选题。如果连接了 Notion，把这份计划同步成排期表。",
+
+  "content-calendar-weekly.title": "内容日历",
+  "contract-expiry-weekly.description": "每周一检查下个月到期的合同（订阅 / 租赁 / 合作），提前续签或解约",
+  "contract-expiry-weekly.prompt": "每周一早上 9:00 列出未来 30 天到期的合同（订阅、租赁、合作），标注哪些需要续签、哪些可以解约。",
+
+  "contract-expiry-weekly.title": "合同到期预警",
+  "core-metric-daily.description": "告诉我要看的指标（DAU、留存、转化），每天早上自动同步变化",
+  "core-metric-daily.prompt": "每天早上 9:00 同步我的核心指标变化（DAU、留存、转化），与昨天和 7 日均值做对比。",
+
+  "core-metric-daily.title": "核心指标日报",
+  "cross-platform-engagement-daily.description": "每天早上聚合你全平台的评论、私信、提及、新粉丝",
+  "cross-platform-engagement-daily.prompt": "每天早上 9:00 聚合我各平台的评论、私信、提及和新粉丝，标出 5 条最值得回复的。",
+
+  "cross-platform-engagement-daily.title": "全平台互动日报",
+  "crypto-market-daily.description": "每天早上看比特币、以太坊、你关注币种的 24h 变化 + 重要链上事件",
+  "crypto-market-daily.prompt": "每天早上 9:00 给我比特币、以太坊和我关注币种的 24h 价格变化，加上过去一天最重要的链上事件。",
+
+  "crypto-market-daily.title": "加密市场日报",
+  "daily-design-inspiration.description": "每天早上从 Dribbble、Behance、Awwwards、Pinterest 挑 10 个和你风格匹配的作品",
+  "daily-design-inspiration.prompt": "每天早上 9:00 从 Dribbble、Behance、Awwwards、Pinterest 挑 10 个和我风格匹配的作品，各附一句亮点点评。",
+
+  "daily-design-inspiration.title": "每日灵感",
+  "daily-followup-list.description": "每天早上按优先级排一遍今天该跟进的客户，附上次沟通要点",
+  "daily-followup-list.prompt": "每天早上 9:00 从 HubSpot 中排出今天该跟进的客户优先级清单，每条附上次沟通要点。",
+
+  "daily-followup-list.title": "今日跟进清单",
+  "daily-learning-bite.description": "每天给你一条 15 分钟能看完的学习内容（文章 / 视频 / 播客）",
+  "daily-learning-bite.prompt": "每天早上 7:30 给我一条 15 分钟能看完的学习内容（文章 / 视频 / 播客），附一句关键收获。",
+
+  "daily-learning-bite.title": "每日学习料",
+  "daily-topic-pick.description": "每天早上帮你扒一遍你赛道前一天跑得最好的 10 条内容，拆解选题角度",
+  "daily-topic-pick.prompt": "每天早上 9:00 帮我扒我赛道前一天跑得最好的 10 条内容，拆解选题角度，挑 1-2 个我今天能直接发的。",
+
+  "daily-topic-pick.title": "今日选题",
+  "deal-pipeline-weekly.description": "每周五盘点管道里所有 Deal：哪些推进、哪些停滞、本月能成多少",
+  "deal-pipeline-weekly.prompt": "每周五下午 16:00 盘点 HubSpot 管道里的所有 Deal：本周推进的、停滞的，并预测本月能成多少。",
+
+  "deal-pipeline-weekly.title": "Deal Pipeline 周报",
+  "dependency-security-weekly.description": "每周一自动扫一遍你项目的漏洞和过期版本，给出升级优先级",
+  "dependency-security-weekly.prompt": "每周一早上 10:00 扫一遍我 GitHub 项目里有漏洞或过期的依赖，按严重程度和升级风险排出优先级。",
+
+  "dependency-security-weekly.title": "依赖安全周检",
+  "design-trend-weekly.description": "每周一给你本周 UI / 品牌 / 插画 3 个新趋势 + 5 个代表案例",
+  "design-trend-weekly.prompt": "每周一早上 9:00 给我 UI、品牌、插画领域本周 3 个新趋势，每个趋势配 5 个代表案例。",
+
+  "design-trend-weekly.title": "设计趋势周报",
+  "diet-log-companion.description": "每天晚上帮你回顾今天吃了什么，给下次的调整建议。不强迫、不批判",
+  "diet-log-companion.prompt": "每天晚上 21:00 陪我回顾今天的饮食，温柔地给一两条明天可以调整的建议，不强迫、不批判。",
+
+  "diet-log-companion.title": "饮食记录陪跑",
+  "exhibition-event-weekly.description": "告诉我你所在城市，每周一给你本周的展览、演出、livehouse 信息",
+  "exhibition-event-weekly.prompt": "每周一早上 10:00 列出我所在城市本周的展览、演出、livehouse 演出信息，给出最值得去的几条简介。",
+
+  "exhibition-event-weekly.title": "展览演出日历",
+  "family-finance-weekly.description": "每周日晚回顾本周支出结构、预算完成度、下周大额计划",
+  "family-finance-weekly.prompt": "每周日晚 20:00 基于 Google Sheets 流水回顾本周家庭支出结构、预算完成度，并预告下周的大额支出计划。",
+
+  "family-finance-weekly.title": "家庭财务周报",
+  "family-task-schedule.description": "每周一早上分配本周家务、采购、接送、缴费，家庭群可同步",
+  "family-task-schedule.prompt": "每周一早上 8:00 帮我排好本周家庭任务计划：家务、采购、接送、缴费，给每项一个暂定责任人和时间段。如果连接了 Google Calendar，建议可直接落进日程的时间块。",
+
+  "family-task-schedule.title": "家庭任务排期",
+  "figma-files-cleanup.description": "每周五下班前帮你盘点近期更新的 Figma 文件，标记该归档的、该同步开发的",
+  "figma-files-cleanup.prompt": "每周五下午 17:00 盘点近期更新的 Figma 文件，标记哪些该归档、哪些需要同步给开发，还有哪些需要继续打磨。",
+
+  "figma-files-cleanup.title": "Figma 文件整理",
+  "follower-growth-weekly.description": "每周一看跨平台的粉丝变化：哪个平台在涨、哪个在跌、该加码哪里",
+  "follower-growth-weekly.prompt": "每周一早上 10:00 回顾我 X (Twitter) 等平台的粉丝增长，标出该加码的平台和互动下滑的平台。",
+
+  "follower-growth-weekly.title": "粉丝增长周报",
+  "font-color-weekly.description": "每周三给你 3 组值得收藏的字体组合 + 3 组配色方案，直接存进灵感库",
+  "font-color-weekly.prompt": "每周三早上 10:00 给我 3 组值得收藏的字体组合和 3 组配色方案，每组字体附授权或下载渠道。",
+
+  "font-color-weekly.title": "字体配色周报",
+  "friday-wrap-list.description": "每周五下午列一份：这周没做完的、周一要交付的、下周第一件事",
+  "friday-wrap-list.prompt": "每周五下午 16:00 列一份：本周没做完的、周一要交付的、下周第一件事。",
+
+  "friday-wrap-list.title": "周五收尾清单",
+  "funding-intel-daily.description": "每天给你 3-5 条你赛道的融资快讯：谁拿钱、估值多少、投资人是谁",
+  "funding-intel-daily.prompt": "每天早上 10:00 给我赛道里过去 24 小时的 3-5 条融资快讯：谁拿了钱、金额、估值、领投方。",
+
+  "funding-intel-daily.title": "融资情报日报",
+  "headline-inspiration.description": "每天给你 10 个符合你调性的标题模板，从近期爆款反推的结构",
+  "headline-inspiration.prompt": "每天早上 10:00 从近期爆款反推 10 个符合我调性的标题模板，卡标题时直接抄。",
+
+  "headline-inspiration.title": "标题灵感",
+  "hot-topic-radar.description": "每天早上一次性看完你领域里正在升温的 5 个话题，趁还没挤满就能下手",
+  "hot-topic-radar.prompt": "每天早上 10:00 给我我赛道里正在升温但还没饱和的 5 个话题，每条说明现在为什么值得下手。",
+
+  "hot-topic-radar.title": "热点雷达",
+  "hubspot-funnel-daily.description": "每天早上看 MQL、SQL、成交漏斗变化，标出掉单高发环节",
+  "hubspot-funnel-daily.prompt": "每天早上 9:00 看 HubSpot 漏斗：MQL、SQL、成交各阶段的变化，对比上周标出掉单高发的环节。",
+
+  "hubspot-funnel-daily.title": "HubSpot 漏斗日报",
+  "industry-morning-brief.description": "每天早上把你行业 5 条重要新闻、融资、政策变化做成 5 分钟读物",
+  "industry-morning-brief.prompt": "每天早上 8:00 把我行业 5 条重要新闻、融资、政策变化汇总成 5 分钟读物。",
+
+  "industry-morning-brief.title": "行业早餐",
+  "industry-research-weekly.description": "告诉我你研究的赛道，每周一给你一份市场动态、融资、新玩家、监管变化汇总",
+  "industry-research-weekly.prompt": "每周一早上 9:00 汇总我赛道的市场动态、融资、新玩家、监管变化，整理成研究简报。",
+
+  "industry-research-weekly.title": "行业研究周报",
+  "invoice-collection-daily.description": "每天早上看哪些发票逾期了、逾期多少天、该发催款邮件了",
+  "invoice-collection-daily.prompt": "每天早上 10:00 列出逾期发票和对接联系人，并为每条草拟一封礼貌的催款邮件。",
+
+  "invoice-collection-daily.title": "发票催收日报",
+  "iteration-recap-weekly.description": "每周五下班前帮你拉本周迭代数据：完成率、逾期项、新增 Bug",
+  "iteration-recap-weekly.prompt": "每周五下午 17:00 复盘本周迭代：完成率、逾期项、新增 Bug，整理成下周一可直接用的复盘材料。",
+
+  "iteration-recap-weekly.title": "迭代复盘周报",
+  "key-account-radar.description": "告诉我核心客户的公司名，每天盯他们的新闻、融资、高管变动",
+  "key-account-radar.prompt": "每天早上 9:00 扫一遍我核心客户的公司新闻、融资、高管变动，挑出可作为续约谈话切入点的素材。",
+
+  "key-account-radar.title": "客户动态雷达",
+  "keyword-tech-feed.description": "告诉我你想追踪的技术关键词，每天带回 5 条高质量新问答 / 新博客",
+  "keyword-tech-feed.prompt": "每天早上 10:00 按我设定的技术关键词带回 5 条高质量的新博客或新问答。",
+
+  "keyword-tech-feed.title": "关键词技术订阅",
+  "kol-collab-calendar.description": "每周一同步正在合作的 KOL 进度：谁该发了、谁逾期、数据怎样",
+  "kol-collab-calendar.prompt": "每周一早上 9:00 同步正在进行的 KOL 合作：谁该发了、谁逾期、已发出内容的数据。",
+
+  "kol-collab-calendar.title": "KOL 合作日历",
+  "language-morning-bite.description": "每天给你一段 3 分钟能读完的目标语言内容 + 5 个生词卡",
+  "language-morning-bite.prompt": "每天早上 7:30 给我一段 3 分钟能读完的目标语言内容，加上 5 个生词卡（单词、释义、例句）。",
+
+  "language-morning-bite.title": "语言早报",
+  "linear-sprint-daily.description": "每天早上同步 Sprint 进度：哪些卡住了、哪些逾期、今天该做什么",
+  "linear-sprint-daily.prompt": "每天早上 8:30 从 Linear 拉一份 Sprint 进度：今日重点、阻塞项、昨日完成，整理成 3 条站会前可直接念的要点。",
+
+  "linear-sprint-daily.title": "Linear Sprint 日报",
+  "macro-economy-weekly.description": "每周一早给你汇率、利率、原油、金银、主要指数汇总",
+  "macro-economy-weekly.prompt": "每周一早上 8:00 给我宏观快照：汇率、利率、原油、金银、主要指数，加上一段「本周变化」总结。",
+
+  "macro-economy-weekly.title": "宏观经济周报",
+  "marketing-hot-radar.description": "每天追踪你行业正在发酵的 5 个营销话题：哪些值得蹭、哪些要避雷",
+  "marketing-hot-radar.prompt": "每天早上 10:00 追踪我行业正在发酵的 5 个营销话题，标注哪些值得蹭、哪些要避雷，各附 1-2 句理由。",
+
+  "marketing-hot-radar.title": "营销热点雷达",
+  "meeting-brief.description": "每天早上把今天所有会议的背景、参会人、上次纪要整理成 1 页",
+  "meeting-brief.prompt": "每天早上 8:30 为今天日历上的每个会议生成一页简报：背景、参会人、上次纪要，进会议室前看一眼。",
+
+  "meeting-brief.title": "会议简报",
+  "monetization-opportunity-weekly.description": "每周三给你内容创作者的新变现渠道和案例：广告 / 知识付费 / 会员 / 电商",
+  "monetization-opportunity-weekly.prompt": "每周三早上 10:00 给我我赛道相关的新变现渠道和案例：广告、知识付费、会员订阅、电商。",
+
+  "monetization-opportunity-weekly.title": "变现机会播报",
+  "morning-brief.description": "每天 8 点推一份：今天日程、待回邮件数、待办清单、天气",
+  "morning-brief.prompt": "每天早上 8:00 推送：今天日程、待回邮件数、TOP 3 待办、天气，整理成 1 分钟能读完的早报。",
+
+  "morning-brief.title": "晨间早报",
+  "morning-ritual.description": "每天 7 点：天气 + 今日日程 + 一条金句 + 一个动一动建议，温柔开启一天",
+  "morning-ritual.prompt": "每天早上 7:00 给我一份温柔的晨间仪式：天气、今日日程、一条短金句、一个轻量运动建议。如果连接了 Google Calendar，把日程锚定在那里。",
+
+  "morning-ritual.title": "晨间仪式",
+  "must-read-papers-weekly.description": "每周日晚帮你挑本周被引最多、讨论最热的 3 篇论文，做成精读清单",
+  "must-read-papers-weekly.prompt": "每周日晚 20:00 帮我挑本周我研究方向被引最多或讨论最热的 3 篇论文，整理成周末可读完的精读清单。",
+
+  "must-read-papers-weekly.title": "本周必读论文",
+  "newsletter-aggregator.description": "每周日晚把你订阅的 Newsletter 合并成一份摘要，周末一次性读完",
+  "newsletter-aggregator.prompt": "每周日晚 20:00 扫一遍我 Gmail 收件箱里本周收到的 Newsletter，按主题合并成一份周末摘要。",
+
+  "newsletter-aggregator.title": "Newsletter 聚合",
+  "newsletter-perf-weekly.description": "每周一帮你看 Newsletter 的打开率、点击率、取关率变化趋势，标出需要优化的环节",
+  "newsletter-perf-weekly.prompt": "每周一早上 10:00 回顾过去 4 周 Newsletter 的打开率、点击率、取关率，标出需要优化的人群分层。",
+
+  "newsletter-perf-weekly.title": "Newsletter 表现周报",
+  "onboarding-buddy-weekly.description": "新人入职 90 天内，每周一生成他的进度：任务完成、Buddy 反馈、该关注什么",
+  "onboarding-buddy-weekly.prompt": "每周一早上 9:00 为还在 90 天试用期内的新人生成进度卡：任务完成度、Buddy 反馈、本周该关注什么。",
+
+  "onboarding-buddy-weekly.title": "新人入职陪跑",
+  "oss-intel-daily.description": "每天早上给你 10 条技术栈动态：GitHub Trending、大厂新开源、关键 repo 的 release",
+  "oss-intel-daily.prompt": "每天早上 9:00 给我 10 条技术栈动态：GitHub Trending、大厂新开源、我关注的 repo 新 release。",
+
+  "oss-intel-daily.title": "开源情报日报",
+  "podcast-new-episodes.description": "告诉我你订阅的播客，每周一给你本周新集 + 值得听的 3 集推荐",
+  "podcast-new-episodes.prompt": "每周一早上 9:00 列出我订阅播客本周的新集，并推荐其中最值得先听的 3 集。",
+
+  "podcast-new-episodes.title": "播客新集聚合",
+  "portfolio-daily.description": "告诉我你的持仓股票 / 基金 / 加密货币，每天收盘后给你涨跌、重要新闻、持仓公司动态",
+  "portfolio-daily.prompt": "每天 16:00 收盘后给我每个持仓的当日涨跌、影响新闻和公司公告。",
+
+  "portfolio-daily.title": "持仓日报",
+  "prd-review-reminder.description": "每周五盘点本周该评审的 PRD 和决策项，别让文档压在草稿箱",
+  "prd-review-reminder.prompt": "每周五下午 15:00 盘点我 Notion 里本周该评审的 PRD 和决策文档，标出仍卡在草稿状态的。",
+
+  "prd-review-reminder.title": "PRD 评审提醒",
+  "pre-market-brief.description": "每天开盘前 30 分钟给你宏观要闻、重要财报、你持仓公司的动态",
+  "pre-market-brief.prompt": "每天早上 9:00 给我开盘前简报：宏观要闻、今日重要财报、我持仓公司的动态。",
+
+  "pre-market-brief.title": "开盘前简报",
+  "precious-metals-daily.description": "每天收盘后推送金银铜油主要品种的价格和日变化幅度，波动超阈值立刻标红",
+  "precious-metals-daily.prompt": "每天 16:00 收盘后给我金、银、铜、原油的当日价格和日变化幅度，单日波动超过 2% 立刻标红。",
+
+  "precious-metals-daily.title": "金银油价日报",
+  "recruit-funnel-daily.description": "每天早上看各岗位新投递、待面试、待反馈数，标出面试官拖着的人选",
+  "recruit-funnel-daily.prompt": "每天早上 9:00 按岗位汇总招聘漏斗：新投递、待面试、待反馈数，标出被面试官卡住的人选。",
+
+  "recruit-funnel-daily.title": "招聘漏斗日报",
+  "regulation-watch-weekly.description": "告诉我你关注的合规领域（数据 / 税务 / 劳动法），每周一给你一份变更摘要和影响判断",
+  "regulation-watch-weekly.prompt": "每周一早上 10:00 汇总我追踪的合规领域（数据 / 税务 / 劳动法）过去一周的变更，并判断对我们的影响。",
+
+  "regulation-watch-weekly.title": "法规变更追踪",
+  "renewal-risk-weekly.description": "每周一扫一遍本月到期合同，标出使用频次下降的高风险客户",
+  "renewal-risk-weekly.prompt": "每周一早上 9:00 扫一遍 HubSpot 中本月到期合同，标出使用频次下降的高风险客户，并为每条高风险账户建议挽留动作。",
+
+  "renewal-risk-weekly.title": "续费风险预警",
+  "repo-health-weekly.description": "每周一帮你看你维护的 repo：Issue 堆积、PR 停滞、CI 失败、依赖告警",
+  "repo-health-weekly.prompt": "每周一早上 9:00 检查我维护的 GitHub repo：Issue 堆积、PR 停滞、CI 失败、依赖告警，挑出本周该处理的事项。",
+
+  "repo-health-weekly.title": "仓库健康周报",
+  "schedule.daily": "每天 {{time}}",
+  "schedule.weekly": "每{{weekday}} {{time}}",
+  "section.title": "试试这些定时任务",
+
+  "seo-weekly-report.description": "每周一一份轻量 SEO 报告：排名变化、新关键词机会、值得翻新的页面",
+  "seo-weekly-report.prompt": "每周一早上 9:00 给我一份轻量 SEO 周报：排名升 / 降 TOP 变动、5 个值得关注的新关键词、3 个适合内容翻新的老页面。",
+
+  "seo-weekly-report.title": "SEO 排名周报",
+  "series-update-weekly.description": "告诉我你在追的剧 / 小说 / 漫画，每周给你更新提醒和剧情回顾",
+  "series-update-weekly.prompt": "每周一早上 9:00 给我我在追的剧、小说、漫画的更新提醒和短剧情回顾。",
+
+  "series-update-weekly.title": "追更日报",
+  "standup-brief.description": "每天站会前 15 分钟帮你拉一份 Linear 进度简报：今日重点、阻塞项、昨日完成",
+  "standup-brief.prompt": "每天早上 8:30 拉一份 Linear 站会简报：今日重点、阻塞项、昨日完成，整理成 3 条站会前可直接念的要点。",
+
+  "standup-brief.title": "站会简报",
+  "sunday-reflection.description": "每周日晚陪你走 5 个问题：最有成就感的事、最想吐槽的事、下周 3 件重要事",
+  "sunday-reflection.prompt": "每周日晚 21:00 陪我走 5 个复盘问题：本周最有成就感的事、最想吐槽的事、下周 3 件重要事、本周学到的、本周应该放下的。",
+
+  "sunday-reflection.title": "周日复盘",
+  "team-status-weekly.description": "每周一看团队请假、加班、会议时长趋势，预警潜在倦怠信号",
+  "team-status-weekly.prompt": "每周一早上 9:00 回顾团队过去一周的请假、加班、会议时长趋势，预警有倦怠风险的成员。",
+
+  "team-status-weekly.title": "团队状态周报",
+  "tech-trend-weekly.description": "每周一帮你总结前端 / 后端 / AI 圈的重要动态：论文、框架、融资",
+  "tech-trend-weekly.prompt": "每周一早上 8:00 总结前端、后端、AI 圈过去一周的重要动态：论文、框架、融资，整理成 10 条 + 一句要点。",
+
+  "tech-trend-weekly.title": "技术趋势周刊",
+  "travel-inspiration-weekly.description": "每周三给你想去城市的机票价格变动、签证政策、最佳出行时间",
+  "travel-inspiration-weekly.prompt": "每周三早上 10:00 给我心愿城市的机票价格变化、签证政策、最佳出行时间。",
+
+  "travel-inspiration-weekly.title": "旅行灵感周报",
+  "twitter-weekly-recap.description": "每周一帮你复盘过去 7 天的推文表现：涨粉最猛的、互动最差的、为什么",
+  "twitter-weekly-recap.prompt": "每周一早上 10:00 复盘我 X (Twitter) 过去 7 天的推文表现：涨粉最猛的、互动最差的，并给出原因假设和下周 3 个尝试方向。",
+
+  "twitter-weekly-recap.title": "推特周报",
+  "user-feedback-daily.description": "每天把各渠道用户反馈（应用商店、社媒、客服）聚合成 TOP 20 条，按情绪和主题分类",
+  "user-feedback-daily.prompt": "每天早上 9:00 把各渠道用户反馈（应用商店、社媒、客服）聚合成 TOP 20 条，按情绪和主题分类。",
+
+  "user-feedback-daily.title": "用户反馈日报",
+  "user-interview-schedule.description": "每周一帮你梳理本周访谈：谁、什么时候、问题列表准备好没",
+  "user-interview-schedule.prompt": "每周一早上 9:00 列出本周已排期的用户访谈：访谈对象、时间、准备清单（问题列表是否齐全、录制设备是否就位）。",
+
+  "user-interview-schedule.title": "用户访谈排期",
+  "vercel-health-weekly.description": "每周一帮你盘点上周部署成功率、构建时长、流量异常",
+  "vercel-health-weekly.prompt": "每周一早上 10:00 盘点 Vercel 过去一周的部署：成功率、构建时长、流量异常，标出累积问题。",
+
+  "vercel-health-weekly.title": "Vercel 健康周报",
+  "viral-content-breakdown.description": "每天从你领域挑 1 条爆款帮你拆：选题、开头、结构、结尾",
+  "viral-content-breakdown.prompt": "每天早上 10:00 从我领域挑 1 条爆款帮我拆：选题、开头、结构、结尾，整理成可复刻的模板。",
+
+  "viral-content-breakdown.title": "爆款拆解",
+  "watchlist-friday.description": "每周五给你本周豆瓣 / IMDb 新上映的 5 部高分作品，附一句话短评",
+  "watchlist-friday.prompt": "每周五晚 18:00 从豆瓣和 IMDb 挑 5 部本周新上映的高分作品，每部附一句短评。",
+
+  "watchlist-friday.title": "观影清单",
+  "weekly-meeting-brief.description": "每周一早上帮你准备本周战略会的 3 个讨论要点：行业动态、内部指标、决策建议",
+  "weekly-meeting-brief.prompt": "每周一早上 8:30 准备本周战略会的 3 个讨论要点：行业动态、值得提的内部指标、需要决策的事项。",
+
+  "weekly-meeting-brief.title": "周会简报",
+  "youtube-channel-weekly.description": "每周一拉频道数据：订阅变化、热门视频、观众留存、收益变化",
+  "youtube-channel-weekly.prompt": "每周一早上 9:00 拉我 YouTube 频道的数据：订阅变化、热门视频、观众留存、收益变化。",
+
+  "youtube-channel-weekly.title": "YouTube 频道周报",
+  "youtube-weekly-recap.description": "每周一帮你拉频道过去 7 天的播放、CTR、留存曲线，标出值得拍续集的选题",
+  "youtube-weekly-recap.prompt": "每周一早上 9:00 拉我 YouTube 频道过去 7 天的播放、CTR、留存曲线，标出值得拍续集的选题。",
+
+  "youtube-weekly-recap.title": "YouTube 周报",
+  "zendesk-ticket-daily.description": "每天早上盘一下 Zendesk 工单：积压多少、SLA 逾期多少、重复问题前三名",
+  "zendesk-ticket-daily.prompt": "每天早上 9:00 给我 Zendesk 快照：未关单积压、SLA 逾期数量、过去 24 小时 TOP 3 重复问题。",
+  "zendesk-ticket-daily.title": "Zendesk 工单日报"
+}

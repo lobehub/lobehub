@@ -111,6 +111,8 @@
   "response.PluginServerError": "Błąd serwera umiejętności. Sprawdź manifest, konfigurację lub implementację serwera.",
   "response.PluginSettingsInvalid": "Ta umiejętność wymaga poprawnej konfiguracji przed użyciem. Sprawdź ustawienia.",
   "response.ProviderBizError": "Błąd podczas żądania usługi {{provider}}. Spróbuj ponownie lub sprawdź szczegóły.",
+  "response.ProviderContentModeration": "Sprawdzenie zgodności z zasadami treści nie powiodło się. Popraw swój prompt i spróbuj ponownie.",
+  "response.ProviderContentModerationWarning": "Wykryto powtarzające się naruszenia zasad. Dalsze nadużycia mogą skutkować ograniczeniem Twojego konta.",
   "response.QuotaLimitReached": "Przepraszamy, limit tokenów lub liczby żądań dla tego klucza został osiągnięty. Zwiększ limit lub spróbuj później.",
   "response.QuotaLimitReachedCloud": "Usługa modelu jest obecnie bardzo obciążona. Proszę spróbować ponownie później.",
   "response.ServerAgentRuntimeError": "Przepraszamy, usługa Agenta jest obecnie niedostępna. Spróbuj później lub skontaktuj się z nami mailowo.",
