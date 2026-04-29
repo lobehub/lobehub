@@ -400,6 +400,7 @@ const stepfunImageModels: AIImageModelCard[] = [
     id: 'step-1x-medium',
     parameters: {
       cfg: { default: 7.5, max: 10, min: 1, step: 0.1 },
+      imageUrl: { default: null },
       prompt: {
         default: '',
       },
