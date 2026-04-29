@@ -201,18 +201,23 @@ export class PluginMCPStoreActionImpl {
     const normalizedConfig = toNonEmptyStringRecord(config);
     let plugin = mcpStoreSelectors.getPluginById(identifier)(this.#get());
 
-    if (!plugin || !plugin.manifestUrl) {
-      const data = await discoverService.getMcpDetail({ identifier });
-      if (!data) return;
-
-      plugin = data as unknown as PluginItem;
+    // Best-effort: fetch detail for haveCloudEndpoint (only detail API includes it)
+    // Detail failures must not block install — cloud path needs it, http/stdio don't
+    let haveCloudEndpoint: string | undefined;
+    try {
+      const detail = await discoverService.getMcpDetail({ identifier });
+      if (detail) {
+        haveCloudEndpoint = detail.haveCloudEndpoint;
+        // Use detail to enrich plugin info if list data was incomplete
+        if (!plugin || !plugin.manifestUrl) {
+          plugin = detail as unknown as PluginItem;
+        }
+      }
+    } catch {
+      // detail API unavailable — installation can still proceed via http/stdio paths
     }
 
     if (!plugin) return;
-
-    // Extract haveCloudEndpoint after plugin is loaded
-    // @ts-expect-error
-    const { haveCloudEndpoint } = plugin || {};
 
     const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();
 
