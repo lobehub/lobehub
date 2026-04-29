@@ -28,24 +28,25 @@ export async function createStepfunImage(
   const { cfg, imageUrl, prompt, seed, size, steps } = params;
 
   try {
-    let endpoint = params.imageUrl ? 'edits' : 'generations';
+    let endpoint = imageUrl ? 'edits' : 'generations';
 
     const body: Record<string, any> = {
       model,
+      n: 1, // Only supports generating 1 image at a time
       prompt,
       response_format: 'url',
-      ...(cfg ? { cfg_scale: cfg } : {}),
-      ...(seed ? { seed } : {}),
-      ...(size ? { size } : {}),
-      ...(steps ? { steps } : {}),
+      ...(cfg !== undefined ? { cfg_scale: cfg } : {}),
+      ...(seed !== undefined ? { seed } : {}),
+      ...(size !== undefined ? { size } : {}),
+      ...(steps !== undefined ? { steps } : {}),
       ...(model === 'step-image-edit-2' ? { text_mode: true } : {}),
     };
 
     if (imageUrl) {
       if (model === 'step-1x-medium') {
-        // For step-1x-medium, endpoint is "image2image" and the imageUrl should be passed as "source_image" in the body
+        // For step-1x-medium, endpoint is "image2image" and the imageUrl should be passed as "source_url" in the body
         endpoint = 'image2image';
-        body.source_image = imageUrl;
+        body.source_url = imageUrl;
         body.source_weight = 0.5;
       } else {
         // For other models, the imageUrl should be passed as "image" in the body
