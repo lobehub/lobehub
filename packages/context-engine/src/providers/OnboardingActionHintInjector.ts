@@ -36,16 +36,32 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
 
     const hints: string[] = [];
     const phase = ctx.phaseGuidance;
-    const marketplaceAlreadyOpened = context.messages.some(
-      (msg) =>
-        msg.role === 'assistant' &&
-        Array.isArray((msg as any).tool_calls) &&
-        (msg as any).tool_calls.some(
+    // Detect prior showAgentMarketplace calls. NOTE: this provider runs in pipeline phase 4.5
+    // (virtual tail guidance) BEFORE ToolCallProcessor converts the DB-shape `tools` array
+    // into OpenAI-shape `tool_calls`. So at injection time, assistant messages still carry
+    // `tools: [{ identifier, apiName, ... }]`, not `tool_calls`. Match on apiName here, with
+    // a `tool_calls` fallback in case ordering changes.
+    const isMarketplaceShowCall = (msg: any): boolean => {
+      if (msg?.role !== 'assistant') return false;
+      if (
+        Array.isArray(msg.tools) &&
+        msg.tools.some(
+          (t: any) =>
+            t?.apiName === 'showAgentMarketplace' || t?.identifier === 'lobe-agent-marketplace',
+        )
+      ) {
+        return true;
+      }
+      if (Array.isArray(msg.tool_calls)) {
+        return msg.tool_calls.some(
           (tc: any) =>
             typeof tc?.function?.name === 'string' &&
             tc.function.name.includes('showAgentMarketplace'),
-        ),
-    );
+        );
+      }
+      return false;
+    };
+    const marketplaceAlreadyOpened = context.messages.some((msg) => isMarketplaceShowCall(msg));
 
     // Detect empty documents and nudge tool calls (empty docs use writeDocument; non-empty use updateDocument)
     if (!ctx.soulContent) {
@@ -81,11 +97,11 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     } else if (phase.includes('Summary')) {
       if (!marketplaceAlreadyOpened) {
         hints.push(
-          "Present a summary, then THIS TURN call `showAgentMarketplace` exactly once with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion. After the showAgentMarketplace tool result comes back, **STOP this turn** — no more tool calls (no `finishOnboarding`, no `askUserQuestion`, nothing else). End your turn with at most one short acknowledgment sentence and wait for the user's next message. The closing + `finishOnboarding` belongs to the FOLLOWING turn.",
+          'Present a summary, then THIS TURN call `showAgentMarketplace` exactly once with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion. After the showAgentMarketplace tool result comes back, **STOP this turn** — no more tool calls and no closing text yet. The picker resolves directly via the tool result UI (the user will pick / skip in place); when it resolves, the runtime will start a NEW assistant turn whose tool result describes what was picked. The closing + `finishOnboarding` belong to that next turn.',
         );
       } else {
         hints.push(
-          "You have ALREADY opened the marketplace picker this conversation. Do NOT call `showAgentMarketplace` again. The user's latest message is your cue to close: acknowledge any picks they referenced (do not claim you installed anything), send a brief warm closing message (2–3 sentences), then call `finishOnboarding` THIS TURN. If the picker is still in `pending` state because no UI resolution arrived, treat the user's text reply as the implicit resolution and proceed with `finishOnboarding` anyway — do not stall waiting.",
+          'You have ALREADY opened the marketplace picker this conversation, and the user has just resolved it through the picker UI — the latest tool result describes what was picked (look for `installedAgentIds` / `selectedTemplateIds`, or a `skipped`/`cancelled` status). Do NOT call `showAgentMarketplace` again, do NOT claim you just opened the list, and do NOT wait for another user message. THIS TURN: (1) briefly acknowledge the picks (or the skip/cancel) in 1–2 sentences; (2) call `updateDocument(type="persona")` with `insertAt` mode to record the picks (categories/use cases) so future sessions remember; (3) call `finishOnboarding`. If the tool result indicates skip/cancel, skip step 2 and just close + `finishOnboarding`.',
         );
       }
     }

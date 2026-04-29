@@ -63,7 +63,7 @@ export class AgentMarketplaceExecutionRuntime {
       const existing = [...this.picks.values()].find((p) => p.topicId === scope.topicId);
       if (existing) {
         return {
-          content: `Marketplace picker has already been opened in this conversation (requestId=${existing.requestId}, status=${existing.status}). Do NOT call showAgentMarketplace again. Proceed directly to a brief warm closing message and call finishOnboarding on this turn — the user's text reply is the resolution signal even if the picker is still pending.`,
+          content: `Marketplace picker has already been opened in this conversation (requestId=${existing.requestId}, status=${existing.status}). Do NOT call showAgentMarketplace again. The picker resolves directly through the UI — when the user picks or skips, the runtime will start a new turn with the resolution as the tool result. Proceed straight to acknowledging the picks, persisting any persona update, and calling finishOnboarding.`,
           state: existing,
           success: false,
         };
@@ -90,8 +90,8 @@ export class AgentMarketplaceExecutionRuntime {
     return {
       content: [
         `Marketplace picker is now visible to the user (requestId=${requestId}).`,
-        'STOP your current turn here. Do not call any further tools this turn (no finishOnboarding, no askUserQuestion, no other tools).',
-        "On your NEXT turn — i.e. after the user's next message arrives — send a brief warm closing (2–3 sentences) and call finishOnboarding then.",
+        'STOP your current turn here. Do not call any further tools this turn (no finishOnboarding, no askUserQuestion, no other tools), and do not write a wrap-up message yet.',
+        'The picker resolves directly through the UI — when the user picks or skips, the runtime will start a NEW assistant turn whose tool result describes the picks (`installedAgentIds`, `selectedTemplateIds`, or skip/cancel status). Acknowledge the picks, persist a short persona update, and call finishOnboarding on that next turn.',
       ].join(' '),
       state,
       success: true,
