@@ -83,9 +83,9 @@ describe('createMarketApp', () => {
     if (!(headers instanceof Headers)) throw new TypeError('Expected headers to be Headers');
 
     expect(headers.get('authorization')).toBe('Bearer user-token');
+    expect(headers.get('x-lobe-trust-token')).toBe('trusted-token');
     expect(headers.get('x-request-id')).toBe('request-1');
     expect(headers.has('host')).toBe(false);
-    expect(headers.has('x-lobe-trust-token')).toBe(false);
   });
 
   it('does not proxy unknown agent API routes to upstream Market', async () => {

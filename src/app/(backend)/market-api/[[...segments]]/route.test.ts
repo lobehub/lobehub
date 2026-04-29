@@ -84,6 +84,7 @@ describe('market-api proxy route', () => {
           'authorization': 'Bearer token',
           'cookie': 'session=secret',
           'host': 'lobehub.example.com',
+          'x-lobe-trust-token': 'trusted-token',
           'x-request-id': 'request-1',
         },
       }),
@@ -98,6 +99,7 @@ describe('market-api proxy route', () => {
 
     expect(headers.has('authorization')).toBe(false);
     expect(headers.has('cookie')).toBe(false);
+    expect(headers.has('x-lobe-trust-token')).toBe(false);
     expect(headers.get('x-request-id')).toBe('request-1');
     expect(headers.has('host')).toBe(false);
   });

@@ -7,7 +7,13 @@ interface MarketProxyRequestInit extends RequestInit {
 }
 
 const methodsWithoutBody = new Set(['GET', 'HEAD']);
-const proxyHeaderBlocklist = ['authorization', 'cookie', 'host', 'set-cookie'];
+const proxyHeaderBlocklist = [
+  'authorization',
+  'cookie',
+  'host',
+  'set-cookie',
+  'x-lobe-trust-token',
+];
 const responseHeaderBlocklist = ['set-cookie'];
 
 const sanitizeProxyResponse = (response: Response) => {
