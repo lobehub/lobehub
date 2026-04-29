@@ -30,10 +30,16 @@ import {
   shouldEmitTopicBrief,
 } from './synthesize';
 
-/** Read the brief generation mode from `task.config.brief.mode`. */
+/**
+ * Read the brief generation mode from `task.config.brief.mode`.
+ *
+ * Defaults to `'auto'` — programmatic synthesis in `synthesizeTopicBrief`
+ * is the standard path. `'agent'` is an explicit escape hatch that re-enables
+ * the legacy agent-driven `createBrief` tool flow.
+ */
 const getBriefMode = (task: TaskItem | null): 'agent' | 'auto' => {
   const mode = (task?.config as { brief?: { mode?: string } } | null)?.brief?.mode;
-  return mode === 'auto' ? 'auto' : 'agent';
+  return mode === 'agent' ? 'agent' : 'auto';
 };
 
 const log = debug('task-lifecycle');
