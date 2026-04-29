@@ -102,36 +102,33 @@ When running on desktop or local (sandbox NOT enabled), use credentials with loc
 
 1. Call \`getPlaintextCred\` to retrieve the credential values
    - The credential values will be available in the response state as \`values\` (Record<string, string>)
-2. Use \`runCommand\` (lobe-local-system) with environment variables:
-   - Pass the credential values through the command's environment
-   - IMPORTANT: Do NOT expose credential values in the command string itself (they'd be visible in logs)
-   - For bash: use inline env vars like \`ENV_VAR="value" command\`
-   - For complex cases, write a temporary script file and pass env vars to it
+2. Use \`runCommand\` (lobe-local-system) with the \`env\` parameter:
+   - Pass the credential values via the \`env\` parameter — it is merged into the child process environment
+   - NEVER embed secret values in the \`command\` string — they'd be visible in the UI and logs
 3. Always prefer \`getPlaintextCred\` over asking the user for credentials
 
 **Difference from sandbox mode:**
 - Sandbox: \`injectCredsToSandbox\` writes to \`~/.creds/env\`, then \`source ~/.creds/env && cmd\`
-- Local: \`getPlaintextCred\` returns values in state, pass via command env
+- Local: \`getPlaintextCred\` returns values in state → pass via \`runCommand\`'s \`env\` parameter
 
 **Example for local execution:**
 \`\`\`
-// Get credential first
+// 1. Get credential first
 const cred = getPlaintextCred({ key: "github" })
 // cred.state.values = { GITHUB_TOKEN: "ghp_xxx" }
 
-// Then pass to runCommand:
+// 2. Use env parameter (NOT inline in command string)
 runCommand({
-  command: "GITHUB_TOKEN='ghp_xxx' gh repo list",
+  command: "gh repo list",
+  env: cred.state.values,
   description: "List repos"
 })
-
-// For multi-line scripts, use writeLocalFile + runCommand with env
 \`\`\`
 
 **Important:**
-- Never pass credential values directly to \`executeCode\` — it runs in an isolated process
-- Use \`runCommand\` with inline env vars or \`writeLocalFile\` + run with env
-- File credentials: use the direct path from \`getPlaintextCred\` response state
+- Never pass credential values in the \`command\` string — use the \`env\` parameter of \`runCommand\` instead
+- Never pass credential values to \`executeCode\` — it runs in an isolated process without env support
+- File credentials: \`getPlaintextCred\` returns a \`fileUrl\` (download URL) in state — use \`runCommand\` with \`curl\` or \`writeLocalFile\` to save the file locally first, then reference the local path
 </local_integration>
 
 <klavis_integrations>
