@@ -1,3 +1,5 @@
+import type { ToolOutcomeProcedureDeps } from '../../procedure/toolOutcome';
+import { createToolOutcomeSourceHandler } from '../../procedure/toolOutcome';
 import { defineAgentSignalHandlers } from '../../runtime/middleware';
 import type {
   SkillManagementActionHandlerOptions,
@@ -16,6 +18,17 @@ import { createFeedbackSatisfactionJudgeProcessor } from './feedbackSatisfaction
 export interface CreateAnalyzeIntentPolicyOptions {
   feedbackDomainJudge?: CreateFeedbackDomainJudgePolicyOptions['feedbackDomainJudge'];
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
+  procedure?: ToolOutcomeProcedureDeps & {
+    markerReader: {
+      shouldSuppress: (input: {
+        domainKey: string;
+        intentClass?: string;
+        intentClassCandidates?: string[];
+        procedureKey: string;
+        scopeKey: string;
+      }) => Promise<boolean>;
+    };
+  };
   skillManagement?: SkillManagementActionHandlerOptions;
   userMemory?: UserMemoryActionHandlerOptions;
 }
@@ -26,11 +39,15 @@ export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOpti
   });
 
   return defineAgentSignalHandlers([
+    ...(options.procedure ? [createToolOutcomeSourceHandler(options.procedure)] : []),
     createFeedbackSatisfactionJudgeProcessor(options.feedbackSatisfactionJudge),
     createFeedbackDomainJudgeSignalHandler({
       resolveDomains: feedbackDomainResolver,
     }),
-    createFeedbackActionPlannerSignalHandler(),
+    createFeedbackActionPlannerSignalHandler({
+      markerReader: options.procedure?.markerReader,
+      procedure: options.procedure,
+    }),
     ...(options.skillManagement
       ? [defineSkillManagementActionHandler(options.skillManagement)]
       : []),

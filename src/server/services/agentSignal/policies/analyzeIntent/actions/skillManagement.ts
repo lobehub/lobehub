@@ -1,3 +1,9 @@
+import {
+  AgentRuntime,
+  type AgentRuntimeContext,
+  type AgentState,
+  GeneralChatAgent,
+} from '@lobechat/agent-runtime';
 import type {
   AgenticAttempt,
   BaseAction,
@@ -5,7 +11,17 @@ import type {
   SignalAttempt,
 } from '@lobechat/agent-signal';
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import {
+  generateToolsFromManifest,
+  type LobeToolManifest,
+  ToolNameResolver,
+} from '@lobechat/context-engine';
+import type {
+  ChatStreamPayload,
+  GenerateObjectSchema,
+  ModelRuntime,
+} from '@lobechat/model-runtime';
+import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import {
   AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE,
   AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE,
@@ -14,6 +30,7 @@ import {
   createAgentSkillManagerDecisionPrompt,
   createAgentSkillRefinePrompt,
 } from '@lobechat/prompts';
+import type { ChatToolPayload, MessageToolCall, ModelUsage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
@@ -21,12 +38,15 @@ import type { AgentDocument } from '@/database/models/agentDocuments';
 import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import {
   createSkillTree,
   getSkillFolder,
 } from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
+import { AgentSignalProcedureInspector } from '@/server/services/agentSignal/procedure';
+import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 import { SkillMaintainerService } from '@/server/services/skillMaintainer/SkillMaintainerService';
 import { SkillReferenceResolver } from '@/server/services/skillMaintainer/SkillReferenceResolver';
 import { VfsSkillPackageAdapter } from '@/server/services/skillMaintainer/VfsSkillPackageAdapter';
@@ -58,13 +78,17 @@ export interface SkillManagementSignalPayload {
   evidence?: Array<{ cue: string; excerpt: string }>;
   /** Original feedback message that motivated the signal. */
   feedbackMessage: string;
+  /** Message that originated this same-turn feedback action. */
+  messageId?: string;
+  /** Runtime scope used to inspect same-turn procedure state. */
+  scopeKey?: string;
   /** Optional topic where the feedback happened. */
   topicId?: string;
   /** Optional relevant turn summary. */
   turnContext?: string;
 }
 
-export type SkillManagementDecisionAction = 'consolidate' | 'create' | 'noop' | 'refine';
+export type SkillManagementDecisionAction = 'consolidate' | 'create' | 'noop' | 'refine' | 'reject';
 
 /**
  * Normalized result returned by the skill-management decision step.
@@ -74,6 +98,8 @@ export interface SkillManagementDecision {
   action: SkillManagementDecisionAction;
   /** Optional confidence score from the decision model. */
   confidence?: number;
+  /** Optional document ids inspected while deciding. */
+  documentRefs?: string[];
   /** Optional short explanation for observability. */
   reason?: string;
   /** Optional file paths that should be read before refinement or consolidation. */
@@ -94,6 +120,7 @@ export interface SkillManagementActionInput {
   evidence?: AgentSignalFeedbackEvidence[];
   feedbackHint?: 'not_satisfied' | 'satisfied';
   message: string;
+  messageId?: string;
   reason?: string;
   serializedContext?: string;
   topicId?: string;
@@ -112,6 +139,39 @@ export interface SkillManagementActionHandlerOptions {
     agentId: string;
   }) => SkillMaintainerFileOperationService;
   userId: string;
+}
+
+export interface SkillDecisionDocumentOutcome {
+  documentId: string;
+  relation?: string;
+  summary?: string;
+}
+
+export interface SkillDecisionCandidateDocument {
+  documentId: string;
+  filename?: string;
+  title?: string;
+}
+
+export interface SkillDecisionDocumentSnapshot {
+  content?: string;
+  documentId: string;
+  filename?: string;
+  title?: string;
+}
+
+export interface SkillDecisionToolset {
+  listCandidateDocuments: (input: {
+    agentId: string;
+    topicId?: string;
+  }) => Promise<SkillDecisionCandidateDocument[]>;
+  listSameTurnDocumentOutcomes: (input: {
+    agentId: string;
+    messageId?: string;
+    scopeKey?: string;
+    topicId?: string;
+  }) => Promise<SkillDecisionDocumentOutcome[]>;
+  readDocument: (input: { documentId: string }) => Promise<SkillDecisionDocumentSnapshot>;
 }
 
 export interface SkillManagementAgentModelConfig {
@@ -150,8 +210,9 @@ export interface SkillMaintainerFileOperationService {
 }
 
 const SkillManagementDecisionSchema = z.object({
-  action: z.enum(['create', 'refine', 'consolidate', 'noop']),
+  action: z.enum(['create', 'refine', 'consolidate', 'noop', 'reject']),
   confidence: z.number().min(0).max(1).nullable(),
+  documentRefs: z.array(z.string()).default([]),
   reason: z.string().nullable(),
   requiredReads: z.array(z.string()),
   targetSkillIds: z.array(z.string()),
@@ -174,15 +235,16 @@ const SkillManagementDecisionGenerateObjectSchema = {
   schema: {
     additionalProperties: false,
     properties: {
-      action: { enum: ['create', 'refine', 'consolidate', 'noop'], type: 'string' },
+      action: { enum: ['create', 'refine', 'consolidate', 'noop', 'reject'], type: 'string' },
       confidence: {
         anyOf: [{ maximum: 1, minimum: 0, type: 'number' }, { type: 'null' }],
       },
+      documentRefs: { items: { type: 'string' }, type: 'array' },
       reason: { type: ['string', 'null'] },
       requiredReads: { items: { type: 'string' }, type: 'array' },
       targetSkillIds: { items: { type: 'string' }, type: 'array' },
     },
-    required: ['action', 'confidence', 'reason', 'requiredReads', 'targetSkillIds'],
+    required: ['action', 'confidence', 'documentRefs', 'reason', 'requiredReads', 'targetSkillIds'],
     type: 'object',
   },
   strict: true,
@@ -199,7 +261,16 @@ const SkillMaintainerWorkflowResultBaseGenerateObjectSchema = {
         items: {
           additionalProperties: false,
           properties: {
-            arguments: { additionalProperties: {}, type: 'object' },
+            arguments: {
+              additionalProperties: false,
+              properties: {
+                content: { type: ['string', 'null'] },
+                path: { type: 'string' },
+                skillRef: { type: 'string' },
+              },
+              required: ['skillRef', 'path', 'content'],
+              type: 'object',
+            },
             name: {
               enum: ['updateSkill', 'writeSkillFile', 'removeSkillFile'],
               type: 'string',
@@ -211,7 +282,15 @@ const SkillMaintainerWorkflowResultBaseGenerateObjectSchema = {
         type: 'array',
       },
       proposedLifecycleActions: {
-        items: { additionalProperties: {}, type: 'object' },
+        items: {
+          additionalProperties: false,
+          properties: {
+            reason: { type: ['string', 'null'] },
+            type: { type: 'string' },
+          },
+          required: ['type', 'reason'],
+          type: 'object',
+        },
         type: 'array',
       },
       reason: { type: ['string', 'null'] },
@@ -223,7 +302,11 @@ const SkillMaintainerWorkflowResultBaseGenerateObjectSchema = {
 } satisfies Omit<GenerateObjectSchema, 'name'>;
 
 const isSkillManagementDecisionAction = (value: unknown): value is SkillManagementDecisionAction =>
-  value === 'create' || value === 'refine' || value === 'consolidate' || value === 'noop';
+  value === 'create' ||
+  value === 'refine' ||
+  value === 'consolidate' ||
+  value === 'noop' ||
+  value === 'reject';
 
 const getStringArray = (value: unknown) => {
   if (!Array.isArray(value)) return undefined;
@@ -241,6 +324,7 @@ const normalizeSkillManagementDecision = (decision: unknown): SkillManagementDec
   const record = decision as Record<string, unknown>;
   const action = isSkillManagementDecisionAction(record.action) ? record.action : 'noop';
   const confidence = typeof record.confidence === 'number' ? record.confidence : undefined;
+  const documentRefs = getStringArray(record.documentRefs);
   const reason = typeof record.reason === 'string' ? record.reason : undefined;
   const requiredReads = getStringArray(record.requiredReads);
   const targetSkillIds = getStringArray(record.targetSkillIds);
@@ -248,10 +332,394 @@ const normalizeSkillManagementDecision = (decision: unknown): SkillManagementDec
   return {
     action,
     ...(confidence === undefined ? {} : { confidence }),
+    ...(documentRefs === undefined ? {} : { documentRefs }),
     ...(reason === undefined ? {} : { reason }),
     ...(requiredReads === undefined ? {} : { requiredReads }),
     ...(targetSkillIds === undefined ? {} : { targetSkillIds }),
   };
+};
+
+const malformedDecisionOutputReason = 'decision structured output was malformed';
+
+const skillDecisionToolIdentifier = 'agent-signal-skill-decision';
+
+const skillDecisionManifest = {
+  api: [
+    {
+      description: 'List document tool outcomes from the same Agent Signal turn.',
+      name: 'listSameTurnDocumentOutcomes',
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          messageId: { type: ['string', 'null'] },
+          scopeKey: { type: ['string', 'null'] },
+        },
+        required: ['messageId', 'scopeKey'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'List candidate agent documents when same-turn outcomes are insufficient.',
+      name: 'listCandidateDocuments',
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          agentId: { type: 'string' },
+          topicId: { type: ['string', 'null'] },
+        },
+        required: ['agentId', 'topicId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Read one agent document by document id for attribution before deciding.',
+      name: 'readDocument',
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          documentId: { type: 'string' },
+        },
+        required: ['documentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Submit the final skill-management decision after optional read-only inspection.',
+      name: 'submitDecision',
+      parameters: SkillManagementDecisionGenerateObjectSchema.schema,
+    },
+  ],
+  identifier: skillDecisionToolIdentifier,
+  meta: {
+    description: 'Read same-turn evidence and submit one skill-management decision.',
+    title: 'Agent Signal Skill Decision',
+  },
+  systemRole: 'Use read-only evidence tools before submitting a skill-management decision.',
+  type: 'builtin',
+} satisfies LobeToolManifest;
+
+interface SkillDecisionAgentRuntimeInput {
+  model: string;
+  modelRuntime: Pick<ModelRuntime, 'chat'>;
+  payload: SkillManagementSignalPayload;
+  tools: SkillDecisionToolset;
+}
+
+const toNullableString = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+const parseToolArguments = (value: string | undefined): Record<string, unknown> => {
+  if (!value) return {};
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const executeSkillDecisionRuntimeTool = async (
+  toolCall: ChatToolPayload,
+  input: Pick<SkillDecisionAgentRuntimeInput, 'payload' | 'tools'>,
+) => {
+  const args = parseToolArguments(toolCall.arguments);
+
+  if (toolCall.apiName === 'listSameTurnDocumentOutcomes') {
+    return input.tools.listSameTurnDocumentOutcomes({
+      agentId: input.payload.agentId,
+      messageId: toNullableString(args.messageId) ?? input.payload.messageId,
+      scopeKey: toNullableString(args.scopeKey) ?? input.payload.scopeKey,
+      topicId: input.payload.topicId,
+    });
+  }
+
+  if (toolCall.apiName === 'listCandidateDocuments') {
+    return input.tools.listCandidateDocuments({
+      agentId: input.payload.agentId,
+      topicId: toNullableString(args.topicId) ?? input.payload.topicId,
+    });
+  }
+
+  if (toolCall.apiName === 'readDocument') {
+    const documentId = toNullableString(args.documentId);
+    if (!documentId) return { error: 'documentId is required' };
+
+    return input.tools.readDocument({ documentId });
+  }
+
+  return { error: `Unsupported skill decision tool: ${toolCall.apiName}` };
+};
+
+/**
+ * Runs the skill-management decision agent with the standard Agent Runtime state machine.
+ *
+ * Use when:
+ * - The decision step must inspect same-turn document outcomes before deciding
+ * - Tool use should follow the same LLM -> tool -> LLM control flow as normal agents
+ *
+ * Expects:
+ * - Tool implementations are read-only and scoped by agent/message/scope
+ * - `submitDecision` is the only terminal tool
+ *
+ * Returns:
+ * - Final normalized skill-management decision
+ *
+ * Call stack:
+ *
+ * createSkillDecisionRunner
+ *   -> SkillManagementDecisionAgentService.decide
+ *     -> {@link runSkillDecisionAgentRuntime}
+ *       -> AgentRuntime.step
+ */
+export const runSkillDecisionAgentRuntime = async (input: SkillDecisionAgentRuntimeInput) => {
+  let submittedDecision: SkillManagementDecision | undefined;
+  const toolNameResolver = new ToolNameResolver();
+  const manifestMap = { [skillDecisionToolIdentifier]: skillDecisionManifest };
+  const tools = generateToolsFromManifest(skillDecisionManifest);
+  const messages: Array<{ content: string; role: 'system' | 'user' }> = [
+    { content: AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE, role: 'system' },
+    {
+      content: createAgentSkillManagerDecisionPrompt({
+        agentId: input.payload.agentId,
+        ...(input.payload.candidateSkills?.length
+          ? { candidateSkills: input.payload.candidateSkills }
+          : {}),
+        evidence: input.payload.evidence ?? [],
+        feedbackMessage: input.payload.feedbackMessage,
+        messageId: input.payload.messageId,
+        scopeKey: input.payload.scopeKey,
+        topicId: input.payload.topicId,
+        turnContext: input.payload.turnContext,
+      }),
+      role: 'user',
+    },
+  ];
+
+  const runtime = new AgentRuntime(
+    new GeneralChatAgent({
+      compressionConfig: { enabled: false },
+      modelRuntimeConfig: {
+        model: input.model,
+        provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
+      },
+      operationId: `agent-signal-skill-decision:${input.payload.messageId ?? 'message'}`,
+    }),
+    {
+      executors: {
+        call_llm: async (instruction, state) => {
+          const payload = (instruction as { payload: { messages: ChatStreamPayload['messages'] } })
+            .payload;
+          let content = '';
+          let modelUsage: ModelUsage | undefined;
+          let rawToolCalls: MessageToolCall[] = [];
+
+          const response = await input.modelRuntime.chat(
+            {
+              messages: payload.messages,
+              model: input.model,
+              stream: true,
+              tools,
+            },
+            {
+              callback: {
+                onCompletion: (data) => {
+                  modelUsage = data.usage;
+                },
+                onText: (text) => {
+                  content += text;
+                },
+                onToolsCalling: ({ toolsCalling }) => {
+                  rawToolCalls = toolsCalling;
+                },
+              },
+              metadata: { trigger: RequestTrigger.Memory },
+            },
+          );
+          await consumeStreamUntilDone(response);
+
+          const assistantMessageId = `skill-decision-assistant-${state.stepCount}`;
+          const resolvedToolCalls = toolNameResolver.resolve(rawToolCalls, manifestMap);
+          const newState = structuredClone(state);
+
+          newState.messages.push({
+            content,
+            id: assistantMessageId,
+            role: 'assistant',
+            ...(rawToolCalls.length > 0 ? { tool_calls: rawToolCalls } : {}),
+          });
+
+          return {
+            events: [
+              {
+                result: { content, tool_calls: rawToolCalls, usage: modelUsage },
+                type: 'llm_result',
+              },
+            ],
+            newState,
+            nextContext: {
+              payload: {
+                hasToolsCalling: resolvedToolCalls.length > 0,
+                parentMessageId: assistantMessageId,
+                result: { content, tool_calls: rawToolCalls },
+                toolsCalling: resolvedToolCalls,
+              },
+              phase: 'llm_result',
+              session: {
+                messageCount: newState.messages.length,
+                sessionId: newState.operationId,
+                status: newState.status,
+                stepCount: newState.stepCount,
+              },
+              stepUsage: modelUsage,
+            } satisfies AgentRuntimeContext,
+          };
+        },
+        call_tool: async (instruction, state) => {
+          const payload = (
+            instruction as {
+              payload: {
+                parentMessageId: string;
+                toolCalling: ChatToolPayload;
+              };
+            }
+          ).payload;
+          const startedAt = Date.now();
+          const args = parseToolArguments(payload.toolCalling.arguments);
+          const data =
+            payload.toolCalling.apiName === 'submitDecision'
+              ? normalizeSkillManagementDecision(args)
+              : await executeSkillDecisionRuntimeTool(payload.toolCalling, input);
+
+          if (payload.toolCalling.apiName === 'submitDecision') {
+            submittedDecision = data as SkillManagementDecision;
+          }
+
+          const content = JSON.stringify(data);
+          const newState = structuredClone(state);
+          newState.messages.push({
+            content,
+            role: 'tool',
+            tool_call_id: payload.toolCalling.id,
+          });
+
+          return {
+            events: [
+              {
+                id: payload.toolCalling.id,
+                result: { content, success: true },
+                type: 'tool_result',
+              },
+            ],
+            newState,
+            nextContext: {
+              payload: {
+                data,
+                executionTime: Date.now() - startedAt,
+                isSuccess: true,
+                parentMessageId: payload.parentMessageId,
+                toolCall: payload.toolCalling,
+                toolCallId: payload.toolCalling.id,
+              },
+              phase: 'tool_result',
+              session: {
+                messageCount: newState.messages.length,
+                sessionId: newState.operationId,
+                status: newState.status,
+                stepCount: newState.stepCount,
+              },
+            } satisfies AgentRuntimeContext,
+          };
+        },
+      },
+    },
+  );
+
+  const createdAt = new Date().toISOString();
+  let state: AgentState = {
+    cost: {
+      calculatedAt: createdAt,
+      currency: 'USD',
+      llm: { byModel: [], currency: 'USD', total: 0 },
+      tools: { byTool: [], currency: 'USD', total: 0 },
+      total: 0,
+    },
+    createdAt,
+    lastModified: createdAt,
+    messages,
+    metadata: {
+      agentId: input.payload.agentId,
+      sourceMessageId: input.payload.messageId,
+      topicId: input.payload.topicId,
+      trigger: RequestTrigger.Memory,
+    },
+    modelRuntimeConfig: {
+      model: input.model,
+      provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
+    },
+    operationId: `agent-signal-skill-decision:${input.payload.messageId ?? 'message'}`,
+    operationToolSet: {
+      enabledToolIds: [skillDecisionToolIdentifier],
+      manifestMap,
+      sourceMap: { [skillDecisionToolIdentifier]: 'builtin' },
+      tools,
+    },
+    status: 'idle',
+    stepCount: 0,
+    toolManifestMap: manifestMap,
+    toolSourceMap: { [skillDecisionToolIdentifier]: 'builtin' },
+    tools,
+    usage: {
+      humanInteraction: {
+        approvalRequests: 0,
+        promptRequests: 0,
+        selectRequests: 0,
+        totalWaitingTimeMs: 0,
+      },
+      llm: {
+        apiCalls: 0,
+        processingTimeMs: 0,
+        tokens: { input: 0, output: 0, total: 0 },
+      },
+      tools: {
+        byTool: [],
+        totalCalls: 0,
+        totalTimeMs: 0,
+      },
+    },
+    userInterventionConfig: { approvalMode: 'headless' },
+  };
+  let context: AgentRuntimeContext = {
+    payload: {
+      model: input.model,
+      provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
+      tools,
+    },
+    phase: 'user_input',
+    session: {
+      messageCount: messages.length,
+      sessionId: state.operationId,
+      status: state.status,
+      stepCount: state.stepCount,
+    },
+  };
+
+  for (let step = 0; step < 14; step += 1) {
+    if (submittedDecision) break;
+    if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
+      break;
+    }
+
+    const result = await runtime.step(state, context);
+    state = result.newState;
+
+    if (!result.nextContext) break;
+    context = result.nextContext;
+  }
+
+  return submittedDecision ?? createNoopDecision('decision agent did not submit a decision');
 };
 
 /**
@@ -276,7 +744,19 @@ export const handleSkillManagementSignal = async (input: {
     return { reason: 'self iteration is disabled', status: 'skipped' as const };
   }
 
-  const decision = normalizeSkillManagementDecision(await input.decide(input.payload));
+  let decisionOutput: unknown;
+
+  try {
+    decisionOutput = await input.decide(input.payload);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { reason: malformedDecisionOutputReason, status: 'skipped' as const };
+    }
+
+    throw error;
+  }
+
+  const decision = normalizeSkillManagementDecision(decisionOutput);
 
   return { decision, status: 'decided' as const };
 };
@@ -286,6 +766,7 @@ const toSkillManagementDecision = (
 ): SkillManagementDecision => ({
   action: value.action,
   ...(value.confidence === null ? {} : { confidence: value.confidence }),
+  ...(value.documentRefs.length === 0 ? {} : { documentRefs: value.documentRefs }),
   ...(value.reason === null ? {} : { reason: value.reason }),
   ...(value.requiredReads.length === 0 ? {} : { requiredReads: value.requiredReads }),
   ...(value.targetSkillIds.length === 0 ? {} : { targetSkillIds: value.targetSkillIds }),
@@ -327,6 +808,58 @@ export const collectAgentSkillDecisionCandidates = (
   return candidates.sort((left, right) => left.id.localeCompare(right.id));
 };
 
+const createDefaultSkillDecisionToolset = (
+  db: LobeChatDatabase,
+  userId: string,
+): SkillDecisionToolset => {
+  const agentDocumentModel = new AgentDocumentModel(db, userId);
+  const agentDocumentsService = new AgentDocumentsService(db, userId);
+  const inspector = new AgentSignalProcedureInspector(redisPolicyStateStore);
+
+  return {
+    listCandidateDocuments: async ({ agentId, topicId }) => {
+      const documents = topicId
+        ? await agentDocumentsService.listDocumentsForTopic(agentId, topicId)
+        : await agentDocumentModel.findByAgent(agentId);
+
+      return documents.map((document) => ({
+        documentId: document.documentId,
+        filename: document.filename,
+        title: document.title,
+      }));
+    },
+    listSameTurnDocumentOutcomes: async ({ messageId, scopeKey }) => {
+      if (!scopeKey) return [];
+
+      const snapshot = await inspector.inspectScope(scopeKey);
+
+      return snapshot.receipts
+        .filter((receipt) => receipt.domainKey.startsWith('document:'))
+        .filter((receipt) => !messageId || receipt.messageId === messageId)
+        .flatMap((receipt) =>
+          (receipt.relatedObjects ?? [])
+            .filter((object) => object.objectType === 'document')
+            .map((object) => ({
+              documentId: object.objectId,
+              relation: object.relation,
+              summary: receipt.summary,
+            })),
+        );
+    },
+    readDocument: async ({ documentId }) => {
+      const snapshot = await agentDocumentsService.getDocumentSnapshotById(documentId);
+      if (!snapshot) return { documentId };
+
+      return {
+        content: snapshot.content,
+        documentId,
+        filename: snapshot.filename,
+        title: snapshot.title,
+      };
+    },
+  };
+};
+
 const toSkillMaintainerWorkflowResult = (
   value: z.infer<typeof SkillMaintainerWorkflowResultSchema>,
 ): SkillMaintainerWorkflowResult => ({
@@ -364,29 +897,26 @@ class SkillManagementDecisionAgentService {
         await new AgentDocumentModel(this.db, this.userId).findByAgent(input.agentId),
       );
 
-    const result = await modelRuntime.generateObject(
-      {
-        messages: [
-          { content: AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE, role: 'system' },
-          {
-            content: createAgentSkillManagerDecisionPrompt({
-              agentId: input.agentId,
-              ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
-              evidence: input.evidence ?? [],
-              feedbackMessage: input.feedbackMessage,
-              topicId: input.topicId,
-              turnContext: input.turnContext,
-            }),
-            role: 'user',
-          },
-        ] as never[],
-        model: this.modelConfig.model,
-        schema: SkillManagementDecisionGenerateObjectSchema,
+    const result = await runSkillDecisionAgentRuntime({
+      model: this.modelConfig.model,
+      modelRuntime,
+      payload: {
+        ...input,
+        ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
-    );
+      tools: createDefaultSkillDecisionToolset(this.db, this.userId),
+    });
 
-    return toSkillManagementDecision(SkillManagementDecisionSchema.parse(result));
+    return toSkillManagementDecision(
+      SkillManagementDecisionSchema.parse({
+        confidence: result.confidence ?? null,
+        documentRefs: result.documentRefs ?? [],
+        reason: result.reason ?? null,
+        requiredReads: result.requiredReads ?? [],
+        targetSkillIds: result.targetSkillIds ?? [],
+        action: result.action,
+      }),
+    );
   }
 }
 
@@ -747,7 +1277,15 @@ const runMaintainerWorkflow = async (
     ),
   );
 
-  await applyMaintainerOperations(service, workflowResult.operations, targetSkillIds);
+  try {
+    await applyMaintainerOperations(service, workflowResult.operations, targetSkillIds);
+  } catch (error) {
+    return {
+      decision,
+      detail: error instanceof Error ? error.message : String(error),
+      status: 'skipped',
+    };
+  }
 
   return {
     decision,
@@ -761,6 +1299,14 @@ export const runSkillManagementAction = async (
   options: SkillManagementActionHandlerOptions,
   decision: SkillManagementDecision,
 ): Promise<SkillManagementActionResult> => {
+  if (decision.action === 'reject') {
+    return {
+      decision,
+      detail: decision.reason ?? 'Skill-management decision was rejected.',
+      status: 'skipped',
+    };
+  }
+
   if (decision.action === 'noop') {
     return {
       decision,
@@ -872,6 +1418,7 @@ export const handleSkillManagementAction = async (
       evidence: action.payload.evidence,
       feedbackHint: action.payload.feedbackHint,
       message,
+      messageId: action.payload.messageId,
       reason: action.payload.reason,
       serializedContext: action.payload.serializedContext,
       topicId: action.payload.topicId,
@@ -883,6 +1430,8 @@ export const handleSkillManagementAction = async (
         ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
         evidence: action.payload.evidence,
         feedbackMessage: message,
+        messageId: action.payload.messageId,
+        scopeKey: context.scopeKey,
         topicId: action.payload.topicId,
         turnContext: action.payload.serializedContext,
       },

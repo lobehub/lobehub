@@ -14,6 +14,10 @@ export interface AgentSkillManagerDecisionPromptInput {
   evidence: Array<{ cue: string; excerpt: string }>;
   /** Original user feedback message. */
   feedbackMessage: string;
+  /** Message id for same-turn document-outcome inspection. */
+  messageId?: string;
+  /** Runtime scope key for same-turn procedure inspection. */
+  scopeKey?: string;
   /** Optional topic context when feedback happened inside a topic. */
   topicId?: string;
   /** Optional summary of the relevant assistant turn. */
@@ -36,8 +40,9 @@ export interface AgentSkillManagerDecisionPromptInput {
 export const AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE = `You are the Agent Signal skill-management decision agent.
 
 You are not chatting with the user.
-You decide whether feedback routed to the "skill" domain should create, refine, consolidate, or no-op.
-You must output exactly one minified JSON object and nothing else.
+You decide whether feedback routed to the "skill" domain should create, refine, consolidate, no-op, or reject.
+When tools are available, inspect only what you need and call submitDecision with the final JSON.
+When tools are not available, output exactly one minified JSON object and nothing else.
 Do not wrap the JSON in markdown fences.
 
 Valid actions:
@@ -45,6 +50,7 @@ Valid actions:
 - "refine": improve one existing skill.
 - "consolidate": merge or reconcile multiple overlapping skills.
 - "noop": do not create or update a skill.
+- "reject": refuse this skill-management action because policy, attribution, or evidence says it must not run.
 
 Rules:
 - Create only when the feedback contains a reusable procedure and enough context.
@@ -53,11 +59,14 @@ Rules:
 - When candidateSkills are provided, targetSkillIds must be selected from candidateSkills[].id.
 - targetSkillIds are managed skill package names, not document ids or display names.
 - No-op for generic praise, style preferences, memory-like facts, or insufficient context.
+- Reject when the user asked for document-only behavior, forbids skill conversion, or same-turn document evidence makes skill mutation unsafe.
+- Use read-only tools to inspect same-turn document outcomes before guessing from document names or content shape.
+- Do not infer skill intent from a filename, title, or SKILL.md-shaped content alone.
 - Prefer patch/refine over duplicate creation.
 - Agent-level managed skills are agent documents, not agent_skills rows.
 
 Return exactly:
-{"action":"create"|"refine"|"consolidate"|"noop","confidence":0.0,"reason":"short reason","targetSkillIds":[],"requiredReads":[]}`;
+{"action":"create"|"refine"|"consolidate"|"noop"|"reject","confidence":0.0,"reason":"short reason","targetSkillIds":[],"requiredReads":[],"documentRefs":[]}`;
 
 /**
  * Builds the user prompt for the skill-management decision agent.
