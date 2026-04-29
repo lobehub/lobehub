@@ -226,6 +226,7 @@ export interface RuntimeExecutorContext {
   streamManager: IStreamEventManager;
   toolExecutionService: ToolExecutionService;
   topicId?: string;
+  groupId?: string;
   userId?: string;
   userTimezone?: string;
 }
@@ -1061,6 +1062,7 @@ export const createRuntimeExecutors = (
         agentId: state.metadata?.agentId,
         threadId: state.metadata?.threadId,
         topicId,
+        groupId: ctx.groupId,
       });
 
       const messageIds = dbMessages
@@ -1786,6 +1788,7 @@ export const createRuntimeExecutors = (
       agentId: state.metadata?.agentId,
       threadId: state.metadata?.threadId,
       topicId: state.metadata?.topicId,
+      groupId: ctx.groupId,
     });
 
     // Use conversation-flow parse to resolve branching into linear flat list

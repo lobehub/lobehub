@@ -1458,6 +1458,7 @@ export class AgentRuntimeService {
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,
       topicId: metadata?.topicId,
+      groupId: metadata?.groupId,
       userId: metadata?.userId,
     };
 
