@@ -42,6 +42,24 @@ describe('TextLoader', () => {
     expect(pages[0].pageContent).toBe('Hello UTF-16BE.\nSecond Line.\n');
   });
 
+  it('should load UTF-8 file with BOM correctly', async () => {
+    const pages = await loader.loadPages(fixturePath('test-utf8-bom.txt'));
+    expect(pages).toHaveLength(1);
+    expect(pages[0].pageContent).toBe('Hello UTF-8 BOM.\nSecond Line.\n');
+  });
+
+  it('should detect UTF-16LE without BOM via heuristic', async () => {
+    const pages = await loader.loadPages(fixturePath('test-utf16le-nobom.csv'));
+    expect(pages).toHaveLength(1);
+    expect(pages[0].pageContent).toBe('Hello UTF-16LE.\nSecond Line.\n');
+  });
+
+  it('should detect UTF-16BE without BOM via heuristic', async () => {
+    const pages = await loader.loadPages(fixturePath('test-utf16be-nobom.csv'));
+    expect(pages).toHaveLength(1);
+    expect(pages[0].pageContent).toBe('Hello UTF-16BE.\nSecond Line.\n');
+  });
+
   it('should handle file read errors in loadPages', async () => {
     const pages = await loader.loadPages(fixturePath('nonexistent.txt'));
     expect(pages).toHaveLength(1);
