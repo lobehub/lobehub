@@ -4,17 +4,45 @@ packages:
   - e2e
   - apps/desktop/src/main
 
-onlyBuiltDependencies:
-  - '@vercel/speed-insights'
-  - '@lobehub/editor'
+lockfile: false
+resolutionMode: highest
+dedupePeerDependents: true
+ignoreWorkspaceRootCheck: true
+enablePrePostScripts: true
+enableGlobalVirtualStore: true
+
+publicHoistPattern:
+  - '*@umijs/lint*'
+  - '*changelog*'
+  - '*commitlint*'
+  - '*eslint*'
+  - '*postcss*'
+  - '*prettier*'
+  - '*remark*'
+  - '*semantic-release*'
+  - '*stylelint*'
+  - '@auth/core'
+  - 'pdfjs-dist'
+  - '@napi-rs/canvas-*'
+
+allowBuilds:
+  '@lobehub/editor': true
+  '@vercel/speed-insights': true
+  'ffmpeg-static': true
 
 overrides:
-  jose: ^6.1.3
-  stylelint-config-clean-order: 7.0.0
-  pdfjs-dist: 5.4.530
-  react: 19.2.4
-  react-dom: 19.2.4
   '@react-pdf/image': 3.0.4
+  '@types/react': 19.2.13
+  'better-auth': 1.4.6
+  'better-call': 1.1.8
+  'drizzle-orm': ^0.45.1
+  'fast-xml-parser': 5.4.2
+  'jose': ^6.1.3
+  'lexical': 0.42.0
+  'pdfjs-dist': 5.4.530
+  'react': 19.2.4
+  'react-dom': 19.2.4
+  'stylelint-config-clean-order': 7.0.0
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch

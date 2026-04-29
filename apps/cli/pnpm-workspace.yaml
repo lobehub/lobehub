@@ -4,3 +4,18 @@ packages:
   - '../../packages/local-file-shell'
   - '../../packages/file-loaders'
   - '.'
+
+lockfile: false
+ignoreWorkspaceRootCheck: true
+
+publicHoistPattern:
+  - '*@umijs/lint*'
+  - '*unicorn*'
+  - '*changelog*'
+  - '*commitlint*'
+  - '*eslint*'
+  - '*postcss*'
+  - '*prettier*'
+  - '*remark*'
+  - '*semantic-release*'
+  - '*stylelint*'
