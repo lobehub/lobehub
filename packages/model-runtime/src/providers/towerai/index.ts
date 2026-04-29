@@ -97,14 +97,26 @@ export const params = {
   baseURL: `${TOWERAI_DEFAULT_BASE_URL}/zi/webapi/chat/openai`,
   chatCompletion: {
     handlePayload: (payload) => {
-      const { stream_options, user, ...rest } = payload as any;
+      // Strip OpenAI-style fields Tower AI doesn't support
+      const { stream_options, user, tools, tool_choice, ...rest } = payload as any;
       void stream_options;
       void user;
+
       const model = (rest.model as string) ?? '';
-      // Vertexai endpoint (Gemini/Claude) always returns SSE with session auth → keep stream:true
-      // OpenAI/NewAPI endpoints return JSON with stream:false
-      const useStream = model.startsWith('gemini') || model.startsWith('claude');
-      return { ...rest, stream: useStream } as any;
+      const isVertexai = model.startsWith('gemini') || model.startsWith('claude');
+      const hasTools = Array.isArray(tools) && tools.length > 0;
+
+      // Tower AI uses its own search params instead of function calling.
+      // When LobeHub sends tools (e.g. web search), translate to Tower AI's native search API.
+      const searchParams = hasTools
+        ? isVertexai
+          ? { searchMode: 'smart', useModelBuiltinSearch: true }
+          : { enabledSearch: true }
+        : {};
+
+      // Vertexai endpoint always needs SSE; OpenAI endpoint also needs SSE when search is enabled
+      const useStream = isVertexai || hasTools;
+      return { ...rest, stream: useStream, ...searchParams } as any;
     },
   },
   customClient: {
@@ -158,6 +170,19 @@ export const params = {
         const ct = res.headers.get('content-type') ?? '';
         if (!ct.includes('text/event-stream') && !ct.includes('text/plain')) {
           return res; // already JSON, pass through
+        }
+
+        // Tower AI sometimes returns HTTP 200 with a JSON error body (e.g. {"error_code":502,...}).
+        // Peek at the body; if it's JSON (starts with '{'), surface it as a 502 error.
+        if (isStreaming) {
+          const cloned = res.clone();
+          const peek = await cloned.text();
+          if (peek.trimStart().startsWith('{')) {
+            return new Response(peek, {
+              status: 502,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
         }
 
         return new Response(toOpenAIStream(res.body, model), {
