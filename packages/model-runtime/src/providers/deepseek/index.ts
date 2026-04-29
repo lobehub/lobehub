@@ -131,6 +131,9 @@ const buildDeepSeekAnthropicPayload = async (
 
   return {
     ...basePayload,
+    ...(basePayload.temperature !== undefined && payload.temperature !== undefined
+      ? { temperature: payload.temperature }
+      : {}),
     ...(isThinkingDisabled ? { thinking: { type: 'disabled' } } : {}),
   } as Anthropic.MessageCreateParams;
 };

@@ -164,6 +164,18 @@ describe('LobeDeepSeekAnthropicAI', () => {
       expect(payload.output_config).toBeUndefined();
     });
 
+    it('should preserve DeepSeek temperature scale for non-thinking Anthropic requests', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-chat',
+        temperature: 1.4,
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.temperature).toBe(1.4);
+    });
+
     it('should convert assistant reasoning to Anthropic thinking block', async () => {
       await instance.chat({
         messages: [

@@ -461,32 +461,23 @@ export const createRouterRuntime = ({
 
     async models() {
       const resolvedRouters = await this.resolveRouters();
-      const runtimes = await Promise.all(
-        resolvedRouters.map(async (router) => {
-          const routerOptions = this.normalizeRouterOptions(router);
-          const { id: resolvedApiType, runtime } = await this.createRuntimeFromOption(
-            router,
-            routerOptions[0],
-          );
+      const matchedRouter = this._options.baseURL
+        ? (resolvedRouters.find((router) => router.baseURLPattern?.test(this._options.baseURL!)) ??
+          resolvedRouters.at(-1)!)
+        : resolvedRouters.at(-1)!;
+      const routerOptions = this.normalizeRouterOptions(matchedRouter);
+      const { runtime } = await this.createRuntimeFromOption(matchedRouter, routerOptions[0]);
 
-          return {
-            id: resolvedApiType,
-            models: router.models,
-            runtime,
-          };
-        }),
-      );
-
-      if (modelsOption && typeof modelsOption === 'function') {
-        // If it's a functional configuration, use the last runtime's client to call the function
-        const lastRuntime = runtimes.at(-1)?.runtime;
-        if (lastRuntime && 'client' in lastRuntime) {
-          const modelList = await modelsOption({ client: (lastRuntime as any).client });
-          return await postProcessModelList(modelList);
-        }
+      if (
+        modelsOption &&
+        typeof modelsOption === 'function' && // Use the same baseURL-matched runtime as chat routing for provider model discovery.
+        'client' in runtime
+      ) {
+        const modelList = await modelsOption({ client: (runtime as any).client });
+        return await postProcessModelList(modelList);
       }
 
-      return runtimes.at(-1)?.runtime.models?.();
+      return runtime.models?.();
     }
 
     /**
