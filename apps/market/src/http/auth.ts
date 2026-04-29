@@ -14,6 +14,7 @@ const CRYPTO = {
 } as const;
 
 const SECRET_PREFIX = 'lobehub-market_tcs_';
+const TRUSTED_TOKEN_FUTURE_SKEW_MS = 30 * 1000;
 
 const deriveKey = (secret: string) => {
   if (secret.startsWith(SECRET_PREFIX)) {
@@ -72,7 +73,17 @@ export const verifyTrustedToken = (
       );
     }
 
-    if (Date.now() - payload.timestamp > options.maxAgeMs) {
+    const now = Date.now();
+
+    if (payload.timestamp - now > TRUSTED_TOKEN_FUTURE_SKEW_MS) {
+      throw new MarketHttpError(
+        401,
+        'invalid_trusted_payload',
+        'Trusted token timestamp is invalid.',
+      );
+    }
+
+    if (now - payload.timestamp > options.maxAgeMs) {
       throw new MarketHttpError(401, 'expired_trusted_token', 'Trusted token has expired.');
     }
 

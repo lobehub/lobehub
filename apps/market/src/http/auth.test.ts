@@ -78,6 +78,12 @@ describe('verifyTrustedToken', () => {
 
     expect(() => verifyTrustedToken(token, trustedClientOptions)).toThrow(MarketHttpError);
   });
+
+  it('rejects a token with a timestamp too far in the future', () => {
+    const token = createToken({ timestamp: Date.now() + 31 * 1000 });
+
+    expect(() => verifyTrustedToken(token, trustedClientOptions)).toThrow(MarketHttpError);
+  });
 });
 
 describe('optionalTrustedAuth', () => {

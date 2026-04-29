@@ -695,6 +695,17 @@ section_regenerate_secrets() {
             echo $(show_message "security_secrect_regenerate_failed") "AUTH_SECRET in \`.env\`"
         fi
     fi
+
+    # Generate Market trusted-client secret (prefix + 64 hex chars)
+    MARKET_TRUSTED_CLIENT_SECRET="lobehub-market_tcs_$(openssl rand -hex 32)"
+    if [ $? -ne 0 ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "MARKET_TRUSTED_CLIENT_SECRET"
+    else
+        sed "${SED_INPLACE_ARGS[@]}" "s#^MARKET_TRUSTED_CLIENT_SECRET=.*#MARKET_TRUSTED_CLIENT_SECRET=${MARKET_TRUSTED_CLIENT_SECRET}#" .env
+        if [ $? -ne 0 ]; then
+            echo $(show_message "security_secrect_regenerate_failed") "MARKET_TRUSTED_CLIENT_SECRET in \`.env\`"
+        fi
+    fi
 }
 
 show_message "ask_regenerate_secrets"

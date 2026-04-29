@@ -228,7 +228,7 @@ export class MarketApiService {
    * Get skill download URL from market
    */
   getSkillDownloadUrl(identifier: string): string {
-    const marketBaseUrl = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
+    const marketBaseUrl = process.env.NEXT_PUBLIC_MARKET_BASE_URL || '/market-api';
     return `${marketBaseUrl}/api/v1/skills/${identifier}/download`;
   }
 }
