@@ -272,6 +272,17 @@ describe('Market HTTP agent routes', async () => {
     });
   });
 
+  it('rejects plugin lookups without a plugin id', async () => {
+    const app = createMarketApp({ db, env: trustedClientEnv });
+
+    await createPublishedAgent(app, ownerToken);
+
+    const response = await app.request('/api/v1/agents/by-plugin');
+
+    expect(response.status).toBe(400);
+    expect(await readErrorJson(response)).toEqual({ error: { code: 'invalid_plugin_id' } });
+  });
+
   it('rejects POST bodies that are missing a required identifier with a 400 error', async () => {
     const app = createMarketApp({ db, env: trustedClientEnv });
 

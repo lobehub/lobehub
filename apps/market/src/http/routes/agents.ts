@@ -191,11 +191,13 @@ export const createAgentRoutes = (): Hono<MarketHonoEnv> => {
   app.get('/by-plugin', optionalTrustedAuth(), async (c) => {
     const searchParams = new URL(c.req.url).searchParams;
     const query = createListQuery(searchParams);
-    if (searchParams.has('pluginId')) return c.json(createEmptyList(query));
+    const pluginId = searchParams.get('pluginId');
 
-    const service = new AgentService(getMarketDb(c));
+    if (!pluginId) {
+      throw new MarketHttpError(400, 'invalid_plugin_id', 'Plugin id is required.');
+    }
 
-    return c.json(await service.listAgentsByPlugin(query));
+    return c.json(createEmptyList(query));
   });
 
   app.get('/own', trustedAuth(), async (c) => {
