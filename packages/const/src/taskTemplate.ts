@@ -1,7 +1,3 @@
-import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiGithub } from '@icons-pack/react-simple-icons';
-import type { LucideIcon } from 'lucide-react';
-
 /**
  * Task Template catalog used by home "Try following tasks" recommendation.
  * I18n keys: `taskTemplate:${id}.title|description|prompt`.
@@ -9,11 +5,21 @@ import type { LucideIcon } from 'lucide-react';
  * `interests` values must be keys from `INTEREST_AREAS` in
  * `src/routes/onboarding/config.ts` — that's what `users.interests` stores.
  */
+
+/**
+ * Identifier for a per-template icon override. The renderer maps each value to
+ * a concrete icon component; keep this union small and stable so consumers can
+ * exhaustively type their registries.
+ */
+export const TASK_TEMPLATE_ICONS = ['github'] as const;
+
+export type TaskTemplateIcon = (typeof TASK_TEMPLATE_ICONS)[number];
+
 export interface TaskTemplate {
   category: TaskTemplateCategory;
   cronPattern: string;
-  /** Per-template icon override. Falls back to a category-level default when omitted. */
-  icon?: IconType | LucideIcon;
+  /** Optional icon identifier; consumers resolve it to a component. */
+  icon?: TaskTemplateIcon;
   id: string;
   interests: string[];
   /** Skills that enrich the brief but are not required to run it. */
@@ -114,7 +120,7 @@ export const taskTemplates: TaskTemplate[] = [
     id: 'oss-intel-daily',
     category: 'engineering',
     cronPattern: '0 9 * * *',
-    icon: SiGithub,
+    icon: 'github',
     interests: ['coding'],
   },
   {
