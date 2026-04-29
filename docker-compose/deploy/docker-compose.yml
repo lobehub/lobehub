@@ -44,7 +44,7 @@ services:
 
   market:
     build:
-      context: https://github.com/lobehub/lobehub.git
+      context: ../..
       dockerfile: apps/market/Dockerfile
     container_name: lobehub-market
     depends_on:
