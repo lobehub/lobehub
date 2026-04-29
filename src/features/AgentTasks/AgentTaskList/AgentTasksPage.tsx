@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -28,6 +29,10 @@ const AgentTasksPage = memo(() => {
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
+  const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
+    systemStatusSelectors.showTaskAgentPanel(s),
+    s.toggleTaskAgentPanel,
+  ]);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const setViewOptions = useCallback(
     (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => {
@@ -59,6 +64,11 @@ const AgentTasksPage = memo(() => {
               <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
             )}
             <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
+            <ToggleRightPanelButton
+              hideWhenExpanded
+              expand={showTaskAgentPanel}
+              onToggle={() => toggleTaskAgentPanel()}
+            />
           </Flexbox>
         }
         styles={{
