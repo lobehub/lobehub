@@ -92,7 +92,7 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
       setSubmitting(true);
       try {
         await onInteractionAction({
-          payload: { selectedTemplateIds: [...selected] },
+          payload: { categoryHints, requestId: args.requestId, selectedTemplateIds: [...selected] },
           type: 'submit',
         });
       } catch (error) {
@@ -100,12 +100,15 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
       } finally {
         setSubmitting(false);
       }
-    }, [onInteractionAction, selected]);
+    }, [args.requestId, categoryHints, onInteractionAction, selected]);
 
     const handleSkip = useCallback(async () => {
       if (!onInteractionAction) return;
-      await onInteractionAction({ type: 'skip' });
-    }, [onInteractionAction]);
+      await onInteractionAction({
+        payload: { categoryHints, requestId: args.requestId },
+        type: 'skip',
+      });
+    }, [args.requestId, categoryHints, onInteractionAction]);
 
     const handleCardKeyDown = useCallback(
       (event: KeyboardEvent<HTMLDivElement>, id: string) => {
