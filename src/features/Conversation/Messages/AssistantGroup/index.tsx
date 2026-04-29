@@ -2,7 +2,6 @@
 
 import type { AssistantContentBlock, EmojiReaction } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import type { MouseEventHandler } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -21,10 +20,7 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../.
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
-import {
-  useSetMessageItemActionElementPortialContext,
-  useSetMessageItemActionTypeContext,
-} from '../Contexts/message-action-context';
+import { useActivateMessageActionsBar } from '../Contexts/useActivateMessageActionsBar';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
 import type { WorkflowExpandLevelDefault } from './components/WorkflowCollapse';
@@ -110,24 +106,12 @@ const GroupMessage = memo<GroupMessageProps>(
       [reactions],
     );
 
-    const setMessageItemActionElementPortialContext =
-      useSetMessageItemActionElementPortialContext();
-    const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
-
-    const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
-      (e) => {
-        if (disableEditing) return;
-        setMessageItemActionElementPortialContext(e.currentTarget);
-        setMessageItemActionTypeContext({ id, index, type: 'assistantGroup' });
-      },
-      [
-        disableEditing,
-        id,
-        index,
-        setMessageItemActionElementPortialContext,
-        setMessageItemActionTypeContext,
-      ],
-    );
+    const activateActionsBar = useActivateMessageActionsBar({
+      disabled: disableEditing,
+      id,
+      index,
+      type: 'assistantGroup',
+    });
 
     const onAvatarClick = useCallback(() => {
       if (!isInbox) {
@@ -158,7 +142,8 @@ const GroupMessage = memo<GroupMessageProps>(
           )
         }
         onAvatarClick={onAvatarClick}
-        onMouseEnter={onMouseEnter}
+        onClick={activateActionsBar}
+        onMouseEnter={activateActionsBar}
       >
         {children && children.length > 0 && (
           <Group
