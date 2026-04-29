@@ -32,6 +32,9 @@ export const createMarketApp = (options: CreateMarketAppOptions = {}) => {
   app.route('/', createHealthRoutes());
   app.route('/lobehub-oidc', createOidcRoutes());
   app.route('/api/v1/agents', createAgentRoutes());
+  app.all('/api/v1/agents/*', (c) =>
+    jsonError(c, 404, 'not_found', 'Requested Market endpoint was not found.'),
+  );
   app.route('/api/v1', createUpstreamProxyRoutes());
 
   app.all('/lobehub-oidc/auth', (c) => notImplemented(c, '/lobehub-oidc/auth'));

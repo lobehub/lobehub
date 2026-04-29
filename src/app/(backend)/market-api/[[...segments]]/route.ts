@@ -8,6 +8,20 @@ interface MarketProxyRequestInit extends RequestInit {
 
 const methodsWithoutBody = new Set(['GET', 'HEAD']);
 const proxyHeaderBlocklist = ['authorization', 'cookie', 'host', 'set-cookie'];
+const responseHeaderBlocklist = ['set-cookie'];
+
+const sanitizeProxyResponse = (response: Response) => {
+  const headers = new Headers(response.headers);
+  for (const header of responseHeaderBlocklist) {
+    headers.delete(header);
+  }
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +48,9 @@ const proxyMarketRequest = async (request: Request, context: MarketRouteContext)
     method: request.method,
   };
 
-  return fetch(targetUrl.toString(), requestInit);
+  const response = await fetch(targetUrl.toString(), requestInit);
+
+  return sanitizeProxyResponse(response);
 };
 
 export const GET = proxyMarketRequest;

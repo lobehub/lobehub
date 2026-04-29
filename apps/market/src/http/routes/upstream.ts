@@ -10,6 +10,20 @@ interface ProxyRequestInit extends RequestInit {
 
 const methodsWithoutBody = new Set(['GET', 'HEAD']);
 const proxyHeaderBlocklist = ['host', 'x-lobe-trust-token'];
+const responseHeaderBlocklist = ['set-cookie'];
+
+const sanitizeProxyResponse = (response: Response) => {
+  const headers = new Headers(response.headers);
+  for (const header of responseHeaderBlocklist) {
+    headers.delete(header);
+  }
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+};
 
 const proxyToUpstream = async (c: Context<MarketHonoEnv>) => {
   const upstreamBaseUrl = getMarketEnv(c).MARKET_UPSTREAM_BASE_URL;
@@ -42,7 +56,9 @@ const proxyToUpstream = async (c: Context<MarketHonoEnv>) => {
     method: c.req.method,
   };
 
-  return fetch(targetUrl.toString(), requestInit);
+  const response = await fetch(targetUrl.toString(), requestInit);
+
+  return sanitizeProxyResponse(response);
 };
 
 export const createUpstreamProxyRoutes = () => {

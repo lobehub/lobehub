@@ -18,7 +18,7 @@ describe('market-api proxy route', () => {
   it('proxies GET requests to the configured Market base URL', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('zip-bytes', {
-        headers: { 'content-type': 'application/zip' },
+        headers: { 'content-type': 'application/zip', 'set-cookie': 'upstream=1' },
         status: 200,
       }),
     );
@@ -35,6 +35,7 @@ describe('market-api proxy route', () => {
       method: 'GET',
     });
     expect(response.status).toBe(200);
+    expect(response.headers.has('set-cookie')).toBe(false);
     expect(await response.text()).toBe('zip-bytes');
   });
 

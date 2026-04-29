@@ -50,7 +50,7 @@ describe('createMarketApp', () => {
   it('proxies unimplemented v1 API routes to the upstream Market service', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ items: [] }), {
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'set-cookie': 'upstream=1' },
       }),
     );
     const app = createMarketApp({
@@ -72,6 +72,7 @@ describe('createMarketApp', () => {
     const response = await app.request(request);
 
     expect(response.status).toBe(200);
+    expect(response.headers.has('set-cookie')).toBe(false);
     expect(await response.json()).toEqual({ items: [] });
     expect(fetchSpy).toHaveBeenCalledWith('https://market.example.com/api/v1/skills?locale=en-US', {
       headers: expect.any(Headers),
@@ -85,5 +86,21 @@ describe('createMarketApp', () => {
     expect(headers.get('x-request-id')).toBe('request-1');
     expect(headers.has('host')).toBe(false);
     expect(headers.has('x-lobe-trust-token')).toBe(false);
+  });
+
+  it('does not proxy unknown agent API routes to upstream Market', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('upstream'));
+    const app = createMarketApp({
+      env: {
+        MARKET_TRUSTED_CLIENT_ID: 'internal-lobehub',
+        MARKET_TRUSTED_CLIENT_SECRET: 'lobehub-market_tcs_test-secret',
+        MARKET_UPSTREAM_BASE_URL: 'https://market.example.com',
+      },
+    });
+
+    const response = await app.request('/api/v1/agents/unknown-operation');
+
+    expect(response.status).toBe(404);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
