@@ -99,6 +99,7 @@ export type ModelDetailPanelExpandedKey = (typeof MODEL_DETAIL_PANEL_EXPANDED_KE
 
 export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
   'pricing',
+  'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];
 
 export interface SystemStatus {
