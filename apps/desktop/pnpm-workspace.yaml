@@ -34,6 +34,9 @@ allowBuilds:
   '@napi-rs/canvas': true
   'electron': true
   'electron-builder': true
+  'electron-winstaller': true
+  'esbuild': true
+  'get-windows': true
   'node-mac-permissions': true
 
 overrides:

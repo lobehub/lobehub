@@ -25,10 +25,34 @@ publicHoistPattern:
   - 'pdfjs-dist'
   - '@napi-rs/canvas-*'
 
+packageExtensions:
+  '@ant-design/pro-descriptions':
+    dependencies:
+      '@ant-design/icons': ^6.2.1
+  '@azure-rest/ai-inference':
+    dependencies:
+      '@azure/core-util': ^1.13.1
+  '@cucumber/cucumber':
+    dependencies:
+      tsx: ^4.21.0
+  rc-util:
+    dependencies:
+      react: 19.2.4
+  stylelint:
+    dependencies:
+      postcss-styled-syntax: ^0.7.1
+
 allowBuilds:
   '@lobehub/editor': true
   '@vercel/speed-insights': true
+  core-js: true
+  electron: true
+  es5-ext: true
+  esbuild: true
   'ffmpeg-static': true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
 
 overrides:
   '@react-pdf/image': 3.0.4
