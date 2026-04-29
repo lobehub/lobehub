@@ -1,3 +1,0 @@
-{
-  "error": "The JSON you provided is too large to process in a single response within the current limits. Please break it into smaller chunks (for example, 30–40 entries at a time), and I will translate each chunk accurately to pt-BR while preserving valid JSON structure."
-}

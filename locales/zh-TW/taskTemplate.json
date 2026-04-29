@@ -1,3 +1,0 @@
-{
-  "error": "The JSON file you provided is too large to translate in a single response due to system output limits. Please split the JSON into smaller sections (for example, 10–20 entries per message), and I will translate each part into zh-TW while keeping the keys unchanged and preserving valid JSON format."
-}

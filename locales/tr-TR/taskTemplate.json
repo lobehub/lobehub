@@ -1,3 +1,0 @@
-{
-  "error": "The provided JSON file is too large to translate in a single response. Please split it into smaller parts (for example, 20–30 entries per message), and I will translate each part accurately into tr-TR while maintaining valid JSON format."
-}

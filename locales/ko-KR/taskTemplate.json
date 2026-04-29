@@ -1,3 +1,0 @@
-{
-  "error": "The file you provided is too large to translate in a single response without exceeding system limits. Please break the JSON into smaller chunks (for example, 50–80 keys at a time), and I will translate each chunk accurately into ko-KR while preserving the JSON structure."
-}
