@@ -216,10 +216,12 @@ describe('createRouterRuntime', () => {
     it('should use the baseURL-matched runtime client for functional model discovery', async () => {
       class OpenAIRuntime implements LobeRuntimeAI {
         client = { provider: 'openai-compatible' };
+        models = vi.fn();
       }
 
       class AnthropicRuntime implements LobeRuntimeAI {
         client = { provider: 'anthropic-compatible' };
+        models = vi.fn();
       }
 
       const models = vi.fn().mockResolvedValue([]);
