@@ -2,8 +2,9 @@ import { produce } from 'immer';
 
 import { INBOX_SESSION_ID } from '@/const/session';
 import { SESSION_CHAT_URL } from '@/const/url';
-import { type GlobalStore } from '@/store/global';
-import { type StoreSetter } from '@/store/types';
+import type { GlobalStore } from '@/store/global';
+import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
+import type { StoreSetter } from '@/store/types';
 import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -80,6 +81,20 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showLeftPanel }, n('toggleLeftPanel', newValue));
   };
 
+  togglePageAgentPanel = (newValue?: boolean): void => {
+    const showPageAgentPanel =
+      typeof newValue === 'boolean' ? newValue : !this.#get().status.showPageAgentPanel;
+
+    this.#get().updateSystemStatus({ showPageAgentPanel }, n('togglePageAgentPanel', newValue));
+  };
+
+  toggleTaskAgentPanel = (newValue?: boolean): void => {
+    const showTaskAgentPanel =
+      typeof newValue === 'boolean' ? newValue : !this.#get().status.showTaskAgentPanel;
+
+    this.#get().updateSystemStatus({ showTaskAgentPanel }, n('toggleTaskAgentPanel', newValue));
+  };
+
   toggleMobilePortal = (newValue?: boolean): void => {
     const mobileShowPortal =
       typeof newValue === 'boolean' ? newValue : !this.#get().status.mobileShowPortal;
@@ -120,6 +135,13 @@ export class GlobalWorkspacePaneActionImpl {
     const nextZenMode = !status.zenMode;
 
     this.#get().updateSystemStatus({ zenMode: nextZenMode }, n('toggleZenMode'));
+  };
+
+  updateModelDetailPanelExpandedKeys = (keys: ModelDetailPanelExpandedKey[]): void => {
+    this.#get().updateSystemStatus(
+      { modelDetailPanelExpandedKeys: keys },
+      n('updateModelDetailPanelExpandedKeys', keys),
+    );
   };
 }
 

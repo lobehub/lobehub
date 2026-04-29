@@ -36,6 +36,7 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
   vi.doUnmock('../featureGate');
   vi.doUnmock('../observability/projector');
   vi.doUnmock('../observability/store');
+  vi.doUnmock('../orchestrator');
   vi.doUnmock('../runtime/AgentSignalRuntime');
   vi.doUnmock('../sources');
   vi.doUnmock('@/server/services/agentDocuments');
@@ -95,18 +96,26 @@ afterEach(() => {
 });
 
 describe('emitAgentSignalSourceEvent integration', () => {
-  it('returns early when the feature gate is disabled', async () => {
-    const emitSourceEvent = vi.fn();
-    const { emitAgentSignalSourceEvent } = await loadIndexIntegrationModule({
-      featureGateEnabled: false,
-      mockEmitSourceEvent: emitSourceEvent,
-    });
+  it('passes the enabled self-iteration policy into immediate source execution', async () => {
+    vi.resetModules();
 
-    const result = await emitAgentSignalSourceEvent(
+    const executeAgentSignalSourceEvent = vi.fn().mockResolvedValue(undefined);
+    const isAgentSignalEnabledForUser = vi.fn().mockResolvedValue(true);
+
+    vi.doMock('../featureGate', () => ({
+      isAgentSignalEnabledForUser,
+    }));
+    vi.doMock('../orchestrator', () => ({
+      executeAgentSignalSourceEvent,
+    }));
+
+    const { emitAgentSignalSourceEvent } = await import('../emitter');
+
+    await emitAgentSignalSourceEvent(
       {
-        payload: { message: 'Remember this.', messageId: 'msg-disabled' },
+        payload: { message: 'Create a reusable skill.', messageId: 'msg-skill' },
         scopeKey: 'topic:topic-1',
-        sourceId: 'eval-agent-signal-disabled',
+        sourceId: 'source-skill',
         sourceType: 'agent.user.message',
         timestamp: 1_710_000_000_000,
       },
@@ -117,8 +126,17 @@ describe('emitAgentSignalSourceEvent integration', () => {
       },
     );
 
-    expect(result).toBeUndefined();
-    expect(emitSourceEvent).not.toHaveBeenCalled();
+    expect(executeAgentSignalSourceEvent).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(Object),
+      expect.objectContaining({
+        policyOptions: {
+          skillManagement: {
+            selfIterationEnabled: true,
+          },
+        },
+      }),
+    );
   });
 
   it('orchestrates source emission through the runtime boundary', async () => {

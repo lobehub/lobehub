@@ -470,6 +470,11 @@ export interface BuiltinToolContext {
   stepContext?: RuntimeStepContext;
 
   /**
+   * Current task identifier or database id when the conversation is scoped to a task detail page.
+   */
+  taskId?: string | null;
+
+  /**
    * The current topic ID (only available when operating within a topic)
    * Used by tools that need to create messages or operations within a topic
    */

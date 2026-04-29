@@ -624,6 +624,8 @@
   "user.logout": "Sair",
   "user.myProfile": "Meu Perfil",
   "user.noAgents": "Este usuário ainda não publicou nenhum agente",
+  "user.noAgents.ownerDescription": "Crie seu primeiro Agente e compartilhe-o com a Comunidade.",
+  "user.noAgents.title": "Nenhum Agente ainda",
   "user.noFavoriteAgents": "Nenhum agente salvo ainda",
   "user.noFavoritePlugins": "Nenhuma habilidade salva ainda",
   "user.noForkedAgentGroups": "Nenhum grupo de agentes forkado ainda",

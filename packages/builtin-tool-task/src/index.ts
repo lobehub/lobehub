@@ -5,4 +5,5 @@ export {
   normalizeOptionalFilterValues,
 } from './listTasks';
 export { TaskIdentifier, TaskManifest } from './manifest';
+export { systemPrompt } from './systemRole';
 export { TaskApiName } from './types';

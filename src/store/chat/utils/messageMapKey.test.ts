@@ -63,6 +63,22 @@ describe('messageMapKey', () => {
     });
   });
 
+  describe('Task mode', () => {
+    it('should generate key for a new task manager topic', () => {
+      const result = messageMapKey({ scope: 'task', agentId: 'agt_task' });
+      expect(result).toBe('task_agt_task_new');
+    });
+
+    it('should generate key for an existing task manager topic', () => {
+      const result = messageMapKey({
+        scope: 'task',
+        agentId: 'agt_task',
+        topicId: 'tpc_task',
+      });
+      expect(result).toBe('task_agt_task_tpc_task');
+    });
+  });
+
   describe('Group mode with groupId (auto-detected)', () => {
     it('should auto-detect group scope when groupId is present', () => {
       const result = messageMapKey({

@@ -624,6 +624,8 @@
   "user.logout": "ログアウト",
   "user.myProfile": "マイページ",
   "user.noAgents": "このユーザーはまだアシスタントを公開していません",
+  "user.noAgents.ownerDescription": "最初のエージェントを作成して、コミュニティと共有しましょう。",
+  "user.noAgents.title": "まだエージェントがありません",
   "user.noFavoriteAgents": "お気に入りのアシスタントはまだありません",
   "user.noFavoritePlugins": "お気に入りのプラグインはまだありません",
   "user.noForkedAgentGroups": "フォーク済みのエージェントグループはまだありません",

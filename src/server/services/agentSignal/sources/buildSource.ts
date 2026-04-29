@@ -21,7 +21,7 @@ const sourceRenderers = new Map<AgentSignalSource['sourceType'], SourceRenderer>
  *
  * Use when:
  * - Server producers hand over loosely-shaped payloads
- * - The runtime needs one stable source envelope before dedupe/window handling
+ * - The runtime needs one stable source event before dedupe/window handling
  *
  * Expects:
  * - `input.sourceType` selects the matching renderer when one exists

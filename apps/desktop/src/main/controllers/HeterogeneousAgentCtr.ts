@@ -725,7 +725,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
   ): Promise<string> {
-    const content: any[] = [{ text: prompt, type: 'text' }];
+    const content: any[] = [];
+    if (prompt && prompt.length > 0) content.push({ text: prompt, type: 'text' });
 
     for (const image of imageList) {
       try {

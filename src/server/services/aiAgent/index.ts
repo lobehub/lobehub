@@ -9,6 +9,7 @@ import {
   generateSystemPrompt,
   RemoteDeviceManifest,
 } from '@lobechat/builtin-tool-remote-device';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
 import type {
@@ -19,6 +20,7 @@ import type {
 } from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
 import type {
   ChatFileItem,
   ChatTopicBotContext,
@@ -42,6 +44,7 @@ import { AiModelModel } from '@/database/models/aiModel';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
+import { TaskModel } from '@/database/models/task';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -195,6 +198,7 @@ export class AiAgentService {
   private readonly agentService: AgentService;
   private readonly messageModel: MessageModel;
   private readonly pluginModel: PluginModel;
+  private readonly taskModel: TaskModel;
   private readonly threadModel: ThreadModel;
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
@@ -213,11 +217,23 @@ export class AiAgentService {
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.pluginModel = new PluginModel(db, userId);
+    this.taskModel = new TaskModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, options?.runtimeOptions);
     this.marketService = new MarketService({ userInfo: { userId } });
     this.klavisService = new KlavisService({ db, userId });
+  }
+
+  private async resolveOperationTaskId(
+    idOrIdentifier?: string | null,
+  ): Promise<string | undefined> {
+    if (!idOrIdentifier) return;
+
+    // Task detail routes use human-readable identifiers such as `T-1`, while
+    // operation runtimes store this value in FK-backed records.
+    const task = await this.taskModel.resolve(idOrIdentifier);
+    return task?.id;
   }
 
   /**
@@ -280,6 +296,8 @@ export class AiAgentService {
     const identifier = agentId || slug!;
 
     log('execAgent: identifier=%s, prompt=%s', identifier, prompt.slice(0, 50));
+
+    const operationTaskId = await this.resolveOperationTaskId(taskId ?? appContext?.taskId);
 
     const assistantMessageRef: { current?: string } = {};
     const updateAbortedAssistantMessage = async (errorMessage: string) => {
@@ -383,6 +401,25 @@ export class AiAgentService {
         enableHistoryCount: false,
       };
       log('execAgent: injected page-agent runtime for page scope');
+    }
+
+    if (appContext?.scope === 'task' && agentSlug !== BUILTIN_AGENT_SLUGS.taskAgent) {
+      const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {
+        model: agentConfig.model,
+        plugins: agentConfig.plugins ?? [],
+      });
+      const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
+
+      if (taskAgentSystemRole) {
+        agentConfig.systemRole = agentConfig.systemRole
+          ? `${agentConfig.systemRole}\n\n${taskAgentSystemRole}`
+          : taskAgentSystemRole;
+      }
+
+      agentConfig.plugins = agentConfig.plugins?.includes(TaskIdentifier)
+        ? agentConfig.plugins
+        : [TaskIdentifier, ...(agentConfig.plugins ?? [])];
+      log('execAgent: injected task-agent runtime for task scope');
     }
 
     await throwIfExecutionAborted('agent configuration');
@@ -517,12 +554,12 @@ export class AiAgentService {
 
       // Prepare metadata with cronJobId, taskId, botContext, and bound device if provided
       const metadata =
-        cronJobId || taskId || botContext || requestedDeviceId
+        cronJobId || operationTaskId || botContext || requestedDeviceId
           ? {
               bot: botContext,
               boundDeviceId: requestedDeviceId,
               cronJobId: cronJobId || undefined,
-              taskId: taskId || undefined,
+              taskId: operationTaskId,
             }
           : undefined;
 
@@ -1406,6 +1443,20 @@ export class AiAgentService {
       }
     }
 
+    if (appContext?.scope === 'task' && appContext.defaultTaskAssigneeAgentId) {
+      initialContext = {
+        ...initialContext,
+        initialContext: {
+          ...initialContext.initialContext,
+          taskManager: {
+            contextPrompt: buildTaskManagerDefaultsPrompt({
+              defaultAssigneeAgentId: appContext.defaultTaskAssigneeAgentId,
+            }),
+          },
+        },
+      };
+    }
+
     // 16b. Human-approval resume — override initialContext based on the
     // user's decision. The DB write above has already persisted the
     // intervention status, so `allMessages` reflects the decision for the
@@ -1520,10 +1571,11 @@ export class AiAgentService {
         userTimezone,
         appContext: {
           agentId: resolvedAgentId,
+          defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
           scope: appContext?.scope,
-          taskId,
+          taskId: operationTaskId,
           threadId: appContext?.threadId,
           topicId,
           trigger,

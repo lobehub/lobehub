@@ -429,7 +429,7 @@ describe('ChatPluginAction', () => {
 
       const payload = {
         identifier: 'lobe-agent-documents',
-        apiName: 'editDocument',
+        apiName: 'replaceDocumentContent',
         arguments: JSON.stringify({ content: 'test', id: 'agent-document-id' }),
         type: 'builtin',
       } as ChatToolPayload;

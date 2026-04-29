@@ -1,6 +1,10 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
 class BriefService {
+  delete = async (id: string) => {
+    return lambdaClient.brief.delete.mutate({ id });
+  };
+
   listUnresolved = async () => {
     return lambdaClient.brief.listUnresolved.query();
   };

@@ -8,7 +8,6 @@ import {
   Select,
   Text,
 } from '@lobehub/ui';
-import { TimePicker } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
@@ -66,6 +65,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const DEFAULT_PATTERN = '0 9 * * *';
 const DEFAULT_TIMEZONE = 'UTC';
+
+// Cron storage rounds minutes to 0 or 30 (see buildCronPattern), so the picker
+// only needs to offer half-hour slots — flatten to a single column instead of
+// antd's hour×minute grid.
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2);
+  const minute = i % 2 === 0 ? 0 : 30;
+  const label = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return { label, value: hour * 60 + minute };
+});
+
+// The parent Popover (Base UI) treats any click outside its popup root as an
+// outside-click and dismisses. antd Select's dropdown defaults to a body-level
+// portal, which trips that detection — anchor it inside the Popover's DOM so
+// option clicks stay "inside".
+const getPopupContainer = (triggerNode: HTMLElement) => triggerNode.parentElement ?? document.body;
 
 export interface SchedulerFormChange {
   maxExecutions: number | null;
@@ -152,10 +167,12 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
     emit({ scheduleType: value, weekdays: nextWeekdays });
   };
 
-  const handleTimeChange = (value: Dayjs | null) => {
-    if (!value) return;
-    setTriggerTime(value);
-    emit({ triggerTime: value });
+  const handleTimeChange = (totalMinutes: number) => {
+    const next = dayjs()
+      .hour(Math.floor(totalMinutes / 60))
+      .minute(totalMinutes % 60);
+    setTriggerTime(next);
+    emit({ triggerTime: next });
   };
 
   const handleHourlyMinuteChange = (minute: number) => {
@@ -203,6 +220,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         <Flexbox flex={1} gap={6}>
           <Text className={styles.fieldLabel}>{t('taskSchedule.frequency')}</Text>
           <Select
+            getPopupContainer={getPopupContainer}
             value={scheduleType}
             variant="filled"
             options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
@@ -215,11 +233,10 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         {showTimeRow && (
           <Flexbox flex={1} gap={6}>
             <Text className={styles.fieldLabel}>{t('taskSchedule.time')}</Text>
-            <TimePicker
-              format="HH:mm"
-              minuteStep={15}
-              style={{ width: '100%' }}
-              value={triggerTime}
+            <Select
+              getPopupContainer={getPopupContainer}
+              options={TIME_OPTIONS}
+              value={triggerTime.hour() * 60 + triggerTime.minute()}
               variant="filled"
               onChange={handleTimeChange}
             />
@@ -239,6 +256,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               />
               <Text type="secondary">{t('taskSchedule.hours')}</Text>
               <Select
+                getPopupContainer={getPopupContainer}
                 style={{ width: 80 }}
                 value={triggerTime.minute()}
                 variant="filled"
@@ -297,6 +315,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               </Flexbox>
               <Select
                 showSearch
+                getPopupContainer={getPopupContainer}
                 options={TIMEZONE_OPTIONS}
                 popupMatchSelectWidth={false}
                 value={tz}

@@ -27,24 +27,18 @@ const BRIEF_TYPE_COLOR_BG: Record<BriefType, string | undefined> = {
 } as const;
 
 interface BriefIconProps {
+  muted?: boolean;
   size?: number;
   type: BriefType;
 }
 
-const BriefIcon = memo<BriefIconProps>(({ size = 28, type }) => {
+const BriefIcon = memo<BriefIconProps>(({ size = 28, type, muted = false }) => {
   const icon = BRIEF_TYPE_ICON[type] || Lightbulb;
-  const color = BRIEF_TYPE_COLOR[type] || cssVar.colorPrimary;
+  const color = muted ? cssVar.colorTextQuaternary : BRIEF_TYPE_COLOR[type] || cssVar.colorPrimary;
+  const background = muted ? cssVar.colorFillQuaternary : BRIEF_TYPE_COLOR_BG[type];
 
   return (
-    <Block
-      align={'center'}
-      height={size}
-      justify={'center'}
-      width={size}
-      style={{
-        background: BRIEF_TYPE_COLOR_BG[type],
-      }}
-    >
+    <Block align={'center'} height={size} justify={'center'} style={{ background }} width={size}>
       <Icon color={color} icon={icon} size={size * 0.6} />
     </Block>
   );

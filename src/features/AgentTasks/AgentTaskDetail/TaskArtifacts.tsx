@@ -1,18 +1,24 @@
 import type { TaskDetailWorkspaceNode } from '@lobechat/types';
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
+import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import { Package } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FileIcon from '@/components/FileIcon';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
-
-const formatSizeValue = (size: number): string =>
-  size < 1000 ? String(size) : `${(size / 1000).toFixed(1)}k`;
 
 const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspaceNode[] =>
   nodes.flatMap((node) => [
@@ -22,41 +28,80 @@ const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspace
 
 const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const { t } = useTranslation('chat');
-  const openPageDrawer = useTaskStore((s) => s.openPageDrawer);
+  const { modal } = App.useApp();
+  const openPageModal = useTaskStore((s) => s.openPageModal);
+  const unpinDocument = useTaskStore((s) => s.unpinDocument);
+  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const title = node.title || 'Untitled';
   const sizeLabel =
-    node.size == null
-      ? undefined
-      : t('taskDetail.artifactSize', { value: formatSizeValue(node.size) });
-  const fileName = title.includes('.') ? title : `${title}.md`;
+    node.size == null ? undefined : t('taskDetail.artifactSize', { value: node.size });
+
+  const handleDelete = useCallback(() => {
+    const taskId = node.sourceTaskId ?? activeTaskId;
+    if (!taskId) return;
+    modal.confirm({
+      centered: true,
+      content: t('taskDetail.artifactMenu.deleteConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.artifactMenu.deleteConfirm.ok'),
+      onOk: () => unpinDocument(taskId, node.documentId),
+      title: t('taskDetail.artifactMenu.deleteConfirm.title'),
+      type: 'error',
+    });
+  }, [activeTaskId, modal, node.documentId, node.sourceTaskId, t, unpinDocument]);
+
+  const menuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        danger: true,
+        icon: <Icon icon={Trash} />,
+        key: 'delete',
+        label: t('taskDetail.artifactMenu.delete'),
+        onClick: handleDelete,
+      },
+    ],
+    [handleDelete, t],
+  );
 
   return (
     <Block
       clickable
       horizontal
       align="center"
-      gap={12}
-      paddingBlock={12}
+      gap={10}
+      paddingBlock={8}
       paddingInline={12}
       variant="outlined"
-      onClick={() => openPageDrawer(node.documentId)}
+      onClick={() => openPageModal(node.documentId)}
     >
-      <FileIcon fileName={fileName} size={32} />
-      <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
-        <Text ellipsis>{title}</Text>
-        <Flexbox horizontal align="center" gap={6}>
-          {sizeLabel && (
-            <Text fontSize={12} type="secondary">
-              {sizeLabel}
-            </Text>
-          )}
-          {node.sourceTaskIdentifier && (
-            <Tag size="small" style={{ flexShrink: 0 }}>
-              {node.sourceTaskIdentifier}
-            </Tag>
-          )}
-        </Flexbox>
-      </Flexbox>
+      <Icon
+        color={cssVar.colorTextSecondary}
+        icon={FileTextIcon}
+        size={{ size: 18, strokeWidth: 1.5 }}
+        style={{ flexShrink: 0 }}
+      />
+      <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+        {title}
+      </Text>
+      {sizeLabel && (
+        <Text fontSize={12} style={{ flexShrink: 0 }} type="secondary">
+          {sizeLabel}
+        </Text>
+      )}
+      {node.sourceTaskIdentifier && (
+        <Tag size="small" style={{ flexShrink: 0 }}>
+          {node.sourceTaskIdentifier}
+        </Tag>
+      )}
+      <DropdownMenu items={menuItems}>
+        <ActionIcon
+          icon={MoreHorizontal}
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        />
+      </DropdownMenu>
     </Block>
   );
 });

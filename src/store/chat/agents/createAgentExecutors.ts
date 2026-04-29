@@ -684,8 +684,11 @@ export const createAgentExecutors = (context: {
         type: 'toolCalling',
         context: {
           agentId: opContext.agentId!,
+          groupId: opContext.groupId,
+          scope: opContext.scope,
           topicId: opContext.topicId,
           threadId: opContext.threadId,
+          viewedTask: opContext.viewedTask,
         },
         parentOperationId: context.operationId,
         metadata: {

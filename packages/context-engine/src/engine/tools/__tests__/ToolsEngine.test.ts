@@ -129,7 +129,7 @@ describe('ToolsEngine', () => {
         {
           type: 'function',
           function: {
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             description: 'Search the web',
             parameters: {
               type: 'object',
@@ -203,7 +203,7 @@ describe('ToolsEngine', () => {
         {
           type: 'function',
           function: {
-            name: 'lobe-all-optional____search____builtin',
+            name: 'lobe-all-optional____search',
             description: 'Search with all-optional params',
             parameters: {
               type: 'object',
@@ -715,7 +715,7 @@ describe('ToolsEngine', () => {
           {
             type: 'function',
             function: {
-              name: 'builtin-1____builtin-api-1____builtin',
+              name: 'builtin-1____builtin-api-1',
               description: 'Builtin API 1',
               parameters: {},
             },
@@ -1222,8 +1222,8 @@ describe('ToolsEngine', () => {
 
       // Should only generate 2 tools, not 3
       expect(result).toHaveLength(2);
-      expect(result![0].function.name).toBe('lobe-web-browsing____search____builtin');
-      expect(result![1].function.name).toBe('dalle____generateImage____builtin');
+      expect(result![0].function.name).toBe('lobe-web-browsing____search');
+      expect(result![1].function.name).toBe('dalle____generateImage');
     });
 
     it('should deduplicate between toolIds and defaultToolIds', () => {
@@ -1242,8 +1242,8 @@ describe('ToolsEngine', () => {
 
       // Should only generate 2 tools (lobe-web-browsing should appear once)
       expect(result).toHaveLength(2);
-      expect(result![0].function.name).toBe('lobe-web-browsing____search____builtin');
-      expect(result![1].function.name).toBe('dalle____generateImage____builtin');
+      expect(result![0].function.name).toBe('lobe-web-browsing____search');
+      expect(result![1].function.name).toBe('dalle____generateImage');
     });
 
     it('should deduplicate in generateToolsDetailed', () => {
@@ -1455,7 +1455,7 @@ describe('ToolsEngine', () => {
 
       // Should only include dalle, not the default lobe-web-browsing
       expect(result).toHaveLength(1);
-      expect(result![0].function.name).toBe('dalle____generateImage____builtin');
+      expect(result![0].function.name).toBe('dalle____generateImage');
     });
 
     it('should not include default tools when skipDefaultTools is true in generateToolsDetailed', () => {
@@ -1575,7 +1575,7 @@ describe('ToolsEngine', () => {
 
       // Should only include dalle
       expect(result).toHaveLength(1);
-      expect(result![0].function.name).toBe('dalle____generateImage____builtin');
+      expect(result![0].function.name).toBe('dalle____generateImage');
     });
   });
 });

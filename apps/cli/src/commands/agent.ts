@@ -14,33 +14,12 @@ import {
 import { resolveLocalDeviceId } from '../utils/device';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log, setVerbose } from '../utils/logger';
-
-/**
- * Resolve an agent identifier (agentId or slug) to a concrete agentId.
- * When a slug is provided, uses getBuiltinAgent to look up the agent.
- */
-async function resolveAgentId(
-  client: any,
-  opts: { agentId?: string; slug?: string },
-): Promise<string> {
-  if (opts.agentId) return opts.agentId;
-
-  if (opts.slug) {
-    const agent = await client.agent.getBuiltinAgent.query({ slug: opts.slug });
-    if (!agent) {
-      log.error(`Agent not found for slug: ${opts.slug}`);
-      process.exit(1);
-    }
-    return (agent as any).id || (agent as any).agentId;
-  }
-
-  log.error('Either <agentId> or --slug is required.');
-  process.exit(1);
-  return ''; // unreachable
-}
+import { resolveAgentId } from './agent/resolveAgentId';
+import { registerAgentSpaceFsCommand } from './agent/spaceFs';
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
+  registerAgentSpaceFsCommand(agent);
 
   // ── list ──────────────────────────────────────────────
 

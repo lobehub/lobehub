@@ -6,6 +6,7 @@ import {
   type DropdownItem,
   DropdownMenu,
   Flexbox,
+  stopPropagation,
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
@@ -38,8 +39,13 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const isRunning = activity.status === 'running';
 
+  const finalDuration =
+    !isRunning && activity.time && activity.completedAt
+      ? new Date(activity.completedAt).getTime() - new Date(activity.time).getTime()
+      : null;
+
   const [elapsed, setElapsed] = useState(() =>
-    activity.time ? Date.now() - new Date(activity.time).getTime() : 0,
+    isRunning && activity.time ? Date.now() - new Date(activity.time).getTime() : 0,
   );
 
   useEffect(() => {
@@ -58,8 +64,16 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.id) void navigator.clipboard.writeText(activity.id);
   }, [activity.id]);
 
+  const handleCopyOperationId = useCallback(() => {
+    if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
+  }, [activity.operationId]);
+
   const startedAt = activity.time ? dayjs(activity.time).fromNow() : '';
-  const durationText = isRunning ? formatDuration(elapsed) : '';
+  const durationText = isRunning
+    ? formatDuration(elapsed)
+    : finalDuration != null && finalDuration >= 0
+      ? formatDuration(finalDuration)
+      : '';
 
   const menuItems: DropdownItem[] = [
     {
@@ -72,8 +86,15 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       disabled: !activity.id,
       icon: Copy,
       key: 'copy',
-      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy run ID' }),
+      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy topic ID' }),
       onClick: handleCopyId,
+    },
+    {
+      disabled: !activity.operationId,
+      icon: Copy,
+      key: 'copyOperationId',
+      label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy operation ID' }),
+      onClick: handleCopyOperationId,
     },
   ];
 
@@ -132,15 +153,11 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
               {startedAt}
             </Text>
           )}
-          <DropdownMenu items={menuItems}>
-            <ActionIcon
-              icon={MoreHorizontal}
-              size={'small'}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            />
-          </DropdownMenu>
+          <Flexbox onClick={stopPropagation}>
+            <DropdownMenu items={menuItems}>
+              <ActionIcon icon={MoreHorizontal} size={'small'} />
+            </DropdownMenu>
+          </Flexbox>
         </Flexbox>
       </Flexbox>
 

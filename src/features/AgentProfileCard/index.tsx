@@ -15,6 +15,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   bannerInner: css`
     filter: blur(44px);
   `,
+  clickableAvatar: css`
+    cursor: pointer;
+  `,
+  clickableTitle: css`
+    cursor: pointer;
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
+  `,
   container: css`
     overflow: hidden;
     width: 280px;
@@ -63,11 +73,22 @@ export interface AgentProfileCardProps {
   headerAction?: ReactNode;
   /** Show inline skeletons for fields that are still loading. */
   loading?: boolean;
+  /** When set, avatar + title become clickable and trigger this handler. */
+  onHeaderClick?: () => void;
   title: string;
 }
 
 const AgentProfileCard = memo<AgentProfileCardProps>(
-  ({ avatar, backgroundColor, description, headerAction, loading, title, children }) => {
+  ({
+    avatar,
+    backgroundColor,
+    description,
+    headerAction,
+    loading,
+    onHeaderClick,
+    title,
+    children,
+  }) => {
     return (
       <Flexbox className={styles.container}>
         <Center className={styles.banner} style={{ background: cssVar.colorFillTertiary }}>
@@ -86,13 +107,19 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
             emojiScaleWithBackground
             avatar={avatar || DEFAULT_AVATAR}
             background={backgroundColor ?? undefined}
+            className={onHeaderClick ? styles.clickableAvatar : undefined}
             shape={'square'}
             size={48}
             style={{ border: `2px solid ${cssVar.colorBgElevated}` }}
+            onClick={onHeaderClick}
           />
           <Flexbox gap={2}>
             <Flexbox horizontal align={'center'} justify={'space-between'}>
-              <Text ellipsis className={styles.name}>
+              <Text
+                ellipsis
+                className={`${styles.name} ${onHeaderClick ? styles.clickableTitle : ''}`}
+                onClick={onHeaderClick}
+              >
                 {title}
               </Text>
               {headerAction}

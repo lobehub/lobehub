@@ -1,5 +1,7 @@
 {
   "action.connect.button": "连接 {{provider}}",
+  "action.connect.error": "连接失败，请稍后再试",
+  "action.connect.popupBlocked": "连接弹窗被浏览器拦截，请允许弹窗后重试",
   "action.create.error": "创建任务失败，请稍后再试",
   "action.create.success": "定时任务已创建，可在 Lobe AI 中查看",
   "action.createButton": "添加为定时任务",

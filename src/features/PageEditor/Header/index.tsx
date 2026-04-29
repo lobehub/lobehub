@@ -9,6 +9,8 @@ import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
@@ -22,6 +24,10 @@ const Header = memo(() => {
     s.title,
     s.parentId,
     s.onBack,
+  ]);
+  const [showPageAgentPanel, togglePageAgentPanel] = useGlobalStore((s) => [
+    systemStatusSelectors.showPageAgentPanel(s),
+    s.togglePageAgentPanel,
   ]);
   const { menuItems } = useMenu();
 
@@ -61,7 +67,12 @@ const Header = memo(() => {
           >
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SIZE} />
           </DropdownMenu>
-          <ToggleRightPanelButton hideWhenExpanded showActive={false} />
+          <ToggleRightPanelButton
+            hideWhenExpanded
+            expand={showPageAgentPanel}
+            showActive={false}
+            onToggle={() => togglePageAgentPanel()}
+          />
         </>
       }
     />

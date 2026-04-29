@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { SourceAgentUserMessage } from '@lobechat/agent-signal/source';
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,7 +7,6 @@ import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeProcessorContext } from '../../../runtime/context';
-import type { SourceAgentUserMessage } from '../../../sourceTypes';
 import { createFeedbackSatisfactionJudgeProcessor } from '../feedbackSatisfaction';
 
 vi.mock('@/server/modules/ModelRuntime', () => ({

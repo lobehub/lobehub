@@ -140,8 +140,16 @@ export class TaskConfigSliceActionImpl {
       update.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL_SECONDS;
     }
     if (mode === 'schedule') {
-      if (!detail?.schedule?.pattern) update.schedulePattern = DEFAULT_SCHEDULE_PATTERN;
-      if (!detail?.schedule?.timezone) update.scheduleTimezone = resolveDefaultTimezone();
+      // The DB column defaults `scheduleTimezone` to 'UTC' on row creation, so a
+      // missing `pattern` is the reliable signal that the user has never opened
+      // the schedule form. Treat that case as first-time enable and override the
+      // DB default with the user's local timezone.
+      if (!detail?.schedule?.pattern) {
+        update.schedulePattern = DEFAULT_SCHEDULE_PATTERN;
+        update.scheduleTimezone = resolveDefaultTimezone();
+      } else if (!detail?.schedule?.timezone) {
+        update.scheduleTimezone = resolveDefaultTimezone();
+      }
     }
 
     // Optimistic update so the Segmented reflects the new tab immediately

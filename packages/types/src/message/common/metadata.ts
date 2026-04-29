@@ -3,6 +3,34 @@ import { z } from 'zod';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
+const LocalSystemToolSnapshotSchema = z.object({
+  apiName: z.enum(['readLocalFile', 'listLocalFiles']),
+  arguments: z.record(z.string(), z.unknown()),
+  capturedAt: z.string(),
+  content: z.string().nullable(),
+  error: z.unknown().optional(),
+  identifier: z.literal('lobe-local-system'),
+  result: z.unknown().optional(),
+  snapshotId: z.string(),
+  state: z.unknown().optional(),
+  success: z.boolean(),
+  toolCallId: z.string(),
+});
+
+export interface LocalSystemToolSnapshot {
+  apiName: 'readLocalFile' | 'listLocalFiles';
+  arguments: Record<string, unknown>;
+  capturedAt: string;
+  content: string | null;
+  error?: unknown;
+  identifier: 'lobe-local-system';
+  result?: unknown;
+  snapshotId: string;
+  state?: unknown;
+  success: boolean;
+  toolCallId: string;
+}
+
 export interface ModelTokensUsage {
   // Prediction tokens
   acceptedPredictionTokens?: number;
@@ -101,6 +129,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
+  localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
   // here so zod doesn't strip them from writes going through UpdateMessageParamsSchema
@@ -200,6 +229,10 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
+  /**
+   * Local-system tool snapshots materialized when the user sent @file mentions.
+   */
+  localSystemToolSnapshots?: LocalSystemToolSnapshot[];
   /** @deprecated use `metadata.usage` instead */
   outputAudioTokens?: number;
   /** @deprecated use `metadata.usage` instead */

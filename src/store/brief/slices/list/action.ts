@@ -38,6 +38,12 @@ export class BriefListActionImpl {
     this.#set({ briefs: updated }, false, n('internal_updateBrief'));
   };
 
+  deleteBrief = async (id: string) => {
+    await briefService.delete(id);
+    const briefs = this.#get().briefs.filter((b) => b.id !== id);
+    this.#set({ briefs }, false, n('deleteBrief'));
+  };
+
   markBriefRead = async (id: string) => {
     await briefService.markRead(id);
     this.internal_updateBrief(id, { readAt: new Date().toISOString() });
