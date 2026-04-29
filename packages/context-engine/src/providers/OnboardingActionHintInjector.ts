@@ -30,12 +30,22 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     return false;
   }
 
-  protected buildContent(_context: PipelineContext): string | null {
+  protected buildContent(context: PipelineContext): string | null {
     const ctx = this.config.onboardingContext;
     if (!ctx) return null;
 
     const hints: string[] = [];
     const phase = ctx.phaseGuidance;
+    const marketplaceAlreadyOpened = context.messages.some(
+      (msg) =>
+        msg.role === 'assistant' &&
+        Array.isArray((msg as any).tool_calls) &&
+        (msg as any).tool_calls.some(
+          (tc: any) =>
+            typeof tc?.function?.name === 'string' &&
+            tc.function.name.includes('showAgentMarketplace'),
+        ),
+    );
 
     // Detect empty documents and nudge tool calls (empty docs use writeDocument; non-empty use updateDocument)
     if (!ctx.soulContent) {
@@ -69,12 +79,15 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
         'EARLY EXIT: A true early-exit signal is the user explicitly wanting to END onboarding (e.g., "我累了", "我先走", "下次再聊", "没空", "暂时不弄了", "结束吧", "Thanks, that\'s enough", "I have to go"). Short affirmations like "好的" / "行" / "嗯" / "ok" are NOT early-exit signals — they confirm what you just said and you should keep exploring or move toward summary normally. When you see a real exit signal: stop exploring, save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call `showAgentMarketplace` and only after it resolves call `finishOnboarding`. Do NOT skip the marketplace step unless the user explicitly cancels/skips the picker.',
       );
     } else if (phase.includes('Summary')) {
-      hints.push(
-        'Present a summary, then THIS TURN call `showAgentMarketplace` with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion, and do NOT call `finishOnboarding` before the user has submitted, skipped, or cancelled the picker.',
-      );
-      hints.push(
-        'After the user resolves the picker (submit / skip / cancel — the framework records this for you), acknowledge what they picked by title (do not claim you installed anything), send a brief warm closing message, then call `finishOnboarding`. You MUST call `finishOnboarding` to finish the conversation, but only AFTER the marketplace handoff has resolved.',
-      );
+      if (!marketplaceAlreadyOpened) {
+        hints.push(
+          "Present a summary, then THIS TURN call `showAgentMarketplace` exactly once with `{ requestId, categoryHints, prompt }` — pick 1–3 MarketplaceCategory slugs from what you learned in discovery. The picker is the required handoff that lets the user choose recommended assistants; do NOT skip it on normal completion. After the showAgentMarketplace tool result comes back, **STOP this turn** — no more tool calls (no `finishOnboarding`, no `askUserQuestion`, nothing else). End your turn with at most one short acknowledgment sentence and wait for the user's next message. The closing + `finishOnboarding` belongs to the FOLLOWING turn.",
+        );
+      } else {
+        hints.push(
+          "You have ALREADY opened the marketplace picker this conversation. Do NOT call `showAgentMarketplace` again. The user's latest message is your cue to close: acknowledge any picks they referenced (do not claim you installed anything), send a brief warm closing message (2–3 sentences), then call `finishOnboarding` THIS TURN. If the picker is still in `pending` state because no UI resolution arrived, treat the user's text reply as the implicit resolution and proceed with `finishOnboarding` anyway — do not stall waiting.",
+        );
+      }
     }
 
     hints.push(

@@ -24,9 +24,9 @@ export class AgentMarketplaceExecutor extends BaseExecutor<typeof AgentMarketpla
 
   showAgentMarketplace = async (
     params: ShowAgentMarketplaceArgs,
-    _ctx: BuiltinToolContext,
+    ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    return this.runtime.showAgentMarketplace(params);
+    return this.runtime.showAgentMarketplace(params, { topicId: ctx.topicId });
   };
 
   submitAgentPick = async (

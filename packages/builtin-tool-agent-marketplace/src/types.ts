@@ -99,6 +99,8 @@ export interface PickState {
   selectedTemplateIds?: string[];
   skipReason?: string;
   status: PickStatus;
+  /** topic the pick belongs to; used for per-conversation duplicate detection */
+  topicId?: string;
 }
 
 export type AgentPickResult =

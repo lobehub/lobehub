@@ -43,7 +43,10 @@ export class AgentMarketplaceExecutionRuntime {
     this.hooks = hooks;
   }
 
-  async showAgentMarketplace(args: unknown): Promise<BuiltinServerRuntimeOutput> {
+  async showAgentMarketplace(
+    args: unknown,
+    scope?: { topicId?: string | null },
+  ): Promise<BuiltinServerRuntimeOutput> {
     const parsed = showAgentMarketplaceSchema.safeParse(args);
     if (!parsed.success) {
       const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
@@ -56,12 +59,24 @@ export class AgentMarketplaceExecutionRuntime {
     const { categoryHints, description, prompt, requestId } =
       parsed.data as ShowAgentMarketplaceArgs;
 
+    if (scope?.topicId) {
+      const existing = [...this.picks.values()].find((p) => p.topicId === scope.topicId);
+      if (existing) {
+        return {
+          content: `Marketplace picker has already been opened in this conversation (requestId=${existing.requestId}, status=${existing.status}). Do NOT call showAgentMarketplace again. Proceed directly to a brief warm closing message and call finishOnboarding on this turn — the user's text reply is the resolution signal even if the picker is still pending.`,
+          state: existing,
+          success: false,
+        };
+      }
+    }
+
     const state: PickState = {
       categoryHints,
       description,
       prompt,
       requestId,
       status: 'pending',
+      topicId: scope?.topicId ?? undefined,
     };
 
     this.picks.set(requestId, state);
@@ -73,7 +88,11 @@ export class AgentMarketplaceExecutionRuntime {
     }
 
     return {
-      content: `Marketplace picker "${prompt}" is now pending user selection.`,
+      content: [
+        `Marketplace picker is now visible to the user (requestId=${requestId}).`,
+        'STOP your current turn here. Do not call any further tools this turn (no finishOnboarding, no askUserQuestion, no other tools).',
+        "On your NEXT turn — i.e. after the user's next message arrives — send a brief warm closing (2–3 sentences) and call finishOnboarding then.",
+      ].join(' '),
       state,
       success: true,
     };
