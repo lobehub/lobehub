@@ -36,7 +36,7 @@ const toBriefItem = (act: TaskDetailActivity): BriefItem | null => {
       id: a.id,
       title: a.title,
     })),
-    artifacts: act.artifacts,
+    artifacts: act.artifacts ?? null,
     createdAt: act.createdAt ?? act.time ?? new Date().toISOString(),
     cronJobId: act.cronJobId ?? null,
     id: act.id,

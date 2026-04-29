@@ -1,5 +1,15 @@
-import { chainTaskTopicHandoff, TASK_TOPIC_HANDOFF_SCHEMA } from '@lobechat/prompts';
-import type { TaskItem, TaskSchedulerContext } from '@lobechat/types';
+import {
+  chainGenerateBrief,
+  chainTaskTopicHandoff,
+  GENERATE_BRIEF_SCHEMA,
+  TASK_TOPIC_HANDOFF_SCHEMA,
+} from '@lobechat/prompts';
+import type {
+  BriefArtifacts,
+  TaskItem,
+  TaskSchedulerContext,
+  TaskTopicHandoff,
+} from '@lobechat/types';
 import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
@@ -12,6 +22,20 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskReviewService } from '@/server/services/taskReview';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
+
+import {
+  collectTopicArtifacts,
+  isTrivialAssistantContent,
+  selectBriefPriority,
+  selectBriefType,
+  shouldEmitTopicBrief,
+} from './synthesize';
+
+/** Read the brief generation mode from `task.config.brief.mode`. */
+const getBriefMode = (task: TaskItem | null): 'agent' | 'auto' => {
+  const mode = (task?.config as { brief?: { mode?: string } } | null)?.brief?.mode;
+  return mode === 'auto' ? 'auto' : 'agent';
+};
 
 const log = debug('task-lifecycle');
 
@@ -101,7 +125,21 @@ export class TaskLifecycleService {
 
       if (reviewTerminated) return;
 
-      // 4. Default post-tick transition.
+      // 4. Synthesize a programmatic brief for the user (auto mode only).
+      //    The agent-driven `createBrief` tool path stays the default until
+      //    the GrowthBook flag flips. See LOBE-8333 for the rollout plan.
+      if (getBriefMode(currentTask) === 'auto' && currentTask && topicId && lastAssistantContent) {
+        await this.synthesizeTopicBrief(
+          taskId,
+          taskIdentifier,
+          topicId,
+          lastAssistantContent,
+          reason,
+          currentTask,
+        );
+      }
+
+      // 5. Default post-tick transition.
       //    - Automation tasks (heartbeat / schedule) loop running ↔ scheduled, so
       //      a successful tick parks the task at 'scheduled' to wait for the next
       //      tick. They never auto-pause on success — only `reason === 'error'`
@@ -276,6 +314,118 @@ export class TaskLifecycleService {
       log('handoff generated for topic %s: title=%s', topicId, handoff.title);
     } catch (e) {
       console.warn('[TaskLifecycle] handoff generation failed:', e);
+    }
+  }
+
+  /**
+   * Programmatic brief synthesis for a completed topic.
+   *
+   * Fired only in `brief.mode === 'auto'` and only when neither the error nor
+   * the judge path has already produced a brief. Three-layer split:
+   *  - decision (whether to emit, which type, which priority): pure rules
+   *  - artifacts: programmatic DB query against task_documents
+   *  - title / summary: a dedicated LLM call (separate from handoff because
+   *    handoff is agent-internal language; brief is user-facing)
+   *
+   * Failures are swallowed — a missing brief should never block the task
+   * lifecycle. The caller still proceeds to the post-tick state transition.
+   */
+  private async synthesizeTopicBrief(
+    taskId: string,
+    taskIdentifier: string,
+    topicId: string,
+    lastAssistantContent: string,
+    reason: string,
+    currentTask: TaskItem,
+  ): Promise<void> {
+    try {
+      const reviewConfig = this.taskModel.getReviewConfig(currentTask);
+      const decisionInput = {
+        hasReviewConfigEnabled: !!reviewConfig?.enabled,
+        isTrivialContent: isTrivialAssistantContent(lastAssistantContent),
+        reason,
+        // We've already returned upstream when reviewTerminated was true; the
+        // remaining decision lives in shouldEmitTopicBrief itself.
+        reviewTerminated: false,
+        task: currentTask,
+      };
+
+      const decision = shouldEmitTopicBrief(decisionInput);
+      if (!decision.emit) {
+        log(
+          'synthesize: skip task=%s topic=%s reason=%s',
+          taskIdentifier,
+          topicId,
+          decision.reason,
+        );
+        return;
+      }
+
+      const briefType = selectBriefType(decisionInput);
+      const priority = selectBriefPriority(decisionInput);
+
+      const topicLink = await this.taskTopicModel.findByTopicId(topicId);
+      const topicStartedAt = topicLink?.createdAt ?? new Date(0);
+
+      const artifacts: BriefArtifacts = await collectTopicArtifacts({
+        db: this.db,
+        since: topicStartedAt,
+        taskId,
+        userId: this.userId,
+      });
+
+      const handoff = (topicLink?.handoff as TaskTopicHandoff | null) ?? null;
+
+      const { model, provider } = await (this.systemAgentService as any).getTaskModelConfig(
+        'topic',
+      );
+
+      const payload = chainGenerateBrief({
+        artifacts,
+        handoff,
+        lastAssistantContent,
+        taskInstruction: currentTask.instruction || '',
+        taskName: currentTask.name || taskIdentifier,
+      });
+
+      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+      const result = await modelRuntime.generateObject(
+        {
+          messages: payload.messages as any[],
+          model,
+          schema: { name: 'task_topic_brief', schema: GENERATE_BRIEF_SCHEMA },
+        },
+        { metadata: { trigger: 'task-brief' } },
+      );
+
+      const generated = result as { summary?: string; title?: string };
+      if (!generated.title || !generated.summary) {
+        log(
+          'synthesize: LLM returned empty title/summary task=%s topic=%s',
+          taskIdentifier,
+          topicId,
+        );
+        return;
+      }
+
+      // `result` briefs render a fixed approval UI and intentionally have no
+      // default actions — see DEFAULT_BRIEF_ACTIONS comment.
+      const actions = briefType === 'result' ? null : (DEFAULT_BRIEF_ACTIONS[briefType] ?? null);
+
+      await this.briefModel.create({
+        actions,
+        artifacts,
+        priority,
+        summary: generated.summary,
+        taskId,
+        title: generated.title,
+        topicId,
+        type: briefType,
+      });
+
+      log('synthesize: brief created task=%s topic=%s type=%s', taskIdentifier, topicId, briefType);
+    } catch (e) {
+      console.warn('[TaskLifecycle] brief synthesis failed:', e);
     }
   }
 

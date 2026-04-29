@@ -1,3 +1,5 @@
+import type { BriefArtifacts } from '../brief';
+
 // ── Task type aliases ──
 
 export type TaskStatus =
@@ -210,7 +212,7 @@ export interface TaskDetailActivity {
   actions?: unknown;
   agentId?: string | null;
   agents?: TaskDetailActivityAgent[];
-  artifacts?: unknown;
+  artifacts?: BriefArtifacts | null;
   author?: TaskDetailActivityAuthor;
   briefType?: string;
   /**
