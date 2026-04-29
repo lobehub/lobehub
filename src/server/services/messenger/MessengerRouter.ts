@@ -15,6 +15,7 @@ import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
+import { MessengerSlackBinder } from './platforms/slack';
 import { MessengerTelegramBinder } from './platforms/telegram';
 import type { MessengerPlatformBinder } from './types';
 
@@ -194,6 +195,9 @@ export class MessengerRouter {
     switch (platform) {
       case 'telegram': {
         return new MessengerTelegramBinder();
+      }
+      case 'slack': {
+        return new MessengerSlackBinder();
       }
       default: {
         return null;

@@ -14,6 +14,7 @@ import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
   consumeLinkToken,
+  MessengerSlackBinder,
   MessengerTelegramBinder,
   peekLinkToken,
 } from '@/server/services/messenger';
@@ -176,8 +177,15 @@ const notifyLinkSuccess = async (
   params: { activeAgentName?: string; platformUserId: string },
 ) => {
   try {
-    if (platform === 'telegram') {
-      await new MessengerTelegramBinder().notifyLinkSuccess(params);
+    switch (platform) {
+      case 'telegram': {
+        await new MessengerTelegramBinder().notifyLinkSuccess(params);
+        break;
+      }
+      case 'slack': {
+        await new MessengerSlackBinder().notifyLinkSuccess(params);
+        break;
+      }
     }
   } catch (error) {
     console.error('[messenger:notifyLinkSuccess]', error);

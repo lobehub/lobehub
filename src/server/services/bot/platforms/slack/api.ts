@@ -41,6 +41,38 @@ export class SlackApi {
     return { ts: data.ts };
   }
 
+  /**
+   * Post a message with a single URL button rendered as an actions block.
+   * `text` is also sent as fallback for clients that can't render blocks
+   * (notifications, screen readers, etc.).
+   */
+  async postMessageWithUrlButton(
+    channel: string,
+    text: string,
+    button: { text: string; url: string },
+  ): Promise<{ ts: string }> {
+    log('postMessageWithUrlButton: channel=%s', channel);
+    const fallback = this.truncateText(text);
+    const data = await this.call('chat.postMessage', {
+      blocks: [
+        { text: { text: fallback, type: 'mrkdwn' }, type: 'section' },
+        {
+          elements: [
+            {
+              text: { emoji: true, text: button.text, type: 'plain_text' },
+              type: 'button',
+              url: button.url,
+            },
+          ],
+          type: 'actions',
+        },
+      ],
+      channel,
+      text: fallback,
+    });
+    return { ts: data.ts };
+  }
+
   async postMessageInThread(
     channel: string,
     threadTs: string,
