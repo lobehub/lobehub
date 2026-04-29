@@ -56,7 +56,7 @@ export interface EmitToolOutcomeInput {
  *
  * Use when:
  * - Direct tool execution writes procedure state before async enqueue
- * - Idempotent source identity should prefer structured ids
+ * - Idempotent source identity should prefer the per-call tool id before broader operation ids
  *
  * Expects:
  * - Natural-language text is not used for identity
@@ -66,8 +66,8 @@ export interface EmitToolOutcomeInput {
  */
 export const createToolOutcomeSourceId = (input: EmitToolOutcomeInput) => {
   const stableId =
-    input.operationId ??
     input.toolCallId ??
+    input.operationId ??
     input.messageId ??
     `${input.scopeKey}:${input.identifier}:${input.apiName ?? 'unknown'}:${input.toolAction ?? 'unknown'}`;
 
