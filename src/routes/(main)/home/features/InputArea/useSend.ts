@@ -1,4 +1,4 @@
-import { SESSION_CHAT_URL } from '@lobechat/const';
+import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
@@ -57,11 +57,14 @@ export const useSend = () => {
             if (!inboxAgentId) return;
 
             sendMessage({
-              context: { agentId: inboxAgentId },
+              context: { agentId: inboxAgentId, isolatedTopic: true },
               contexts: contextList,
               editorData,
               files: fileList,
               message: inputMessage,
+              onTopicCreated: (topicId) => {
+                router.replace(SESSION_CHAT_TOPIC_URL(inboxAgentId, topicId, false));
+              },
             });
 
             router.push(SESSION_CHAT_URL(inboxAgentId, false));
