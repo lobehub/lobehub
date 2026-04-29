@@ -29,6 +29,11 @@ export interface AgentListParams {
   visibility?: MarketAgentVisibility;
 }
 
+export interface AgentForkListParams {
+  includePrivateForOwnerId?: number;
+  status?: MarketAgentStatus;
+}
+
 export interface AgentListRow {
   agent: MarketAgentItem;
   version: MarketAgentVersionItem | null;
@@ -200,19 +205,20 @@ export class AgentModel {
     };
   }
 
-  async listForks(sourceAgentId: number, includePrivateForOwnerId?: number) {
+  async listForks(sourceAgentId: number, params: AgentForkListParams = {}) {
     return await this.db
       .select()
       .from(marketAgents)
       .where(
         and(
           eq(marketAgents.forkedFromAgentId, sourceAgentId),
-          includePrivateForOwnerId === undefined
+          params.status === undefined ? undefined : eq(marketAgents.status, params.status),
+          params.includePrivateForOwnerId === undefined
             ? eq(marketAgents.visibility, 'public')
             : or(
                 eq(marketAgents.visibility, 'public'),
                 and(
-                  eq(marketAgents.ownerId, includePrivateForOwnerId),
+                  eq(marketAgents.ownerId, params.includePrivateForOwnerId),
                   or(
                     eq(marketAgents.visibility, 'private'),
                     eq(marketAgents.visibility, 'internal'),

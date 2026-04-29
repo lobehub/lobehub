@@ -225,6 +225,16 @@ describe('AgentService', async () => {
       identifier: 'draft-agent',
       status: 'unpublished',
     });
+    await expect(service.increaseInstallCount('draft-agent')).rejects.toMatchObject({
+      code: 'agent_not_found',
+      status: 404,
+    } satisfies Partial<MarketHttpError>);
+    await expect(
+      service.createEvent(null, { event: 'click', identifier: 'draft-agent' }),
+    ).rejects.toMatchObject({
+      code: 'agent_not_found',
+      status: 404,
+    } satisfies Partial<MarketHttpError>);
   });
 
   it('forks an agent from the source version and hides private forks from non-owners', async () => {
@@ -252,6 +262,15 @@ describe('AgentService', async () => {
     const fork = await service.forkAgent(second.id, 'source-agent', {
       identifier: 'forked-agent',
       visibility: 'private',
+    });
+    await service.forkAgent(second.id, 'source-agent', {
+      identifier: 'draft-public-fork',
+      visibility: 'public',
+    });
+    await service.forkAgent(second.id, 'source-agent', {
+      identifier: 'published-public-fork',
+      status: 'published',
+      visibility: 'public',
     });
     const privateDetail = await service.getAgentDetail('forked-agent', {
       includePrivateForAccountId: second.id,
@@ -282,18 +301,19 @@ describe('AgentService', async () => {
       visibility: 'private',
     });
     expect(publicForks).toMatchObject({
-      forks: [],
-      totalCount: 0,
-    });
-    expect(ownerForks).toMatchObject({
-      forks: [
-        expect.objectContaining({
-          identifier: 'forked-agent',
-          ownerId: second.id,
-        }),
-      ],
+      forks: [expect.objectContaining({ identifier: 'published-public-fork' })],
       totalCount: 1,
     });
+    expect(ownerForks).toMatchObject({
+      totalCount: 3,
+    });
+    expect(ownerForks.forks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ identifier: 'forked-agent', ownerId: second.id }),
+        expect.objectContaining({ identifier: 'draft-public-fork', ownerId: second.id }),
+        expect.objectContaining({ identifier: 'published-public-fork', ownerId: second.id }),
+      ]),
+    );
     expect(ownerForkSource.source).toMatchObject({
       identifier: 'source-agent',
       ownerId: sourceOwner.id,

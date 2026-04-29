@@ -509,7 +509,10 @@ export class AgentService {
       throw new MarketHttpError(404, 'agent_not_found', 'Agent not found.');
     }
 
-    const forks = await this.model.listForks(agent.id, options.includePrivateForAccountId);
+    const forks = await this.model.listForks(agent.id, {
+      includePrivateForOwnerId: options.includePrivateForAccountId,
+      status: options.includePrivateForAccountId === undefined ? 'published' : undefined,
+    });
 
     return {
       forks: forks.map(toForkItem),
@@ -536,6 +539,11 @@ export class AgentService {
   }
 
   async increaseInstallCount(identifier: string): Promise<AgentInstallCountResponse> {
+    const existing = await this.model.findByIdentifier(identifier);
+    if (!existing || !this.canReadAgent(existing)) {
+      throw new MarketHttpError(404, 'agent_not_found', 'Agent not found.');
+    }
+
     const agent = await this.model.increaseInstallCount(identifier);
     if (!agent) throw new MarketHttpError(404, 'agent_not_found', 'Agent not found.');
 
@@ -548,7 +556,9 @@ export class AgentService {
 
   async createEvent(accountId: number | null, data: AgentEventRequest) {
     const agent = await this.model.findByIdentifier(data.identifier);
-    if (!agent) throw new MarketHttpError(404, 'agent_not_found', 'Agent not found.');
+    if (!agent || !this.canReadAgent(agent, accountId ?? undefined)) {
+      throw new MarketHttpError(404, 'agent_not_found', 'Agent not found.');
+    }
 
     return await this.model.createEvent({
       accountId,

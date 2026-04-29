@@ -400,6 +400,31 @@ describe('Market HTTP agent routes', async () => {
     });
   });
 
+  it('does not expose unpublished public forks through public fork routes', async () => {
+    const app = createMarketApp({ db, env: trustedClientEnv });
+
+    await createPublishedAgent(app, ownerToken);
+    await app.request(
+      '/api/v1/agents/agent-one/fork',
+      requestJson({ identifier: 'draft-public-fork', visibility: 'public' }, otherToken),
+    );
+    await app.request(
+      '/api/v1/agents/agent-one/fork',
+      requestJson(
+        { identifier: 'published-public-fork', status: 'published', visibility: 'public' },
+        otherToken,
+      ),
+    );
+
+    const response = await app.request('/api/v1/agents/agent-one/forks');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      forks: [expect.objectContaining({ identifier: 'published-public-fork' })],
+      totalCount: 1,
+    });
+  });
+
   it('does not expose private agents through public ownerId query parameters', async () => {
     const app = createMarketApp({ db, env: trustedClientEnv });
 
@@ -464,6 +489,33 @@ describe('Market HTTP agent routes', async () => {
     });
     expect(detailResponse.status).toBe(404);
     expect(await readErrorJson(detailResponse)).toEqual({ error: { code: 'agent_not_found' } });
+  });
+
+  it('does not record public counters or events for unpublished agents', async () => {
+    const app = createMarketApp({ db, env: trustedClientEnv });
+
+    await app.request(
+      '/api/v1/agents/create',
+      requestJson({ identifier: 'draft-agent', name: 'Draft Agent' }, ownerToken),
+    );
+    await app.request(
+      '/api/v1/agents/version/create',
+      requestJson({ identifier: 'draft-agent' }, ownerToken),
+    );
+
+    const installResponse = await app.request(
+      '/api/v1/agents/install-count',
+      requestJson({ identifier: 'draft-agent' }),
+    );
+    const eventResponse = await app.request(
+      '/api/v1/agents/events',
+      requestJson({ event: 'click', identifier: 'draft-agent' }),
+    );
+
+    expect(installResponse.status).toBe(404);
+    expect(await readErrorJson(installResponse)).toEqual({ error: { code: 'agent_not_found' } });
+    expect(eventResponse.status).toBe(404);
+    expect(await readErrorJson(eventResponse)).toEqual({ error: { code: 'agent_not_found' } });
   });
 
   it('rejects agent modification by a different trusted account', async () => {
