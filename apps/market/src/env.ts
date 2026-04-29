@@ -1,12 +1,21 @@
 import { z } from 'zod';
 
+export const MARKET_TRUSTED_CLIENT_SECRET_PLACEHOLDER =
+  'lobehub-market_tcs_0000000000000000000000000000000000000000000000000000000000000000';
+
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   MARKET_BASE_URL: z.string().url().optional(),
   MARKET_PORT: z.coerce.number().int().positive().default(3211),
   MARKET_PUBLIC_BASE_URL: z.string().url().optional(),
   MARKET_TRUSTED_CLIENT_ID: z.string().min(1),
-  MARKET_TRUSTED_CLIENT_SECRET: z.string().min(1),
+  MARKET_TRUSTED_CLIENT_SECRET: z
+    .string()
+    .min(1)
+    .refine(
+      (secret) => secret !== MARKET_TRUSTED_CLIENT_SECRET_PLACEHOLDER,
+      'must be regenerated from the placeholder value',
+    ),
   MARKET_UPSTREAM_BASE_URL: z.string().url().optional(),
 });
 

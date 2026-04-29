@@ -214,16 +214,10 @@ export class AgentModel {
           eq(marketAgents.forkedFromAgentId, sourceAgentId),
           params.status === undefined ? undefined : eq(marketAgents.status, params.status),
           params.includePrivateForOwnerId === undefined
-            ? eq(marketAgents.visibility, 'public')
+            ? and(eq(marketAgents.status, 'published'), eq(marketAgents.visibility, 'public'))
             : or(
-                eq(marketAgents.visibility, 'public'),
-                and(
-                  eq(marketAgents.ownerId, params.includePrivateForOwnerId),
-                  or(
-                    eq(marketAgents.visibility, 'private'),
-                    eq(marketAgents.visibility, 'internal'),
-                  ),
-                ),
+                and(eq(marketAgents.status, 'published'), eq(marketAgents.visibility, 'public')),
+                eq(marketAgents.ownerId, params.includePrivateForOwnerId),
               ),
         ),
       )

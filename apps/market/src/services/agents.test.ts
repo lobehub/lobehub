@@ -267,6 +267,7 @@ describe('AgentService', async () => {
       identifier: 'draft-public-fork',
       visibility: 'public',
     });
+    const third = await createAccount('third-owner', 'Third Owner');
     await service.forkAgent(second.id, 'source-agent', {
       identifier: 'published-public-fork',
       status: 'published',
@@ -281,6 +282,9 @@ describe('AgentService', async () => {
     });
     const ownerForkSource = await service.getForkSource('forked-agent', {
       includePrivateForAccountId: second.id,
+    });
+    const nonOwnerForks = await service.listForks('source-agent', {
+      includePrivateForAccountId: third.id,
     });
 
     expect(fork.agent).toMatchObject({
@@ -314,6 +318,10 @@ describe('AgentService', async () => {
         expect.objectContaining({ identifier: 'published-public-fork', ownerId: second.id }),
       ]),
     );
+    expect(nonOwnerForks).toMatchObject({
+      forks: [expect.objectContaining({ identifier: 'published-public-fork' })],
+      totalCount: 1,
+    });
     expect(ownerForkSource.source).toMatchObject({
       identifier: 'source-agent',
       ownerId: sourceOwner.id,

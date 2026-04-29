@@ -508,7 +508,6 @@ export class AgentService {
 
     const forks = await this.model.listForks(agent.id, {
       includePrivateForOwnerId: options.includePrivateForAccountId,
-      status: options.includePrivateForAccountId === undefined ? 'published' : undefined,
     });
 
     return {
