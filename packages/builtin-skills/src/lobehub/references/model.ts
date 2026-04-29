@@ -33,6 +33,6 @@ The \`--type\` filter accepts the following values:
 - Models belong to providers; always specify \`--provider\` when needed
 - \`lh model list\` without \`--type\` returns all model types; use \`--type video\` (or the relevant type) to narrow results when looking for non-chat models
 - Use \`--enabled\` to filter only active models
-\`;
+`;
 
 export default content;
