@@ -7,6 +7,7 @@ import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
@@ -18,11 +19,13 @@ import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
+import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TasksGroupConfig from './TasksGroupConfig';
 
 const AgentTasksPage = memo(() => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ allAgents: true });
@@ -54,6 +57,8 @@ const AgentTasksPage = memo(() => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
   }, [setViewOptions]);
 
+  const showTaskAgentPanelToggle = shouldRenderTaskAgentPanelToggle(isMobile);
+
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
@@ -64,11 +69,13 @@ const AgentTasksPage = memo(() => {
               <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
             )}
             <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
-            <ToggleRightPanelButton
-              hideWhenExpanded
-              expand={showTaskAgentPanel}
-              onToggle={() => toggleTaskAgentPanel()}
-            />
+            {showTaskAgentPanelToggle && (
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={showTaskAgentPanel}
+                onToggle={() => toggleTaskAgentPanel()}
+              />
+            )}
           </Flexbox>
         }
         styles={{
