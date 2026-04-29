@@ -91,7 +91,7 @@ describe('AgentModel.getAgentAvatarsByIds', () => {
       avatar: '/avatars/lobe-ai.png',
       backgroundColor: null,
       id: 'agent-inbox',
-      title: 'LobeAI',
+      title: 'Lobe AI',
     });
   });
 
