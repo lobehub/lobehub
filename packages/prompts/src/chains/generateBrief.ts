@@ -37,13 +37,27 @@ ${params.artifacts.documents.map((d) => `- ${d.title || '(untitled)'} [id=${d.id
   return {
     messages: [
       {
-        content: `You are writing a brief — a short delivery report for the end user — about one round of agent execution that just completed.
+        content: `You decide whether the topic just completed is worth reporting to the end user as a "brief", and if so, write that brief.
+
+A brief is a short delivery report. Not every topic deserves one — many topics are mid-process working steps that the user does not need surfaced. Your job is two-part: judge whether to emit, and if so, produce user-facing title + summary.
 
 Output a JSON object with these fields:
-- "title": A user-facing headline for what was delivered (max 60 chars, same language as the assistant's content).
-- "summary": A 2-4 sentence report describing what was accomplished and why it matters to the user.
+- "emit": boolean. true if this topic is a delivery moment worth surfacing to the user. false if it is mid-process / a working step / a clarification / a non-deliverable acknowledgement.
+- "title": string. User-facing headline for what was delivered (max 60 chars, same language as the assistant's content). When emit=false, return an empty string.
+- "summary": string. A 2-4 sentence report describing what was accomplished and why it matters to the user. When emit=false, return a one-line note (max 120 chars) explaining why no brief — for logs, the user will not see it.
 
-Voice and style rules:
+When to emit (emit=true):
+- A finished deliverable (a draft, a report, code, a plan, an analysis result).
+- A meaningful decision or conclusion the user should know about.
+- A milestone or phase boundary the user would care about.
+
+When to skip (emit=false):
+- "I clarified my understanding..." / "I will continue with X next."
+- Mid-process working notes, status pings, internal planning out loud.
+- Trivial acknowledgements or restatements with no new information for the user.
+- Any output where the next step is the actual deliverable, not this one.
+
+Voice and style rules (apply only when emit=true):
 - Write FOR THE USER, not for the agent or developer.
 - Use the same language as the assistant's content.
 - Lead with the delivered outcome, not the process.
@@ -51,7 +65,8 @@ Voice and style rules:
 - Do NOT say "I" or "the agent" — describe the outcome, not the actor.
 - If artifacts are listed, you may mention them by their human title, but do not paste their IDs.
 - Avoid filler ("As requested...", "I have completed..."). Be specific about the result.
-- Output ONLY the JSON object, no markdown fences or explanations.`,
+
+Output ONLY the JSON object, no markdown fences or explanations.`,
         role: 'system',
       },
       {
@@ -73,9 +88,10 @@ ${params.lastAssistantContent}`,
 export const GENERATE_BRIEF_SCHEMA = {
   additionalProperties: false,
   properties: {
+    emit: { type: 'boolean' },
     summary: { type: 'string' },
     title: { type: 'string' },
   },
-  required: ['title', 'summary'],
+  required: ['emit', 'title', 'summary'],
   type: 'object' as const,
 };

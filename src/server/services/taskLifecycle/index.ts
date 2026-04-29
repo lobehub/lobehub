@@ -322,10 +322,14 @@ export class TaskLifecycleService {
    *
    * Fired only in `brief.mode === 'auto'` and only when neither the error nor
    * the judge path has already produced a brief. Three-layer split:
-   *  - decision (whether to emit, which type, which priority): pure rules
+   *  - decision (whether to emit, which type, which priority): two stages —
+   *    a pure-rule pre-filter (`shouldEmitTopicBrief`) for cheap structural
+   *    skips, then an LLM verdict on the actual content (mid-process working
+   *    notes shouldn't surface as a delivery report)
    *  - artifacts: programmatic DB query against task_documents
-   *  - title / summary: a dedicated LLM call (separate from handoff because
-   *    handoff is agent-internal language; brief is user-facing)
+   *  - title / summary: produced by the same LLM call as the verdict, in
+   *    user-facing language (deliberately separate from handoff, which is
+   *    agent-internal)
    *
    * Failures are swallowed — a missing brief should never block the task
    * lifecycle. The caller still proceeds to the post-tick state transition.
@@ -398,7 +402,20 @@ export class TaskLifecycleService {
         { metadata: { trigger: 'task-brief' } },
       );
 
-      const generated = result as { summary?: string; title?: string };
+      const generated = result as { emit?: boolean; summary?: string; title?: string };
+      // The LLM is the second-stage gate: even when the rule layer says "this
+      // could be a delivery", the model judges from actual content whether
+      // it's worth surfacing. Mid-process working notes / clarifications get
+      // emit=false here.
+      if (generated.emit === false) {
+        log(
+          'synthesize: LLM voted skip task=%s topic=%s reason=%s',
+          taskIdentifier,
+          topicId,
+          generated.summary?.slice(0, 80) || '(none)',
+        );
+        return;
+      }
       if (!generated.title || !generated.summary) {
         log(
           'synthesize: LLM returned empty title/summary task=%s topic=%s',
