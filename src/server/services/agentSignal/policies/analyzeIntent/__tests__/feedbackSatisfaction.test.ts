@@ -17,12 +17,13 @@ const createUserMessageSource = (
   sourceId: string,
   message: string,
   serializedContext = 'topic=repo-review;assistant_behavior=verbose',
+  intents: SourceAgentUserMessage['payload']['intents'] = ['document', 'memory'],
 ): SourceAgentUserMessage => ({
   chain: { chainId: `chain:${sourceId}`, rootSourceId: sourceId },
   payload: {
     agentId: 'agent_1',
     documentPayload: { section: 'answer-style' },
-    intents: ['document', 'memory'],
+    intents,
     memoryPayload: { preplanned: true },
     message,
     messageId: `msg:${sourceId}`,
@@ -171,6 +172,88 @@ describe('feedbackSatisfactionJudge', () => {
   it('fails fast when no judge or runtime context is configured', () => {
     expect(() => createFeedbackSatisfactionJudgeProcessor()).toThrow(
       'Feedback satisfaction judge requires either an injected judge or both db and userId.',
+    );
+  });
+
+  it('treats explicit skill merge requests as unsatisfied actionable feedback', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn(),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_merge',
+        'The PR review checklist and release-risk checklist overlap; combine the repeated parts.',
+        'topic=repo-review',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'source hinted explicit skill-management change request',
+              result: 'not_satisfied',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('treats skill reuse hints as satisfied weak positive feedback', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn(),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_reuse',
+        '这个 review 流程挺好，下次也可以参考。',
+        'topic=repo-review',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'source hinted reusable skill or workflow feedback',
+              result: 'satisfied',
+            }),
+          }),
+        ],
+      }),
     );
   });
 });

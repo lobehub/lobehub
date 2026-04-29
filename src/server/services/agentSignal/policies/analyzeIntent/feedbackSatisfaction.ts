@@ -254,6 +254,35 @@ const buildSignal = (
   };
 };
 
+const explicitSkillChangePattern =
+  /create|update|refine|merge|consolidate|combine|deduplicate|reorganize|创建|更新|合并|去重|整理/i;
+
+const weakPositiveSkillPattern = /keep|reuse|reference|保留|复用|参考/i;
+
+const resolveSkillHintSatisfaction = (
+  source: SourceAgentUserMessage,
+): FeedbackSatisfactionStagePayloadResult | undefined => {
+  if (!source.payload.intents?.includes('skill')) return undefined;
+
+  const message = source.payload.message.trim();
+  const explicitChangeRequest = explicitSkillChangePattern.test(message);
+  const result =
+    !explicitChangeRequest && weakPositiveSkillPattern.test(message)
+      ? 'satisfied'
+      : 'not_satisfied';
+
+  return {
+    confidence: 0.8,
+    evidence: [{ cue: 'skill source hint', excerpt: message }],
+    reason: explicitChangeRequest
+      ? 'source hinted explicit skill-management change request'
+      : result === 'satisfied'
+        ? 'source hinted reusable skill or workflow feedback'
+        : 'source hinted skill-management feedback',
+    result,
+  };
+};
+
 /**
  * Creates the source handler for the feedback satisfaction judge.
  *
@@ -279,10 +308,12 @@ export const createFeedbackSatisfactionJudgeProcessor = (
     `${AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage}:feedback-satisfaction-judge`,
     async (source, ctx): Promise<RuntimeProcessorResult | void> => {
       const normalizedMessage = source.payload.message.trim();
-      const payload = await judge.judgeSatisfaction({
-        message: normalizedMessage,
-        serializedContext: source.payload.serializedContext,
-      });
+      const payload =
+        resolveSkillHintSatisfaction(source) ??
+        (await judge.judgeSatisfaction({
+          message: normalizedMessage,
+          serializedContext: source.payload.serializedContext,
+        }));
 
       return {
         signals: [

@@ -17,9 +17,11 @@ import {
 import { projectAgentSignalObservability } from './observability/projector';
 import { persistAgentSignalObservability } from './observability/store';
 import { createDefaultAgentSignalPolicies } from './policies';
+import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 import { emitSourceEvent } from './sources';
+import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
 import type { AgentSignalSourceEventStore } from './store/types';
 
 export { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
@@ -98,6 +100,13 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
     );
     if (emission.deduped) return emission;
 
+    const procedurePolicyOptions =
+      options.policyOptions?.procedure ??
+      createProcedurePolicyOptions({
+        policyStateStore: redisPolicyStateStore,
+        ttlSeconds: 7 * 24 * 60 * 60,
+      });
+
     const runtime = await createAgentSignalRuntime({
       guardBackend: options.runtimeGuardBackend,
       policies: createDefaultAgentSignalPolicies({
@@ -111,6 +120,7 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
           ...options.policyOptions?.feedbackSatisfactionJudge,
           userId: context.userId,
         },
+        procedure: procedurePolicyOptions,
         userMemory: {
           db: context.db,
           ...options.policyOptions?.userMemory,

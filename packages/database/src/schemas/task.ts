@@ -1,3 +1,4 @@
+import type { BriefArtifacts } from '@lobechat/types';
 import {
   foreignKey,
   index,
@@ -241,7 +242,7 @@ export const briefs = pgTable(
     priority: text('priority').default('info'), // 'urgent' | 'normal' | 'info'
     title: text('title').notNull(),
     summary: text('summary').notNull(),
-    artifacts: jsonb('artifacts'), // document ids
+    artifacts: jsonb('artifacts').$type<BriefArtifacts>(), // programmatically collected at synthesis
     actions: jsonb('actions'), // BriefAction[]
 
     // Resolution

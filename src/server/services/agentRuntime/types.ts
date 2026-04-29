@@ -153,6 +153,8 @@ export interface OperationCreationParams {
     documentId?: string | null;
     groupId?: string | null;
     scope?: string | null;
+    /** Source user message ID used for same-turn Agent Signal procedure suppression. */
+    sourceMessageId?: string;
     taskId?: string;
     threadId?: string | null;
     topicId?: string | null;

@@ -24,8 +24,10 @@ export const AGENT_SIGNAL_POLICY_SIGNAL_TYPES = {
   feedbackSatisfaction: 'signal.feedback.satisfaction',
   nudgeMemoryConditionMatched: 'signal.nudge.memory.condition-matched',
   nudgeMemoryConditionMismatched: 'signal.nudge.memory.condition-mismatched',
+  procedureBucketScored: 'signal.procedure.bucket.scored',
   selfReflectionNeeded: 'signal.self-reflection-analysis.reflect-needed',
   selfReflectionSkipped: 'signal.self-reflection-analysis.reflect-skipped',
+  toolOutcome: 'signal.tool.outcome',
 } as const;
 
 /** Server-owned built-in AgentSignal action type identifiers. */
@@ -78,7 +80,7 @@ export interface AgentSignalFeedbackDomainStagePayload<
  */
 export interface AgentSignalFeedbackSourceHints {
   documentPayload?: Record<string, unknown>;
-  intents?: Array<'document' | 'memory' | 'persona' | 'prompt'>;
+  intents?: Array<'document' | 'memory' | 'persona' | 'prompt' | 'skill'>;
   memoryPayload?: Record<string, unknown>;
 }
 
@@ -173,6 +175,20 @@ export interface AgentSignalPolicySignalPayloadMap {
     serializedContext?: string;
     topicId?: string;
   };
+  [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.procedureBucketScored]: {
+    aggregateScore: number;
+    bucketKey: string;
+    confidence: number;
+    domain: string;
+    itemScores: Array<{
+      reasons: string[];
+      recordId: string;
+      score: number;
+      suggestedAction?: 'handle' | 'ignore' | 'maintain' | 'review' | 'summarize';
+    }>;
+    recordIds: string[];
+    suggestedActions: string[];
+  };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.selfReflectionNeeded]: {
     agentId?: string;
     operationId: string;
@@ -191,6 +207,24 @@ export interface AgentSignalPolicySignalPayloadMap {
     outcome: 'failed' | 'resolved' | 'succeeded';
     reason: 'cooldown-active' | 'insufficient-context' | 'no-learning-value' | 'policy-filtered';
     serializedContext?: string;
+    topicId?: string;
+  };
+  [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.toolOutcome]: {
+    agentId?: string;
+    domainKey?: string;
+    intentClass?: string;
+    messageId?: string;
+    operationId?: string;
+    outcome: {
+      action?: string;
+      errorReason?: string;
+      status: 'failed' | 'skipped' | 'succeeded';
+      summary?: string;
+    };
+    relatedObjects?: Array<{ objectId: string; objectType: string; relation?: string }>;
+    taskId?: string;
+    tool: { apiName?: string; identifier: string };
+    toolCallId?: string;
     topicId?: string;
   };
 }
@@ -220,6 +254,7 @@ export interface AgentSignalPolicyActionPayloadMap {
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
     idempotencyKey: string;
     message: string;
+    messageId?: string;
     reason?: string;
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
@@ -232,6 +267,7 @@ export interface AgentSignalPolicyActionPayloadMap {
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
     idempotencyKey: string;
     message: string;
+    messageId?: string;
     reason?: string;
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;

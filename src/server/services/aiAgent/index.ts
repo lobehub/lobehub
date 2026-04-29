@@ -1575,6 +1575,7 @@ export class AiAgentService {
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
           scope: appContext?.scope,
+          sourceMessageId: userMessageRecord?.id ?? parentMessageId ?? undefined,
           taskId: operationTaskId,
           threadId: appContext?.threadId,
           topicId,
