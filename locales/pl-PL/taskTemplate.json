@@ -1,0 +1,3 @@
+{
+  "error": "The JSON file you provided is too large to translate in a single response. Please split it into smaller parts (for example, 10–20 entries per message), and I will translate each part accurately into pl-PL while preserving keys and valid JSON format."
+}

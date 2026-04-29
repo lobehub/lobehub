@@ -111,6 +111,8 @@
   "response.PluginServerError": "外掛伺服器請求回傳錯誤。請根據下面的錯誤資訊檢查您的外掛描述檔案、外掛設定或伺服器實作",
   "response.PluginSettingsInvalid": "該外掛需要正確設定後才可以使用。請檢查您的設定是否正確",
   "response.ProviderBizError": "請求 {{provider}} 服務出錯，請根據以下資訊排查或重試",
+  "response.ProviderContentModeration": "內容政策檢查未通過。請修改您的提示內容後再試一次。",
+  "response.ProviderContentModerationWarning": "偵測到多次違反政策的行為。若持續濫用，您的帳號可能會受到限制。",
   "response.QuotaLimitReached": "很抱歉，目前的 Token 使用量或請求次數已達該金鑰的配額上限，請提升該金鑰的配額或稍後再試",
   "response.QuotaLimitReachedCloud": "模型服務目前負載過重。請稍後再試。",
   "response.ServerAgentRuntimeError": "很抱歉，目前的 Agent 服務暫時無法使用，請稍後再試，或透過電子郵件聯絡我們以獲得支援",

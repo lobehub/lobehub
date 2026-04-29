@@ -1,12 +1,12 @@
 {
+  "features.agentSelfIteration.desc": "Consenti all'assistente di riflettere, sviluppare autoconsapevolezza e iterare continuamente attraverso tentativi e interazioni continui.",
+  "features.agentSelfIteration.title": "Auto-iterazione dell'agente",
   "features.assistantMessageGroup.desc": "Raggruppa i messaggi dell'agente e i risultati delle chiamate agli strumenti per una visualizzazione unificata",
   "features.assistantMessageGroup.title": "Raggruppamento Messaggi Agente",
   "features.gatewayMode.desc": "Esegui le attività dell’agente sul server tramite Gateway WebSocket invece di eseguirle in locale. Consente un’esecuzione più rapida e riduce l’utilizzo delle risorse del client.",
   "features.gatewayMode.title": "Esecuzione dell’Agente Lato Server (Gateway)",
   "features.groupChat.desc": "Abilita il coordinamento della chat di gruppo con più agenti.",
   "features.groupChat.title": "Chat di Gruppo (Multi-Agente)",
-  "features.heterogeneousAgent.desc": "Abilita l'esecuzione eterogenea degli agenti con Claude Code, Codex CLI e altre CLI di agenti esterni. Crea un'opzione \"Agente Claude Code\" nel menu laterale degli agenti.",
-  "features.heterogeneousAgent.title": "Agente Eterogeneo (Claude Code)",
   "features.inputMarkdown.desc": "Visualizza in tempo reale il Markdown nell'area di input (testo in grassetto, blocchi di codice, tabelle, ecc.).",
   "features.inputMarkdown.title": "Rendering Markdown in Input",
   "title": "Laboratori"

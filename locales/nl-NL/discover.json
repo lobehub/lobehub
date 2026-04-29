@@ -624,6 +624,8 @@
   "user.logout": "Uitloggen",
   "user.myProfile": "Mijn Profiel",
   "user.noAgents": "Deze gebruiker heeft nog geen Agents gepubliceerd",
+  "user.noAgents.ownerDescription": "Maak je eerste Agent en deel deze met de community.",
+  "user.noAgents.title": "Nog geen Agents",
   "user.noFavoriteAgents": "Nog geen opgeslagen Agents",
   "user.noFavoritePlugins": "Nog geen opgeslagen Vaardigheden",
   "user.noForkedAgentGroups": "Nog geen geforkte agentgroepen",

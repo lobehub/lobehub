@@ -624,6 +624,8 @@
   "user.logout": "خروج",
   "user.myProfile": "پروفایل من",
   "user.noAgents": "این کاربر هنوز عاملی منتشر نکرده است",
+  "user.noAgents.ownerDescription": "اولین ایجنت خود را بسازید و آن را با جامعه به اشتراک بگذارید.",
+  "user.noAgents.title": "هنوز هیچ ایجنتی وجود ندارد",
   "user.noFavoriteAgents": "هیچ عامل ذخیره‌شده‌ای وجود ندارد",
   "user.noFavoritePlugins": "هیچ مهارت ذخیره‌شده‌ای وجود ندارد",
   "user.noForkedAgentGroups": "هنوز هیچ گروه عامل فورک‌شده‌ای وجود ندارد",

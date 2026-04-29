@@ -1,0 +1,3 @@
+{
+  "error": "The file is too large to translate in a single response. Please split the JSON into smaller chunks (for example 20–30 keys per message), and I will translate each chunk into ar while keeping valid JSON."
+}

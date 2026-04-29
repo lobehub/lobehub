@@ -111,6 +111,8 @@
   "response.PluginServerError": "Fout bij verzoek aan vaardigheidsserver. Controleer het manifest, de configuratie of de implementatie.",
   "response.PluginSettingsInvalid": "Deze vaardigheid moet correct worden geconfigureerd voordat je deze kunt gebruiken. Controleer je instellingen.",
   "response.ProviderBizError": "Fout bij aanvragen van {{provider}}-service. Los het probleem op met onderstaande informatie of probeer opnieuw.",
+  "response.ProviderContentModeration": "Controle van inhoudsbeleid mislukt. Pas uw prompt aan en probeer het opnieuw.",
+  "response.ProviderContentModerationWarning": "Herhaalde schendingen van het beleid gedetecteerd. Verder misbruik kan leiden tot beperkingen van uw account.",
   "response.QuotaLimitReached": "Sorry, het tokengebruik of aantal verzoeken heeft het quotum bereikt. Verhoog het quotum of probeer later opnieuw.",
   "response.QuotaLimitReachedCloud": "De modelservice is momenteel zwaar belast. Probeer het later opnieuw.",
   "response.ServerAgentRuntimeError": "Sorry, de Agent-service is momenteel niet beschikbaar. Probeer later opnieuw of neem contact met ons op via e-mail.",

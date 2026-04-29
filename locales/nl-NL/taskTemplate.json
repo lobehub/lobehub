@@ -1,0 +1,3 @@
+{
+  "error": "The provided JSON file is too large to translate in a single response due to system output limits. Please split the file into smaller sections (for example, 50–80 lines per request), and I will translate each part accurately into nl-NL while preserving keys and valid JSON format."
+}
