@@ -1,7 +1,6 @@
 import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-agent-marketplace';
 import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_ONBOARDING_MODEL } from '@lobechat/const';
+import { DEFAULT_ONBOARDING_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 
 import type { BuiltinAgentDefinition } from '../../types';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
