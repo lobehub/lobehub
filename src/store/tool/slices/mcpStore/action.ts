@@ -203,7 +203,7 @@ export class PluginMCPStoreActionImpl {
 
     // Best-effort: fetch detail for haveCloudEndpoint (only detail API includes it)
     // Detail failures must not block install — cloud path needs it, http/stdio don't
-    let haveCloudEndpoint: string | undefined;
+    let haveCloudEndpoint: boolean | undefined;
     try {
       const detail = await discoverService.getMcpDetail({ identifier });
       if (detail) {
