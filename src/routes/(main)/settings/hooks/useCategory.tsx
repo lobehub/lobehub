@@ -17,6 +17,7 @@ import {
   KeyIcon,
   KeyRound,
   Map,
+  MessageCircleIcon,
   PaletteIcon,
   Sparkles,
   TerminalSquare,
@@ -84,7 +85,7 @@ export const useCategory = () => {
       {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : undefined,
         key: SettingsTabs.Profile,
-        label: username ? username : tAuth('tab.profile'),
+        label: username || tAuth('tab.profile'),
       },
       {
         icon: ChartColumnBigIcon,
@@ -105,6 +106,11 @@ export const useCategory = () => {
         icon: BellIcon,
         key: SettingsTabs.Notification,
         label: t('tab.notification'),
+      },
+      {
+        icon: MessageCircleIcon,
+        key: SettingsTabs.Messenger,
+        label: t('tab.messenger'),
       },
     ].filter(Boolean) as CategoryItem[];
 

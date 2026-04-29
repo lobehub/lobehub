@@ -25,6 +25,28 @@ export class TelegramApi {
     return { message_id: data.result.message_id };
   }
 
+  /**
+   * Send a message with a single inline-keyboard URL button. Used by the
+   * LobeAI link flow to surface a "Link Account" CTA that opens the
+   * verify-im page in the user's browser.
+   */
+  async sendMessageWithUrlButton(
+    chatId: string | number,
+    text: string,
+    button: { text: string; url: string },
+  ): Promise<{ message_id: number }> {
+    log('sendMessageWithUrlButton: chatId=%s', chatId);
+    const data = await this.call('sendMessage', {
+      chat_id: chatId,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[{ text: button.text, url: button.url }]],
+      },
+      text: this.truncateText(text),
+    });
+    return { message_id: data.result.message_id };
+  }
+
   async editMessageText(chatId: string | number, messageId: number, text: string): Promise<void> {
     log('editMessageText: chatId=%s, messageId=%s', chatId, messageId);
     try {

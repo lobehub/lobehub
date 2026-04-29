@@ -704,3 +704,9 @@ desktopRoutes.push({
   errorElement: <ErrorBoundary />,
   path: '/onboarding/classic',
 });
+
+desktopRoutes.push({
+  element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > LobeAI Verify'),
+  errorElement: <ErrorBoundary />,
+  path: '/verify-im',
+});

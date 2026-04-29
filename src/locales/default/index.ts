@@ -19,6 +19,7 @@ import hotkey from './hotkey';
 import image from './image';
 import knowledgeBase from './knowledgeBase';
 import labs from './labs';
+import lobeai from './lobeai';
 import marketAuth from './marketAuth';
 import memory from './memory';
 import metadata from './metadata';
@@ -66,6 +67,7 @@ const resources = {
   image,
   knowledgeBase,
   labs,
+  lobeai,
   marketAuth,
   memory,
   metadata,

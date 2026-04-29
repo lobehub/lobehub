@@ -1,0 +1,53 @@
+export default {
+  'messenger.activeAgent': 'Active agent',
+  'messenger.activeAgentHint':
+    'Inbound messages on this platform go to "{{agent}}". Change agents any time here or via /switch in the bot.',
+  'messenger.activeAgentHintEmpty':
+    'No active agent. Pick one above or use /switch in the bot. Until then inbound messages will be parked.',
+  'messenger.activeAgentPlaceholder': 'Select an agent',
+  'messenger.helpCommands':
+    'In the bot: send /agents to list your agents, /switch <n> to change which one receives messages.',
+  'messenger.linkCta': 'Connect',
+  'messenger.linkedAccount': 'Linked to {{platform}} account {{handle}}',
+  'messenger.linkModal.continueIn': 'Continue setup in {{platform}}',
+  'messenger.linkModal.instructions':
+    'Open the LobeAI bot, send /start, then tap "Link Account" to connect your LobeHub account.',
+  'messenger.linkModal.notConfigured':
+    'Bot username is not configured. Set LOBE_TELEGRAM_BOT_USERNAME (without "@") in your environment to enable the deep link.',
+  'messenger.linkModal.openCta': 'Open in {{platform}}',
+  'messenger.linkModal.scanHint': 'Or scan with your phone to open {{platform}}.',
+  'messenger.linkModal.title': 'Connect LobeAI',
+  'messenger.noPlatformsConfigured':
+    'No LobeAI platforms are configured. Set bot tokens (e.g. LOBE_TELEGRAM_BOT_TOKEN) in your environment to enable.',
+  'messenger.setActiveFailed': 'Failed to set as active.',
+  'messenger.setActiveSuccess': 'Active agent updated.',
+  'messenger.statusLinked': 'Connected',
+  'messenger.statusNotLinked': 'Not connected',
+  'messenger.subtitle':
+    'Connect your account to the official LobeAI bot once. Pick which agent receives messages, switch any time from here or from the bot.',
+  'messenger.title': 'Messenger',
+  'messenger.unlinkConfirm':
+    'Disconnect your {{platform}} account from LobeAI? Inbound messages will stop until you /start again.',
+  'messenger.unlinkCta': 'Disconnect',
+  'messenger.unlinkFailed': 'Failed to disconnect.',
+  'messenger.unlinkSuccess': 'Disconnected.',
+  'messenger.unlinkTitle': 'Disconnect account',
+  'verify.confirm.cta': 'Confirm linking',
+  'verify.confirm.defaultAgent': 'Default agent',
+  'verify.confirm.defaultAgentHint':
+    'Your messages will be routed here first. You can switch any time via /switch in the bot or from Settings → Messenger.',
+  'verify.confirm.defaultAgentPlaceholder': 'Select an agent',
+  'verify.confirm.description':
+    'Your LobeHub account will be linked with {{platform}} account "{{handle}}".',
+  'verify.confirm.noAgents':
+    "You don't have any agents yet. Create one in LobeHub, then come back to finish linking.",
+  'verify.confirm.title': 'Confirm linking',
+  'verify.error.expired': 'This link has expired. Please return to the bot and send /start again.',
+  'verify.error.generic': 'Something went wrong. Please try again.',
+  'verify.error.missingToken': 'Invalid link. Open this page from the bot.',
+  'verify.signInCta': 'Sign in to continue',
+  'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
+  'verify.success.description':
+    'Your account is now connected to {{platform}}. Open {{platform}} and send your first message.',
+  'verify.success.title': 'Linked successfully!',
+};

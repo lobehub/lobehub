@@ -691,6 +691,25 @@ table generations {
   }
 }
 
+table lobeai_account_links {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  platform varchar(50) [not null]
+  platform_user_id varchar(255) [not null]
+  platform_username text
+  active_agent_id text
+  linked_at "timestamp with time zone" [not null, default: `now()`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (platform, platform_user_id) [name: 'lobeai_account_links_platform_user_unique', unique]
+    (user_id, platform) [name: 'lobeai_account_links_user_platform_unique', unique]
+    active_agent_id [name: 'lobeai_account_links_active_agent_idx']
+  }
+}
+
 table message_chunks {
   message_id text
   chunk_id uuid
@@ -1945,7 +1964,6 @@ table user_memory_persona_documents {
     user_id [name: 'user_persona_documents_user_id_index']
   }
 }
-
 
 ref: agent_skills.user_id - users.id
 

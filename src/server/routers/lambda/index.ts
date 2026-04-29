@@ -44,6 +44,7 @@ import { importerRouter } from './importer';
 import { klavisRouter } from './klavis';
 import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
+import { lobeAIRouter } from './lobeAI';
 import { marketRouter } from './market';
 import { messageRouter } from './message';
 import { notebookRouter } from './notebook';
@@ -103,6 +104,7 @@ export const lambdaRouter = router({
   importer: importerRouter,
   klavis: klavisRouter,
   knowledge: knowledgeRouter,
+  lobeAI: lobeAIRouter,
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,
