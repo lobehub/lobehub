@@ -20,6 +20,7 @@ import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
 import DeepSeekProvider from './deepseek';
+import EUrouterProvider from './eurouter';
 import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
 import GiteeAIProvider from './giteeai';
@@ -103,6 +104,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   OllamaProvider.chatModels,
   VLLMProvider.chatModels,
   XinferenceProvider.chatModels,
+  EUrouterProvider.chatModels,
   OpenRouterProvider.chatModels,
   TogetherAIProvider.chatModels,
   FireworksAIProvider.chatModels,
@@ -156,6 +158,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   { ...AzureProvider, chatModels: [] },
   AzureAIProvider,
   AiHubMixProvider,
+  EUrouterProvider,
   OpenRouterProvider,
   FalProvider,
   OllamaProvider,
@@ -253,6 +256,7 @@ export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
+export { default as EUrouterProviderCard } from './eurouter';
 export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';

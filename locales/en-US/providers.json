@@ -47,6 +47,7 @@
   "ollama.description": "Ollama offers models across code generation, math, multilingual processing, and chat, supporting both enterprise and local deployments.",
   "ollamacloud.description": "Ollama Cloud provides managed inference with out-of-the-box access to the Ollama model library and OpenAI-compatible APIs.",
   "openai.description": "OpenAI is a leading AI research lab whose GPT models advanced natural language processing, delivering high performance and strong value across research, business, and innovation.",
+  "eurouter.description": "EUrouter is a European AI Gateway providing a single OpenAI-compatible API endpoint to EU-hosted, GDPR-friendly AI models with smart routing, safe fallbacks, and observability.",
   "openrouter.description": "OpenRouter provides access to many frontier models from OpenAI, Anthropic, LLaMA, and more, letting users pick the best model and price for their use case.",
   "perplexity.description": "Perplexity provides advanced chat models, including Llama 3.1 variants, for online and offline use and complex NLP workloads.",
   "ppio.description": "PPIO provides reliable, cost-effective open-model APIs, including DeepSeek, Llama, Qwen, and other leading models.",

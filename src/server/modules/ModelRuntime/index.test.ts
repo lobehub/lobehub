@@ -5,6 +5,7 @@ import {
   LobeBedrockAI,
   LobeComfyUI,
   LobeDeepSeekAI,
+  LobeEUrouterAI,
   LobeGoogleAI,
   LobeGroq,
   LobeMinimaxAI,
@@ -220,6 +221,14 @@ describe('initModelRuntimeWithUserPayload method', () => {
       const runtime = await initModelRuntimeWithUserPayload(ModelProvider.DeepSeek, jwtPayload);
       expect(runtime).toBeInstanceOf(ModelRuntime);
       expect(runtime['_runtime']).toBeInstanceOf(LobeDeepSeekAI);
+    });
+
+    it('EUrouter provider: with apikey', async () => {
+      const jwtPayload: ClientSecretPayload = { apiKey: 'user-eurouter-key' };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.EUrouter, jwtPayload);
+      expect(runtime).toBeInstanceOf(ModelRuntime);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeEUrouterAI);
+      expect(runtime['_runtime'].baseURL).toBe('https://api.eurouter.ai/api/v1');
     });
 
     it('Together AI provider: with apikey', async () => {
