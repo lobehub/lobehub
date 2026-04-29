@@ -1,5 +1,8 @@
 export default {
   'action.connect.button': 'Connect {{provider}}',
+  'action.connect.error': 'Connection failed, please try again.',
+  'action.connect.popupBlocked':
+    'Connection popup blocked. Allow popups in your browser to continue.',
   'action.create.error': 'Failed to create task. Please try again.',
   'action.create.success': 'Scheduled task added. Find it in Lobe AI.',
   'action.createButton': 'Add as scheduled task',
