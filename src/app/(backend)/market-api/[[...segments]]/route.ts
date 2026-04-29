@@ -7,6 +7,7 @@ interface MarketProxyRequestInit extends RequestInit {
 }
 
 const methodsWithoutBody = new Set(['GET', 'HEAD']);
+const proxyHeaderBlocklist = ['authorization', 'cookie', 'host', 'set-cookie'];
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,9 @@ const proxyMarketRequest = async (request: Request, context: MarketRouteContext)
   targetUrl.search = sourceUrl.search;
 
   const headers = new Headers(request.headers);
-  headers.delete('host');
+  for (const header of proxyHeaderBlocklist) {
+    headers.delete(header);
+  }
   const hasBody = !methodsWithoutBody.has(request.method);
   const requestInit: MarketProxyRequestInit = {
     ...(hasBody ? { body: request.body, duplex: 'half' } : {}),

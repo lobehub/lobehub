@@ -733,7 +733,7 @@ section_init_database() {
 	    return 1
     fi
 
-    docker compose pull
+    docker compose pull --ignore-buildable
     docker compose up --detach postgresql
     # hopefully enough time for even the slower systems
 	sleep 15

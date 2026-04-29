@@ -74,13 +74,14 @@ describe('market-api proxy route', () => {
     });
   });
 
-  it('copies request headers and removes host before proxying', async () => {
+  it('copies safe request headers and removes host credentials before proxying', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok'));
 
     await GET(
       new Request('https://lobehub.example.com/market-api/api/v1/skills', {
         headers: {
           'authorization': 'Bearer token',
+          'cookie': 'session=secret',
           'host': 'lobehub.example.com',
           'x-request-id': 'request-1',
         },
@@ -94,7 +95,8 @@ describe('market-api proxy route', () => {
 
     if (!(headers instanceof Headers)) throw new TypeError('Expected headers to be Headers');
 
-    expect(headers.get('authorization')).toBe('Bearer token');
+    expect(headers.has('authorization')).toBe(false);
+    expect(headers.has('cookie')).toBe(false);
     expect(headers.get('x-request-id')).toBe('request-1');
     expect(headers.has('host')).toBe(false);
   });

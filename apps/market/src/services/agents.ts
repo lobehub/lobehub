@@ -80,6 +80,8 @@ const isConcreteVisibility = (
 ): visibility is NonNullable<AgentListParams['visibility']> =>
   visibility === 'public' || visibility === 'private' || visibility === 'internal';
 
+const isPublished = (agent: MarketAgentItem) => agent.status === 'published';
+
 const normalizeOwnerId = (ownerId: AgentListQuery['ownerId']) => {
   if (ownerId === undefined) return undefined;
 
@@ -372,7 +374,12 @@ export class AgentService {
       page,
       pageSize,
       query: params.q,
-      status: isConcreteStatus(params.status) ? params.status : undefined,
+      status:
+        ownerId === undefined
+          ? 'published'
+          : isConcreteStatus(params.status)
+            ? params.status
+            : undefined,
       visibility:
         ownerId !== undefined && isConcreteVisibility(params.visibility)
           ? params.visibility
@@ -411,7 +418,7 @@ export class AgentService {
     data: AgentForkRequest,
   ): Promise<AgentForkResponse> {
     const sourceAgent = await this.model.findByIdentifier(sourceIdentifier);
-    if (!sourceAgent || !this.canReadAgent(sourceAgent)) {
+    if (!sourceAgent || !this.canReadAgent(sourceAgent) || !isPublished(sourceAgent)) {
       throw new MarketHttpError(404, 'agent_not_found', 'Agent not found.');
     }
 
@@ -562,6 +569,8 @@ export class AgentService {
   }
 
   private canReadAgent(agent: MarketAgentItem, accountId?: number) {
-    return agent.visibility === 'public' || agent.ownerId === accountId;
+    if (agent.ownerId === accountId) return true;
+
+    return agent.visibility === 'public' && isPublished(agent);
   }
 }

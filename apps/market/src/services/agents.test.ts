@@ -149,7 +149,7 @@ describe('AgentService', async () => {
     ]);
   });
 
-  it('hides private agents from the default public list while keeping published public agents visible', async () => {
+  it('hides private and unpublished agents from the default public list', async () => {
     const account = await createAccount('privacy-owner', 'Privacy Owner');
 
     await service.createAgent(account.id, {
@@ -172,8 +172,21 @@ describe('AgentService', async () => {
     await service.createAgentVersion(account.id, {
       identifier: 'private-agent',
     });
+    await service.createAgent(account.id, {
+      identifier: 'draft-agent',
+      name: 'Draft Agent',
+      visibility: 'public',
+    });
+    await service.createAgentVersion(account.id, {
+      identifier: 'draft-agent',
+    });
 
     const list = await service.listAgents();
+    const publicUnpublishedList = await service.listAgents({
+      page: 1,
+      pageSize: 20,
+      status: 'unpublished',
+    });
     const publicPrivateList = await service.listAgents({
       page: 1,
       pageSize: 20,
@@ -191,6 +204,7 @@ describe('AgentService', async () => {
       totalCount: 1,
       totalPages: 1,
     });
+    expect(publicUnpublishedList.items.map((item) => item.identifier)).toEqual(['public-agent']);
     expect(publicPrivateList).toMatchObject({
       items: [],
       totalCount: 0,
@@ -200,6 +214,16 @@ describe('AgentService', async () => {
     expect(ownerPrivateList).toMatchObject({
       totalCount: 1,
       totalPages: 1,
+    });
+    await expect(service.getAgentDetail('draft-agent')).rejects.toMatchObject({
+      code: 'agent_not_found',
+      status: 404,
+    } satisfies Partial<MarketHttpError>);
+    await expect(
+      service.getAgentDetail('draft-agent', { includePrivateForAccountId: account.id }),
+    ).resolves.toMatchObject({
+      identifier: 'draft-agent',
+      status: 'unpublished',
     });
   });
 
@@ -219,6 +243,10 @@ describe('AgentService', async () => {
       name: 'Source Version Name',
       summary: 'Source summary',
       tags: ['source'],
+    });
+    await service.modifyAgent(sourceOwner.id, {
+      identifier: 'source-agent',
+      status: 'published',
     });
 
     const fork = await service.forkAgent(second.id, 'source-agent', {

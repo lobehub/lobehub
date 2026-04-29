@@ -434,6 +434,38 @@ describe('Market HTTP agent routes', async () => {
     });
   });
 
+  it('does not expose unpublished public agents through public catalog routes', async () => {
+    const app = createMarketApp({ db, env: trustedClientEnv });
+
+    await app.request(
+      '/api/v1/agents/create',
+      requestJson({ identifier: 'draft-agent', name: 'Draft Agent' }, ownerToken),
+    );
+    await app.request(
+      '/api/v1/agents/version/create',
+      requestJson({ identifier: 'draft-agent' }, ownerToken),
+    );
+
+    const listResponse = await app.request('/api/v1/agents');
+    const unpublishedListResponse = await app.request('/api/v1/agents?status=unpublished');
+    const detailResponse = await app.request('/api/v1/agents/detail/draft-agent');
+
+    expect(listResponse.status).toBe(200);
+    expect(await listResponse.json()).toMatchObject({
+      items: [],
+      totalCount: 0,
+      totalPages: 0,
+    });
+    expect(unpublishedListResponse.status).toBe(200);
+    expect(await unpublishedListResponse.json()).toMatchObject({
+      items: [],
+      totalCount: 0,
+      totalPages: 0,
+    });
+    expect(detailResponse.status).toBe(404);
+    expect(await readErrorJson(detailResponse)).toEqual({ error: { code: 'agent_not_found' } });
+  });
+
   it('rejects agent modification by a different trusted account', async () => {
     const app = createMarketApp({ db, env: trustedClientEnv });
 
