@@ -1,6 +1,6 @@
 import { DEFAULT_BOT_DEBOUNCE_MS, MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
-import { displayToolCallsField, userIdField } from '../const';
+import { displayToolCallsField, makeUserIdField } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -74,7 +74,7 @@ export const schema: FieldSchema[] = [
         type: 'boolean',
       },
       displayToolCallsField,
-      userIdField,
+      makeUserIdField('line'),
     ],
     type: 'object',
   },

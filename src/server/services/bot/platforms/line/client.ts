@@ -219,7 +219,7 @@ class LineWebhookClient implements PlatformClient {
     );
 
     const results = await Promise.all(
-      candidates.map(async ({ messageId, raw }) => {
+      candidates.map(async ({ messageId, raw }): Promise<AttachmentSource | undefined> => {
         try {
           const buffer = await this.api.downloadContent(messageId);
           const meta = getMediaFileNameAndType(raw);
@@ -228,7 +228,7 @@ class LineWebhookClient implements PlatformClient {
             mimeType: defaultMimeForType(meta.type),
             name: defaultNameForType(meta.type, meta.fileName),
             size: buffer.length,
-          } satisfies AttachmentSource;
+          };
         } catch (err) {
           log('extractFiles: downloadContent failed for messageId=%s: %O', messageId, err);
           return undefined;
