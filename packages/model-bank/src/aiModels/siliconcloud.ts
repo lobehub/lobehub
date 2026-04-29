@@ -1296,25 +1296,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'KAT-Dev (32B) is an open-source 32B model for software engineering tasks. It achieves a 62.4% solve rate on SWE-Bench Verified, ranking 5th among open models. It is optimized through mid-training, SFT, and RL for code completion, bug fixing, and code review.',
-    displayName: 'KAT-Dev 32B',
-    id: 'Kwaipilot/KAT-Dev',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-27',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 198_000,
@@ -2114,82 +2095,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek-R1-Distill-Qwen-32B is distilled from Qwen2.5-32B and fine-tuned on 800K curated DeepSeek-R1 samples. It excels in math, programming, and reasoning, achieving strong results on AIME 2024, MATH-500 (94.3% accuracy), and GPQA Diamond.',
-    displayName: 'DeepSeek R1 Distill Qwen 32B',
-    id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.26, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.26, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek-R1-Distill-Qwen-14B is distilled from Qwen2.5-14B and fine-tuned on 800K curated DeepSeek-R1 samples. It shows strong reasoning, with 93.9% on MATH-500, 69.7% on AIME 2024, and a 1481 CodeForces rating.',
-    displayName: 'DeepSeek R1 Distill Qwen 14B',
-    id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek-R1-Distill-Qwen-7B is distilled from Qwen2.5-Math-7B and fine-tuned on 800K curated DeepSeek-R1 samples. It performs strongly, with 92.8% on MATH-500, 55.5% on AIME 2024, and a 1189 CodeForces rating for a 7B model.',
-    displayName: 'DeepSeek R1 Distill Qwen 7B (Free)',
-    id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek-R1-Distill-Qwen-7B is distilled from Qwen2.5-Math-7B and fine-tuned on 800K curated DeepSeek-R1 samples. It performs strongly, with 92.8% on MATH-500, 55.5% on AIME 2024, and a 1189 CodeForces rating for a 7B model.',
-    displayName: 'DeepSeek R1 Distill Qwen 7B (Pro)',
-    id: 'Pro/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.35, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.35, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       reasoning: true,
       vision: true,
     },
@@ -2204,28 +2109,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 9.9, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 9.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'QwQ is a reasoning model in the Qwen family. Compared with standard instruction-tuned models, it adds thinking and reasoning that significantly boost downstream performance, especially on hard problems. QwQ-32B is a mid-size reasoning model competitive with top reasoning models like DeepSeek-R1 and o1-mini. It uses RoPE, SwiGLU, RMSNorm, and attention QKV bias, with 64 layers and 40 Q attention heads (8 KV in GQA).',
-    displayName: 'QwQ 32B',
-    id: 'Qwen/QwQ-32B',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -2333,93 +2216,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 4.13, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 4.13, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768,
-    description:
-      'Qwen2.5-Coder-32B-Instruct is a code-focused model built on Qwen2.5. Trained on 5.5T tokens, it significantly improves code generation, reasoning, and repair. It is among the most advanced open code models, with coding ability comparable to GPT-4, while retaining math and general strengths and supporting long text.',
-    displayName: 'Qwen2.5 Coder 32B Instruct',
-    id: 'Qwen/Qwen2.5-Coder-32B-Instruct',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.26, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.26, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Qwen2-VL is the latest Qwen-VL model, reaching SOTA on vision benchmarks like MathVista, DocVQA, RealWorldQA, and MTVQA. It can understand videos over 20 minutes for video QA, dialogue, and content creation. It also supports complex reasoning and decision-making, integrating with devices/robots for vision-driven actions. Beyond English and Chinese, it can read text in many languages including most European languages, Japanese, Korean, Arabic, and Vietnamese.',
-    displayName: 'Qwen2 VL 72B Instruct',
-    id: 'Qwen/Qwen2-VL-72B-Instruct',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4.13, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4.13, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Qwen2.5-VL-32B-Instruct is a multimodal model from the Qwen team. It recognizes common objects and analyzes text, charts, icons, graphics, and layouts. As a visual agent, it can reason and dynamically control tools, including computer and phone use. It precisely localizes objects and generates structured outputs for invoices and tables. Compared to Qwen2-VL, RL further improves math and problem-solving, with more human-preferred responses.',
-    displayName: 'Qwen2.5 VL 32B Instruct',
-    id: 'Qwen/Qwen2.5-VL-32B-Instruct',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.89, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.89, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Qwen2.5-VL is the vision-language model in the Qwen2.5 series with major upgrades: stronger visual understanding for objects, text, charts, and layouts; reasoning as a visual agent with dynamic tool use; understanding videos over 1 hour and capturing key events; precise object grounding via boxes or points; and structured outputs for scanned data like invoices and tables.',
-    displayName: 'Qwen2.5 VL 72B Instruct',
-    id: 'Qwen/Qwen2.5-VL-72B-Instruct',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4.13, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4.13, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'InternLM2.5-7B-Chat is an open-source chat model based on the InternLM2 architecture. The 7B model focuses on dialogue generation with Chinese/English support, using modern training for fluent, intelligent conversation. It suits many chat scenarios such as customer support and personal assistants.',
-    displayName: 'InternLM2.5 7B Chat (Free)',
-    id: 'internlm/internlm2_5-7b-chat',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
