@@ -1,4 +1,4 @@
-import { Given, Then, When } from '@cucumber/cucumber';
+import { After, Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { llmMockManager } from '../../mocks/llm';
@@ -91,3 +91,9 @@ Then(
     console.log('   ✅ 用户消息已保留在对话中');
   },
 );
+
+After({ tags: '@chat-input' }, async function (this: CustomWorld) {
+  llmMockManager.resetConfig();
+  llmMockManager.clearResponses();
+  this.testContext.delayColdAgentScripts = false;
+});
