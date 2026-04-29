@@ -314,6 +314,14 @@ describe('OnboardingService', () => {
       id: 'topic-1',
       metadata: {
         onboardingSession: {
+          agentMarketplacePick: {
+            categoryHints: ['engineering'],
+            installedAgentIds: ['agent-1'],
+            requestId: 'req-1',
+            resolvedAt: '2026-04-16T00:30:00.000Z',
+            selectedTemplateIds: ['template-1'],
+            status: 'submitted',
+          },
           lastActiveAt: '2026-04-16T00:00:00.000Z',
           phase: 'summary',
           startedAt: '2026-04-16T00:00:00.000Z',
@@ -393,6 +401,14 @@ describe('OnboardingService', () => {
       'Coder',
       'Ops',
     ]);
+    expect(persistedTopics['topic-1']?.metadata?.onboardingSession?.agentMarketplacePick).toEqual({
+      categoryHints: ['engineering'],
+      installedAgentIds: ['agent-1'],
+      requestId: 'req-1',
+      resolvedAt: '2026-04-16T00:30:00.000Z',
+      selectedTemplateIds: ['template-1'],
+      status: 'submitted',
+    });
   });
 
   it('is idempotent when finishOnboarding is called after completion', async () => {

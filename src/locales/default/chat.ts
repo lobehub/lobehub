@@ -719,6 +719,14 @@ export default {
   'tool.intervention.onboarding.agentIdentity.targetOnboarding': 'Current onboarding Agent',
   'tool.intervention.onboarding.agentIdentity.targets': 'Applies to',
   'tool.intervention.onboarding.agentIdentity.title': 'Confirm Agent identity update',
+  'tool.intervention.onboarding.userProfile.applyHint':
+    'These details will be saved to your profile after approval.',
+  'tool.intervention.onboarding.userProfile.description':
+    'Approving this change updates your onboarding profile so the Agent can tailor future replies.',
+  'tool.intervention.onboarding.userProfile.eyebrow': 'Onboarding approval',
+  'tool.intervention.onboarding.userProfile.fullName': 'Full name',
+  'tool.intervention.onboarding.userProfile.responseLanguage': 'Response language',
+  'tool.intervention.onboarding.userProfile.title': 'Confirm your profile update',
   'tool.intervention.reject': 'Reject',
   'tool.intervention.rejectAndContinue': 'Reject and Retry',
   'tool.intervention.rejectOnly': 'Reject',
