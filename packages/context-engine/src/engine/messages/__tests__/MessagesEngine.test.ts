@@ -175,7 +175,7 @@ describe('MessagesEngine', () => {
           {
             function: {
               arguments: '{"path":"/tmp/a.ts"}',
-              name: 'lobe-local-system____readLocalFile____builtin',
+              name: 'lobe-local-system____readLocalFile',
             },
             id: 'call_local-system-snapshot-1',
             type: 'function',
@@ -184,7 +184,7 @@ describe('MessagesEngine', () => {
       });
       expect(result.messages).toContainEqual({
         content: 'File: /tmp/a.ts (lines 0-200)\n\nconst a = 1;\n',
-        name: 'lobe-local-system____readLocalFile____builtin',
+        name: 'lobe-local-system____readLocalFile',
         role: 'tool',
         tool_call_id: 'call_local-system-snapshot-1',
       });
