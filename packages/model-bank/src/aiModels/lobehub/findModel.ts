@@ -5,14 +5,14 @@ import { lobehubEmbeddingModels } from './embedding';
 import { lobehubImageModels } from './image';
 import { lobehubVideoModels } from './video';
 
-const lobehubAllModels = [
+export const allModels = [
   ...lobehubChatModels,
   ...lobehubEmbeddingModels,
   ...lobehubImageModels,
   ...lobehubVideoModels,
 ];
 
-export const findLobeHubModel = (id: string) => lobehubAllModels.find((m) => m.id === id);
+export const findLobeHubModel = (id: string) => allModels.find((m) => m.id === id);
 
 export const isLobeHubModelAvailable = (id: string, expectedType: AiModelType) => {
   const model = findLobeHubModel(id);
