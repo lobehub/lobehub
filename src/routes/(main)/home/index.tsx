@@ -17,8 +17,12 @@ const Home: FC = () => {
     <>
       {isHomeRoute && <PageTitle title="" />}
       <HomePageTracker />
-      <NavHeader right={<Flexbox horizontal align="center" />} />
-      <Flexbox height={'100%'} style={{ overflowY: 'auto', paddingBottom: '16vh' }} width={'100%'}>
+      <NavHeader />
+      <Flexbox
+        height={'100%'}
+        style={{ overflowY: 'auto', paddingBlock: '44px 16vh' }}
+        width={'100%'}
+      >
         <WideScreenContainer>
           <HomeContent />
         </WideScreenContainer>
