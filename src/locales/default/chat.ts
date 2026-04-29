@@ -528,6 +528,7 @@ export default {
   'taskSchedule.scheduleType.weekly': 'Weekly',
   'taskSchedule.scheduler': 'Scheduler',
   'taskSchedule.schedulerTab': 'Scheduled',
+  'taskSchedule.startScheduling': 'Start scheduling',
   'taskSchedule.summary.daily': 'Daily at {{time}}',
   'taskSchedule.summary.disabled': 'Automation is off',
   'taskSchedule.summary.everyNHours': 'Every {{count}} hours{{minute}}',

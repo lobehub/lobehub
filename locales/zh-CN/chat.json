@@ -599,6 +599,7 @@
   "taskSchedule.scheduleType.weekly": "每周",
   "taskSchedule.scheduler": "定时任务",
   "taskSchedule.schedulerTab": "定时任务",
+  "taskSchedule.startScheduling": "启动定时",
   "taskSchedule.summary.daily": "每天 {{time}} 运行",
   "taskSchedule.summary.disabled": "自动化未启用",
   "taskSchedule.summary.everyNHours": "每 {{count}} 小时{{minute}}",
