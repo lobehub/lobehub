@@ -37,6 +37,16 @@ export class AgentModel {
     return this.enrichAgentWithKnowledge(agent);
   };
 
+  existsById = async (id: string): Promise<boolean> => {
+    const rows = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, id), eq(agents.userId, this.userId)))
+      .limit(1);
+
+    return rows.length > 0;
+  };
+
   /**
    * Query non-virtual agents with optional keyword filter.
    * Returns minimal agent info (id, title, description, avatar, backgroundColor).
@@ -94,7 +104,7 @@ export class AgentModel {
     return rows.map(({ slug, ...row }) => ({
       ...row,
       avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
-      title: row.title || (slug === INBOX_SESSION_ID ? 'LobeAI' : null),
+      title: row.title || (slug === INBOX_SESSION_ID ? 'Lobe AI' : null),
     }));
   };
 

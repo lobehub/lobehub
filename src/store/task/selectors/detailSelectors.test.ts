@@ -162,6 +162,14 @@ describe('taskDetailSelectors', () => {
       });
       expect(taskDetailSelectors.canRunActiveTask(state)).toBe(true);
     });
+
+    it('should return false for scheduled task (automation owns the next run)', () => {
+      const state = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: { 'T-1': { ...mockDetail, status: 'scheduled' } },
+      });
+      expect(taskDetailSelectors.canRunActiveTask(state)).toBe(false);
+    });
   });
 
   describe('canPauseActiveTask', () => {
@@ -180,10 +188,18 @@ describe('taskDetailSelectors', () => {
       });
       expect(taskDetailSelectors.canPauseActiveTask(state)).toBe(false);
     });
+
+    it('should return false for scheduled task', () => {
+      const state = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: { 'T-1': { ...mockDetail, status: 'scheduled' } },
+      });
+      expect(taskDetailSelectors.canPauseActiveTask(state)).toBe(false);
+    });
   });
 
   describe('canCancelActiveTask', () => {
-    it.each(['running', 'paused', 'backlog'] as const)(
+    it.each(['running', 'paused', 'backlog', 'scheduled'] as const)(
       'should return true for %s task',
       (status) => {
         const state = createState({

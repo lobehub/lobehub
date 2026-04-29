@@ -1,9 +1,10 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { ActionIcon, Avatar, Block, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, showContextMenu, Text } from '@lobehub/ui';
 import { Button, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
 import { ChevronDown, ListTodoIcon, Plus } from 'lucide-react';
+import type { Key, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -12,10 +13,14 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
+import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
+import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
-import { useTaskItemContextMenu } from '../features/useTaskItemContextMenu';
+import TaskTriggerTag from '../features/TaskTriggerTag';
+import { useTaskContextMenuActions } from '../features/useTaskItemContextMenu';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
 
 type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
@@ -37,87 +42,75 @@ interface TaskTreeNode {
   task: TaskDetailSubtask;
 }
 
-const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] => {
-  if (subtasks.some((item) => (item.children?.length ?? 0) > 0)) {
-    return subtasks.map((task) => ({
-      children: buildTree(task.children ?? []),
-      task,
-    }));
-  }
-
-  const nodeMap = new Map(
-    subtasks.map((task) => [
-      task.identifier,
-      { children: [] as TaskTreeNode[], task } satisfies TaskTreeNode,
-    ]),
-  );
-  const roots: TaskTreeNode[] = [];
-
-  for (const task of subtasks) {
-    const node = nodeMap.get(task.identifier);
-    if (!node) continue;
-
-    const parentIdentifier = task.blockedBy;
-    const parent = parentIdentifier ? nodeMap.get(parentIdentifier) : undefined;
-    if (parent && parent.task.identifier !== task.identifier) {
-      parent.children.push(node);
-      continue;
-    }
-
-    roots.push(node);
-  }
-
-  return roots;
-};
+const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] =>
+  subtasks.map((task) => ({
+    children: buildTree(task.children ?? []),
+    task,
+  }));
 
 const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
   const status = toTaskStatus(task.status);
-  const { items, onContextMenu } = useTaskItemContextMenu({
-    identifier: task.identifier,
-    priority: task.priority,
-    status: task.status,
-  });
+  const isRunning = status === 'running';
+  const hasName = !!task.name;
 
   return (
-    <ContextMenuTrigger items={items} onContextMenu={onContextMenu}>
-      <Flexbox
-        horizontal
-        align="center"
-        gap={8}
-        style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden' }}
+    <Flexbox
+      horizontal
+      align="center"
+      gap={8}
+      justify="space-between"
+      style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}
+    >
+      <span
+        style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.identifier} />
+      </span>
+      <span
+        style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier} />
+      </span>
+      {hasName && (
+        <Text fontSize={13} style={{ flex: 'none' }} type={'secondary'}>
+          {task.identifier}
+        </Text>
+      )}
+      <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+        {task.name || task.identifier}
+      </Text>
+      {task.automationMode ? (
+        <span
+          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskTriggerTag
+            automationMode={task.automationMode}
+            heartbeatInterval={task.heartbeat?.interval}
+            schedulePattern={task.schedule?.pattern}
+            scheduleTimezone={task.schedule?.timezone}
+          />
+        </span>
+      ) : null}
+      <AssigneeAgentSelector
+        currentAgentId={task.assignee?.id ?? null}
+        disabled={isRunning}
+        taskIdentifier={task.identifier}
       >
         <span
-          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-          onClick={(e) => e.stopPropagation()}
+          style={{
+            alignItems: 'center',
+            cursor: isRunning ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            flex: 'none',
+          }}
         >
-          <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.identifier} />
+          <AssigneeAvatar agentId={task.assignee?.id} size={18} />
         </span>
-        <span
-          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier} />
-        </span>
-        <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
-          {task.name || task.identifier}
-        </Text>
-        {task.assignee && (
-          <span
-            style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Avatar
-              avatar={task.assignee.avatar ?? ''}
-              background={task.assignee.backgroundColor || cssVar.colorBgContainer}
-              shape="circle"
-              size={18}
-              title={task.assignee.title ?? ''}
-              variant="outlined"
-            />
-          </span>
-        )}
-      </Flexbox>
-    </ContextMenuTrigger>
+      </AssigneeAgentSelector>
+    </Flexbox>
   );
 });
 
@@ -136,6 +129,8 @@ const TaskSubtasks = memo(() => {
   const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
 
+  const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions();
+
   const [isCreating, setIsCreating] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -146,10 +141,43 @@ const TaskSubtasks = memo(() => {
     [navigate],
   );
 
+  const subtaskMap = useMemo(() => {
+    const map = new Map<string, TaskDetailSubtask>();
+    const walk = (items: TaskDetailSubtask[]) => {
+      for (const item of items) {
+        map.set(item.identifier, item);
+        if (item.children?.length) walk(item.children);
+      }
+    };
+    walk(subtasks);
+    return map;
+  }, [subtasks]);
+
   const treeData = useMemo(() => {
     if (subtasks.length === 0) return [];
     return toTreeData(buildTree(subtasks));
   }, [subtasks]);
+
+  const handleRightClick = useCallback(
+    ({ event, node }: { event: MouseEvent; node: { key: Key } }) => {
+      const subtask = subtaskMap.get(String(node.key));
+      if (!subtask) return;
+      event.preventDefault();
+      showContextMenu(
+        buildItems({
+          identifier: subtask.identifier,
+          priority: subtask.priority,
+          status: subtask.status,
+        }),
+      );
+      installKeyboardHandlers({
+        identifier: subtask.identifier,
+        priority: subtask.priority,
+        status: subtask.status,
+      });
+    },
+    [subtaskMap, buildItems, installKeyboardHandlers],
+  );
 
   const toggleCreating = useCallback(() => setIsCreating((prev) => !prev), []);
 
@@ -178,14 +206,9 @@ const TaskSubtasks = memo(() => {
                 <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
                   {t('taskDetail.subtasks')}
                 </Text>
-                <Icon
-                  color={cssVar.colorTextDescription}
-                  icon={ChevronDown}
-                  size={14}
-                  style={{
-                    transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-                    transition: 'transform 200ms',
-                  }}
+                <AccordionArrowIcon
+                  isOpen={isExpanded}
+                  style={{ color: cssVar.colorTextDescription }}
                 />
               </Block>
               <TaskSubtaskProgressTag
@@ -221,6 +244,7 @@ const TaskSubtasks = memo(() => {
                   className={styles.subtaskTree}
                   switcherIcon={<Icon icon={ChevronDown} size={14} />}
                   treeData={treeData}
+                  onRightClick={handleRightClick}
                   onSelect={(keys) => {
                     const key = keys[0];
                     if (!key) return;

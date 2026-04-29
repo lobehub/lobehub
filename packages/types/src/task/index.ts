@@ -1,6 +1,13 @@
 // ── Task type aliases ──
 
-export type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+export type TaskStatus =
+  | 'backlog'
+  | 'canceled'
+  | 'completed'
+  | 'failed'
+  | 'paused'
+  | 'running'
+  | 'scheduled';
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
@@ -29,6 +36,7 @@ export interface WorkspaceDocNode {
   fileType: string;
   parentId: string | null;
   pinnedBy: string;
+  sourceTaskId: string;
   sourceTaskIdentifier: string | null;
   title: string;
   updatedAt: string | null;
@@ -162,11 +170,14 @@ export interface TaskDetailSubtaskAssignee {
 
 export interface TaskDetailSubtask {
   assignee?: TaskDetailSubtaskAssignee | null;
+  automationMode?: TaskAutomationMode | null;
   blockedBy?: string;
   children?: TaskDetailSubtask[];
+  heartbeat?: { interval?: number | null };
   identifier: string;
   name?: string | null;
   priority?: number | null;
+  schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
 }
 
@@ -176,6 +187,7 @@ export interface TaskDetailWorkspaceNode {
   documentId: string;
   fileType?: string;
   size?: number | null;
+  sourceTaskId?: string;
   sourceTaskIdentifier?: string | null;
   title?: string;
 }
@@ -201,15 +213,39 @@ export interface TaskDetailActivity {
   artifacts?: unknown;
   author?: TaskDetailActivityAuthor;
   briefType?: string;
+  /**
+   * Topic-only: ISO timestamp when the topic run terminated (any of
+   * completed / failed / canceled / timeout). Pair with `time` (start) to
+   * compute elapsed duration.
+   */
+  completedAt?: string;
   content?: string;
   createdAt?: string;
   cronJobId?: string | null;
   id?: string;
+  /**
+   * Topic-only: persisted Gateway operation ID for the task topic, sourced
+   * from `task_topics.operationId`. Survives across runs (created on add,
+   * updated on resume) so it remains available after the topic completes —
+   * unlike `runningOperation`, which is cleared when the run terminates.
+   */
+  operationId?: string | null;
   priority?: string | null;
   readAt?: string | null;
   resolvedAction?: string | null;
   resolvedAt?: string | null;
   resolvedComment?: string | null;
+  /**
+   * Topic-only: currently running Gateway operation, mirrored from
+   * `topics.metadata.runningOperation`. Lets the task topic drawer establish
+   * a Gateway WebSocket reconnection without a separate topic lookup.
+   */
+  runningOperation?: {
+    assistantMessageId: string;
+    operationId: string;
+    scope?: string;
+    threadId?: string | null;
+  } | null;
   seq?: number | null;
   status?: string | null;
   summary?: string;
@@ -244,6 +280,11 @@ export interface TaskDetailData {
   parent?: { identifier: string; name: string | null } | null;
   priority?: number | null;
   review?: Record<string, any> | null;
+  schedule?: {
+    maxExecutions?: number | null;
+    pattern?: string | null;
+    timezone?: string | null;
+  };
   status: string;
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;

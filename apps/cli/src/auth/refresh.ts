@@ -7,12 +7,14 @@ const CLIENT_ID = 'lobehub-cli';
  * Get a valid access token, refreshing if expired.
  * Returns null if no credentials or refresh fails.
  */
-export async function getValidToken(): Promise<{ credentials: StoredCredentials } | null> {
+export async function getValidToken(
+  bufferSeconds = 60,
+): Promise<{ credentials: StoredCredentials } | null> {
   const credentials = loadCredentials();
   if (!credentials) return null;
 
-  // Check if token is still valid (with 60s buffer)
-  if (credentials.expiresAt && Date.now() / 1000 < credentials.expiresAt - 60) {
+  // Check if token is still valid (with configurable buffer)
+  if (credentials.expiresAt && Date.now() / 1000 < credentials.expiresAt - bufferSeconds) {
     return { credentials };
   }
 

@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "예약된 작업 \"{{jobName}}\"이(가) 실패했습니다. 전체 오류 내용을 확인하려면 작업을 열어보세요.",
+  "agent_cron_job_failed_insufficient_budget": "계정 크레딧이 부족하여 예약된 작업 \"{{jobName}}\"을(를) 실행할 수 없습니다. 크레딧을 충전하거나 요금제를 업그레이드하면 이후 작업이 재개됩니다.",
+  "agent_cron_job_failed_insufficient_budget_title": "예약된 작업 일시 중지: 크레딧 부족",
+  "agent_cron_job_failed_title": "예약된 작업 실패",
   "billboard.learnMore": "자세히 알아보기",
   "billboard.menuLabel": "공지 사항",
+  "image_generation_completed": "이미지 \"{{prompt}}\"이(가) 준비되었습니다.",
+  "image_generation_completed_title": "이미지 생성 완료",
   "inbox.archiveAll": "모두 보관",
   "inbox.empty": "알림이 아직 없습니다",
   "inbox.emptyUnread": "읽지 않은 알림이 없습니다",
   "inbox.filterUnread": "읽지 않은 항목만 보기",
   "inbox.markAllRead": "모두 읽음으로 표시",
-  "inbox.title": "알림"
+  "inbox.title": "알림",
+  "video_generation_completed": "동영상 \"{{prompt}}\"이(가) 준비되었습니다.",
+  "video_generation_completed_title": "동영상 생성 완료"
 }

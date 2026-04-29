@@ -5,6 +5,19 @@ import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
 
+// Default values applied when a task is switched into a mode for the first time
+// — keeps the popover summary, the cron runtime and the persisted record in
+// sync rather than leaving the task in a "mode enabled but unconfigured" state.
+const DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 600;
+const DEFAULT_SCHEDULE_PATTERN = '0 9 * * *';
+const resolveDefaultTimezone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+};
+
 type Setter = StoreSetter<TaskStore>;
 
 export const createTaskConfigSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
@@ -116,8 +129,29 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // Switch between automation modes; null = disable automation.
+  // Switch between automation modes; null = disable automation. When entering a
+  // mode that has never been configured, also persist the mode's defaults so the
+  // popover summary, cron runtime and DB row stay aligned.
   setAutomationMode = async (id: string, mode: TaskAutomationMode | null): Promise<void> => {
+    const detail = this.#get().taskDetailMap[id];
+
+    const update: Parameters<typeof taskService.update>[1] = { automationMode: mode };
+    if (mode === 'heartbeat' && !detail?.heartbeat?.interval) {
+      update.heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL_SECONDS;
+    }
+    if (mode === 'schedule') {
+      // The DB column defaults `scheduleTimezone` to 'UTC' on row creation, so a
+      // missing `pattern` is the reliable signal that the user has never opened
+      // the schedule form. Treat that case as first-time enable and override the
+      // DB default with the user's local timezone.
+      if (!detail?.schedule?.pattern) {
+        update.schedulePattern = DEFAULT_SCHEDULE_PATTERN;
+        update.scheduleTimezone = resolveDefaultTimezone();
+      } else if (!detail?.schedule?.timezone) {
+        update.scheduleTimezone = resolveDefaultTimezone();
+      }
+    }
+
     // Optimistic update so the Segmented reflects the new tab immediately
     this.#get().internal_dispatchTaskDetail({
       id,
@@ -126,7 +160,7 @@ export class TaskConfigSliceActionImpl {
     });
 
     try {
-      await taskService.update(id, { automationMode: mode });
+      await taskService.update(id, update);
       await this.#get().internal_refreshTaskDetail(id);
     } catch (error) {
       console.error('[TaskStore] Failed to update automation mode:', error);
@@ -134,8 +168,33 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // TODO [LOBE-6587]: Scheduled tasks (cron mode)
-  // updateSchedule(id, { pattern, timezone }) — backend task.update schema does not yet expose schedulePattern/scheduleTimezone
+  // Configure schedule mode: cron pattern + IANA timezone are columns; maxExecutions
+  // (null = unlimited / continuous) lives in `tasks.config.schedule` JSONB pocket.
+  // Whether the schedule actually fires depends on automationMode === 'schedule'.
+  updateSchedule = async (
+    id: string,
+    schedule: { maxExecutions: number | null; pattern: string; timezone: string },
+  ): Promise<void> => {
+    const existingConfig =
+      (this.#get().taskDetailMap[id]?.config as Record<string, unknown> | undefined) ?? {};
+    const existingScheduleConfig =
+      (existingConfig.schedule as Record<string, unknown> | undefined) ?? {};
+
+    try {
+      await taskService.update(id, {
+        config: {
+          ...existingConfig,
+          schedule: { ...existingScheduleConfig, maxExecutions: schedule.maxExecutions },
+        },
+        schedulePattern: schedule.pattern,
+        scheduleTimezone: schedule.timezone,
+      });
+      await this.#get().internal_refreshTaskDetail(id);
+    } catch (error) {
+      console.error('[TaskStore] Failed to update schedule:', error);
+      await this.#get().internal_refreshTaskDetail(id);
+    }
+  };
 }
 
 export type TaskConfigSliceAction = Pick<

@@ -75,6 +75,10 @@ class TaskService {
       instruction?: string;
       name?: string;
       priority?: number;
+      // schedulePattern: cron expression for scheduled automation (e.g. '0 9 * * *')
+      schedulePattern?: string | null;
+      // scheduleTimezone: IANA timezone for the cron expression (e.g. 'Asia/Shanghai')
+      scheduleTimezone?: string | null;
     },
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
@@ -82,11 +86,8 @@ class TaskService {
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 
-  updateStatus = async (
-    id: string,
-    status: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running',
-    error?: string,
-  ) => lambdaClient.task.updateStatus.mutate({ error, id, status });
+  updateStatus = async (id: string, status: TaskStatus, error?: string) =>
+    lambdaClient.task.updateStatus.mutate({ error, id, status });
 
   run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
     lambdaClient.task.run.mutate({ id, ...params });

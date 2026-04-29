@@ -50,6 +50,25 @@ export default {
   'channel.feishu.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
+  'channel.line.description':
+    'Connect this assistant to LINE Messaging API for direct and group chats.',
+  'channel.line.destinationUserId': 'Destination User ID',
+  'channel.line.destinationUserIdHint':
+    'The bot\'s destination user ID (starts with `U`, 33 chars total). The LINE Developers Console does NOT display this value. Issue a Channel Access Token below first, then click "Fetch from LINE" to auto-fill this field. Note: "Your user ID" in Basic settings is your personal LINE user ID, not the bot\'s.',
+  'channel.line.fetchBotInfo': 'Fetch from LINE',
+  'channel.line.fetchBotInfoSuccess': 'Destination User ID fetched',
+  'channel.line.fetchBotInfoFailed': 'Failed to fetch bot info',
+  'channel.line.fetchBotInfoMissingToken':
+    'Enter the Channel Access Token first, then click "Fetch from LINE".',
+  'channel.line.destinationUserIdPlaceholder': 'e.g. U1234567890abcdef1234567890abcdef',
+  'channel.line.channelAccessToken': 'Channel Access Token',
+  'channel.line.channelAccessTokenHint':
+    'Long-lived token issued under the Messaging API tab. Token will be encrypted and stored securely.',
+  'channel.line.channelSecret': 'Channel Secret',
+  'channel.line.channelSecretHint':
+    'From the Basic settings tab. Required — used to verify X-Line-Signature on every inbound webhook.',
+  'channel.line.webhookManualSetup':
+    'LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click "Verify", and enable "Use webhook".',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',
@@ -113,27 +132,35 @@ export default {
   'channel.appSecretHint':
     'The App Secret of your bot application. It will be encrypted and stored securely.',
   'channel.connectionMode': 'Connection Mode',
-  'channel.connectionModeHint':
-    'WebSocket is recommended for new bots. Use Webhook if your bot already has a callback URL configured.',
+  'channel.connectionModeHint': 'How the platform delivers events to the bot',
   'channel.connectionModeWebSocket': 'WebSocket',
+  'channel.connectionModeWebSocketHint': 'Recommended for new bots',
   'channel.connectionModeWebhook': 'Webhook',
+  'channel.connectionModeWebhookHint': 'Use if your bot has a callback URL configured',
   'channel.charLimit': 'Character Limit',
   'channel.charLimitHint': 'Maximum number of characters per message',
   'channel.concurrency': 'Concurrency Mode',
   'channel.concurrencyDebounce': 'Debounce',
-  'channel.concurrencyHint':
-    'Queue processes messages one at a time; Debounce waits for a burst of messages to finish before processing',
+  'channel.concurrencyDebounceHint':
+    'Only process the last message in a burst (earlier ones are dropped)',
+  'channel.concurrencyHint': 'How concurrent messages are batched',
   'channel.concurrencyQueue': 'Queue',
+  'channel.concurrencyQueueHint': 'Process messages one at a time',
   'channel.credentials': 'Credentials',
   'channel.debounceMs': 'Debounce Window (ms)',
   'channel.debounceMsHint':
     'How long to wait for additional messages before dispatching to the agent (ms)',
   'channel.dm': 'Direct Messages',
   'channel.dmPolicy': 'DM Policy',
-  'channel.dmPolicyHint': 'Control who can send direct messages to the bot',
+  'channel.dmPolicyHint': 'Who can DM the bot',
   'channel.dmPolicyAllowlist': 'Allowlist',
+  'channel.dmPolicyAllowlistHint': 'Only listed users can DM the bot',
   'channel.dmPolicyDisabled': 'Disabled',
+  'channel.dmPolicyDisabledHint': 'Reject all DMs',
   'channel.dmPolicyOpen': 'Open',
+  'channel.dmPolicyOpenHint': 'Accept DMs from anyone',
+  'channel.dmPolicyPairing': 'Pairing',
+  'channel.dmPolicyPairingHint': 'Strangers need /approve to DM',
   'channel.allowFrom': 'Allowed Users',
   'channel.allowFromHint':
     "Only listed users can interact with the bot; your 'Platform User ID' is auto-included.",
@@ -144,10 +171,13 @@ export default {
   'channel.allowFromAdd': 'Add user',
   'channel.allowFromEmpty': 'No users added yet — anyone can interact with the bot.',
   'channel.groupPolicy': 'Group Policy',
-  'channel.groupPolicyHint': 'Control where the bot responds in groups, channels, and threads',
+  'channel.groupPolicyHint': 'Where the bot responds in groups, channels, and threads',
   'channel.groupPolicyAllowlist': 'Allowlist',
+  'channel.groupPolicyAllowlistHint': 'Only respond in listed channels',
   'channel.groupPolicyDisabled': 'Disabled',
+  'channel.groupPolicyDisabledHint': 'Ignore all group messages',
   'channel.groupPolicyOpen': 'Open',
+  'channel.groupPolicyOpenHint': 'Respond in any group, channel, or thread',
   'channel.groupAllowFrom': 'Allowed Channels',
   'channel.groupAllowFromHint': 'Channel / group / chat IDs the bot may respond in.',
   'channel.groupAllowFromIdLabel': 'Channel ID',
@@ -169,12 +199,26 @@ export default {
     'Show tool call details during AI responses. When disabled, only the final response is displayed for a cleaner experience.',
   'channel.historyLimit': 'History Message Limit',
   'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
-  'channel.serverId': 'Default Server (for AI tools)',
-  'channel.serverIdHint':
-    "The server / guild ID AI tools should default to when you ask the bot to act on a server (e.g. 'list channels', 'send to #announcements'). Independent of access control — see Group Policy for that.",
-  'channel.userId': 'Your Platform User ID (for AI tools)',
+  'channel.serverId': 'Default Server ID',
+  'channel.serverIdHint': 'Default server / guild AI tools act on; not used for access control',
+  'channel.serverIdHint.discord':
+    'Enable Developer Mode (Settings → Advanced), then right-click the server icon → Copy Server ID.',
+  'channel.serverIdHint.slack':
+    'Workspace ID (starts with T). Find it under Settings & administration → Workspace settings, or in the workspace URL.',
+  'channel.userId': 'Your Platform User ID',
   'channel.userIdHint':
-    'AI tools use this to reach you proactively (e.g. reminders, notifications); also auto-trusted by the global allowlist.',
+    'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist',
+  'channel.userIdMissingDesc':
+    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Fill it in under Advanced Settings.",
+  'channel.userIdMissingTitle': 'Add your platform User ID',
+  'channel.userIdHint.discord':
+    'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
+  'channel.userIdHint.feishu':
+    'Open your app on the Feishu / Lark Open Platform → Permissions, then look up your Open ID.',
+  'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
+  'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
+  'channel.userIdHint.telegram':
+    'Send any message to @userinfobot in Telegram — it replies with your numeric User ID.',
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',

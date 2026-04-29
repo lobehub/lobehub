@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "L'attività programmata \"{{jobName}}\" non è riuscita. Apri l'attività per visualizzare l'errore completo.",
+  "agent_cron_job_failed_insufficient_budget": "L'attività programmata \"{{jobName}}\" non è stata eseguita perché il tuo account non ha abbastanza crediti. Ricarica o aggiorna il tuo piano per riprendere le esecuzioni future.",
+  "agent_cron_job_failed_insufficient_budget_title": "Attività programmata in pausa: crediti insufficienti",
+  "agent_cron_job_failed_title": "Attività programmata non riuscita",
   "billboard.learnMore": "Scopri di più",
   "billboard.menuLabel": "Annunci",
+  "image_generation_completed": "La tua immagine \"{{prompt}}\" è pronta.",
+  "image_generation_completed_title": "Generazione immagine completata",
   "inbox.archiveAll": "Archivia tutto",
   "inbox.empty": "Nessuna notifica al momento",
   "inbox.emptyUnread": "Nessuna notifica non letta",
   "inbox.filterUnread": "Mostra solo non lette",
   "inbox.markAllRead": "Segna tutto come letto",
-  "inbox.title": "Notifiche"
+  "inbox.title": "Notifiche",
+  "video_generation_completed": "Il tuo video \"{{prompt}}\" è pronto.",
+  "video_generation_completed_title": "Generazione video completata"
 }

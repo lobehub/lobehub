@@ -291,10 +291,14 @@ const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentDat
 const isCurrentAgentHeterogeneous = (s: AgentStoreState): boolean =>
   !!currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider;
 
+const currentAgentHeterogeneousProviderType = (s: AgentStoreState) =>
+  currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider?.type;
+
 const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
   s.agentDocumentsMap[agentId];
 
 export const agentSelectors = {
+  currentAgentHeterogeneousProviderType,
   currentAgentAvatar,
   currentAgentBackgroundColor,
   currentAgentConfig,

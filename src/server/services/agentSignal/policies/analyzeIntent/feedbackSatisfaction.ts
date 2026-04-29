@@ -1,5 +1,10 @@
 import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
+import {
+  AGENT_SIGNAL_SOURCE_TYPES,
+  type SourceAgentUserMessage,
+} from '@lobechat/agent-signal/source';
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
+import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import { chainAgentSignalAnalyzeIntentFeedbackSatisfaction } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -8,9 +13,7 @@ import { z } from 'zod';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
-import { buildGenerateObjectSchema } from '../../../../../../packages/memory-user-memory/src/utils/zod';
 import { defineSourceHandler } from '../../runtime/middleware';
-import { AGENT_SIGNAL_SOURCE_TYPES, type SourceAgentUserMessage } from '../../sourceTypes';
 import {
   AGENT_SIGNAL_POLICY_SIGNAL_TYPES,
   type AgentSignalFeedbackEvidence,
@@ -35,6 +38,33 @@ const FeedbackSatisfactionStagePayloadSchema = z.object({
 type FeedbackSatisfactionStagePayloadResult = z.infer<
   typeof FeedbackSatisfactionStagePayloadSchema
 >;
+
+const FeedbackSatisfactionGenerateObjectSchema = {
+  name: 'agent_signal_feedback_satisfaction',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      confidence: { maximum: 1, minimum: 0, type: 'number' },
+      evidence: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            cue: { type: 'string' },
+            excerpt: { type: 'string' },
+          },
+          required: ['cue', 'excerpt'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+      reason: { type: 'string' },
+      result: { enum: ['neutral', 'not_satisfied', 'satisfied'], type: 'string' },
+    },
+    required: ['confidence', 'evidence', 'reason', 'result'],
+    type: 'object',
+  },
+  strict: true,
+} satisfies GenerateObjectSchema;
 
 /**
  * One normalized satisfaction-judge input.
@@ -148,9 +178,7 @@ export class FeedbackSatisfactionJudgeAgentService implements FeedbackSatisfacti
       {
         messages: payload.messages as any[],
         model: this.modelConfig.model,
-        schema: buildGenerateObjectSchema(FeedbackSatisfactionStagePayloadSchema, {
-          name: 'agent_signal_feedback_satisfaction',
-        }),
+        schema: FeedbackSatisfactionGenerateObjectSchema,
       },
       { metadata: { trigger: RequestTrigger.Memory } },
     );
@@ -226,6 +254,35 @@ const buildSignal = (
   };
 };
 
+const explicitSkillChangePattern =
+  /create|update|refine|merge|consolidate|combine|deduplicate|reorganize|创建|更新|合并|去重|整理/i;
+
+const weakPositiveSkillPattern = /keep|reuse|reference|保留|复用|参考/i;
+
+const resolveSkillHintSatisfaction = (
+  source: SourceAgentUserMessage,
+): FeedbackSatisfactionStagePayloadResult | undefined => {
+  if (!source.payload.intents?.includes('skill')) return undefined;
+
+  const message = source.payload.message.trim();
+  const explicitChangeRequest = explicitSkillChangePattern.test(message);
+  const result =
+    !explicitChangeRequest && weakPositiveSkillPattern.test(message)
+      ? 'satisfied'
+      : 'not_satisfied';
+
+  return {
+    confidence: 0.8,
+    evidence: [{ cue: 'skill source hint', excerpt: message }],
+    reason: explicitChangeRequest
+      ? 'source hinted explicit skill-management change request'
+      : result === 'satisfied'
+        ? 'source hinted reusable skill or workflow feedback'
+        : 'source hinted skill-management feedback',
+    result,
+  };
+};
+
 /**
  * Creates the source handler for the feedback satisfaction judge.
  *
@@ -251,10 +308,12 @@ export const createFeedbackSatisfactionJudgeProcessor = (
     `${AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage}:feedback-satisfaction-judge`,
     async (source, ctx): Promise<RuntimeProcessorResult | void> => {
       const normalizedMessage = source.payload.message.trim();
-      const payload = await judge.judgeSatisfaction({
-        message: normalizedMessage,
-        serializedContext: source.payload.serializedContext,
-      });
+      const payload =
+        resolveSkillHintSatisfaction(source) ??
+        (await judge.judgeSatisfaction({
+          message: normalizedMessage,
+          serializedContext: source.payload.serializedContext,
+        }));
 
       return {
         signals: [

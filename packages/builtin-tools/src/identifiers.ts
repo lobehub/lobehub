@@ -2,6 +2,7 @@ import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import { AgentMarketplaceManifest } from '@lobechat/builtin-tool-agent-marketplace';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
@@ -24,6 +25,7 @@ export const builtinToolIdentifiers: string[] = [
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
+  AgentMarketplaceManifest.identifier,
   CalculatorManifest.identifier,
   CloudSandboxManifest.identifier,
   CredsManifest.identifier,

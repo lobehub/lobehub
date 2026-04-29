@@ -2,7 +2,13 @@ import type { DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 
+import { TaskModel } from '@/database/models/task';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import {
+  emitToolOutcomeSafely,
+  resolveToolOutcomeScope,
+} from '@/server/services/agentSignal/procedure';
+import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -13,14 +19,136 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
     }
 
     const service = new AgentDocumentsService(context.serverDB, context.userId);
+    const userId = context.userId;
+    const taskModel = new TaskModel(context.serverDB, context.userId);
+    const { taskId } = context;
+    const emitDocumentOutcome = async (input: {
+      agentId?: string;
+      apiName: string;
+      documentId?: string;
+      errorReason?: string;
+      relation?: string;
+      status: 'failed' | 'succeeded';
+      summary: string;
+      toolAction: string;
+    }) => {
+      const { scope, scopeKey } = resolveToolOutcomeScope({
+        agentId: input.agentId ?? context.agentId,
+        taskId: context.taskId,
+        topicId: context.topicId,
+        userId,
+      });
+
+      await emitToolOutcomeSafely({
+        apiName: input.apiName,
+        context: { agentId: input.agentId ?? context.agentId, userId },
+        domainKey: 'document:agent-document',
+        errorReason: input.errorReason,
+        identifier: AgentDocumentsIdentifier,
+        intentClass: 'explicit_persistence',
+        messageId: context.messageId,
+        operationId: context.operationId,
+        policyStateStore: redisPolicyStateStore,
+        relatedObjects: input.documentId
+          ? [{ objectId: input.documentId, objectType: 'document', relation: input.relation }]
+          : undefined,
+        scope,
+        scopeKey,
+        status: input.status,
+        summary: input.summary,
+        ttlSeconds: 7 * 24 * 60 * 60,
+        toolAction: input.toolAction,
+        toolCallId: context.toolCallId,
+      });
+    };
+
+    const withDocumentOutcome = async <T>(
+      input: {
+        agentId?: string;
+        getDocumentId?: (result: T) => string | undefined;
+        apiName: string;
+        relation: string;
+        summary: string;
+        toolAction: string;
+      },
+      operation: () => Promise<T>,
+    ) => {
+      try {
+        const result = await operation();
+        await emitDocumentOutcome({
+          agentId: input.agentId,
+          apiName: input.apiName,
+          documentId: input.getDocumentId?.(result),
+          relation: input.relation,
+          status: 'succeeded',
+          summary: input.summary,
+          toolAction: input.toolAction,
+        });
+        return result;
+      } catch (error) {
+        await emitDocumentOutcome({
+          agentId: input.agentId,
+          apiName: input.apiName,
+          errorReason: (error as Error).message,
+          relation: input.relation,
+          status: 'failed',
+          summary: `${input.summary} failed.`,
+          toolAction: input.toolAction,
+        });
+        throw error;
+      }
+    };
+
+    const pinToTask = async <T extends { documentId?: string } | undefined>(doc: T): Promise<T> => {
+      if (taskId && doc?.documentId) {
+        await taskModel.pinDocument(taskId, doc.documentId, 'agent');
+      }
+      return doc;
+    };
 
     return new AgentDocumentsExecutionRuntime({
-      copyDocument: ({ agentId, id, newTitle }) => service.copyDocumentById(id, newTitle, agentId),
-      createDocument: ({ agentId, content, title }) =>
-        service.createDocument(agentId, title, content),
-      createTopicDocument: ({ agentId, content, title, topicId }) =>
-        service.createForTopic(agentId, title, content, topicId),
-      editDocument: ({ agentId, content, id }) => service.editDocumentById(id, content, agentId),
+      copyDocument: async ({ agentId, id, newTitle }) =>
+        pinToTask(
+          await withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'copyDocument',
+              getDocumentId: (result) => result?.documentId,
+              relation: 'created',
+              summary: 'Agent documents copied a document.',
+              toolAction: 'copy',
+            },
+            () => service.copyDocumentById(id, newTitle, agentId),
+          ),
+        ),
+      createDocument: async ({ agentId, content, title }) =>
+        pinToTask(
+          await withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'createDocument',
+              getDocumentId: (result) => result?.documentId,
+              relation: 'created',
+              summary: 'Agent documents created a document.',
+              toolAction: 'create',
+            },
+            () => service.createDocument(agentId, title, content),
+          ),
+        ),
+      createTopicDocument: async ({ agentId, content, title, topicId }) =>
+        pinToTask(
+          await withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'createTopicDocument',
+              getDocumentId: (result) => result?.documentId,
+              relation: 'created',
+              summary: 'Agent documents created a topic document.',
+              toolAction: 'create',
+            },
+            () => service.createForTopic(agentId, title, content, topicId),
+          ),
+        ),
       listDocuments: async ({ agentId }) => {
         const docs = await service.listDocuments(agentId);
         return docs.map((d) => ({
@@ -40,21 +168,71 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         }));
       },
       modifyNodes: ({ agentId, id, operations }) =>
-        service.modifyDocumentNodesById(id, operations, agentId),
-      readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
-      readDocumentByFilename: ({ agentId, filename }) =>
-        service.getDocumentSnapshotByFilename(agentId, filename),
-      removeDocument: ({ agentId, id }) => service.removeDocumentById(id, agentId),
-      renameDocument: ({ agentId, id, newTitle }) =>
-        service.renameDocumentById(id, newTitle, agentId),
-      updateLoadRule: ({ agentId, id, rule }) =>
-        service.updateLoadRuleById(
-          id,
-          { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
-          agentId,
+        withDocumentOutcome(
+          {
+            agentId,
+            apiName: 'modifyNodes',
+            getDocumentId: () => id,
+            relation: 'updated',
+            summary: 'Agent documents modified document nodes.',
+            toolAction: 'edit',
+          },
+          () => service.modifyDocumentNodesById(id, operations, agentId),
         ),
-      upsertDocumentByFilename: ({ agentId, content, filename }) =>
-        service.upsertDocumentByFilename({ agentId, content, filename }),
+      readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
+      removeDocument: ({ agentId, id }) =>
+        withDocumentOutcome(
+          {
+            agentId,
+            apiName: 'removeDocument',
+            getDocumentId: () => id,
+            relation: 'removed',
+            summary: 'Agent documents removed a document.',
+            toolAction: 'remove',
+          },
+          () => service.removeDocumentById(id, agentId),
+        ),
+      renameDocument: ({ agentId, id, newTitle }) =>
+        withDocumentOutcome(
+          {
+            agentId,
+            apiName: 'renameDocument',
+            getDocumentId: () => id,
+            relation: 'updated',
+            summary: 'Agent documents renamed a document.',
+            toolAction: 'rename',
+          },
+          () => service.renameDocumentById(id, newTitle, agentId),
+        ),
+      replaceDocumentContent: ({ agentId, content, id }) =>
+        withDocumentOutcome(
+          {
+            agentId,
+            apiName: 'replaceDocumentContent',
+            getDocumentId: () => id,
+            relation: 'updated',
+            summary: 'Agent documents replaced document content.',
+            toolAction: 'replace',
+          },
+          () => service.replaceDocumentContentById(id, content, agentId),
+        ),
+      updateLoadRule: ({ agentId, id, rule }) =>
+        withDocumentOutcome(
+          {
+            agentId,
+            apiName: 'updateLoadRule',
+            getDocumentId: () => id,
+            relation: 'updated',
+            summary: 'Agent documents updated a load rule.',
+            toolAction: 'update',
+          },
+          () =>
+            service.updateLoadRuleById(
+              id,
+              { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
+              agentId,
+            ),
+        ),
     });
   },
   identifier: AgentDocumentsIdentifier,

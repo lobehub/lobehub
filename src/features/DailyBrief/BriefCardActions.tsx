@@ -2,7 +2,7 @@ import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
@@ -28,7 +28,7 @@ type CommentMode = { type: 'feedback' } | { key: string; type: 'comment' };
 
 const SuccessTag = memo<{ label: string }>(({ label }) => (
   <Flexbox horizontal align={'center'} gap={4}>
-    <Icon icon={Check} size={14} />
+    <Icon color={cssVar.colorTextQuaternary} icon={Check} size={14} />
     <Text className={styles.resolvedTag}>{label}</Text>
   </Flexbox>
 ));
@@ -46,27 +46,25 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     const { t } = useTranslation('home');
     const [commentMode, setCommentMode] = useState<CommentMode | null>(null);
     const [loadingKey, setLoadingKey] = useState<string | null>(null);
-    const [feedbackSent, setFeedbackSent] = useState(false);
-    const { addComment, resolveBrief } = useBriefStore(
-      (s) => ({ addComment: s.addComment, resolveBrief: s.resolveBrief }),
+    const { resolveBrief, submitFeedback } = useBriefStore(
+      (s) => ({ resolveBrief: s.resolveBrief, submitFeedback: s.submitFeedback }),
       shallow,
     );
 
-    useEffect(() => {
-      if (!feedbackSent) return;
-      const timer = setTimeout(() => setFeedbackSent(false), 1500);
-      return () => clearTimeout(timer);
-    }, [feedbackSent]);
+    const isResult = briefType === 'result';
 
-    const actions = actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? [];
+    const actions: BriefAction[] = isResult
+      ? [{ key: 'approve', label: t('brief.action.confirmDone'), type: 'resolve' }]
+      : (actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? []);
 
     const getActionLabel = useCallback(
       (action: BriefAction) => {
+        if (isResult && action.key === 'approve') return t('brief.action.confirmDone');
         const i18nKey = `brief.action.${action.key}`;
         const translated = t(i18nKey, { defaultValue: '' });
         return !translated || translated === i18nKey ? action.label : translated;
       },
-      [t],
+      [isResult, t],
     );
 
     const handleResolve = useCallback(
@@ -94,21 +92,29 @@ const BriefCardActions = memo<BriefCardActionsProps>(
           } finally {
             setLoadingKey(null);
           }
-        } else {
-          if (taskId) {
-            await addComment(briefId, taskId, text);
-            await onAfterAddComment?.();
-          }
-          setFeedbackSent(true);
+        } else if (taskId) {
+          // Free-form feedback must resolve the brief (so the heartbeat
+          // re-arm gate stops blocking on this urgent brief) AND re-run
+          // the task so the agent picks up `resolvedComment` next turn.
+          await submitFeedback(briefId, taskId, text);
+          await onAfterAddComment?.();
+          await onAfterResolve?.();
         }
 
         setCommentMode(null);
       },
-      [addComment, briefId, commentMode, resolveBrief, taskId, onAfterResolve, onAfterAddComment],
+      [
+        briefId,
+        commentMode,
+        resolveBrief,
+        submitFeedback,
+        taskId,
+        onAfterResolve,
+        onAfterAddComment,
+      ],
     );
 
     if (resolvedAction) return <SuccessTag label={t('brief.resolved')} />;
-    if (feedbackSent) return <SuccessTag label={t('brief.feedbackSent')} />;
     if (commentMode) {
       return <CommentInput onCancel={() => setCommentMode(null)} onSubmit={handleCommentSubmit} />;
     }
@@ -119,12 +125,18 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       .filter((a) => a.type !== 'comment')
       .slice(1)
       .reverse();
+    const showEditButton = !!taskId && (isResult || !!commentActions);
+    const editTooltip = isResult
+      ? t('brief.editResult')
+      : commentActions
+        ? getActionLabel(commentActions) || t('brief.addFeedback')
+        : t('brief.addFeedback');
 
     return (
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
         <Flexbox horizontal align={'center'} gap={8}>
-          {taskId && commentActions && (
-            <Tooltip title={getActionLabel(commentActions) || t('brief.addFeedback')}>
+          {showEditButton && (
+            <Tooltip title={editTooltip}>
               <Button
                 className={'brief-comment-btn'}
                 icon={SquarePen}

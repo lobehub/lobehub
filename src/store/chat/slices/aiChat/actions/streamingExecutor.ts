@@ -30,7 +30,10 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
-import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import {
+  notifyDesktopHumanApprovalRequired,
+  resolveNotificationNavigatePath,
+} from '@/store/chat/utils/desktopNotification';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
@@ -313,12 +316,17 @@ export class StreamingExecutorActionImpl {
 
         if (viewedTask.type === 'list') {
           contextPrompt = buildTaskListPrompt({
+            defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
             tasks: taskState.tasks,
             total: taskState.tasksTotal || taskState.tasks.length,
           });
         } else {
           const detail = taskState.taskDetailMap[viewedTask.taskId];
-          if (detail) contextPrompt = buildTaskDetailPrompt({ task: detail });
+          if (detail)
+            contextPrompt = buildTaskDetailPrompt({
+              defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
+              task: detail,
+            });
         }
 
         if (contextPrompt) {
@@ -767,6 +775,7 @@ export class StreamingExecutorActionImpl {
               editorData: merged.editorData,
               files: mergedFiles,
               message: mergedContent,
+              metadata: merged.metadata,
             })
             .catch((e: unknown) => {
               console.error(
@@ -846,8 +855,11 @@ export class StreamingExecutorActionImpl {
             if (agentMeta?.title) notificationTitle = agentMeta.title;
           }
 
+          const navigatePath = resolveNotificationNavigatePath({ agentId, groupId, topicId });
+
           await desktopNotificationService.showNotification({
             body: markdownToTxt(lastAssistant.content),
+            navigate: navigatePath ? { path: navigatePath } : undefined,
             title: notificationTitle,
           });
         }

@@ -49,9 +49,11 @@ Rules:
 - The output must start with "{" and end with "}".
 - The caller only invokes you for satisfaction results "satisfied" and "not_satisfied".
 - Prefer "none" when the message is acknowledgement, vague, or task-local.
-- "prompt" is exclusive with "memory" and "skill" when the feedback is clearly about the assistant's own wording or operating pattern.
+- "prompt" is exclusive with "memory" and "skill" only when the feedback is clearly about the assistant's own identity, behavior, wording, output format, or operating prompt.
 - "memory" is for the user's future preference, not the assistant's self-style or prompt rule.
 - "skill" can fan out with "memory" when the feedback contains both a personal preference and a reusable workflow/template insight.
+- Route to "skill", not "prompt", when the feedback asks to create, update, refine, merge, consolidate, deduplicate, or reorganize an existing reusable checklist, skill, template, workflow, playbook, or writing pattern.
+- Route to "skill" for explicit requests to create or preserve a reusable operational artifact, even when the message is phrased as an imperative instead of a complaint.
 - Never output duplicate targets.
 - Return "none" when no durable target is justified.
 
@@ -67,6 +69,15 @@ Output: {"targets":[{"target":"memory","confidence":0.86,"reason":"future person
 
 Input satisfaction=result:satisfied, message:"This workflow is much better and should become our reusable template."
 Output: {"targets":[{"target":"skill","confidence":0.83,"reason":"reusable workflow worth capturing for future reuse","evidence":[{"cue":"reusable template","excerpt":"This workflow is much better and should become our reusable template."}]}]}
+
+Input satisfaction=result:not_satisfied, message:"Create a reusable skill for future PR reviews: always check correctness, tests, security, rollout risk, and rollback risk."
+Output: {"targets":[{"target":"skill","confidence":0.94,"reason":"explicit reusable skill creation request","evidence":[{"cue":"create reusable skill","excerpt":"Create a reusable skill for future PR reviews"},{"cue":"future PR reviews","excerpt":"future PR reviews"}]}]}
+
+Input satisfaction=result:satisfied, message:"这个 review 流程挺好，下次也可以参考。"
+Output: {"targets":[{"target":"skill","confidence":0.78,"reason":"positive reusable workflow signal","evidence":[{"cue":"review 流程","excerpt":"这个 review 流程挺好"},{"cue":"下次参考","excerpt":"下次也可以参考"}]}]}
+
+Input satisfaction=result:not_satisfied, message:"The PR review checklist and release-risk checklist overlap; combine the repeated parts."
+Output: {"targets":[{"target":"skill","confidence":0.88,"reason":"maintains existing reusable checklist artifacts","evidence":[{"cue":"checklist","excerpt":"The PR review checklist and release-risk checklist overlap; combine the repeated parts."},{"cue":"combine","excerpt":"combine the repeated parts"}]}]}
 
 Return only the JSON object.`;
 

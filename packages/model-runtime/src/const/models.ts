@@ -51,6 +51,7 @@ export const responsesAPIModels = new Set([
   'gpt-5.4-nano',
   'gpt-5.4-pro',
   'gpt-5.5',
+  'gpt-5.5-pro',
 ]);
 
 /**

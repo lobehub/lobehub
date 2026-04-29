@@ -238,6 +238,34 @@ describe('TaskDetailSliceAction', () => {
     });
   });
 
+  describe('unpinDocument', () => {
+    it('should refresh source task and active task when they differ', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
+
+      // Detail page is open at parent identifier; doc is owned by a child DB id.
+      useTaskStore.setState({ activeTaskId: 'T-1' });
+
+      await useTaskStore.getState().unpinDocument('task_child', 'doc_1');
+
+      expect(taskService.unpinDocument).toHaveBeenCalledWith('task_child', 'doc_1');
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'task_child']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+    });
+
+    it('should not double-refresh when source task equals active task', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({ activeTaskId: 'T-1' });
+
+      await useTaskStore.getState().unpinDocument('T-1', 'doc_1');
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+    });
+  });
+
   describe('internal_dispatchTaskDetail', () => {
     it('should set task detail via reducer', () => {
       const detail = { identifier: 'T-1', instruction: 'Test', status: 'backlog' } as any;

@@ -9,6 +9,7 @@ import {
   CircleDot,
   CircleSlash,
   CircleX,
+  Clock,
   HandIcon,
   Loader2Icon,
 } from 'lucide-react';
@@ -63,6 +64,12 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
     icon: CircleDot,
     label: 'Running',
     labelKey: 'status.running',
+  },
+  scheduled: {
+    color: cssVar.colorWarning,
+    icon: Clock,
+    label: 'Scheduled',
+    labelKey: 'status.scheduled',
   },
 };
 

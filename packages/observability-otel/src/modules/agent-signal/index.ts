@@ -82,3 +82,65 @@ export const actionDurationHistogram = meter.createHistogram('agent_signal_actio
   description: 'Observed duration for one AgentSignal action attempt.',
   unit: 'ms',
 });
+
+/**
+ * Count of source-event generation attempts grouped by source type and outcome.
+ */
+export const sourceEventCounter = meter.createCounter('agent_signal_source_events_total', {
+  description: 'Count of AgentSignal source-event generation attempts grouped by outcome.',
+  unit: '{event}',
+});
+
+/**
+ * Duration histogram for one source-event generation attempt.
+ */
+export const sourceEventDurationHistogram = meter.createHistogram(
+  'agent_signal_source_event_duration_ms',
+  {
+    description: 'Observed duration for one AgentSignal source-event generation attempt.',
+    unit: 'ms',
+  },
+);
+
+/**
+ * Count of workflow runs grouped by source type and outcome.
+ */
+export const workflowRunCounter = meter.createCounter('agent_signal_workflow_runs_total', {
+  description: 'Count of AgentSignal workflow runs grouped by outcome.',
+  unit: '{workflow-run}',
+});
+
+/**
+ * Duration histogram for one workflow run.
+ */
+export const workflowRunDurationHistogram = meter.createHistogram(
+  'agent_signal_workflow_duration_ms',
+  {
+    description: 'Observed duration for one AgentSignal workflow run.',
+    unit: 'ms',
+  },
+);
+
+/**
+ * Count of scheduler handler invocations grouped by handler identity and outcome.
+ */
+export const handlerCounter = meter.createCounter('agent_signal_handler_runs_total', {
+  description: 'Count of AgentSignal scheduler handler invocations grouped by outcome.',
+  unit: '{handler-run}',
+});
+
+/**
+ * Duration histogram for one scheduler handler invocation.
+ */
+export const handlerDurationHistogram = meter.createHistogram('agent_signal_handler_duration_ms', {
+  description: 'Observed duration for one AgentSignal scheduler handler invocation.',
+  unit: 'ms',
+});
+
+/**
+ * Count of terminal runtime results such as wait, schedule, or conclude.
+ */
+export const terminalResultCounter = meter.createCounter('agent_signal_terminal_results_total', {
+  description: 'Count of AgentSignal terminal runtime results grouped by status and reason.',
+  unit: '{terminal-result}',
+});

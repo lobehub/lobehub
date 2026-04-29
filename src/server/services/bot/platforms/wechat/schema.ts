@@ -23,6 +23,7 @@ export const schema: FieldSchema[] = [
         default: 'queue',
         description: 'channel.concurrencyHint',
         enum: ['queue', 'debounce'],
+        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
         enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
         label: 'channel.concurrency',
         type: 'string',

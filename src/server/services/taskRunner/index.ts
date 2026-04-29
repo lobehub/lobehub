@@ -4,6 +4,7 @@ import type { ExecAgentResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { TopicTrigger } from '@/const/topic';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -162,6 +163,7 @@ export class TaskRunnerService {
             type: 'onComplete' as const,
             webhook: {
               body: { taskId, taskIdentifier, userId },
+              delivery: 'qstash' as const,
               url: '/api/workflows/task/on-topic-complete',
             },
           },
@@ -169,7 +171,7 @@ export class TaskRunnerService {
         prompt,
         taskId: task.id,
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
-        trigger: 'task',
+        trigger: TopicTrigger.RunTask,
         userInterventionConfig: { approvalMode: 'headless' },
         ...(continueTopicId && { appContext: { topicId: continueTopicId } }),
       });

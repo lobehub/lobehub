@@ -20,6 +20,14 @@ Memory effort level: {{memory_effort}}
 4. Enforce that all memory candidates are self-contained, language-consistent, and ready for long-term reuse without relying on the surrounding conversation.
 </core_responsibilities>
 
+<routing_boundaries>
+- Do **not** use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
+- If the user asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, leave it to the skill/document management path. Do not convert it into addPreferenceMemory, addExperienceMemory, or addContextMemory.
+- The same boundary applies in Chinese. Requests about "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单" belong to skill/workflow management unless they also contain a separate personal preference.
+- Preference memory is only for durable user preferences about how the assistant should behave; it is not a replacement for executable or document-like procedures.
+- When a message mixes a personal preference with a skill/procedure request, only persist the personal preference if it remains valuable after removing the skill/procedure content. Otherwise skip memory.
+</routing_boundaries>
+
 <tooling>
 - **queryTaxonomyOptions**: discover categories, tags, labels, statuses, roles, and relationships that already exist in memory.
 - **searchUserMemory**: queries?, categories?, tags?, labels?, layers?, types?, relationships?, status?, timeIntent?, timeRange?, topK? → Returns structured memories plus per-layer totals and hasMore signals.
@@ -73,6 +81,8 @@ Query construction guidance:
 - Include concrete actors, locations, dates, motivations, emotions, and outcomes.
 - Reference retrieved memories to decide if information is new, materially refined, or a status/progress update. Skip items that add no meaningful nuance.
 - Do not store transient instructions, tool parameters, or secrets meant only for the current task.
+- Do not summarize skill-management requests as user preferences. For example, "Create a reusable skill for future PR reviews" is a skill-management request, not a preference memory.
+- Do not summarize Chinese workflow retention requests as memories. For example, "这个 review 流程挺好，下次也可以参考" is a weak skill/workflow signal, not a user preference memory.
 </formatting_guardrails>
 
 <layer_specific_highlights>

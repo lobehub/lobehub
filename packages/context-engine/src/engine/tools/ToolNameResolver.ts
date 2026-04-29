@@ -25,11 +25,12 @@ export class ToolNameResolver {
    * Generate tool calling name
    * @param identifier - Plugin identifier
    * @param name - API name
-   * @param type - Plugin type (default: 'default')
+   * @param type - Plugin type (default: 'builtin')
    * @returns Generated tool name (max 64 characters)
    */
-  generate(identifier: string, name: string, type: string = 'default'): string {
-    const pluginType = type && type !== 'default' ? `${PLUGIN_SCHEMA_SEPARATOR}${type}` : '';
+  generate(identifier: string, name: string, type: string = 'builtin'): string {
+    const pluginType =
+      type && type !== 'builtin' && type !== 'default' ? `${PLUGIN_SCHEMA_SEPARATOR}${type}` : '';
 
     // Step 1: Try normal format
     let apiName = identifier + PLUGIN_SCHEMA_SEPARATOR + name + pluginType;
@@ -86,7 +87,7 @@ export class ToolNameResolver {
           id: toolCall.id,
           identifier,
           thoughtSignature: toolCall.thoughtSignature,
-          type: (type ?? manifests[identifier]?.type ?? 'default') as any,
+          type: (type ?? manifests[identifier]?.type ?? 'builtin') as any,
         };
 
         // Step 2: Resolve hashed apiName if needed

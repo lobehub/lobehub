@@ -2,6 +2,7 @@ import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import { AgentMarketplaceManifest } from '@lobechat/builtin-tool-agent-marketplace';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -16,6 +17,7 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
@@ -107,6 +109,13 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: SkillStoreManifest.identifier,
     manifest: SkillStoreManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: SkillMaintainerManifest.identifier,
+    manifest: SkillMaintainerManifest,
     type: 'builtin',
   },
   {
@@ -229,6 +238,13 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: UserInteractionManifest.identifier,
     manifest: UserInteractionManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: AgentMarketplaceManifest.identifier,
+    manifest: AgentMarketplaceManifest,
     type: 'builtin',
   },
   {

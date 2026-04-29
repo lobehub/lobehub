@@ -303,6 +303,7 @@ export class ConversationControlActionImpl {
     toolMessageId: string,
     response: Record<string, unknown>,
     context?: ConversationContext,
+    options?: { createUserMessage?: boolean; toolResultContent?: string },
   ): Promise<void> => {
     const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
 
@@ -329,6 +330,7 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
+    const shouldCreateUserMessage = options?.createUserMessage !== false;
 
     // 1. Mark intervention as approved and set tool result to user's response
     await this.#get().optimisticUpdateMessagePlugin(
@@ -337,7 +339,7 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
 
-    const toolContent = `User submitted: ${JSON.stringify(response)}`;
+    const toolContent = options?.toolResultContent ?? `User submitted: ${JSON.stringify(response)}`;
     await this.#get().optimisticUpdateMessageContent(
       toolMessageId,
       toolContent,
@@ -345,7 +347,57 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
 
-    // 2. Create a user message summarizing the response (makes conversation natural)
+    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
+
+    // 2a. Tool-result-only path: skip the synthetic user message and resume from the
+    // tool message. Used by interventions whose UI handles its own side effect (e.g.
+    // the agent marketplace picker forks agents directly) — the LLM should see the
+    // tool result, not a fake user turn.
+    if (!shouldCreateUserMessage) {
+      const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+
+      const { state, context: initialContext } = this.#get().internal_createAgentState({
+        messages: currentMessages,
+        parentMessageId: toolMessageId,
+        agentId,
+        topicId,
+        threadId: threadId ?? undefined,
+        operationId,
+      });
+
+      const agentRuntimeContext: AgentRuntimeContext = {
+        ...initialContext,
+        phase: 'human_approved_tool',
+        payload: {
+          approvedToolCall: toolMessage.plugin,
+          parentMessageId: toolMessageId,
+          skipCreateToolMessage: true,
+        },
+      };
+
+      try {
+        await internal_execAgentRuntime({
+          context: effectiveContext,
+          messages: currentMessages,
+          parentMessageId: toolMessageId,
+          parentMessageType: 'tool',
+          initialState: state,
+          initialContext: agentRuntimeContext,
+          parentOperationId: operationId,
+        });
+        completeOperation(operationId);
+      } catch (error) {
+        const err = error as Error;
+        console.error('[submitToolInteraction] Error executing agent runtime:', err);
+        this.#get().failOperation(operationId, {
+          type: 'submitToolInteraction',
+          message: err.message || 'Unknown error',
+        });
+      }
+      return;
+    }
+
+    // 2b. Default path: create a user message summarizing the response, resume from user
     const userMessageContent = Object.values(response).join(', ');
     const groupId = toolMessage.groupId;
     const userMsg = await this.#get().optimisticCreateMessage(
@@ -369,7 +421,6 @@ export class ConversationControlActionImpl {
     }
 
     // 3. Resume agent from user message (not tool re-execution)
-    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
 
     const { state, context: initialContext } = this.#get().internal_createAgentState({

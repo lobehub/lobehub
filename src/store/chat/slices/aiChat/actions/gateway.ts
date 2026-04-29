@@ -231,13 +231,16 @@ export class GatewayActionImpl {
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
 
     const isCreateNewTopic = !context.topicId;
+    const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;
 
     const result = await aiAgentService.execAgentTask({
       agentId: context.agentId,
       appContext: {
+        defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
         documentId: context.documentId,
         groupId: context.groupId,
         scope: context.scope,
+        taskId,
         threadId: context.threadId,
         topicId: context.topicId,
       },
@@ -344,10 +347,9 @@ export class GatewayActionImpl {
   }): Promise<void> => {
     const { assistantMessageId, operationId, topicId, scope, threadId } = params;
 
-    if (!this.isGatewayModeEnabled()) return;
-
     const agentGatewayUrl =
-      window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
+      window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
+    if (!agentGatewayUrl) return;
 
     // Get a fresh JWT token (original expired after 5 min)
     const { token } = await aiAgentService.refreshGatewayToken(topicId);

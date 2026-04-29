@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -16,6 +17,9 @@ const createTopic = async (id: string, uid = userId) => {
   await serverDB.insert(topics).values({ id, userId: uid }).onConflictDoNothing();
   return id;
 };
+
+const getTopic = async (id: string) =>
+  (await serverDB.select().from(topics).where(eq(topics.id, id)).limit(1))[0];
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -73,6 +77,84 @@ describe('TaskTopicModel', () => {
       const topics = await topicModel.findByTaskId(task.id);
       expect(topics[0].status).toBe('completed');
     });
+
+    it('should mirror completed status to topics row', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_done');
+
+      await topicModel.add(task.id, 'tpc_done', { seq: 1 });
+      await topicModel.updateStatus(task.id, 'tpc_done', 'completed');
+
+      const topic = await getTopic('tpc_done');
+      expect(topic.status).toBe('completed');
+      expect(topic.completedAt).toBeInstanceOf(Date);
+    });
+
+    it('should stamp completedAt without promoting status for non-completed terminal states', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_failed');
+
+      await topicModel.add(task.id, 'tpc_failed', { seq: 1 });
+      await topicModel.updateStatus(task.id, 'tpc_failed', 'failed');
+
+      const topic = await getTopic('tpc_failed');
+      expect(topic.completedAt).toBeInstanceOf(Date);
+      // topic.status stays whatever it was (default null), not promoted to 'completed'
+      expect(topic.status).not.toBe('completed');
+    });
+
+    it('should not stamp completedAt for non-terminal status', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_running');
+
+      await topicModel.add(task.id, 'tpc_running', { seq: 1 });
+      await topicModel.updateStatus(task.id, 'tpc_running', 'running');
+
+      const topic = await getTopic('tpc_running');
+      expect(topic.completedAt).toBeNull();
+    });
+  });
+
+  describe('cancelIfRunning', () => {
+    it('should cancel + stamp completedAt when topic was running', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_cancel');
+
+      await topicModel.add(task.id, 'tpc_cancel', { seq: 1 });
+      const updated = await topicModel.cancelIfRunning(task.id, 'tpc_cancel');
+
+      expect(updated).toBe(true);
+      const topic = await getTopic('tpc_cancel');
+      expect(topic.completedAt).toBeInstanceOf(Date);
+      expect(topic.status).not.toBe('completed');
+    });
+
+    it('should be a no-op when topic is not running', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_already_done');
+
+      await topicModel.add(task.id, 'tpc_already_done', { seq: 1 });
+      await topicModel.updateStatus(task.id, 'tpc_already_done', 'completed');
+      const completedAtBefore = (await getTopic('tpc_already_done')).completedAt;
+
+      // sleep one tick so a re-stamp would be detectable
+      await new Promise((r) => setTimeout(r, 5));
+      const updated = await topicModel.cancelIfRunning(task.id, 'tpc_already_done');
+
+      expect(updated).toBe(false);
+      const topic = await getTopic('tpc_already_done');
+      expect(topic.completedAt?.getTime()).toBe(completedAtBefore?.getTime());
+    });
   });
 
   describe('timeoutRunning', () => {
@@ -95,6 +177,44 @@ describe('TaskTopicModel', () => {
       const tpcB = topics.find((t) => t.topicId === 'tpc_bbb');
       expect(tpcA!.status).toBe('completed');
       expect(tpcB!.status).toBe('timeout');
+    });
+
+    it('should stamp completedAt on each timed-out topic', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_t1');
+      await createTopic('tpc_t2');
+
+      await topicModel.add(task.id, 'tpc_t1', { seq: 1 });
+      await topicModel.add(task.id, 'tpc_t2', { seq: 2 });
+
+      await topicModel.timeoutRunning(task.id);
+
+      const t1 = await getTopic('tpc_t1');
+      const t2 = await getTopic('tpc_t2');
+      expect(t1.completedAt).toBeInstanceOf(Date);
+      expect(t2.completedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('findWithHandoff', () => {
+    it('should return completedAt joined from topics', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_h1');
+      await createTopic('tpc_h2');
+
+      await topicModel.add(task.id, 'tpc_h1', { seq: 1 });
+      await topicModel.add(task.id, 'tpc_h2', { seq: 2 });
+      await topicModel.updateStatus(task.id, 'tpc_h1', 'completed');
+
+      const rows = await topicModel.findWithHandoff(task.id, 10);
+      const h1 = rows.find((r) => r.topicId === 'tpc_h1');
+      const h2 = rows.find((r) => r.topicId === 'tpc_h2');
+      expect(h1?.completedAt).toBeInstanceOf(Date);
+      expect(h2?.completedAt).toBeNull();
     });
   });
 

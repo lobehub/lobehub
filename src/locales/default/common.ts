@@ -31,6 +31,8 @@ export default {
   'back': 'Back',
   'batchDelete': 'Batch Delete',
   'blog': 'Product Blog',
+  'botIntegrationBanner.dismiss': 'Dismiss',
+  'botIntegrationBanner.title': 'Add Channels to Lobe AI',
   'branching': 'Create Subtopic',
   'branchingDisable':
     'The "Sub-topic" feature is unavailable in the current mode. To use this feature, please switch to Postgres/Pglite DB mode or use LobeHub Cloud.',
@@ -350,8 +352,7 @@ export default {
   'footer.title': 'Like Our Product?',
   'fullscreen': 'Full Screen Mode',
   'generation.hero.taglinePrefix': 'Start Creating with',
-  'generation.promptModeration.blocked':
-    'The request content may violate content policy. Please modify your prompt and try again.',
+  'generation.promptModeration.blocked': 'Content policy check failed. Please revise your prompt.',
   'historyRange': 'History Range',
   'home.suggestQuestions': 'Try these examples',
   'import': 'Import',
@@ -509,6 +510,7 @@ export default {
   'tab.discover': 'Discover',
   'tab.eval': 'Eval Lab',
   'tab.files': 'Files',
+  'tab.generation': 'Generation',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
   'tab.marketplace': 'Marketplace',

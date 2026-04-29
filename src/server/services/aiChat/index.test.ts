@@ -42,6 +42,42 @@ describe('AiChatService', () => {
     expect(res.topics).toEqual([{ id: 't1' }]);
   });
 
+  it('getMessagesAndTopics should forward topicFilter to topicModel.query', async () => {
+    const serverDB = {} as unknown as LobeChatDatabase;
+
+    const mockQueryMessages = vi.fn().mockResolvedValue([]);
+    const mockQueryTopics = vi.fn().mockResolvedValue([]);
+
+    vi.mocked(MessageModel).mockImplementation(() => ({ query: mockQueryMessages }) as any);
+    vi.mocked(TopicModel).mockImplementation(() => ({ query: mockQueryTopics }) as any);
+    vi.mocked(FileService).mockImplementation(
+      () => ({ getFullFileUrl: vi.fn().mockResolvedValue('url') }) as any,
+    );
+
+    const service = new AiChatService(serverDB, 'u1');
+
+    await service.getMessagesAndTopics({
+      agentId: 'agent-1',
+      includeTopic: true,
+      topicFilter: {
+        excludeStatuses: ['completed'],
+        excludeTriggers: ['cron', 'eval'],
+      },
+    });
+
+    expect(mockQueryTopics).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      excludeStatuses: ['completed'],
+      excludeTriggers: ['cron', 'eval'],
+      groupId: undefined,
+    });
+    // topicFilter must not leak into messageModel.query
+    expect(mockQueryMessages).toHaveBeenCalledWith(
+      expect.not.objectContaining({ topicFilter: expect.anything() }),
+      expect.objectContaining({ postProcessUrl: expect.any(Function) }),
+    );
+  });
+
   it('getMessagesAndTopics should not query topics when includeTopic is false', async () => {
     const serverDB = {} as unknown as LobeChatDatabase;
 

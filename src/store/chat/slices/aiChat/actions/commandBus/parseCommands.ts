@@ -17,6 +17,27 @@ export interface ParsedActionTag {
 
 export interface ParsedCommand extends ParsedActionTag {}
 
+export interface SingleAgentMentionDirectRoute {
+  agent: RuntimeMentionedAgent;
+}
+
+export interface ParsedLocalFileReference {
+  isDirectory?: boolean;
+  name: string;
+  path: string;
+}
+
+const appendLocalFileReference = (
+  references: ParsedLocalFileReference[],
+  seen: Set<string>,
+  reference: ParsedLocalFileReference,
+) => {
+  if (!reference.path || seen.has(reference.path)) return;
+
+  seen.add(reference.path);
+  references.push(reference);
+};
+
 /**
  * Walk the Lexical JSON tree to find all action-tag nodes.
  * Returns the extracted action tags in document order.
@@ -108,6 +129,89 @@ export const parseMentionedAgentsFromEditorData = (
   return agents;
 };
 
+export const parseLocalFileReferencesFromEditorData = (
+  editorData: Record<string, any> | undefined,
+): ParsedLocalFileReference[] => {
+  if (!editorData) return [];
+
+  const references: ParsedLocalFileReference[] = [];
+  const seen = new Set<string>();
+
+  walkMentionNode(editorData.root, (label, metadata) => {
+    if (metadata?.type !== 'localFile') return;
+
+    const path = metadata.path as string | undefined;
+    if (!path) return;
+
+    appendLocalFileReference(references, seen, {
+      isDirectory: metadata.isDirectory === true,
+      name: (metadata.name as string | undefined) || label || path.split('/').pop() || path,
+      path,
+    });
+  });
+
+  return references;
+};
+
+export const mergeLocalFileReferences = (
+  references: ParsedLocalFileReference[],
+): ParsedLocalFileReference[] => {
+  const merged: ParsedLocalFileReference[] = [];
+  const seen = new Set<string>();
+
+  for (const reference of references) {
+    appendLocalFileReference(merged, seen, reference);
+  }
+
+  return merged;
+};
+
+/**
+ * Detect the direct-route shorthand:
+ * exactly one mention node in the whole document, and that mention is the
+ * first meaningful node and points to an agent.
+ */
+export const parseSingleAgentMentionDirectRoute = (
+  editorData: Record<string, any> | undefined,
+): SingleAgentMentionDirectRoute | undefined => {
+  if (!editorData) return;
+
+  const mentions: Array<{
+    label: string;
+    metadata: Record<string, unknown>;
+    node: any;
+  }> = [];
+  let firstMeaningfulNode: any;
+
+  walkMeaningfulNode(editorData.root, (node) => {
+    firstMeaningfulNode ??= node;
+
+    if (node.type === 'mention' && node.metadata) {
+      mentions.push({
+        label: node.label ?? '',
+        metadata: node.metadata,
+        node,
+      });
+    }
+  });
+
+  if (mentions.length !== 1) return;
+
+  const [mention] = mentions;
+  if (firstMeaningfulNode !== mention.node) return;
+  if (mention.metadata.type !== 'agent') return;
+
+  const id = typeof mention.metadata.id === 'string' ? mention.metadata.id : undefined;
+  if (!id) return;
+
+  return {
+    agent: {
+      id,
+      name: mention.label || id,
+    },
+  };
+};
+
 /**
  * Check if editorData contains any meaningful text content
  * besides action-tag nodes (whitespace-only counts as empty).
@@ -145,6 +249,32 @@ function walkMentionNode(
       walkMentionNode(child, cb);
     }
   }
+}
+
+function walkMeaningfulNode(node: any, cb: (node: any) => void): void {
+  if (!node) return;
+
+  if (isMeaningfulNode(node)) {
+    cb(node);
+  }
+
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) {
+      walkMeaningfulNode(child, cb);
+    }
+  }
+}
+
+function isMeaningfulNode(node: any): boolean {
+  if (!node?.type || Array.isArray(node.children)) return false;
+
+  if (node.type === 'text') {
+    return typeof node.text === 'string' && node.text.trim().length > 0;
+  }
+
+  if (node.type === 'linebreak') return false;
+
+  return true;
 }
 
 function walkNode(node: any, out: ParsedActionTag[]): void {

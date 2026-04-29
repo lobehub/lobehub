@@ -117,7 +117,7 @@ it('should handle tool calls', async () => {
       toolCalls: [
         {
           id: 'call_123',
-          name: 'lobe-web-browsing____search____builtin',
+          name: 'lobe-web-browsing____search',
           arguments: JSON.stringify({ query: 'weather' }),
         },
       ],

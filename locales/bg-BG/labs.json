@@ -1,12 +1,12 @@
 {
+  "features.agentSelfIteration.desc": "Позволява на асистента да разсъждава, да изгражда самосъзнание и да извършва непрекъснати подобрения чрез последователни опити и взаимодействия.",
+  "features.agentSelfIteration.title": "Само-итерация на агента",
   "features.assistantMessageGroup.desc": "Групиране на съобщенията от агента и резултатите от извикванията на инструменти заедно за показване",
   "features.assistantMessageGroup.title": "Групиране на съобщения от агент",
   "features.gatewayMode.desc": "Изпълнявайте задачите на агента на сървъра чрез Gateway WebSocket вместо локално. Осигурява по-бързо изпълнение и намалява използването на ресурси от клиента.",
   "features.gatewayMode.title": "Изпълнение на агента от страна на сървъра (Gateway)",
   "features.groupChat.desc": "Активиране на координация в групов чат с множество агенти.",
   "features.groupChat.title": "Групов чат (многоагентен)",
-  "features.heterogeneousAgent.desc": "Активира изпълнение с хетерогенни агенти чрез Claude Code, Codex CLI и други външни агентски CLI инструменти. Създава опция „Claude Code Agent“ в менюто за агенти в страничната лента.",
-  "features.heterogeneousAgent.title": "Хетерогенен агент (Claude Code)",
   "features.inputMarkdown.desc": "Реално време визуализация на Markdown в полето за въвеждане (удебелен текст, кодови блокове, таблици и др.).",
   "features.inputMarkdown.title": "Визуализация на Markdown при въвеждане",
   "title": "Лаборатория"

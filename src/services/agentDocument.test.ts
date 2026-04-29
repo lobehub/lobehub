@@ -21,17 +21,15 @@ vi.mock('@/libs/trpc/client', () => ({
     agentDocument: {
       copyDocument: { mutate: queryMock },
       createDocument: { mutate: queryMock },
-      editDocument: { mutate: queryMock },
       getDocuments: { query: queryMock },
       getTemplates: { query: queryMock },
       initializeFromTemplate: { mutate: queryMock },
       listDocuments: { query: queryMock },
       readDocument: { query: queryMock },
-      readDocumentByFilename: { query: queryMock },
       removeDocument: { mutate: queryMock },
       renameDocument: { mutate: queryMock },
+      replaceDocumentContent: { mutate: queryMock },
       updateLoadRule: { mutate: queryMock },
-      upsertDocumentByFilename: { mutate: queryMock },
     },
   },
 }));

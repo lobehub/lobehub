@@ -14,6 +14,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-2-0-pro-260215',
@@ -66,6 +67,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -75,6 +77,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-2-0-lite-260215',
@@ -127,6 +130,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -136,6 +140,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-2-0-mini-260215',
@@ -187,6 +192,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -196,6 +202,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-2-0-code-preview-260215',
@@ -247,6 +254,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-15',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -256,6 +264,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-8-251228',
@@ -308,6 +317,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-18',
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -317,6 +327,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-code-preview-251028',
@@ -362,6 +373,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -564,6 +576,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-vision-250815',
@@ -608,6 +621,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -617,6 +631,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-thinking-250715',
@@ -659,6 +674,9 @@ const doubaoChatModels: AIChatModelCard[] = [
         { name: 'textInput_cacheRead', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -667,6 +685,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-251015',
@@ -712,6 +731,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -721,6 +741,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-lite-251015',
@@ -766,6 +787,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['gpt5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -775,6 +797,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       reasoning: true,
       video: true,
       vision: true,
+      search: true,
     },
     config: {
       deploymentName: 'doubao-seed-1-6-flash-250828',
@@ -819,6 +842,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },

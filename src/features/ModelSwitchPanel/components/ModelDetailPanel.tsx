@@ -23,11 +23,14 @@ import {
   type TieredPricingUnit,
 } from 'model-bank';
 import { type FC } from 'react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useGlobalStore } from '@/store/global';
+import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 import { formatPriceByCurrency, getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/index';
@@ -242,7 +245,8 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
     );
 
-    const [expandedKeys, setExpandedKeys] = useState<string[]>(['pricing']);
+    const expandedKeys = useGlobalStore(systemStatusSelectors.modelDetailPanelExpandedKeys);
+    const updateExpandedKeys = useGlobalStore((s) => s.updateModelDetailPanelExpandedKeys);
 
     const hasPricing = !!model?.pricing;
     const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;
@@ -287,7 +291,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
           <Accordion
             expandedKeys={expandedKeys}
             gap={8}
-            onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
+            onExpandedChange={(keys) => updateExpandedKeys(keys as ModelDetailPanelExpandedKey[])}
           >
             {/* Context Length */}
             {hasContext && (

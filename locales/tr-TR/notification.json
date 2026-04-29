@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "\"{{jobName}}\" adlı zamanlanmış göreviniz başarısız oldu. Hatanın tamamını görmek için görevi açın.",
+  "agent_cron_job_failed_insufficient_budget": "\"{{jobName}}\" adlı zamanlanmış göreviniz çalıştırılamadı çünkü hesabınızda yeterli kredi yok. Gelecek çalışmaları sürdürebilmek için bakiye ekleyin veya planınızı yükseltin.",
+  "agent_cron_job_failed_insufficient_budget_title": "Zamanlanmış görev durduruldu: yetersiz kredi",
+  "agent_cron_job_failed_title": "Zamanlanmış görev başarısız oldu",
   "billboard.learnMore": "Daha fazla bilgi al",
   "billboard.menuLabel": "Duyurular",
+  "image_generation_completed": "\"{{prompt}}\" adlı görseliniz hazır.",
+  "image_generation_completed_title": "Görsel oluşturma tamamlandı",
   "inbox.archiveAll": "Tümünü arşivle",
   "inbox.empty": "Henüz bildirim yok",
   "inbox.emptyUnread": "Okunmamış bildirim yok",
   "inbox.filterUnread": "Sadece okunmamışları göster",
   "inbox.markAllRead": "Tümünü okundu olarak işaretle",
-  "inbox.title": "Bildirimler"
+  "inbox.title": "Bildirimler",
+  "video_generation_completed": "\"{{prompt}}\" adlı videonuz hazır.",
+  "video_generation_completed_title": "Video oluşturma tamamlandı"
 }

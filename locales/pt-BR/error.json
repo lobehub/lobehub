@@ -111,6 +111,8 @@
   "response.PluginServerError": "Erro na solicitação ao servidor da habilidade. Verifique o manifesto, configuração ou implementação.",
   "response.PluginSettingsInvalid": "Esta habilidade precisa ser configurada corretamente antes de ser usada. Verifique a configuração.",
   "response.ProviderBizError": "Erro ao solicitar o serviço {{provider}}. Solucione com base nas informações abaixo ou tente novamente.",
+  "response.ProviderContentModeration": "A verificação da política de conteúdo falhou. Revise seu prompt e tente novamente.",
+  "response.ProviderContentModerationWarning": "Violações repetidas da política foram detectadas. Uso indevido adicional pode resultar em restrições à sua conta.",
   "response.QuotaLimitReached": "Desculpe, o uso de tokens ou número de solicitações atingiu o limite da chave. Aumente a cota ou tente mais tarde.",
   "response.QuotaLimitReachedCloud": "O serviço do modelo está atualmente sob alta demanda. Por favor, tente novamente mais tarde.",
   "response.ServerAgentRuntimeError": "Desculpe, o serviço Agent está indisponível. Tente novamente mais tarde ou entre em contato por e-mail.",

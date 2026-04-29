@@ -19,6 +19,18 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   },
 }));
 
+// Stub the bot-settings helper so the test never loads its transitive
+// imports (BotMessageRouter -> AiAgentService -> ModelRuntime). ModelRuntime
+// reads server-only env at module construction, which the vitest client
+// runtime rejects ("Attempted to access a server-side environment variable
+// on the client"). The runtime under test doesn't exercise these helpers in
+// any covered path; pass-through / no-op behaviour is enough to load.
+vi.mock('@/server/services/bot/agentBotProviderSettings', () => ({
+  assertBotAccessSettings: vi.fn(),
+  invalidateBotAfterUpdate: vi.fn().mockResolvedValue(undefined),
+  mergeBotSettingsForPersist: vi.fn((_platform, settings) => settings),
+}));
+
 // Mock platform API constructors
 const mockDiscordCreateMessage = vi.fn();
 const mockDiscordGetMessages = vi.fn();

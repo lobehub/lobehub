@@ -465,6 +465,57 @@ describe('createRouterRuntime', () => {
       expect(mockChatSuccess).not.toHaveBeenCalled();
     });
 
+    it('should not retry when shouldStopFallback returns true', async () => {
+      const moderationError = {
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        error: { message: 'Content violates usage guidelines' },
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(moderationError);
+      const mockChatSuccess = vi.fn().mockResolvedValue('success');
+      const shouldStopFallback = vi.fn().mockResolvedValue(true);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      class SuccessRuntime implements LobeRuntimeAI {
+        chat = mockChatSuccess;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [
+              { apiKey: 'key-1', runtime: FailRuntime as any },
+              { apiKey: 'key-2', runtime: SuccessRuntime as any },
+            ],
+            runtime: FailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+        shouldStopFallback,
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(moderationError);
+
+      expect(shouldStopFallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: moderationError,
+          model: 'gpt-4',
+          optionIndex: 0,
+        }),
+      );
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+      expect(mockChatSuccess).not.toHaveBeenCalled();
+    });
+
     it('should still retry on other error types', async () => {
       const bizError = {
         errorType: AgentRuntimeErrorType.ProviderBizError,

@@ -144,7 +144,7 @@ describe('toolEngineering', () => {
       expect(result![0]).toMatchObject({
         function: {
           description: 'Search the web',
-          name: 'search____search____builtin',
+          name: 'search____search',
           parameters: {
             properties: {
               query: { description: 'Search query', type: 'string' },
@@ -368,7 +368,7 @@ describe('toolEngineering', () => {
         const result = getEnabledTools(['search'], 'gpt-4', 'openai');
         expect(result).toHaveLength(1);
         expect(result[0]).toHaveProperty('type', 'function');
-        expect(result[0].function).toHaveProperty('name', 'search____search____builtin');
+        expect(result[0].function).toHaveProperty('name', 'search____search');
       });
 
       it('should use provided model and provider', () => {

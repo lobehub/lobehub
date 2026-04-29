@@ -54,6 +54,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 describe('Task Router Integration', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
+  let otherUserId: string | undefined;
   let testAgentId: string;
   let testTopicId: string;
   let caller: ReturnType<typeof taskRouter.createCaller>;
@@ -76,6 +77,8 @@ describe('Task Router Integration', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    if (otherUserId) await cleanupTestUser(serverDB, otherUserId);
+    otherUserId = undefined;
   });
 
   describe('create + find + detail', () => {
@@ -122,6 +125,35 @@ describe('Task Router Integration', () => {
 
       expect(result.data.createdByAgentId).toBeNull();
       expect(result.data.createdByUserId).toBe(userId);
+    });
+
+    it('should reject assigneeAgentId from another user when creating', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const otherAgentId = await createTestAgent(serverDB, otherUserId);
+
+      await expect(
+        caller.create({
+          assigneeAgentId: otherAgentId,
+          instruction: 'Cross-user assignment',
+          name: 'Cross-user Task',
+        }),
+      ).rejects.toThrow('Assignee agent not found');
+    });
+
+    it('should reject assigneeAgentId from another user when updating', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const otherAgentId = await createTestAgent(serverDB, otherUserId);
+      const task = await caller.create({
+        instruction: 'Created via UI',
+        name: 'UI Task',
+      });
+
+      await expect(
+        caller.update({
+          assigneeAgentId: otherAgentId,
+          id: task.data.id,
+        }),
+      ).rejects.toThrow('Assignee agent not found');
     });
   });
 

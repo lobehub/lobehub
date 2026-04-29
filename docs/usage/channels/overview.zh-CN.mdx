@@ -1,7 +1,7 @@
 ---
 title: 渠道概览
 description: >-
-  将 LobeHub 代理连接到外部消息平台，如 Discord、Slack、Telegram、QQ、微信、飞书和
+  将 LobeHub 代理连接到外部消息平台，如 Discord、Slack、Telegram、LINE、QQ、微信、飞书和
   Lark，让用户可以直接在他们喜欢的聊天应用中与 AI 助手互动。
 tags:
   - 渠道
@@ -10,6 +10,7 @@ tags:
   - Discord
   - Slack
   - Telegram
+  - LINE
   - QQ
   - 微信
   - 飞书
@@ -26,22 +27,23 @@ tags:
 
 ## 支持的平台
 
-| 平台                                        | 描述                                 |
-| ----------------------------------------- | ---------------------------------- |
-| [Discord](/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信          |
-| [Slack](/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话                |
-| [Telegram](/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话             |
-| [QQ](/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信                     |
-| [微信](/docs/usage/channels/wechat)         | 通过 iLink Bot 连接到微信，用于私聊和群聊（需要有效订阅） |
-| [飞书](/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）                  |
-| [Lark](/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）               |
+| 平台                                        | 描述                                     |
+| ----------------------------------------- | -------------------------------------- |
+| [Discord](/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信              |
+| [Slack](/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话                    |
+| [Telegram](/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话                 |
+| [LINE](/docs/usage/channels/line)         | 通过 LINE Messaging API 连接到 LINE，支持私聊和群聊 |
+| [QQ](/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信                         |
+| [微信](/docs/usage/channels/wechat)         | 通过 iLink Bot 连接到微信，用于私聊和群聊（需要有效订阅）     |
+| [飞书](/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）                      |
+| [Lark](/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）                   |
 
 ## 工作原理
 
 每个渠道集成都通过将目标平台上的机器人账户与 LobeHub 代理连接来实现。当用户向机器人发送消息时，LobeHub 会通过代理处理消息并将响应发送回同一对话。
 
 - **按代理配置** — 每个代理可以拥有自己的一组渠道连接，因此不同的代理可以服务于不同的平台或社区。
-- **同时支持多个渠道** — 单个代理可以同时连接到 Discord、Slack、Telegram、QQ、微信、飞书和 Lark。LobeHub 会自动将消息路由到正确的代理。
+- **同时支持多个渠道** — 单个代理可以同时连接到 Discord、Slack、Telegram、LINE、QQ、微信、飞书和 Lark。LobeHub 会自动将消息路由到正确的代理。
 - **安全的凭据存储** — 所有机器人令牌和应用密钥在存储前都会被加密。
 
 ## 快速开始
@@ -51,6 +53,7 @@ tags:
    - [Discord](/docs/usage/channels/discord)
    - [Slack](/docs/usage/channels/slack)
    - [Telegram](/docs/usage/channels/telegram)
+   - [LINE](/docs/usage/channels/line)
    - [QQ](/docs/usage/channels/qq)
    - [微信](/docs/usage/channels/wechat)
    - [飞书](/docs/usage/channels/feishu)
@@ -62,13 +65,13 @@ tags:
 
 所有平台均支持文本消息。某些功能因平台而异：
 
-| 功能        | Discord | Slack | Telegram | QQ | 微信 | 飞书   | Lark |
-| --------- | ------- | ----- | -------- | -- | -- | ---- | ---- |
-| 文本消息      | 是       | 是     | 是        | 是  | 是  | 是    | 是    |
-| 私人消息      | 是       | 是     | 是        | 是  | 是  | 是    | 是    |
-| 群组聊天      | 是       | 是     | 是        | 是  | 是  | 是    | 是    |
-| 表情反应      | 是       | 是     | 是        | 否  | 否  | 部分支持 | 部分支持 |
-| 图片 / 文件附件 | 是       | 是     | 是        | 是  | 否  | 是    | 是    |
+| 功能        | Discord | Slack | Telegram | LINE | QQ | 微信 | 飞书   | Lark |
+| --------- | ------- | ----- | -------- | ---- | -- | -- | ---- | ---- |
+| 文本消息      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
+| 私人消息      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
+| 群组聊天      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
+| 表情反应      | 是       | 是     | 是        | 否    | 否  | 否  | 部分支持 | 部分支持 |
+| 图片 / 文件附件 | 是       | 是     | 是        | 仅入站  | 是  | 否  | 是    | 是    |
 
 ## 允许的用户（全局）
 
@@ -89,11 +92,12 @@ tags:
 
 私信策略只影响私信 — 群聊里的 `@提及` 由下面的 **群组策略** 单独管理。全局 **允许的用户** 的用户级过滤也会同时生效；各 scope 的策略叠加在上面。
 
-| 策略                  | 行为                                                                                     |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| **开放 (Open)**       | 平台上的任何用户都可以私信机器人（如设置了全局白名单则受其约束）。适合面向所有人开放的助手。                                         |
-| **白名单 (Allowlist)** | 私信需要发送者在 **允许的用户** 里。和 `Open` 的差别在白名单为空时：`Allowlist` 模式下会**全部拒绝**，而 `Open` 模式下任何人都能私信。 |
-| **禁用 (Disabled)**   | 机器人会忽略所有私信。适合那种 " 只在群里被 `@` 时才回复 " 的场景。                                                |
+| 策略                  | 行为                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **开放 (Open)**       | 平台上的任何用户都可以私信机器人（如设置了全局白名单则受其约束）。适合面向所有人开放的助手。                                                                                        |
+| **白名单 (Allowlist)** | 私信需要发送者在 **允许的用户** 里。和 `Open` 的差别在白名单为空时：`Allowlist` 模式下会**全部拒绝**，而 `Open` 模式下任何人都能私信。                                                |
+| **配对审批 (Pairing)**  | 与 `Allowlist` 共享同一份名单，但非名单用户被拒后会收到一次性配对码，由你（属主）通过 `/approve <code>` 审批。审批通过的用户会被自动追加到 **允许的用户**，后续 DM 直通。需先填 **你的平台用户 ID** 并部署 Redis。 |
+| **禁用 (Disabled)**   | 机器人会忽略所有私信。适合那种 " 只在群里被 `@` 时才回复 " 的场景。                                                                                               |
 
 ## 群组策略
 

@@ -60,6 +60,8 @@ const updateSchema = z.object({
   instruction: z.string().optional(),
   name: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
+  schedulePattern: z.string().nullable().optional(),
+  scheduleTimezone: z.string().nullable().optional(),
 });
 
 const listSchema = z.object({
@@ -93,6 +95,21 @@ async function resolveOrThrow(model: TaskModel, id: string) {
   const task = await model.resolve(id);
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
   return task;
+}
+
+async function assertAssigneeAgentBelongsToUser(
+  model: AgentModel,
+  assigneeAgentId?: string | null,
+) {
+  if (!assigneeAgentId) return;
+
+  const exists = await model.existsById(assigneeAgentId);
+  if (!exists) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Assignee agent not found',
+    });
+  }
 }
 
 export const taskRouter = router({
@@ -316,6 +333,7 @@ export const taskRouter = router({
   create: taskProcedure.input(createSchema).mutation(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
+      await assertAssigneeAgentBelongsToUser(ctx.agentModel, input.assigneeAgentId);
 
       // Resolve parentTaskId if it's an identifier
       const createData = { ...input };
@@ -928,6 +946,7 @@ export const taskRouter = router({
     const { id, ...data } = input;
     try {
       const model = ctx.taskModel;
+      await assertAssigneeAgentBelongsToUser(ctx.agentModel, data.assigneeAgentId);
       const resolved = await resolveOrThrow(model, id);
       const task = await model.update(resolved.id, data);
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });

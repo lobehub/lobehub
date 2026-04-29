@@ -111,6 +111,8 @@
   "response.PluginServerError": "スキルサーバーでエラーが返されました。以下の情報に基づいてスキル記述、設定、サーバー実装を確認してください",
   "response.PluginSettingsInvalid": "このスキルを使用するには設定を完了する必要があります。スキル設定を確認してください",
   "response.ProviderBizError": "モデルプロバイダーでエラーが返されました。以下の情報に基づいてトラブルシューティングを行うか、時間を置いて再試行してください",
+  "response.ProviderContentModeration": "コンテンツポリシーの確認に失敗しました。プロンプトを修正して、もう一度お試しください。",
+  "response.ProviderContentModerationWarning": "ポリシー違反が繰り返し検出されました。これ以上の不適切な利用は、アカウント制限につながる可能性があります。",
   "response.QuotaLimitReached": "Token 使用量またはリクエスト回数がクォータ上限に達しました。クォータを増やすか、時間を置いて再試行してください",
   "response.QuotaLimitReachedCloud": "モデルサービスが現在高負荷状態です。しばらくしてから再試行してください。",
   "response.ServerAgentRuntimeError": "アシスタント実行サービスが一時的に利用できません。時間を置いて再試行するか、メールでサポートにお問い合わせください",

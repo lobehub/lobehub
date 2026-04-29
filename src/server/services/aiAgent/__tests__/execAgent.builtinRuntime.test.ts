@@ -6,11 +6,14 @@ import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 
 import { AiAgentService } from '../index';
 
-const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate } = vi.hoisted(() => ({
-  mockCreateOperation: vi.fn(),
-  mockGetAgentConfig: vi.fn(),
-  mockMessageCreate: vi.fn(),
-}));
+const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate, mockResolveTask } = vi.hoisted(
+  () => ({
+    mockCreateOperation: vi.fn(),
+    mockGetAgentConfig: vi.fn(),
+    mockMessageCreate: vi.fn(),
+    mockResolveTask: vi.fn(),
+  }),
+);
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -56,6 +59,12 @@ vi.mock('@/database/models/thread', () => ({
     create: vi.fn(),
     findById: vi.fn(),
     update: vi.fn(),
+  })),
+}));
+
+vi.mock('@/database/models/task', () => ({
+  TaskModel: vi.fn().mockImplementation(() => ({
+    resolve: mockResolveTask,
   })),
 }));
 
@@ -120,6 +129,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockResolveTask.mockResolvedValue(null);
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -253,6 +263,41 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
           plugins: [PageAgentIdentifier, 'lobe-agent-documents'],
         }),
       }),
+    );
+  });
+
+  it('should normalize task identifier from appContext before creating runtime operation', async () => {
+    mockResolveTask.mockResolvedValue({ id: 'task-row-1', identifier: 'T-1' });
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-task',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: '',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-task',
+      appContext: {
+        defaultTaskAssigneeAgentId: 'agt_inbox',
+        scope: 'task',
+        taskId: 'T-1',
+        topicId: 'topic-1',
+      },
+      prompt: 'Show current task',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(mockResolveTask).toHaveBeenCalledWith('T-1');
+    expect(callArgs.appContext).toMatchObject({
+      defaultTaskAssigneeAgentId: 'agt_inbox',
+      scope: 'task',
+      taskId: 'task-row-1',
+      topicId: 'topic-1',
+    });
+    expect(callArgs.initialContext.initialContext.taskManager.contextPrompt).toContain(
+      'Default Lobe AI agent id: agt_inbox',
     );
   });
 });

@@ -8,6 +8,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./source": {
+      "types": "./src/source/index.ts",
+      "default": "./src/source/index.ts"
     }
   },
   "main": "src/index.ts",

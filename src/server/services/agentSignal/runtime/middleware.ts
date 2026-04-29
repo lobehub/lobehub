@@ -1,4 +1,8 @@
 import type { AgentSignalSource, BaseAction, BaseSignal } from '@lobechat/agent-signal';
+import type {
+  AgentSignalSourceType,
+  AgentSignalSourceVariant,
+} from '@lobechat/agent-signal/source';
 
 import type {
   AgentSignalPolicyActionType,
@@ -6,7 +10,6 @@ import type {
   AgentSignalPolicySignalType,
   AgentSignalPolicySignalVariant,
 } from '../policies/types';
-import type { AgentSignalSourceType, AgentSignalSourceVariant } from '../sourceTypes';
 import type {
   AgentSignalSchedulerHandle,
   AgentSignalSchedulerHandler,

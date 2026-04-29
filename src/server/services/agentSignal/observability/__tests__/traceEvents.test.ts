@@ -39,6 +39,7 @@ describe('toAgentSignalTraceEvents', () => {
         {
           actionId: 'action_1',
           attempt: { completedAt: 5, current: 1, startedAt: 4, status: 'succeeded' },
+          output: { decision: { action: 'create' } },
           status: 'applied',
         },
       ],
@@ -62,6 +63,45 @@ describe('toAgentSignalTraceEvents', () => {
       expect.objectContaining({
         attemptCurrent: 1,
         attemptStatus: 'succeeded',
+        outputDecision: { action: 'create' },
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * const failed = toAgentSignalTraceEvents({ results: [{ status: 'failed', error: { message: 'boom' } }] });
+   * expect(failed.at(-1)?.data.errorMessage).toBe('boom');
+   */
+  it('keeps failed action error messages in trace events', () => {
+    const events = toAgentSignalTraceEvents({
+      actions: [],
+      results: [
+        {
+          actionId: 'action_failed',
+          attempt: { completedAt: 5, current: 1, startedAt: 4, status: 'failed' },
+          error: {
+            code: 'SKILL_MANAGEMENT_EXECUTION_FAILED',
+            message: 'model output did not match schema',
+          },
+          status: 'failed',
+        },
+      ],
+      signals: [],
+      source: {
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: { message: 'remember this', messageId: 'msg_1' },
+        scopeKey: 'topic:t1',
+        sourceId: 'source_1',
+        sourceType: 'agent.user.message',
+        timestamp: 1,
+      },
+    });
+
+    expect(events.at(-1)?.data).toEqual(
+      expect.objectContaining({
+        errorCode: 'SKILL_MANAGEMENT_EXECUTION_FAILED',
+        errorMessage: 'model output did not match schema',
       }),
     );
   });
