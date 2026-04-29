@@ -2,6 +2,8 @@ import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { HotkeyId } from '@/types/hotkey';
+
 import { isTaskPanelRoute, useToggleRightPanelHotkey } from './globalScope';
 
 interface MockGlobalState {
@@ -11,7 +13,7 @@ interface MockGlobalState {
   updateSystemStatus: () => void;
 }
 
-type HotkeyRegistrationArgs = [HotkeyEnum, () => void, ...unknown[]];
+type HotkeyRegistrationArgs = [HotkeyId, () => void, ...unknown[]];
 
 const mocks = vi.hoisted(() => ({
   hotkeyCallback: undefined as (() => void) | undefined,
