@@ -1,6 +1,8 @@
 import type { ToolOutcomeProcedureDeps } from '../../procedure/toolOutcome';
 import { createToolOutcomeSourceHandler } from '../../procedure/toolOutcome';
 import { defineAgentSignalHandlers } from '../../runtime/middleware';
+import type { ClassifierDiagnosticsService } from '../../services/classifierServices';
+import type { ProcedureStateService } from '../../services/types';
 import type {
   SkillManagementActionHandlerOptions,
   UserMemoryActionHandlerOptions,
@@ -15,21 +17,37 @@ import {
 import type { CreateFeedbackSatisfactionJudgePolicyOptions } from './feedbackSatisfaction';
 import { createFeedbackSatisfactionJudgeProcessor } from './feedbackSatisfaction';
 
-export interface CreateAnalyzeIntentPolicyOptions {
-  feedbackDomainJudge?: CreateFeedbackDomainJudgePolicyOptions['feedbackDomainJudge'];
-  feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
-  procedure?: ToolOutcomeProcedureDeps & {
-    markerReader: {
-      shouldSuppress: (input: {
-        domainKey: string;
-        intentClass?: string;
-        intentClassCandidates?: string[];
-        procedureKey: string;
-        scopeKey: string;
-      }) => Promise<boolean>;
-    };
+interface AnalyzeIntentProcedureOptions extends ToolOutcomeProcedureDeps {
+  /** Reads handled procedure markers for feedback-action suppression. */
+  markerReader: {
+    /** Checks whether an active marker suppresses the current procedure candidate. */
+    shouldSuppress: (input: {
+      domainKey: string;
+      intentClass?: string;
+      intentClassCandidates?: string[];
+      procedureKey: string;
+      scopeKey: string;
+    }) => Promise<boolean>;
   };
+  /** Composed procedure service bundle for migrated procedure processors. */
+  procedureState?: ProcedureStateService;
+}
+
+/**
+ * Options for composing the analyze-intent agent signal policy.
+ */
+export interface CreateAnalyzeIntentPolicyOptions {
+  /** Optional diagnostics sink for recoverable classifier structured-output failures. */
+  classifierDiagnostics?: ClassifierDiagnosticsService;
+  /** Optional domain judge dependency used by feedback domain classification. */
+  feedbackDomainJudge?: CreateFeedbackDomainJudgePolicyOptions['feedbackDomainJudge'];
+  /** Optional satisfaction judge dependencies used by feedback satisfaction classification. */
+  feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
+  /** Optional procedure dependencies shared by tool-outcome projection and action planning. */
+  procedure?: AnalyzeIntentProcedureOptions;
+  /** Optional skill-management action handler dependencies. */
   skillManagement?: SkillManagementActionHandlerOptions;
+  /** Optional user-memory action handler dependencies. */
   userMemory?: UserMemoryActionHandlerOptions;
 }
 
@@ -40,8 +58,13 @@ export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOpti
 
   return defineAgentSignalHandlers([
     ...(options.procedure ? [createToolOutcomeSourceHandler(options.procedure)] : []),
-    createFeedbackSatisfactionJudgeProcessor(options.feedbackSatisfactionJudge),
+    createFeedbackSatisfactionJudgeProcessor({
+      ...options.feedbackSatisfactionJudge,
+      classifierDiagnostics:
+        options.feedbackSatisfactionJudge?.classifierDiagnostics ?? options.classifierDiagnostics,
+    }),
     createFeedbackDomainJudgeSignalHandler({
+      classifierDiagnostics: options.classifierDiagnostics,
       resolveDomains: feedbackDomainResolver,
     }),
     createFeedbackActionPlannerSignalHandler({

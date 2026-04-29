@@ -18,6 +18,7 @@ export * from './analyzeIntent/feedbackSatisfaction';
 export * from './types';
 
 export interface CreateDefaultAgentSignalPoliciesOptions extends CreateFeedbackDomainJudgePolicyOptions {
+  classifierDiagnostics?: CreateAnalyzeIntentPolicyOptions['classifierDiagnostics'];
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
   procedure?: CreateAnalyzeIntentPolicyOptions['procedure'];
   skillManagement?: SkillManagementActionHandlerOptions;

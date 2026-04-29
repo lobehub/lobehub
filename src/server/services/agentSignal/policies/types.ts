@@ -67,7 +67,7 @@ export interface AgentSignalFeedbackSatisfactionStagePayload {
 
 /** Future-facing slim payload for one domain stage result. */
 export interface AgentSignalFeedbackDomainStagePayload<
-  TTarget extends AgentSignalFeedbackPhase1DomainTarget,
+  TTarget extends AgentSignalFeedbackDomainTarget,
 > {
   confidence: number;
   evidence: AgentSignalFeedbackEvidence[];

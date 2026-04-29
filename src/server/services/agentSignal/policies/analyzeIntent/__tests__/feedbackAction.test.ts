@@ -5,11 +5,13 @@ import { AgentSignalProcedureInspector, createProcedurePolicyOptions } from '../
 import { createRuntimeProcessorContext } from '../../../runtime/context';
 import type { AgentSignalPolicyStateStore } from '../../../store/types';
 import type {
+  ActionUserMemoryHandle,
   SignalFeedbackDomainMemory,
   SignalFeedbackDomainNone,
   SignalFeedbackDomainPrompt,
   SignalFeedbackDomainSkill,
 } from '../../types';
+import { createAnalyzeIntentPolicy } from '..';
 import { createFeedbackActionPlannerSignalHandler } from '../feedbackAction';
 
 const context = createRuntimeProcessorContext({
@@ -163,6 +165,57 @@ function createDomainSignal(
 }
 
 describe('feedbackActionPlanner', () => {
+  /**
+   * @example
+   * composed procedure dependencies expose the procedure state service and install in policy order.
+   */
+  it('passes composed procedure state through analyze-intent policy options', async () => {
+    const procedure = createProcedurePolicyOptions({
+      policyStateStore: createStore(),
+      ttlSeconds: 3600,
+    });
+    const installed: string[] = [];
+
+    await createAnalyzeIntentPolicy({
+      feedbackSatisfactionJudge: {
+        judge: {
+          judgeSatisfaction: async () => ({
+            confidence: 0.9,
+            evidence: [{ cue: 'test', excerpt: 'test' }],
+            reason: 'test-satisfaction-judge',
+            result: 'not_satisfied',
+          }),
+        },
+      },
+      procedure,
+    }).install({
+      handleAction: (handler) => {
+        installed.push(`${handler.type}:${handler.id}`);
+      },
+      handleSignal: (handler) => {
+        installed.push(`${handler.type}:${handler.id}`);
+      },
+      handleSource: (handler) => {
+        installed.push(`${handler.type}:${handler.id}`);
+      },
+    });
+
+    expect(procedure.procedureState).toEqual(
+      expect.objectContaining({
+        accumulators: expect.any(Object),
+        markers: expect.any(Object),
+        receipts: expect.any(Object),
+        records: expect.any(Object),
+      }),
+    );
+    expect(installed).toEqual([
+      'source:source.tool-outcome.procedure',
+      'source:agent.user.message:feedback-satisfaction-judge',
+      'signal:signal.feedback-domain-judge',
+      'signal:signal.feedback-action-planner',
+    ]);
+  });
+
   it('creates stable idempotency keys for memory actions', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
     const signal = createDomainSignal({
@@ -192,6 +245,69 @@ describe('feedbackActionPlanner', () => {
       }),
     );
     expect(second).toEqual(first);
+  });
+
+  /**
+   * @example
+   * action services own memory action preparation while the handler only dispatches the plan.
+   */
+  it('dispatches memory action plans prepared by injected action services', async () => {
+    const action = {
+      actionId: 'action:custom-memory',
+      actionType: 'action.user-memory.handle' as const,
+      chain: {
+        chainId: 'chain_1',
+        parentNodeId: 'sig_action_service',
+        parentSignalId: 'sig_action_service',
+        rootSourceId: 'source_action_service',
+      },
+      payload: {
+        agentId: undefined,
+        conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout' as const, priority: 100 },
+        evidence: [],
+        feedbackHint: 'not_satisfied' as const,
+        idempotencyKey: 'custom-memory-key',
+        message: 'Remember this preference.',
+        messageId: 'msg_action_service',
+        reason: 'custom action service',
+        sourceHints: {},
+        topicId: undefined,
+      },
+      signal: {
+        signalId: 'sig_action_service',
+        signalType: 'signal.feedback.domain.memory',
+      },
+      source: {
+        sourceId: 'source_action_service',
+        sourceType: 'agent.user.message' as const,
+      },
+      timestamp: 1,
+    } satisfies ActionUserMemoryHandle;
+    const prepare = vi.fn(() => ({
+      action,
+      reason: 'custom memory action plan',
+      risk: 'low' as const,
+    }));
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare },
+      },
+    });
+    const signal = createDomainSignal({
+      message: 'Remember this preference.',
+      messageId: 'msg_action_service',
+      signalId: 'sig_action_service',
+      sourceId: 'source_action_service',
+      target: 'memory',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(prepare).toHaveBeenCalledWith(signal);
+    expect(result).toEqual({
+      actions: [action],
+      status: 'dispatch',
+    });
   });
 
   it('plans skill-management actions for skill domain signals', async () => {
@@ -332,6 +448,80 @@ describe('feedbackActionPlanner', () => {
         bucketKey: 'topic:thread_1:skill',
         domain: 'skill',
       }),
+    );
+  });
+
+  /**
+   * @example
+   * procedureState-only dependencies support weak satisfied skill accumulation.
+   */
+  it('accumulates satisfied skill feedback through procedure state service', async () => {
+    let now = 100;
+    const store = createStore();
+    const procedure = createProcedurePolicyOptions({
+      now: () => now,
+      policyStateStore: store,
+      ttlSeconds: 3600,
+    });
+    const handler = createFeedbackActionPlannerSignalHandler({
+      procedure: {
+        procedureState: procedure.procedureState,
+      },
+    });
+
+    const first = await handler.handle(
+      createDomainSignal({
+        message: 'This successful workflow can be kept as a reference.',
+        messageId: 'msg_skill_state_positive_1',
+        satisfactionResult: 'satisfied',
+        signalId: 'sig_skill_state_positive_1',
+        sourceId: 'source_skill_state_positive_1',
+        target: 'skill',
+      }),
+      context,
+    );
+    now = 130;
+    const second = await handler.handle(
+      createDomainSignal({
+        message: 'The review flow from earlier is worth reusing next time.',
+        messageId: 'msg_skill_state_positive_2',
+        satisfactionResult: 'satisfied',
+        signalId: 'sig_skill_state_positive_2',
+        sourceId: 'source_skill_state_positive_2',
+        target: 'skill',
+      }),
+      context,
+    );
+    const snapshot = await new AgentSignalProcedureInspector(store).inspectScope('topic:thread_1');
+
+    expect(first).toBeUndefined();
+    expect(second).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              bucketKey: 'topic:thread_1:skill',
+              domain: 'skill',
+              recordIds: [
+                'procedure-record:sig_skill_state_positive_1:skill-candidate',
+                'procedure-record:sig_skill_state_positive_2:skill-candidate',
+              ],
+              suggestedActions: ['maintain'],
+            }),
+            signalType: 'signal.procedure.bucket.scored',
+          }),
+        ],
+        status: 'dispatch',
+      }),
+    );
+    expect(snapshot.markers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domainKey: 'skill',
+          markerType: 'accumulated',
+          signalId: 'sig_skill_state_positive_2:signal:procedure-accumulated',
+        }),
+      ]),
     );
   });
 

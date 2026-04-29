@@ -122,6 +122,21 @@ export const createToolOutcomeSourceHandler = (deps: ToolOutcomeProcedureDeps) =
         toolCallId: payload.toolCallId,
       });
 
+      await deps.receiptStore.append({
+        createdAt: now,
+        domainKey: payload.domainKey,
+        id: `procedure-receipt:${record.id}`,
+        intentClass: payload.intentClass,
+        messageId: payload.messageId,
+        recordIds: [record.id],
+        relatedObjects: payload.relatedObjects,
+        scopeKey: context.scopeKey,
+        sourceId: source.sourceId,
+        status: payload.outcome.status === 'failed' ? 'failed' : 'handled',
+        summary: payload.outcome.summary ?? `${payload.domainKey} tool outcome handled.`,
+        updatedAt: now,
+      });
+
       if (
         shouldWriteHandledMarker({
           domainKey: payload.domainKey,
@@ -144,21 +159,6 @@ export const createToolOutcomeSourceHandler = (deps: ToolOutcomeProcedureDeps) =
           }),
         );
       }
-
-      await deps.receiptStore.append({
-        createdAt: now,
-        domainKey: payload.domainKey,
-        id: `procedure-receipt:${record.id}`,
-        intentClass: payload.intentClass,
-        messageId: payload.messageId,
-        recordIds: [record.id],
-        relatedObjects: payload.relatedObjects,
-        scopeKey: context.scopeKey,
-        sourceId: source.sourceId,
-        status: payload.outcome.status === 'failed' ? 'failed' : 'handled',
-        summary: payload.outcome.summary ?? `${payload.domainKey} tool outcome handled.`,
-        updatedAt: now,
-      });
 
       return { signals: [signal], status: 'dispatch' };
     },

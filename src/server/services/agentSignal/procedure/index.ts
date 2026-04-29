@@ -1,14 +1,8 @@
+import { createProcedureStateService } from '../services/procedureStateService';
 import type { AgentSignalPolicyStateStore } from '../store/types';
-import {
-  appendAndScoreProcedureAccumulatorRecord,
-  appendProcedureAccumulatorRecord,
-} from './accumulator';
-import { createProcedureMarkerKeysForRead } from './keys';
-import { readFirstActiveHandledProcedureMarker, writeProcedureMarker } from './marker';
-import { appendProcedureReceipt } from './receipt';
-import { writeProcedureRecordField } from './record';
 import type { AgentSignalProcedureRecord } from './types';
 
+export { createProcedureStateService } from '../services/procedureStateService';
 export * from './accumulator';
 export * from './batchScorer';
 export * from './emitToolOutcome';
@@ -47,50 +41,34 @@ export interface CreateProcedurePolicyOptionsInput {
  */
 export const createProcedurePolicyOptions = (input: CreateProcedurePolicyOptionsInput) => {
   const now = input.now ?? (() => Date.now());
-  const appendRecord = async (record: AgentSignalProcedureRecord) => {
-    await appendProcedureAccumulatorRecord(input.policyStateStore, record, input.ttlSeconds);
-  };
+  const procedureState = createProcedureStateService({ ...input, now });
 
   return {
     accumulator: {
       appendAndScore: (record: AgentSignalProcedureRecord) =>
-        appendAndScoreProcedureAccumulatorRecord(input.policyStateStore, record, input.ttlSeconds, {
-          now: now(),
-        }),
-      appendRecord,
+        procedureState.accumulators.appendAndScore(record),
+      appendRecord: (record: AgentSignalProcedureRecord) =>
+        procedureState.accumulators.append(record),
     },
     markerReader: {
-      shouldSuppress: async (markerInput: {
+      shouldSuppress: (markerInput: {
         domainKey: string;
         intentClass?: string;
         intentClassCandidates?: string[];
         procedureKey: string;
         scopeKey: string;
-      }) => {
-        const marker = await readFirstActiveHandledProcedureMarker(
-          input.policyStateStore,
-          createProcedureMarkerKeysForRead(markerInput),
-          now(),
-        );
-
-        return Boolean(marker);
-      },
+      }) => procedureState.markers.shouldSuppress(markerInput),
     },
     markerStore: {
-      write: (marker: Parameters<typeof writeProcedureMarker>[1]) =>
-        writeProcedureMarker(input.policyStateStore, marker, input.ttlSeconds),
+      write: procedureState.markers.write,
     },
     now,
+    procedureState,
     receiptStore: {
-      append: (receipt: Parameters<typeof appendProcedureReceipt>[1]) =>
-        appendProcedureReceipt(input.policyStateStore, receipt, {
-          maxItems: 8,
-          ttlSeconds: input.ttlSeconds,
-        }),
+      append: procedureState.receipts.append,
     },
     recordStore: {
-      write: (record: AgentSignalProcedureRecord) =>
-        writeProcedureRecordField(input.policyStateStore, record, input.ttlSeconds),
+      write: (record: AgentSignalProcedureRecord) => procedureState.records.write(record),
     },
     ttlSeconds: input.ttlSeconds,
   };

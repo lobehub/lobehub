@@ -1,5 +1,5 @@
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import type { GenerateObjectPayload, GenerateObjectSchema } from '@lobechat/model-runtime';
 import { chainAgentSignalAnalyzeIntentRoute } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -75,6 +75,52 @@ const FeedbackDomainGenerateObjectSchema = {
   strict: true,
 } satisfies GenerateObjectSchema;
 
+const generateObjectRoles = ['assistant', 'system', 'user'] as const;
+
+const isGenerateObjectRole = (
+  role: string,
+): role is GenerateObjectPayload['messages'][number]['role'] => {
+  return generateObjectRoles.includes(role as (typeof generateObjectRoles)[number]);
+};
+
+/**
+ * Normalizes prompt-chain messages for generateObject.
+ *
+ * Before:
+ * - `{ role: "system", content: "Route feedback" }`
+ * - `{ role: "tool", content: "Unsupported role" }`
+ *
+ * After:
+ * - `{ role: "system", content: "Route feedback" }`
+ * - Throws `TypeError` for roles or content shapes generateObject cannot consume
+ */
+const normalizeGenerateObjectMessages = (
+  messages: NonNullable<ReturnType<typeof chainAgentSignalAnalyzeIntentRoute>['messages']>,
+): GenerateObjectPayload['messages'] => {
+  return messages.map((message) => {
+    if (!isGenerateObjectRole(message.role)) {
+      throw new TypeError(`Unsupported feedback domain message role: ${message.role}`);
+    }
+
+    if (typeof message.content !== 'string') {
+      throw new TypeError('Feedback domain message content must be a string.');
+    }
+
+    if (message.name) {
+      return {
+        content: message.content,
+        name: message.name,
+        role: message.role,
+      };
+    }
+
+    return {
+      content: message.content,
+      role: message.role,
+    };
+  });
+};
+
 export interface FeedbackDomainJudgeAgentModelConfig {
   model: string;
   provider: string;
@@ -144,7 +190,7 @@ export class FeedbackDomainJudgeAgentService {
 
     const result = await modelRuntime.generateObject(
       {
-        messages: payload.messages as any[],
+        messages: normalizeGenerateObjectMessages(payload.messages ?? []),
         model: this.modelConfig.model,
         schema: FeedbackDomainGenerateObjectSchema,
       },
