@@ -20,7 +20,10 @@ export interface TrustedClientPayload {
 
 export interface MarketAuthVariables {
   db?: MarketDatabase;
-  marketEnv?: Pick<MarketEnv, 'MARKET_TRUSTED_CLIENT_ID' | 'MARKET_TRUSTED_CLIENT_SECRET'>;
+  marketEnv?: Pick<
+    MarketEnv,
+    'MARKET_TRUSTED_CLIENT_ID' | 'MARKET_TRUSTED_CLIENT_SECRET' | 'MARKET_UPSTREAM_BASE_URL'
+  >;
   trustedPayload?: TrustedClientPayload;
 }
 

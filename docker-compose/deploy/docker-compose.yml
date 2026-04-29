@@ -57,6 +57,7 @@ services:
       - 'MARKET_PUBLIC_BASE_URL=${APP_URL}/market-api'
       - 'MARKET_TRUSTED_CLIENT_ID=${MARKET_TRUSTED_CLIENT_ID}'
       - 'MARKET_TRUSTED_CLIENT_SECRET=${MARKET_TRUSTED_CLIENT_SECRET}'
+      - 'MARKET_UPSTREAM_BASE_URL=${MARKET_UPSTREAM_BASE_URL}'
     restart: always
     networks:
       - lobe-network

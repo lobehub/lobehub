@@ -7,11 +7,15 @@ import { jsonError, MarketHttpError, notImplemented } from './http/errors';
 import { createAgentRoutes } from './http/routes/agents';
 import { createHealthRoutes } from './http/routes/health';
 import { createOidcRoutes } from './http/routes/oidc';
+import { createUpstreamProxyRoutes } from './http/routes/upstream';
 import type { MarketDatabase, MarketHonoEnv } from './types';
 
 interface CreateMarketAppOptions {
   db?: MarketDatabase;
-  env?: Pick<MarketEnv, 'MARKET_TRUSTED_CLIENT_ID' | 'MARKET_TRUSTED_CLIENT_SECRET'>;
+  env?: Pick<
+    MarketEnv,
+    'MARKET_TRUSTED_CLIENT_ID' | 'MARKET_TRUSTED_CLIENT_SECRET' | 'MARKET_UPSTREAM_BASE_URL'
+  >;
 }
 
 export const createMarketApp = (options: CreateMarketAppOptions = {}) => {
@@ -28,6 +32,7 @@ export const createMarketApp = (options: CreateMarketAppOptions = {}) => {
   app.route('/', createHealthRoutes());
   app.route('/lobehub-oidc', createOidcRoutes());
   app.route('/api/v1/agents', createAgentRoutes());
+  app.route('/api/v1', createUpstreamProxyRoutes());
 
   app.all('/lobehub-oidc/auth', (c) => notImplemented(c, '/lobehub-oidc/auth'));
   app.all('/lobehub-oidc/token', (c) => notImplemented(c, '/lobehub-oidc/token'));

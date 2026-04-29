@@ -7,6 +7,7 @@ const EnvSchema = z.object({
   MARKET_PUBLIC_BASE_URL: z.string().url().optional(),
   MARKET_TRUSTED_CLIENT_ID: z.string().min(1),
   MARKET_TRUSTED_CLIENT_SECRET: z.string().min(1),
+  MARKET_UPSTREAM_BASE_URL: z.string().url().optional(),
 });
 
 export type MarketEnv = z.infer<typeof EnvSchema>;
