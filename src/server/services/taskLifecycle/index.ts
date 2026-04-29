@@ -24,7 +24,6 @@ import { TaskReviewService } from '@/server/services/taskReview';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
 import {
-  collectTopicArtifacts,
   isTrivialAssistantContent,
   selectBriefPriority,
   selectBriefType,
@@ -371,12 +370,8 @@ export class TaskLifecycleService {
       const topicLink = await this.taskTopicModel.findByTopicId(topicId);
       const topicStartedAt = topicLink?.createdAt ?? new Date(0);
 
-      const artifacts: BriefArtifacts = await collectTopicArtifacts({
-        db: this.db,
-        since: topicStartedAt,
-        taskId,
-        userId: this.userId,
-      });
+      const pinnedDocs = await this.taskModel.getDocumentsPinnedSince(taskId, topicStartedAt);
+      const artifacts: BriefArtifacts = { documents: pinnedDocs };
 
       const handoff = (topicLink?.handoff as TaskTopicHandoff | null) ?? null;
 

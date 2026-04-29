@@ -1,8 +1,4 @@
-import type { BriefArtifacts, BriefType, TaskItem } from '@lobechat/types';
-import { and, eq, gte } from 'drizzle-orm';
-
-import { documents, taskDocuments } from '@/database/schemas';
-import type { LobeChatDatabase } from '@/database/type';
+import type { BriefType, TaskItem } from '@lobechat/types';
 
 /** Inputs for the brief-emission rule. Pure data, no I/O. */
 export interface ShouldEmitTopicBriefInput {
@@ -65,45 +61,3 @@ export const selectBriefType = (_input: ShouldEmitTopicBriefInput): BriefType =>
  * in the inbox without paging the user. Reserved for future heuristics.
  */
 export const selectBriefPriority = (_input: ShouldEmitTopicBriefInput): string => 'normal';
-
-/**
- * Collect documents that were pinned to the task during the topic's execution
- * window. We run synchronously after topic completion, so anything pinned at
- * or after `since` (the topic start) is attributable to this topic — no upper
- * bound needed.
- *
- * `task_documents.pinnedBy` records who pinned the document, but we include
- * all pins regardless of source: if the user manually pinned something during
- * a topic run it's still part of the delivered context.
- */
-export const collectTopicArtifacts = async (params: {
-  db: LobeChatDatabase;
-  since: Date;
-  taskId: string;
-  userId: string;
-}): Promise<BriefArtifacts> => {
-  const { db, taskId, userId, since } = params;
-  const rows = await db
-    .select({
-      fileType: documents.fileType,
-      id: documents.id,
-      title: documents.title,
-    })
-    .from(taskDocuments)
-    .innerJoin(documents, eq(taskDocuments.documentId, documents.id))
-    .where(
-      and(
-        eq(taskDocuments.taskId, taskId),
-        eq(taskDocuments.userId, userId),
-        gte(taskDocuments.createdAt, since),
-      ),
-    );
-
-  return {
-    documents: rows.map((d) => ({
-      id: d.id,
-      kind: d.fileType ?? null,
-      title: d.title ?? null,
-    })),
-  };
-};
