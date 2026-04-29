@@ -270,6 +270,7 @@
   "footer.title": "Like Our Product?",
   "fullscreen": "Full Screen Mode",
   "generation.hero.taglinePrefix": "Start Creating with",
+  "generation.promptModeration.blocked": "Content policy check failed. Please revise your prompt.",
   "getDesktopApp": "Get Desktop App",
   "historyRange": "History Range",
   "home.suggestQuestions": "Try these examples",

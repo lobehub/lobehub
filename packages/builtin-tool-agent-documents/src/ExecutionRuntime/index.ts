@@ -3,15 +3,13 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import type {
   CopyDocumentArgs,
   CreateDocumentArgs,
-  EditDocumentArgs,
   ListDocumentsArgs,
   ModifyDocumentNodesArgs,
   ReadDocumentArgs,
-  ReadDocumentByFilenameArgs,
   RemoveDocumentArgs,
   RenameDocumentArgs,
+  ReplaceDocumentContentArgs,
   UpdateLoadRuleArgs,
-  UpsertDocumentByFilenameArgs,
 } from '../types';
 
 interface AgentDocumentRecord {
@@ -60,11 +58,6 @@ export interface AgentDocumentsRuntimeService {
       topicId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  editDocument: (
-    params: EditDocumentArgs & {
-      agentId: string;
-    },
-  ) => Promise<AgentDocumentRecord | undefined>;
   listDocuments: (
     params: ListDocumentsArgs & {
       agentId: string;
@@ -86,11 +79,6 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  readDocumentByFilename: (
-    params: ReadDocumentByFilenameArgs & {
-      agentId: string;
-    },
-  ) => Promise<AgentDocumentRecord | undefined>;
   removeDocument: (
     params: RemoveDocumentArgs & {
       agentId: string;
@@ -101,13 +89,13 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  updateLoadRule: (
-    params: UpdateLoadRuleArgs & {
+  replaceDocumentContent: (
+    params: ReplaceDocumentContentArgs & {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  upsertDocumentByFilename: (
-    params: UpsertDocumentByFilenameArgs & {
+  updateLoadRule: (
+    params: UpdateLoadRuleArgs & {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
@@ -159,19 +147,6 @@ export class AgentDocumentsExecutionRuntime {
     return doc.documentId === currentDocumentId;
   }
 
-  private async shouldBlockUpsertForCurrentPageDocument(
-    agentId: string,
-    filename: string,
-    context?: AgentDocumentOperationContext,
-  ) {
-    const currentDocumentId = this.getCurrentDocumentId(context);
-    if (!currentDocumentId) return false;
-
-    const docs = await this.service.listDocuments({ agentId });
-
-    return docs.some((doc) => doc.documentId === currentDocumentId && doc.filename === filename);
-  }
-
   private formatDocumentReadContent(
     doc: AgentDocumentRecord,
     format: 'xml' | 'markdown' | 'both' = 'xml',
@@ -220,62 +195,6 @@ export class AgentDocumentsExecutionRuntime {
     return {
       content: JSON.stringify(list),
       state: { documents: list },
-      success: true,
-    };
-  }
-
-  async readDocumentByFilename(
-    args: ReadDocumentByFilenameArgs,
-    context?: AgentDocumentOperationContext,
-  ): Promise<BuiltinServerRuntimeOutput> {
-    const agentId = this.resolveAgentId(context);
-    if (!agentId) {
-      return {
-        content: 'Cannot read agent document without agentId context.',
-        success: false,
-      };
-    }
-
-    const doc = await this.service.readDocumentByFilename({ ...args, agentId });
-    if (!doc) return { content: `Document not found: ${args.filename}`, success: false };
-
-    const format = args.format ?? 'xml';
-
-    return {
-      content: this.formatDocumentReadContent(doc, format),
-      state: {
-        content: doc.content,
-        filename: args.filename,
-        id: doc.id,
-        title: doc.title,
-        xml: doc.litexml,
-      },
-      success: true,
-    };
-  }
-
-  async upsertDocumentByFilename(
-    args: UpsertDocumentByFilenameArgs,
-    context?: AgentDocumentOperationContext,
-  ): Promise<BuiltinServerRuntimeOutput> {
-    const agentId = this.resolveAgentId(context);
-    if (!agentId) {
-      return {
-        content: 'Cannot upsert agent document without agentId context.',
-        success: false,
-      };
-    }
-
-    if (await this.shouldBlockUpsertForCurrentPageDocument(agentId, args.filename, context)) {
-      return this.buildCurrentPageDocumentWriteBlockedResult('upsertDocumentByFilename');
-    }
-
-    const doc = await this.service.upsertDocumentByFilename({ ...args, agentId });
-    if (!doc) return { content: `Failed to upsert document: ${args.filename}`, success: false };
-
-    return {
-      content: `Upserted document "${args.filename}" (${doc.id}).`,
-      state: { filename: args.filename, id: doc.id },
       success: true,
     };
   }
@@ -338,14 +257,14 @@ export class AgentDocumentsExecutionRuntime {
     };
   }
 
-  async editDocument(
-    args: EditDocumentArgs,
+  async replaceDocumentContent(
+    args: ReplaceDocumentContentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
-        content: 'Cannot edit agent document without agentId context.',
+        content: 'Cannot replace agent document content without agentId context.',
         success: false,
       };
     }
@@ -354,10 +273,10 @@ export class AgentDocumentsExecutionRuntime {
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
 
     if (this.isCurrentPageDocument(existing, context)) {
-      return this.buildCurrentPageDocumentWriteBlockedResult('editDocument');
+      return this.buildCurrentPageDocumentWriteBlockedResult('replaceDocumentContent');
     }
 
-    const doc = await this.service.editDocument({ ...args, agentId });
+    const doc = await this.service.replaceDocumentContent({ ...args, agentId });
     if (!doc) return { content: `Failed to update document ${args.id}.`, success: false };
 
     return {

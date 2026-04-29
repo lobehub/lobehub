@@ -111,6 +111,8 @@
   "response.PluginServerError": "기능 서버에서 오류가 반환되었습니다. 다음 정보를 기반으로 기능 설명, 설정, 서버 구현을 확인하세요",
   "response.PluginSettingsInvalid": "이 기능을 사용하려면 설정을 완료해야 합니다. 기능 설정을 확인하세요",
   "response.ProviderBizError": "모델 제공자에서 오류가 반환되었습니다. 다음 정보를 기반으로 문제를 해결하거나 잠시 후 다시 시도하세요",
+  "response.ProviderContentModeration": "콘텐츠 정책 확인에 실패했습니다. 프롬프트를 수정한 후 다시 시도하세요.",
+  "response.ProviderContentModerationWarning": "정책 위반이 반복적으로 감지되었습니다. 지속적인 오용은 계정 사용이 제한될 수 있습니다.",
   "response.QuotaLimitReached": "토큰 사용량 또는 요청 횟수가 할당량 상한에 도달했습니다. 할당량을 늘리거나 잠시 후 다시 시도하세요",
   "response.QuotaLimitReachedCloud": "모델 서비스가 현재 과부하 상태입니다. 나중에 다시 시도하세요.",
   "response.ServerAgentRuntimeError": "도우미 실행 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도하거나 이메일로 지원팀에 문의하세요",

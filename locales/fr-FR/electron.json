@@ -35,6 +35,7 @@
   "navigation.recentView": "Vues récentes",
   "navigation.resources": "Ressources",
   "navigation.settings": "Paramètres",
+  "navigation.tasks": "Tâches",
   "navigation.unpin": "Désépingler",
   "notification.finishChatGeneration": "Génération du message par l'IA terminée",
   "proxy.auth": "Authentification requise",

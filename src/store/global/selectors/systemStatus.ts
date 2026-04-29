@@ -1,5 +1,5 @@
-import { type GlobalState } from '../initialState';
-import { INITIAL_STATUS } from '../initialState';
+import type { GlobalState, ModelDetailPanelExpandedKey } from '../initialState';
+import { DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS, INITIAL_STATUS } from '../initialState';
 
 export const systemStatus = (s: GlobalState) => s.status;
 
@@ -175,6 +175,8 @@ const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
 const language = (s: GlobalState) => s.status.language || 'auto';
+const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] =>
+  s.status.modelDetailPanelExpandedKeys ?? [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS];
 const modelSwitchPanelGroupMode = (s: GlobalState) =>
   s.status.modelSwitchPanelGroupMode || 'byProvider';
 const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 460;
@@ -256,6 +258,7 @@ export const systemStatusSelectors = {
   leftPanelWidth,
   mobileShowPortal,
   mobileShowTopic,
+  modelDetailPanelExpandedKeys,
   modelSwitchPanelGroupMode,
   modelSwitchPanelWidth,
   pageAgentPanelWidth,

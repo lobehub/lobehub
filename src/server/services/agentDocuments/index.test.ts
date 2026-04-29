@@ -421,7 +421,7 @@ describe('AgentDocumentsService', () => {
     });
   });
 
-  describe('editDocumentById', () => {
+  describe('replaceDocumentContentById', () => {
     it('should save history before editing document content', async () => {
       mockModel.findById
         .mockResolvedValueOnce({
@@ -440,7 +440,7 @@ describe('AgentDocumentsService', () => {
         });
 
       const service = new AgentDocumentsService(db, userId);
-      const result = await service.editDocumentById('agent-doc-1', 'new', 'agent-1');
+      const result = await service.replaceDocumentContentById('agent-doc-1', 'new', 'agent-1');
 
       expect(mockDocumentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
         'documents-1',
@@ -480,7 +480,7 @@ describe('AgentDocumentsService', () => {
         });
 
       const service = new AgentDocumentsService(db, userId);
-      await service.editDocumentById('agent-doc-1', 'same', 'agent-1');
+      await service.replaceDocumentContentById('agent-doc-1', 'same', 'agent-1');
 
       expect(mockDocumentService.trySaveCurrentDocumentHistory).not.toHaveBeenCalled();
       expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {

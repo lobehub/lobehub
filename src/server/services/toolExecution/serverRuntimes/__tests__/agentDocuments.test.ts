@@ -39,7 +39,6 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     copyDocumentById: ReturnType<typeof vi.fn>;
     createDocument: ReturnType<typeof vi.fn>;
     createForTopic: ReturnType<typeof vi.fn>;
-    upsertDocumentByFilename: ReturnType<typeof vi.fn>;
   };
   let pinDocument: ReturnType<typeof vi.fn>;
 
@@ -48,7 +47,6 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       copyDocumentById: vi.fn().mockResolvedValue(newDoc),
       createDocument: vi.fn().mockResolvedValue(newDoc),
       createForTopic: vi.fn().mockResolvedValue(newDoc),
-      upsertDocumentByFilename: vi.fn().mockResolvedValue(newDoc),
     };
     pinDocument = vi.fn().mockResolvedValue(undefined);
 
@@ -101,17 +99,6 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
   });
 
-  it('pins documents produced by upsertDocumentByFilename', async () => {
-    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
-
-    await runtime.upsertDocumentByFilename(
-      { content: 'body', filename: 'daily-brief.md' },
-      { agentId: 'agent-1' },
-    );
-
-    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
-  });
-
   it('does not pin when service returns undefined (e.g. copy of missing doc)', async () => {
     serviceImpl.copyDocumentById.mockResolvedValue(undefined);
     const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
@@ -127,16 +114,14 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     copyDocument: vi.fn(),
     createDocument: vi.fn(),
     createTopicDocument: vi.fn(),
-    editDocument: vi.fn(),
     listDocuments: vi.fn(),
     listTopicDocuments: vi.fn(),
     modifyNodes: vi.fn(),
     readDocument: vi.fn(),
-    readDocumentByFilename: vi.fn(),
     removeDocument: vi.fn(),
     renameDocument: vi.fn(),
+    replaceDocumentContent: vi.fn(),
     updateLoadRule: vi.fn(),
-    upsertDocumentByFilename: vi.fn(),
   });
 
   it('returns documents.id (not agentDocuments.id) for state.documentId', async () => {
@@ -211,7 +196,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(stub.createTopicDocument).not.toHaveBeenCalled();
   });
 
-  it('blocks editDocument for the current page document', async () => {
+  it('blocks replaceDocumentContent for the current page document', async () => {
     const stub = makeStub();
     stub.readDocument.mockResolvedValue({
       content: 'body',
@@ -221,7 +206,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     });
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
-    const result = await runtime.editDocument(
+    const result = await runtime.replaceDocumentContent(
       { content: 'updated', id: 'agent-doc-assoc-id' },
       {
         agentId: 'agent-1',
@@ -235,39 +220,10 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
       code: 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN',
       kind: 'replan',
     });
-    expect(stub.editDocument).not.toHaveBeenCalled();
+    expect(stub.replaceDocumentContent).not.toHaveBeenCalled();
   });
 
-  it('blocks upsertDocumentByFilename when the filename resolves to the current page document', async () => {
-    const stub = makeStub();
-    stub.listDocuments.mockResolvedValue([
-      {
-        documentId: 'documents-row-id',
-        filename: 'current-doc.md',
-        id: 'agent-doc-assoc-id',
-        title: 'Current Doc',
-      },
-    ]);
-
-    const runtime = new AgentDocumentsExecutionRuntime(stub);
-    const result = await runtime.upsertDocumentByFilename(
-      { content: 'updated', filename: 'current-doc.md' },
-      {
-        agentId: 'agent-1',
-        currentDocumentId: 'documents-row-id',
-        scope: 'page',
-      },
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toMatchObject({
-      code: 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN',
-      kind: 'replan',
-    });
-    expect(stub.upsertDocumentByFilename).not.toHaveBeenCalled();
-  });
-
-  it('still allows editing a different agent document in page scope', async () => {
+  it('still allows replacing a different agent document in page scope', async () => {
     const stub = makeStub();
     stub.readDocument.mockResolvedValue({
       content: 'body',
@@ -275,7 +231,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
       id: 'agent-doc-assoc-id-2',
       title: 'Other Doc',
     });
-    stub.editDocument.mockResolvedValue({
+    stub.replaceDocumentContent.mockResolvedValue({
       content: 'updated',
       documentId: 'documents-row-id-2',
       id: 'agent-doc-assoc-id-2',
@@ -283,7 +239,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     });
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
-    const result = await runtime.editDocument(
+    const result = await runtime.replaceDocumentContent(
       { content: 'updated', id: 'agent-doc-assoc-id-2' },
       {
         agentId: 'agent-1',
@@ -293,7 +249,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(stub.editDocument).toHaveBeenCalledWith({
+    expect(stub.replaceDocumentContent).toHaveBeenCalledWith({
       agentId: 'agent-1',
       content: 'updated',
       id: 'agent-doc-assoc-id-2',
@@ -306,16 +262,14 @@ describe('AgentDocumentsExecutionRuntime.listDocuments', () => {
     copyDocument: vi.fn(),
     createDocument: vi.fn(),
     createTopicDocument: vi.fn(),
-    editDocument: vi.fn(),
     listDocuments: vi.fn(),
     listTopicDocuments: vi.fn(),
     modifyNodes: vi.fn(),
     readDocument: vi.fn(),
-    readDocumentByFilename: vi.fn(),
     removeDocument: vi.fn(),
     renameDocument: vi.fn(),
+    replaceDocumentContent: vi.fn(),
     updateLoadRule: vi.fn(),
-    upsertDocumentByFilename: vi.fn(),
   });
 
   it('lists current topic documents while preserving agent document ids', async () => {

@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Планираната ви задача \"{{jobName}}\" се провали. Отворете задачата, за да видите пълната грешка.",
+  "agent_cron_job_failed_insufficient_budget": "Планираната ви задача \"{{jobName}}\" не можа да се изпълни, защото кредитите по акаунта ви са изчерпани. Заредете кредити или надградете плана си, за да възобновите бъдещите изпълнения.",
+  "agent_cron_job_failed_insufficient_budget_title": "Планираната задача е поставена на пауза: недостатъчно кредити",
+  "agent_cron_job_failed_title": "Планираната задача се провали",
   "billboard.learnMore": "Научете повече",
   "billboard.menuLabel": "Съобщения",
+  "image_generation_completed": "Вашето изображение \"{{prompt}}\" е готово.",
+  "image_generation_completed_title": "Генерирането на изображението завърши",
   "inbox.archiveAll": "Архивирай всички",
   "inbox.empty": "Все още няма известия",
   "inbox.emptyUnread": "Няма непрочетени известия",
   "inbox.filterUnread": "Показвай само непрочетените",
   "inbox.markAllRead": "Маркирай всички като прочетени",
-  "inbox.title": "Известия"
+  "inbox.title": "Известия",
+  "video_generation_completed": "Вашето видео \"{{prompt}}\" е готово.",
+  "video_generation_completed_title": "Генерирането на видеото завърши"
 }

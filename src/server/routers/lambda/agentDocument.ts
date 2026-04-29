@@ -332,23 +332,6 @@ export const agentDocumentRouter = router({
     }),
 
   /**
-   * Tool-oriented: read document by filename
-   */
-  readDocumentByFilename: agentDocumentProcedure
-    .input(
-      z.object({
-        agentId: z.string(),
-        format: readFormatSchema,
-        filename: z.string(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      return input.format
-        ? ctx.agentDocumentService.getDocumentSnapshotByFilename(input.agentId, input.filename)
-        : ctx.agentDocumentService.getDocumentByFilename(input.agentId, input.filename);
-    }),
-
-  /**
    * Tool-oriented: stat document by VFS path
    */
   statDocumentByPath: agentDocumentProcedure
@@ -654,25 +637,6 @@ export const agentDocumentRouter = router({
     }),
 
   /**
-   * Tool-oriented: upsert document by filename
-   */
-  upsertDocumentByFilename: agentDocumentProcedure
-    .input(
-      z.object({
-        agentId: z.string(),
-        content: z.string(),
-        filename: z.string(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.upsertDocumentByFilename({
-        agentId: input.agentId,
-        content: input.content,
-        filename: input.filename,
-      });
-    }),
-
-  /**
    * Tool-oriented: associate an existing document with an agent
    */
   associateDocument: agentDocumentProcedure
@@ -764,9 +728,9 @@ export const agentDocumentRouter = router({
     }),
 
   /**
-   * Tool-oriented: edit document content by id
+   * Tool-oriented: replace document content by id
    */
-  editDocument: agentDocumentProcedure
+  replaceDocumentContent: agentDocumentProcedure
     .input(
       z.object({
         agentId: z.string(),
@@ -775,7 +739,11 @@ export const agentDocumentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.editDocumentById(input.id, input.content, input.agentId);
+      return ctx.agentDocumentService.replaceDocumentContentById(
+        input.id,
+        input.content,
+        input.agentId,
+      );
     }),
 
   /**

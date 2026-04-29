@@ -591,7 +591,7 @@ Document content here.
             {
               function: {
                 arguments: '{}',
-                name: 'lobe-page-agent____modifyNodes____builtin',
+                name: 'lobe-page-agent____modifyNodes',
               },
               id: 'call_1',
               type: 'function',
@@ -631,8 +631,7 @@ Document content here.
       expect(
         result.messages.some(
           (m) =>
-            m.role === 'assistant' &&
-            JSON.stringify(m).includes('lobe-page-agent____modifyNodes____builtin'),
+            m.role === 'assistant' && JSON.stringify(m).includes('lobe-page-agent____modifyNodes'),
         ),
       ).toBe(false);
       expect(result.metadata.disabledToolCallFilter).toEqual({

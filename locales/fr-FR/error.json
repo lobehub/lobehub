@@ -111,6 +111,8 @@
   "response.PluginServerError": "Erreur lors de la requête au serveur de la compétence. Veuillez vérifier le manifeste, la configuration ou l'implémentation.",
   "response.PluginSettingsInvalid": "Cette compétence doit être correctement configurée avant utilisation. Veuillez vérifier la configuration.",
   "response.ProviderBizError": "Erreur lors de la requête au service {{provider}}. Veuillez diagnostiquer ou réessayer.",
+  "response.ProviderContentModeration": "Échec de la vérification de la politique de contenu. Révisez votre demande et réessayez.",
+  "response.ProviderContentModerationWarning": "Violations répétées des règles détectées. Une mauvaise utilisation supplémentaire pourrait restreindre votre compte.",
   "response.QuotaLimitReached": "Désolé, la limite de quota pour cette clé a été atteinte. Veuillez augmenter le quota ou réessayer plus tard.",
   "response.QuotaLimitReachedCloud": "Le service du modèle est actuellement très sollicité. Veuillez réessayer plus tard.",
   "response.ServerAgentRuntimeError": "Désolé, le service Agent est actuellement indisponible. Veuillez réessayer plus tard ou nous contacter par e-mail.",

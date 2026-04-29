@@ -1,13 +1,12 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, Popover, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, Flexbox, Popover, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
-import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
@@ -88,7 +87,21 @@ const AgentSelect = memo(() => {
       .catch((e) => console.error('[AgentSelect] failed to prefetch agent config', e));
   };
 
-  if (isLoading) return <SkeletonItem height={40} padding={0} />;
+  if (isLoading)
+    return (
+      <Flexbox horizontal align={'center'} gap={8} height={40} padding={4}>
+        <Skeleton.Button
+          active
+          size={'small'}
+          style={{ borderRadius: cssVar.borderRadius, height: 32, minWidth: 32, width: 32 }}
+        />
+        <Skeleton.Button
+          active
+          size={'small'}
+          style={{ borderRadius: cssVar.borderRadius, height: 16, minWidth: 96, opacity: 0.5 }}
+        />
+      </Flexbox>
+    );
 
   return (
     <Popover

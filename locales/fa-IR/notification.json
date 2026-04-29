@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "وظیفه زمان‌بندی‌شده شما «{{jobName}}» با خطا مواجه شد. برای مشاهده جزئیات کامل خطا، وظیفه را باز کنید.",
+  "agent_cron_job_failed_insufficient_budget": "وظیفه زمان‌بندی‌شده شما «{{jobName}}» اجرا نشد زیرا اعتبار حساب شما کافی نیست. برای ادامه اجرای وظایف، حساب خود را شارژ یا پلن خود را ارتقا دهید.",
+  "agent_cron_job_failed_insufficient_budget_title": "توقف وظیفه زمان‌بندی‌شده: اعتبار ناکافی",
+  "agent_cron_job_failed_title": "خطا در وظیفه زمان‌بندی‌شده",
   "billboard.learnMore": "بیشتر بدانید",
   "billboard.menuLabel": "اطلاعیه‌ها",
+  "image_generation_completed": "تصویر شما با موضوع «{{prompt}}» آماده است.",
+  "image_generation_completed_title": "تولید تصویر تکمیل شد",
   "inbox.archiveAll": "بایگانی همه",
   "inbox.empty": "هنوز هیچ اعلانی وجود ندارد",
   "inbox.emptyUnread": "هیچ اعلان خوانده‌نشده‌ای وجود ندارد",
   "inbox.filterUnread": "فقط خوانده‌نشده‌ها را نشان بده",
   "inbox.markAllRead": "همه را به‌عنوان خوانده‌شده علامت بزن",
-  "inbox.title": "اعلانات"
+  "inbox.title": "اعلانات",
+  "video_generation_completed": "ویدیوی شما با موضوع «{{prompt}}» آماده است.",
+  "video_generation_completed_title": "تولید ویدیو تکمیل شد"
 }
