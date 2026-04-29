@@ -43,7 +43,9 @@ services:
       - lobe-network
 
   market:
-    image: lobehub/lobehub-market
+    build:
+      context: ../..
+      dockerfile: apps/market/Dockerfile
     container_name: lobehub-market
     depends_on:
       postgresql:

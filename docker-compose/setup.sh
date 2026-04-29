@@ -336,6 +336,16 @@ show_message() {
                 ;;
             esac
         ;;
+        tips_market_source_checkout_required)
+            case $LANGUAGE in
+                zh_CN)
+                    echo "当前部署配置需要从 LobeHub 源码构建 Market 服务。请在仓库的 docker-compose/deploy 目录中运行此脚本。"
+                ;;
+                *)
+                    echo "This deployment builds the Market service from the LobeHub source checkout. Run this script from the repository's docker-compose/deploy directory."
+                ;;
+            esac
+        ;;
         ask_regenerate_secrets)
             case $LANGUAGE in
                 zh_CN)
@@ -516,6 +526,13 @@ if [ -z "$LANGUAGE" ]; then
     esac
 fi
 
+section_check_market_source_checkout() {
+    if [ ! -f "../../apps/market/Dockerfile" ]; then
+        show_message "tips_market_source_checkout_required"
+        exit 1
+    fi
+}
+
 section_download_files(){
     # Download files asynchronously
     if ! command -v wget &> /dev/null ; then
@@ -538,6 +555,7 @@ if [ -d "data" ] || [ -d "s3_data" ]; then
     show_message "tips_already_installed"
     exit 0
 else
+    section_check_market_source_checkout
     section_download_files
 fi
 

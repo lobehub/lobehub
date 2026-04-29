@@ -19,4 +19,13 @@ describe('loadEnv', () => {
       }),
     ).toThrow('MARKET_TRUSTED_CLIENT_SECRET');
   });
+
+  it('rejects the setup-generated trusted client secret placeholder', () => {
+    expect(() =>
+      loadEnv({
+        ...validEnv,
+        MARKET_TRUSTED_CLIENT_SECRET: 'REPLACE_WITH_SETUP_GENERATED_MARKET_TRUSTED_CLIENT_SECRET',
+      }),
+    ).toThrow('MARKET_TRUSTED_CLIENT_SECRET');
+  });
 });
