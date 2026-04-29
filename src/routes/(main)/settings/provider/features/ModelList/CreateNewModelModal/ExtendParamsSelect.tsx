@@ -103,10 +103,6 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'hy3ReasoningEffort',
   },
   {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint',
-    key: 'deepseekV4ReasoningEffort',
-  },
-  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint',
     key: 'codexMaxReasoningEffort',
   },
@@ -227,11 +223,6 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   hy3ReasoningEffort: {
     labelSuffix: ' (Hy3 preview)',
     previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  deepseekV4ReasoningEffort: {
-    labelSuffix: ' (DeepSeek V4)',
-    previewWidth: 220,
     tag: 'reasoning_effort',
   },
   imageAspectRatio: { labelSuffix: '', previewWidth: 350, tag: 'aspect_ratio' },
@@ -365,7 +356,6 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
       grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
       hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="high" />,
-      deepseekV4ReasoningEffort: <DeepseekV4ReasoningEffortSlider value="high" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,

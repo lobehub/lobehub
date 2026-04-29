@@ -312,28 +312,6 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       },
     },
     {
-      children: <DeepseekV4ReasoningEffortSlider />,
-      desc: 'reasoning_effort',
-      label: t('extendParams.reasoningEffort.title'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'deepseekV4ReasoningEffort',
-      style: {
-        paddingBottom: 0,
-      },
-    },
-    {
-      children: <DeepseekV4ReasoningEffortSlider />,
-      desc: 'reasoning_effort',
-      label: t('extendParams.reasoningEffort.title'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'deepseekV4ReasoningEffort',
-      style: {
-        paddingBottom: 0,
-      },
-    },
-    {
       children: <CodexMaxReasoningEffortSlider />,
       desc: 'reasoning_effort',
       label: t('extendParams.reasoningEffort.title'),
