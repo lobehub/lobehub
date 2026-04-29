@@ -28,6 +28,7 @@ function toOpenAIStream(
   const id = `chatcmpl-towerai-${Date.now()}`;
   let buf = '';
   let closed = false;
+  let hadToolCalls = false;
 
   function emitChunk(
     ctrl: ReadableStreamDefaultController<Uint8Array>,
@@ -54,6 +55,25 @@ function toOpenAIStream(
       else if (line.startsWith('data: ')) data = line.slice(6);
     }
 
+    if (eventType === 'tool_calls' && data) {
+      let toolCalls: any[];
+      try {
+        toolCalls = JSON.parse(data);
+      } catch {
+        return false;
+      }
+      const chunk = {
+        id,
+        object: 'chat.completion.chunk',
+        created: Math.floor(Date.now() / 1000),
+        model,
+        choices: [{ delta: { tool_calls: toolCalls }, finish_reason: null, index: 0 }],
+      };
+      ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      hadToolCalls = true;
+      return false;
+    }
+
     if (eventType === 'text' && data) {
       let content: string;
       try {
@@ -63,7 +83,7 @@ function toOpenAIStream(
       }
       emitChunk(ctrl, content, null);
     } else if (eventType === 'stop') {
-      emitChunk(ctrl, '', 'stop');
+      emitChunk(ctrl, '', hadToolCalls ? 'tool_calls' : 'stop');
       ctrl.enqueue(encoder.encode('data: [DONE]\n\n'));
       ctrl.close();
       return true;
@@ -93,6 +113,55 @@ function toOpenAIStream(
   });
 }
 
+// Vertexai-endpoint models that support native function calling.
+// Corresponds to abilities.functionCall: true in the towerai model bank.
+// When tools are present for these models, pass them through directly instead of
+// converting to Tower AI's built-in search mode.
+const VERTEXAI_FUNCTION_CALL_MODELS = new Set([
+  'gemini-3-flash-preview',
+  'gemini-3.1-pro-preview',
+  'claude-sonnet-4-6',
+  'claude-sonnet-4-5-20250929',
+]);
+
+// JSON Schema fields that Vertex AI does not support in function declarations.
+// Vertex AI uses a restricted subset of JSON Schema — passing unsupported fields
+// results in a 400 INVALID_ARGUMENT / 471 error from the backend.
+const VERTEXAI_UNSUPPORTED_SCHEMA_KEYS = new Set([
+  'const',
+  '$schema',
+  '$id',
+  '$ref',
+  'definitions',
+  '$defs',
+  'examples',
+  'default',
+]);
+
+function sanitizeSchemaForVertexAI(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(sanitizeSchemaForVertexAI);
+
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (VERTEXAI_UNSUPPORTED_SCHEMA_KEYS.has(k)) continue;
+    result[k] = sanitizeSchemaForVertexAI(v);
+  }
+  return result;
+}
+
+function sanitizeToolsForVertexAI(tools: unknown[]): unknown[] {
+  return tools.map((tool) => {
+    if (!tool || typeof tool !== 'object') return tool;
+    const t = tool as any;
+    if (!t.function?.parameters) return tool;
+    return {
+      ...t,
+      function: { ...t.function, parameters: sanitizeSchemaForVertexAI(t.function.parameters) },
+    };
+  });
+}
+
 export const params = {
   baseURL: `${TOWERAI_DEFAULT_BASE_URL}/zi/webapi/chat/openai`,
   chatCompletion: {
@@ -105,6 +174,18 @@ export const params = {
       const model = (rest.model as string) ?? '';
       const isVertexai = model.startsWith('gemini') || model.startsWith('claude');
       const hasTools = Array.isArray(tools) && tools.length > 0;
+
+      // For vertexai models with native function calling support, pass tools through.
+      // Tower AI's vertexai endpoint returns tool calls as `event: tool_calls` SSE events,
+      // which toOpenAIStream converts to OpenAI format.
+      if (hasTools && VERTEXAI_FUNCTION_CALL_MODELS.has(model)) {
+        return {
+          ...rest,
+          stream: true,
+          tool_choice,
+          tools: sanitizeToolsForVertexAI(tools),
+        } as any;
+      }
 
       // Tower AI uses its own search params instead of function calling.
       // When LobeHub sends tools (e.g. web search), translate to Tower AI's native search API.

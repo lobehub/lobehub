@@ -9,6 +9,7 @@ export const getLLMConfig = () => {
       ENABLED_OPENAI: z.boolean(),
       OPENAI_API_KEY: z.string().optional(),
 
+      ENABLED_TOWERAI: z.boolean(),
       TOWERAI_API_KEY: z.string().optional(),
       TOWERAI_AUTH_TOKEN: z.string().optional(),
 
@@ -261,6 +262,7 @@ export const getLLMConfig = () => {
       ENABLED_OPENAI: process.env.ENABLED_OPENAI !== '0',
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
 
+      ENABLED_TOWERAI: !!process.env.TOWERAI_API_KEY,
       TOWERAI_API_KEY: process.env.TOWERAI_API_KEY,
       TOWERAI_AUTH_TOKEN: process.env.TOWERAI_AUTH_TOKEN,
 
