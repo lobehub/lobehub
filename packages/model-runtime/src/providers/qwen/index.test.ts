@@ -47,7 +47,7 @@ describe('LobeQwenAI - custom features', () => {
 
       expect(calledPayload.enable_thinking).toBe(true);
       expect(calledPayload.reasoning_effort).toBe('high');
-      expect(calledPayload.thinking_budget).toBe(2048);
+      expect(calledPayload.thinking_budget).toBeUndefined();
     });
 
     it('should remove reasoning_effort when deepseek-v4 thinking is disabled', async () => {
@@ -65,7 +65,7 @@ describe('LobeQwenAI - custom features', () => {
 
       expect(calledPayload.enable_thinking).toBe(false);
       expect(calledPayload.reasoning_effort).toBeUndefined();
-      expect(calledPayload.thinking_budget).toBe(2048);
+      expect(calledPayload.thinking_budget).toBeUndefined();
     });
 
     it('should only send thinking_budget for budget-only non-thinking models', async () => {

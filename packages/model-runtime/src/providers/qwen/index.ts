@@ -61,8 +61,6 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
               ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
                 ? { enable_thinking: !thinkingExplicitlyDisabled }
                 : {}),
-              thinking_budget:
-                thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
               ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
             }
           : model.includes('-thinking')

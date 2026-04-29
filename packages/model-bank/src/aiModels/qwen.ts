@@ -228,7 +228,7 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['reasoningBudgetToken', 'deepseekV4ReasoningEffort'],
+      extendParams: ['deepseekV4ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -253,7 +253,7 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['reasoningBudgetToken', 'deepseekV4ReasoningEffort'],
+      extendParams: ['deepseekV4ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
