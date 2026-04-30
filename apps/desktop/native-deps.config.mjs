@@ -40,6 +40,23 @@ export const nativeModules = [
   'node-screenshots',
 ];
 
+const optionalNativePackagePrefixes = new Map([
+  ['@napi-rs/canvas', ['@napi-rs/canvas-']],
+  ['node-screenshots', ['node-screenshots-']],
+]);
+
+function getRuntimeOptionalDependencies(moduleName, optionalDependencies) {
+  const prefixes = optionalNativePackagePrefixes.get(moduleName);
+
+  if (!prefixes) {
+    return [];
+  }
+
+  return Object.keys(optionalDependencies).filter((dep) =>
+    prefixes.some((prefix) => dep.startsWith(prefix)),
+  );
+}
+
 /**
  * Recursively resolve all dependencies of a module
  * @param {string} moduleName - The module to resolve
@@ -77,9 +94,11 @@ function resolveDependencies(
       resolveDependencies(dep, visited, nodeModulesPath);
     }
 
-    // Also resolve optional dependencies (important for native modules like @napi-rs/canvas
-    // which have platform-specific binaries in optional deps)
-    for (const dep of Object.keys(optionalDependencies)) {
+    // Only include optional packages that are runtime native binaries for the
+    // module itself. Native packages can also list install-time toolchains such
+    // as node-gyp or node-pre-gyp as optional deps; those must not be copied or
+    // externalized into the packaged Electron app.
+    for (const dep of getRuntimeOptionalDependencies(moduleName, optionalDependencies)) {
       resolveDependencies(dep, visited, nodeModulesPath);
     }
   } catch {
