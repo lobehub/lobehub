@@ -16,6 +16,11 @@ import { initialThreadState } from './slices/thread/initialState';
 import { type ChatTopicState } from './slices/topic/initialState';
 import { initialTopicState } from './slices/topic/initialState';
 
+export interface AgentMockDevState {
+  /** Dev-only: when true, suppresses agent-signal/analytics/tracing emits driven by mock playback. */
+  __agentMockSilent?: boolean;
+}
+
 export type ChatStoreState = ChatTopicState &
   ChatMessageState &
   ChatAIChatState &
@@ -23,7 +28,8 @@ export type ChatStoreState = ChatTopicState &
   ChatThreadState &
   ChatPortalState &
   ChatAIAgentState &
-  ChatOperationState;
+  ChatOperationState &
+  AgentMockDevState;
 
 export const initialState: ChatStoreState = {
   ...initialMessageState,
@@ -34,6 +40,7 @@ export const initialState: ChatStoreState = {
   ...initialChatPortalState,
   ...initialOperationState,
   ...initialAiAgentState,
+  __agentMockSilent: false,
 
   // cloud
 };
