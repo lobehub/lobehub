@@ -177,11 +177,11 @@ const AgentOnboardingPage = memo(() => {
                   },
                   onAfterSendMessage: async () => {
                     const prevPhase = data?.context?.phase;
-                    const prevFinishedAt = data?.finishedAt;
+                    const prevFinishedAt = data?.agentOnboarding?.finishedAt;
 
                     const nextContext = await syncOnboardingContext();
                     const nextPhase = nextContext?.context?.phase;
-                    const nextFinishedAt = nextContext?.finishedAt;
+                    const nextFinishedAt = nextContext?.agentOnboarding?.finishedAt;
 
                     // Only refresh user store + builtin agent caches at phase boundaries (or finish).
                     // Within a phase neither cache's content changes, so refreshing every turn is wasted RPC.
