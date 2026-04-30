@@ -25,9 +25,10 @@ export class FollowUpActionImpl {
     this.#get = get;
   }
 
-  fetchFor = async (messageId: string, agentId: string, hint?: FollowUpHint): Promise<void> => {
+  fetchFor = async (topicId: string, hint?: FollowUpHint): Promise<void> => {
     const cur = this.#get();
-    if (cur.messageId === messageId && cur.status !== 'idle') return;
+    // Dedupe: skip if already loading/ready for the same topic
+    if (cur.pendingTopicId === topicId && cur.status !== 'idle') return;
 
     cur.abortController?.abort();
 
@@ -35,22 +36,32 @@ export class FollowUpActionImpl {
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     this.#set(
-      { abortController: controller, chips: [], messageId, status: 'loading' },
+      {
+        abortController: controller,
+        chips: [],
+        messageId: undefined,
+        pendingTopicId: topicId,
+        status: 'loading',
+      },
       false,
       'fetchFor:start',
     );
 
-    const result = await followUpActionService.extract(
-      { agentId, hint, messageId },
-      controller.signal,
-    );
+    const result = await followUpActionService.extract({ hint, topicId }, controller.signal);
     clearTimeout(timeoutId);
 
-    if (this.#get().messageId !== messageId) return;
+    // If a new fetch for a different topic has started, ignore this result.
+    if (this.#get().pendingTopicId !== topicId) return;
 
-    if (!result) {
+    if (!result || !result.messageId || result.chips.length === 0) {
       this.#set(
-        { abortController: undefined, chips: [], messageId: undefined, status: 'idle' },
+        {
+          abortController: undefined,
+          chips: [],
+          messageId: undefined,
+          pendingTopicId: undefined,
+          status: 'idle',
+        },
         false,
         'fetchFor:fail',
       );
@@ -58,7 +69,13 @@ export class FollowUpActionImpl {
     }
 
     this.#set(
-      { abortController: undefined, chips: result.chips, status: 'ready' },
+      {
+        abortController: undefined,
+        chips: result.chips,
+        messageId: result.messageId,
+        pendingTopicId: undefined,
+        status: 'ready',
+      },
       false,
       'fetchFor:ready',
     );
@@ -68,7 +85,13 @@ export class FollowUpActionImpl {
     const cur = this.#get();
     cur.abortController?.abort();
     this.#set(
-      { abortController: undefined, chips: [], messageId: undefined, status: 'idle' },
+      {
+        abortController: undefined,
+        chips: [],
+        messageId: undefined,
+        pendingTopicId: undefined,
+        status: 'idle',
+      },
       false,
       'abort',
     );

@@ -26,7 +26,7 @@ describe('useOnboardingFollowUp', () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({ enabled: false, isGreeting: false }),
     );
-    await result.current.triggerExtract('m', 'agent-1', 'discovery');
+    await result.current.triggerExtract('topic-1', 'discovery');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
@@ -34,7 +34,7 @@ describe('useOnboardingFollowUp', () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({ enabled: true, isGreeting: false }),
     );
-    await result.current.triggerExtract('m', 'agent-1', undefined);
+    await result.current.triggerExtract('topic-1', undefined);
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
@@ -42,13 +42,13 @@ describe('useOnboardingFollowUp', () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({ enabled: true, isGreeting: false }),
     );
-    await result.current.triggerExtract('m', 'agent-1', 'summary');
+    await result.current.triggerExtract('topic-1', 'summary');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
   it('triggerExtract skips when isGreeting is true', async () => {
     const { result } = renderHook(() => useOnboardingFollowUp({ enabled: true, isGreeting: true }));
-    await result.current.triggerExtract('m', 'agent-1', 'agent_identity');
+    await result.current.triggerExtract('topic-1', 'agent_identity');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
@@ -56,8 +56,8 @@ describe('useOnboardingFollowUp', () => {
     const { result } = renderHook(() =>
       useOnboardingFollowUp({ enabled: true, isGreeting: false }),
     );
-    await result.current.triggerExtract('last', 'agent-1', 'discovery');
-    expect(fetchFor).toHaveBeenCalledWith('last', 'agent-1', {
+    await result.current.triggerExtract('topic-1', 'discovery');
+    expect(fetchFor).toHaveBeenCalledWith('topic-1', {
       kind: 'onboarding',
       phase: 'discovery',
     });

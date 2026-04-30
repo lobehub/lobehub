@@ -2,8 +2,6 @@ import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
-import { AgentModel } from '@/database/models/agent';
-import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -12,35 +10,40 @@ import { RawResponseSchema, SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
 
 const log = debug('lobe-server:follow-up-action-service');
 
-const EMPTY_RESULT = (messageId: string): FollowUpExtractResult => ({ messageId, chips: [] });
+const EMPTY_RESULT = (messageId: string): FollowUpExtractResult => ({ chips: [], messageId });
 
 export class FollowUpActionService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
-  private readonly messageModel: MessageModel;
-  private readonly agentModel: AgentModel;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
-    this.messageModel = new MessageModel(db, userId);
-    this.agentModel = new AgentModel(db, userId);
   }
 
-  async extract({
-    messageId,
-    agentId,
-    hint,
-  }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
-    const message = await this.messageModel.findById(messageId);
-    if (!message || message.role !== 'assistant') return EMPTY_RESULT(messageId);
+  async extract({ topicId, hint }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
+    // Resolve the latest assistant message that actually has user-facing text.
+    // Tool-call-only messages have empty content and must be skipped.
+    const row = await this.db.query.messages.findFirst({
+      columns: { content: true, id: true },
+      orderBy: (m, { desc }) => desc(m.createdAt),
+      where: (m, { and, eq, isNotNull, ne }) =>
+        and(
+          eq(m.userId, this.userId),
+          eq(m.topicId, topicId),
+          eq(m.role, 'assistant'),
+          isNotNull(m.content),
+          ne(m.content, ''),
+        ),
+    });
 
-    const text = (message.content ?? '').trim();
-    if (!text) return EMPTY_RESULT(messageId);
+    if (!row) return EMPTY_RESULT('');
+
+    const text = (row.content ?? '').trim();
+    if (!text) return EMPTY_RESULT(row.id);
 
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
-
-    const { model, provider } = await this.getModelConfig(agentId);
+    const { model, provider } = this.getModelConfig();
 
     let raw: unknown;
     try {
@@ -55,13 +58,13 @@ export class FollowUpActionService {
       });
     } catch (error) {
       log('LLM call failed: %O', error);
-      return EMPTY_RESULT(messageId);
+      return EMPTY_RESULT(row.id);
     }
 
     const parsed = RawResponseSchema.safeParse(raw);
     if (!parsed.success) {
       log('LLM response did not match schema: %O', parsed.error.flatten());
-      return EMPTY_RESULT(messageId);
+      return EMPTY_RESULT(row.id);
     }
 
     const chips: FollowUpChip[] = parsed.data.chips
@@ -74,19 +77,19 @@ export class FollowUpActionService {
       )
       .slice(0, 4);
 
-    return { messageId, chips };
+    return { chips, messageId: row.id };
   }
 
-  /**
-   * Resolve model + provider from the caller-supplied agent. Falls back to the
-   * systemAgent topic config when the agent record has no explicit model/provider.
-   */
-  private async getModelConfig(agentId: string): Promise<{ model: string; provider: string }> {
-    const fallback = DEFAULT_SYSTEM_AGENT_CONFIG.topic;
-    const agent = await this.agentModel.getAgentConfigById(agentId);
-    if (agent?.model && agent?.provider) {
-      return { model: agent.model, provider: agent.provider };
+  private getModelConfig(): { model: string; provider: string } {
+    const overrideModel = process.env.FOLLOW_UP_ACTION_MODEL;
+    const overrideProvider = process.env.FOLLOW_UP_ACTION_PROVIDER;
+    if (overrideModel && overrideProvider) {
+      return { model: overrideModel, provider: overrideProvider };
     }
-    return { model: fallback.model, provider: fallback.provider };
+    const fallback = DEFAULT_SYSTEM_AGENT_CONFIG.topic;
+    return {
+      model: overrideModel ?? fallback.model,
+      provider: overrideProvider ?? fallback.provider,
+    };
   }
 }

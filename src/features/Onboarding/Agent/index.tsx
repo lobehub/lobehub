@@ -6,7 +6,7 @@ import { SESSION_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -120,8 +120,6 @@ const AgentOnboardingPage = memo(() => {
     return messagesForOnboarding[0]?.role !== 'user';
   }, [messagesForOnboarding]);
 
-  const pendingAssistantIdRef = useRef<string | null>(null);
-
   const onboardingFollowUp = useOnboardingFollowUp({
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
@@ -171,44 +169,16 @@ const AgentOnboardingPage = memo(() => {
             onboardingFinished
               ? undefined
               : {
-                  onAfterMessageCreate: async ({ assistantMessageId }) => {
-                    // Defer extraction until onAfterSendMessage so we use the refreshed phase.
-                    pendingAssistantIdRef.current = assistantMessageId;
-                  },
                   onAfterSendMessage: async () => {
-                    const prevPhase = data?.context?.phase;
-                    const prevFinishedAt = data?.agentOnboarding?.finishedAt;
-
                     const nextContext = await syncOnboardingContext();
-                    const nextPhase = nextContext?.context?.phase;
-                    const nextFinishedAt = nextContext?.agentOnboarding?.finishedAt;
-
-                    // Only refresh user store + builtin agent caches at phase boundaries (or finish).
-                    // Within a phase neither cache's content changes, so refreshing every turn is wasted RPC.
-                    if (prevPhase !== nextPhase || prevFinishedAt !== nextFinishedAt) {
-                      await Promise.all([
-                        refreshUserState(),
-                        refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
-                      ]);
-                    }
-
-                    const pendingId = pendingAssistantIdRef.current;
-                    pendingAssistantIdRef.current = null;
-
-                    console.info('Onboarding message sent. Syncing context...', {
-                      prevPhase,
-                      nextPhase,
-                      prevFinishedAt,
-                      nextFinishedAt,
-                      pendingId,
-                    });
-                    if (pendingId) {
-                      await onboardingFollowUp.triggerExtract(
-                        pendingId,
-                        onboardingAgentId,
-                        nextPhase,
-                      );
-                    }
+                    await Promise.all([
+                      refreshUserState(),
+                      refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
+                    ]);
+                    await onboardingFollowUp.triggerExtract(
+                      effectiveTopicId,
+                      nextContext?.context?.phase,
+                    );
                   },
                   onBeforeSendMessage: onboardingFollowUp.onBeforeSendMessage,
                 }

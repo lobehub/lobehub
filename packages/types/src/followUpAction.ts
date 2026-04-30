@@ -12,13 +12,13 @@ export interface FollowUpChip {
 export type FollowUpHint = { kind: 'onboarding'; phase: OnboardingPhase } | { kind: 'chat' };
 
 export interface FollowUpExtractInput {
-  agentId: string;
   hint?: FollowUpHint;
-  messageId: string;
+  topicId: string;
 }
 
 export interface FollowUpExtractResult {
   chips: FollowUpChip[];
+  /** Resolved server-side id of the assistant message the chips were extracted from. Empty string if no eligible message was found. */
   messageId: string;
 }
 
@@ -33,7 +33,6 @@ export const FollowUpHintSchema = z.union([
 ]);
 
 export const FollowUpExtractInputSchema = z.object({
-  agentId: z.string().min(1),
-  messageId: z.string().min(1),
   hint: FollowUpHintSchema.optional(),
+  topicId: z.string().min(1),
 });

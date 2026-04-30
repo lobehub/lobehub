@@ -6,6 +6,7 @@ export interface FollowUpActionState {
   abortController?: AbortController;
   chips: FollowUpChip[];
   messageId?: string;
+  pendingTopicId?: string;
   status: FollowUpActionStatus;
 }
 

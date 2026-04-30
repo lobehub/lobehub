@@ -33,7 +33,13 @@ class FollowUpActionStoreResetAction implements ResetableStore {
     current.abortController?.abort();
     // Explicitly include undefined fields so zustand's merge-mode setState clears them.
     this.#set(
-      { abortController: undefined, chips: [], messageId: undefined, status: 'idle' },
+      {
+        abortController: undefined,
+        chips: [],
+        messageId: undefined,
+        pendingTopicId: undefined,
+        status: 'idle',
+      },
       false,
       'resetFollowUpActionStore',
     );

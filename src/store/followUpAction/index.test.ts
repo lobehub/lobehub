@@ -4,8 +4,9 @@ import { followUpActionService } from '@/services/followUpAction';
 
 import { useFollowUpActionStore } from './store';
 
-const MSG = 'msg-1';
-const NEW_MSG = 'msg-2';
+const TOPIC = 'topic-1';
+const NEW_TOPIC = 'topic-2';
+const MSG = 'msg-real';
 
 describe('useFollowUpActionStore', () => {
   beforeEach(() => {
@@ -23,55 +24,63 @@ describe('useFollowUpActionStore', () => {
       chips: [{ label: 'a', message: 'a' }],
     });
 
-    const promise = useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
+    const promise = useFollowUpActionStore.getState().fetchFor(TOPIC);
     expect(useFollowUpActionStore.getState().status).toBe('loading');
     await promise;
     expect(spy).toHaveBeenCalledOnce();
     expect(useFollowUpActionStore.getState().status).toBe('ready');
     expect(useFollowUpActionStore.getState().chips).toHaveLength(1);
+    expect(useFollowUpActionStore.getState().messageId).toBe(MSG);
   });
 
   it('fetchFor returns idle when service returns null', async () => {
     vi.spyOn(followUpActionService, 'extract').mockResolvedValue(null);
-    await useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
+    await useFollowUpActionStore.getState().fetchFor(TOPIC);
     expect(useFollowUpActionStore.getState().status).toBe('idle');
     expect(useFollowUpActionStore.getState().chips).toHaveLength(0);
     expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
   });
 
-  it('fetchFor dedupes same messageId while still loading', async () => {
+  it('fetchFor returns idle when service returns empty messageId', async () => {
+    vi.spyOn(followUpActionService, 'extract').mockResolvedValue({ chips: [], messageId: '' });
+    await useFollowUpActionStore.getState().fetchFor(TOPIC);
+    expect(useFollowUpActionStore.getState().status).toBe('idle');
+    expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
+  });
+
+  it('fetchFor dedupes same topicId while still loading', async () => {
     const spy = vi
       .spyOn(followUpActionService, 'extract')
       .mockImplementation(() => new Promise(() => {}));
-    const p1 = useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
-    const p2 = useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
+    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
+    const p2 = useFollowUpActionStore.getState().fetchFor(TOPIC);
     void p1;
     void p2;
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it('fetchFor with new messageId aborts the old controller', async () => {
+  it('fetchFor with new topicId aborts the old controller', async () => {
     let firstSignal: AbortSignal | undefined;
     vi.spyOn(followUpActionService, 'extract').mockImplementation(async (_, signal) => {
-      // Only capture the first call's signal
       if (!firstSignal) firstSignal = signal;
       return new Promise(() => {});
     });
-    const p1 = useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
+    const p1 = useFollowUpActionStore.getState().fetchFor(TOPIC);
     void p1;
     await Promise.resolve();
     await Promise.resolve();
-    void useFollowUpActionStore.getState().fetchFor(NEW_MSG, 'agent-1');
+    void useFollowUpActionStore.getState().fetchFor(NEW_TOPIC);
     expect(firstSignal?.aborted).toBe(true);
   });
 
   it('clear() aborts and resets state', async () => {
     vi.spyOn(followUpActionService, 'extract').mockImplementation(() => new Promise(() => {}));
-    const p = useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
+    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
     void p;
     useFollowUpActionStore.getState().clear();
     expect(useFollowUpActionStore.getState().status).toBe('idle');
     expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
+    expect(useFollowUpActionStore.getState().pendingTopicId).toBeUndefined();
   });
 
   it('3s timeout aborts the in-flight call', async () => {
@@ -80,7 +89,7 @@ describe('useFollowUpActionStore', () => {
       signal = s;
       return new Promise(() => {});
     });
-    const p = useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
+    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
     void p;
     await Promise.resolve();
     vi.advanceTimersByTime(3000);
@@ -105,12 +114,13 @@ describe('useFollowUpActionStore', () => {
       signal = s;
       return new Promise(() => {});
     });
-    const p = useFollowUpActionStore.getState().fetchFor(MSG, 'agent-1');
+    const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
     void p;
     await Promise.resolve();
     useFollowUpActionStore.getState().reset();
     expect(signal?.aborted).toBe(true);
     expect(useFollowUpActionStore.getState().status).toBe('idle');
     expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
+    expect(useFollowUpActionStore.getState().pendingTopicId).toBeUndefined();
   });
 });
