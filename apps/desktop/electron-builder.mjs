@@ -213,6 +213,15 @@ const config = {
     artifactName: '${productName}-${version}.${ext}',
   },
 
+  // Native modules are copied explicitly by the hooks below. Keeping package
+  // dependencies in the generated app metadata makes electron-builder invoke
+  // its pnpm dependency collector, which can hit EMFILE on Linux runners.
+  extraMetadata: {
+    dependencies: {},
+    devDependencies: {},
+    optionalDependencies: {},
+  },
+
   // Native modules must be unpacked from asar to work correctly
   asarUnpack: getAsarUnpackPatterns(),
 
