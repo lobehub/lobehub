@@ -110,6 +110,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       agent_self_iteration: true,
       agent_onboarding: true,
       agent_task: true,
+      auth_captcha: true,
       market: true,
       speech_to_text: true,
       changelog: false,
@@ -136,6 +137,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       enableAgentSelfIteration: true,
       enableAgentOnboarding: true,
       enableAgentTask: true,
+      enableAuthCaptcha: true,
       showMarket: true,
       enableSTT: true,
       showCloudPromotion: true,
@@ -151,6 +153,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       agent_self_iteration: ['user-123'],
       agent_onboarding: ['user-123'],
       agent_task: ['user-123'],
+      auth_captcha: ['user-123'],
       create_session: ['user-789'],
       dalle: true,
       knowledge_base: ['user-123'],
@@ -163,6 +166,7 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableAgentSelfIteration).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentOnboarding).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentTask).toBe(true); // user-123 is in allowlist
+    expect(mappedState.enableAuthCaptcha).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableKnowledgeBase).toBe(true); // user-123 is in allowlist
   });
 
