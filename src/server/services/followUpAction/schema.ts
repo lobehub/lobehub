@@ -1,15 +1,18 @@
 import { z } from 'zod';
 
-export const ChipSchema = z.object({
-  label: z.string().min(1).max(40),
-  message: z.string().min(1).max(200),
+/**
+ * Lenient schemas used to parse raw LLM output.
+ * Length validation is performed manually in the service layer so individual
+ * malformed chips can be dropped without rejecting the whole response.
+ */
+export const RawChipSchema = z.object({
+  label: z.string(),
+  message: z.string(),
 });
 
-export const SuggestionResponseSchema = z.object({
-  chips: z.array(ChipSchema).max(8), // accept up to 8 from LLM; service truncates to 4
+export const RawResponseSchema = z.object({
+  chips: z.array(RawChipSchema),
 });
-
-export type SuggestionResponse = z.infer<typeof SuggestionResponseSchema>;
 
 /** JSON schema form for LLM structured-output binding */
 export const SUGGESTION_RESPONSE_JSON_SCHEMA = {

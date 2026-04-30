@@ -93,6 +93,19 @@ describe('FollowUpActionService.extract', () => {
     expect(result.chips).toEqual([{ label: 'ok', message: 'ok' }]);
   });
 
+  it('drops chips with empty label or message', async () => {
+    mockMessageModel.findById.mockResolvedValue({ role: 'assistant', content: 'choose' });
+    runtimeMock.generateObject.mockResolvedValue({
+      chips: [
+        { label: '', message: '' },
+        { label: 'ok', message: 'ok' },
+        { label: 'bad', message: '' },
+      ],
+    });
+    const result = await svc.extract({ messageId: TEST_MSG_ID });
+    expect(result.chips).toEqual([{ label: 'ok', message: 'ok' }]);
+  });
+
   it('returns empty when LLM throws', async () => {
     mockMessageModel.findById.mockResolvedValue({ role: 'assistant', content: 'q?' });
     runtimeMock.generateObject.mockRejectedValue(new Error('boom'));

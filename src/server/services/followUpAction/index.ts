@@ -1,18 +1,13 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
-import { z } from 'zod';
 
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { buildSuggestionPrompt } from './prompts';
-import { SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
-
-// Lenient schema for parsing LLM output — length validation is done manually below
-const RawChipSchema = z.object({ label: z.string(), message: z.string() });
-const RawResponseSchema = z.object({ chips: z.array(RawChipSchema) });
+import { RawResponseSchema, SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
 
 const log = debug('lobe-server:follow-up-action-service');
 
@@ -63,7 +58,13 @@ export class FollowUpActionService {
     }
 
     const chips: FollowUpChip[] = parsed.data.chips
-      .filter((c) => c.label.length <= 40 && c.message.length <= 200)
+      .filter(
+        (c) =>
+          c.label.length >= 1 &&
+          c.label.length <= 40 &&
+          c.message.length >= 1 &&
+          c.message.length <= 200,
+      )
       .slice(0, 4);
 
     return { messageId, chips };
