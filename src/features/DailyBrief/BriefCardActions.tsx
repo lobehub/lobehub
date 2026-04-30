@@ -1,7 +1,7 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, MessageSquareText, SquarePen } from 'lucide-react';
+import { Check, Footprints, SquarePen } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -71,7 +71,8 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     }, [openTopicDrawer, setActiveTaskId, taskId, topicId]);
     const viewRunButton = showViewRun ? (
       <Button
-        icon={MessageSquareText}
+        className={'brief-view-run-btn'}
+        icon={Footprints}
         size={'small'}
         style={{ color: cssVar.colorTextSecondary }}
         type={'text'}
