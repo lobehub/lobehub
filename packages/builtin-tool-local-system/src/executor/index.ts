@@ -51,7 +51,14 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   private runtime = new LocalSystemExecutionRuntime(localFileService);
 
   /**
-   * Convert BuiltinServerRuntimeOutput to BuiltinToolResult
+   * Convert BuiltinServerRuntimeOutput to BuiltinToolResult.
+   *
+   * Single funnel for every executor return — keep it strict:
+   * - never propagate an undefined `content` (would collapse downstream into
+   *   `''` and leave the Debug "Response" pane blank while pluginState was
+   *   still saved — see globLocalFiles regression);
+   * - always preserve `state` when the runtime produced one, regardless of
+   *   `success`, so renderers can keep displaying partial outputs on failure.
    */
   private toResult(output: {
     content: string;
@@ -59,16 +66,21 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     state?: any;
     success: boolean;
   }): BuiltinToolResult {
+    const errorMessage =
+      typeof output.error?.message === 'string' ? output.error.message : undefined;
+    const safeContent = output.content || errorMessage || 'Tool execution failed';
+
     if (!output.success) {
       return {
-        content: output.content,
+        content: safeContent,
         error: output.error
-          ? { body: output.error, message: output.content, type: 'PluginServerError' }
+          ? { body: output.error, message: errorMessage ?? safeContent, type: 'PluginServerError' }
           : undefined,
+        state: output.state,
         success: false,
       };
     }
-    return { content: output.content, state: output.state, success: true };
+    return { content: safeContent, state: output.state, success: true };
   }
 
   // ==================== File Operations ====================

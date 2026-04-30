@@ -58,6 +58,32 @@ describe('LocalSystemExecutor', () => {
       });
     });
 
+    it('falls back to a meaningful content + preserves state when IPC reports failure with no error message', async () => {
+      // Defense in depth: even if normalizeResult ever forgets to forward
+      // `raw.error`, toResult should still produce a non-empty content
+      // ("Tool execution failed") so the Response panel and the LLM never see
+      // an empty string. State must also survive into the failure result so
+      // any renderer can still draw partial output.
+      globFilesMock.mockResolvedValue({
+        engine: 'fast-glob',
+        files: [],
+        success: false,
+        total_files: 0,
+      });
+
+      const result = await localSystemExecutor.globLocalFiles({
+        pattern: '**/*never-matches*',
+      });
+
+      expect(result.content).toBeTruthy();
+      expect(result.content).not.toBe('');
+      expect(result.state).toEqual({
+        files: [],
+        pattern: '**/*never-matches*',
+        totalCount: 0,
+      });
+    });
+
     it('surfaces the underlying error in content when the IPC reports failure', async () => {
       // Regression: a fast-glob throw used to come back as
       //   { result: {files:[], totalCount:0}, success: false }
