@@ -1,7 +1,6 @@
 {
   "messenger.activeAgent": "Active agent",
-  "messenger.activeAgentHint": "Inbound messages on this platform go to \"{{agent}}\". Change agents any time here or via /switch in the bot.",
-  "messenger.activeAgentHintEmpty": "No active agent. Pick one above or use /switch in the bot. Until then inbound messages will be parked.",
+  "messenger.activeAgentHintEmpty": "No active agent. Pick one above or use /agents in the bot. Until then inbound messages will be parked.",
   "messenger.activeAgentPlaceholder": "Select an agent",
   "messenger.helpCommands": "In the bot: send /agents to list your agents, /switch <n> to change which one receives messages.",
   "messenger.linkCta": "Connect",

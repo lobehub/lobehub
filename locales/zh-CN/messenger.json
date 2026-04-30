@@ -1,7 +1,6 @@
 {
   "messenger.activeAgent": "当前激活 Agent",
-  "messenger.activeAgentHint": "此平台的消息将发送到「{{agent}}」。可以在此处或机器人中通过 /switch 随时切换。",
-  "messenger.activeAgentHintEmpty": "当前没有激活的 Agent。请在上方选一个或在机器人中 /switch；在此之前消息会被搁置。",
+  "messenger.activeAgentHintEmpty": "当前没有激活的 Agent。请在上方选一个或在机器人中 /agents 切换；在此之前消息会被搁置。",
   "messenger.activeAgentPlaceholder": "请选择 Agent",
   "messenger.helpCommands": "在机器人中：发送 /agents 列出你的 Agent，/switch <n> 切换接收消息的 Agent。",
   "messenger.linkCta": "连接",

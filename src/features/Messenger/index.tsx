@@ -2,7 +2,7 @@
 
 import { SlackOutlined } from '@ant-design/icons';
 import { SiTelegram } from '@icons-pack/react-simple-icons';
-import { Block, Button, Flexbox, Icon, Modal, Tag, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Modal, Skeleton, Tag, Text } from '@lobehub/ui';
 import { App, QRCode, Tabs } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, LinkIcon, Trash2Icon } from 'lucide-react';
@@ -99,18 +99,8 @@ const buildTelegramDeepLink = (botUsername: string): string =>
 
 const MessengerSettings = memo(() => {
   const { t } = useTranslation('messenger');
-  const { t: tCommon } = useTranslation('common');
   const { message, modal } = App.useApp();
   const [linkOpen, setLinkOpen] = useState(false);
-
-  const defaultAgentTitle = tCommon('defaultSession');
-
-  // Pulled here too so the "Active agent: X" hint can render the agent's
-  // human-readable title without resolving it through AgentSelect's render
-  // tree. AgentSelect uses the same SWR key, so this is the same cache entry.
-  const agentsSWR = useSWR('messenger:agentsForBinding', () =>
-    messengerService.listAgentsForBinding(),
-  );
 
   const platformsSWR = useSWR('messenger:availablePlatforms', () =>
     messengerService.availablePlatforms(),
@@ -120,6 +110,8 @@ const MessengerSettings = memo(() => {
   const platforms = platformsSWR.data ?? [];
   const links = linksSWR.data ?? [];
   const linksByPlatform = new Map(links.map((link) => [link.platform, link]));
+
+  const isLoading = platformsSWR.isLoading || linksSWR.isLoading;
 
   const handleSetActive = async (platform: MessengerPlatform, agentId: string | null) => {
     try {
@@ -155,7 +147,9 @@ const MessengerSettings = memo(() => {
           <Text type="secondary">{t('messenger.subtitle')}</Text>
         </Flexbox>
 
-        {platforms.length === 0 ? (
+        {isLoading ? (
+          <Skeleton active paragraph={{ rows: 4 }} title={false} />
+        ) : platforms.length === 0 ? (
           <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
         ) : (
           <Flexbox gap={12}>
@@ -164,12 +158,6 @@ const MessengerSettings = memo(() => {
               const link = linksByPlatform.get(platform);
               const label = PLATFORM_LABELS[platform] ?? platform;
               const activeAgentId = link?.activeAgentId ?? null;
-              const activeAgent = activeAgentId
-                ? agentsSWR.data?.find((agent) => agent.id === activeAgentId)
-                : undefined;
-              const activeAgentTitle = activeAgent
-                ? activeAgent.title || defaultAgentTitle
-                : undefined;
 
               return (
                 <Block className={styles.card} key={platform}>
@@ -231,11 +219,11 @@ const MessengerSettings = memo(() => {
                             handleSetActive(platform, (agentId ?? null) as string | null)
                           }
                         />
-                        <Text style={{ fontSize: 12 }} type="secondary">
-                          {activeAgentTitle
-                            ? t('messenger.activeAgentHint', { agent: activeAgentTitle })
-                            : t('messenger.activeAgentHintEmpty')}
-                        </Text>
+                        {!activeAgentId && (
+                          <Text style={{ fontSize: 12 }} type="secondary">
+                            {t('messenger.activeAgentHintEmpty')}
+                          </Text>
+                        )}
                       </Flexbox>
                     )}
                   </Flexbox>

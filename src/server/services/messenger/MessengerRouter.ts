@@ -12,6 +12,7 @@ import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
@@ -201,6 +202,8 @@ export class MessengerRouter {
         .registerBotCommands([
           { command: 'start', description: 'Bind your account to LobeHub' },
           { command: 'agents', description: 'List agents and switch the active one' },
+          { command: 'new', description: 'Start a new conversation' },
+          { command: 'stop', description: 'Stop the current execution' },
           { command: 'help', description: 'Show usage' },
         ])
         .catch((error) => log('registerBotCommands failed for %s: %O', platform, error));
@@ -278,6 +281,7 @@ export class MessengerRouter {
             message,
             platform,
             serverDB,
+            thread,
           });
           if (handled) return;
         }
@@ -346,9 +350,19 @@ export class MessengerRouter {
     message: Message;
     platform: MessengerPlatform;
     serverDB: LobeChatDatabase;
+    thread: any;
   }): Promise<boolean> {
-    const { authorUserId, authorUserName, binder, chatId, command, link, message, serverDB } =
-      params;
+    const {
+      authorUserId,
+      authorUserName,
+      binder,
+      chatId,
+      command,
+      link,
+      message,
+      serverDB,
+      thread,
+    } = params;
 
     switch (command.name) {
       case 'start': {
@@ -367,12 +381,68 @@ export class MessengerRouter {
         await this.handleAgentsCommand({ binder, chatId, command, link, serverDB });
         return true;
       }
+      case 'new': {
+        if (!link) {
+          await binder.sendDmText(chatId, 'You need to /start to bind your account first.');
+          return true;
+        }
+        // Drop the cached topicId so the next message starts a fresh topic.
+        // Mirrors `/new` in the bot router (BotMessageRouter.buildCommands).
+        try {
+          await thread.setState({ topicId: undefined }, { replace: true });
+        } catch (error) {
+          log('handleCommand[/new]: setState failed: %O', error);
+        }
+        await binder.sendDmText(
+          chatId,
+          'Started a new conversation. Your next message begins a fresh topic.',
+        );
+        return true;
+      }
+      case 'stop': {
+        if (!link) {
+          await binder.sendDmText(chatId, 'You need to /start to bind your account first.');
+          return true;
+        }
+        const isActive = AgentBridgeService.isThreadActive(thread.id);
+        if (!isActive) {
+          await binder.sendDmText(chatId, 'No active execution to stop.');
+          return true;
+        }
+        const operationId = AgentBridgeService.getActiveOperationId(thread.id);
+        if (operationId) {
+          try {
+            const aiAgentService = new AiAgentService(serverDB, link.userId);
+            const result = await aiAgentService.interruptTask({ operationId });
+            if (!result.success) {
+              log('handleCommand[/stop]: runtime interrupt rejected for op=%s', operationId);
+              await binder.sendDmText(chatId, 'Unable to stop the current execution.');
+              return true;
+            }
+            AgentBridgeService.clearActiveThread(thread.id);
+            log('handleCommand[/stop]: interrupted op=%s', operationId);
+          } catch (error) {
+            log('handleCommand[/stop]: interruptTask failed: %O', error);
+            await binder.sendDmText(chatId, 'Unable to stop the current execution.');
+            return true;
+          }
+        } else {
+          // execAgent hasn't returned an operationId yet — queue the stop so it
+          // fires the moment startup completes.
+          AgentBridgeService.requestStop(thread.id);
+          log('handleCommand[/stop]: queued deferred stop for thread=%s', thread.id);
+        }
+        await binder.sendDmText(chatId, 'Stop requested.');
+        return true;
+      }
       case 'help': {
         await binder.sendDmText(
           chatId,
           [
             'Commands:',
             '• /agents — list your agents and tap to switch the active one',
+            '• /new — start a new conversation',
+            '• /stop — stop the current execution',
             '• /start — bind a different LobeHub account',
           ].join('\n'),
         );

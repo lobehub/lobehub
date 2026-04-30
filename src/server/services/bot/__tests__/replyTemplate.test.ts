@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderStepParams } from '../replyTemplate';
 import {
   formatTokens,
+  renderAgentError,
   renderCommandReply,
   renderDmRejected,
   renderError,
@@ -352,6 +353,55 @@ describe('replyTemplate', () => {
 
     it('falls back to English for locales without a translated dictionary', () => {
       expect(renderError(undefined, 'ja-JP')).toBe('**Agent Execution Failed**');
+    });
+  });
+
+  // ==================== renderAgentError ====================
+
+  describe('renderAgentError', () => {
+    it('returns the friendly NoAvailableProvider copy and ignores the operation id', () => {
+      const out = renderAgentError('NoAvailableProvider', 'op-abc');
+      expect(out).toContain('No model provider configured');
+      // The friendly message guides the user — the op id is irrelevant noise.
+      expect(out).not.toContain('op-abc');
+    });
+
+    it('renders Chinese NoAvailableProvider copy when locale is zh-CN', () => {
+      const out = renderAgentError('NoAvailableProvider', 'op-abc', 'zh-CN');
+      expect(out).toContain('未配置可用的模型 Provider');
+      expect(out).not.toContain('op-abc');
+    });
+
+    it('returns the friendly InvalidProviderAPIKey copy', () => {
+      const en = renderAgentError('InvalidProviderAPIKey', 'op-1');
+      expect(en).toContain('Invalid or missing API key');
+      const zh = renderAgentError('InvalidProviderAPIKey', 'op-1', 'zh-CN');
+      expect(zh).toContain('API Key 无效');
+    });
+
+    it('returns the friendly ExceededContextWindow copy', () => {
+      expect(renderAgentError('ExceededContextWindow', 'op-1')).toContain(
+        'Context window exceeded',
+      );
+      expect(renderAgentError('ExceededContextWindow', 'op-1', 'zh-CN')).toContain('上下文已超出');
+    });
+
+    it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
+      const a = renderAgentError('QuotaLimitReached', 'op-1');
+      const b = renderAgentError('InsufficientQuota', 'op-1');
+      expect(a).toContain('quota');
+      expect(b).toContain('quota');
+      expect(a).toBe(b);
+    });
+
+    it('falls back to the generic op-id template for unknown error codes', () => {
+      expect(renderAgentError('SomeNewErrorCode', 'op-1')).toBe(
+        '**Agent Execution Failed**\nOperation ID: `op-1`',
+      );
+    });
+
+    it('falls back to the generic header when neither errorType nor operationId is known', () => {
+      expect(renderAgentError(undefined, undefined)).toBe('**Agent Execution Failed**');
     });
   });
 

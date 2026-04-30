@@ -1,7 +1,5 @@
 export default {
   'messenger.activeAgent': 'Active agent',
-  'messenger.activeAgentHint':
-    'Inbound messages on this platform go to "{{agent}}". Change agents any time here or via /agents in the bot.',
   'messenger.activeAgentHintEmpty':
     'No active agent. Pick one above or use /agents in the bot. Until then inbound messages will be parked.',
   'messenger.activeAgentPlaceholder': 'Select an agent',

@@ -24,6 +24,7 @@ import {
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import {
+  renderAgentError,
   renderError,
   renderErrorWithDetails,
   renderFinalReply,
@@ -1107,12 +1108,17 @@ export class AgentBridgeService {
                 if (reason === 'error') {
                   const errorMsg = event.errorMessage || 'Agent execution failed';
                   log(
-                    'onComplete: agent run failed, operationId=%s, errorMessage=%s',
+                    'onComplete: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
                     event.operationId,
+                    event.errorType,
                     errorMsg,
                   );
                   try {
-                    const errorText = renderError(event.operationId, replyLocale);
+                    const errorText = renderAgentError(
+                      event.errorType,
+                      event.operationId,
+                      replyLocale,
+                    );
                     if (progressMessage) {
                       await progressMessage.edit(errorText);
                     } else {
