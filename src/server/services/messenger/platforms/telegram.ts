@@ -185,7 +185,13 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
    * other bot's callback, malformed data) so the router can hand off to
    * chat-sdk for normal processing.
    */
-  extractCallbackAction(rawBody: unknown): InboundCallbackAction | null {
+  async extractCallbackAction(req: Request): Promise<InboundCallbackAction | null> {
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return null;
+    }
     if (!rawBody || typeof rawBody !== 'object') return null;
     const cb = (rawBody as any).callback_query;
     if (!cb) return null;

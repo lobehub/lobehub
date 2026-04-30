@@ -884,7 +884,7 @@ export class BotMessageRouter {
       } catch (error) {
         log('onNewMention: unhandled error from handleMention: %O', error);
         try {
-          await thread.post(renderError(undefined, replyLocale));
+          await thread.post({ markdown: renderError(undefined, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -993,7 +993,7 @@ export class BotMessageRouter {
       } catch (error) {
         log('onSubscribedMessage: unhandled error from handleSubscribedMessage: %O', error);
         try {
-          await thread.post(renderError(undefined, replyLocale));
+          await thread.post({ markdown: renderError(undefined, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -1112,7 +1112,7 @@ export class BotMessageRouter {
           log('onNewMessage: unhandled error from handleMention: %O', error);
           try {
             const errMsg = error instanceof Error ? error.message : String(error);
-            await thread.post(renderInlineError(errMsg, replyLocale));
+            await thread.post({ markdown: renderInlineError(errMsg, replyLocale) });
           } catch {
             // best-effort notification
           }

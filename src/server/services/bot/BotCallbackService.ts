@@ -251,7 +251,8 @@ export class BotCallbackService {
         errorType,
         errorMessage,
       );
-      const errorText = renderAgentError(errorType, operationId, replyLocale);
+      const errorBody = renderAgentError(errorType, operationId, replyLocale);
+      const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       try {
         if (canEdit && progressMessageId) {
           await messenger.editMessage(progressMessageId, errorText);

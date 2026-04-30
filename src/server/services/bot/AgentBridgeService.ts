@@ -350,9 +350,11 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
-    const errorContent = stopped
-      ? renderStopped(errorMessage, replyLocale)
-      : renderError(operationId, replyLocale);
+    const errorContent = {
+      markdown: stopped
+        ? renderStopped(errorMessage, replyLocale)
+        : renderError(operationId, replyLocale),
+    };
 
     if (progressMessage) {
       try {
@@ -464,7 +466,7 @@ export class AgentBridgeService {
       } catch (error) {
         log('handleMention error: %O', error);
         try {
-          await thread.post(renderError(undefined, replyLocale));
+          await thread.post({ markdown: renderError(undefined, replyLocale) });
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -604,7 +606,7 @@ export class AgentBridgeService {
 
         log('handleSubscribedMessage error: %O', error);
         try {
-          await thread.post(renderErrorWithDetails(errMsg, replyLocale));
+          await thread.post({ markdown: renderErrorWithDetails(errMsg, replyLocale) });
         } catch (postError) {
           log('handleSubscribedMessage: failed to post error message: %O', postError);
         }
@@ -1080,11 +1082,17 @@ export class AgentBridgeService {
                   totalCost: event.totalCost ?? 0,
                   totalTokens: event.totalTokens ?? 0,
                 };
-                const formatted = client?.formatMarkdown?.(msgBody) ?? msgBody;
-                const progressText = client?.formatReply?.(formatted, stats) ?? formatted;
+                // Local mode goes through the Chat SDK adapter, which only
+                // applies the platform's markdown parse_mode when the message
+                // is `{ markdown }`. Pre-converting via `formatMarkdown` (HTML
+                // for Telegram, mrkdwn for Slack, …) would land in a plain
+                // string branch and render literal `**` / `<b>`. `formatReply`
+                // only appends a plain stats line, so it composes cleanly with
+                // the markdown body.
+                const progressBody = client?.formatReply?.(msgBody, stats) ?? msgBody;
 
                 try {
-                  progressMessage = await progressMessage.edit(progressText);
+                  progressMessage = await progressMessage.edit({ markdown: progressBody });
                 } catch (error) {
                   log('executeWithCallback[local]: failed to edit progress message: %O', error);
                 }
@@ -1114,27 +1122,37 @@ export class AgentBridgeService {
                     errorMsg,
                   );
                   try {
-                    const errorText = renderAgentError(
+                    const errorBody = renderAgentError(
                       event.errorType,
                       event.operationId,
                       replyLocale,
                     );
+                    // Wrap in `{ markdown }` so the Chat SDK adapter sets the
+                    // platform's markdown parse_mode (e.g. Telegram `Markdown`,
+                    // Slack `mrkdwn`) and converts the body. Plain strings are
+                    // sent without parse_mode and would render literal `**`.
                     if (progressMessage) {
-                      await progressMessage.edit(errorText);
+                      await progressMessage.edit({ markdown: errorBody });
                     } else {
-                      await thread.post(errorText);
+                      await thread.post({ markdown: errorBody });
                     }
                   } catch {
                     // ignore send failure
                   }
-                  reject(new Error(errorMsg));
+                  // Resolve (not reject) — the friendly error has already been
+                  // posted to the user. Rejecting would bubble up to the outer
+                  // try/catch in handleMention and cause a duplicate generic
+                  // "Agent Execution Failed" message on top of the friendly one.
+                  resolve({ reply: '', topicId: resolvedTopicId });
                   return;
                 }
 
                 if (reason === 'interrupted') {
                   if (progressMessage) {
                     try {
-                      await progressMessage.edit(renderStopped(undefined, replyLocale));
+                      await progressMessage.edit({
+                        markdown: renderStopped(undefined, replyLocale),
+                      });
                     } catch {
                       // ignore edit failure
                     }
@@ -1155,21 +1173,23 @@ export class AgentBridgeService {
                       totalCost: event.cost ?? 0,
                       totalTokens: event.totalTokens ?? 0,
                     };
-                    const formattedBody = client?.formatMarkdown?.(replyBody) ?? replyBody;
-                    const finalText =
-                      client?.formatReply?.(formattedBody, replyStats) ?? formattedBody;
+                    // See progress-handler note above: keep the body as
+                    // markdown and let the Chat SDK adapter render it with the
+                    // platform's parse_mode. `formatReply` only appends a
+                    // plain-text stats line.
+                    const finalText = client?.formatReply?.(replyBody, replyStats) ?? replyBody;
 
                     const chunks = splitMessage(finalText, charLimit);
 
                     try {
                       if (progressMessage) {
-                        await progressMessage.edit(chunks[0]);
+                        await progressMessage.edit({ markdown: chunks[0] });
                         for (let i = 1; i < chunks.length; i++) {
-                          await thread.post(chunks[i]);
+                          await thread.post({ markdown: chunks[i] });
                         }
                       } else {
                         for (const chunk of chunks) {
-                          await thread.post(chunk);
+                          await thread.post({ markdown: chunk });
                         }
                       }
                     } catch (error) {
@@ -1247,7 +1267,9 @@ export class AgentBridgeService {
 
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderError(result.operationId, replyLocale));
+                await progressMessage.edit({
+                  markdown: renderError(result.operationId, replyLocale),
+                });
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
               }
@@ -1285,7 +1307,9 @@ export class AgentBridgeService {
           if (isAbortError(error)) {
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderStopped(error.message, replyLocale));
+                await progressMessage.edit({
+                  markdown: renderStopped(error.message, replyLocale),
+                });
               } catch (editError) {
                 log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
               }
@@ -1309,7 +1333,7 @@ export class AgentBridgeService {
 
           if (progressMessage) {
             try {
-              await progressMessage.edit(renderError(undefined, replyLocale));
+              await progressMessage.edit({ markdown: renderError(undefined, replyLocale) });
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);
             }

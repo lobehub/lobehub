@@ -87,9 +87,79 @@ export class SlackApi {
     return { ts: data.ts };
   }
 
+  /**
+   * Post a message with a grid of action buttons (Block Kit `actions` block).
+   * Each button carries an `action_id` (≤ 255 chars) which the bot receives
+   * back via the interactive webhook (`block_actions` payload) when tapped.
+   * `text` is also sent as fallback for clients that can't render blocks.
+   *
+   * Slack caps a single `actions` block at 25 elements; if the keyboard is
+   * larger we split across multiple actions blocks.
+   */
+  async postMessageWithButtonGrid(
+    channel: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): Promise<{ ts: string }> {
+    log('postMessageWithButtonGrid: channel=%s, buttons=%d', channel, buttons.length);
+    const fallback = this.truncateText(text);
+    const data = await this.call('chat.postMessage', {
+      blocks: this.buildButtonGridBlocks(fallback, buttons),
+      channel,
+      text: fallback,
+    });
+    return { ts: data.ts };
+  }
+
+  /**
+   * Replace an existing message's text + button grid in place. Used to
+   * re-render the picker after one of its options is selected so the new
+   * active marker is visible.
+   */
+  async updateMessageWithButtonGrid(
+    channel: string,
+    ts: string,
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): Promise<void> {
+    log('updateMessageWithButtonGrid: channel=%s, ts=%s', channel, ts);
+    const fallback = this.truncateText(text);
+    await this.call('chat.update', {
+      blocks: this.buildButtonGridBlocks(fallback, buttons),
+      channel,
+      text: fallback,
+      ts,
+    });
+  }
+
   async updateMessage(channel: string, ts: string, text: string): Promise<void> {
     log('updateMessage: channel=%s, ts=%s', channel, ts);
     await this.call('chat.update', { channel, text: this.truncateText(text), ts });
+  }
+
+  /**
+   * Post an ephemeral message visible only to `user` in `channel`. Slack has
+   * no native button-tap toast (unlike Telegram's `answerCallbackQuery`) so
+   * this is what we use to surface short feedback after an interactive
+   * action — e.g. "Switched to Foo." Requires the `chat:write` scope.
+   */
+  async postEphemeral(channel: string, user: string, text: string): Promise<void> {
+    log('postEphemeral: channel=%s, user=%s', channel, user);
+    await this.call('chat.postEphemeral', {
+      channel,
+      text: this.truncateText(text),
+      user,
+    });
   }
 
   async removeReaction(channel: string, timestamp: string, name: string): Promise<void> {
@@ -261,6 +331,33 @@ export class SlackApi {
     // Slack message limit is ~40000, but we respect the user-configured charLimit
     if (text.length > 40_000) return text.slice(0, 39_997) + '...';
     return text;
+  }
+
+  private buildButtonGridBlocks(
+    text: string,
+    buttons: Array<{
+      actionId: string;
+      style?: 'primary' | 'danger';
+      text: string;
+      value?: string;
+    }>,
+  ): unknown[] {
+    const elements = buttons.map((b) => ({
+      action_id: b.actionId,
+      text: { emoji: true, text: b.text, type: 'plain_text' },
+      type: 'button',
+      ...(b.style ? { style: b.style } : {}),
+      ...(b.value !== undefined ? { value: b.value } : {}),
+    }));
+
+    // Slack caps each `actions` block at 25 elements — chunk if larger.
+    const chunks: unknown[][] = [];
+    for (let i = 0; i < elements.length; i += 25) chunks.push(elements.slice(i, i + 25));
+
+    return [
+      { text: { text, type: 'mrkdwn' }, type: 'section' },
+      ...chunks.map((els) => ({ elements: els, type: 'actions' })),
+    ];
   }
 
   private async call(method: string, body: Record<string, unknown>): Promise<any> {

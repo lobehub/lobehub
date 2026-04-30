@@ -60,11 +60,16 @@ export interface MessengerPlatformBinder {
   createClient: () => PlatformClient | null;
 
   /**
-   * Try to extract a tap-action from a raw webhook update. Returns null when
+   * Try to extract a tap-action from a raw webhook request. Returns null when
    * the update is a regular message (in which case the caller hands it off to
    * chat-sdk). Platforms without tap callbacks return null unconditionally.
+   *
+   * The implementation owns body parsing because platforms disagree on the
+   * wire format — Telegram posts JSON, Slack posts `application/x-www-form-
+   * urlencoded` with a `payload` field. The router clones the request before
+   * calling so consumers downstream can still read the body.
    */
-  extractCallbackAction?: (rawBody: unknown) => InboundCallbackAction | null;
+  extractCallbackAction?: (req: Request) => Promise<InboundCallbackAction | null>;
 
   /** Called when an inbound message arrives from a sender that hasn't bound any account yet. */
   handleUnlinkedMessage: (ctx: UnlinkedMessageContext) => Promise<void>;

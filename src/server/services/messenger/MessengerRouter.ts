@@ -87,17 +87,18 @@ export class MessengerRouter {
       // Intercept tap-action callbacks before chat-sdk: Telegram's
       // callback_query / Slack's interactive payload aren't surfaced through
       // chat-sdk's onNewMessage / onDirectMessage, so binders peek the raw
-      // body and the router orchestrates the response.
+      // body and the router orchestrates the response. Each binder owns its
+      // own body parsing because the wire formats differ (Telegram = JSON,
+      // Slack = form-urlencoded).
       if (bot.binder.extractCallbackAction) {
         try {
-          const rawBody = await req.clone().json();
-          const action = bot.binder.extractCallbackAction(rawBody);
+          const action = await bot.binder.extractCallbackAction(req.clone());
           if (action) {
             await this.handleCallbackAction(bot, platform, action);
             return new Response('OK', { status: 200 });
           }
-        } catch {
-          // Body wasn't JSON or parsing failed — let chat-sdk decide.
+        } catch (error) {
+          log('extractCallbackAction failed for %s: %O', platform, error);
         }
       }
 

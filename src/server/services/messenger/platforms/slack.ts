@@ -7,9 +7,33 @@ import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import { SlackClientFactory } from '@/server/services/bot/platforms/slack/client';
 
 import { issueLinkToken } from '../linkTokenStore';
-import type { MessengerPlatformBinder, UnlinkedMessageContext } from '../types';
+import type {
+  AgentPickerEntry,
+  CallbackAcknowledgement,
+  InboundCallbackAction,
+  MessengerPlatformBinder,
+  UnlinkedMessageContext,
+} from '../types';
 
 const log = debug('lobe-server:messenger:slack');
+
+/**
+ * Application prefix on Slack `action_id`s so we can distinguish OUR buttons
+ * from anything else the workspace might inject. Format:
+ * `messenger:<verb>:<arg>` — mirrors the Telegram binder's `callback_data`
+ * convention so the router can reuse the same matcher.
+ */
+const ACTION_PREFIX = 'messenger:';
+
+const buildSwitchButtons = (
+  entries: AgentPickerEntry[],
+): Array<{ actionId: string; style?: 'primary'; text: string; value: string }> =>
+  entries.map((entry) => ({
+    actionId: `${ACTION_PREFIX}switch:${entry.id}`,
+    text: entry.isActive ? `✅ ${entry.title}` : entry.title,
+    value: entry.id,
+    ...(entry.isActive ? { style: 'primary' as const } : {}),
+  }));
 
 const buildVerifyImUrl = (params: {
   appUrl: string;
@@ -132,6 +156,102 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
       await new SlackApi(config.botToken).postMessage(chatId, text);
     } catch (error) {
       log('sendDmText: failed to send to chat=%s: %O', chatId, error);
+    }
+  }
+
+  async sendAgentPicker(
+    chatId: string,
+    params: { entries: AgentPickerEntry[]; text: string },
+  ): Promise<void> {
+    const config = getMessengerSlackConfig();
+    if (!config) return;
+    try {
+      const api = new SlackApi(config.botToken);
+      await api.postMessageWithButtonGrid(chatId, params.text, buildSwitchButtons(params.entries));
+    } catch (error) {
+      log('sendAgentPicker: failed for chat=%s: %O', chatId, error);
+    }
+  }
+
+  /**
+   * Pull our `messenger:switch:<agentId>` action out of a Slack interactive
+   * webhook payload. Slack delivers `block_actions` as
+   * `application/x-www-form-urlencoded` with a single `payload` field whose
+   * value is JSON, so we have to parse the body here rather than relying on
+   * the router's JSON-only path. Returns null for any other update so the
+   * caller can hand off to chat-sdk.
+   */
+  async extractCallbackAction(req: Request): Promise<InboundCallbackAction | null> {
+    const contentType = req.headers.get('content-type') ?? '';
+    if (!contentType.includes('application/x-www-form-urlencoded')) return null;
+
+    let payload: any;
+    try {
+      const raw = await req.text();
+      const params = new URLSearchParams(raw);
+      const payloadStr = params.get('payload');
+      if (!payloadStr) return null;
+      payload = JSON.parse(payloadStr);
+    } catch {
+      return null;
+    }
+
+    if (!payload || payload.type !== 'block_actions') return null;
+    const action = payload.actions?.[0];
+    const actionId = action?.action_id ? String(action.action_id) : '';
+    if (!actionId.startsWith(ACTION_PREFIX)) return null;
+
+    const fromUserId = payload.user?.id ? String(payload.user.id) : '';
+    // For DMs the channel id is in `payload.channel.id`; for app-home or some
+    // surfaces it can be missing — we only support DM-channel pickers today.
+    const chatId = payload.channel?.id ? String(payload.channel.id) : '';
+    const messageTs = payload.message?.ts ? String(payload.message.ts) : undefined;
+    if (!fromUserId || !chatId) return null;
+
+    return {
+      // `response_url` is what we use to ack — Slack accepts up to 5 calls
+      // within 30 minutes per response_url and applies the update to the
+      // exact message that triggered the action.
+      callbackId: payload.response_url ? String(payload.response_url) : '',
+      chatId,
+      data: actionId,
+      fromUserId,
+      messageId: messageTs,
+    };
+  }
+
+  async acknowledgeCallback(
+    action: InboundCallbackAction,
+    ack: CallbackAcknowledgement,
+  ): Promise<void> {
+    const config = getMessengerSlackConfig();
+    if (!config) return;
+    const api = new SlackApi(config.botToken);
+
+    // Re-render the picker first so the new active marker shows up before any
+    // ephemeral feedback fires (and even if the ephemeral post fails).
+    if (ack.updatedPicker && action.messageId !== undefined) {
+      try {
+        await api.updateMessageWithButtonGrid(
+          action.chatId,
+          String(action.messageId),
+          ack.updatedPicker.text,
+          buildSwitchButtons(ack.updatedPicker.entries),
+        );
+      } catch (error) {
+        log('acknowledgeCallback: update picker failed: %O', error);
+      }
+    }
+
+    if (ack.toast) {
+      try {
+        // Slack has no native toast for button taps (unlike Telegram's
+        // `answerCallbackQuery`) — the closest UX is an ephemeral message
+        // visible only to the tapper.
+        await api.postEphemeral(action.chatId, action.fromUserId, ack.toast);
+      } catch (error) {
+        log('acknowledgeCallback: postEphemeral failed: %O', error);
+      }
     }
   }
 }
