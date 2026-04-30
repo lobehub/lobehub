@@ -1,4 +1,4 @@
-import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Check, MessageSquareText, SquarePen } from 'lucide-react';
@@ -23,6 +23,8 @@ export interface BriefCardActionsProps {
   onAfterResolve?: () => void | Promise<void>;
   resolvedAction?: string | null;
   taskId?: string | null;
+  /** Parent task's runtime status — `scheduled` flips the result action to a plain "Confirm" since approving must NOT terminate a task parked between automated runs. */
+  taskStatus?: TaskStatus | null;
   /** When set together with taskId, renders a "View run" shortcut to the topic drawer. */
   topicId?: string | null;
 }
@@ -45,6 +47,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     onAfterResolve,
     resolvedAction,
     taskId,
+    taskStatus,
     topicId,
   }) => {
     const { t } = useTranslation('home');
@@ -82,19 +85,26 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     ) : null;
 
     const isResult = briefType === 'result';
+    // A result brief on a task parked at status='scheduled' is one occurrence
+    // of a recurring run — approving must NOT mark the task as completed
+    // (server-side guard mirrors this). Use a plain "Confirm" so the label
+    // reflects the dismiss-only behavior; otherwise "Confirm complete" signals
+    // the terminal transition.
+    const resultLabelKey =
+      taskStatus === 'scheduled' ? 'brief.action.confirm' : 'brief.action.confirmDone';
 
     const actions: BriefAction[] = isResult
-      ? [{ key: 'approve', label: t('brief.action.confirm'), type: 'resolve' }]
+      ? [{ key: 'approve', label: t(resultLabelKey), type: 'resolve' }]
       : (actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? []);
 
     const getActionLabel = useCallback(
       (action: BriefAction) => {
-        if (isResult && action.key === 'approve') return t('brief.action.confirm');
+        if (isResult && action.key === 'approve') return t(resultLabelKey);
         const i18nKey = `brief.action.${action.key}`;
         const translated = t(i18nKey, { defaultValue: '' });
         return !translated || translated === i18nKey ? action.label : translated;
       },
-      [isResult, t],
+      [isResult, resultLabelKey, t],
     );
 
     const handleResolve = useCallback(

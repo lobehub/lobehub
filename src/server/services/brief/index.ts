@@ -1,3 +1,5 @@
+import type { TaskStatus } from '@lobechat/types';
+
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
@@ -13,6 +15,8 @@ export interface AgentAvatarInfo {
 
 export type BriefWithAgents = BriefItem & {
   agents: AgentAvatarInfo[];
+  /** Parent task's runtime status — `scheduled` marks a task parked between automated runs. */
+  taskStatus: TaskStatus | null;
 };
 
 export class BriefService {
@@ -30,10 +34,17 @@ export class BriefService {
     const taskIds = briefs.map((b) => b.taskId).filter((id): id is string => id !== null);
 
     if (taskIds.length === 0) {
-      return briefs.map((brief) => ({ ...brief, agents: [] }));
+      return briefs.map((brief) => ({ ...brief, agents: [], taskStatus: null }));
     }
 
-    const taskAgentIdsMap = await this.taskModel.getTreeAgentIdsForTaskIds(taskIds);
+    const [taskAgentIdsMap, taskRows] = await Promise.all([
+      this.taskModel.getTreeAgentIdsForTaskIds(taskIds),
+      this.taskModel.findByIds(taskIds),
+    ]);
+    const taskStatusMap = Object.fromEntries(
+      taskRows.map((t) => [t.id, (t.status as TaskStatus) ?? null]),
+    );
+
     const allAgentIds = [...new Set(Object.values(taskAgentIdsMap).flat())];
     let agentMap: Record<string, AgentAvatarInfo> = {};
 
@@ -47,6 +58,7 @@ export class BriefService {
       agents: (brief.taskId ? taskAgentIdsMap[brief.taskId] || [] : [])
         .map((id) => agentMap[id])
         .filter(Boolean),
+      taskStatus: brief.taskId ? (taskStatusMap[brief.taskId] ?? null) : null,
     }));
   }
 
