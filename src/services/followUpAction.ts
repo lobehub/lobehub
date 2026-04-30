@@ -15,7 +15,6 @@ class FollowUpActionService {
       return result;
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return null;
-      // eslint-disable-next-line no-console
       console.warn('[FollowUpAction] extract failed', err);
       return null;
     }
