@@ -20,6 +20,11 @@ interface ReviewProps {
   workingDirectory: string;
 }
 
+// Empirically: ~100KB of patch ≈ 50 small-diff files OR ~2 big refactors;
+// either way keeps Shiki tokenization under ~250ms on first paint.
+const DEFAULT_EXPAND_BYTE_BUDGET = 100 * 1024;
+const DEFAULT_EXPAND_MAX_COUNT = 50;
+
 const itemKey = (entry: { filePath: string; status: string }) =>
   `${entry.status}:${entry.filePath}`;
 
@@ -67,16 +72,28 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
   const patches = useMemo(() => data?.patches ?? [], [data]);
   const [viewMode, setViewMode] = useState<'unified' | 'split'>('unified');
 
-  // Default-expand every entry (Codex-style review). Re-syncing on signature
-  // change auto-expands files the agent writes during the panel being open;
-  // panels the user manually closed earlier stay closed because their key is
-  // already absent.
+  // Default-expand by patch-size budget: take entries until cumulative patch
+  // bytes exceed DEFAULT_EXPAND_BYTE_BUDGET, capped at DEFAULT_EXPAND_MAX_COUNT.
+  // Every PatchDiff mounts a Shiki tokenizer synchronously, so expanding too
+  // much at once locks the renderer; size-based budget keeps small-diff cases
+  // generous while clamping repos with a few large refactors. Re-syncing on
+  // signature change auto-expands new entries within the cap; panels the user
+  // manually closed earlier stay closed because their key is already absent.
   const signature = useMemo(() => patches.map(itemKey).join('|'), [patches]);
   const [seenSignature, setSeenSignature] = useState('');
   const [activeKeys, setActiveKeys] = useState<string[]>([]);
   if (signature !== seenSignature) {
     setSeenSignature(signature);
-    setActiveKeys(patches.map(itemKey));
+    const initialKeys: string[] = [];
+    let budget = DEFAULT_EXPAND_BYTE_BUDGET;
+    for (const entry of patches) {
+      if (initialKeys.length >= DEFAULT_EXPAND_MAX_COUNT) break;
+      const cost = entry.patch?.length ?? 0;
+      if (initialKeys.length > 0 && cost > budget) break;
+      initialKeys.push(itemKey(entry));
+      budget -= cost;
+    }
+    setActiveKeys(initialKeys);
   }
 
   if (!data && isLoading) {
