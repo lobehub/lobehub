@@ -7,7 +7,7 @@
   "dependencies": {
     "@lobechat/python-interpreter": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
-    "@lobehub/market-sdk": "0.32.2",
+    "@lobehub/market-sdk": "0.33.3",
     "@lobehub/market-types": "^1.12.3",
     "model-bank": "workspace:*",
     "type-fest": "^4.41.0",

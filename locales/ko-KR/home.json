@@ -22,6 +22,7 @@
   "brief.resolved": "해결됨",
   "brief.title": "일일 브리프",
   "brief.viewAllTasks": "모든 작업 보기",
+  "brief.viewRun": "실행 보기",
   "project.create": "새 프로젝트 만들기",
   "project.deleteConfirm": "이 프로젝트는 삭제되며 복구할 수 없습니다. 계속하려면 확인하세요.",
   "starter.createAgent": "도우미 만들기",

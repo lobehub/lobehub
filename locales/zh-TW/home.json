@@ -22,6 +22,7 @@
   "brief.resolved": "已標記為已解決",
   "brief.title": "每日摘要",
   "brief.viewAllTasks": "檢視所有任務",
+  "brief.viewRun": "查看執行",
   "project.create": "新增專案",
   "project.deleteConfirm": "此專案將被刪除且無法恢復。確認繼續。",
   "starter.createAgent": "建立助理",

@@ -22,6 +22,7 @@
   "brief.resolved": "Marcado como resolvido",
   "brief.title": "Resumo diário",
   "brief.viewAllTasks": "Ver todas as tarefas",
+  "brief.viewRun": "Ver execução",
   "project.create": "Novo projeto",
   "project.deleteConfirm": "Este projeto será excluído e não poderá ser recuperado. Confirme para continuar.",
   "starter.createAgent": "Criar Agente",
