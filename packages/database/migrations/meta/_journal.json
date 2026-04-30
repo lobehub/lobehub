@@ -700,6 +700,13 @@
       "when": 1776674965365,
       "tag": "0099_topic_status_tasks_automation_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1777552567945,
+      "tag": "0100_add_metadata_and_trigger_to_briefs",
+      "breakpoints": true
     }
   ],
   "version": "6"

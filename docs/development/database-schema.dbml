@@ -1412,6 +1412,8 @@ table briefs {
   resolved_comment text
   read_at "timestamp with time zone"
   resolved_at "timestamp with time zone"
+  trigger varchar(255)
+  metadata jsonb
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
@@ -1422,6 +1424,7 @@ table briefs {
     type [name: 'briefs_type_idx']
     priority [name: 'briefs_priority_idx']
     (user_id, resolved_at) [name: 'briefs_unresolved_idx']
+    trigger [name: 'briefs_trigger_idx']
   }
 }
 
