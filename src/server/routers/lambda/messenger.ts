@@ -112,10 +112,17 @@ export const messengerRouter = router({
     }),
 
   /**
-   * Agent list for the verify-im UI's "pick an initial agent" dropdown. Mirrors
-   * the home sidebar: filters out virtual agents, orders by `updatedAt DESC`,
-   * and resolves the LobeAI inbox fallback (slug='inbox' → "LobeAI" + default
-   * avatar) so the picker matches what the user sees in the sidebar.
+   * Agent list for the verify-im UI's "pick an initial agent" dropdown.
+   *
+   * Excludes virtual agents (page-copilot, etc.) but explicitly keeps the
+   * inbox/LobeAI agent — historical inbox sessions get migrated with
+   * `virtual=true`, so a plain virtual filter would hide LobeAI even though
+   * the home sidebar shows it (sidebar fetches it separately via
+   * `agent.getBuiltinAgent`).
+   *
+   * Order matches the home sidebar (`updatedAt DESC`). Title fallback for the
+   * inbox agent resolves to `"LobeAI"` + default avatar; everything else falls
+   * back on the client via `common.defaultSession`.
    */
   listAgentsForBinding: messengerProcedure.query(async ({ ctx }) => {
     const rows = await ctx.serverDB
@@ -128,17 +135,31 @@ export const messengerRouter = router({
       })
       .from(agents)
       .where(
-        and(eq(agents.userId, ctx.userId), or(eq(agents.virtual, false), ne(agents.virtual, true))),
+        and(
+          eq(agents.userId, ctx.userId),
+          or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID)),
+        ),
       )
       .orderBy(desc(agents.updatedAt));
 
-    return rows
+    const mapped = rows
       .filter((row) => row.id)
-      .map(({ slug, ...row }) => ({
-        ...row,
-        avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
-        title: row.title || (slug === INBOX_SESSION_ID ? 'LobeAI' : null),
+      .map((row) => ({
+        avatar: row.avatar || (row.slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
+        backgroundColor: row.backgroundColor,
+        id: row.id,
+        slug: row.slug,
+        title: row.title || (row.slug === INBOX_SESSION_ID ? 'LobeAI' : null),
       }));
+
+    // Pin the inbox/LobeAI agent to the top regardless of updatedAt — it's the
+    // implicit "default" agent and should always be the first option.
+    const inboxIdx = mapped.findIndex((row) => row.slug === INBOX_SESSION_ID);
+    if (inboxIdx > 0) {
+      const [inbox] = mapped.splice(inboxIdx, 1);
+      mapped.unshift(inbox);
+    }
+    return mapped.map(({ slug: _slug, ...rest }) => rest);
   }),
 
   /** Get the current user's link for one platform (or null). */

@@ -128,7 +128,11 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     const config = getMessengerTelegramConfig();
     if (!config) return;
     try {
-      await new TelegramApi(config.botToken).sendMessage(chatId, text);
+      // TelegramApi.sendMessage uses parse_mode='HTML' under the hood.
+      // sendDmText is for plain text replies (command help, agent lists, etc.)
+      // so we escape `< > &` to prevent literal characters like "/switch <n>"
+      // from being interpreted as HTML tags.
+      await new TelegramApi(config.botToken).sendMessage(chatId, escapeHtml(text));
     } catch (error) {
       log('sendDmText: failed to send to chat=%s: %O', chatId, error);
     }

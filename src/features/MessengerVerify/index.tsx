@@ -26,6 +26,24 @@ const PLATFORM_BRAND_ICONS: Record<string, ReactNode> = {
   telegram: <Telegram.Color size={36} />,
 };
 
+/**
+ * Build the deep-link back to the platform's bot so the success state can
+ * bounce the user straight into the chat. Returns null when the platform has
+ * no useful deep-link mechanism (Slack workspaces vary per-tenant; not worth
+ * guessing) or when the bot username isn't configured.
+ *
+ * Note: we deliberately skip Telegram's `?start=` query param here. Including
+ * it would trigger the bot's auto-`/start` flow, but the user just finished
+ * binding and only wants to open the chat — re-triggering /start would
+ * confuse the bot into re-issuing a link button.
+ */
+const buildOpenBotUrl = (platform: string, botUsername: string | undefined): string | null => {
+  if (platform === 'telegram' && botUsername) {
+    return `https://t.me/${botUsername.replace(/^@/, '')}`;
+  }
+  return null;
+};
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   bubble: css`
     display: flex;
@@ -103,11 +121,29 @@ const MessengerVerifyPage = memo(() => {
   const { message } = App.useApp();
 
   const randomId = searchParams.get('random_id') ?? '';
+  const imType = searchParams.get('im_type') ?? '';
   const { data: session, isPending: sessionPending } = useSession();
   const isSignedIn = !!session?.user;
 
+  // Refresh-friendly: if the user already has a link for this platform, skip
+  // the token flow entirely and jump to the success state. Without this,
+  // refreshing the page after a successful link looks like an expired-token
+  // error (the random_id token gets consumed on confirm).
+  const existingLinkSWR = useSWR(
+    isSignedIn && (imType === 'telegram' || imType === 'slack')
+      ? ['messenger:myLink', imType]
+      : null,
+    async () => messengerService.getMyLink(imType as 'telegram' | 'slack'),
+  );
+  const alreadyLinked = !!existingLinkSWR.data;
+
   const agentsSWR = useSWR(isSignedIn ? ['messenger:agents'] : null, async () =>
     messengerService.listAgentsForBinding(),
+  );
+
+  // Used in the success state to deep-link the user back to the bot.
+  const platformsSWR = useSWR('messenger:availablePlatforms', () =>
+    messengerService.availablePlatforms(),
   );
 
   const defaultAgentTitle = tCommon('defaultSession');
@@ -172,7 +208,7 @@ const MessengerVerifyPage = memo(() => {
     );
   }
 
-  if (sessionPending) {
+  if (sessionPending || existingLinkSWR.isLoading) {
     return <Loading debugId="MessengerVerify" />;
   }
 
@@ -186,6 +222,35 @@ const MessengerVerifyPage = memo(() => {
         <Button block href={signInUrl} size="large" type="primary">
           {t('verify.signInCta')}
         </Button>
+      </Flexbox>
+    );
+  }
+
+  // Already linked (from a prior successful confirm — survives page refresh)
+  // OR just-confirmed in this session: jump straight to the success state.
+  if (alreadyLinked || done) {
+    const platform = (existingLinkSWR.data?.platform ?? tokenSWR.data?.platform ?? imType) as
+      | string
+      | undefined;
+    const platformLabelSuccess = platform ? (PLATFORM_LABELS[platform] ?? platform) : '';
+    const botUsername = platformsSWR.data?.find((p) => p.platform === platform)?.botUsername;
+    const openBotUrl = platform ? buildOpenBotUrl(platform, botUsername) : null;
+    return (
+      <Flexbox align="center" className={styles.card} gap={24}>
+        <div className={styles.iconRow}>
+          <div className={styles.bubble} style={{ background: '#22c55e', color: '#ffffff' }}>
+            <Icon icon={CheckCircle2Icon} size={32} />
+          </div>
+        </div>
+        <Heading
+          subtitle={t('verify.success.description', { platform: platformLabelSuccess })}
+          title={t('verify.success.title')}
+        />
+        {openBotUrl && (
+          <Button block href={openBotUrl} size="large" target="_blank" type="primary">
+            {t('verify.success.openBot', { platform: platformLabelSuccess })}
+          </Button>
+        )}
       </Flexbox>
     );
   }
@@ -207,22 +272,6 @@ const MessengerVerifyPage = memo(() => {
 
   const platformLabel = PLATFORM_LABELS[tokenSWR.data.platform] ?? tokenSWR.data.platform;
   const handle = tokenSWR.data.platformUsername ?? `ID ${tokenSWR.data.platformUserId}`;
-
-  if (done) {
-    return (
-      <Flexbox align="center" className={styles.card} gap={24}>
-        <div className={styles.iconRow}>
-          <div className={styles.bubble} style={{ background: '#22c55e', color: '#ffffff' }}>
-            <Icon icon={CheckCircle2Icon} size={32} />
-          </div>
-        </div>
-        <Heading
-          subtitle={t('verify.success.description', { platform: platformLabel })}
-          title={t('verify.success.title')}
-        />
-      </Flexbox>
-    );
-  }
 
   return (
     <Flexbox align="center" className={styles.card} gap={32}>

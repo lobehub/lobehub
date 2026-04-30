@@ -50,5 +50,6 @@ export default {
   'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
   'verify.success.description':
     'Your account is now connected to {{platform}}. Open {{platform}} and send your first message.',
+  'verify.success.openBot': 'Open in {{platform}}',
   'verify.success.title': 'Linked successfully!',
 };

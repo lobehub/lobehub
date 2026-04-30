@@ -1,7 +1,8 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
 import debug from 'debug';
-import { asc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne, or } from 'drizzle-orm';
 
 import { getEnabledMessengerPlatforms, type MessengerPlatform } from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -455,23 +456,46 @@ export class MessengerRouter {
     );
   }
 
-  /** Fetch a user's agents in stable order (asc by accessedAt → oldest first). */
+  /**
+   * Fetch a user's agents for `/agents` and `/switch`. Mirrors the web
+   * verify-im picker (and the home sidebar):
+   *  - excludes virtual agents but explicitly keeps the inbox/LobeAI agent
+   *  - orders by `updatedAt DESC`
+   *  - pins inbox/LobeAI to the top regardless of updatedAt
+   *  - applies the LobeAI title fallback (slug='inbox') and a generic
+   *    "Custom Agent" fallback for agents without a title
+   */
   private async fetchUserAgents(
     serverDB: LobeChatDatabase,
     userId: string,
   ): Promise<AgentSummary[]> {
     const rows = await serverDB
-      .select({ id: agents.id, title: agents.title })
+      .select({ id: agents.id, slug: agents.slug, title: agents.title })
       .from(agents)
-      .where(eq(agents.userId, userId))
-      .orderBy(asc(agents.accessedAt));
+      .where(
+        and(
+          eq(agents.userId, userId),
+          or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID)),
+        ),
+      )
+      .orderBy(desc(agents.updatedAt));
 
-    return rows
+    const mapped = rows
       .filter((row) => row.id)
       .map((row) => ({
         id: row.id,
-        title: row.title ?? `Agent ${row.id.slice(0, 8)}`,
+        slug: row.slug,
+        title:
+          (row.title && row.title.trim()) ||
+          (row.slug === INBOX_SESSION_ID ? 'LobeAI' : 'Custom Agent'),
       }));
+
+    const inboxIdx = mapped.findIndex((row) => row.slug === INBOX_SESSION_ID);
+    if (inboxIdx > 0) {
+      const [inbox] = mapped.splice(inboxIdx, 1);
+      mapped.unshift(inbox);
+    }
+    return mapped.map(({ slug: _slug, ...rest }) => rest);
   }
 
   private async dispatchToAgent(
