@@ -4,10 +4,7 @@ import { AgentMarketplaceExecutionRuntime } from '../ExecutionRuntime';
 import {
   AgentMarketplaceApiName,
   AgentMarketplaceIdentifier,
-  type CancelAgentPickArgs,
-  type GetPickStateArgs,
   type ShowAgentMarketplaceArgs,
-  type SkipAgentPickArgs,
   type SubmitAgentPickArgs,
 } from '../types';
 
@@ -33,31 +30,7 @@ export class AgentMarketplaceExecutor extends BaseExecutor<typeof AgentMarketpla
     params: SubmitAgentPickArgs,
     _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    // TODO(LOBE-7801): after submit, install the selected templates into the
-    // user workspace (clone from lobehub/agent-template into sessions table).
-    // For MVP we only record the selection and let the agent acknowledge verbally.
     return this.runtime.submitAgentPick(params);
-  };
-
-  skipAgentPick = async (
-    params: SkipAgentPickArgs,
-    _ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    return this.runtime.skipAgentPick(params);
-  };
-
-  cancelAgentPick = async (
-    params: CancelAgentPickArgs,
-    _ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    return this.runtime.cancelAgentPick(params);
-  };
-
-  getPickState = async (
-    params: GetPickStateArgs,
-    _ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    return this.runtime.getPickState(params);
   };
 }
 

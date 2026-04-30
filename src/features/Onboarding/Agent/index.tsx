@@ -170,15 +170,31 @@ const AgentOnboardingPage = memo(() => {
               ? undefined
               : {
                   onAfterSendMessage: async () => {
-                    const nextContext = await syncOnboardingContext();
-                    await Promise.all([
-                      refreshUserState(),
-                      refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
-                    ]);
-                    await onboardingFollowUp.triggerExtract(
+                    const prevPhase = data?.context?.phase;
+                    const prevFinishedAt = agentOnboarding?.finishedAt;
+
+                    const extractPromise = onboardingFollowUp.triggerExtract(
                       effectiveTopicId,
-                      nextContext?.context?.phase,
+                      prevPhase,
                     );
+
+                    // Sync first to learn the next phase/finishedAt; only then
+                    // decide whether the heavier user-store / builtin-agent
+                    // refreshes are actually needed this turn.
+                    const [nextContext] = await Promise.all([
+                      syncOnboardingContext(),
+                      extractPromise,
+                    ]);
+
+                    const newPhase = nextContext?.context?.phase;
+                    const newFinishedAt = nextContext?.agentOnboarding?.finishedAt;
+
+                    const refreshes: Promise<unknown>[] = [];
+                    if (newFinishedAt !== prevFinishedAt) refreshes.push(refreshUserState());
+                    if (newPhase !== prevPhase) {
+                      refreshes.push(refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding));
+                    }
+                    if (refreshes.length > 0) await Promise.all(refreshes);
                   },
                   onBeforeSendMessage: onboardingFollowUp.onBeforeSendMessage,
                 }

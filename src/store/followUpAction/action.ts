@@ -44,6 +44,7 @@ export class FollowUpActionImpl {
         messageId: undefined,
         pendingTopicId: topicId,
         status: 'loading',
+        topicId: undefined,
       },
       false,
       'fetchFor:start',
@@ -52,8 +53,13 @@ export class FollowUpActionImpl {
     const result = await followUpActionService.extract({ hint, topicId }, controller.signal);
     clearTimeout(timeoutId);
 
-    // If a new fetch for a different topic has started, ignore this result.
-    if (this.#get().pendingTopicId !== topicId) return;
+    // Discard stale results: if the active controller in state is no longer
+    // this one, our call has been superseded — either by clear()/abort()
+    // (e.g., user sent a new message) or by a newer fetchFor for the same
+    // topic (next turn). Identity beats topicId here because a same-topic
+    // follow-up turn would otherwise let an in-flight prior result overwrite
+    // the new turn's chips when the network abort race is lost.
+    if (this.#get().abortController !== controller) return;
 
     if (!result || !result.messageId || result.chips.length === 0) {
       this.#set(
@@ -63,6 +69,7 @@ export class FollowUpActionImpl {
           messageId: undefined,
           pendingTopicId: undefined,
           status: 'idle',
+          topicId: undefined,
         },
         false,
         'fetchFor:fail',
@@ -77,6 +84,7 @@ export class FollowUpActionImpl {
         messageId: result.messageId,
         pendingTopicId: undefined,
         status: 'ready',
+        topicId,
       },
       false,
       'fetchFor:ready',
@@ -93,6 +101,7 @@ export class FollowUpActionImpl {
         messageId: undefined,
         pendingTopicId: undefined,
         status: 'idle',
+        topicId: undefined,
       },
       false,
       'abort',

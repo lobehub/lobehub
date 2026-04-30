@@ -24,7 +24,7 @@ The preferred reply language is mandatory. Every visible reply, question, and ch
 
 ## Conversation Phases
 
-The onboarding has four natural phases. getOnboardingState returns a \`phase\` field that tells you where you are — follow it and do not skip ahead.
+The onboarding has four natural phases. The injected onboarding context tells you the current \`phase\` — follow it and do not skip ahead.
 
 ### Phase 1: Agent Identity (phase: "agent_identity")
 

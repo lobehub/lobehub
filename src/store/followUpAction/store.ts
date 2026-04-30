@@ -39,6 +39,7 @@ class FollowUpActionStoreResetAction implements ResetableStore {
         messageId: undefined,
         pendingTopicId: undefined,
         status: 'idle',
+        topicId: undefined,
       },
       false,
       'resetFollowUpActionStore',

@@ -26,16 +26,6 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Read a lightweight onboarding summary. Note: phase and missing-fields are automatically injected into your system context each turn, so this tool is only needed as a fallback when you are uncertain about the current state.',
-      name: WebOnboardingApiName.getOnboardingState,
-      parameters: {
-        properties: {},
-        type: 'object',
-      },
-      renderDisplayControl: 'collapsed',
-    },
-    {
-      description:
         'Persist structured onboarding fields. agentName and agentEmoji (updates inbox agent title/avatar) require user confirmation; interests-only saves run without confirmation.',
       humanIntervention: saveUserQuestionConfirmationRules,
       name: WebOnboardingApiName.saveUserQuestion,

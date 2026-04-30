@@ -103,7 +103,8 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     const itemContent = (index: number, id: string) => {
       const isLatestItem = displayMessages.length === index + 1;
       const message = displayMessages[index];
-      const showFollowUp = isLatestItem && message?.role === 'assistant';
+      const showFollowUp =
+        isLatestItem && !!message && assistantLikeRoles.has(message.role) && !!topicId;
 
       return (
         <Flexbox>
@@ -113,7 +114,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
             index={index}
             isLatestItem={isLatestItem}
           />
-          {showFollowUp && <FollowUpChips messageId={id} />}
+          {showFollowUp && <FollowUpChips messageId={id} topicId={topicId!} />}
         </Flexbox>
       );
     };
@@ -135,6 +136,10 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
               onAfterFinish={onAfterWrapUp}
             />
             <ChatInput
+              disableFollowUpVariant
+              disableMention
+              disableQueue
+              disableSlash
               allowExpand={false}
               leftActions={chatInputLeftActions}
               rightActions={chatInputRightActions}

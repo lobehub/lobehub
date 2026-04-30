@@ -8,6 +8,7 @@ export interface FollowUpActionState {
   messageId?: string;
   pendingTopicId?: string;
   status: FollowUpActionStatus;
+  topicId?: string;
 }
 
 export const initialFollowUpActionState: FollowUpActionState = {

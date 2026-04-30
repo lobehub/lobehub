@@ -1,4 +1,15 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, keyframes } from 'antd-style';
+
+const slideUp = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
@@ -9,10 +20,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     max-inline-size: 460px;
     margin-block-start: 8px;
-    margin-inline-start: 44px;
   `,
   chip: css`
     cursor: pointer;
+
+    transform: translateY(8px);
 
     display: inline-flex;
     gap: 8px;
@@ -26,11 +38,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 13px;
     color: ${cssVar.colorText};
 
+    opacity: 0;
     background: ${cssVar.colorFillTertiary};
 
     transition:
       background 0.15s,
       color 0.15s;
+    animation: ${slideUp} 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
@@ -39,6 +53,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover .followup-icon {
       color: ${cssVar.colorPrimary};
       opacity: 1;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transform: none;
+      opacity: 1;
+      animation: none;
     }
   `,
   chipIcon: css`
