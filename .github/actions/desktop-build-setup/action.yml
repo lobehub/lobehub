@@ -22,6 +22,6 @@ runs:
 
     - name: Install deps on Desktop
       shell: bash
-      run: npm run install-isolated --prefix=./apps/desktop
+      run: pnpm --dir ./apps/desktop install --node-linker=hoisted --config.enable-global-virtual-store=false
       env:
         NODE_OPTIONS: --max-old-space-size=8192
