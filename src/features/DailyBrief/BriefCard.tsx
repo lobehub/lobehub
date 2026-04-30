@@ -116,6 +116,7 @@ const BriefCard = memo<BriefCardProps>(
               briefId={brief.id}
               briefType={brief.type}
               resolvedAction={brief.resolvedAction}
+              taskAutomationMode={brief.taskAutomationMode}
               taskId={brief.taskId}
               topicId={brief.topicId}
               onAfterAddComment={onAfterAddComment}

@@ -22,6 +22,8 @@ export interface BriefCardActionsProps {
   /** Hook invoked after the brief is successfully resolved. */
   onAfterResolve?: () => void | Promise<void>;
   resolvedAction?: string | null;
+  /** Parent task's automation mode — `schedule` flips the result action to a plain "Mark as resolved" since recurring tasks aren't completed by accepting one run. */
+  taskAutomationMode?: 'heartbeat' | 'schedule' | null;
   taskId?: string | null;
   /** When set together with taskId, renders a "View run" shortcut to the topic drawer. */
   topicId?: string | null;
@@ -44,6 +46,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     onAfterAddComment,
     onAfterResolve,
     resolvedAction,
+    taskAutomationMode,
     taskId,
     topicId,
   }) => {
@@ -82,19 +85,29 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     ) : null;
 
     const isResult = briefType === 'result';
+    // A result brief belonging to a recurring task is just one occurrence —
+    // accepting it must NOT mark the parent task as completed (server-side
+    // guard mirrors this). Surface that distinction with a plain "Mark as
+    // resolved" label. Discriminator is the task's automation mode, NOT the
+    // brief's cronJobId — a manual run of a recurring task has cronJobId=null
+    // but the task is still recurring.
+    const isRecurringResult = isResult && taskAutomationMode === 'schedule';
+    const resultLabelKey = isRecurringResult
+      ? 'brief.action.markResolved'
+      : 'brief.action.confirmDone';
 
     const actions: BriefAction[] = isResult
-      ? [{ key: 'approve', label: t('brief.action.confirmDone'), type: 'resolve' }]
+      ? [{ key: 'approve', label: t(resultLabelKey), type: 'resolve' }]
       : (actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? []);
 
     const getActionLabel = useCallback(
       (action: BriefAction) => {
-        if (isResult && action.key === 'approve') return t('brief.action.confirmDone');
+        if (isResult && action.key === 'approve') return t(resultLabelKey);
         const i18nKey = `brief.action.${action.key}`;
         const translated = t(i18nKey, { defaultValue: '' });
         return !translated || translated === i18nKey ? action.label : translated;
       },
-      [isResult, t],
+      [isResult, resultLabelKey, t],
     );
 
     const handleResolve = useCallback(

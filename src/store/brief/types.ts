@@ -21,6 +21,8 @@ export interface BriefItem {
   resolvedAt: Date | string | null;
   resolvedComment: string | null;
   summary: string;
+  /** Parent task's automation mode — `schedule` means the task is recurring. */
+  taskAutomationMode: 'heartbeat' | 'schedule' | null;
   taskId: string | null;
   title: string;
   topicId: string | null;

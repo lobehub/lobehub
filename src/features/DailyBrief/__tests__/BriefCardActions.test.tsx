@@ -20,6 +20,7 @@ vi.mock('react-i18next', () => ({
         'brief.commentPlaceholder': 'Share your feedback...',
         'brief.commentSubmit': 'Submit feedback',
         'brief.action.confirmDone': 'Confirm complete',
+        'brief.action.markResolved': 'Mark as resolved',
         'brief.editResult': 'Edit',
         'brief.viewRun': 'View run',
       };
@@ -170,5 +171,33 @@ describe('BriefCardActions', () => {
       />,
     );
     expect(screen.queryByText('View run')).not.toBeInTheDocument();
+  });
+
+  it('should label the result action "Confirm complete" for a one-shot task', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
+        briefId="brief-7"
+        briefType="result"
+        taskAutomationMode={null}
+        taskId="task-7"
+      />,
+    );
+    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.queryByText('Mark as resolved')).not.toBeInTheDocument();
+  });
+
+  it('should label the result action "Mark as resolved" for a recurring task (taskAutomationMode=schedule)', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
+        briefId="brief-8"
+        briefType="result"
+        taskAutomationMode={'schedule'}
+        taskId="task-8"
+      />,
+    );
+    expect(screen.getByText('Mark as resolved')).toBeInTheDocument();
+    expect(screen.queryByText('Confirm complete')).not.toBeInTheDocument();
   });
 });
