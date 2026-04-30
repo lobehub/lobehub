@@ -130,6 +130,11 @@ const config = {
     );
     console.info('✅ CLI bundle copied to resources/bin/lobe-cli.js');
   },
+  // Native dependencies are rebuilt during the isolated desktop install and
+  // copied explicitly by the hooks here. Returning false marks node_modules as
+  // externally handled, so electron-builder does not invoke its pnpm collector
+  // during packaging.
+  beforeBuild: () => false,
   /**
    * AfterPack hook for post-processing:
    * 1. Copy native modules to asar.unpacked (resolving pnpm symlinks)
@@ -213,15 +218,6 @@ const config = {
     artifactName: '${productName}-${version}.${ext}',
   },
 
-  // Native modules are copied explicitly by the hooks below. Keeping package
-  // dependencies in the generated app metadata makes electron-builder invoke
-  // its pnpm dependency collector, which can hit EMFILE on Linux runners.
-  extraMetadata: {
-    dependencies: {},
-    devDependencies: {},
-    optionalDependencies: {},
-  },
-
   // Native modules must be unpacked from asar to work correctly
   asarUnpack: getAsarUnpackPatterns(),
 
@@ -299,10 +295,6 @@ const config = {
       { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'zip' },
     ],
   },
-  // Native dependencies are rebuilt during the isolated desktop install.
-  // Re-running electron-builder's pnpm dependency collector during packaging can
-  // hit EMFILE on Linux runners with pnpm 11.
-  npmRebuild: false,
   nsis: {
     allowToChangeInstallationDirectory: true,
     artifactName: '${productName}-${version}-setup.${ext}',
