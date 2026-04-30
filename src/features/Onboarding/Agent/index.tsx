@@ -176,18 +176,26 @@ const AgentOnboardingPage = memo(() => {
                     pendingAssistantIdRef.current = assistantMessageId;
                   },
                   onAfterSendMessage: async () => {
+                    const prevPhase = data?.context?.phase;
+                    const prevFinishedAt = data?.finishedAt;
+
                     const nextContext = await syncOnboardingContext();
-                    await Promise.all([
-                      refreshUserState(),
-                      refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
-                    ]);
+                    const nextPhase = nextContext?.context?.phase;
+                    const nextFinishedAt = nextContext?.finishedAt;
+
+                    // Only refresh user store + builtin agent caches at phase boundaries (or finish).
+                    // Within a phase neither cache's content changes, so refreshing every turn is wasted RPC.
+                    if (prevPhase !== nextPhase || prevFinishedAt !== nextFinishedAt) {
+                      await Promise.all([
+                        refreshUserState(),
+                        refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
+                      ]);
+                    }
+
                     const pendingId = pendingAssistantIdRef.current;
                     pendingAssistantIdRef.current = null;
                     if (pendingId) {
-                      await onboardingFollowUp.triggerExtract(
-                        pendingId,
-                        nextContext?.context?.phase,
-                      );
+                      await onboardingFollowUp.triggerExtract(pendingId, nextPhase);
                     }
                   },
                   onBeforeSendMessage: onboardingFollowUp.onBeforeSendMessage,
