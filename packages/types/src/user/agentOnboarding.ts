@@ -134,8 +134,8 @@ export const ONBOARDING_PHASES = [
   'summary',
 ] as const;
 
-export const MIN_DISCOVERY_USER_MESSAGES = 5;
-export const RECOMMENDED_DISCOVERY_USER_MESSAGES = 8;
+export const MIN_DISCOVERY_USER_MESSAGES = 2;
+export const RECOMMENDED_DISCOVERY_USER_MESSAGES = 3;
 
 export type OnboardingPhase = (typeof ONBOARDING_PHASES)[number];
 

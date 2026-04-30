@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +17,8 @@ const { chatInputSpy, messageItemSpy, mockState } = vi.hoisted(() => ({
   messageItemSpy: vi.fn(),
   mockState: {
     displayMessages: [] as Array<{ content?: string; id: string; role: string }>,
+    generatingIds: new Set<string>(),
+    pendingInterventions: [] as Array<{ id: string }>,
   },
 }));
 
@@ -62,12 +64,7 @@ vi.mock('@/features/Conversation', () => ({
   dataSelectors: {
     displayMessages: (state: typeof mockState) => state.displayMessages,
   },
-  useConversationStore: (
-    selector: (state: { displayMessages: typeof mockState.displayMessages }) => unknown,
-  ) =>
-    selector({
-      displayMessages: mockState.displayMessages,
-    }),
+  useConversationStore: (selector: (state: typeof mockState) => unknown) => selector(mockState),
 }));
 
 vi.mock('@/features/Conversation/hooks/useAgentMeta', () => ({
@@ -87,6 +84,8 @@ describe('AgentOnboardingConversation', () => {
     chatInputSpy.mockClear();
     messageItemSpy.mockClear();
     mockState.displayMessages = [];
+    mockState.generatingIds = new Set();
+    mockState.pendingInterventions = [];
   });
 
   it('renders a read-only transcript when viewing a historical topic', () => {
@@ -123,6 +122,116 @@ describe('AgentOnboardingConversation', () => {
     );
   });
 
+  it('disables / @ triggers, follow-up placeholder, and message queueing', () => {
+    mockState.displayMessages = [{ id: 'assistant-1', role: 'assistant' }];
+
+    render(<AgentOnboardingConversation />);
+
+    expect(chatInputSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        disableFollowUpVariant: true,
+        disableMention: true,
+        disableQueue: true,
+        disableSlash: true,
+      }),
+    );
+  });
+
+  it('fires the assistant-settled callback after the latest assistant stops generating', async () => {
+    const onAssistantTurnSettled = vi.fn();
+    mockState.displayMessages = [
+      { id: 'user-1', role: 'user' },
+      { id: 'assistant-1', role: 'assistant' },
+    ];
+    mockState.generatingIds = new Set(['assistant-1']);
+
+    const { rerender } = render(
+      <AgentOnboardingConversation
+        discoveryUserMessageCount={0}
+        topicId="topic-1"
+        onAssistantTurnSettled={onAssistantTurnSettled}
+      />,
+    );
+
+    expect(onAssistantTurnSettled).not.toHaveBeenCalled();
+
+    mockState.generatingIds = new Set();
+    rerender(
+      <AgentOnboardingConversation
+        discoveryUserMessageCount={1}
+        topicId="topic-1"
+        onAssistantTurnSettled={onAssistantTurnSettled}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onAssistantTurnSettled).toHaveBeenCalledWith('assistant-1');
+    });
+    expect(onAssistantTurnSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for resumed generation after a pending intervention clears', async () => {
+    const onAssistantTurnSettled = vi.fn();
+    mockState.displayMessages = [
+      { id: 'user-1', role: 'user' },
+      { id: 'assistant-1', role: 'assistant' },
+    ];
+    mockState.generatingIds = new Set(['assistant-1']);
+
+    const { rerender } = render(
+      <AgentOnboardingConversation
+        discoveryUserMessageCount={0}
+        topicId="topic-1"
+        onAssistantTurnSettled={onAssistantTurnSettled}
+      />,
+    );
+
+    mockState.generatingIds = new Set();
+    mockState.pendingInterventions = [{ id: 'tool-1' }];
+    rerender(
+      <AgentOnboardingConversation
+        discoveryUserMessageCount={1}
+        topicId="topic-1"
+        onAssistantTurnSettled={onAssistantTurnSettled}
+      />,
+    );
+    expect(onAssistantTurnSettled).not.toHaveBeenCalled();
+
+    mockState.pendingInterventions = [];
+    rerender(
+      <AgentOnboardingConversation
+        discoveryUserMessageCount={2}
+        topicId="topic-1"
+        onAssistantTurnSettled={onAssistantTurnSettled}
+      />,
+    );
+    expect(onAssistantTurnSettled).not.toHaveBeenCalled();
+
+    mockState.generatingIds = new Set(['assistant-1']);
+    rerender(
+      <AgentOnboardingConversation
+        discoveryUserMessageCount={3}
+        topicId="topic-1"
+        onAssistantTurnSettled={onAssistantTurnSettled}
+      />,
+    );
+    expect(onAssistantTurnSettled).not.toHaveBeenCalled();
+
+    mockState.generatingIds = new Set();
+    rerender(
+      <AgentOnboardingConversation
+        discoveryUserMessageCount={4}
+        topicId="topic-1"
+        onAssistantTurnSettled={onAssistantTurnSettled}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onAssistantTurnSettled).toHaveBeenCalledWith('assistant-1');
+    });
+    expect(onAssistantTurnSettled).toHaveBeenCalledTimes(1);
+  });
+
   it('renders normal message items outside the greeting state', () => {
     mockState.displayMessages = [
       { id: 'assistant-1', role: 'assistant' },
@@ -151,3 +260,13 @@ describe('AgentOnboardingConversation', () => {
     );
   });
 });
+
+vi.mock('@/features/Conversation/store', () => ({
+  dataSelectors: {
+    pendingInterventions: (state: typeof mockState) => state.pendingInterventions,
+  },
+  messageStateSelectors: {
+    isAssistantGroupItemGenerating: (id: string) => (state: typeof mockState) =>
+      state.generatingIds.has(id),
+  },
+}));

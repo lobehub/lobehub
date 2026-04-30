@@ -662,40 +662,15 @@ export const contextEngineering = async ({
     },
   );
 
-  // Build onboarding context if this is the web-onboarding agent
+  // Build onboarding context if this is the web-onboarding agent.
+  // Single combined trpc call — server runs state/soul/persona DB queries in parallel.
   let onboardingContext: OnboardingContext | undefined;
   const isOnboardingAgent = tools?.includes(WebOnboardingIdentifier);
   if (isOnboardingAgent) {
     try {
       const { userService } = await import('@/services/user');
-      const { formatWebOnboardingStateMessage } =
-        await import('@lobechat/builtin-tool-web-onboarding/utils');
-      const state = await userService.getOnboardingState();
-      const phaseGuidance = formatWebOnboardingStateMessage(state);
-
-      // Fetch SOUL.md and persona documents via raw DB access to avoid placeholder text
-      let soulContent: string | null = null;
-      let personaContent: string | null = null;
-      try {
-        const soulDoc = await userService.readOnboardingDocument('soul');
-        // Only inject real content, not empty-state placeholder messages
-        if (soulDoc?.id && soulDoc.content) {
-          soulContent = soulDoc.content;
-        }
-      } catch {
-        // Ignore — document may not exist yet
-      }
-      try {
-        const personaDoc = await userService.readOnboardingDocument('persona');
-        if (personaDoc?.id && personaDoc.content) {
-          personaContent = personaDoc.content;
-        }
-      } catch {
-        // Ignore — document may not exist yet
-      }
-
-      onboardingContext = { personaContent, phaseGuidance, soulContent };
-      log('Built onboarding context, phase: %s', state.phase);
+      onboardingContext = await userService.getOnboardingAgentContext();
+      log('Built onboarding context');
     } catch (error) {
       log('Failed to build onboarding context: %O', error);
     }

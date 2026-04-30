@@ -31,7 +31,7 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 }));
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   useTaskStore.setState({
     activeTaskId: undefined,
     isCreatingTask: false,
@@ -135,6 +135,77 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskSaveStatus).toBe('idle');
       expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
       expect(message.error).toHaveBeenCalled();
+    });
+
+    it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        activeTaskId: 'T-sub',
+        taskDetailMap: {
+          'T-parent': {
+            identifier: 'T-parent',
+            instruction: 'Parent',
+            status: 'backlog',
+            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+          },
+          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+        },
+      });
+
+      vi.mocked(taskService.update).mockRejectedValue(new Error('fail'));
+
+      await expect(
+        useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
+      ).rejects.toThrow('fail');
+
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
+    });
+
+    it('should not show error when update succeeds but cache refresh fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      const { message } = await import('@/components/AntdStaticMethods');
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+        },
+      });
+
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('network blip'));
+
+      await useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agent-x' });
+
+      expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
+      expect(message.error).not.toHaveBeenCalled();
+    });
+
+    it('should refresh the parent that was patched even if activeTaskId changes mid-flight', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        activeTaskId: 'T-parent',
+        taskDetailMap: {
+          'T-parent': {
+            identifier: 'T-parent',
+            instruction: 'Parent',
+            status: 'backlog',
+            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+          },
+        },
+      });
+
+      vi.mocked(taskService.update).mockImplementation(async () => {
+        useTaskStore.setState({ activeTaskId: 'T-other' });
+        throw new Error('fail');
+      });
+
+      await expect(
+        useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
+      ).rejects.toThrow('fail');
+
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
     });
   });
 

@@ -19,6 +19,7 @@ vi.mock('react-i18next', () => ({
         'cancel': 'Cancel',
         'brief.commentPlaceholder': 'Share your feedback...',
         'brief.commentSubmit': 'Submit feedback',
+        'brief.action.confirm': 'Confirm',
         'brief.action.confirmDone': 'Confirm complete',
         'brief.editResult': 'Edit',
         'brief.viewRun': 'View run',
@@ -170,5 +171,33 @@ describe('BriefCardActions', () => {
       />,
     );
     expect(screen.queryByText('View run')).not.toBeInTheDocument();
+  });
+
+  it('should label the result action "Confirm complete" when the parent task is not parked at scheduled', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
+        briefId="brief-7"
+        briefType="result"
+        taskId="task-7"
+        taskStatus={'paused'}
+      />,
+    );
+    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.queryByText('Confirm', { exact: true })).not.toBeInTheDocument();
+  });
+
+  it('should label the result action "Confirm" when the parent task is parked at status="scheduled"', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
+        briefId="brief-8"
+        briefType="result"
+        taskId="task-8"
+        taskStatus={'scheduled'}
+      />,
+    );
+    expect(screen.getByText('Confirm')).toBeInTheDocument();
+    expect(screen.queryByText('Confirm complete')).not.toBeInTheDocument();
   });
 });

@@ -198,7 +198,6 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
 
   // Misc
   finishOnboarding: 'workflow.toolDisplayName.finishOnboarding',
-  getOnboardingState: 'workflow.toolDisplayName.getOnboardingState',
   getTopicContext: 'workflow.toolDisplayName.getTopicContext',
   listOnlineDevices: 'workflow.toolDisplayName.listOnlineDevices',
   activateDevice: 'workflow.toolDisplayName.activateDevice',

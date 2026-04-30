@@ -63,6 +63,24 @@ export interface ChatInputProps {
    */
   children?: ReactNode;
   /**
+   * Suppress the followUp placeholder variant (e.g. onboarding has no
+   * follow-up design). When true, placeholder stays in default variant.
+   */
+  disableFollowUpVariant?: boolean;
+  /**
+   * Disable the @ mention trigger and its placeholder hint
+   */
+  disableMention?: boolean;
+  /**
+   * Disable enqueuing follow-up messages while the agent is streaming.
+   * Hides the QueueTray and gates handleSend so Enter does not enqueue.
+   */
+  disableQueue?: boolean;
+  /**
+   * Disable the / slash command trigger
+   */
+  disableSlash?: boolean;
+  /**
    * Extra action items to append to the ActionBar
    */
   extraActionItems?: ChatInputActionsProps['items'];
@@ -123,6 +141,10 @@ const ChatInput = memo<ChatInputProps>(
   ({
     actionBarStyle,
     allowExpand,
+    disableFollowUpVariant,
+    disableMention,
+    disableQueue,
+    disableSlash,
     leftActions = [],
     leftContent,
     rightActions = [],
@@ -186,11 +208,13 @@ const ChatInput = memo<ChatInputProps>(
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
     const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
+      disableFollowUpVariant,
       isInputEmpty,
       isInputLoading,
     });
-    // Input stays enabled during agent execution — messages are queued
-    const disabled = isInputEmpty || isUploadingFiles;
+    // Input stays enabled during agent execution — messages are queued.
+    // When disableQueue is set (e.g. onboarding), block sending while loading.
+    const disabled = isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
 
     // Send handler - gets message, clears editor immediately, then sends
@@ -203,6 +227,10 @@ const ChatInput = memo<ChatInputProps>(
         const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
 
         if (currentIsUploading) return;
+
+        // Onboarding-style surfaces opt out of message queuing — pressing Enter
+        // while the agent is streaming should be a no-op rather than enqueue.
+        if (disableQueue && isInputLoading) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
@@ -228,7 +256,7 @@ const ChatInput = memo<ChatInputProps>(
         // Fire and forget - send with captured message
         await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [sendMessage],
+      [sendMessage, disableQueue, isInputLoading],
     );
 
     const sendButtonProps: SendButtonProps = {
@@ -259,7 +287,7 @@ const ChatInput = memo<ChatInputProps>(
                 />
               </Flexbox>
             )}
-            {hasQueuedMessages && (
+            {!disableQueue && hasQueuedMessages && (
               <Flexbox
                 paddingInline={12}
                 style={{
@@ -292,6 +320,8 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        disableMention={disableMention}
+        disableSlash={disableSlash}
         getMessages={getMessages}
         leftActions={leftActions}
         mentionItems={mentionItems}

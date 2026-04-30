@@ -1043,6 +1043,9 @@ When I am ___, I need ___
   'tools.builtins.lobe-agent-documents.title': 'Documents',
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
+  'tools.builtins.lobe-agent-marketplace.description':
+    'Show users a curated Agent Marketplace card and record which templates they pick.',
+  'tools.builtins.lobe-agent-marketplace.title': 'Agent Marketplace',
   'tools.builtins.lobe-brief.description':
     'Report progress, deliver results, and request user decisions',
   'tools.builtins.lobe-brief.title': 'Brief Tools',

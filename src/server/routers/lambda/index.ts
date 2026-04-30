@@ -33,6 +33,7 @@ import { deviceRouter } from './device';
 import { documentRouter } from './document';
 import { exporterRouter } from './exporter';
 import { fileRouter } from './file';
+import { followUpActionRouter } from './followUpAction';
 import { generationRouter } from './generation';
 import { generationBatchRouter } from './generationBatch';
 import { generationTopicRouter } from './generationTopic';
@@ -89,6 +90,7 @@ export const lambdaRouter = router({
   document: documentRouter,
   exporter: exporterRouter,
   file: fileRouter,
+  followUpAction: followUpActionRouter,
   generation: generationRouter,
   generationBatch: generationBatchRouter,
   generationTopic: generationTopicRouter,

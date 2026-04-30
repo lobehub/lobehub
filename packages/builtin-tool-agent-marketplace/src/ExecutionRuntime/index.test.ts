@@ -57,55 +57,17 @@ describe('AgentMarketplaceExecutionRuntime', () => {
     });
   });
 
-  it('marks a request skipped with optional reason', async () => {
-    const runtime = new AgentMarketplaceExecutionRuntime();
-    await runtime.showAgentMarketplace({ ...baseArgs, requestId: 'req-2' });
-
-    const result = await runtime.skipAgentPick({ requestId: 'req-2', reason: 'user tired' });
-
-    expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({
-      requestId: 'req-2',
-      status: 'skipped',
-      skipReason: 'user tired',
-    });
-  });
-
-  it('marks a request cancelled', async () => {
-    const runtime = new AgentMarketplaceExecutionRuntime();
-    await runtime.showAgentMarketplace({ ...baseArgs, requestId: 'req-3' });
-
-    const result = await runtime.cancelAgentPick({ requestId: 'req-3' });
-
-    expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({ requestId: 'req-3', status: 'cancelled' });
-  });
-
-  it('returns current pick state', async () => {
-    const runtime = new AgentMarketplaceExecutionRuntime();
-    await runtime.showAgentMarketplace({ ...baseArgs, requestId: 'req-4' });
-
-    const result = await runtime.getPickState({ requestId: 'req-4' });
-
-    expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({ requestId: 'req-4', status: 'pending' });
-  });
-
-  it('returns error for non-existent request', async () => {
-    const runtime = new AgentMarketplaceExecutionRuntime();
-    const result = await runtime.getPickState({ requestId: 'nope' });
-
-    expect(result.success).toBe(false);
-  });
-
   it('prevents submitting a non-pending request', async () => {
     const runtime = new AgentMarketplaceExecutionRuntime();
     await runtime.showAgentMarketplace({ ...baseArgs, requestId: 'req-5' });
-    await runtime.cancelAgentPick({ requestId: 'req-5' });
+    await runtime.submitAgentPick({
+      requestId: 'req-5',
+      selectedTemplateIds: ['copywriter'],
+    });
 
     const result = await runtime.submitAgentPick({
       requestId: 'req-5',
-      selectedTemplateIds: ['copywriter'],
+      selectedTemplateIds: ['copywriter-2'],
     });
 
     expect(result.success).toBe(false);

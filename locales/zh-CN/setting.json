@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "文档",
   "tools.builtins.lobe-agent-management.description": "创建、管理并编排 AI 助手",
   "tools.builtins.lobe-agent-management.title": "助手管理",
+  "tools.builtins.lobe-agent-marketplace.description": "向用户展示精选的助手市场卡片，并记录其选择的模板。",
+  "tools.builtins.lobe-agent-marketplace.title": "助手市场",
   "tools.builtins.lobe-artifacts.description": "生成并预览交互式 UI 组件和可视化内容",
   "tools.builtins.lobe-artifacts.readme": "生成并实时预览交互式 UI 组件、数据可视化、图表、SVG 图形和 Web 应用。创建用户可直接交互的丰富可视化内容。",
   "tools.builtins.lobe-artifacts.title": "Artifacts",
