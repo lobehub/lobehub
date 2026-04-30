@@ -8,10 +8,13 @@ import type {
   GitBranchInfo,
   GitBranchListItem,
   GitCheckoutResult,
+  GitFileDiffStatus,
   GitLinkedPullRequestResult,
   GitPullResult,
   GitPushResult,
   GitWorkingTreeFiles,
+  GitWorkingTreePatch,
+  GitWorkingTreePatches,
   GitWorkingTreeStatus,
 } from '@lobechat/electron-client-ipc';
 
@@ -259,6 +262,168 @@ export default class GitController extends ControllerModule {
     } catch {
       return { added: [], deleted: [], modified: [] };
     }
+  }
+
+  /**
+   * Pull every dirty file's unified diff in one shot — one IPC call returns
+   * the patches the renderer needs to render `<PatchDiff />` per file. We do
+   * the per-file `git diff` invocations in parallel inside this method so
+   * the renderer doesn't have to fan out N IPC round trips.
+   *
+   * Tracked changes (modified / deleted / staged-A) come from
+   * `git diff HEAD -- <file>`; pure untracked files come from
+   * `git diff --no-index /dev/null <file>` (which exits with code 1 when
+   * there are differences — that's success, not failure).
+   *
+   * Per-file patches are capped at 256 KB; oversized or binary entries get an
+   * empty `patch` string and a flag the renderer can use for a placeholder.
+   */
+  @IpcMethod()
+  async getGitWorkingTreePatches(dirPath: string): Promise<GitWorkingTreePatches> {
+    const MAX_PATCH_BYTES = 256 * 1024;
+    const execFileAsync = promisify(execFile);
+
+    interface Entry {
+      filePath: string;
+      isUntracked: boolean;
+      status: GitFileDiffStatus;
+    }
+
+    // Step 1 — classify every dirty path. Mirrors getGitWorkingTreeFiles but
+    // also distinguishes untracked (`??`) from staged-add (`A`) so we can pick
+    // the right diff command per entry.
+    const entries: Entry[] = [];
+    try {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
+        cwd: dirPath,
+        timeout: 5000,
+      });
+      const tokens = stdout.split('\0');
+      let i = 0;
+      while (i < tokens.length) {
+        const entry = tokens[i];
+        i++;
+        if (entry.length < 3) continue;
+        const x = entry[0];
+        const y = entry[1];
+        const filePath = entry.slice(3);
+        // R/C entries carry an extra source-path token we must consume.
+        if (x === 'R' || x === 'C') i++;
+        if (!filePath) continue;
+        if (x === '?' && y === '?') {
+          entries.push({ filePath, isUntracked: true, status: 'added' });
+        } else if (x === '!' && y === '!') {
+          // ignored
+        } else if (x === 'D' || y === 'D') {
+          entries.push({ filePath, isUntracked: false, status: 'deleted' });
+        } else if (x === 'A' || y === 'A') {
+          entries.push({ filePath, isUntracked: false, status: 'added' });
+        } else {
+          entries.push({ filePath, isUntracked: false, status: 'modified' });
+        }
+      }
+    } catch (error: any) {
+      logger.warn('[getGitWorkingTreePatches] status failed', {
+        cwd: dirPath,
+        stderr: error?.stderr?.toString?.() ?? error?.stderr,
+      });
+      return { patches: [] };
+    }
+
+    // Walk the patch line-by-line counting `+`/`-` payload lines while
+    // skipping the `+++ b/...` / `--- a/...` headers (they look like
+    // additions/deletions but aren't). Cheap enough to do inline per file —
+    // each patch is capped at MAX_PATCH_BYTES.
+    const countAddDel = (patch: string): { additions: number; deletions: number } => {
+      let additions = 0;
+      let deletions = 0;
+      for (const line of patch.split('\n')) {
+        if (line.startsWith('+++') || line.startsWith('---')) continue;
+        if (line.startsWith('+')) additions++;
+        else if (line.startsWith('-')) deletions++;
+      }
+      return { additions, deletions };
+    };
+
+    // Step 2 — per-file diff in parallel. `--no-index` exits 1 when there's a
+    // diff (which is the expected outcome for untracked files), so we have to
+    // pull stdout off the rejected error rather than letting it throw.
+    const patches = await Promise.all(
+      entries.map(async ({ filePath, isUntracked, status }): Promise<GitWorkingTreePatch> => {
+        const args = isUntracked
+          ? ['diff', '--no-color', '--no-index', '/dev/null', filePath]
+          : ['diff', '--no-color', 'HEAD', '--', filePath];
+
+        let text: string;
+        try {
+          const { stdout } = await execFileAsync('git', args, {
+            cwd: dirPath,
+            encoding: 'utf8',
+            maxBuffer: MAX_PATCH_BYTES * 4,
+            timeout: 10_000,
+          });
+          text = stdout as string;
+        } catch (error: any) {
+          if (error?.stdout == null) {
+            logger.debug('[getGitWorkingTreePatches] diff failed', {
+              filePath,
+              status,
+              stderr: error?.stderr?.toString?.() ?? error?.stderr,
+            });
+            return {
+              additions: 0,
+              deletions: 0,
+              filePath,
+              isBinary: false,
+              patch: '',
+              status,
+              truncated: false,
+            };
+          }
+          text = error.stdout.toString();
+        }
+
+        if (text.length > MAX_PATCH_BYTES) {
+          return {
+            additions: 0,
+            deletions: 0,
+            filePath,
+            isBinary: false,
+            patch: '',
+            status,
+            truncated: true,
+          };
+        }
+        if (/^Binary files .* differ$/m.test(text)) {
+          return {
+            additions: 0,
+            deletions: 0,
+            filePath,
+            isBinary: true,
+            patch: '',
+            status,
+            truncated: false,
+          };
+        }
+        const { additions, deletions } = countAddDel(text);
+        return {
+          additions,
+          deletions,
+          filePath,
+          isBinary: false,
+          patch: text,
+          status,
+          truncated: false,
+        };
+      }),
+    );
+
+    // Re-bucket so the UI sees added → modified → deleted (matches the
+    // working-tree popover order).
+    const order: Record<GitFileDiffStatus, number> = { added: 0, modified: 1, deleted: 2 };
+    patches.sort((a, b) => order[a.status] - order[b.status]);
+
+    return { patches };
   }
 
   /**
