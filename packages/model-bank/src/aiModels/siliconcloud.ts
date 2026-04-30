@@ -632,26 +632,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'GLM-4.6V achieves state-of-the-art visual understanding accuracy at its parameter scale, and for the first time natively integrates Function Call capability into the visual model architecture, bridging the path from "visual perception" to "executable actions", providing a unified technical foundation for multimodal Agents in real-world business scenarios.',
-    displayName: 'GLM-4.6V',
-    id: 'zai-org/GLM-4.6V',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-12-08',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 163_840,

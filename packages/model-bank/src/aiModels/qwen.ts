@@ -11,58 +11,6 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 1_000_000,
-    description:
-      "DeepSeek V4 Pro is DeepSeek's flagship large language model on Bailian. It supports context caching discounts, offers a 1M-token context window, and provides a combined 393,216-token budget for reasoning and final response generation.",
-    displayName: 'DeepSeek V4 Pro',
-    id: 'deepseek-v4-pro',
-    maxOutput: 393_216,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 12 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 1_000_000,
-    description:
-      'DeepSeek V4 Flash is a lower-cost DeepSeek V4 variant on Bailian. It supports context caching discounts and is optimized for high-throughput usage with 1 CNY input and 2 CNY output pricing per million tokens.',
-    displayName: 'DeepSeek V4 Flash',
-    id: 'deepseek-v4-flash',
-    maxOutput: 393_216,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 1 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -477,51 +425,6 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-14',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 202_752,
-    description:
-      'GLM-5.1 is Zhipu’s latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. It excels at long-horizon tasks, able to autonomously plan, execute, and iterate for up to 8 hours in a single task, making it an ideal foundation for Autonomous Agents and long-horizon Coding Agents.',
-    displayName: 'GLM-5.1',
-    id: 'glm-5.1',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 6,
-              '[0.032, infinity]': 8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 24,
-              '[0.032, infinity]': 28,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -1062,33 +965,6 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-16',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'The Qwen 3.6 series 27B is a native vision-language dense model. Compared to version 3.5-27B, it delivers significant improvements in agentic coding capabilities, with further enhancements in STEM performance and reasoning ability. On the visual side, it shows notable gains in spatial intelligence, object localization, and detection, while also steadily improving in video understanding, document OCR, and visual agent capabilities.',
-    displayName: 'Qwen3.6-27B',
-    id: 'qwen3.6-27b',
-    maxOutput: 65_536,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-04-22',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
