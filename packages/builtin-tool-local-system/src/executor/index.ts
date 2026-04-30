@@ -112,6 +112,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const resolvedParams = resolveArgsWithScope(params, 'directory');
       const result = await this.runtime.searchFiles({
+        ...resolvedParams,
         directory: resolvedParams.directory || '',
       });
       return this.toResult(result);
