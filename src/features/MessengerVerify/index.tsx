@@ -1,15 +1,18 @@
 'use client';
 
-import { Button, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { Slack, Telegram } from '@lobehub/ui/icons';
 import { App } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
-import AuthCard from '@/features/AuthCard';
+import { DEFAULT_AVATAR } from '@/const/meta';
 import { useSession } from '@/libs/better-auth/auth-client';
 import { messengerService } from '@/services/messenger';
 
@@ -18,25 +21,84 @@ const PLATFORM_LABELS: Record<string, string> = {
   telegram: 'Telegram',
 };
 
-const IconBubble = ({ icon }: { icon: typeof LinkIcon }) => (
-  <Flexbox align="center" justify="center" paddingBlock={16}>
-    <Flexbox
+const PLATFORM_BRAND_ICONS: Record<string, ReactNode> = {
+  slack: <Slack.Color size={32} />,
+  telegram: <Telegram.Color size={36} />,
+};
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  bubble: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+
+    background: ${cssVar.colorBgContainer};
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 6%),
+      0 4px 12px rgb(0 0 0 / 4%);
+  `,
+  card: css`
+    width: 100%;
+    max-width: 440px;
+  `,
+  chainBubble: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+
+    color: ${cssVar.colorBgContainer};
+
+    background: ${cssVar.colorTextBase};
+  `,
+  iconRow: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+
+    margin-block-end: 8px;
+  `,
+}));
+
+const ChainBubble = ({ className }: { className: string }) => (
+  <div className={className}>
+    <Icon icon={LinkIcon} size={16} />
+  </div>
+);
+
+const PlatformBubble = ({ className, platform }: { className: string; platform: string }) => {
+  const icon = PLATFORM_BRAND_ICONS[platform];
+  return <div className={className}>{icon ?? <Icon icon={LinkIcon} size={32} />}</div>;
+};
+
+const Heading = ({ subtitle, title }: { subtitle?: string; title: string }) => (
+  <Flexbox align="center" gap={12}>
+    <Text
       align="center"
-      justify="center"
-      style={{
-        background: 'var(--ant-color-fill-secondary)',
-        borderRadius: 12,
-        height: 56,
-        width: 56,
-      }}
+      as="h1"
+      style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.3, margin: 0 }}
     >
-      <Icon icon={icon} size={28} />
-    </Flexbox>
+      {title}
+    </Text>
+    {subtitle && (
+      <Text align="center" style={{ fontSize: 16, lineHeight: 1.5 }} type="secondary">
+        {subtitle}
+      </Text>
+    )}
   </Flexbox>
 );
 
 const MessengerVerifyPage = memo(() => {
   const { t } = useTranslation('messenger');
+  const { t: tCommon } = useTranslation('common');
   const searchParams = useSearchParams();
   const { message } = App.useApp();
 
@@ -48,13 +110,28 @@ const MessengerVerifyPage = memo(() => {
     messengerService.listAgentsForBinding(),
   );
 
+  const defaultAgentTitle = tCommon('defaultSession');
   const agentOptions = useMemo(
     () =>
-      (agentsSWR.data ?? []).map((agent) => ({
-        label: agent.title,
-        value: agent.id,
-      })),
-    [agentsSWR.data],
+      (agentsSWR.data ?? []).map((agent) => {
+        const title = agent.title || defaultAgentTitle;
+        return {
+          label: (
+            <Flexbox horizontal align="center" gap={8}>
+              <Avatar
+                avatar={agent.avatar || DEFAULT_AVATAR}
+                background={agent.backgroundColor ?? undefined}
+                size={20}
+              />
+              <Text ellipsis>{title}</Text>
+            </Flexbox>
+          ),
+          searchValue: title,
+          title,
+          value: agent.id,
+        };
+      }),
+    [agentsSWR.data, defaultAgentTitle],
   );
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
@@ -88,7 +165,11 @@ const MessengerVerifyPage = memo(() => {
   };
 
   if (!randomId) {
-    return <AuthCard subtitle={t('verify.error.missingToken')} title={t('verify.error.title')} />;
+    return (
+      <Flexbox align="center" className={styles.card} gap={24}>
+        <Heading subtitle={t('verify.error.missingToken')} title={t('verify.error.title')} />
+      </Flexbox>
+    );
   }
 
   if (sessionPending) {
@@ -100,15 +181,12 @@ const MessengerVerifyPage = memo(() => {
       `/verify-im?${searchParams.toString()}`,
     )}`;
     return (
-      <AuthCard
-        subtitle={t('verify.signInRequired')}
-        title={t('verify.confirm.title')}
-        footer={
-          <Button block href={signInUrl} size="large" type="primary">
-            {t('verify.signInCta')}
-          </Button>
-        }
-      />
+      <Flexbox align="center" className={styles.card} gap={24}>
+        <Heading subtitle={t('verify.signInRequired')} title={t('verify.confirm.title')} />
+        <Button block href={signInUrl} size="large" type="primary">
+          {t('verify.signInCta')}
+        </Button>
+      </Flexbox>
     );
   }
 
@@ -118,10 +196,12 @@ const MessengerVerifyPage = memo(() => {
 
   if (tokenSWR.error || !tokenSWR.data) {
     return (
-      <AuthCard
-        subtitle={tokenSWR.error?.message ?? t('verify.error.expired')}
-        title={t('verify.error.title')}
-      />
+      <Flexbox align="center" className={styles.card} gap={24}>
+        <Heading
+          subtitle={tokenSWR.error?.message ?? t('verify.error.expired')}
+          title={t('verify.error.title')}
+        />
+      </Flexbox>
     );
   }
 
@@ -130,41 +210,42 @@ const MessengerVerifyPage = memo(() => {
 
   if (done) {
     return (
-      <AuthCard
-        subtitle={t('verify.success.description', { platform: platformLabel })}
-        title={t('verify.success.title')}
-      >
-        <IconBubble icon={CheckCircle2Icon} />
-      </AuthCard>
+      <Flexbox align="center" className={styles.card} gap={24}>
+        <div className={styles.iconRow}>
+          <div className={styles.bubble} style={{ background: '#22c55e', color: '#ffffff' }}>
+            <Icon icon={CheckCircle2Icon} size={32} />
+          </div>
+        </div>
+        <Heading
+          subtitle={t('verify.success.description', { platform: platformLabel })}
+          title={t('verify.success.title')}
+        />
+      </Flexbox>
     );
   }
 
   return (
-    <AuthCard
-      subtitle={t('verify.confirm.description', { handle, platform: platformLabel })}
-      title={t('verify.confirm.title')}
-      footer={
-        <Button
-          block
-          disabled={!selectedAgentId}
-          loading={confirming}
-          size="large"
-          type="primary"
-          onClick={handleConfirm}
-        >
-          {t('verify.confirm.cta')}
-        </Button>
-      }
-    >
-      <IconBubble icon={LinkIcon} />
-      <Flexbox gap={8}>
+    <Flexbox align="center" className={styles.card} gap={32}>
+      {/* Two-bubble icon row: LobeHub ↔ platform */}
+      <div className={styles.iconRow}>
+        <div className={styles.bubble}>
+          <ProductLogo size={36} type="3d" />
+        </div>
+        <ChainBubble className={styles.chainBubble} />
+        <PlatformBubble className={styles.bubble} platform={tokenSWR.data.platform} />
+      </div>
+
+      <Heading
+        subtitle={t('verify.confirm.description', { handle, platform: platformLabel })}
+        title={t('verify.confirm.title')}
+      />
+
+      <Flexbox gap={8} style={{ width: '100%' }}>
         <Text strong>{t('verify.confirm.defaultAgent')}</Text>
         {agentOptions.length === 0 ? (
           <Text type="warning">{t('verify.confirm.noAgents')}</Text>
         ) : (
           <Select
-            showSearch
-            optionFilterProp="label"
             options={agentOptions}
             placeholder={t('verify.confirm.defaultAgentPlaceholder')}
             value={selectedAgentId}
@@ -175,7 +256,18 @@ const MessengerVerifyPage = memo(() => {
           {t('verify.confirm.defaultAgentHint')}
         </Text>
       </Flexbox>
-    </AuthCard>
+
+      <Button
+        block
+        disabled={!selectedAgentId}
+        loading={confirming}
+        size="large"
+        type="primary"
+        onClick={handleConfirm}
+      >
+        {t('verify.confirm.cta')}
+      </Button>
+    </Flexbox>
   );
 });
 

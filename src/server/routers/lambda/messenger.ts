@@ -1,5 +1,6 @@
+import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -111,19 +112,33 @@ export const messengerRouter = router({
     }),
 
   /**
-   * Lightweight agent list used by the verify-im UI's "pick an initial agent"
-   * dropdown. Mirrors MessengerRouter.fetchUserAgents (asc by accessedAt) so the
-   * web picker matches the bot's `/agents` ordering.
+   * Agent list for the verify-im UI's "pick an initial agent" dropdown. Mirrors
+   * the home sidebar: filters out virtual agents, orders by `updatedAt DESC`,
+   * and resolves the LobeAI inbox fallback (slug='inbox' → "LobeAI" + default
+   * avatar) so the picker matches what the user sees in the sidebar.
    */
   listAgentsForBinding: messengerProcedure.query(async ({ ctx }) => {
     const rows = await ctx.serverDB
-      .select({ id: agents.id, title: agents.title })
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        id: agents.id,
+        slug: agents.slug,
+        title: agents.title,
+      })
       .from(agents)
-      .where(eq(agents.userId, ctx.userId))
-      .orderBy(asc(agents.accessedAt));
+      .where(
+        and(eq(agents.userId, ctx.userId), or(eq(agents.virtual, false), ne(agents.virtual, true))),
+      )
+      .orderBy(desc(agents.updatedAt));
+
     return rows
       .filter((row) => row.id)
-      .map((row) => ({ id: row.id, title: row.title ?? `Agent ${row.id.slice(0, 8)}` }));
+      .map(({ slug, ...row }) => ({
+        ...row,
+        avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
+        title: row.title || (slug === INBOX_SESSION_ID ? 'LobeAI' : null),
+      }));
   }),
 
   /** Get the current user's link for one platform (or null). */
