@@ -98,4 +98,19 @@ describe('useFollowUpActionStore', () => {
     expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
     expect(useFollowUpActionStore.getState().chips).toHaveLength(0);
   });
+
+  it('reset aborts in-flight request and resets state', async () => {
+    let signal: AbortSignal | undefined;
+    vi.spyOn(followUpActionService, 'extract').mockImplementation(async (_, s) => {
+      signal = s;
+      return new Promise(() => {});
+    });
+    const p = useFollowUpActionStore.getState().fetchFor(MSG);
+    void p;
+    await Promise.resolve();
+    useFollowUpActionStore.getState().reset();
+    expect(signal?.aborted).toBe(true);
+    expect(useFollowUpActionStore.getState().status).toBe('idle');
+    expect(useFollowUpActionStore.getState().messageId).toBeUndefined();
+  });
 });

@@ -1,18 +1,43 @@
+import type { StoreApi } from 'zustand';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
+import { type StoreSetter } from '../types';
 import { flattenActions } from '../utils/flattenActions';
-import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
+import { type ResetableStore } from '../utils/resetableStore';
 import { createFollowUpActionSlice, type FollowUpActionAction } from './action';
 import { type FollowUpActionState, initialFollowUpActionState } from './initialState';
 
 export type FollowUpActionStore = FollowUpActionState & FollowUpActionAction & ResetableStore;
 
-class FollowUpActionStoreResetAction extends ResetableStoreAction<FollowUpActionStore> {
-  protected readonly resetActionName = 'resetFollowUpActionStore';
+class FollowUpActionStoreResetAction implements ResetableStore {
+  readonly #api: StoreApi<FollowUpActionStore>;
+  readonly #set: StoreSetter<FollowUpActionStore>;
+
+  constructor(
+    set: StoreSetter<FollowUpActionStore>,
+    _get: () => FollowUpActionStore,
+    api: StoreApi<FollowUpActionStore>,
+  ) {
+    void _get;
+    this.#set = set;
+    this.#api = api;
+  }
+
+  reset = () => {
+    // Cancel any in-flight LLM call before wiping state, otherwise the AbortController is leaked.
+    const current = this.#api.getState();
+    current.abortController?.abort();
+    // Explicitly include undefined fields so zustand's merge-mode setState clears them.
+    this.#set(
+      { abortController: undefined, chips: [], messageId: undefined, status: 'idle' },
+      false,
+      'resetFollowUpActionStore',
+    );
+  };
 }
 
 const createStore: StateCreator<FollowUpActionStore, [['zustand/devtools', never]]> = (
