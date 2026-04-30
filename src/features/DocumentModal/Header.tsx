@@ -8,25 +8,21 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
+import { usePageAgentPanelControl } from '@/features/PageEditor/RightPanel/OverrideContext';
 import { usePageEditorStore } from '@/features/PageEditor/store';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
-import { useTaskStore } from '@/store/task';
 
 const HEADER_HEIGHT = 44;
 
-const PageModalHeader = memo(() => {
+interface DocumentModalHeaderProps {
+  onClose: () => void;
+}
+
+const DocumentModalHeader = memo<DocumentModalHeaderProps>(({ onClose }) => {
   const { t } = useTranslation(['file', 'common']);
 
   const [documentId, emoji, title] = usePageEditorStore((s) => [s.documentId, s.emoji, s.title]);
-
-  const [showPageAgentPanel, togglePageAgentPanel] = useGlobalStore((s) => [
-    systemStatusSelectors.showPageAgentPanel(s),
-    s.togglePageAgentPanel,
-  ]);
-
-  const closePageModal = useTaskStore((s) => s.closePageModal);
+  const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
   return (
     <Flexbox
@@ -48,7 +44,6 @@ const PageModalHeader = memo(() => {
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={4}>
         <ToggleRightPanelButton
-          hideWhenExpanded
           expand={showPageAgentPanel}
           showActive={false}
           onToggle={() => togglePageAgentPanel()}
@@ -57,13 +52,13 @@ const PageModalHeader = memo(() => {
           icon={XIcon}
           size={DESKTOP_HEADER_ICON_SIZE}
           title={t('close', { ns: 'common' })}
-          onClick={closePageModal}
+          onClick={onClose}
         />
       </Flexbox>
     </Flexbox>
   );
 });
 
-PageModalHeader.displayName = 'PageModalHeader';
+DocumentModalHeader.displayName = 'DocumentModalHeader';
 
-export default PageModalHeader;
+export default DocumentModalHeader;

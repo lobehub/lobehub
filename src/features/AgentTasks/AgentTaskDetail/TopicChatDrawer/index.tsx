@@ -96,10 +96,16 @@ TopicChatDrawerBody.displayName = 'TopicChatDrawerBody';
 const TopicChatDrawer = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
   const topicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
+  const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+
+  // Hydrate task detail when the drawer is opened outside of TaskDetailPage
+  // (e.g. from a brief on home) so the header has agentId / status / seq.
+  useFetchTaskDetail(topicId ? activeTaskId : undefined);
 
   const open = !!topicId && !!agentId;
   const status = activity?.status;

@@ -1,6 +1,18 @@
 [
   {
     "children": {},
+    "date": "2026-04-29",
+    "version": "2.1.55"
+  },
+  {
+    "children": {
+      "fixes": ["clear stale topic when switching agents from a topic route."]
+    },
+    "date": "2026-04-27",
+    "version": "2.1.54"
+  },
+  {
+    "children": {},
     "date": "2026-04-20",
     "version": "2.1.52"
   },

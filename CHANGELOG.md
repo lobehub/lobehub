@@ -2,6 +2,56 @@
 
 # Changelog
 
+### [Version 2.1.55](https://github.com/lobehub/lobe-chat/compare/v2.1.54...v2.1.55)
+
+<sup>Released on **2026-04-29**</sup>
+
+#### 🐛 Bug Fixes
+
+- **chat**: preserve topics across cold route sends.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **chat**: preserve topics across cold route sends, closes [#14284](https://github.com/lobehub/lobe-chat/issues/14284) ([b8fe675](https://github.com/lobehub/lobe-chat/commit/b8fe675))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.54](https://github.com/lobehub/lobe-chat/compare/v2.1.53...v2.1.54)
+
+<sup>Released on **2026-04-27**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: clear stale topic when switching agents from a topic route.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: clear stale topic when switching agents from a topic route, closes [#14231](https://github.com/lobehub/lobe-chat/issues/14231) ([deeb97a](https://github.com/lobehub/lobe-chat/commit/deeb97a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.52](https://github.com/lobehub/lobe-chat/compare/v2.1.51...v2.1.52)
 
 <sup>Released on **2026-04-20**</sup>

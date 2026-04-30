@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     activeTaskId: 'T-1',
     activeTopicDrawerTopicId: 'topic-1',
     closeTopicDrawer: vi.fn(),
+    useFetchTaskDetail: vi.fn(),
     taskDetailMap: {
       'T-1': {
         activities: [

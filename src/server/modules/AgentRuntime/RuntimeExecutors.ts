@@ -690,6 +690,7 @@ export const createRuntimeExecutors = (
         const imageList: any[] = [];
         let grounding: any = null;
         let currentStepUsage: any = undefined;
+        let currentStepFinishReason: string | undefined = undefined;
         let streamError: any = undefined;
         const contentParts: ContentPart[] = [];
         const reasoningParts: ContentPart[] = [];
@@ -730,6 +731,12 @@ export const createRuntimeExecutors = (
                 // Capture usage (may or may not include cost)
                 if (data.usage) {
                   currentStepUsage = data.usage;
+                }
+                // Capture provider's terminal finishReason so soft interrupts
+                // (e.g. Gemini RECITATION / MAX_TOKENS with empty content)
+                // are visible in tracing instead of being silently swallowed.
+                if (data.finishReason) {
+                  currentStepFinishReason = data.finishReason;
                 }
               },
               onGrounding: async (groundingData) => {
@@ -869,7 +876,13 @@ export const createRuntimeExecutors = (
 
           // Add a complete llm_stream event (including all streaming chunks)
           events.push({
-            result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
+            result: {
+              content,
+              finishReason: currentStepFinishReason,
+              reasoning: thinkingContent,
+              tool_calls,
+              usage: currentStepUsage,
+            },
             type: 'llm_result',
           });
 

@@ -592,6 +592,78 @@ describe('createCallbacksTransformer', () => {
     expect(onFinal).toHaveBeenCalledWith(expectedData);
   });
 
+  it('should capture finishReason from stop chunks and include in final data', async () => {
+    const onCompletion = vi.fn();
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion, onFinal });
+
+    // Simulates the Gemini "soft interrupt" path: empty content + non-STOP finishReason
+    // (e.g. RECITATION / MAX_TOKENS) — we MUST capture the reason so downstream
+    // tracing/UI can surface it instead of silently rendering empty.
+    const chunks = [
+      'event: stop\n',
+      `data: ${JSON.stringify('RECITATION')}\n\n`,
+      'event: usage\n',
+      `data: ${JSON.stringify({ totalTokens: 10 })}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: 'RECITATION' }),
+    );
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: 'RECITATION' }));
+  });
+
+  it('should keep the first finishReason when multiple stop chunks are emitted', async () => {
+    // Anthropic emits message_delta (carrying real stop_reason) followed by a
+    // message_stop sentinel — the meaningful reason must not be clobbered.
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: stop\n',
+      `data: ${JSON.stringify('max_tokens')}\n\n`,
+      'event: stop\n',
+      `data: ${JSON.stringify('message_stop')}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: 'max_tokens' }),
+    );
+  });
+
+  it('should fall back to a later stop chunk when the first one is empty', async () => {
+    const onCompletion = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion });
+
+    const chunks = [
+      'event: stop\n',
+      `data: ${JSON.stringify('')}\n\n`,
+      'event: stop\n',
+      `data: ${JSON.stringify('end_turn')}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: 'end_turn' }),
+    );
+  });
+
+  it('should leave finishReason undefined when no stop chunk is received', async () => {
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onFinal });
+
+    const chunks = ['event: text\n', 'data: "Hi"\n\n'];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: undefined }));
+  });
+
   it('should handle speed chunks and include in final data', async () => {
     const onFinal = vi.fn();
     const transformer = createCallbacksTransformer({ onFinal });
