@@ -14,6 +14,7 @@ import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { useSession } from '@/libs/better-auth/auth-client';
+import { lambdaClient } from '@/libs/trpc/client';
 import { messengerService } from '@/services/messenger';
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -137,6 +138,15 @@ const MessengerVerifyPage = memo(() => {
   );
   const alreadyLinked = !!existingLinkSWR.data;
 
+  // Messenger is a Labs-gated feature: don't let a user bind a new account
+  // unless they've explicitly opted in. (Existing bindings keep working — the
+  // bot's webhook doesn't consult this flag — but forming new ones requires
+  // a deliberate Labs toggle.)
+  const userStateSWR = useSWR(isSignedIn ? ['user:state'] : null, () =>
+    lambdaClient.user.getUserState.query(),
+  );
+  const labMessengerEnabled = !!userStateSWR.data?.preference?.lab?.enableMessenger;
+
   const agentsSWR = useSWR(isSignedIn ? ['messenger:agents'] : null, async () =>
     messengerService.listAgentsForBinding(),
   );
@@ -208,7 +218,7 @@ const MessengerVerifyPage = memo(() => {
     );
   }
 
-  if (sessionPending || existingLinkSWR.isLoading) {
+  if (sessionPending || existingLinkSWR.isLoading || userStateSWR.isLoading) {
     return <Loading debugId="MessengerVerify" />;
   }
 
@@ -221,6 +231,23 @@ const MessengerVerifyPage = memo(() => {
         <Heading subtitle={t('verify.signInRequired')} title={t('verify.confirm.title')} />
         <Button block href={signInUrl} size="large" type="primary">
           {t('verify.signInCta')}
+        </Button>
+      </Flexbox>
+    );
+  }
+
+  // Lab gate: Messenger is opt-in. If the user already linked, we let them
+  // through to the success state below — disabling the lab shouldn't strand
+  // someone mid-flow on a binding they already started.
+  if (!labMessengerEnabled && !existingLinkSWR.data) {
+    return (
+      <Flexbox align="center" className={styles.card} gap={24}>
+        <Heading
+          subtitle={t('verify.labRequired.description')}
+          title={t('verify.labRequired.title')}
+        />
+        <Button block href="/settings/advanced" size="large" type="primary">
+          {t('verify.labRequired.openSettings')}
         </Button>
       </Flexbox>
     );

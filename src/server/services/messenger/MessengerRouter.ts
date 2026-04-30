@@ -18,7 +18,12 @@ import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
 import { MessengerSlackBinder } from './platforms/slack';
 import { MessengerTelegramBinder } from './platforms/telegram';
-import type { MessengerPlatformBinder } from './types';
+import type {
+  AgentPickerEntry,
+  CallbackAcknowledgement,
+  InboundCallbackAction,
+  MessengerPlatformBinder,
+} from './types';
 
 const log = debug('lobe-server:messenger:router');
 
@@ -57,7 +62,7 @@ const parseCommand = (text: string | undefined): CommandMatch | null => {
  * Account model: each user binds their IM account to LobeHub ONCE per
  * platform (one row in `messenger_account_links`). The `activeAgentId` column
  * tracks which of the user's agents currently receives messages — switchable
- * via `/switch` or the web UI without re-running verify-im.
+ * via `/agents` (tap to switch) or the web UI without re-running verify-im.
  */
 export class MessengerRouter {
   private bots = new Map<MessengerPlatform, RegisteredMessengerBot>();
@@ -76,6 +81,23 @@ export class MessengerRouter {
       const bot = await this.getOrCreateBot(platform);
       if (!bot) {
         return new Response(`Messenger ${platform} bot not configured`, { status: 404 });
+      }
+
+      // Intercept tap-action callbacks before chat-sdk: Telegram's
+      // callback_query / Slack's interactive payload aren't surfaced through
+      // chat-sdk's onNewMessage / onDirectMessage, so binders peek the raw
+      // body and the router orchestrates the response.
+      if (bot.binder.extractCallbackAction) {
+        try {
+          const rawBody = await req.clone().json();
+          const action = bot.binder.extractCallbackAction(rawBody);
+          if (action) {
+            await this.handleCallbackAction(bot, platform, action);
+            return new Response('OK', { status: 200 });
+          }
+        } catch {
+          // Body wasn't JSON or parsing failed — let chat-sdk decide.
+        }
       }
 
       const handler = (bot.chatBot.webhooks as any)?.[platform];
@@ -178,8 +200,7 @@ export class MessengerRouter {
       client
         .registerBotCommands([
           { command: 'start', description: 'Bind your account to LobeHub' },
-          { command: 'agents', description: 'List your agents' },
-          { command: 'switch', description: 'Switch the active agent (e.g. /switch 2)' },
+          { command: 'agents', description: 'List agents and switch the active one' },
           { command: 'help', description: 'Show usage' },
         ])
         .catch((error) => log('registerBotCommands failed for %s: %O', platform, error));
@@ -272,12 +293,9 @@ export class MessengerRouter {
           return;
         }
 
-        // Bound but no active agent → tell user to /switch
+        // Bound but no active agent → prompt the user to pick one via /agents
         if (!link.activeAgentId) {
-          await binder.sendDmText(
-            chatId,
-            'No active agent selected. Use /agents to list your agents and /switch <n> to pick one.',
-          );
+          await binder.sendDmText(chatId, 'No active agent selected. Send /agents to pick one.');
           return;
         }
 
@@ -346,17 +364,7 @@ export class MessengerRouter {
         return true;
       }
       case 'agents': {
-        await this.handleAgentsCommand({ binder, chatId, link, serverDB });
-        return true;
-      }
-      case 'switch': {
-        await this.handleSwitchCommand({
-          args: command.args,
-          binder,
-          chatId,
-          link,
-          serverDB,
-        });
+        await this.handleAgentsCommand({ binder, chatId, command, link, serverDB });
         return true;
       }
       case 'help': {
@@ -364,8 +372,7 @@ export class MessengerRouter {
           chatId,
           [
             'Commands:',
-            '• /agents — list your agents',
-            '• /switch <n> — switch the active agent (e.g. /switch 2)',
+            '• /agents — list your agents and tap to switch the active one',
             '• /start — bind a different LobeHub account',
           ].join('\n'),
         );
@@ -379,13 +386,21 @@ export class MessengerRouter {
     }
   }
 
+  /**
+   * `/agents` is the single command for both listing agents and switching the
+   * active one — on Telegram (and any platform that implements
+   * `sendAgentPicker`) the bot replies with a tap-to-switch inline keyboard.
+   * Platforms without keyboard support fall back to a numbered text list +
+   * `/agents <n>` syntax for switching.
+   */
   private async handleAgentsCommand(params: {
     binder: MessengerPlatformBinder;
     chatId: string;
+    command?: CommandMatch;
     link: MessengerAccountLinkItem | undefined;
     serverDB: LobeChatDatabase;
   }): Promise<void> {
-    const { binder, chatId, link, serverDB } = params;
+    const { binder, chatId, command, link, serverDB } = params;
 
     if (!link) {
       await binder.sendDmText(chatId, 'You need to /start to bind your account first.');
@@ -396,68 +411,123 @@ export class MessengerRouter {
     if (userAgents.length === 0) {
       await binder.sendDmText(
         chatId,
-        'You have no agents yet. Create one in LobeHub, then come back and use /switch.',
+        'You have no agents yet. Create one in LobeHub, then come back to /agents.',
       );
       return;
     }
 
+    // Text-fallback path: `/agents 2` switches without needing the keyboard,
+    // for platforms (or clients) where tap-buttons aren't available.
+    const args = command?.args?.trim() ?? '';
+    if (args && !binder.sendAgentPicker) {
+      const index = Number.parseInt(args, 10);
+      if (!Number.isInteger(index) || index < 1 || index > userAgents.length) {
+        await binder.sendDmText(
+          chatId,
+          `Usage: /agents <n>, where n is between 1 and ${userAgents.length}.`,
+        );
+        return;
+      }
+      const target = userAgents[index - 1];
+      if (link.activeAgentId === target.id) {
+        await binder.sendDmText(chatId, `${target.title} is already the active agent.`);
+        return;
+      }
+      await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, target.id);
+      await binder.sendDmText(
+        chatId,
+        `Switched active agent to: ${target.title}. Your next message will go there.`,
+      );
+      return;
+    }
+
+    if (binder.sendAgentPicker) {
+      await binder.sendAgentPicker(chatId, {
+        entries: this.toPickerEntries(userAgents, link.activeAgentId),
+        text: 'Tap an agent to make it the active one:',
+      });
+      return;
+    }
+
+    // Final fallback: numbered list + usage hint for `/agents <n>`.
     const lines = userAgents.map((agent, i) => {
       const marker = link.activeAgentId === agent.id ? ' (active)' : '';
       return `${i + 1}. ${agent.title}${marker}`;
     });
     await binder.sendDmText(
       chatId,
-      `Your agents:\n${lines.join('\n')}\n\nUse /switch <n> to change the active agent.`,
+      `Your agents:\n${lines.join('\n')}\n\nReply with /agents <n> to switch the active agent.`,
     );
   }
 
-  private async handleSwitchCommand(params: {
-    args: string;
-    binder: MessengerPlatformBinder;
-    chatId: string;
-    link: MessengerAccountLinkItem | undefined;
-    serverDB: LobeChatDatabase;
-  }): Promise<void> {
-    const { args, binder, chatId, link, serverDB } = params;
+  private toPickerEntries(
+    userAgents: AgentSummary[],
+    activeAgentId: string | null | undefined,
+  ): AgentPickerEntry[] {
+    return userAgents.map((agent) => ({
+      id: agent.id,
+      isActive: agent.id === activeAgentId,
+      title: agent.title,
+    }));
+  }
 
+  /**
+   * Run a tap-action surfaced by `binder.extractCallbackAction`. Today only
+   * `messenger:switch:<agentId>` is recognized; new actions can be added by
+   * extending the switch.
+   */
+  private async handleCallbackAction(
+    bot: RegisteredMessengerBot,
+    platform: MessengerPlatform,
+    action: InboundCallbackAction,
+  ): Promise<void> {
+    const { binder } = bot;
+    if (!binder.acknowledgeCallback) return;
+
+    const ack = (params: CallbackAcknowledgement) => binder.acknowledgeCallback!(action, params);
+
+    const switchMatch = action.data.match(/^messenger:switch:(.+)$/);
+    if (!switchMatch) {
+      await ack({ toast: 'Unknown action.' });
+      return;
+    }
+
+    const targetAgentId = switchMatch[1];
+    const serverDB = await getServerDB();
+    const link = await MessengerAccountLinkModel.findByPlatformUser(
+      serverDB,
+      platform,
+      action.fromUserId,
+    );
     if (!link) {
-      await binder.sendDmText(chatId, 'You need to /start to bind your account first.');
+      await ack({ toast: 'Not linked. Send /start first.' });
       return;
     }
 
     const userAgents = await this.fetchUserAgents(serverDB, link.userId);
-    if (userAgents.length === 0) {
-      await binder.sendDmText(
-        chatId,
-        'You have no agents yet. Create one in LobeHub, then come back and use /switch.',
-      );
+    const target = userAgents.find((agent) => agent.id === targetAgentId);
+    if (!target) {
+      await ack({ toast: 'Agent not found.' });
       return;
     }
 
-    const index = Number.parseInt(args, 10);
-    if (!Number.isInteger(index) || index < 1 || index > userAgents.length) {
-      await binder.sendDmText(
-        chatId,
-        `Usage: /switch <n>, where n is between 1 and ${userAgents.length}. Use /agents to see the list.`,
-      );
+    if (link.activeAgentId === targetAgentId) {
+      await ack({ toast: `${target.title} is already active.` });
       return;
     }
 
-    const target = userAgents[index - 1];
-    if (link.activeAgentId === target.id) {
-      await binder.sendDmText(chatId, `${target.title} is already the active agent.`);
-      return;
-    }
-
-    await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, target.id);
-    await binder.sendDmText(
-      chatId,
-      `Switched active agent to: ${target.title}. Your next message will go there.`,
-    );
+    await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, targetAgentId);
+    await ack({
+      toast: `Switched to ${target.title}.`,
+      updatedPicker: {
+        entries: this.toPickerEntries(userAgents, targetAgentId),
+        text: 'Pick an agent to receive your messages:',
+      },
+    });
   }
 
   /**
-   * Fetch a user's agents for `/agents` and `/switch`. Mirrors the web
+   * Fetch a user's agents for `/agents`. Mirrors the web
    * verify-im picker (and the home sidebar):
    *  - excludes virtual agents but explicitly keeps the inbox/LobeAI agent
    *  - orders by `updatedAt DESC`

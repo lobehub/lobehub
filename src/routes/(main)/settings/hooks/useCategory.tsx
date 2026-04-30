@@ -35,6 +35,7 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
@@ -68,6 +69,7 @@ export const useCategory = () => {
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const enableMessenger = useUserStore(labPreferSelectors.enableMessenger);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -107,7 +109,9 @@ export const useCategory = () => {
         key: SettingsTabs.Notification,
         label: t('tab.notification'),
       },
-      {
+      // Gated by Labs → Messenger; the lab flag also controls whether the
+      // verify-im binding flow is reachable.
+      enableMessenger && {
         icon: MessageCircleIcon,
         key: SettingsTabs.Messenger,
         label: t('tab.messenger'),
@@ -227,6 +231,7 @@ export const useCategory = () => {
     mobile,
     showApiKeyManage,
     isDevMode,
+    enableMessenger,
     avatarUrl,
     username,
   ]);

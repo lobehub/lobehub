@@ -67,7 +67,7 @@ export const messengerRouter = router({
    * Confirm the account link. Account-level: creates (or overwrites) a single
    * `messenger_account_links` row for `(userId, platform)`. `initialAgentId` is
    * required so the user's first IM message has somewhere to land — they can
-   * always change it later via `/switch` or the per-agent UI.
+   * always change it later via `/agents` (tap to switch) or the per-agent UI.
    */
   confirmLink: messengerProcedure
     .input(

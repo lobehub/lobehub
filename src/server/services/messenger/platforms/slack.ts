@@ -93,7 +93,7 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     });
 
     const text =
-      'Welcome to LobeHub! :robot_face:\n\nTo continue, link your Slack account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, use:\n• `/agents` to list your agents\n• `/switch <n>` to change the active one';
+      'Welcome to LobeHub! :robot_face:\n\nTo continue, link your Slack account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, send `/agents` anytime to list your agents and switch the active one.';
 
     const api = new SlackApi(config.botToken);
     await api.postMessageWithUrlButton(ctx.chatId, text, {
@@ -113,8 +113,8 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     const headline =
       ':white_check_mark: Linked successfully! Your LobeHub account is now connected.';
     const tail = params.activeAgentName
-      ? `\n\nActive agent: *${params.activeAgentName}*\n\nGo ahead and send your first message — use \`/switch <n>\` any time to change agents.`
-      : '\n\nUse `/agents` to list your agents and `/switch <n>` to pick the active one.';
+      ? `\n\nActive agent: *${params.activeAgentName}*\n\nGo ahead and send your first message — send \`/agents\` any time to switch the active agent.`
+      : '\n\nSend `/agents` to list your agents and pick the active one.';
 
     try {
       // Slack accepts a user ID as the `channel` argument and auto-routes to

@@ -9,6 +9,34 @@ export interface UnlinkedMessageContext {
   message: Message;
 }
 
+export interface AgentPickerEntry {
+  id: string;
+  isActive: boolean;
+  title: string;
+}
+
+/** Raw inbound platform update used for actions chat-sdk doesn't surface. */
+export interface InboundCallbackAction {
+  /** Platform-specific raw id needed to acknowledge the action. */
+  callbackId: string;
+  /** Conversation id to send replies / edits to. */
+  chatId: string;
+  /** Application-defined key — e.g. `switch:agt_xxxx`. */
+  data: string;
+  /** ID of the user who tapped the button. */
+  fromUserId: string;
+  /** Platform message id of the picker (so the picker can be re-rendered). */
+  messageId?: string | number;
+}
+
+/** Result the router asks the binder to deliver after handling a callback. */
+export interface CallbackAcknowledgement {
+  /** Optional toast text shown above the user's keyboard. */
+  toast?: string;
+  /** When set, edit the picker message in place to reflect the new state. */
+  updatedPicker?: { entries: AgentPickerEntry[]; text: string };
+}
+
 /**
  * Per-platform glue for the shared messenger bot. Wires env credentials into a
  * `PlatformClient` (so the existing AgentBridgeService can drive it) plus
@@ -19,8 +47,24 @@ export interface UnlinkedMessageContext {
  * router stays platform-agnostic.
  */
 export interface MessengerPlatformBinder {
+  /**
+   * Acknowledge a callback action: dismiss the loading spinner, optionally
+   * show a toast, and optionally re-render the picker keyboard.
+   */
+  acknowledgeCallback?: (
+    action: InboundCallbackAction,
+    ack: CallbackAcknowledgement,
+  ) => Promise<void>;
+
   /** Construct the underlying platform client. Returns null if env config is missing. */
   createClient: () => PlatformClient | null;
+
+  /**
+   * Try to extract a tap-action from a raw webhook update. Returns null when
+   * the update is a regular message (in which case the caller hands it off to
+   * chat-sdk). Platforms without tap callbacks return null unconditionally.
+   */
+  extractCallbackAction?: (rawBody: unknown) => InboundCallbackAction | null;
 
   /** Called when an inbound message arrives from a sender that hasn't bound any account yet. */
   handleUnlinkedMessage: (ctx: UnlinkedMessageContext) => Promise<void>;
@@ -46,6 +90,17 @@ export interface MessengerPlatformBinder {
    */
   registerWebhook: (params: { webhookUrl: string }) => Promise<void>;
 
-  /** Plain DM reply (used by /agents, /switch, and various command help texts). */
+  /**
+   * Send an interactive agent picker so the user can switch the active agent
+   * without typing a number. Optional — platforms that don't support
+   * tap-to-select keyboards (e.g. plain Slack DMs) can leave this unset and
+   * the router will fall back to the text-based `/agents <n>` flow.
+   */
+  sendAgentPicker?: (
+    chatId: string,
+    params: { entries: AgentPickerEntry[]; text: string },
+  ) => Promise<void>;
+
+  /** Plain DM reply (used by /agents and various command help texts). */
   sendDmText: (chatId: string, text: string) => Promise<void>;
 }

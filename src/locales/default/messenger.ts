@@ -1,12 +1,12 @@
 export default {
   'messenger.activeAgent': 'Active agent',
   'messenger.activeAgentHint':
-    'Inbound messages on this platform go to "{{agent}}". Change agents any time here or via /switch in the bot.',
+    'Inbound messages on this platform go to "{{agent}}". Change agents any time here or via /agents in the bot.',
   'messenger.activeAgentHintEmpty':
-    'No active agent. Pick one above or use /switch in the bot. Until then inbound messages will be parked.',
+    'No active agent. Pick one above or use /agents in the bot. Until then inbound messages will be parked.',
   'messenger.activeAgentPlaceholder': 'Select an agent',
   'messenger.helpCommands':
-    'In the bot: send /agents to list your agents, /switch <n> to change which one receives messages.',
+    'In the bot: send /agents to list your agents and tap one to switch which agent receives messages.',
   'messenger.linkCta': 'Connect',
   'messenger.linkedAccount': 'Linked to {{platform}} account {{handle}}',
   'messenger.linkModal.continueIn': 'Continue setup in {{platform}}',
@@ -35,7 +35,7 @@ export default {
   'verify.confirm.cta': 'Confirm linking',
   'verify.confirm.defaultAgent': 'Default agent',
   'verify.confirm.defaultAgentHint':
-    'Your messages will be routed here first. You can switch any time via /switch in the bot or from Settings → Messenger.',
+    'Your messages will be routed here first. You can switch any time via /agents in the bot or from Settings → Messenger.',
   'verify.confirm.defaultAgentPlaceholder': 'Select an agent',
   'verify.confirm.description':
     'Your LobeHub account will be linked with {{platform}} account "{{handle}}".',
@@ -46,6 +46,10 @@ export default {
   'verify.error.generic': 'Something went wrong. Please try again.',
   'verify.error.missingToken': 'Invalid link. Open this page from the bot.',
   'verify.error.title': 'Unable to confirm link',
+  'verify.labRequired.description':
+    'Messenger is currently a Labs feature. Enable it in Settings → Advanced → Labs and reload this page.',
+  'verify.labRequired.openSettings': 'Open Labs settings',
+  'verify.labRequired.title': 'Enable Messenger to continue',
   'verify.signInCta': 'Sign in to continue',
   'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
   'verify.success.description':

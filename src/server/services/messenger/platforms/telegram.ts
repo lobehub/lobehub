@@ -8,7 +8,30 @@ import { TelegramClientFactory } from '@/server/services/bot/platforms/telegram/
 import { setTelegramWebhook } from '@/server/services/bot/platforms/telegram/helpers';
 
 import { issueLinkToken } from '../linkTokenStore';
-import type { MessengerPlatformBinder, UnlinkedMessageContext } from '../types';
+import type {
+  AgentPickerEntry,
+  CallbackAcknowledgement,
+  InboundCallbackAction,
+  MessengerPlatformBinder,
+  UnlinkedMessageContext,
+} from '../types';
+
+/**
+ * Application prefix on Telegram callback_data so we can distinguish OUR
+ * buttons from anything else the user (or another bot in the same chat)
+ * might inject. Format: `messenger:<verb>:<arg>`.
+ */
+const CALLBACK_PREFIX = 'messenger:';
+
+const buildSwitchKeyboard = (
+  entries: AgentPickerEntry[],
+): Array<Array<{ callback_data: string; text: string }>> =>
+  entries.map((entry) => [
+    {
+      callback_data: `${CALLBACK_PREFIX}switch:${entry.id}`,
+      text: entry.isActive ? `✅ ${entry.title}` : entry.title,
+    },
+  ]);
 
 const log = debug('lobe-server:messenger:telegram');
 
@@ -95,7 +118,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     });
 
     const text =
-      'Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, use:\n• /agents to list your agents\n• /switch &lt;n&gt; to change the active one';
+      'Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.';
 
     const api = new TelegramApi(config.botToken);
     await api.sendMessageWithUrlButton(ctx.chatId, text, {
@@ -114,8 +137,8 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     const api = new TelegramApi(config.botToken);
     const headline = '✅ Linked successfully! Your LobeHub account is now connected.';
     const tail = params.activeAgentName
-      ? `\n\nActive agent: <b>${escapeHtml(params.activeAgentName)}</b>\n\nGo ahead and send your first message — use /switch &lt;n&gt; any time to change agents.`
-      : '\n\nUse /agents to list your agents and /switch &lt;n&gt; to pick the active one.';
+      ? `\n\nActive agent: <b>${escapeHtml(params.activeAgentName)}</b>\n\nGo ahead and send your first message — send /agents any time to switch the active agent.`
+      : '\n\nSend /agents to list your agents and tap one to set it as active.';
 
     try {
       await api.sendMessage(params.platformUserId, `${headline}${tail}`);
@@ -130,11 +153,86 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     try {
       // TelegramApi.sendMessage uses parse_mode='HTML' under the hood.
       // sendDmText is for plain text replies (command help, agent lists, etc.)
-      // so we escape `< > &` to prevent literal characters like "/switch <n>"
+      // so we escape `< > &` to prevent literal characters like "/agents <n>"
       // from being interpreted as HTML tags.
       await new TelegramApi(config.botToken).sendMessage(chatId, escapeHtml(text));
     } catch (error) {
       log('sendDmText: failed to send to chat=%s: %O', chatId, error);
+    }
+  }
+
+  async sendAgentPicker(
+    chatId: string,
+    params: { entries: AgentPickerEntry[]; text: string },
+  ): Promise<void> {
+    const config = getMessengerTelegramConfig();
+    if (!config) return;
+    try {
+      const api = new TelegramApi(config.botToken);
+      await api.sendMessageWithCallbackKeyboard(
+        chatId,
+        escapeHtml(params.text),
+        buildSwitchKeyboard(params.entries),
+      );
+    } catch (error) {
+      log('sendAgentPicker: failed for chat=%s: %O', chatId, error);
+    }
+  }
+
+  /**
+   * Pull our `messenger:switch:<agentId>` action out of a Telegram webhook
+   * update. Returns null when the update is anything else (regular message,
+   * other bot's callback, malformed data) so the router can hand off to
+   * chat-sdk for normal processing.
+   */
+  extractCallbackAction(rawBody: unknown): InboundCallbackAction | null {
+    if (!rawBody || typeof rawBody !== 'object') return null;
+    const cb = (rawBody as any).callback_query;
+    if (!cb) return null;
+
+    const data = String(cb.data ?? '');
+    if (!data.startsWith(CALLBACK_PREFIX)) return null;
+
+    const fromUserId = cb.from?.id != null ? String(cb.from.id) : '';
+    const chatId = cb.message?.chat?.id != null ? String(cb.message.chat.id) : '';
+    const messageId = cb.message?.message_id;
+    const callbackId = String(cb.id ?? '');
+    if (!fromUserId || !chatId || !callbackId) return null;
+
+    return { callbackId, chatId, data, fromUserId, messageId };
+  }
+
+  async acknowledgeCallback(
+    action: InboundCallbackAction,
+    ack: CallbackAcknowledgement,
+  ): Promise<void> {
+    const config = getMessengerTelegramConfig();
+    if (!config) return;
+    const api = new TelegramApi(config.botToken);
+
+    // Re-render the picker first so the user sees the new active marker
+    // before the toast fires (and even if the toast fails).
+    if (ack.updatedPicker && action.messageId !== undefined) {
+      const messageId =
+        typeof action.messageId === 'string' ? Number(action.messageId) : action.messageId;
+      if (Number.isFinite(messageId)) {
+        try {
+          await api.editMessageWithCallbackKeyboard(
+            action.chatId,
+            messageId as number,
+            escapeHtml(ack.updatedPicker.text),
+            buildSwitchKeyboard(ack.updatedPicker.entries),
+          );
+        } catch (error) {
+          log('acknowledgeCallback: edit picker failed: %O', error);
+        }
+      }
+    }
+
+    try {
+      await api.answerCallbackQuery(action.callbackId, ack.toast);
+    } catch (error) {
+      log('acknowledgeCallback: answerCallbackQuery failed: %O', error);
     }
   }
 }
