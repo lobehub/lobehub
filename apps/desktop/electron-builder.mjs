@@ -290,7 +290,10 @@ const config = {
       { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'zip' },
     ],
   },
-  npmRebuild: true,
+  // Native dependencies are rebuilt during the isolated desktop install.
+  // Re-running electron-builder's pnpm dependency collector during packaging can
+  // hit EMFILE on Linux runners with pnpm 11.
+  npmRebuild: false,
   nsis: {
     allowToChangeInstallationDirectory: true,
     artifactName: '${productName}-${version}-setup.${ext}',

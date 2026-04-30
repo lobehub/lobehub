@@ -127,9 +127,7 @@ jobs:
       # Linux 构建
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
-        run: |
-          ulimit -n 65536 || true
-          npm run desktop:package:app
+        run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: beta
           APP_URL: http://localhost:3015
