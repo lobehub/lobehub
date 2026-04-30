@@ -201,7 +201,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     setIsConnecting(true);
     try {
       // Use /oauth/callback/success as redirect URI with provider param for auto-enable
-      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+      // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
+      const redirectUri = window.location.protocol.startsWith('http')
+        ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`
+        : undefined;
       const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
       openOAuthWindow(authorizeUrl);
     } catch (error) {
@@ -277,7 +280,9 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
             onClick={async (e) => {
               e.stopPropagation();
               try {
-                const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+                const redirectUri = window.location.protocol.startsWith('http')
+                  ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`
+                  : undefined;
                 const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
                 openOAuthWindow(authorizeUrl);
               } catch (error) {
