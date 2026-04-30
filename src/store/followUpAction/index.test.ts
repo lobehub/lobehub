@@ -83,7 +83,7 @@ describe('useFollowUpActionStore', () => {
     expect(useFollowUpActionStore.getState().pendingTopicId).toBeUndefined();
   });
 
-  it('3s timeout aborts the in-flight call', async () => {
+  it('20s timeout aborts the in-flight call', async () => {
     let signal: AbortSignal | undefined;
     vi.spyOn(followUpActionService, 'extract').mockImplementation(async (_, s) => {
       signal = s;
@@ -92,7 +92,7 @@ describe('useFollowUpActionStore', () => {
     const p = useFollowUpActionStore.getState().fetchFor(TOPIC);
     void p;
     await Promise.resolve();
-    vi.advanceTimersByTime(3000);
+    vi.advanceTimersByTime(20_000);
     expect(signal?.aborted).toBe(true);
   });
 

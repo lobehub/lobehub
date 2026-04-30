@@ -5,7 +5,9 @@ import { type StoreSetter } from '@/store/types';
 
 import { type FollowUpActionStore } from './store';
 
-const TIMEOUT_MS = 3000;
+// LLM `generateObject` for chip extraction routinely takes 8-12s end-to-end.
+// Anything below ~20s aborts before the model can respond.
+const TIMEOUT_MS = 20_000;
 
 type Setter = StoreSetter<FollowUpActionStore>;
 
