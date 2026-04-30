@@ -4,8 +4,8 @@ Output a JSON object that conforms to the supplied schema. No prose outside the 
 
 Guidelines:
 - 0-4 chips. Return an empty array if the message is a statement (no question).
-- "label" is what the chip displays (2-20 characters).
-- "message" is the full text sent on click (2-60 characters). It may equal the label.
+- "label" is what the chip displays (2-40 characters).
+- "message" is the full text sent on click (2-200 characters). It may equal the label.
 - Conversational tone; no trailing punctuation on the label.
 - Output English only.
 - If the assistant question lists explicit options, return those options as chips.

@@ -11,7 +11,7 @@ class FollowUpActionService {
     signal?: AbortSignal,
   ): Promise<FollowUpExtractResult | null> {
     try {
-      const result = await lambdaClient.followUpAction.extract.mutate(input, { signal } as any);
+      const result = await lambdaClient.followUpAction.extract.mutate(input, { signal });
       return result;
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return null;

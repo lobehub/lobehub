@@ -42,7 +42,7 @@ export class FollowUpActionService {
         messages: [
           { content: system, role: 'system' as const },
           { content: user, role: 'user' as const },
-        ] as any[],
+        ],
         model,
         schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
       });
