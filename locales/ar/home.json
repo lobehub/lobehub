@@ -22,6 +22,7 @@
   "brief.resolved": "تم وضع علامة كمُعالَج",
   "brief.title": "الموجز اليومي",
   "brief.viewAllTasks": "عرض جميع المهام",
+  "brief.viewRun": "عرض التشغيل",
   "project.create": "مشروع جديد",
   "project.deleteConfirm": "سيتم حذف هذا المشروع ولن يمكن استعادته. أكد للمتابعة.",
   "starter.createAgent": "إنشاء وكيل",
