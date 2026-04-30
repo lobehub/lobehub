@@ -5,6 +5,19 @@ import { useFollowUpActionStore } from '@/store/followUpAction';
 
 import FollowUpChips from './FollowUpChips';
 
+vi.hoisted(() => {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      removeItem: (key: string) => storage.delete(key),
+      setItem: (key: string, value: string) => storage.set(key, value),
+    },
+  });
+});
+
 const MSG = 'msg-1';
 const OTHER_MSG = 'msg-2';
 const CHILD_MSG = 'msg-1-child-answer';

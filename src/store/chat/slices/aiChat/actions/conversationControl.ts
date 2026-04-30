@@ -365,13 +365,17 @@ export class ConversationControlActionImpl {
         operationId,
       });
 
+      // Resume directly from `tool_result` phase rather than `human_approved_tool`.
+      // The intervention UI already wrote the final tool result content via
+      // `optimisticUpdateMessageContent`; routing through `human_approved_tool`
+      // would re-execute the builtin tool on the server and overwrite our
+      // content with the server-side placeholder (e.g. the marketplace picker
+      // would clobber the picked-templates result with "picker is now visible").
       const agentRuntimeContext: AgentRuntimeContext = {
         ...initialContext,
-        phase: 'human_approved_tool',
+        phase: 'tool_result',
         payload: {
-          approvedToolCall: toolMessage.plugin,
           parentMessageId: toolMessageId,
-          skipCreateToolMessage: true,
         },
       };
 

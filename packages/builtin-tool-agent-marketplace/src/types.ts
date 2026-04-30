@@ -70,11 +70,14 @@ export interface SubmitAgentPickArgs {
   selectedTemplateIds: string[];
 }
 
+export type PickStatus = 'pending' | 'submitted';
+
 export interface PickState {
   categoryHints: MarketplaceCategory[];
   description?: string;
   prompt: string;
   requestId: string;
   selectedTemplateIds?: string[];
+  status: PickStatus;
   topicId?: string;
 }

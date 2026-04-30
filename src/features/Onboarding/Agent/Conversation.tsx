@@ -13,6 +13,7 @@ import {
   useConversationStore,
 } from '@/features/Conversation';
 import FollowUpChips from '@/features/Conversation/FollowUp/FollowUpChips';
+import { dataSelectors, messageStateSelectors } from '@/features/Conversation/store';
 import type { OnboardingPhase } from '@/types/user';
 import { isDev } from '@/utils/env';
 
@@ -27,6 +28,7 @@ interface AgentOnboardingConversationProps {
   feedbackSubmitted?: boolean;
   finishTargetUrl?: string;
   onAfterWrapUp?: () => Promise<unknown> | void;
+  onAssistantTurnSettled?: (messageId: string) => Promise<unknown> | void;
   onboardingFinished?: boolean;
   phase?: OnboardingPhase;
   readOnly?: boolean;
@@ -43,6 +45,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     feedbackSubmitted,
     finishTargetUrl,
     onAfterWrapUp,
+    onAssistantTurnSettled,
     onboardingFinished,
     phase,
     readOnly,
@@ -50,6 +53,9 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     topicId,
   }) => {
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
+    const pendingInterventionCount = useConversationStore(
+      (s) => dataSelectors.pendingInterventions(s).length,
+    );
 
     const isGreetingState = useMemo(() => {
       if (displayMessages.length !== 1) return false;
@@ -57,8 +63,23 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       return assistantLikeRoles.has(first.role);
     }, [displayMessages]);
 
+    const latestAssistantMessageId = useMemo(() => {
+      const latest = displayMessages.at(-1);
+      if (!latest || !assistantLikeRoles.has(latest.role)) return undefined;
+
+      return latest.id;
+    }, [displayMessages]);
+
+    const isLatestAssistantGenerating = useConversationStore((s) =>
+      latestAssistantMessageId
+        ? messageStateSelectors.isAssistantGroupItemGenerating(latestAssistantMessageId)(s)
+        : false,
+    );
+
     const [showGreeting, setShowGreeting] = useState(isGreetingState);
     const prevGreetingRef = useRef(isGreetingState);
+    const armedSettledMessageIdRef = useRef<string>(undefined);
+    const firedSettledMessageIdRef = useRef<string>(undefined);
 
     useEffect(() => {
       if (prevGreetingRef.current && !isGreetingState) {
@@ -76,6 +97,32 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       }
       prevGreetingRef.current = isGreetingState;
     }, [isGreetingState]);
+
+    useEffect(() => {
+      if (!onAssistantTurnSettled || !latestAssistantMessageId) return;
+
+      if (pendingInterventionCount > 0) {
+        armedSettledMessageIdRef.current = undefined;
+        return;
+      }
+
+      if (isLatestAssistantGenerating) {
+        armedSettledMessageIdRef.current = latestAssistantMessageId;
+        return;
+      }
+
+      if (armedSettledMessageIdRef.current !== latestAssistantMessageId) return;
+      if (firedSettledMessageIdRef.current === latestAssistantMessageId) return;
+
+      firedSettledMessageIdRef.current = latestAssistantMessageId;
+      armedSettledMessageIdRef.current = undefined;
+      void onAssistantTurnSettled(latestAssistantMessageId);
+    }, [
+      isLatestAssistantGenerating,
+      latestAssistantMessageId,
+      onAssistantTurnSettled,
+      pendingInterventionCount,
+    ]);
 
     const shouldShowGreetingWelcome = showGreeting && !onboardingFinished;
 

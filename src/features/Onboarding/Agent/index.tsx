@@ -6,7 +6,7 @@ import { SESSION_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -124,6 +124,48 @@ const AgentOnboardingPage = memo(() => {
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
   });
+  const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
+
+  const syncOnboardingContext = useCallback(async () => {
+    const nextContext = await userService.getOrCreateOnboardingState();
+    await mutate(nextContext, { revalidate: false });
+    if (isDev && onboardingAgentId) await mutateHistoryTopics();
+
+    return nextContext;
+  }, [mutate, mutateHistoryTopics, onboardingAgentId]);
+
+  const handleAssistantTurnSettled = useCallback(async () => {
+    if (!effectiveTopicId) return;
+
+    const prevPhase = data?.context?.phase;
+    const prevFinishedAt = agentOnboarding?.finishedAt;
+
+    const extractPromise = triggerExtract(effectiveTopicId, prevPhase);
+
+    // Sync first to learn the next phase/finishedAt; only then decide whether
+    // the heavier user-store / builtin-agent refreshes are needed this turn.
+    const [nextContext] = await Promise.all([syncOnboardingContext(), extractPromise]);
+
+    const newPhase = nextContext?.context?.phase;
+    const newFinishedAt = nextContext?.agentOnboarding?.finishedAt;
+
+    const refreshes: Promise<unknown>[] = [];
+    if (newFinishedAt !== prevFinishedAt) refreshes.push(refreshUserState());
+    if (newPhase !== prevPhase) {
+      refreshes.push(refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding));
+    }
+    if (refreshes.length > 0) await Promise.all(refreshes);
+  }, [
+    agentOnboarding?.finishedAt,
+    data?.context?.phase,
+    effectiveTopicId,
+    refreshBuiltinAgent,
+    refreshUserState,
+    syncOnboardingContext,
+    triggerExtract,
+  ]);
+  const assistantTurnSettledHandler =
+    onboardingFinished || viewingHistoricalTopic ? undefined : handleAssistantTurnSettled;
 
   if (error) {
     return (
@@ -136,14 +178,6 @@ const AgentOnboardingPage = memo(() => {
   if (isLoading || !activeTopicId || !onboardingAgentId || !effectiveTopicId) {
     return <Loading debugId="AgentOnboarding" />;
   }
-
-  const syncOnboardingContext = async () => {
-    const nextContext = await userService.getOrCreateOnboardingState();
-    await mutate(nextContext, { revalidate: false });
-    if (isDev && onboardingAgentId) await mutateHistoryTopics();
-
-    return nextContext;
-  };
 
   const handleReset = async () => {
     setIsResetting(true);
@@ -169,34 +203,7 @@ const AgentOnboardingPage = memo(() => {
             onboardingFinished
               ? undefined
               : {
-                  onAfterSendMessage: async () => {
-                    const prevPhase = data?.context?.phase;
-                    const prevFinishedAt = agentOnboarding?.finishedAt;
-
-                    const extractPromise = onboardingFollowUp.triggerExtract(
-                      effectiveTopicId,
-                      prevPhase,
-                    );
-
-                    // Sync first to learn the next phase/finishedAt; only then
-                    // decide whether the heavier user-store / builtin-agent
-                    // refreshes are actually needed this turn.
-                    const [nextContext] = await Promise.all([
-                      syncOnboardingContext(),
-                      extractPromise,
-                    ]);
-
-                    const newPhase = nextContext?.context?.phase;
-                    const newFinishedAt = nextContext?.agentOnboarding?.finishedAt;
-
-                    const refreshes: Promise<unknown>[] = [];
-                    if (newFinishedAt !== prevFinishedAt) refreshes.push(refreshUserState());
-                    if (newPhase !== prevPhase) {
-                      refreshes.push(refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding));
-                    }
-                    if (refreshes.length > 0) await Promise.all(refreshes);
-                  },
-                  onBeforeSendMessage: onboardingFollowUp.onBeforeSendMessage,
+                  onBeforeSendMessage,
                 }
           }
         >
@@ -211,6 +218,7 @@ const AgentOnboardingPage = memo(() => {
               showFeedback={!viewingHistoricalTopic}
               topicId={effectiveTopicId}
               onAfterWrapUp={syncOnboardingContext}
+              onAssistantTurnSettled={assistantTurnSettledHandler}
             />
           </ErrorBoundary>
         </OnboardingConversationProvider>

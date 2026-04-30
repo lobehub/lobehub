@@ -10,6 +10,7 @@ export {
 } from './data/agent-templates';
 export * from './ExecutionRuntime';
 export { AgentMarketplaceManifest } from './manifest';
+export { buildAgentMarketplaceToolResult, type InstallMarketplaceAgentSummary } from './pickResult';
 export { systemPrompt } from './systemRole';
 export {
   AgentMarketplaceApiName,
