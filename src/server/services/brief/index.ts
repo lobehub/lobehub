@@ -13,8 +13,6 @@ export interface AgentAvatarInfo {
 
 export type BriefWithAgents = BriefItem & {
   agents: AgentAvatarInfo[];
-  /** Parent task's automation mode — `schedule` marks a recurring task. */
-  taskAutomationMode: 'heartbeat' | 'schedule' | null;
 };
 
 export class BriefService {
@@ -32,17 +30,10 @@ export class BriefService {
     const taskIds = briefs.map((b) => b.taskId).filter((id): id is string => id !== null);
 
     if (taskIds.length === 0) {
-      return briefs.map((brief) => ({ ...brief, agents: [], taskAutomationMode: null }));
+      return briefs.map((brief) => ({ ...brief, agents: [] }));
     }
 
-    const [taskAgentIdsMap, taskRows] = await Promise.all([
-      this.taskModel.getTreeAgentIdsForTaskIds(taskIds),
-      this.taskModel.findByIds(taskIds),
-    ]);
-    const taskAutomationMap = Object.fromEntries(
-      taskRows.map((t) => [t.id, t.automationMode ?? null]),
-    );
-
+    const taskAgentIdsMap = await this.taskModel.getTreeAgentIdsForTaskIds(taskIds);
     const allAgentIds = [...new Set(Object.values(taskAgentIdsMap).flat())];
     let agentMap: Record<string, AgentAvatarInfo> = {};
 
@@ -56,7 +47,6 @@ export class BriefService {
       agents: (brief.taskId ? taskAgentIdsMap[brief.taskId] || [] : [])
         .map((id) => agentMap[id])
         .filter(Boolean),
-      taskAutomationMode: brief.taskId ? (taskAutomationMap[brief.taskId] ?? null) : null,
     }));
   }
 
@@ -86,13 +76,13 @@ export class BriefService {
    * (feedback / retry / acknowledge) likewise do not transition task status
    * here; retry triggers re-execution via a separate flow.
    *
-   * Recurring tasks (`automationMode === 'schedule'`) are also exempt: each
-   * scheduled run produces its own `result` brief, but the task itself is the
-   * recurring instruction — accepting one occurrence is a UI dismissal, not a
-   * lifecycle terminal. The check is on the task's automation mode, not on the
-   * brief's `cronJobId`, so a *manual* run of a recurring task is treated the
-   * same way (cronJobId would be null in that case but the task is still
-   * recurring).
+   * Tasks parked at `status === 'scheduled'` are also exempt: that status means
+   * the task is between automated runs (heartbeat or schedule), so approving
+   * one occurrence's `result` brief is a UI dismissal, not a lifecycle
+   * terminal — the next tick must still surface. Discriminating on the runtime
+   * `status` (rather than `automationMode`) also means a manual run of a
+   * recurring task — which leaves the task in `scheduled` between runs — is
+   * handled the same way.
    */
   async resolve(
     id: string,
@@ -103,7 +93,7 @@ export class BriefService {
 
     if (options?.action === 'approve' && brief.taskId && brief.type === 'result') {
       const task = await this.taskModel.findById(brief.taskId);
-      if (task && task.automationMode !== 'schedule') {
+      if (task && task.status !== 'scheduled') {
         await this.taskModel.updateStatus(brief.taskId, 'completed', { error: null });
       }
     }

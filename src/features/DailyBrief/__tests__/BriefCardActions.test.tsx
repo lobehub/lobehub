@@ -19,8 +19,7 @@ vi.mock('react-i18next', () => ({
         'cancel': 'Cancel',
         'brief.commentPlaceholder': 'Share your feedback...',
         'brief.commentSubmit': 'Submit feedback',
-        'brief.action.confirmDone': 'Confirm complete',
-        'brief.action.markResolved': 'Mark as resolved',
+        'brief.action.confirm': 'Confirm',
         'brief.editResult': 'Edit',
         'brief.viewRun': 'View run',
       };
@@ -122,7 +121,7 @@ describe('BriefCardActions', () => {
     expect(screen.getByText('✅ 确认')).toBeInTheDocument();
   });
 
-  it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
+  it('should hardcode primary action label to "Confirm" for result briefs', () => {
     renderWithRouter(
       <BriefCardActions
         actions={[{ key: 'approve', label: '✅ Custom approve', type: 'resolve' }]}
@@ -131,7 +130,7 @@ describe('BriefCardActions', () => {
       />,
     );
 
-    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.getByText('Confirm')).toBeInTheDocument();
     expect(screen.queryByText('✅ Custom approve')).not.toBeInTheDocument();
   });
 
@@ -173,31 +172,15 @@ describe('BriefCardActions', () => {
     expect(screen.queryByText('View run')).not.toBeInTheDocument();
   });
 
-  it('should label the result action "Confirm complete" for a one-shot task', () => {
+  it('should label the result action "Confirm" regardless of the parent task type', () => {
     renderWithRouter(
       <BriefCardActions
         actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
         briefId="brief-7"
         briefType="result"
-        taskAutomationMode={null}
         taskId="task-7"
       />,
     );
-    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
-    expect(screen.queryByText('Mark as resolved')).not.toBeInTheDocument();
-  });
-
-  it('should label the result action "Mark as resolved" for a recurring task (taskAutomationMode=schedule)', () => {
-    renderWithRouter(
-      <BriefCardActions
-        actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
-        briefId="brief-8"
-        briefType="result"
-        taskAutomationMode={'schedule'}
-        taskId="task-8"
-      />,
-    );
-    expect(screen.getByText('Mark as resolved')).toBeInTheDocument();
-    expect(screen.queryByText('Confirm complete')).not.toBeInTheDocument();
+    expect(screen.getByText('Confirm')).toBeInTheDocument();
   });
 });

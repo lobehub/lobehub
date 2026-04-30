@@ -36,7 +36,6 @@ describe('BriefService', () => {
 
   const mockTaskModel = {
     findById: vi.fn(),
-    findByIds: vi.fn(),
     getTreeAgentIdsForTaskIds: vi.fn(),
     updateStatus: vi.fn(),
   };
@@ -49,10 +48,6 @@ describe('BriefService', () => {
   });
 
   describe('enrichBriefsWithAgents', () => {
-    beforeEach(() => {
-      mockTaskModel.findByIds.mockResolvedValue([]);
-    });
-
     it('should return briefs with empty agents when no taskIds', async () => {
       const service = new BriefService(db, userId);
 
@@ -65,14 +60,11 @@ describe('BriefService', () => {
 
       expect(result).toHaveLength(2);
       expect(result[0].agents).toEqual([]);
-      expect(result[0].taskAutomationMode).toBeNull();
       expect(result[1].agents).toEqual([]);
-      expect(result[1].taskAutomationMode).toBeNull();
       expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
-      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
     });
 
-    it('should enrich briefs with agent data and taskAutomationMode from the parent task', async () => {
+    it('should enrich briefs with agent data', async () => {
       const service = new BriefService(db, userId);
 
       const briefs = [
@@ -84,10 +76,6 @@ describe('BriefService', () => {
         'task-1': ['agent-a', 'agent-b'],
         'task-2': ['agent-b', 'agent-c'],
       });
-      mockTaskModel.findByIds.mockResolvedValue([
-        { automationMode: 'schedule', id: 'task-1' },
-        { automationMode: null, id: 'task-2' },
-      ]);
 
       mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
         { avatar: '🤖', backgroundColor: null, id: 'agent-a', title: 'Agent A' },
@@ -98,12 +86,9 @@ describe('BriefService', () => {
       const result = await service.enrichBriefsWithAgents(briefs);
 
       expect(result[0].agents).toHaveLength(2);
-      expect(result[0].taskAutomationMode).toBe('schedule');
       expect(result[1].agents).toHaveLength(2);
-      expect(result[1].taskAutomationMode).toBeNull();
 
       expect(mockTaskModel.getTreeAgentIdsForTaskIds).toHaveBeenCalledWith(['task-1', 'task-2']);
-      expect(mockTaskModel.findByIds).toHaveBeenCalledWith(['task-1', 'task-2']);
       expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(
         expect.arrayContaining(['agent-a', 'agent-b', 'agent-c']),
       );
@@ -120,7 +105,6 @@ describe('BriefService', () => {
       mockTaskModel.getTreeAgentIdsForTaskIds.mockResolvedValue({
         'task-1': ['agent-a'],
       });
-      mockTaskModel.findByIds.mockResolvedValue([{ automationMode: 'schedule', id: 'task-1' }]);
 
       mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
         { avatar: '🤖', backgroundColor: null, id: 'agent-a', title: 'Agent A' },
@@ -129,9 +113,7 @@ describe('BriefService', () => {
       const result = await service.enrichBriefsWithAgents(briefs);
 
       expect(result[0].agents).toHaveLength(1);
-      expect(result[0].taskAutomationMode).toBe('schedule');
       expect(result[1].agents).toEqual([]);
-      expect(result[1].taskAutomationMode).toBeNull();
     });
 
     it('should handle task with no agents in tree', async () => {
@@ -140,12 +122,10 @@ describe('BriefService', () => {
       const briefs = [{ id: 'b1', taskId: 'task-1', title: 'Brief' }] as any[];
 
       mockTaskModel.getTreeAgentIdsForTaskIds.mockResolvedValue({});
-      mockTaskModel.findByIds.mockResolvedValue([{ automationMode: null, id: 'task-1' }]);
 
       const result = await service.enrichBriefsWithAgents(briefs);
 
       expect(result[0].agents).toEqual([]);
-      expect(result[0].taskAutomationMode).toBeNull();
       expect(mockAgentModel.getAgentAvatarsByIds).not.toHaveBeenCalled();
     });
   });
@@ -185,14 +165,14 @@ describe('BriefService', () => {
   });
 
   describe('resolve', () => {
-    it('should complete the task when approving a result brief on a one-shot task', async () => {
+    it('should complete the task when approving a result brief on a non-scheduled task', async () => {
       const service = new BriefService(db, userId);
       mockBriefModel.resolve.mockResolvedValue({
         id: 'b1',
         taskId: 'task-1',
         type: 'result',
       });
-      mockTaskModel.findById.mockResolvedValue({ automationMode: null, id: 'task-1' });
+      mockTaskModel.findById.mockResolvedValue({ id: 'task-1', status: 'paused' });
 
       const brief = await service.resolve('b1', { action: 'approve' });
 
@@ -268,22 +248,20 @@ describe('BriefService', () => {
       expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
     });
 
-    it('should NOT complete a recurring task (automationMode=schedule) when approving its result brief', async () => {
+    it('should NOT complete a task parked at status="scheduled" when approving its result brief', async () => {
       const service = new BriefService(db, userId);
       mockBriefModel.resolve.mockResolvedValue({
         id: 'b6',
         taskId: 'task-6',
         type: 'result',
       });
-      mockTaskModel.findById.mockResolvedValue({ automationMode: 'schedule', id: 'task-6' });
+      mockTaskModel.findById.mockResolvedValue({ id: 'task-6', status: 'scheduled' });
 
       await service.resolve('b6', { action: 'approve' });
 
-      // Recurring tasks must keep producing future runs; accepting one
-      // occurrence is a UI dismissal, not a lifecycle terminal. The
-      // discriminator is the task's automationMode, NOT the brief's
-      // cronJobId — a manual run of a recurring task would have
-      // cronJobId=null but the task is still recurring.
+      // status='scheduled' means the task is parked between automated runs
+      // (heartbeat or schedule). Approving one occurrence is a UI dismissal —
+      // the next tick must still surface, so don't flip the task to completed.
       expect(mockTaskModel.findById).toHaveBeenCalledWith('task-6');
       expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
     });
