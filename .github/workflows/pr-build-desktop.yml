@@ -144,7 +144,9 @@ jobs:
       # Linux 平台构建处理
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
-        run: npm run desktop:package:app
+        run: |
+          ulimit -n 65536 || true
+          npm run desktop:package:app
         env:
           # 设置更新通道，PR构建为nightly，否则为stable
           UPDATE_CHANNEL: 'nightly'

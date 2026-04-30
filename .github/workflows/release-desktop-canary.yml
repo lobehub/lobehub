@@ -275,7 +275,9 @@ jobs:
       # Linux 构建
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
-        run: npm run desktop:package:app
+        run: |
+          ulimit -n 65536 || true
+          npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
