@@ -12,6 +12,7 @@ import {
   MessageItem,
   useConversationStore,
 } from '@/features/Conversation';
+import FollowUpChips from '@/features/Conversation/FollowUp/FollowUpChips';
 import type { OnboardingPhase } from '@/types/user';
 import { isDev } from '@/utils/env';
 
@@ -101,13 +102,19 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
 
     const itemContent = (index: number, id: string) => {
       const isLatestItem = displayMessages.length === index + 1;
+      const message = displayMessages[index];
+      const showFollowUp = isLatestItem && message?.role === 'assistant';
+
       return (
-        <MessageItem
-          defaultWorkflowExpandLevel="collapsed"
-          id={id}
-          index={index}
-          isLatestItem={isLatestItem}
-        />
+        <Flexbox>
+          <MessageItem
+            defaultWorkflowExpandLevel="collapsed"
+            id={id}
+            index={index}
+            isLatestItem={isLatestItem}
+          />
+          {showFollowUp && <FollowUpChips messageId={id} />}
+        </Flexbox>
       );
     };
 

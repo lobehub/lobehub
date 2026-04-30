@@ -19,6 +19,8 @@ import { topicService } from '@/services/topic';
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
 import { isDev } from '@/utils/env';
 
@@ -28,6 +30,7 @@ import AgentOnboardingConversation from './Conversation';
 import AgentOnboardingDebugExportButton from './DebugExportButton';
 import HistoryPanel from './HistoryPanel';
 import OnboardingConversationProvider from './OnboardingConversationProvider';
+import { useOnboardingFollowUp } from './useOnboardingFollowUp';
 
 const CLASSIC_ONBOARDING_PATH = '/onboarding/classic';
 
@@ -107,6 +110,22 @@ const AgentOnboardingPage = memo(() => {
   const viewingHistoricalTopic =
     !!activeTopicId && !!effectiveTopicId && effectiveTopicId !== activeTopicId;
 
+  const onboardingChatKey = useMemo(
+    () => messageMapKey({ agentId: onboardingAgentId || '', topicId: effectiveTopicId }),
+    [onboardingAgentId, effectiveTopicId],
+  );
+  const messagesForOnboarding = useChatStore((s) => s.dbMessagesMap[onboardingChatKey]);
+  const isGreeting = useMemo(() => {
+    if (!messagesForOnboarding || messagesForOnboarding.length !== 1) return false;
+    return messagesForOnboarding[0]?.role !== 'user';
+  }, [messagesForOnboarding]);
+
+  const onboardingFollowUp = useOnboardingFollowUp({
+    enabled: !onboardingFinished && !viewingHistoricalTopic,
+    isGreeting,
+    phase: data?.context?.phase,
+  });
+
   if (error) {
     return (
       <OnboardingContainer>
@@ -151,6 +170,7 @@ const AgentOnboardingPage = memo(() => {
             onboardingFinished
               ? undefined
               : {
+                  onAfterMessageCreate: onboardingFollowUp.onAfterMessageCreate,
                   onAfterSendMessage: async () => {
                     await syncOnboardingContext();
                     await Promise.all([
@@ -158,6 +178,7 @@ const AgentOnboardingPage = memo(() => {
                       refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
                     ]);
                   },
+                  onBeforeSendMessage: onboardingFollowUp.onBeforeSendMessage,
                 }
           }
         >
