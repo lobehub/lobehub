@@ -250,9 +250,6 @@ export class TaskDetailSliceActionImpl {
     try {
       await taskService.update(id, data);
       this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
-      if (assigneeAgentId !== undefined) {
-        await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]);
-      }
     } catch (error) {
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
       await refreshPatchedTargets();
@@ -263,6 +260,10 @@ export class TaskDetailSliceActionImpl {
         }),
       );
       throw error;
+    }
+
+    if (assigneeAgentId !== undefined) {
+      await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
     }
   };
 
