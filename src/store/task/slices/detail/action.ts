@@ -193,7 +193,6 @@ export class TaskDetailSliceActionImpl {
     if (this.#get().activeTaskId === taskId) return;
     this.#set(
       {
-        activePageModalId: undefined,
         activeTaskId: taskId,
         activeTopicDrawerTopicId: undefined,
       },
@@ -210,20 +209,6 @@ export class TaskDetailSliceActionImpl {
   closeTopicDrawer = (): void => {
     if (!this.#get().activeTopicDrawerTopicId) return;
     this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
-  };
-
-  openPageModal = (pageId: string): void => {
-    if (this.#get().activePageModalId === pageId) return;
-    this.#set(
-      { activePageModalId: pageId, activeTopicDrawerTopicId: undefined },
-      false,
-      'openPageModal',
-    );
-  };
-
-  closePageModal = (): void => {
-    if (!this.#get().activePageModalId) return;
-    this.#set({ activePageModalId: undefined }, false, 'closePageModal');
   };
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {

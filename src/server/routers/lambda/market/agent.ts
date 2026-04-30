@@ -408,6 +408,57 @@ export const agentRouter = router({
     }),
 
   /**
+   * Get the full curated onboarding agent catalog for the marketplace picker.
+   * Proxies to GET /api/v1/agents/onboarding-full with trust-token authentication.
+   * Response is keyed by MarketplaceCategory slug.
+   */
+  getOnboardingFull: agentProcedure.query(async ({ ctx }) => {
+    const url = `${MARKET_BASE_URL}/api/v1/agents/onboarding-full?_ts=${Date.now()}`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    const userInfo = ctx.marketUserInfo as TrustedClientUserInfo | undefined;
+    const accessToken = (ctx as { marketOidcAccessToken?: string }).marketOidcAccessToken;
+
+    if (userInfo) {
+      const trustedClientToken = generateTrustedClientToken(userInfo);
+      if (trustedClientToken) {
+        headers['x-lobe-trust-token'] = trustedClientToken;
+      }
+    }
+
+    if (!headers['x-lobe-trust-token'] && accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    try {
+      const response = await fetch(url, { headers, method: 'GET' });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        log(
+          'Get onboarding full failed: %s %s - %s',
+          response.status,
+          response.statusText,
+          errorText,
+        );
+        throw new Error(`Failed to get onboarding full: ${response.statusText}`);
+      }
+
+      return (await response.json()) as Record<string, unknown[]>;
+    } catch (error) {
+      log('Error getting onboarding full: %O', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to get onboarding full',
+      });
+    }
+  }),
+
+  /**
    * Get the fork source of an agent
    * GET /market/agent/:identifier/fork-source
    */

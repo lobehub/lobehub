@@ -22,6 +22,7 @@ export default {
   'brief.resolved': 'Marked as resolved',
   'brief.title': 'Daily brief',
   'brief.viewAllTasks': 'View all tasks',
+  'brief.viewRun': 'View run',
   'project.create': 'New project',
   'project.deleteConfirm':
     "This project will be deleted and can't be recovered. Confirm to continue.",

@@ -41,6 +41,7 @@ import {
   GTDTodoInjector,
   HistorySummaryProvider,
   KnowledgeInjector,
+  LocalSystemToolSnapshotInjector,
   OnboardingActionHintInjector,
   OnboardingContextInjector,
   OnboardingSyntheticStateInjector,
@@ -329,6 +330,8 @@ export class MessagesEngine {
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Page selections (inject user-selected text into each user message)
       new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
+      // Local-system file snapshots (replay send-time @file reads as real tool results)
+      new LocalSystemToolSnapshotInjector({ enabled: true }),
       // Page Editor context (inject current page content to last user message)
       new PageEditorContextInjector({
         enabled: isPageEditorEnabled,

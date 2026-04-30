@@ -217,6 +217,8 @@ export default {
     'Your subscription points have been exhausted, and you cannot use this feature. Please top up credits or configure a custom model API to continue using it.',
   'response.SystemTimeNotMatchError':
     'Sorry, your system time does not match the server. Please check your system time and try again.',
+  'response.LobeHubModelDeprecated':
+    'The model "{{model}}" is no longer available. Please pick a current model from the model selector.',
   'response.UnknownChatFetchError':
     'Sorry, an unknown request error occurred. Please check the information below or try again.',
   'stt.responseError': 'Service request failed, please check the configuration or try again',

@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Configuração inválida do Ollama. Verifique e tente novamente.",
   "response.InvalidProviderAPIKey": "A chave de API do {{provider}} está incorreta ou vazia. Verifique e tente novamente.",
   "response.InvalidVertexCredentials": "Falha na autenticação do Vertex. Verifique suas credenciais e tente novamente.",
+  "response.LobeHubModelDeprecated": "O modelo \"{{model}}\" não está mais disponível. Por favor, escolha um modelo atual no seletor de modelos.",
   "response.LocationNotSupportError": "Desculpe, sua localização atual não suporta este serviço. Verifique as restrições regionais ou tente de outro local.",
   "response.ModelNotFound": "Desculpe, o modelo solicitado não foi encontrado. Verifique se ele existe ou se você tem permissão de acesso.",
   "response.NoOpenAIAPIKey": "A chave de API do OpenAI está vazia. Adicione uma chave personalizada.",

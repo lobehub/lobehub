@@ -2,6 +2,7 @@ export * from './abstractChunk';
 export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
 export * from './compressContext';
+export * from './generateBrief';
 export * from './inputCompletion';
 export * from './langDetect';
 export * from './pickEmoji';

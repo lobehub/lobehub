@@ -1,5 +1,7 @@
 {
   "action.connect.button": "Conectar {{provider}}",
+  "action.connect.error": "Conexão falhou, por favor tente novamente.",
+  "action.connect.popupBlocked": "Popup de conexão bloqueado. Permita popups no seu navegador para continuar.",
   "action.create.error": "Falha ao criar a tarefa. Por favor, tente novamente.",
   "action.create.success": "Tarefa agendada adicionada. Encontre-a no Lobe AI.",
   "action.createButton": "Adicionar como tarefa agendada",

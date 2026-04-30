@@ -15,11 +15,12 @@ export const agentUserMessageRenderer = {
             : undefined,
         intents: Array.isArray(input.payload.intents)
           ? input.payload.intents.filter(
-              (intent): intent is 'document' | 'memory' | 'persona' | 'prompt' =>
+              (intent): intent is 'document' | 'memory' | 'persona' | 'prompt' | 'skill' =>
                 intent === 'document' ||
                 intent === 'memory' ||
                 intent === 'persona' ||
-                intent === 'prompt',
+                intent === 'prompt' ||
+                intent === 'skill',
             )
           : undefined,
         memoryPayload:

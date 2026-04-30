@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import type * as ProviderSkillsAgentDocumentUtils from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { createSkillTree } from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
@@ -9,6 +10,7 @@ import {
   collectAgentSkillDecisionCandidates,
   defineSkillManagementActionHandler,
   handleSkillManagementSignal,
+  runSkillDecisionAgentRuntime,
 } from '../skillManagement';
 
 const skillDecisionRunner = vi.fn();
@@ -86,7 +88,7 @@ describe('defineSkillManagementActionHandler', () => {
    * Skill decisions preserve the four v1.2 action values.
    */
   it('returns structured results for each v1.2 decision action', async () => {
-    for (const action of ['create', 'refine', 'consolidate', 'noop'] as const) {
+    for (const action of ['create', 'refine', 'consolidate', 'noop', 'reject'] as const) {
       const result = await handleSkillManagementSignal({
         decide: vi.fn().mockResolvedValue({ action, confidence: 0.9 }),
         payload: { agentId: 'agent-1', feedbackMessage: 'Make this reusable.' },
@@ -95,6 +97,110 @@ describe('defineSkillManagementActionHandler', () => {
 
       expect(result).toMatchObject({ decision: { action }, status: 'decided' });
     }
+  });
+
+  /**
+   * @example
+   * The decision agent can inspect same-turn document outcomes before returning reject.
+   */
+  it('runs read-only decision tools through AgentRuntime before submitting a decision', async () => {
+    const response = () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+      );
+    const chat = vi
+      .fn()
+      .mockImplementationOnce(async (_payload, options) => {
+        await options.callback.onToolsCalling({
+          toolsCalling: [
+            {
+              function: {
+                arguments: '{"messageId":"msg_1","scopeKey":"topic:topic_1"}',
+                name: 'agent-signal-skill-decision____listSameTurnDocumentOutcomes',
+              },
+              id: 'call_list_outcomes',
+              type: 'function',
+            },
+          ],
+        });
+        return response();
+      })
+      .mockImplementationOnce(async (_payload, options) => {
+        await options.callback.onToolsCalling({
+          toolsCalling: [
+            {
+              function: {
+                arguments: '{"documentId":"doc_1"}',
+                name: 'agent-signal-skill-decision____readDocument',
+              },
+              id: 'call_read_document',
+              type: 'function',
+            },
+          ],
+        });
+        return response();
+      })
+      .mockImplementationOnce(async (_payload, options) => {
+        await options.callback.onToolsCalling({
+          toolsCalling: [
+            {
+              function: {
+                arguments:
+                  '{"action":"reject","confidence":0.9,"documentRefs":["doc_1"],"reason":"The same turn created a document and forbids skill conversion.","requiredReads":[],"targetSkillIds":[]}',
+                name: 'agent-signal-skill-decision____submitDecision',
+              },
+              id: 'call_submit_decision',
+              type: 'function',
+            },
+          ],
+        });
+        return response();
+      });
+    const tools = {
+      listCandidateDocuments: vi.fn(),
+      listSameTurnDocumentOutcomes: vi.fn().mockResolvedValue([
+        {
+          documentId: 'doc_1',
+          relation: 'created',
+          summary: 'Agent documents created a document.',
+        },
+      ]),
+      readDocument: vi.fn().mockResolvedValue({
+        content: '# Draft',
+        documentId: 'doc_1',
+        title: 'Draft',
+      }),
+    };
+
+    const result = await runSkillDecisionAgentRuntime({
+      model: 'test-model',
+      modelRuntime: { chat },
+      payload: {
+        agentId: 'agent_1',
+        feedbackMessage: 'Create a document for this, do not make it a skill.',
+        messageId: 'msg_1',
+        topicId: 'topic_1',
+      },
+      tools,
+    });
+
+    expect(chat).toHaveBeenCalledTimes(3);
+    expect(tools.listSameTurnDocumentOutcomes).toHaveBeenCalledWith({
+      agentId: 'agent_1',
+      messageId: 'msg_1',
+      scopeKey: 'topic:topic_1',
+      topicId: 'topic_1',
+    });
+    expect(tools.readDocument).toHaveBeenCalledWith({ documentId: 'doc_1' });
+    expect(result).toMatchObject({
+      action: 'reject',
+      documentRefs: ['doc_1'],
+      reason: 'The same turn created a document and forbids skill conversion.',
+    });
   });
 
   /**
@@ -199,13 +305,15 @@ describe('defineSkillManagementActionHandler', () => {
       context,
     );
 
-    expect(skillDecisionRunner).toHaveBeenCalledWith({
-      agentId: 'agent_1',
-      evidence: [{ cue: 'reusable', excerpt: 'Make this a reusable checklist.' }],
-      feedbackMessage: 'Make this a reusable checklist for PR reviews.',
-      topicId: 'topic_1',
-      turnContext: '{"surface":"chat"}',
-    });
+    expect(skillDecisionRunner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent_1',
+        evidence: [{ cue: 'reusable', excerpt: 'Make this a reusable checklist.' }],
+        feedbackMessage: 'Make this a reusable checklist for PR reviews.',
+        topicId: 'topic_1',
+        turnContext: '{"surface":"chat"}',
+      }),
+    );
     expect(result).toMatchObject({
       output: {
         decision: { action: 'create', confidence: 0.9, reason: 'reusable workflow feedback' },
@@ -358,6 +466,115 @@ describe('defineSkillManagementActionHandler', () => {
       status: 'skipped',
     });
     expect(context.runtimeState.touchGuardState).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example
+   * Malformed structured decision output is skipped instead of failing the whole action.
+   */
+  it('skips skill-management when the decision runner returns undefined output', async () => {
+    // ROOT CAUSE:
+    //
+    // If modelRuntime.generateObject cannot parse provider text as JSON, it returns undefined.
+    // The skill-management handler parsed that undefined value as the final decision object,
+    // which turned a recoverable decision-output problem into signal.action.failed.
+    //
+    // We fixed this by treating non-object decision output as a noop decision.
+    skillDecisionRunner.mockResolvedValue(undefined);
+
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      selfIterationEnabled: true,
+      skillDecisionRunner,
+      userId: 'user_1',
+    });
+
+    const result = await handler.handle(
+      {
+        actionId: 'act_skill_undefined_decision',
+        actionType: 'action.skill-management.handle',
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: {
+          agentId: 'agent_1',
+          idempotencyKey: 'source_1:skill:undefined_decision',
+          message: 'Create a reusable checklist for review failures.',
+        },
+        signal: {
+          signalId: 'sig_1',
+          signalType: 'signal.feedback.domain.skill',
+        },
+        source: { sourceId: 'source_1', sourceType: 'agent.user.message' },
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(createSkillTree).not.toHaveBeenCalled();
+    expect(context.runtimeState.touchGuardState).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      detail: 'decision output was not an object',
+      output: { decision: { action: 'noop', reason: 'decision output was not an object' } },
+      status: 'skipped',
+    });
+  });
+
+  /**
+   * @example
+   * Provider parse failures surface as skipped decisions instead of failed signal actions.
+   */
+  it('skips skill-management when the decision runner rejects malformed structured output', async () => {
+    // ROOT CAUSE:
+    //
+    // The default skill decision runner parses generateObject output before returning it to the
+    // action handler. When generateObject returned undefined after a provider JSON parse failure,
+    // that internal parse threw a ZodError and the outer handler emitted signal.action.failed.
+    //
+    // We fixed this by downgrading malformed decision-output ZodError values to a noop decision.
+    const malformedStructuredOutputError = (() => {
+      try {
+        z.object({}).parse(undefined);
+      } catch (error) {
+        return error;
+      }
+    })();
+    skillDecisionRunner.mockRejectedValue(malformedStructuredOutputError);
+
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      selfIterationEnabled: true,
+      skillDecisionRunner,
+      userId: 'user_1',
+    });
+
+    const result = await handler.handle(
+      {
+        actionId: 'act_skill_malformed_decision',
+        actionType: 'action.skill-management.handle',
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: {
+          agentId: 'agent_1',
+          idempotencyKey: 'source_1:skill:malformed_decision',
+          message: 'Create a reusable checklist for review failures.',
+        },
+        signal: {
+          signalId: 'sig_1',
+          signalType: 'signal.feedback.domain.skill',
+        },
+        source: { sourceId: 'source_1', sourceType: 'agent.user.message' },
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(createSkillTree).not.toHaveBeenCalled();
+    expect(context.runtimeState.touchGuardState).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      detail: 'decision structured output was malformed',
+      output: {
+        decision: { action: 'noop', reason: 'decision structured output was malformed' },
+      },
+      status: 'skipped',
+    });
   });
 
   /**
@@ -547,9 +764,9 @@ describe('defineSkillManagementActionHandler', () => {
 
   /**
    * @example
-   * A maintainer operation naming a non-target skill is rejected before mutation.
+   * A maintainer operation naming a non-target skill is skipped before mutation.
    */
-  it('rejects maintainer operations that target skills outside the decision target set', async () => {
+  it('skips maintainer operations that target skills outside the decision target set', async () => {
     skillDecisionRunner.mockResolvedValue({
       action: 'refine',
       reason: 'update existing review skill',
@@ -603,10 +820,9 @@ describe('defineSkillManagementActionHandler', () => {
     expect(skillMaintainerService.writeSkillFile).not.toHaveBeenCalled();
     expect(skillMaintainerService.removeSkillFile).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      error: {
-        message: expect.stringContaining('other-skill'),
-      },
-      status: 'failed',
+      detail: expect.stringContaining('other-skill'),
+      output: { decision: { action: 'refine' } },
+      status: 'skipped',
     });
   });
 

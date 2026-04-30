@@ -1,10 +1,14 @@
 import type { BriefAction } from '@lobechat/types';
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useBriefStore } from '@/store/brief';
 
 import BriefCardActions from '../BriefCardActions';
+
+const renderWithRouter = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
 // Mock i18n
 vi.mock('react-i18next', () => ({
@@ -17,6 +21,7 @@ vi.mock('react-i18next', () => ({
         'brief.commentSubmit': 'Submit feedback',
         'brief.action.confirmDone': 'Confirm complete',
         'brief.editResult': 'Edit',
+        'brief.viewRun': 'View run',
       };
       return map[key] || key;
     },
@@ -39,12 +44,14 @@ beforeEach(() => {
 
 describe('BriefCardActions', () => {
   it('should render resolve action buttons from actions prop', () => {
-    render(<BriefCardActions actions={sampleActions} briefId="brief-1" briefType="decision" />);
+    renderWithRouter(
+      <BriefCardActions actions={sampleActions} briefId="brief-1" briefType="decision" />,
+    );
     expect(screen.getByText('Approve')).toBeInTheDocument();
   });
 
   it('should render comment action button', () => {
-    const { container } = render(
+    const { container } = renderWithRouter(
       <BriefCardActions
         actions={sampleActions}
         briefId="brief-1"
@@ -59,7 +66,7 @@ describe('BriefCardActions', () => {
   it('should call resolveBrief and onAfterResolve on resolve button click', async () => {
     mockResolveBrief.mockResolvedValueOnce(undefined);
     const onAfterResolve = vi.fn();
-    render(
+    renderWithRouter(
       <BriefCardActions
         actions={sampleActions}
         briefId="brief-1"
@@ -76,7 +83,7 @@ describe('BriefCardActions', () => {
   });
 
   it('should hide action buttons when comment button clicked', () => {
-    const { container } = render(
+    const { container } = renderWithRouter(
       <BriefCardActions
         actions={sampleActions}
         briefId="brief-1"
@@ -95,7 +102,7 @@ describe('BriefCardActions', () => {
   });
 
   it('should show resolved state when resolvedAction is set', () => {
-    render(
+    renderWithRouter(
       <BriefCardActions
         actions={sampleActions}
         briefId="brief-1"
@@ -109,13 +116,13 @@ describe('BriefCardActions', () => {
   });
 
   it('should fallback to DEFAULT_BRIEF_ACTIONS when actions prop is null', () => {
-    render(<BriefCardActions actions={null} briefId="brief-2" briefType="decision" />);
+    renderWithRouter(<BriefCardActions actions={null} briefId="brief-2" briefType="decision" />);
 
     expect(screen.getByText('✅ 确认')).toBeInTheDocument();
   });
 
   it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
-    render(
+    renderWithRouter(
       <BriefCardActions
         actions={[{ key: 'approve', label: '✅ Custom approve', type: 'resolve' }]}
         briefId="brief-3"
@@ -128,7 +135,7 @@ describe('BriefCardActions', () => {
   });
 
   it('should always show the Edit button for result briefs when taskId is set', () => {
-    const { container } = render(
+    const { container } = renderWithRouter(
       <BriefCardActions
         actions={[{ key: 'approve', label: '✅ Custom', type: 'resolve' }]}
         briefId="brief-4"
@@ -138,5 +145,30 @@ describe('BriefCardActions', () => {
     );
 
     expect(container.querySelector('.brief-comment-btn')).toBeInTheDocument();
+  });
+
+  it('should render the View run button when taskId and topicId are both set', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-5"
+        briefType="decision"
+        taskId="task-5"
+        topicId="topic-5"
+      />,
+    );
+    expect(screen.getByText('View run')).toBeInTheDocument();
+  });
+
+  it('should not render the View run button when topicId is missing', () => {
+    renderWithRouter(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-6"
+        briefType="decision"
+        taskId="task-6"
+      />,
+    );
+    expect(screen.queryByText('View run')).not.toBeInTheDocument();
   });
 });

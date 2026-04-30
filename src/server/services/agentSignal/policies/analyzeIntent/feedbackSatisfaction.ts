@@ -4,7 +4,7 @@ import {
   type SourceAgentUserMessage,
 } from '@lobechat/agent-signal/source';
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import type { GenerateObjectPayload, GenerateObjectSchema } from '@lobechat/model-runtime';
 import { chainAgentSignalAnalyzeIntentFeedbackSatisfaction } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -13,13 +13,10 @@ import { z } from 'zod';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
+import { classifySatisfaction, transitionToSignals } from '../../processors';
 import { defineSourceHandler } from '../../runtime/middleware';
-import {
-  AGENT_SIGNAL_POLICY_SIGNAL_TYPES,
-  type AgentSignalFeedbackEvidence,
-  type AgentSignalFeedbackSatisfactionStagePayload,
-  type SignalFeedbackSatisfaction,
-} from '../types';
+import type { ClassifierDiagnosticsService, SatisfactionClassifierService } from '../../services';
+import type { AgentSignalFeedbackSatisfactionStagePayload } from '../types';
 
 const log = debug('lobe-server:agent-signal:feedback-satisfaction:agent');
 
@@ -66,6 +63,54 @@ const FeedbackSatisfactionGenerateObjectSchema = {
   strict: true,
 } satisfies GenerateObjectSchema;
 
+const generateObjectRoles = ['assistant', 'system', 'user'] as const;
+
+const isGenerateObjectRole = (
+  role: string,
+): role is GenerateObjectPayload['messages'][number]['role'] => {
+  return generateObjectRoles.includes(role as (typeof generateObjectRoles)[number]);
+};
+
+/**
+ * Normalizes prompt-chain messages for generateObject.
+ *
+ * Before:
+ * - `{ role: "system", content: "Judge feedback" }`
+ * - `{ role: "tool", content: "Unsupported role" }`
+ *
+ * After:
+ * - `{ role: "system", content: "Judge feedback" }`
+ * - Throws `TypeError` for roles or content shapes generateObject cannot consume
+ */
+const normalizeGenerateObjectMessages = (
+  messages: NonNullable<
+    ReturnType<typeof chainAgentSignalAnalyzeIntentFeedbackSatisfaction>['messages']
+  >,
+): GenerateObjectPayload['messages'] => {
+  return messages.map((message) => {
+    if (!isGenerateObjectRole(message.role)) {
+      throw new TypeError(`Unsupported feedback satisfaction message role: ${message.role}`);
+    }
+
+    if (typeof message.content !== 'string') {
+      throw new TypeError('Feedback satisfaction message content must be a string.');
+    }
+
+    if (message.name) {
+      return {
+        content: message.content,
+        name: message.name,
+        role: message.role,
+      };
+    }
+
+    return {
+      content: message.content,
+      role: message.role,
+    };
+  });
+};
+
 /**
  * One normalized satisfaction-judge input.
  */
@@ -108,6 +153,8 @@ export interface FeedbackSatisfactionJudgeAgentModelConfig {
  * Options for constructing the feedback satisfaction source handler.
  */
 export interface CreateFeedbackSatisfactionJudgePolicyOptions {
+  /** Optional diagnostics sink for malformed structured classifier output. */
+  classifierDiagnostics?: ClassifierDiagnosticsService;
   db?: LobeChatDatabase;
   judge?: FeedbackSatisfactionJudge;
   model?: string;
@@ -176,7 +223,7 @@ export class FeedbackSatisfactionJudgeAgentService implements FeedbackSatisfacti
 
     const result = await modelRuntime.generateObject(
       {
-        messages: payload.messages as any[],
+        messages: normalizeGenerateObjectMessages(payload.messages ?? []),
         model: this.modelConfig.model,
         schema: FeedbackSatisfactionGenerateObjectSchema,
       },
@@ -206,51 +253,32 @@ const resolveJudge = (
   });
 };
 
-const normalizeEvidence = (
-  evidence: FeedbackSatisfactionStagePayloadResult['evidence'],
-): AgentSignalFeedbackEvidence[] => {
-  return evidence.map((item) => ({
-    cue: item.cue,
-    excerpt: item.excerpt,
-  }));
-};
+const explicitSkillChangePattern =
+  /create|update|refine|merge|consolidate|combine|deduplicate|reorganize|创建|更新|合并|去重|整理/i;
 
-const buildSignal = (
+const weakPositiveSkillPattern = /keep|reuse|reference|保留|复用|参考/i;
+
+const resolveSkillHintSatisfaction = (
   source: SourceAgentUserMessage,
-  payload: FeedbackSatisfactionStagePayloadResult,
-  timestamp: number,
-): SignalFeedbackSatisfaction => {
-  const normalizedMessage = source.payload.message.trim();
+): FeedbackSatisfactionStagePayloadResult | undefined => {
+  if (!source.payload.intents?.includes('skill')) return undefined;
+
+  const message = source.payload.message.trim();
+  const explicitChangeRequest = explicitSkillChangePattern.test(message);
+  const result =
+    !explicitChangeRequest && weakPositiveSkillPattern.test(message)
+      ? 'satisfied'
+      : 'not_satisfied';
 
   return {
-    chain: {
-      chainId: source.chain.chainId,
-      parentNodeId: source.sourceId,
-      rootSourceId: source.chain.rootSourceId,
-    },
-    payload: {
-      agentId: source.payload.agentId,
-      confidence: payload.confidence,
-      evidence: normalizeEvidence(payload.evidence),
-      message: normalizedMessage,
-      messageId: source.payload.messageId,
-      reason: payload.reason,
-      result: payload.result,
-      serializedContext: source.payload.serializedContext,
-      sourceHints: {
-        documentPayload: source.payload.documentPayload,
-        intents: source.payload.intents,
-        memoryPayload: source.payload.memoryPayload,
-      },
-      topicId: source.payload.topicId,
-    },
-    signalId: `${source.sourceId}:signal:feedback-satisfaction`,
-    signalType: AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction,
-    source: {
-      sourceId: source.sourceId,
-      sourceType: source.sourceType,
-    },
-    timestamp,
+    confidence: 0.8,
+    evidence: [{ cue: 'skill source hint', excerpt: message }],
+    reason: explicitChangeRequest
+      ? 'source hinted explicit skill-management change request'
+      : result === 'satisfied'
+        ? 'source hinted reusable skill or workflow feedback'
+        : 'source hinted skill-management feedback',
+    result,
   };
 };
 
@@ -278,18 +306,24 @@ export const createFeedbackSatisfactionJudgeProcessor = (
     AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage,
     `${AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage}:feedback-satisfaction-judge`,
     async (source, ctx): Promise<RuntimeProcessorResult | void> => {
-      const normalizedMessage = source.payload.message.trim();
-      const payload = await judge.judgeSatisfaction({
-        message: normalizedMessage,
-        serializedContext: source.payload.serializedContext,
+      const classifier: SatisfactionClassifierService = {
+        async classify(input) {
+          const payload =
+            resolveSkillHintSatisfaction(source) ?? (await judge.judgeSatisfaction(input));
+
+          return FeedbackSatisfactionStagePayloadSchema.parse(payload);
+        },
+      };
+      const result = await classifySatisfaction(source, ctx, {
+        diagnostics: options.classifierDiagnostics,
+        satisfactionClassifier: classifier,
       });
 
-      return {
-        signals: [
-          buildSignal(source, FeedbackSatisfactionStagePayloadSchema.parse(payload), ctx.now()),
-        ],
-        status: 'dispatch',
-      };
+      if (result.type === 'continue') {
+        return transitionToSignals(result.value).result;
+      }
+
+      return result.result;
     },
   );
 };

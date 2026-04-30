@@ -1,4 +1,4 @@
-import { type BriefAction, type BriefType } from '@lobechat/types';
+import { type BriefAction, type BriefArtifacts, type BriefType } from '@lobechat/types';
 
 export interface AgentAvatarInfo {
   avatar: string | null;
@@ -11,7 +11,7 @@ export interface BriefItem {
   actions: BriefAction[] | null;
   agentId: string | null;
   agents: AgentAvatarInfo[];
-  artifacts: unknown;
+  artifacts: BriefArtifacts | null;
   createdAt: Date | string;
   cronJobId: string | null;
   id: string;

@@ -15,6 +15,7 @@ import { FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDocumentStore } from '@/store/document';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -29,7 +30,7 @@ const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspace
 const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const { t } = useTranslation('chat');
   const { modal } = App.useApp();
-  const openPageModal = useTaskStore((s) => s.openPageModal);
+  const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
   const unpinDocument = useTaskStore((s) => s.unpinDocument);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const title = node.title || 'Untitled';
@@ -72,7 +73,7 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
       paddingBlock={8}
       paddingInline={12}
       variant="outlined"
-      onClick={() => openPageModal(node.documentId)}
+      onClick={() => openDocumentPreview(node.documentId)}
     >
       <Icon
         color={cssVar.colorTextSecondary}

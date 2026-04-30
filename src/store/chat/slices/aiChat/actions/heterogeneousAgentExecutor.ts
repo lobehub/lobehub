@@ -1831,6 +1831,7 @@ export const executeHeterogeneousAgent = async (
               editorData: merged.editorData,
               files: mergedFiles,
               message: merged.content,
+              metadata: merged.metadata,
             })
             .catch((e: unknown) => {
               console.error(

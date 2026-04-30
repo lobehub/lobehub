@@ -1,5 +1,7 @@
 {
   "action.connect.button": "اتصل بـ {{provider}}",
+  "action.connect.error": "فشل الاتصال، يرجى المحاولة مرة أخرى.",
+  "action.connect.popupBlocked": "تم حظر نافذة الاتصال المنبثقة. اسمح بالنوافذ المنبثقة في متصفحك للمتابعة.",
   "action.create.error": "فشل في إنشاء المهمة. يرجى المحاولة مرة أخرى.",
   "action.create.success": "تمت إضافة المهمة المجدولة. يمكنك العثور عليها في Lobe AI.",
   "action.createButton": "أضف كمهمة مجدولة",

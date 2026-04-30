@@ -173,7 +173,22 @@ export interface UserAgentOnboardingDraft {
   workStyle?: Partial<UserOnboardingDimensionWorkStyle>;
 }
 
-const TrimmedNonEmptyStringSchema = z.string().trim().min(1);
+// LLMs often emit "" for tool-call fields they have no value for. Treat empty/
+// whitespace strings as missing so partial saveUserQuestion calls pass validation;
+// OnboardingService.saveUserQuestion already ignores empty strings downstream.
+const OptionalTrimmedNonEmptyStringSchema = z
+  .string()
+  .trim()
+  .transform((value) => (value.length > 0 ? value : undefined))
+  .optional();
+
+const OptionalTrimmedNonEmptyStringArraySchema = z
+  .array(z.string())
+  .transform((items) => {
+    const filtered = items.map((item) => item.trim()).filter((item) => item.length > 0);
+    return filtered.length > 0 ? filtered : undefined;
+  })
+  .optional();
 
 export const SaveUserQuestionFieldSchema = z.enum(SAVE_USER_QUESTION_FIELDS);
 export const AgentOnboardingStructuredFieldSchema = SaveUserQuestionFieldSchema;
@@ -181,11 +196,11 @@ export const UserAgentOnboardingNodeSchema = z.enum(AGENT_ONBOARDING_NODES);
 
 export const SaveUserQuestionInputSchema = z
   .object({
-    agentEmoji: TrimmedNonEmptyStringSchema.optional(),
-    agentName: TrimmedNonEmptyStringSchema.optional(),
-    fullName: TrimmedNonEmptyStringSchema.optional(),
-    interests: z.array(TrimmedNonEmptyStringSchema).optional(),
-    responseLanguage: TrimmedNonEmptyStringSchema.optional(),
+    agentEmoji: OptionalTrimmedNonEmptyStringSchema,
+    agentName: OptionalTrimmedNonEmptyStringSchema,
+    fullName: OptionalTrimmedNonEmptyStringSchema,
+    interests: OptionalTrimmedNonEmptyStringArraySchema,
+    responseLanguage: OptionalTrimmedNonEmptyStringSchema,
   })
   .strict();
 
