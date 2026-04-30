@@ -200,7 +200,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install deps
-        run: pnpm install
+        run: pnpm install --config.enable-global-virtual-store=false
 
       - name: Lint
         run: bun run lint

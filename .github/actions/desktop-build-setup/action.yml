@@ -16,7 +16,7 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: pnpm install --node-linker=hoisted
+      run: pnpm install --node-linker=hoisted --config.enable-global-virtual-store=false
 
     - name: Install deps on Desktop
       shell: bash
