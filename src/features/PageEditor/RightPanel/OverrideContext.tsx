@@ -60,5 +60,5 @@ export const usePageAgentPanelControl = (): PageAgentPanelControl => {
     };
   }
 
-  return { expand: globalExpand, toggle: globalToggle };
+  return { expand: !!globalExpand, toggle: globalToggle };
 };
