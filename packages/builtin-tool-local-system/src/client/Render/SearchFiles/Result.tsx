@@ -38,7 +38,7 @@ const SearchFiles = memo<SearchFilesProps>(({ searchResults = [], messageId }) =
   }
 
   return (
-    <Flexbox gap={2} style={{ maxHeight: 140, overflow: 'scroll' }}>
+    <Flexbox gap={2} style={{ maxHeight: 220, overflow: 'auto' }}>
       {searchResults.map((item) => (
         <FileItem key={item.path} {...item} />
       ))}

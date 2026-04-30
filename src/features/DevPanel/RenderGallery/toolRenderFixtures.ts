@@ -870,20 +870,35 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     },
   },
   [keyOf('lobe-local-system', 'searchLocalFiles')]: {
-    args: { directory: '/workspace/src', keyword: 'devtools' },
+    args: { keywords: 'Financial Statement LobeHub' },
     pluginState: {
       results: [
         {
           isDirectory: false,
-          name: 'index.tsx',
-          path: '/workspace/src/routes/(main)/devtools/index.tsx',
+          name: 'LobeHub 2026-03-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
+          path: '/Users/arvinxx/Downloads/数据分析/LobeHub 2026-03-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
+          size: 9_400,
         },
         {
           isDirectory: false,
-          name: 'desktopRouter.config.tsx',
-          path: '/workspace/src/spa/router/desktopRouter.config.tsx',
+          name: 'LobeHub_PTE_LTD_Unaudited_Financial_Statements_Q1_2026.xlsx',
+          path: '/Users/arvinxx/Downloads/数据分析/LobeHub_PTE_LTD_Unaudited_Financial_Statements_Q1_2026.xlsx',
+          size: 35_600,
+        },
+        {
+          isDirectory: false,
+          name: 'LobeHub 2025-12-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
+          path: '/Users/arvinxx/Downloads/数据分析/LobeHub 2025-12-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
+          size: 8_300,
+        },
+        {
+          isDirectory: false,
+          name: 'LobeHub 2025-12-31 - Financial Statement - LobeHub.xlsx',
+          path: '/Users/arvinxx/Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files/a35005353_2d89/msg/file/2026-04/LobeHub 2025-12-31 - Financial Statement - LobeHub.xlsx',
+          size: 16_200,
         },
       ],
+      totalCount: 4,
     },
   },
   [keyOf('lobe-local-system', 'writeLocalFile')]: {
