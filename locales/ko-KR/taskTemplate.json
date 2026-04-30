@@ -1,5 +1,7 @@
 {
   "action.connect.button": "{{provider}} 연결",
+  "action.connect.error": "연결에 실패했습니다. 다시 시도해 주세요.",
+  "action.connect.popupBlocked": "연결 팝업이 차단되었습니다. 계속하려면 브라우저에서 팝업을 허용하세요.",
   "action.create.error": "작업 생성에 실패했습니다. 다시 시도해 주세요.",
   "action.create.success": "예약된 작업이 추가되었습니다. Lobe AI에서 확인하세요.",
   "action.createButton": "예약된 작업으로 추가",
