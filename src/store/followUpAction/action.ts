@@ -25,7 +25,7 @@ export class FollowUpActionImpl {
     this.#get = get;
   }
 
-  fetchFor = async (messageId: string, hint?: FollowUpHint): Promise<void> => {
+  fetchFor = async (messageId: string, agentId: string, hint?: FollowUpHint): Promise<void> => {
     const cur = this.#get();
     if (cur.messageId === messageId && cur.status !== 'idle') return;
 
@@ -40,7 +40,10 @@ export class FollowUpActionImpl {
       'fetchFor:start',
     );
 
-    const result = await followUpActionService.extract({ messageId, hint }, controller.signal);
+    const result = await followUpActionService.extract(
+      { agentId, hint, messageId },
+      controller.signal,
+    );
     clearTimeout(timeoutId);
 
     if (this.#get().messageId !== messageId) return;

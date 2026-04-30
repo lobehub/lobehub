@@ -10,7 +10,11 @@ interface UseOnboardingFollowUpParams {
 
 interface OnboardingFollowUpHandlers {
   onBeforeSendMessage: () => Promise<void>;
-  triggerExtract: (assistantMessageId: string, phase: OnboardingPhase | undefined) => Promise<void>;
+  triggerExtract: (
+    assistantMessageId: string,
+    agentId: string,
+    phase: OnboardingPhase | undefined,
+  ) => Promise<void>;
 }
 
 export const useOnboardingFollowUp = ({
@@ -18,7 +22,7 @@ export const useOnboardingFollowUp = ({
   isGreeting,
 }: UseOnboardingFollowUpParams): OnboardingFollowUpHandlers => {
   const triggerExtract = useCallback(
-    async (assistantMessageId: string, phase: OnboardingPhase | undefined) => {
+    async (assistantMessageId: string, agentId: string, phase: OnboardingPhase | undefined) => {
       if (!enabled) return;
       if (!phase) return;
       if (phase === 'summary') return;
@@ -26,7 +30,7 @@ export const useOnboardingFollowUp = ({
 
       await useFollowUpActionStore
         .getState()
-        .fetchFor(assistantMessageId, { kind: 'onboarding', phase });
+        .fetchFor(assistantMessageId, agentId, { kind: 'onboarding', phase });
     },
     [enabled, isGreeting],
   );

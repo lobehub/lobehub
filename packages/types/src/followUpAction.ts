@@ -12,6 +12,7 @@ export interface FollowUpChip {
 export type FollowUpHint = { kind: 'onboarding'; phase: OnboardingPhase } | { kind: 'chat' };
 
 export interface FollowUpExtractInput {
+  agentId: string;
   hint?: FollowUpHint;
   messageId: string;
 }
@@ -32,6 +33,7 @@ export const FollowUpHintSchema = z.union([
 ]);
 
 export const FollowUpExtractInputSchema = z.object({
+  agentId: z.string().min(1),
   messageId: z.string().min(1),
   hint: FollowUpHintSchema.optional(),
 });

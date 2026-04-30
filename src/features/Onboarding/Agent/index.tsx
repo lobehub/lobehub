@@ -194,8 +194,20 @@ const AgentOnboardingPage = memo(() => {
 
                     const pendingId = pendingAssistantIdRef.current;
                     pendingAssistantIdRef.current = null;
+
+                    console.info('Onboarding message sent. Syncing context...', {
+                      prevPhase,
+                      nextPhase,
+                      prevFinishedAt,
+                      nextFinishedAt,
+                      pendingId,
+                    });
                     if (pendingId) {
-                      await onboardingFollowUp.triggerExtract(pendingId, nextPhase);
+                      await onboardingFollowUp.triggerExtract(
+                        pendingId,
+                        onboardingAgentId,
+                        nextPhase,
+                      );
                     }
                   },
                   onBeforeSendMessage: onboardingFollowUp.onBeforeSendMessage,

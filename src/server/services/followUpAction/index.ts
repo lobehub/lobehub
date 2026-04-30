@@ -2,6 +2,7 @@ import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -17,14 +18,20 @@ export class FollowUpActionService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
   private readonly messageModel: MessageModel;
+  private readonly agentModel: AgentModel;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, userId);
+    this.agentModel = new AgentModel(db, userId);
   }
 
-  async extract({ messageId, hint }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
+  async extract({
+    messageId,
+    agentId,
+    hint,
+  }: FollowUpExtractInput): Promise<FollowUpExtractResult> {
     const message = await this.messageModel.findById(messageId);
     if (!message || message.role !== 'assistant') return EMPTY_RESULT(messageId);
 
@@ -33,7 +40,7 @@ export class FollowUpActionService {
 
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
 
-    const { model, provider } = this.getModelConfig();
+    const { model, provider } = await this.getModelConfig(agentId);
 
     let raw: unknown;
     try {
@@ -70,16 +77,16 @@ export class FollowUpActionService {
     return { messageId, chips };
   }
 
-  private getModelConfig(): { model: string; provider: string } {
-    const overrideModel = process.env.FOLLOW_UP_ACTION_MODEL;
-    const overrideProvider = process.env.FOLLOW_UP_ACTION_PROVIDER;
-    if (overrideModel && overrideProvider) {
-      return { model: overrideModel, provider: overrideProvider };
-    }
+  /**
+   * Resolve model + provider from the caller-supplied agent. Falls back to the
+   * systemAgent topic config when the agent record has no explicit model/provider.
+   */
+  private async getModelConfig(agentId: string): Promise<{ model: string; provider: string }> {
     const fallback = DEFAULT_SYSTEM_AGENT_CONFIG.topic;
-    return {
-      model: overrideModel ?? fallback.model,
-      provider: overrideProvider ?? fallback.provider,
-    };
+    const agent = await this.agentModel.getAgentConfigById(agentId);
+    if (agent?.model && agent?.provider) {
+      return { model: agent.model, provider: agent.provider };
+    }
+    return { model: fallback.model, provider: fallback.provider };
   }
 }
