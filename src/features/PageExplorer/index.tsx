@@ -6,6 +6,8 @@ import { PageEditor } from '@/features/PageEditor';
 import { pageSelectors, usePageStore } from '@/store/page';
 
 interface PageExplorerProps {
+  /** Forwarded to PageEditor. */
+  fullWidthHeader?: boolean;
   /**
    * Custom header slot. `null` hides the editor header entirely; any node
    * replaces the built-in `<Header />`. Forwarded to PageEditor.
@@ -19,7 +21,7 @@ interface PageExplorerProps {
  *
  * Work together with a sidebar @/features/Pages/PageLayout/Body
  */
-const PageExplorer = memo<PageExplorerProps>(({ pageId, header }) => {
+const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader }) => {
   const updatePageOptimistically = usePageStore((s) => s.updatePageOptimistically);
 
   // Get document title and emoji from PageStore
@@ -45,6 +47,7 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId, header }) => {
   return (
     <PageEditor
       emoji={emoji}
+      fullWidthHeader={fullWidthHeader}
       header={header}
       key={pageId}
       pageId={pageId}

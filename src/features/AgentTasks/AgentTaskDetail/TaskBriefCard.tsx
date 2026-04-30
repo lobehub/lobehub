@@ -14,6 +14,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
+import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
@@ -101,6 +102,7 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
         {showFull && (
           <>
             <BriefCardSummary summary={brief.summary} />
+            <BriefCardArtifacts artifacts={brief.artifacts} />
             <BriefCardActions
               actions={brief.actions}
               briefId={brief.id}

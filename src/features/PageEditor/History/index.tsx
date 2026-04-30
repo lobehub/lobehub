@@ -23,9 +23,8 @@ import type {
 import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { selectors, usePageEditorStore } from '../store';
 import { openDocumentCompareModal } from './CompareModal';
 import { formatHistoryAbsoluteTime } from './formatHistoryDate';
@@ -88,10 +87,7 @@ const HistoryPanel = memo(() => {
   const editor = usePageEditorStore(selectors.editor);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
 
-  const [showPageAgentPanel, togglePageAgentPanel] = useGlobalStore((s) => [
-    systemStatusSelectors.showPageAgentPanel(s),
-    s.togglePageAgentPanel,
-  ]);
+  const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
   const markDirty = useDocumentStore((s) => s.markDirty);
   const performSave = useDocumentStore((s) => s.performSave);

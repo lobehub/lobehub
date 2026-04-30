@@ -4,9 +4,11 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import DocumentModal from '@/features/DocumentModal';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
+import { useDocumentStore } from '@/store/document';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -24,6 +26,8 @@ const DailyBrief = memo(() => {
 
   const briefs = useBriefStore(briefListSelectors.briefs);
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
+  const previewDocumentId = useDocumentStore((s) => s.previewDocumentId);
+  const closeDocumentPreview = useDocumentStore((s) => s.closeDocumentPreview);
 
   if (!enableAgentTask || !isLogin) return null;
 
@@ -56,6 +60,11 @@ const DailyBrief = memo(() => {
           <BriefCard brief={brief} key={brief.id} />
         ))}
       </Flexbox>
+      <DocumentModal
+        documentId={previewDocumentId}
+        open={!!previewDocumentId}
+        onClose={closeDocumentPreview}
+      />
     </GroupBlock>
   );
 });

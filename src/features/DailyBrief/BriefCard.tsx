@@ -11,6 +11,7 @@ import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import Time from '@/routes/(main)/home/features/components/Time';
 
 import BriefCardActions from './BriefCardActions';
+import BriefCardArtifacts from './BriefCardArtifacts';
 import BriefCardSummary from './BriefCardSummary';
 import BriefIcon from './BriefIcon';
 import { styles } from './style';
@@ -109,6 +110,7 @@ const BriefCard = memo<BriefCardProps>(
           <>
             <Divider dashed style={{ marginBlock: 0 }} />
             <BriefCardSummary summary={brief.summary} />
+            <BriefCardArtifacts artifacts={brief.artifacts} />
             <BriefCardActions
               actions={brief.actions}
               briefId={brief.id}
