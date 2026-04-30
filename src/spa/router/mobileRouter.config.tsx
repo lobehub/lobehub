@@ -342,11 +342,6 @@ export const mobileRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     path: '/onboarding/classic',
   },
-  {
-    element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > Messenger Verify'),
-    errorElement: <ErrorBoundary />,
-    path: '/verify-im',
-  },
   ...BusinessMobileRoutesWithoutMainLayout,
 
   // Share topic route (outside main layout)

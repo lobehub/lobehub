@@ -45,6 +45,7 @@ export default {
   'verify.error.expired': 'This link has expired. Please return to the bot and send /start again.',
   'verify.error.generic': 'Something went wrong. Please try again.',
   'verify.error.missingToken': 'Invalid link. Open this page from the bot.',
+  'verify.error.title': 'Unable to confirm link',
   'verify.signInCta': 'Sign in to continue',
   'verify.signInRequired': 'Please sign in to LobeHub to confirm the link.',
   'verify.success.description':

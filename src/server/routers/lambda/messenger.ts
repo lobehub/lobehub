@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -109,6 +109,22 @@ export const messengerRouter = router({
 
       return { data: link, success: true };
     }),
+
+  /**
+   * Lightweight agent list used by the verify-im UI's "pick an initial agent"
+   * dropdown. Mirrors MessengerRouter.fetchUserAgents (asc by accessedAt) so the
+   * web picker matches the bot's `/agents` ordering.
+   */
+  listAgentsForBinding: messengerProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.serverDB
+      .select({ id: agents.id, title: agents.title })
+      .from(agents)
+      .where(eq(agents.userId, ctx.userId))
+      .orderBy(asc(agents.accessedAt));
+    return rows
+      .filter((row) => row.id)
+      .map((row) => ({ id: row.id, title: row.title ?? `Agent ${row.id.slice(0, 8)}` }));
+  }),
 
   /** Get the current user's link for one platform (or null). */
   getMyLink: messengerProcedure

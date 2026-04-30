@@ -10,4 +10,5 @@ export const nextjsOnlyRoutes = [
   '/market-auth-callback',
   '/discover',
   '/welcome',
+  '/verify-im',
 ];

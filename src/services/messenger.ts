@@ -11,6 +11,10 @@ class MessengerService {
     return lambdaClient.messenger.peekLinkToken.query({ randomId });
   };
 
+  listAgentsForBinding = async () => {
+    return lambdaClient.messenger.listAgentsForBinding.query();
+  };
+
   confirmLink = async (params: { initialAgentId: string; randomId: string }) => {
     return lambdaClient.messenger.confirmLink.mutate(params);
   };
