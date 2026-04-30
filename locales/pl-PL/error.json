@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Nieprawidłowa konfiguracja Ollama. Sprawdź ustawienia i spróbuj ponownie.",
   "response.InvalidProviderAPIKey": "Nieprawidłowy lub pusty klucz API dla {{provider}}. Sprawdź i spróbuj ponownie.",
   "response.InvalidVertexCredentials": "Uwierzytelnienie Vertex nie powiodło się. Sprawdź dane logowania i spróbuj ponownie.",
+  "response.LobeHubModelDeprecated": "Model \"{{model}}\" nie jest już dostępny. Proszę wybrać aktualny model z selektora modeli.",
   "response.LocationNotSupportError": "Przepraszamy, Twoja lokalizacja nie obsługuje tej usługi. Może to wynikać z ograniczeń regionalnych. Sprawdź dostępność usługi lub spróbuj z innej lokalizacji.",
   "response.ModelNotFound": "Przepraszamy, nie znaleziono żądanego modelu. Może nie istnieć lub nie masz do niego dostępu. Spróbuj ponownie z innym kluczem API lub zmień uprawnienia.",
   "response.NoOpenAIAPIKey": "Brak klucza OpenAI API. Dodaj własny klucz, aby kontynuować.",

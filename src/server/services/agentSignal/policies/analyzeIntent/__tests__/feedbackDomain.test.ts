@@ -175,6 +175,62 @@ describe('feedbackDomainJudge', () => {
     expect(result).toBeUndefined();
   });
 
+  it('dispatches a none domain signal when a non-neutral resolver returns none', async () => {
+    const handler = createFeedbackDomainJudgeSignalHandler({
+      resolveDomains: async () => [
+        {
+          confidence: 0.81,
+          evidence: [],
+          reason: 'non-actionable feedback',
+          target: 'none',
+        },
+      ],
+    });
+
+    const result = await handler.handle(
+      {
+        chain: {
+          chainId: 'chain_none',
+          parentNodeId: 'source_none',
+          rootSourceId: 'source_none',
+        },
+        payload: {
+          confidence: 0.89,
+          evidence: [{ cue: 'commentary', excerpt: 'That was interesting.' }],
+          message: 'That was interesting.',
+          messageId: 'msg_none',
+          reason: 'commentary-only',
+          result: 'satisfied',
+          sourceHints: { intents: ['prompt'] },
+        },
+        signalId: 'sig_none',
+        signalType: 'signal.feedback.satisfaction',
+        source: { sourceId: 'source_none', sourceType: 'agent.user.message' },
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              conflictPolicy: {
+                forbiddenWith: ['memory', 'prompt', 'skill'],
+                mode: 'exclusive',
+                priority: 0,
+              },
+              evidence: [{ cue: 'commentary', excerpt: 'That was interesting.' }],
+              target: 'none',
+            }),
+            signalType: 'signal.feedback.domain.none',
+          }),
+        ],
+      }),
+    );
+  });
+
   it('passes structured satisfaction output to the resolver without serialized context', async () => {
     let resolverInput:
       | Parameters<

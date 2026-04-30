@@ -120,6 +120,7 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
           ...options.policyOptions?.feedbackSatisfactionJudge,
           userId: context.userId,
         },
+        classifierDiagnostics: options.policyOptions?.classifierDiagnostics,
         procedure: procedurePolicyOptions,
         userMemory: {
           db: context.db,

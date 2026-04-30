@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Geçersiz Ollama yapılandırması. Lütfen ayarları kontrol edip tekrar deneyin.",
   "response.InvalidProviderAPIKey": "{{provider}} API Anahtarı hatalı veya boş. Lütfen kontrol edip tekrar deneyin.",
   "response.InvalidVertexCredentials": "Vertex kimlik doğrulaması başarısız oldu. Lütfen bilgilerinizi kontrol edip tekrar deneyin.",
+  "response.LobeHubModelDeprecated": "\"{{model}}\" modeli artık mevcut değil. Lütfen model seçicisinden güncel bir model seçin.",
   "response.LocationNotSupportError": "Üzgünüz, bulunduğunuz konum bu model hizmetini desteklemiyor. Bu, bölgesel kısıtlamalardan veya hizmetin mevcut olmamasından kaynaklanabilir. Lütfen konumunuzu kontrol edin veya farklı bir konumdan deneyin.",
   "response.ModelNotFound": "Üzgünüz, istenen model bulunamadı. Model mevcut olmayabilir veya gerekli erişim izinlerine sahip olmayabilirsiniz. Lütfen API Anahtarınızı değiştirip tekrar deneyin.",
   "response.NoOpenAIAPIKey": "OpenAI API Anahtarı boş. Lütfen özel bir OpenAI API Anahtarı ekleyin.",

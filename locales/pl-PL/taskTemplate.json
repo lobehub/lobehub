@@ -1,5 +1,7 @@
 {
   "action.connect.button": "Połącz z {{provider}}",
+  "action.connect.error": "Połączenie nie powiodło się, spróbuj ponownie.",
+  "action.connect.popupBlocked": "Wyskakujące okienko połączenia zostało zablokowane. Zezwól na wyskakujące okienka w przeglądarce, aby kontynuować.",
   "action.create.error": "Nie udało się utworzyć zadania. Spróbuj ponownie.",
   "action.create.success": "Dodano zaplanowane zadanie. Znajdziesz je w Lobe AI.",
   "action.createButton": "Dodaj jako zaplanowane zadanie",
