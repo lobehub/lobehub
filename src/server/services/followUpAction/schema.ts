@@ -17,14 +17,14 @@ export const SUGGESTION_RESPONSE_JSON_SCHEMA = {
   strict: true,
   schema: {
     additionalProperties: false,
-    type: 'object' as const,
+    type: 'object',
     required: ['chips'],
     properties: {
       chips: {
-        type: 'array' as const,
+        type: 'array',
         maxItems: 8,
         items: {
-          type: 'object' as const,
+          type: 'object',
           additionalProperties: false,
           required: ['label', 'message'],
           properties: {
@@ -35,4 +35,4 @@ export const SUGGESTION_RESPONSE_JSON_SCHEMA = {
       },
     },
   },
-};
+} as const;
