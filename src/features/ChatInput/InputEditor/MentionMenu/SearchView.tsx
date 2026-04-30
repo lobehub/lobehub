@@ -12,6 +12,7 @@ interface SearchViewProps {
 
 const SEARCH_RESULT_CATEGORY_LABEL: Record<string, string> = {
   agent: 'Agent',
+  localFile: 'File',
   member: 'Member',
   skill: 'Skill',
   tool: 'Tool',
@@ -21,6 +22,11 @@ const SEARCH_RESULT_CATEGORY_LABEL: Record<string, string> = {
 const getSearchResultCategoryLabel = (item: ISlashMenuOption): string | undefined => {
   const metadata = item.metadata as Record<string, unknown> | undefined;
   const type = metadata?.type;
+
+  if (type === 'localFile') {
+    if (typeof metadata?.relativePath === 'string') return metadata.relativePath;
+    if (typeof metadata?.path === 'string') return metadata.path;
+  }
 
   return typeof type === 'string' ? SEARCH_RESULT_CATEGORY_LABEL[type] : undefined;
 };
@@ -34,6 +40,7 @@ const SearchView = memo<SearchViewProps>(({ options, activeKey, onSelectItem }) 
     <div className={styles.scrollArea}>
       {options.map((item) => {
         const categoryLabel = getSearchResultCategoryLabel(item);
+        const isLocalFile = item.metadata?.type === 'localFile';
 
         return (
           <MenuItem
@@ -41,7 +48,7 @@ const SearchView = memo<SearchViewProps>(({ options, activeKey, onSelectItem }) 
             item={item}
             key={item.key}
             extra={
-              categoryLabel ? (
+              categoryLabel && !isLocalFile ? (
                 <span className={styles.categoryExtra}>{categoryLabel}</span>
               ) : undefined
             }

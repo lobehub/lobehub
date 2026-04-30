@@ -32,6 +32,7 @@ export interface ToolAction {
   submitToolInteraction: (
     toolMessageId: string,
     response: Record<string, unknown>,
+    options?: { createUserMessage?: boolean; toolResultContent?: string },
   ) => Promise<void>;
 }
 
@@ -127,9 +128,13 @@ export const toolSlice: StateCreator<
     await chatStore.skipToolInteraction(toolMessageId, reason, context);
   },
 
-  submitToolInteraction: async (toolMessageId: string, response: Record<string, unknown>) => {
+  submitToolInteraction: async (
+    toolMessageId: string,
+    response: Record<string, unknown>,
+    options?: { createUserMessage?: boolean; toolResultContent?: string },
+  ) => {
     const { context } = get();
     const chatStore = useChatStore.getState();
-    await chatStore.submitToolInteraction(toolMessageId, response, context);
+    await chatStore.submitToolInteraction(toolMessageId, response, context, options);
   },
 });

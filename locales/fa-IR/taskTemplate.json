@@ -1,5 +1,7 @@
 {
   "action.connect.button": "اتصال به {{provider}}",
+  "action.connect.error": "اتصال ناموفق بود، لطفاً دوباره تلاش کنید.",
+  "action.connect.popupBlocked": "پنجره پاپ‌آپ اتصال مسدود شده است. برای ادامه، پاپ‌آپ‌ها را در مرورگر خود مجاز کنید.",
   "action.create.error": "ایجاد وظیفه ناموفق بود. لطفاً دوباره تلاش کنید.",
   "action.create.success": "وظیفه زمان‌بندی شده اضافه شد. آن را در Lobe AI پیدا کنید.",
   "action.createButton": "افزودن به عنوان وظیفه زمان‌بندی شده",

@@ -594,14 +594,26 @@ export const topicRouter = router({
           onboardingSession: z
             .object({
               agentIdentityCompletedAt: z.string().optional(),
+              agentMarketplacePick: z
+                .object({
+                  categoryHints: z.array(z.string()),
+                  installedAgentIds: z.array(z.string()).optional(),
+                  requestId: z.string(),
+                  resolvedAt: z.string(),
+                  selectedTemplateIds: z.array(z.string()).optional(),
+                  skipReason: z.string().optional(),
+                  skippedAgentIds: z.array(z.string()).optional(),
+                  status: z.enum(['cancelled', 'skipped', 'submitted']),
+                })
+                .optional(),
               discoveryCompletedAt: z.string().optional(),
               finalAgentNames: z.array(z.string()).optional(),
               finishedAt: z.string().optional(),
-              lastActiveAt: z.string(),
-              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']),
-              startedAt: z.string(),
+              lastActiveAt: z.string().optional(),
+              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
+              startedAt: z.string().optional(),
               userIdentityCompletedAt: z.string().optional(),
-              version: z.number(),
+              version: z.number().optional(),
             })
             .optional(),
           provider: z.string().optional(),

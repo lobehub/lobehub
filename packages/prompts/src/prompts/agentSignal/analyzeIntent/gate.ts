@@ -26,11 +26,12 @@ or:
 
 Ignore messages that are:
 - acknowledgement only
-- pure praise or positive reinforcement
+- pure praise or positive reinforcement without a reusable workflow, skill, checklist, template, playbook, or future-facing retention cue
 - task-local one-off instructions
 - empty or too vague to analyze
 
 Proceed only when the message may contain a durable correction, preference, prompt/document rule, or other reusable learning signal.
+Proceed for positive feedback that says a workflow, skill, checklist, template, playbook, or process should be kept, reused, or referenced next time, such as "这个 review 流程挺好，下次也可以参考。".
 
 Return only the JSON object.`;
 

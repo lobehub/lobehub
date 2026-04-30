@@ -314,7 +314,7 @@ export const fileRouter = router({
         resultItems.push({
           ...item,
           editorData: null,
-          url: getFileProxyUrl(item.id),
+          url: getFileProxyUrl(item.fileId || item.id),
           ...status,
         } as FileListItem);
       } else {
@@ -475,7 +475,7 @@ export const fileRouter = router({
           embeddingStatus: embeddingTask?.status as AsyncTaskStatus,
           finishEmbedding: embeddingTask?.status === AsyncTaskStatus.Success,
           sourceType: 'file' as const,
-          url: getFileProxyUrl(item.id),
+          url: getFileProxyUrl(item.fileId || item.id),
         } as FileListItem);
       }
 

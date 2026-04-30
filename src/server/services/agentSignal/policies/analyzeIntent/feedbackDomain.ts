@@ -1,14 +1,11 @@
-import { type BaseSignal, type RuntimeProcessorResult } from '@lobechat/agent-signal';
+import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import { classifyDomain, transitionToSignals } from '../../processors';
 import { defineSignalHandler } from '../../runtime/middleware';
-import {
-  AGENT_SIGNAL_POLICY_SIGNAL_TYPES,
-  type AgentSignalFeedbackDomainConflictPolicy,
-  type AgentSignalFeedbackEvidence,
-  type SignalFeedbackSatisfaction,
-} from '../types';
+import type { ClassifierDiagnosticsService, DomainClassifierService } from '../../services';
+import { AGENT_SIGNAL_POLICY_SIGNAL_TYPES, type SignalFeedbackSatisfaction } from '../types';
 import {
   type FeedbackDomainJudgeAgentModelConfig,
   type FeedbackDomainJudgeAgentResult,
@@ -30,6 +27,8 @@ interface FeedbackDomainJudgeResolverInput {
  * Dependencies for the feedback-domain judge signal handler.
  */
 export interface CreateFeedbackDomainJudgeSignalHandlerOptions {
+  /** Optional diagnostics sink for malformed structured classifier output. */
+  classifierDiagnostics?: ClassifierDiagnosticsService;
   resolveDomains?: (
     input: FeedbackDomainJudgeResolverInput,
   ) => Promise<FeedbackDomainJudgeAgentResult['targets']>;
@@ -44,79 +43,6 @@ export interface CreateFeedbackDomainJudgePolicyOptions {
     userId: string;
   };
 }
-
-const toConflictPolicy = (
-  target: FeedbackDomainJudgeAgentResult['targets'][number]['target'],
-): AgentSignalFeedbackDomainConflictPolicy => {
-  switch (target) {
-    case 'memory': {
-      return { forbiddenWith: ['none'], mode: 'fanout', priority: 100 };
-    }
-    case 'prompt': {
-      return { forbiddenWith: ['memory', 'none', 'skill'], mode: 'exclusive', priority: 90 };
-    }
-    case 'skill': {
-      return { forbiddenWith: ['none'], mode: 'fanout', priority: 80 };
-    }
-    default: {
-      return {
-        forbiddenWith: ['memory', 'prompt', 'skill'],
-        mode: 'exclusive',
-        priority: 0,
-      };
-    }
-  }
-};
-
-const toSignalType = (target: FeedbackDomainJudgeAgentResult['targets'][number]['target']) => {
-  switch (target) {
-    case 'memory': {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainMemory;
-    }
-    case 'skill': {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainSkill;
-    }
-    case 'prompt': {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainPrompt;
-    }
-    default: {
-      return AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainNone;
-    }
-  }
-};
-
-const buildDomainSignals = (
-  signal: SignalFeedbackSatisfaction,
-  targets: FeedbackDomainJudgeAgentResult['targets'],
-): BaseSignal[] => {
-  return targets.map((target) => ({
-    chain: {
-      chainId: signal.chain.chainId,
-      parentNodeId: signal.signalId,
-      rootSourceId: signal.chain.rootSourceId,
-    },
-    payload: {
-      agentId: signal.payload.agentId,
-      confidence: target.confidence,
-      conflictPolicy: toConflictPolicy(target.target),
-      evidence:
-        target.evidence.length > 0
-          ? (target.evidence as AgentSignalFeedbackEvidence[])
-          : signal.payload.evidence,
-      message: signal.payload.message,
-      messageId: signal.payload.messageId,
-      reason: target.reason,
-      satisfactionResult: signal.payload.result,
-      sourceHints: signal.payload.sourceHints,
-      target: target.target,
-      topicId: signal.payload.topicId,
-    },
-    signalId: `${signal.signalId}:domain:${target.target}`,
-    signalType: toSignalType(target.target),
-    source: signal.source,
-    timestamp: Date.now(),
-  }));
-};
 
 const createDomainResolver = (
   options: CreateFeedbackDomainJudgePolicyOptions = {},
@@ -169,30 +95,50 @@ export const createFeedbackDomainJudgeSignalHandler = (
   return defineSignalHandler(
     AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction,
     'signal.feedback-domain-judge',
-    async (signal): Promise<RuntimeProcessorResult | void> => {
-      if (!resolveDomains || signal.payload.result === 'neutral') {
+    async (signal, ctx): Promise<RuntimeProcessorResult | void> => {
+      const classifier: DomainClassifierService | undefined = resolveDomains
+        ? {
+            async classify(input) {
+              const targets = await resolveDomains({
+                chain: input.chain,
+                feedback: {
+                  confidence: input.payload.confidence,
+                  evidence: input.payload.evidence,
+                  message: input.payload.message,
+                  messageId: input.payload.messageId,
+                  reason: input.payload.reason,
+                  result: input.payload.result,
+                },
+                source: input.source,
+                sourceHints: input.payload.sourceHints,
+                topicId: input.payload.topicId,
+              });
+
+              return targets;
+            },
+          }
+        : undefined;
+      const result = await classifyDomain(signal, ctx, {
+        diagnostics: options.classifierDiagnostics,
+        domainClassifier: classifier,
+      });
+
+      if (result.type === 'continue') {
+        return transitionToSignals(result.value, {
+          maxSignals: 4,
+          reason: result.reason,
+        }).result;
+      }
+
+      if (result.reason === 'neutral feedback satisfaction') {
         return;
       }
 
-      const domainTargets = await resolveDomains({
-        chain: signal.chain,
-        feedback: {
-          confidence: signal.payload.confidence,
-          evidence: signal.payload.evidence,
-          message: signal.payload.message,
-          messageId: signal.payload.messageId,
-          reason: signal.payload.reason,
-          result: signal.payload.result,
-        },
-        source: signal.source,
-        sourceHints: signal.payload.sourceHints,
-        topicId: signal.payload.topicId,
-      });
+      if (result.reason === 'domain classifier unavailable') {
+        return;
+      }
 
-      return {
-        signals: buildDomainSignals(signal, domainTargets),
-        status: 'dispatch',
-      };
+      return result.result;
     },
   );
 };

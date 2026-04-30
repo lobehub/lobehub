@@ -21,6 +21,23 @@ export interface SingleAgentMentionDirectRoute {
   agent: RuntimeMentionedAgent;
 }
 
+export interface ParsedLocalFileReference {
+  isDirectory?: boolean;
+  name: string;
+  path: string;
+}
+
+const appendLocalFileReference = (
+  references: ParsedLocalFileReference[],
+  seen: Set<string>,
+  reference: ParsedLocalFileReference,
+) => {
+  if (!reference.path || seen.has(reference.path)) return;
+
+  seen.add(reference.path);
+  references.push(reference);
+};
+
 /**
  * Walk the Lexical JSON tree to find all action-tag nodes.
  * Returns the extracted action tags in document order.
@@ -110,6 +127,43 @@ export const parseMentionedAgentsFromEditorData = (
   });
 
   return agents;
+};
+
+export const parseLocalFileReferencesFromEditorData = (
+  editorData: Record<string, any> | undefined,
+): ParsedLocalFileReference[] => {
+  if (!editorData) return [];
+
+  const references: ParsedLocalFileReference[] = [];
+  const seen = new Set<string>();
+
+  walkMentionNode(editorData.root, (label, metadata) => {
+    if (metadata?.type !== 'localFile') return;
+
+    const path = metadata.path as string | undefined;
+    if (!path) return;
+
+    appendLocalFileReference(references, seen, {
+      isDirectory: metadata.isDirectory === true,
+      name: (metadata.name as string | undefined) || label || path.split('/').pop() || path,
+      path,
+    });
+  });
+
+  return references;
+};
+
+export const mergeLocalFileReferences = (
+  references: ParsedLocalFileReference[],
+): ParsedLocalFileReference[] => {
+  const merged: ParsedLocalFileReference[] = [];
+  const seen = new Set<string>();
+
+  for (const reference of references) {
+    appendLocalFileReference(merged, seen, reference);
+  }
+
+  return merged;
 };
 
 /**

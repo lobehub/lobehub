@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Ollama 配置不正確，請檢查 Ollama 配置後重試",
   "response.InvalidProviderAPIKey": "{{provider}} API 金鑰不正確或為空，請檢查 {{provider}} API 金鑰後重試",
   "response.InvalidVertexCredentials": "Vertex 認證未通過，請檢查認證憑證後重試",
+  "response.LobeHubModelDeprecated": "模型 \"{{model}}\" 已不再可用。請從模型選擇器中選擇一個當前的模型。",
   "response.LocationNotSupportError": "很抱歉，你的所在位置不支持此模型服務，可能是由於地區限制或服務未開通。請確認當前位置是否支持使用此服務，或嘗試使用其他位置信息。",
   "response.ModelNotFound": "很抱歉，無法請求到相應的模型，可能是模型不存在或沒有訪問權限導致，請更換 API Key 或調整訪問權限後重試",
   "response.NoOpenAIAPIKey": "OpenAI API 金鑰為空，請添加自訂 OpenAI API 金鑰",

@@ -1,5 +1,7 @@
 {
   "action.connect.button": "Kết nối {{provider}}",
+  "action.connect.error": "Kết nối thất bại, vui lòng thử lại.",
+  "action.connect.popupBlocked": "Cửa sổ bật lên kết nối bị chặn. Cho phép cửa sổ bật lên trong trình duyệt của bạn để tiếp tục.",
   "action.create.error": "Không thể tạo nhiệm vụ. Vui lòng thử lại.",
   "action.create.success": "Đã thêm nhiệm vụ đã lên lịch. Tìm nó trong Lobe AI.",
   "action.createButton": "Thêm làm nhiệm vụ đã lên lịch",

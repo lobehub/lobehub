@@ -775,6 +775,7 @@ export class StreamingExecutorActionImpl {
               editorData: merged.editorData,
               files: mergedFiles,
               message: mergedContent,
+              metadata: merged.metadata,
             })
             .catch((e: unknown) => {
               console.error(

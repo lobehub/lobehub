@@ -44,7 +44,12 @@ describe('BriefModel', () => {
       const brief = await model.create({
         actions: [{ label: 'Approve', type: 'approve' }],
         agentId: 'agent-1',
-        artifacts: ['doc-1', 'doc-2'],
+        artifacts: {
+          documents: [
+            { id: 'doc-1', kind: null, title: null },
+            { id: 'doc-2', kind: null, title: null },
+          ],
+        },
         priority: 'urgent',
         summary: 'Chapter too long, suggest splitting',
         taskId: null,
@@ -56,7 +61,12 @@ describe('BriefModel', () => {
       expect(brief.priority).toBe('urgent');
       expect(brief.agentId).toBe('agent-1');
       expect(brief.actions).toEqual([{ label: 'Approve', type: 'approve' }]);
-      expect(brief.artifacts).toEqual(['doc-1', 'doc-2']);
+      expect(brief.artifacts).toEqual({
+        documents: [
+          { id: 'doc-1', kind: null, title: null },
+          { id: 'doc-2', kind: null, title: null },
+        ],
+      });
     });
   });
 

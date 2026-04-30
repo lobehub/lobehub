@@ -1,11 +1,19 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
+import { useLocation } from 'react-router-dom';
 
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { usePinnedAgentState } from '@/hooks/usePinnedAgentState';
 import { useGlobalStore } from '@/store/global';
 
 import { useHotkeyById } from './useHotkeyById';
+
+/**
+ * Task routes render AgentTaskManager, whose panel status is intentionally
+ * independent from the generic right panel used by chat and page editor routes.
+ */
+export const isTaskPanelRoute = (pathname: string) =>
+  pathname === '/tasks' || pathname.startsWith('/tasks/') || pathname.startsWith('/task/');
 
 // Switch to chat tab (and focus on Lobe AI)
 export const useNavigateToChatHotkey = () => {
@@ -39,13 +47,30 @@ export const useToggleLeftPanelHotkey = () => {
 };
 
 export const useToggleRightPanelHotkey = () => {
+  const { pathname } = useLocation();
   const isZenMode = useGlobalStore((s) => s.status.zenMode);
-  const toggleConfig = useGlobalStore((s) => s.toggleRightPanel);
+  const [toggleRightPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
+    s.toggleRightPanel,
+    s.toggleTaskAgentPanel,
+  ]);
+  const isTaskRoute = isTaskPanelRoute(pathname);
 
-  return useHotkeyById(HotkeyEnum.ToggleRightPanel, () => toggleConfig(), {
-    enableOnContentEditable: true,
-    enabled: !isZenMode,
-  });
+  return useHotkeyById(
+    HotkeyEnum.ToggleRightPanel,
+    () => {
+      if (isTaskRoute) {
+        toggleTaskAgentPanel();
+        return;
+      }
+
+      toggleRightPanel();
+    },
+    {
+      enableOnContentEditable: true,
+      enabled: !isZenMode,
+    },
+    [isTaskRoute, toggleRightPanel, toggleTaskAgentPanel],
+  );
 };
 
 // CMDK

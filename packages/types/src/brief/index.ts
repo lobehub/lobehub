@@ -35,3 +35,17 @@ export const DEFAULT_BRIEF_ACTIONS: Record<string, BriefAction[]> = {
 
 /** Brief type — must match DEFAULT_BRIEF_ACTIONS keys and DB schema comment */
 export type BriefType = 'decision' | 'error' | 'insight' | 'result';
+
+/**
+ * A single artifact (currently only documents) referenced from a brief.
+ * Programmatically collected during topic completion, not produced by the LLM.
+ */
+export interface BriefArtifactDocument {
+  id: string;
+  kind: string | null;
+  title: string | null;
+}
+
+export interface BriefArtifacts {
+  documents?: BriefArtifactDocument[];
+}

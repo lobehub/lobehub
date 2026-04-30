@@ -212,6 +212,45 @@ describe('createRouterRuntime', () => {
       expect(result).toEqual(['model-1', 'model-2']);
       expect(mockModels).toHaveBeenCalled();
     });
+
+    it('should use the baseURL-matched runtime client for functional model discovery', async () => {
+      class OpenAIRuntime implements LobeRuntimeAI {
+        client = { provider: 'openai-compatible' };
+        models = vi.fn();
+      }
+
+      class AnthropicRuntime implements LobeRuntimeAI {
+        client = { provider: 'anthropic-compatible' };
+        models = vi.fn();
+      }
+
+      const models = vi.fn().mockResolvedValue([]);
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        models,
+        routers: [
+          {
+            apiType: 'openai',
+            baseURLPattern: /\/v1$/,
+            options: {},
+            runtime: OpenAIRuntime as any,
+          },
+          {
+            apiType: 'anthropic',
+            baseURLPattern: /\/anthropic$/,
+            options: {},
+            runtime: AnthropicRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime({ baseURL: 'https://api.example.com/v1' });
+      await runtime.models();
+
+      expect(models).toHaveBeenCalledWith({
+        client: { provider: 'openai-compatible' },
+      });
+    });
   });
 
   describe('embeddings method', () => {

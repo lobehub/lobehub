@@ -41,8 +41,20 @@ export interface OnboardingFeedbackEntry {
   submittedAt: string;
 }
 
+export interface OnboardingAgentMarketplacePickSnapshot {
+  categoryHints: string[];
+  installedAgentIds?: string[];
+  requestId: string;
+  resolvedAt: string;
+  selectedTemplateIds?: string[];
+  skippedAgentIds?: string[];
+  skipReason?: string;
+  status: 'cancelled' | 'skipped' | 'submitted';
+}
+
 export interface OnboardingSessionSnapshot {
   agentIdentityCompletedAt?: string;
+  agentMarketplacePick?: OnboardingAgentMarketplacePickSnapshot;
   discoveryCompletedAt?: string;
   finalAgentNames?: string[];
   finishedAt?: string;

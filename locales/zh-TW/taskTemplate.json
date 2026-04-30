@@ -1,5 +1,7 @@
 {
   "action.connect.button": "連接 {{provider}}",
+  "action.connect.error": "連線失敗，請再試一次。",
+  "action.connect.popupBlocked": "連線彈出視窗被阻擋。請在瀏覽器中允許彈出視窗以繼續。",
   "action.create.error": "建立任務失敗。請再試一次。",
   "action.create.success": "已新增排程任務，可在 Lobe AI 中查看。",
   "action.createButton": "新增為排程任務",

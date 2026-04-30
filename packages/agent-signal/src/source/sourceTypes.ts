@@ -14,6 +14,8 @@ export const AGENT_SIGNAL_SOURCE_TYPES = {
   clientRuntimeStart: 'client.runtime.start',
   runtimeAfterStep: 'runtime.after_step',
   runtimeBeforeStep: 'runtime.before_step',
+  toolOutcomeCompleted: 'tool.outcome.completed',
+  toolOutcomeFailed: 'tool.outcome.failed',
 } as const;
 
 type ValueOf<TValue> = TValue[keyof TValue];
@@ -43,7 +45,7 @@ export interface AgentSignalSourcePayloadMap {
   [AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage]: {
     agentId?: string;
     documentPayload?: Record<string, unknown>;
-    intents?: Array<'document' | 'memory' | 'persona' | 'prompt'>;
+    intents?: Array<'document' | 'memory' | 'persona' | 'prompt' | 'skill'>;
     memoryPayload?: Record<string, unknown>;
     message: string;
     messageId: string;
@@ -121,6 +123,41 @@ export interface AgentSignalSourcePayloadMap {
     topicId?: string;
     turnCount?: number;
   };
+  [AGENT_SIGNAL_SOURCE_TYPES.toolOutcomeCompleted]: {
+    agentId?: string;
+    domainKey?: string;
+    intentClass?: string;
+    messageId?: string;
+    operationId?: string;
+    outcome: {
+      action?: string;
+      status: 'skipped' | 'succeeded';
+      summary?: string;
+    };
+    relatedObjects?: Array<{ objectId: string; objectType: string; relation?: string }>;
+    taskId?: string;
+    tool: { apiName?: string; identifier: string };
+    toolCallId?: string;
+    topicId?: string;
+  };
+  [AGENT_SIGNAL_SOURCE_TYPES.toolOutcomeFailed]: {
+    agentId?: string;
+    domainKey?: string;
+    intentClass?: string;
+    messageId?: string;
+    operationId?: string;
+    outcome: {
+      action?: string;
+      errorReason?: string;
+      status: 'failed';
+      summary?: string;
+    };
+    relatedObjects?: Array<{ objectId: string; objectType: string; relation?: string }>;
+    taskId?: string;
+    tool: { apiName?: string; identifier: string };
+    toolCallId?: string;
+    topicId?: string;
+  };
 }
 
 /** AgentSignal source variant with source-type-specific payload typing. */
@@ -173,6 +210,12 @@ export type SourceClientRuntimeStart = AgentSignalSourceVariant<'client.runtime.
 
 /** Client runtime-complete source variant. */
 export type SourceClientRuntimeComplete = AgentSignalSourceVariant<'client.runtime.complete'>;
+
+/** Tool outcome-completed source variant. */
+export type SourceToolOutcomeCompleted = AgentSignalSourceVariant<'tool.outcome.completed'>;
+
+/** Tool outcome-failed source variant. */
+export type SourceToolOutcomeFailed = AgentSignalSourceVariant<'tool.outcome.failed'>;
 
 /** Source types accepted by browser producers through the authenticated edge. */
 export const AGENT_SIGNAL_CLIENT_SOURCE_TYPES = [

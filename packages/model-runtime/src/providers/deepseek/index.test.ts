@@ -1,22 +1,243 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatModelCard } from '@lobechat/types';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
-import { LobeDeepSeekAI, params } from './index';
+import {
+  LobeDeepSeekAI,
+  LobeDeepSeekAnthropicAI,
+  LobeDeepSeekOpenAI,
+  openAIParams,
+  params,
+} from './index';
 
-const provider = ModelProvider.DeepSeek;
-const defaultBaseURL = 'https://api.deepseek.com/v1';
+const defaultOpenAIBaseURL = 'https://api.deepseek.com/v1';
+const anthropicBaseURL = 'https://api.deepseek.com/anthropic';
 
-testProvider({
-  Runtime: LobeDeepSeekAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_DEEPSEEK_CHAT_COMPLETION',
-  chatModel: 'deepseek-r1',
-  test: {
-    skipAPICall: true,
-  },
+vi.spyOn(console, 'error').mockImplementation(() => {});
+
+describe('LobeDeepSeekAI', () => {
+  const resolveRouter = async (baseURL?: string) => {
+    const runtime = new LobeDeepSeekAI({
+      apiKey: 'test',
+      ...(baseURL ? { baseURL } : {}),
+    });
+
+    return (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
+  };
+
+  describe('RouterRuntime baseURL routing', () => {
+    it('should route to Anthropic format by default', async () => {
+      const router = await resolveRouter();
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should route to Anthropic format when baseURL ends with /anthropic', async () => {
+      const router = await resolveRouter(anthropicBaseURL);
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should route to Anthropic format when baseURL ends with /anthropic/', async () => {
+      const router = await resolveRouter(`${anthropicBaseURL}/`);
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should route to OpenAI format when baseURL ends with /v1', async () => {
+      const router = await resolveRouter(defaultOpenAIBaseURL);
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should route custom non-Anthropic baseURL to OpenAI format', async () => {
+      const router = await resolveRouter('https://api.deepseek.com');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('openai-compatible');
+    });
+  });
+});
+
+describe('LobeDeepSeekOpenAI', () => {
+  describe('init', () => {
+    it('should correctly initialize with an API key', () => {
+      const runtime = new LobeDeepSeekOpenAI({ apiKey: 'test_api_key' });
+
+      expect(runtime).toBeInstanceOf(LobeDeepSeekOpenAI);
+      expect((runtime as any).baseURL).toEqual(defaultOpenAIBaseURL);
+    });
+  });
+});
+
+describe('LobeDeepSeekAnthropicAI', () => {
+  let instance: InstanceType<typeof LobeDeepSeekAnthropicAI>;
+
+  const getLastRequestPayload = () => {
+    const calls = ((instance as any).client.messages.create as Mock).mock.calls;
+    return calls.at(-1)?.[0];
+  };
+
+  beforeEach(() => {
+    instance = new LobeDeepSeekAnthropicAI({ apiKey: 'test' });
+
+    vi.spyOn((instance as any).client.messages, 'create').mockResolvedValue(
+      new ReadableStream() as any,
+    );
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('init', () => {
+    it('should correctly initialize with an API key', () => {
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test_api_key' });
+
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toEqual(anthropicBaseURL);
+    });
+  });
+
+  describe('handlePayload', () => {
+    it('should enable thinking by default for deepseek-v4-pro', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro',
+        temperature: 0,
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.max_tokens).toBe(384_000);
+      expect(payload.thinking).toEqual({
+        budget_tokens: 1024,
+        type: 'enabled',
+      });
+    });
+
+    it('should disable thinking when thinking.type is disabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-flash',
+        reasoning_effort: 'high',
+        thinking: { budget_tokens: 0, type: 'disabled' },
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.thinking).toEqual({ type: 'disabled' });
+      expect(payload.output_config).toBeUndefined();
+    });
+
+    it('should map reasoning_effort to output_config.effort when thinking is enabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-flash',
+        reasoning_effort: 'high',
+        thinking: { budget_tokens: 2048, type: 'enabled' },
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.output_config).toEqual({ effort: 'high' });
+      expect(payload.thinking).toEqual({
+        budget_tokens: 2048,
+        type: 'enabled',
+      });
+    });
+
+    it('should not add thinking params for deepseek-chat by default', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-chat',
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.thinking).toBeUndefined();
+      expect(payload.output_config).toBeUndefined();
+    });
+
+    it('should preserve DeepSeek temperature scale for non-thinking Anthropic requests', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-chat',
+        temperature: 1.4,
+      });
+
+      const payload = getLastRequestPayload();
+
+      expect(payload.temperature).toBe(1.4);
+    });
+
+    it('should convert assistant reasoning to Anthropic thinking block', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: 'Response',
+            reasoning: { content: 'My reasoning process' },
+            role: 'assistant',
+          } as any,
+          { content: 'Follow-up', role: 'user' },
+        ],
+        model: 'deepseek-v4-flash',
+      });
+
+      const payload = getLastRequestPayload();
+      const assistantMessage = payload.messages.find(
+        (message: any) => message.role === 'assistant',
+      );
+
+      expect(assistantMessage?.content).toEqual([
+        { thinking: 'My reasoning process', type: 'thinking' },
+        { text: 'Response', type: 'text' },
+      ]);
+    });
+
+    it('should convert tool calls to Anthropic tool_use with a thinking placeholder', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Search weather', role: 'user' },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{"city":"Beijing"}', name: 'get_weather' },
+                id: 'call_1',
+                type: 'function',
+              },
+            ],
+          } as any,
+          {
+            content: '{"temp":20}',
+            role: 'tool',
+            tool_call_id: 'call_1',
+          } as any,
+        ],
+        model: 'deepseek-v4-flash',
+      });
+
+      const payload = getLastRequestPayload();
+      const assistantMessage = payload.messages.find(
+        (message: any) => message.role === 'assistant',
+      );
+
+      expect(assistantMessage?.content).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ thinking: ' ', type: 'thinking' }),
+          expect.objectContaining({ name: 'get_weather', type: 'tool_use' }),
+        ]),
+      );
+    });
+  });
 });
 
 describe('LobeDeepSeekAI - custom features', () => {
@@ -35,7 +256,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         model: 'deepseek-r1',
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.messages).toEqual([
         { role: 'user', content: 'Hello' },
@@ -57,7 +278,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         model: 'deepseek-chat',
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.messages).toEqual(payload.messages);
     });
@@ -74,7 +295,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         model: 'deepseek-r1',
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.messages[0]).toEqual({
         role: 'assistant',
@@ -88,7 +309,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         model: 'deepseek-chat',
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.stream).toBe(true);
     });
@@ -100,7 +321,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         stream: false,
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.stream).toBe(false);
     });
@@ -128,7 +349,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         model: 'deepseek-reasoner',
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.messages).toEqual([
         { role: 'user', content: 'Search weather' },
@@ -163,7 +384,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         model: 'deepseek-reasoner',
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.messages).toEqual([
         {
@@ -197,7 +418,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           model: 'deepseek-v4-flash',
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result.messages[1]).toEqual({
           role: 'assistant',
@@ -219,7 +440,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           model: 'deepseek-v4-pro',
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result.messages[0]).toEqual({
           role: 'assistant',
@@ -235,7 +456,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           thinking: { type: 'enabled' },
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result.messages[0]).toEqual({
           role: 'assistant',
@@ -251,7 +472,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           thinking: { type: 'disabled' },
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result.messages[0]).toEqual({
           role: 'assistant',
@@ -267,7 +488,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           thinking: { type: 'disabled' },
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result).toEqual({
           messages: [{ role: 'user', content: 'hi' }],
@@ -285,7 +506,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           thinking: { type: 'enabled' },
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result.reasoning_effort).toBe('high');
       });
@@ -302,7 +523,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           model: 'deepseek-v4-flash',
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result.messages[0]).toEqual({
           role: 'assistant',
@@ -317,7 +538,7 @@ describe('LobeDeepSeekAI - custom features', () => {
           model: 'deepseek-chat',
         };
 
-        const result = params.chatCompletion!.handlePayload!(payload as any);
+        const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
         expect(result.messages[0]).toEqual({
           role: 'assistant',
@@ -330,13 +551,13 @@ describe('LobeDeepSeekAI - custom features', () => {
   describe('Debug Configuration', () => {
     it('should disable debug by default', () => {
       delete process.env.DEBUG_DEEPSEEK_CHAT_COMPLETION;
-      const result = params.debug.chatCompletion();
+      const result = openAIParams.debug.chatCompletion();
       expect(result).toBe(false);
     });
 
     it('should enable debug when env is set', () => {
       process.env.DEBUG_DEEPSEEK_CHAT_COMPLETION = '1';
-      const result = params.debug.chatCompletion();
+      const result = openAIParams.debug.chatCompletion();
       expect(result).toBe(true);
       delete process.env.DEBUG_DEEPSEEK_CHAT_COMPLETION;
     });
@@ -344,12 +565,13 @@ describe('LobeDeepSeekAI - custom features', () => {
 
   describe('generateObject configuration', () => {
     it('should use tools calling for generateObject', () => {
-      expect(params.generateObject).toBeDefined();
-      expect(params.generateObject?.useToolsCalling).toBe(true);
+      expect(openAIParams.generateObject).toBeDefined();
+      expect(openAIParams.generateObject?.useToolsCalling).toBe(true);
     });
   });
 
   describe('models', () => {
+    const fetchModels = params.models as (params: { client: unknown }) => Promise<ChatModelCard[]>;
     const mockClient = {
       models: {
         list: vi.fn(),
@@ -365,7 +587,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         data: [{ id: 'deepseek-chat' }, { id: 'deepseek-coder' }, { id: 'deepseek-r1' }],
       });
 
-      const models = await params.models({ client: mockClient as any });
+      const models = await fetchModels({ client: mockClient });
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
       expect(models).toHaveLength(3);
@@ -379,7 +601,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         data: [{ id: 'deepseek-chat' }],
       });
 
-      const models = await params.models({ client: mockClient as any });
+      const models = await fetchModels({ client: mockClient });
 
       expect(models).toHaveLength(1);
       expect(models[0].id).toBe('deepseek-chat');
@@ -390,7 +612,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         data: [],
       });
 
-      const models = await params.models({ client: mockClient as any });
+      const models = await fetchModels({ client: mockClient });
 
       expect(models).toEqual([]);
     });
@@ -400,7 +622,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         data: [{ id: 'deepseek-chat' }],
       });
 
-      const models = await params.models({ client: mockClient as any });
+      const models = await fetchModels({ client: mockClient });
 
       // The processModelList function should merge with known model list
       expect(models[0]).toHaveProperty('id');
@@ -415,7 +637,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         ],
       });
 
-      const models = await params.models({ client: mockClient as any });
+      const models = await fetchModels({ client: mockClient });
 
       expect(models).toHaveLength(2);
       expect(models[0].id).toBe('deepseek-chat');
@@ -432,7 +654,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         ],
       });
 
-      const models = await params.models({ client: mockClient as any });
+      const models = await fetchModels({ client: mockClient });
 
       expect(models).toHaveLength(4);
       expect(models.every((m) => typeof m.id === 'string')).toBe(true);

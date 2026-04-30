@@ -21,6 +21,10 @@ vi.mock('zustand/traditional');
 
 const executeHeterogeneousAgentMock = vi.hoisted(() => vi.fn());
 const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
+const mockLocalFileService = vi.hoisted(() => ({
+  listLocalFiles: vi.fn(),
+  readLocalFile: vi.fn(),
+}));
 
 vi.mock('@lobechat/const', async (importOriginal) => {
   const actual = await importOriginal<typeof LobechatConstModule>();
@@ -34,6 +38,10 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 
 vi.mock('../heterogeneousAgentExecutor', () => ({
   executeHeterogeneousAgent: (...args: any[]) => executeHeterogeneousAgentMock(...args),
+}));
+
+vi.mock('@/services/electron/localFileService', () => ({
+  localFileService: mockLocalFileService,
 }));
 
 // Mock lambdaClient to prevent network requests
@@ -836,6 +844,161 @@ describe('ConversationLifecycle actions', () => {
           }),
           expect.any(AbortController),
         );
+      });
+
+      it('should materialize local file mention editor data into persisted tool-result snapshots', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        mockLocalFileService.readLocalFile.mockResolvedValue({
+          charCount: 17,
+          content: 'export const x = 1;',
+          fileType: 'text',
+          filename: 'foo.ts',
+          loc: [0, 200],
+          totalCharCount: 17,
+          totalLineCount: 1,
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'foo.ts',
+                        metadata: {
+                          name: 'foo.ts',
+                          path: '/Users/me/project/foo.ts',
+                          type: 'localFile',
+                        },
+                        type: 'mention',
+                      },
+                      { text: ' 这个文件是什么', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            },
+            message: '<localFile name="foo.ts" path="/Users/me/project/foo.ts" /> 这个文件是什么',
+          });
+        });
+
+        expect(mockLocalFileService.readLocalFile).toHaveBeenCalledWith({
+          path: '/Users/me/project/foo.ts',
+        });
+        const payload = sendMessageInServerSpy.mock.calls[0]?.[0];
+        expect(payload?.newUserMessage.metadata?.localSystemToolSnapshots).toMatchObject([
+          {
+            apiName: 'readLocalFile',
+            arguments: { path: '/Users/me/project/foo.ts' },
+            content: expect.stringContaining('export const x = 1;'),
+            identifier: 'lobe-local-system',
+            success: true,
+          },
+        ]);
+      });
+
+      it('should preserve local file snapshots for runtime when server response omits metadata', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            plugins: ['lobe-local-system'],
+          },
+        });
+        mockLocalFileService.readLocalFile.mockResolvedValue({
+          charCount: 17,
+          content: 'export const x = 1;',
+          fileType: 'text',
+          filename: 'foo.ts',
+          loc: [0, 200],
+          totalCharCount: 17,
+          totalLineCount: 1,
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          isCreateNewTopic: true,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: { items: [], total: 0 },
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'foo.ts',
+                        metadata: {
+                          name: 'foo.ts',
+                          path: '/Users/me/project/foo.ts',
+                          type: 'localFile',
+                        },
+                        type: 'mention',
+                      },
+                      { text: ' 这个文件是什么', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            },
+            message: '<localFile name="foo.ts" path="/Users/me/project/foo.ts" /> 这个文件是什么',
+          });
+        });
+
+        const runtimePayload = vi.mocked(result.current.internal_execAgentRuntime).mock
+          .calls[0]?.[0];
+        const runtimeUserMessage = runtimePayload?.messages.find(
+          (message) => message.id === TEST_IDS.USER_MESSAGE_ID,
+        );
+
+        expect(runtimeUserMessage?.metadata?.localSystemToolSnapshots).toMatchObject([
+          {
+            apiName: 'readLocalFile',
+            arguments: { path: '/Users/me/project/foo.ts' },
+            content: expect.stringContaining('export const x = 1;'),
+            identifier: 'lobe-local-system',
+            success: true,
+          },
+        ]);
       });
     });
 

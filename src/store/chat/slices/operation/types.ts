@@ -1,4 +1,4 @@
-import { type ConversationContext } from '@lobechat/types';
+import type { ConversationContext, MessageMetadata } from '@lobechat/types';
 
 /**
  * Operation Type Definitions
@@ -197,6 +197,7 @@ export interface QueuedMessage {
   files?: string[];
   id: string;
   interruptMode: 'soft' | 'hard';
+  metadata?: MessageMetadata;
 }
 
 /**
@@ -207,6 +208,7 @@ export interface MergedQueuedMessage {
   /** Lexical editor JSON state for rich text rendering */
   editorData?: Record<string, any>;
   files: string[];
+  metadata?: MessageMetadata;
 }
 
 const createTextNode = (text: string) => ({
@@ -289,10 +291,30 @@ const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> |
  */
 export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMessage => {
   const sorted = [...messages].sort((a, b) => a.createdAt - b.createdAt);
+  const metadata = sorted.reduce<MessageMetadata | undefined>((acc, message) => {
+    if (!message.metadata) return acc;
+    const localSystemToolSnapshots = [
+      ...(acc?.localSystemToolSnapshots ?? []),
+      ...(message.metadata.localSystemToolSnapshots ?? []),
+    ];
+    const pageSelections = [
+      ...(acc?.pageSelections ?? []),
+      ...(message.metadata.pageSelections ?? []),
+    ];
+
+    return {
+      ...acc,
+      ...message.metadata,
+      ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
+      ...(pageSelections.length ? { pageSelections } : undefined),
+    };
+  }, undefined);
+
   return {
     content: sorted.map((m) => m.content).join('\n\n'),
     editorData: mergeQueuedEditorData(sorted),
     files: sorted.flatMap((m) => m.files ?? []),
+    metadata,
   };
 };
 
