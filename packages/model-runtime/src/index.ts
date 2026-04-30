@@ -24,6 +24,7 @@ export { LobeGroq } from './providers/groq';
 export { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 export { LobeHubAI } from './providers/lobehub';
 export { LobeLongCatAI } from './providers/longcat';
+export { LobeManifestAI } from './providers/manifest';
 export { LobeMinimaxAI } from './providers/minimax';
 export { LobeMinimaxCodingPlanAI } from './providers/minimaxCodingPlan';
 export { LobeMistralAI } from './providers/mistral';
