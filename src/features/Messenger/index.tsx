@@ -2,20 +2,18 @@
 
 import { SlackOutlined } from '@ant-design/icons';
 import { SiTelegram } from '@icons-pack/react-simple-icons';
-import { Block, Button, Flexbox, Icon, Modal, Select, Tag, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Modal, Tag, Text } from '@lobehub/ui';
 import { App, QRCode, Tabs } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, LinkIcon, Trash2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { messengerService } from '@/services/messenger';
-import { useSessionStore } from '@/store/session';
-import { sessionMetaSelectors, sessionSelectors } from '@/store/session/selectors';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
+
+import AgentSelect from './AgentSelect';
 
 type MessengerPlatform = 'telegram' | 'slack';
 
@@ -101,24 +99,17 @@ const buildTelegramDeepLink = (botUsername: string): string =>
 
 const MessengerSettings = memo(() => {
   const { t } = useTranslation('messenger');
+  const { t: tCommon } = useTranslation('common');
   const { message, modal } = App.useApp();
   const [linkOpen, setLinkOpen] = useState(false);
 
-  const isSignedIn = useUserStore(authSelectors.isLogin);
-  const useFetchSessions = useSessionStore((s) => s.useFetchSessions);
-  useFetchSessions(isSignedIn === true, isSignedIn);
+  const defaultAgentTitle = tCommon('defaultSession');
 
-  const sessions = useSessionStore((s) =>
-    sessionSelectors.defaultSessions(s).filter((session) => session.type === 'agent'),
-  );
-
-  const agentOptions = useMemo(
-    () =>
-      sessions.map((session) => ({
-        label: sessionMetaSelectors.getTitle(session.meta) ?? session.id.slice(0, 8),
-        value: session.id,
-      })),
-    [sessions],
+  // Pulled here too so the "Active agent: X" hint can render the agent's
+  // human-readable title without resolving it through AgentSelect's render
+  // tree. AgentSelect uses the same SWR key, so this is the same cache entry.
+  const agentsSWR = useSWR('messenger:agentsForBinding', () =>
+    messengerService.listAgentsForBinding(),
   );
 
   const platformsSWR = useSWR('messenger:availablePlatforms', () =>
@@ -173,8 +164,11 @@ const MessengerSettings = memo(() => {
               const link = linksByPlatform.get(platform);
               const label = PLATFORM_LABELS[platform] ?? platform;
               const activeAgentId = link?.activeAgentId ?? null;
-              const activeAgentTitle = activeAgentId
-                ? agentOptions.find((o) => o.value === activeAgentId)?.label
+              const activeAgent = activeAgentId
+                ? agentsSWR.data?.find((agent) => agent.id === activeAgentId)
+                : undefined;
+              const activeAgentTitle = activeAgent
+                ? activeAgent.title || defaultAgentTitle
                 : undefined;
 
               return (
@@ -230,10 +224,7 @@ const MessengerSettings = memo(() => {
                     {link && (
                       <Flexbox gap={8}>
                         <Text strong>{t('messenger.activeAgent')}</Text>
-                        <Select
-                          showSearch
-                          optionFilterProp="label"
-                          options={agentOptions}
+                        <AgentSelect
                           placeholder={t('messenger.activeAgentPlaceholder')}
                           value={activeAgentId ?? undefined}
                           onChange={(agentId) =>

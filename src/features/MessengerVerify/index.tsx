@@ -1,18 +1,18 @@
 'use client';
 
-import { Avatar, Button, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Slack, Telegram } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { memo, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentSelect from '@/features/Messenger/AgentSelect';
 import { useSession } from '@/libs/better-auth/auth-client';
 import { lambdaClient } from '@/libs/trpc/client';
 import { messengerService } from '@/services/messenger';
@@ -117,7 +117,6 @@ const Heading = ({ subtitle, title }: { subtitle?: string; title: string }) => (
 
 const MessengerVerifyPage = memo(() => {
   const { t } = useTranslation('messenger');
-  const { t: tCommon } = useTranslation('common');
   const searchParams = useSearchParams();
   const { message } = App.useApp();
 
@@ -147,37 +146,15 @@ const MessengerVerifyPage = memo(() => {
   );
   const labMessengerEnabled = !!userStateSWR.data?.preference?.lab?.enableMessenger;
 
-  const agentsSWR = useSWR(isSignedIn ? ['messenger:agents'] : null, async () =>
+  // Pre-populate the default selected agent from the same SWR cache the shared
+  // AgentSelect uses (so the very first row is selected once the list lands).
+  const agentsSWR = useSWR(isSignedIn ? 'messenger:agentsForBinding' : null, () =>
     messengerService.listAgentsForBinding(),
   );
 
   // Used in the success state to deep-link the user back to the bot.
   const platformsSWR = useSWR('messenger:availablePlatforms', () =>
     messengerService.availablePlatforms(),
-  );
-
-  const defaultAgentTitle = tCommon('defaultSession');
-  const agentOptions = useMemo(
-    () =>
-      (agentsSWR.data ?? []).map((agent) => {
-        const title = agent.title || defaultAgentTitle;
-        return {
-          label: (
-            <Flexbox horizontal align="center" gap={8}>
-              <Avatar
-                avatar={agent.avatar || DEFAULT_AVATAR}
-                background={agent.backgroundColor ?? undefined}
-                size={20}
-              />
-              <Text ellipsis>{title}</Text>
-            </Flexbox>
-          ),
-          searchValue: title,
-          title,
-          value: agent.id,
-        };
-      }),
-    [agentsSWR.data, defaultAgentTitle],
   );
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
@@ -190,9 +167,9 @@ const MessengerVerifyPage = memo(() => {
 
   // Default-select the first agent once loaded; user can change before confirming.
   useEffect(() => {
-    if (selectedAgentId || agentOptions.length === 0) return;
-    setSelectedAgentId(agentOptions[0].value);
-  }, [agentOptions, selectedAgentId]);
+    if (selectedAgentId || !agentsSWR.data?.length) return;
+    setSelectedAgentId(agentsSWR.data[0].id);
+  }, [agentsSWR.data, selectedAgentId]);
 
   const handleConfirm = async () => {
     if (!randomId || !selectedAgentId) return;
@@ -318,11 +295,10 @@ const MessengerVerifyPage = memo(() => {
 
       <Flexbox gap={8} style={{ width: '100%' }}>
         <Text strong>{t('verify.confirm.defaultAgent')}</Text>
-        {agentOptions.length === 0 ? (
+        {agentsSWR.data?.length === 0 ? (
           <Text type="warning">{t('verify.confirm.noAgents')}</Text>
         ) : (
-          <Select
-            options={agentOptions}
+          <AgentSelect
             placeholder={t('verify.confirm.defaultAgentPlaceholder')}
             value={selectedAgentId}
             onChange={setSelectedAgentId}
