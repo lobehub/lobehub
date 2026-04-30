@@ -1,4 +1,3 @@
-// Client-side components for Creds tool
-// Placeholder for future Render/Streaming components
-
-export {};
+export { CredsManifest } from '../manifest';
+export * from '../types';
+export { CredsInterventions } from './Intervention';

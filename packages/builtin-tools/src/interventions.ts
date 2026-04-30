@@ -8,6 +8,7 @@ import {
 } from '@lobechat/builtin-tool-agent-marketplace/client';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CloudSandboxInterventions } from '@lobechat/builtin-tool-cloud-sandbox/client';
+import { CredsInterventions, CredsManifest } from '@lobechat/builtin-tool-creds/client';
 import {
   GroupManagementInterventions,
   GroupManagementManifest,
@@ -40,6 +41,7 @@ export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInterventions,
   [AgentMarketplaceManifest.identifier]: AgentMarketplaceInterventions,
   [CloudSandboxManifest.identifier]: CloudSandboxInterventions,
+  [CredsManifest.identifier]: CredsInterventions,
   [GroupManagementManifest.identifier]: GroupManagementInterventions,
   [GTDManifest.identifier]: GTDInterventions,
   [LocalSystemIdentifier]: LocalSystemInterventions,

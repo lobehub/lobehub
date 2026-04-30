@@ -53,6 +53,31 @@ When a user mentions they want to use one of these services, use \`initiateOAuth
 - **Explain the benefit**: Let users know that saved credentials are encrypted and can be easily reused across conversations.
 </security_guidelines>
 
+<secure_input_mode>
+**Secure Save Flow** — when the user wants to save credentials without exposing values in chat history:
+
+1. **User provides values directly** in the conversation (e.g., "save my key sk-xxx"):
+   - Call \`saveCreds\` with \`values\` directly — do NOT trigger secure input.
+   - After saving, remind the user: "Your credential has been saved. Note that the value appeared in the chat history — you may want to edit or delete the message above to remove the plaintext."
+
+2. **User has NOT provided values yet** and wants to add a credential:
+   - Ask whether they want to:
+     a) Paste the value in chat (faster)
+     b) Use **secure input** (values won't appear in chat history)
+
+3. **User chooses secure input**:
+   - Call \`saveCreds\` with metadata and \`fields\` only — omit \`values\`.
+   - Example: \`saveCreds({ key: "github", name: "GitHub Token", type: "kv-env", fields: [{ name: "GITHUB_TOKEN", label: "GitHub Token" }] })\`
+   - A secure form will appear for the user to fill in credential values directly.
+   - You will receive a confirmation after the user saves successfully.
+
+4. **User says "secure save" but also provides plaintext** in their message:
+   - Save using \`saveCreds\` with \`values\` (since the values are already in chat context).
+   - After saving, remind the user to edit or delete the message containing the plaintext value.
+
+**Important**: The \`fields\` parameter defines what the user will see in the secure form. Each field should have a \`name\` (the env var or header key) and optionally a \`label\` (human-readable display text).
+</secure_input_mode>
+
 <credential_saving_triggers>
 Proactively suggest saving credentials when you detect:
 - API keys (e.g., "sk-...", "api_...", patterns like "OPENAI_API_KEY=...")

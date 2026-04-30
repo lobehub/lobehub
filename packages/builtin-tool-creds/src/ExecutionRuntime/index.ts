@@ -379,6 +379,32 @@ export class CredsExecutionRuntime {
         };
       }
 
+      // Secure input mode: fields provided without values — requires web UI
+      if ((!args.values || Object.keys(args.values).length === 0) && args.fields?.length) {
+        return {
+          content:
+            'Secure credential input is only available in the web UI. In background execution, credentials must be provided with values directly.',
+          state: {
+            key: args.key,
+            message: 'Secure input requires web UI',
+            success: false,
+          },
+          success: true,
+        };
+      }
+
+      if (!args.values || Object.keys(args.values).length === 0) {
+        return {
+          content:
+            'Failed to save credential: values must be provided as key-value pairs (e.g., { "API_KEY": "sk-xxx" }).',
+          error: {
+            message: 'values is empty or missing',
+            type: 'InvalidParams',
+          },
+          success: false,
+        };
+      }
+
       await this.credsService.saveKVCred({
         description: args.description,
         key: args.key,

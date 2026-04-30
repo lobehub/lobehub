@@ -1,4 +1,5 @@
 import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-agent-marketplace';
+import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import type { OnboardingAgentMarketplacePickSnapshot } from '@lobechat/types';
 
@@ -127,8 +128,22 @@ const handleAgentMarketplaceSubmit: CustomInteractionSubmitHandler = async (payl
   };
 };
 
+const handleCredsSecureInputSubmit: CustomInteractionSubmitHandler = async (payload) => {
+  const key = pickString(payload.key);
+  const name = pickString(payload.name);
+
+  return {
+    options: {
+      createUserMessage: false,
+      toolResultContent: `Credential "${name || key}" saved successfully with key "${key}". The values were provided securely by the user and never appeared in the conversation.`,
+    },
+    payload,
+  };
+};
+
 const customInteractionSubmitHandlers = new Map<string, CustomInteractionSubmitHandler>([
   [AgentMarketplaceIdentifier, handleAgentMarketplaceSubmit],
+  [CredsIdentifier, handleCredsSecureInputSubmit],
 ]);
 
 export const isCustomInteractionIdentifier = (identifier: string) =>

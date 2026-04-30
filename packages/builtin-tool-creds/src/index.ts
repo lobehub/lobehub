@@ -1,3 +1,4 @@
+export { credsSecureInputAudit } from './credsSecureInputAudit';
 export { CredsExecutionRuntime, type ICredsService } from './ExecutionRuntime';
 export {
   checkCredsSatisfied,
@@ -23,6 +24,7 @@ export {
   type InitiateOAuthConnectParams,
   type InjectCredsToSandboxParams,
   type InjectCredsToSandboxState,
+  type SaveCredsField,
   type SaveCredsParams,
   type SaveCredsState,
 } from './types';

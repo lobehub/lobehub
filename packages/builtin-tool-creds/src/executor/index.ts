@@ -592,7 +592,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       const raw = params as any;
       const name: string = params.name || raw.displayName || params.key;
 
-      let values: Record<string, string> = params.values;
+      let values: Record<string, string> | undefined = params.values;
       if (!values && typeof raw.value === 'string') {
         values = {};
         for (const line of (raw.value as string).split('\n')) {
@@ -601,6 +601,22 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
             values[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
           }
         }
+      }
+
+      // Secure input mode: fields provided without values — the intervention component
+      // handles saving directly via tRPC, so the executor should not run.
+      // This branch handles edge cases (e.g., server-side execution).
+      if ((!values || Object.keys(values).length === 0) && raw.fields?.length > 0) {
+        return {
+          content:
+            'Secure credential input is only available in the web UI. Please use the LobeHub web interface to save credentials securely.',
+          state: {
+            key: params.key,
+            message: 'Secure input requires web UI',
+            success: false,
+          },
+          success: true,
+        };
       }
 
       if (!values || Object.keys(values).length === 0) {

@@ -84,7 +84,14 @@ export const CredsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Save a new credential securely. Use this when the user wants to store sensitive information like API keys, tokens, or secrets. The credential will be encrypted and stored securely.',
+        'Save a new credential securely. Use this when the user wants to store sensitive information like API keys, tokens, or secrets. The credential will be encrypted and stored securely. When the user chooses secure input mode, omit `values` and provide `fields` instead — a secure form will appear for the user to fill in the values directly without exposing them to the AI context.',
+      humanIntervention: {
+        dynamic: {
+          default: 'never',
+          policy: 'always',
+          type: 'credsSecureInput',
+        },
+      },
       name: CredsApiName.saveCreds,
       parameters: {
         additionalProperties: false,
@@ -92,6 +99,27 @@ export const CredsManifest: BuiltinToolManifest = {
           description: {
             description: 'Optional description explaining what this credential is used for',
             type: 'string',
+          },
+          fields: {
+            description:
+              'Field definitions for secure input mode. Provide this WITHOUT values to trigger a secure form where the user fills in credential values directly. Each field defines an environment variable or header key that the user will provide.',
+            items: {
+              additionalProperties: false,
+              properties: {
+                label: {
+                  description: 'Display label for the field (defaults to name if omitted)',
+                  type: 'string',
+                },
+                name: {
+                  description:
+                    'Environment variable or header name (e.g., "GITHUB_TOKEN", "OPENAI_API_KEY")',
+                  type: 'string',
+                },
+              },
+              required: ['name'],
+              type: 'object',
+            },
+            type: 'array',
           },
           key: {
             description:
@@ -113,11 +141,11 @@ export const CredsManifest: BuiltinToolManifest = {
               type: 'string',
             },
             description:
-              'Key-value pairs of the credential. For kv-env, the key should be the environment variable name (e.g., {"OPENAI_API_KEY": "sk-..."})',
+              'Key-value pairs of the credential. For kv-env, the key should be the environment variable name (e.g., {"OPENAI_API_KEY": "sk-..."}). Omit this when using secure input mode (provide `fields` instead).',
             type: 'object',
           },
         },
-        required: ['key', 'name', 'type', 'values'],
+        required: ['key', 'name', 'type'],
         type: 'object',
       } satisfies JSONSchema7,
     },

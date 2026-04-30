@@ -106,11 +106,28 @@ export interface InjectCredsToSandboxState {
   success: boolean;
 }
 
+export interface SaveCredsField {
+  /**
+   * Display label for this field
+   */
+  label?: string;
+  /**
+   * Environment variable or header name (e.g., "GITHUB_TOKEN")
+   */
+  name: string;
+}
+
 export interface SaveCredsParams {
   /**
    * Optional description for the credential
    */
   description?: string;
+  /**
+   * Field definitions for secure input mode.
+   * When provided without values, triggers the secure credential form
+   * where the user fills in values directly without exposing them to AI context.
+   */
+  fields?: SaveCredsField[];
   /**
    * Unique key for the credential (used for reference)
    */
@@ -124,9 +141,10 @@ export interface SaveCredsParams {
    */
   type: CredType;
   /**
-   * Key-value pairs of the credential (for kv-env and kv-header types)
+   * Key-value pairs of the credential (for kv-env and kv-header types).
+   * Optional in secure input mode — user fills values via the secure form instead.
    */
-  values: Record<string, string>;
+  values?: Record<string, string>;
 }
 
 export interface SaveCredsState {
