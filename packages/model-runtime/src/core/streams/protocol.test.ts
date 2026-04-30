@@ -592,6 +592,40 @@ describe('createCallbacksTransformer', () => {
     expect(onFinal).toHaveBeenCalledWith(expectedData);
   });
 
+  it('should capture finishReason from stop chunks and include in final data', async () => {
+    const onCompletion = vi.fn();
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onCompletion, onFinal });
+
+    // Simulates the Gemini "soft interrupt" path: empty content + non-STOP finishReason
+    // (e.g. RECITATION / MAX_TOKENS) — we MUST capture the reason so downstream
+    // tracing/UI can surface it instead of silently rendering empty.
+    const chunks = [
+      'event: stop\n',
+      `data: ${JSON.stringify('RECITATION')}\n\n`,
+      'event: usage\n',
+      `data: ${JSON.stringify({ totalTokens: 10 })}\n\n`,
+    ];
+
+    await processChunks(transformer, chunks);
+
+    expect(onCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ finishReason: 'RECITATION' }),
+    );
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: 'RECITATION' }));
+  });
+
+  it('should leave finishReason undefined when no stop chunk is received', async () => {
+    const onFinal = vi.fn();
+    const transformer = createCallbacksTransformer({ onFinal });
+
+    const chunks = ['event: text\n', 'data: "Hi"\n\n'];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: undefined }));
+  });
+
   it('should handle speed chunks and include in final data', async () => {
     const onFinal = vi.fn();
     const transformer = createCallbacksTransformer({ onFinal });
