@@ -1,3 +1,4 @@
+import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import { z } from 'zod';
 
 /**
@@ -15,27 +16,27 @@ export const RawResponseSchema = z.object({
 });
 
 /** JSON schema form for LLM structured-output binding */
-export const SUGGESTION_RESPONSE_JSON_SCHEMA = {
+export const SUGGESTION_RESPONSE_JSON_SCHEMA: GenerateObjectSchema = {
   name: 'follow_up_suggestions',
-  strict: true,
   schema: {
     additionalProperties: false,
-    type: 'object',
-    required: ['chips'],
     properties: {
       chips: {
-        type: 'array',
-        maxItems: 8,
         items: {
-          type: 'object',
           additionalProperties: false,
-          required: ['label', 'message'],
           properties: {
-            label: { type: 'string', minLength: 1, maxLength: 40 },
-            message: { type: 'string', minLength: 1, maxLength: 200 },
+            label: { maxLength: 40, minLength: 1, type: 'string' },
+            message: { maxLength: 200, minLength: 1, type: 'string' },
           },
+          required: ['label', 'message'],
+          type: 'object',
         },
+        maxItems: 8,
+        type: 'array',
       },
     },
+    required: ['chips'],
+    type: 'object',
   },
-} as const;
+  strict: true,
+};
