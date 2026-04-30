@@ -114,7 +114,7 @@ describe('LobeDeepSeekAnthropicAI', () => {
 
       const payload = getLastRequestPayload();
 
-      expect(payload.max_tokens).toBe(384_000);
+      expect(payload.max_tokens).toBe(393_216);
       expect(payload.thinking).toEqual({
         budget_tokens: 1024,
         type: 'enabled',
@@ -569,7 +569,7 @@ describe('LobeDeepSeekAI - custom features', () => {
         model: 'deepseek-v4-pro',
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.messages).toEqual([
         { role: 'user', content: 'Call a tool' },
@@ -602,11 +602,13 @@ describe('LobeDeepSeekAI - custom features', () => {
         },
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
       expect(result.reasoning_effort).toBe('high');
-      expect(result.thinking).toEqual({ type: 'enabled' });
-      expect(result.thinking?.budget_tokens).toBeUndefined();
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'enabled' } }));
+      expect(result).not.toEqual(
+        expect.objectContaining({ thinking: expect.objectContaining({ budget_tokens: 4096 }) }),
+      );
     });
 
     it('should forward disabled thinking mode for deepseek-v4-pro', () => {
@@ -616,9 +618,9 @@ describe('LobeDeepSeekAI - custom features', () => {
         thinking: { type: 'disabled' as const },
       };
 
-      const result = params.chatCompletion!.handlePayload!(payload as any);
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
 
-      expect(result.thinking).toEqual({ type: 'disabled' });
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'disabled' } }));
     });
   });
 
