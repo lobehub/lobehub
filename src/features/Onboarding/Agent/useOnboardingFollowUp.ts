@@ -6,21 +6,19 @@ import type { OnboardingPhase } from '@/types/user';
 interface UseOnboardingFollowUpParams {
   enabled: boolean;
   isGreeting: boolean;
-  phase?: OnboardingPhase;
 }
 
 interface OnboardingFollowUpHandlers {
-  onAfterMessageCreate: (params: { assistantMessageId: string }) => Promise<void>;
   onBeforeSendMessage: () => Promise<void>;
+  triggerExtract: (assistantMessageId: string, phase: OnboardingPhase | undefined) => Promise<void>;
 }
 
 export const useOnboardingFollowUp = ({
   enabled,
   isGreeting,
-  phase,
 }: UseOnboardingFollowUpParams): OnboardingFollowUpHandlers => {
-  const onAfterMessageCreate = useCallback(
-    async ({ assistantMessageId }: { assistantMessageId: string }) => {
+  const triggerExtract = useCallback(
+    async (assistantMessageId: string, phase: OnboardingPhase | undefined) => {
       if (!enabled) return;
       if (!phase) return;
       if (phase === 'summary') return;
@@ -30,7 +28,7 @@ export const useOnboardingFollowUp = ({
         .getState()
         .fetchFor(assistantMessageId, { kind: 'onboarding', phase });
     },
-    [enabled, phase, isGreeting],
+    [enabled, isGreeting],
   );
 
   const onBeforeSendMessage = useCallback(async () => {
@@ -38,5 +36,5 @@ export const useOnboardingFollowUp = ({
     useFollowUpActionStore.getState().clear();
   }, [enabled]);
 
-  return { onAfterMessageCreate, onBeforeSendMessage };
+  return { onBeforeSendMessage, triggerExtract };
 };

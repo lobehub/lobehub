@@ -22,43 +22,41 @@ describe('useOnboardingFollowUp', () => {
     vi.restoreAllMocks();
   });
 
-  it('skips when disabled', async () => {
+  it('triggerExtract skips when disabled', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: false, isGreeting: false, phase: 'discovery' }),
+      useOnboardingFollowUp({ enabled: false, isGreeting: false }),
     );
-    await result.current.onAfterMessageCreate({ assistantMessageId: 'm' });
+    await result.current.triggerExtract('m', 'discovery');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
-  it('skips when phase is missing', async () => {
+  it('triggerExtract skips when phase is undefined', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false, phase: undefined }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
     );
-    await result.current.onAfterMessageCreate({ assistantMessageId: 'm' });
+    await result.current.triggerExtract('m', undefined);
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
-  it('skips when phase is summary', async () => {
+  it('triggerExtract skips when phase is summary', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false, phase: 'summary' }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
     );
-    await result.current.onAfterMessageCreate({ assistantMessageId: 'm' });
+    await result.current.triggerExtract('m', 'summary');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
-  it('skips when isGreeting is true', async () => {
-    const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: true, phase: 'agent_identity' }),
-    );
-    await result.current.onAfterMessageCreate({ assistantMessageId: 'm' });
+  it('triggerExtract skips when isGreeting is true', async () => {
+    const { result } = renderHook(() => useOnboardingFollowUp({ enabled: true, isGreeting: true }));
+    await result.current.triggerExtract('m', 'agent_identity');
     expect(fetchFor).not.toHaveBeenCalled();
   });
 
-  it('fires fetchFor with onboarding hint on a normal turn', async () => {
+  it('triggerExtract fires fetchFor with onboarding hint on a normal turn', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false, phase: 'discovery' }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
     );
-    await result.current.onAfterMessageCreate({ assistantMessageId: 'last' });
+    await result.current.triggerExtract('last', 'discovery');
     expect(fetchFor).toHaveBeenCalledWith('last', {
       kind: 'onboarding',
       phase: 'discovery',
@@ -67,7 +65,7 @@ describe('useOnboardingFollowUp', () => {
 
   it('onBeforeSendMessage clears when enabled', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: true, isGreeting: false, phase: 'discovery' }),
+      useOnboardingFollowUp({ enabled: true, isGreeting: false }),
     );
     await result.current.onBeforeSendMessage();
     expect(clear).toHaveBeenCalledTimes(1);
@@ -75,7 +73,7 @@ describe('useOnboardingFollowUp', () => {
 
   it('onBeforeSendMessage does nothing when disabled', async () => {
     const { result } = renderHook(() =>
-      useOnboardingFollowUp({ enabled: false, isGreeting: false, phase: 'discovery' }),
+      useOnboardingFollowUp({ enabled: false, isGreeting: false }),
     );
     await result.current.onBeforeSendMessage();
     expect(clear).not.toHaveBeenCalled();

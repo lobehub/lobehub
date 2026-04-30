@@ -6,7 +6,7 @@ import { SESSION_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -120,10 +120,11 @@ const AgentOnboardingPage = memo(() => {
     return messagesForOnboarding[0]?.role !== 'user';
   }, [messagesForOnboarding]);
 
+  const pendingAssistantIdRef = useRef<string | null>(null);
+
   const onboardingFollowUp = useOnboardingFollowUp({
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
-    phase: data?.context?.phase,
   });
 
   if (error) {
@@ -170,13 +171,24 @@ const AgentOnboardingPage = memo(() => {
             onboardingFinished
               ? undefined
               : {
-                  onAfterMessageCreate: onboardingFollowUp.onAfterMessageCreate,
+                  onAfterMessageCreate: async ({ assistantMessageId }) => {
+                    // Defer extraction until onAfterSendMessage so we use the refreshed phase.
+                    pendingAssistantIdRef.current = assistantMessageId;
+                  },
                   onAfterSendMessage: async () => {
-                    await syncOnboardingContext();
+                    const nextContext = await syncOnboardingContext();
                     await Promise.all([
                       refreshUserState(),
                       refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
                     ]);
+                    const pendingId = pendingAssistantIdRef.current;
+                    pendingAssistantIdRef.current = null;
+                    if (pendingId) {
+                      await onboardingFollowUp.triggerExtract(
+                        pendingId,
+                        nextContext?.context?.phase,
+                      );
+                    }
                   },
                   onBeforeSendMessage: onboardingFollowUp.onBeforeSendMessage,
                 }
