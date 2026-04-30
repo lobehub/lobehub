@@ -346,6 +346,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return false;
     }
 
+    private resolvePromptCacheKey(model?: string, user?: string) {
+      if (!model?.startsWith('gpt-') || !user) return;
+
+      // Keep the default key at {userId}:{model}; {agentId} can be added later if a narrower cache bucket is needed.
+      return `lobe:${user}:${model}`;
+    }
+
+    private resolvePromptCacheKeyParams(model?: string, user?: string) {
+      const promptCacheKey = this.resolvePromptCacheKey(model, user);
+
+      return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
+    }
+
     async chat({ responseMode, ...payload }: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
         const log = debug(`${this.logPrefix}:chat`);
@@ -484,6 +497,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             ...cleanedPayload,
             messages,
             ...(chatCompletion?.noUserId ? {} : { user: options?.user }),
+            ...this.resolvePromptCacheKeyParams(cleanedPayload.model, options?.user),
             stream_options:
               postPayload.stream && !chatCompletion?.excludeUsage
                 ? { include_usage: true }
@@ -746,6 +760,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             {
               messages,
               model,
+              ...this.resolvePromptCacheKeyParams(model, options?.user),
               tool_choice: { function: { name: tool.function.name }, type: 'function' },
               tools: [tool],
               user: options?.user,
@@ -800,6 +815,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             {
               input: messages,
               model,
+              ...this.resolvePromptCacheKeyParams(model, options?.user),
               text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
               // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
               safety_identifier: options?.user,
@@ -830,6 +846,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             messages,
             model,
             response_format: { json_schema: processedSchema, type: 'json_schema' },
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
             user: options?.user,
           },
           { headers: options?.headers, signal: options?.signal },
@@ -1107,8 +1124,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         input,
         ...(max_tokens && { max_output_tokens: max_tokens }),
         store: false,
-        stream: !isStreaming ? undefined : isStreaming,
+        stream: isStreaming || undefined,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
+        ...this.resolvePromptCacheKeyParams(res.model, options?.user),
         // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
         safety_identifier: options?.user,
         // Sanitize sampling params for Responses API path
@@ -1116,7 +1134,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           normalizeTemperature: false,
           preferTemperature: true,
         }),
-      } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
+      } as unknown as
+        | OpenAI.Responses.ResponseCreateParamsStreaming
+        | OpenAI.Responses.ResponseCreateParams;
 
       if (debugParams?.responses?.()) {
         // eslint-disable-next-line no-console
@@ -1233,6 +1253,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           {
             input,
             model,
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
             tool_choice: 'required',
             tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
             // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
@@ -1274,6 +1295,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         {
           messages: msgs,
           model,
+          ...this.resolvePromptCacheKeyParams(model, options?.user),
           tool_choice: 'required',
           tools,
           user: options?.user,
