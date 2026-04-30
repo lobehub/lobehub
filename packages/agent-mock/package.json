@@ -15,7 +15,6 @@
     "@lobechat/agent-tracing": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5",
-    "vitest": "^3"
+    "vitest": "^3.0.0"
   }
 }
