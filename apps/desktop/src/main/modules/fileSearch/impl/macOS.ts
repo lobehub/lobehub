@@ -14,6 +14,29 @@ import { UnixFileSearch } from './unix';
 const logger = createLogger('module:FileSearch:macOS');
 
 /**
+ * Build the kMDItemFSName expression for a free-form keyword string.
+ *
+ * Splits on whitespace and ANDs each token as a case/diacritic-insensitive
+ * substring match, so "Foo Bar" matches both `Bar_Foo.pdf` and `Foo Bar.pdf`
+ * — instead of requiring the literal phrase "Foo Bar" to appear.
+ *
+ * Returns an empty string when the keywords contain no usable token.
+ */
+export const buildFilenameKeywordExpression = (keywords: string): string => {
+  const tokens = keywords
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => token.replaceAll('"', '\\"'));
+
+  if (tokens.length === 0) return '';
+
+  const term = (token: string) => `kMDItemFSName == "*${token}*"cd`;
+  if (tokens.length === 1) return term(tokens[0]);
+  return `(${tokens.map(term).join(' && ')})`;
+};
+
+/**
  * Fallback tool type for macOS file search
  * Priority: mdfind > fd > find > fast-glob
  */
@@ -214,7 +237,7 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
 
     if (options.keywords) {
       if (!options.keywords.includes('kMDItem')) {
-        queryExpression = `kMDItemFSName == "*${options.keywords.replaceAll('"', '\\"')}*"cd`;
+        queryExpression = buildFilenameKeywordExpression(options.keywords);
       } else {
         queryExpression = options.keywords;
       }
