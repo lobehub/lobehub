@@ -870,31 +870,31 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     },
   },
   [keyOf('lobe-local-system', 'searchLocalFiles')]: {
-    args: { keywords: 'Financial Statement LobeHub' },
+    args: { keywords: 'quarterly report sample' },
     pluginState: {
       results: [
         {
           isDirectory: false,
-          name: 'LobeHub 2026-03-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
-          path: '/Users/arvinxx/Downloads/数据分析/LobeHub 2026-03-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
+          name: 'sample-quarterly-report-q1.xlsx',
+          path: '/Users/sample-user/Downloads/sample-quarterly-report-q1.xlsx',
           size: 9_400,
         },
         {
           isDirectory: false,
-          name: 'LobeHub_PTE_LTD_Unaudited_Financial_Statements_Q1_2026.xlsx',
-          path: '/Users/arvinxx/Downloads/数据分析/LobeHub_PTE_LTD_Unaudited_Financial_Statements_Q1_2026.xlsx',
+          name: 'sample_quarterly_report_q2_draft.xlsx',
+          path: '/Users/sample-user/Downloads/sample_quarterly_report_q2_draft.xlsx',
           size: 35_600,
         },
         {
           isDirectory: false,
-          name: 'LobeHub 2025-12-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
-          path: '/Users/arvinxx/Downloads/数据分析/LobeHub 2025-12-31 - Financial Statement - LobeHub_PTE_LTD_Unaudited.xlsx',
+          name: 'sample-quarterly-report-q3.xlsx',
+          path: '/Users/sample-user/Documents/reports/sample-quarterly-report-q3.xlsx',
           size: 8_300,
         },
         {
           isDirectory: false,
-          name: 'LobeHub 2025-12-31 - Financial Statement - LobeHub.xlsx',
-          path: '/Users/arvinxx/Library/Containers/com.tencent.xinWeChat/Data/Documents/xwechat_files/a35005353_2d89/msg/file/2026-04/LobeHub 2025-12-31 - Financial Statement - LobeHub.xlsx',
+          name: 'sample-quarterly-report-archived.xlsx',
+          path: '/Users/sample-user/Documents/archive/2024/sample-quarterly-report-archived.xlsx',
           size: 16_200,
         },
       ],
