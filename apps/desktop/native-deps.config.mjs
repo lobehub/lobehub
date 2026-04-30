@@ -45,16 +45,32 @@ const optionalNativePackagePrefixes = new Map([
   ['node-screenshots', ['node-screenshots-']],
 ]);
 
+const runtimeOptionalDependencies = new Map([['get-windows', ['@mapbox/node-pre-gyp']]]);
+
+const runtimeDependencyOverrides = new Map([
+  // get-windows imports @mapbox/node-pre-gyp at runtime only for find().
+  // Keep the narrow find() dependency path and avoid shipping its install,
+  // publish, and CLI dependency tree into app.asar.
+  ['@mapbox/node-pre-gyp', ['detect-libc', 'nopt', 'npmlog', 'semver']],
+]);
+
+function getRuntimeDependencies(moduleName, dependencies) {
+  return runtimeDependencyOverrides.get(moduleName) || Object.keys(dependencies);
+}
+
 function getRuntimeOptionalDependencies(moduleName, optionalDependencies) {
   const prefixes = optionalNativePackagePrefixes.get(moduleName);
+  const dependencies = [...(runtimeOptionalDependencies.get(moduleName) || [])];
 
-  if (!prefixes) {
-    return [];
+  if (prefixes) {
+    dependencies.push(
+      ...Object.keys(optionalDependencies).filter((dep) =>
+        prefixes.some((prefix) => dep.startsWith(prefix)),
+      ),
+    );
   }
 
-  return Object.keys(optionalDependencies).filter((dep) =>
-    prefixes.some((prefix) => dep.startsWith(prefix)),
-  );
+  return dependencies;
 }
 
 /**
@@ -90,7 +106,7 @@ function resolveDependencies(
     const optionalDependencies = packageJson.optionalDependencies || {};
 
     // Resolve regular dependencies
-    for (const dep of Object.keys(dependencies)) {
+    for (const dep of getRuntimeDependencies(moduleName, dependencies)) {
       resolveDependencies(dep, visited, nodeModulesPath);
     }
 
