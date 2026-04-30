@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -109,7 +109,7 @@ const parseDiffPathLine = (raw: string, prefix: 'a/' | 'b/'): string | null => {
   return p.startsWith(prefix) ? p.slice(prefix.length) : p;
 };
 
-const dequoteGitPath = (s: string): string =>
+export const dequoteGitPath = (s: string): string =>
   s.replaceAll(/\\(["\\trn]|[0-7]{3})/g, (_, esc: string) => {
     if (esc === '"') return '"';
     if (esc === '\\') return '\\';
@@ -118,6 +118,39 @@ const dequoteGitPath = (s: string): string =>
     if (esc === 'n') return '\n';
     return String.fromCodePoint(Number.parseInt(esc, 8));
   });
+
+/**
+ * Inverse of {@link dequoteGitPath} — returns either `<prefix><path>` (when
+ * no escaping is needed) or git's C-style quoted form `"<prefix><escaped>"`
+ * (when the path contains TAB / LF / CR / quote / backslash / control bytes).
+ * The prefix lives *inside* the quotes so the output matches what real `git
+ * diff` would emit, e.g. `"a/file\twith tab.txt"` rather than `a/"file\twith
+ * tab.txt"`. Plain spaces are not quoted (git tolerates them; the trailing
+ * ` b/<path>` marker on the diff header is enough to delimit the source).
+ */
+// eslint-disable-next-line no-control-regex
+const NEEDS_QUOTING = /["\\\x00-\x1F\x7F]/;
+export const quoteGitPath = (prefix: 'a/' | 'b/', filePath: string): string => {
+  const combined = prefix + filePath;
+  if (!NEEDS_QUOTING.test(combined)) return combined;
+  let out = '"';
+  for (const ch of combined) {
+    if (ch === '\\') out += '\\\\';
+    else if (ch === '"') out += '\\"';
+    else if (ch === '\t') out += '\\t';
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\r') out += '\\r';
+    else {
+      const code = ch.codePointAt(0)!;
+      if (code < 0x20 || code === 0x7f) {
+        out += '\\' + code.toString(8).padStart(3, '0');
+      } else {
+        out += ch;
+      }
+    }
+  }
+  return out + '"';
+};
 
 /** Walk a patch counting `+`/`-` lines while skipping `+++`/`---` headers. */
 const countAddDel = (patch: string): { additions: number; deletions: number } => {
@@ -188,15 +221,20 @@ const readUntrackedAsPatch = async (
     });
     return emptyPatch(entry);
   }
+  // Pre-quote so the path is C-style escaped wherever it lands in the synthetic
+  // patch — raw `entry.filePath` interpolation would emit malformed `diff --git`
+  // / `+++` lines for filenames containing TAB / LF / quote / backslash.
+  const aPath = quoteGitPath('a/', entry.filePath);
+  const bPath = quoteGitPath('b/', entry.filePath);
   if (size === 0) {
     return {
       ...emptyPatch(entry),
       patch:
         [
-          `diff --git a/${entry.filePath} b/${entry.filePath}`,
+          `diff --git ${aPath} ${bPath}`,
           'new file mode 100644',
           '--- /dev/null',
-          `+++ b/${entry.filePath}`,
+          `+++ ${bPath}`,
         ].join('\n') + '\n',
     };
   }
@@ -237,10 +275,10 @@ const readUntrackedAsPatch = async (
   const noNewlineFooter = trailingEmpty ? '' : '\n\\ No newline at end of file';
   const patch =
     [
-      `diff --git a/${entry.filePath} b/${entry.filePath}`,
+      `diff --git ${aPath} ${bPath}`,
       'new file mode 100644',
       '--- /dev/null',
-      `+++ b/${entry.filePath}`,
+      `+++ ${bPath}`,
       `@@ -0,0 +1,${lineCount} @@`,
       body,
     ].join('\n') +
@@ -255,6 +293,127 @@ const readUntrackedAsPatch = async (
     status: entry.status,
     truncated: false,
   };
+};
+
+/**
+ * Stream a git invocation's stdout via `spawn` instead of `execFile`'s
+ * fixed-size buffer. Replaces the bulk-diff caller's old 64 MB `maxBuffer`
+ * cap — pipe-buffer-sized chunks accumulate in memory until the process
+ * exits, with no hard ceiling. SIGTERM on timeout. Resolves with the full
+ * stdout string; rejects with an Error carrying `stderr` and `partialStdout`
+ * fields so callers can salvage partial output (or fall back) on failure.
+ */
+const runGitCaptureStream = (cwd: string, args: string[], timeoutMs: number): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd });
+    const stdoutChunks: Buffer[] = [];
+    let stderrBuf = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, timeoutMs);
+    child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrBuf += chunk.toString('utf8');
+    });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      reject(Object.assign(err, { stderr: stderrBuf }));
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+      if (timedOut) {
+        const err: any = new Error('git command timed out');
+        err.stderr = stderrBuf;
+        err.partialStdout = stdout;
+        return reject(err);
+      }
+      // `git diff HEAD` (without --exit-code) exits 0 even when there are
+      // diffs; non-zero is therefore a real error.
+      if (code !== 0) {
+        const err: any = new Error(`git exited with code ${code}`);
+        err.code = code;
+        err.stderr = stderrBuf;
+        err.partialStdout = stdout;
+        return reject(err);
+      }
+      resolve(stdout);
+    });
+  });
+
+/**
+ * Last-resort per-file diff for tracked entries the bulk diff didn't cover —
+ * either because the bulk command failed entirely or because git emitted no
+ * patch for a path the status step listed (rare race with concurrent writes).
+ * Mirrors the original per-file behavior so individual files keep their
+ * patches even when the bulk fast-path is unavailable.
+ */
+const fetchTrackedPatchPerFile = async (
+  cwd: string,
+  entry: DirtyEntry,
+  maxBytes: number,
+): Promise<GitWorkingTreePatch> => {
+  const execFileAsync = promisify(execFile);
+  let text: string;
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-c', 'core.quotepath=off', 'diff', '--no-color', 'HEAD', '--', entry.filePath],
+      {
+        cwd,
+        encoding: 'utf8',
+        maxBuffer: maxBytes * 4,
+        timeout: 10_000,
+      },
+    );
+    text = stdout as string;
+  } catch (error: any) {
+    logger.debug('[fetchTrackedPatchPerFile] diff failed', {
+      filePath: entry.filePath,
+      stderr: error?.stderr?.toString?.() ?? error?.stderr,
+    });
+    return emptyPatch(entry);
+  }
+  if (text.length > maxBytes) return { ...emptyPatch(entry), truncated: true };
+  if (/^Binary files .* differ$/m.test(text)) return { ...emptyPatch(entry), isBinary: true };
+  if (!text) return emptyPatch(entry);
+  const { additions, deletions } = countAddDel(text);
+  return {
+    additions,
+    deletions,
+    filePath: entry.filePath,
+    isBinary: false,
+    patch: text,
+    status: entry.status,
+    truncated: false,
+  };
+};
+
+/**
+ * Bounded `Promise.all` — runs at most `limit` async tasks at a time. Used
+ * for the per-file fallback so we cap fork pressure at a small constant
+ * instead of replaying the original 200-parallel `git diff` storm.
+ */
+const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const results: R[] = Array.from({ length: items.length });
+  let cursor = 0;
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const idx = cursor++;
+        if (idx >= items.length) return;
+        results[idx] = await fn(items[idx]);
+      }
+    }),
+  );
+  return results;
 };
 
 export default class GitController extends ControllerModule {
@@ -568,14 +727,18 @@ export default class GitController extends ControllerModule {
 
     // Step 2a — single bulk `git diff HEAD` for every tracked dirty path,
     // then split per-file in JS. We pass paths explicitly (not all) so a
-    // huge unrelated working tree doesn't pull extra patches into the buffer.
+    // huge unrelated working tree doesn't pull extra patches into the
+    // stream. Output is streamed via spawn so there's no maxBuffer ceiling
+    // — even a multi-hundred-MB combined diff lands intact, and any partial
+    // output recovered from a failed run still feeds the per-file fallback.
     const trackedEntries = entries.filter((e) => !e.isUntracked);
     const trackedByPath = new Map(trackedEntries.map((e) => [e.filePath, e]));
     const trackedPatches = new Map<string, GitWorkingTreePatch>();
     if (trackedEntries.length > 0) {
+      let bulkDiff = '';
       try {
-        const { stdout } = await execFileAsync(
-          'git',
+        bulkDiff = await runGitCaptureStream(
+          dirPath,
           [
             '-c',
             'core.quotepath=off',
@@ -585,34 +748,31 @@ export default class GitController extends ControllerModule {
             '--',
             ...trackedEntries.map((e) => e.filePath),
           ],
-          {
-            cwd: dirPath,
-            encoding: 'utf8',
-            // Allow the combined diff to be large — per-file capping happens
-            // after we split. 64 MB is plenty for any realistic agent edit
-            // batch and well under the OS pipe buffer.
-            maxBuffer: 64 * 1024 * 1024,
-            timeout: 30_000,
-          },
+          30_000,
         );
-        for (const block of splitBulkDiff(stdout)) {
-          const entry = trackedByPath.get(block.path);
-          if (!entry) continue;
-          trackedPatches.set(entry.filePath, buildTrackedPatch(entry, block, MAX_PATCH_BYTES));
-        }
       } catch (error: any) {
-        logger.warn('[getGitWorkingTreePatches] bulk diff failed', {
+        logger.warn('[getGitWorkingTreePatches] bulk diff failed; per-file fallback', {
           cwd: dirPath,
           stderr: error?.stderr?.toString?.() ?? error?.stderr,
         });
+        // Salvage any patches that did stream through before the failure —
+        // the per-file fallback below only retries the stragglers.
+        if (typeof error?.partialStdout === 'string') bulkDiff = error.partialStdout;
       }
-      // Tracked entries with no matching diff block (e.g. status said dirty
-      // but git diff produced nothing — race with concurrent edits, or the
-      // bulk command failed) get placeholder rows so the UI still lists them.
-      for (const entry of trackedEntries) {
-        if (!trackedPatches.has(entry.filePath)) {
-          trackedPatches.set(entry.filePath, emptyPatch(entry));
-        }
+      for (const block of splitBulkDiff(bulkDiff)) {
+        const entry = trackedByPath.get(block.path);
+        if (!entry) continue;
+        trackedPatches.set(entry.filePath, buildTrackedPatch(entry, block, MAX_PATCH_BYTES));
+      }
+      // Anything the bulk diff didn't cover (bulk crashed, race-with-write,
+      // or git emitted no patch for a path status flagged dirty) gets a
+      // per-file retry. Concurrency-capped to avoid the original fork storm.
+      const stragglers = trackedEntries.filter((e) => !trackedPatches.has(e.filePath));
+      if (stragglers.length > 0) {
+        const recovered = await mapWithConcurrency(stragglers, 8, (entry) =>
+          fetchTrackedPatchPerFile(dirPath, entry, MAX_PATCH_BYTES),
+        );
+        for (const patch of recovered) trackedPatches.set(patch.filePath, patch);
       }
     }
 
