@@ -397,7 +397,13 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
             // Provider's terminal finishReason (e.g. Google's RECITATION / MAX_TOKENS,
             // OpenAI's length, Anthropic's end_turn). Capture so downstream consumers
             // can detect soft interrupts where content is empty but tokens were billed.
-            if (typeof data === 'string') {
+            //
+            // Some providers emit multiple stop chunks per stream — Anthropic sends
+            // `message_delta` (carrying the real `stop_reason` like `end_turn` /
+            // `max_tokens` / `tool_use`) followed by a `message_stop` sentinel.
+            // Keep the FIRST non-empty value so the meaningful reason is not
+            // clobbered by the trailing sentinel.
+            if (typeof data === 'string' && data && !finishReason) {
               finishReason = data;
             }
             break;
