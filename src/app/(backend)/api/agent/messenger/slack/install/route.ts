@@ -10,15 +10,32 @@ const log = debug('lobe-server:messenger:slack-install');
 
 /**
  * Bot scopes requested at install. Keep in sync with
- * `docs/development/messenger/slack-app-manifest.yaml`
- * — Slack rejects the install with `invalid_scope` if the App's manifest
- * doesn't authorise everything we ask for.
+ * `docs/development/messenger/slack-app-manifest.yaml` — Slack rejects the
+ * install with `invalid_scope` if the App's manifest doesn't authorise
+ * everything we ask for.
+ *
+ * Deliberately narrower than the per-agent bot path documented at
+ * `docs/usage/channels/slack.zh-CN.mdx`. The two products are different:
+ *
+ *   - per-agent bot = user installs their own Slack App for a single agent;
+ *     wants @mention in channels, slash commands, channel/group history,
+ *     reactions, Slack AI assistant — needs the full set
+ *   - LobeHub messenger v1 = official LobeHub-distributed Marketplace App,
+ *     DM-only, agent-as-coworker (Manus pattern). Channel @mention / slash
+ *     commands / channel history land in PR3 (LOBE-8424); each addition
+ *     triggers Marketplace re-review so we batch them
+ *
+ * `reactions:write` is included because `AgentBridgeService.handleMention`
+ * uses emoji reactions (👀 "processing" → ✅ "done") for inline feedback —
+ * this is core UX even in DM-only mode. `reactions:read` is NOT needed: we
+ * never react to users' own reactions in v1.
  */
 const BOT_SCOPES = [
   'chat:write',
   'im:history',
   'im:read',
   'im:write',
+  'reactions:write',
   'users:read',
   'users:read.email',
 ];

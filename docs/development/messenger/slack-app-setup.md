@@ -46,10 +46,13 @@ Production App changes go through Slack Marketplace re-review for any scope chan
 | `chat:write`           | Post DM responses + the first-time link prompt                          |
 | `im:history` `im:read` | Read the user's DM messages so the bot can reply                        |
 | `im:write`             | Open the IM channel for `notifyLinkSuccess` after the user binds        |
+| `reactions:write`      | Inline feedback emoji on the user's message (👀 "processing" → ✅ done) |
 | `users:read`           | Resolve `slack_user_id` → user profile                                  |
 | `users:read.email`     | Pull `email` for the verify-im URL prefill (the user can still edit it) |
 
-PR3 will request `app_mentions:read` (channel mentions), `channels:history` (read context for replies), and `commands` (slash commands). Each scope addition triggers Marketplace re-review — keep PR3 batched.
+> **Why narrower than `docs/usage/channels/slack.zh-CN.mdx`?** The two paths are different products. The channel docs cover a per-agent bot a user installs themselves and may use for @mentions / channel reads / slash commands / Slack AI assistant — needs the full set. The messenger app is the LobeHub-distributed Marketplace App, DM-only in v1, so we ask for the minimum that delivers the feature. Smaller scope = friendlier consent screen and faster Marketplace review.
+
+PR3 will request `app_mentions:read` (channel mentions), `channels:history` (read context for replies), `commands` (slash commands), and `reactions:read` (act on user-added reactions like ❌ to cancel). Each scope addition triggers Marketplace re-review — keep PR3 batched.
 
 ## Troubleshooting
 

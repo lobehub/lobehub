@@ -44,10 +44,12 @@ oauth_config:
       - im:history
       - im:read
       - im:write
+      # Inline feedback emoji (👀 → ✅) on the user's message
+      - reactions:write
       # Resolve user → email for account linking on first DM
       - users:read
       - users:read.email
-      # PR3 will add: app_mentions:read, channels:history, commands
+      # PR3 will add: app_mentions:read, channels:history, commands, reactions:read
 
 settings:
   event_subscriptions:
