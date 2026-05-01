@@ -59,14 +59,14 @@ class AgentRuntimeService {
         ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
       ]),
     ];
-    const runtimePluginIdsOrUndefined = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;
+    const effectivePluginIds = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;
 
-    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig, runtimePluginIdsOrUndefined);
+    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig, effectivePluginIds);
 
     const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({
       model: agentConfig.model,
       provider: agentConfig.provider!,
-      toolIds: runtimePluginIdsOrUndefined,
+      toolIds: effectivePluginIds,
     });
 
     // Apply context engineering with preprocessing configuration
@@ -79,7 +79,7 @@ class AgentRuntimeService {
       inputTemplate: chatConfig.inputTemplate,
       messages: data.messages as any,
       ...modelRuntimeConfig,
-      plugins: runtimePluginIdsOrUndefined,
+      plugins: effectivePluginIds,
       systemRole: agentConfig.systemRole,
       tools: enabledToolIds,
     });

@@ -188,23 +188,22 @@ export class StreamingExecutorActionImpl {
         !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
         (!!currentUserMessage?.videoList?.length &&
           !isCanUseVideo(agentConfigData.model, agentConfigData.provider!)));
-    const effectivePluginIds = [
+    const runtimePluginIds = [
       ...new Set([
         ...(pluginIds || []),
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
         ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
       ]),
     ];
-    const effectivePluginIdsOrUndefined =
-      effectivePluginIds.length > 0 ? effectivePluginIds : undefined;
+    const effectivePluginIds = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;
     const mergedToolIds =
       selectedToolIds && selectedToolIds.length > 0
-        ? [...new Set([...effectivePluginIds, ...selectedToolIds])]
-        : effectivePluginIdsOrUndefined;
+        ? [...new Set([...runtimePluginIds, ...selectedToolIds])]
+        : effectivePluginIds;
 
     log(
       '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',
-      effectivePluginIdsOrUndefined,
+      effectivePluginIds,
       isSubTask,
       disableTools,
       hasTopicReference,
@@ -214,7 +213,7 @@ export class StreamingExecutorActionImpl {
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
-      effectivePluginIdsOrUndefined,
+      effectivePluginIds,
     );
     // When skillActivateMode is 'manual':
     // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
