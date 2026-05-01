@@ -18,6 +18,7 @@
   "actions.markCompleted": "Mark as Completed",
   "actions.openInNewTab": "Open in New Tab",
   "actions.openInNewWindow": "Open in a new window",
+  "actions.openInPortal": "Open in Portal",
   "actions.removeAll": "Delete All Topics",
   "actions.removeUnstarred": "Delete Unstarred Topics",
   "actions.unfavorite": "Unfavorite",
