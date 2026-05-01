@@ -114,22 +114,16 @@ export const Modal = memo(() => {
         onOpenChange: (open) => {
           if (!open) setModalState('minimized');
         },
+        onOpenChangeComplete: (open) => {
+          if (!open) instanceRef.current = null;
+        },
         title: 'Agent Mock DevTools (dev)',
         width: 1200,
       });
     } else if (modalState !== 'open' && instanceRef.current) {
-      instanceRef.current.destroy();
-      instanceRef.current = null;
+      instanceRef.current.close();
     }
   }, [modalState, setModalState]);
-
-  useEffect(
-    () => () => {
-      instanceRef.current?.destroy();
-      instanceRef.current = null;
-    },
-    [],
-  );
 
   return null;
 });
