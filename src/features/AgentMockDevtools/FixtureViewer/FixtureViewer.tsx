@@ -44,7 +44,11 @@ export const FixtureViewer = memo(() => {
         <Button
           icon={<Copy size={14} />}
           size="small"
-          onClick={() => navigator.clipboard.writeText(json)}
+          onClick={() =>
+            navigator.clipboard
+              .writeText(json)
+              .catch((err) => console.error('[AgentMock] Copy failed:', err))
+          }
         >
           Copy
         </Button>

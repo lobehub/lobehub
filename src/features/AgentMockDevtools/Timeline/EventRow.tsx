@@ -62,14 +62,17 @@ interface Props {
 }
 
 const previewOf = (event: MockEvent): string => {
-  const data = event.data as Record<string, unknown>;
+  const data =
+    typeof event.data === 'object' && event.data !== null
+      ? (event.data as Record<string, unknown>)
+      : {};
   if (event.type === 'stream_chunk') {
-    return String(data?.content ?? data?.reasoning ?? data?.chunkType ?? '').slice(0, 100);
+    return String(data.content ?? data.reasoning ?? data.chunkType ?? '').slice(0, 100);
   }
   if (event.type === 'tool_start' || event.type === 'tool_end') {
     return JSON.stringify(data).slice(0, 100);
   }
-  if (event.type === 'error') return String(data?.message ?? '');
+  if (event.type === 'error') return String(data.message ?? '');
   return JSON.stringify(data).slice(0, 80);
 };
 

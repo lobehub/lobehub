@@ -1,5 +1,6 @@
+import type { MockEvent } from '@lobechat/agent-mock';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 
 import { useMockCases } from '../hooks/useMockCases';
@@ -44,6 +45,21 @@ export const TimelinePanel = memo(() => {
     return out;
   }, [events]);
 
+  const renderItem = useCallback(
+    (idx: number, ev: MockEvent) => (
+      <EventRow
+        cumulativeMs={cumulative[idx] ?? 0}
+        event={ev}
+        index={idx}
+        isActive={playback?.currentEventIndex === idx}
+        onClick={() => {
+          /* TODO: wire to player.seekToEventIndex via useAgentMockPlayer */
+        }}
+      />
+    ),
+    [cumulative, playback?.currentEventIndex],
+  );
+
   if (!c) return <div style={{ color: 'var(--lobe-color-text-secondary)' }}>Select a case.</div>;
 
   return (
@@ -52,20 +68,7 @@ export const TimelinePanel = memo(() => {
         {events.length} events · {(cumulative.at(-1) ?? 0) / 1000} s total
       </div>
       <div className={styles.list}>
-        <Virtuoso
-          data={events}
-          itemContent={(idx, ev) => (
-            <EventRow
-              cumulativeMs={cumulative[idx] ?? 0}
-              event={ev}
-              index={idx}
-              isActive={playback?.currentEventIndex === idx}
-              onClick={() => {
-                /* TODO: wire to player.seekToEventIndex via useAgentMockPlayer */
-              }}
-            />
-          )}
-        />
+        <Virtuoso data={events} itemContent={renderItem} />
       </div>
     </div>
   );

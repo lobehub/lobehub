@@ -62,8 +62,9 @@ export const SettingsPanel = memo(() => {
     try {
       const r = await cleanup();
       setResult(`Deleted ${r.deleted} mock topics`);
-    } catch (e: any) {
-      setResult(`Error: ${e.message}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setResult(`Error: ${msg}`);
     } finally {
       setBusy(false);
     }
