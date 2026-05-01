@@ -12,6 +12,7 @@ import {
 } from '@lobechat/builtin-tool-agent-management';
 
 import { AgentModel } from '@/database/models/agent';
+import { PluginModel } from '@/database/models/plugin';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
@@ -29,6 +30,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     }
 
     const agentModel = new AgentModel(context.serverDB, context.userId);
+    const pluginModel = new PluginModel(context.serverDB, context.userId);
     const discoverService = new DiscoverService();
 
     return {
@@ -36,28 +38,23 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
         params: CallAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const { agentId, instruction, runAsTask, taskTitle, timeout } = params;
+        const { agentId, instruction, taskTitle, timeout } = params;
 
-        if (runAsTask) {
-          return {
-            content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
-            state: {
-              parentMessageId: ctx.messageId,
-              task: {
-                description: taskTitle || `Call agent ${agentId}`,
-                instruction,
-                targetAgentId: agentId,
-                timeout: timeout || 1_800_000,
-              },
-              type: 'execTask',
-            },
-            success: true,
-          };
-        }
-
+        // Server runtime always uses the task path because there is no
+        // client-side `registerAfterCompletion` callback available to execute
+        // synchronous agent calls.
         return {
-          content: `Agent "${agentId}" has been called. Execution will proceed asynchronously.`,
-          state: { agentId, instruction, mode: 'speak' },
+          content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
+          state: {
+            parentMessageId: ctx.messageId,
+            task: {
+              description: taskTitle || `Call agent ${agentId}`,
+              instruction,
+              targetAgentId: agentId,
+              timeout: timeout || 1_800_000,
+            },
+            type: 'execTask',
+          },
           success: true,
         };
       },
@@ -167,6 +164,13 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const agent = await agentModel.getAgentConfigById(agentId);
           if (!agent) {
             return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          // Ensure the plugin is registered in user_installed_plugins so that
+          // PluginModel.query() can resolve its manifest during agent execution.
+          const existing = await pluginModel.findById(identifier);
+          if (!existing) {
+            await pluginModel.create({ identifier, type: 'plugin' });
           }
 
           const currentPlugins = (agent.plugins as string[] | null) || [];
