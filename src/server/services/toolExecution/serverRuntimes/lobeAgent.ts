@@ -18,7 +18,7 @@ import { FileService } from '@/server/services/file';
 import type { ServerRuntimeRegistration } from './types';
 
 interface AnalyzeVisualMediaParams {
-  files?: string[];
+  files: string[];
   question: string;
 }
 
@@ -187,6 +187,14 @@ class LobeAgentExecutionRuntime {
       return buildError('question is required.', 'INVALID_ARGUMENTS');
     }
 
+    const requestedRefs = params.files?.filter(Boolean);
+    if (!requestedRefs?.length) {
+      return buildError(
+        'files is required and must include at least one visual file ref.',
+        'INVALID_ARGUMENTS',
+      );
+    }
+
     const fileService = new FileService(this.db, this.userId);
     const messageModel = new MessageModel(this.db, this.userId);
     const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
@@ -194,13 +202,9 @@ class LobeAgentExecutionRuntime {
       postProcessUrl,
     });
 
-    const requestedRefs = params.files?.filter(Boolean);
-    const visualMessages =
-      sourceMessage && (requestedRefs?.length || !hasVisualFiles(sourceMessage))
-        ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
-        : sourceMessage
-          ? [sourceMessage]
-          : [];
+    const visualMessages = sourceMessage
+      ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
+      : [];
     const orderedVisualMessages = [
       ...(sourceMessage && hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
       ...visualMessages.filter(
@@ -219,12 +223,7 @@ class LobeAgentExecutionRuntime {
       return buildError('No visual files are attached to the current message.', 'NO_VISUAL_FILES');
     }
 
-    const defaultItems = visualItems.filter((item) => item.messageId === this.messageId);
-    const selectableItems = requestedRefs?.length
-      ? visualItems
-      : defaultItems.length > 0
-        ? defaultItems
-        : visualItems;
+    const selectableItems = visualItems;
     const { availableRefs, selectedItems, unknownRefs } = selectVisualItems(
       selectableItems,
       this.messageId,

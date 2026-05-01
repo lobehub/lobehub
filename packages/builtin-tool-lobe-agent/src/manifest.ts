@@ -7,17 +7,18 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Analyze the images or videos attached to the current user message and answer a visual question. Use this only when the current model cannot inspect the visual media directly.',
+        'Analyze uploaded images or videos selected by visual file refs and answer a visual question. Use this only when the current model cannot inspect the visual media directly.',
       name: LobeAgentApiName.analyzeVisualMedia,
       parameters: {
         additionalProperties: false,
         properties: {
           files: {
             description:
-              'Optional visual file refs, such as image_1 for the current message or msg_xxx.image_1 for earlier messages. Omit this field to analyze the current visual files, or visible earlier visual files when the current message has none.',
+              'Visual file refs to analyze, such as image_1 for the current message or msg_xxx.image_1 for earlier messages. Always pass at least one ref.',
             items: {
               type: 'string',
             },
+            minItems: 1,
             type: 'array',
           },
           question: {
@@ -25,7 +26,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             type: 'string',
           },
         },
-        required: ['question'],
+        required: ['files', 'question'],
         type: 'object',
       },
     },

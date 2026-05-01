@@ -2,6 +2,7 @@ export const systemPrompt = `Use Lobe Agent capabilities when the active model n
 
 Rules:
 - Use the stable refs shown in <files_info>, such as msg_xxx.image_1 or msg_xxx.video_1, when referring to visual files from earlier messages.
+- When the user refers to an earlier, previous, first, or otherwise non-current visual file, pass the explicit stable ref in files.
 - For the current user message, local refs such as image_1 or video_1 are also accepted.
-- Omit files to analyze all visual files from the current user message, or visible earlier visual files when the current message has no visual files.
+- Always pass files with at least one visual file ref.
 - Do not copy or pass attachment URLs manually.`;

@@ -121,6 +121,17 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
+    const requestedRefs = params.files?.filter(Boolean);
+    if (!requestedRefs?.length) {
+      return {
+        error: {
+          message: '`files` is required and must include at least one visual file ref',
+          type: 'InvalidToolArguments',
+        },
+        success: false,
+      };
+    }
+
     const [{ chatService }, { getChatStoreState }, { dbMessageSelectors }] = await Promise.all([
       import('@/services/chat'),
       import('@/store/chat'),
@@ -165,13 +176,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
-    const requestedRefs = params.files?.filter(Boolean);
-    const currentFiles = files.filter((file) => file.messageId === sourceMessage?.id);
-    const selectableFiles = requestedRefs?.length
-      ? files
-      : currentFiles.length > 0
-        ? currentFiles
-        : files;
+    const selectableFiles = files;
     const { invalidRefs, selected } = selectFiles(
       selectableFiles,
       sourceMessage?.id,

@@ -104,7 +104,10 @@ describe('lobeAgentRuntime', () => {
     mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = undefined;
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' });
+    const result = await runtime.analyzeVisualMedia({
+      files: ['image_1'],
+      question: 'what is this?',
+    });
 
     expect(result.success).toBe(false);
     expect(result.error.code).toBe('VISUAL_UNDERSTANDING_NOT_CONFIGURED');
@@ -114,7 +117,10 @@ describe('lobeAgentRuntime', () => {
     mockMessageModelQueryByIds.mockResolvedValue([{ id: 'msg-1' }]);
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' });
+    const result = await runtime.analyzeVisualMedia({
+      files: ['image_1'],
+      question: 'what is this?',
+    });
 
     expect(result).toMatchObject({
       error: { code: 'NO_VISUAL_FILES' },
@@ -142,50 +148,17 @@ describe('lobeAgentRuntime', () => {
     expect(result.content).toContain(`Available refs: ${stableImageRef}, image_1`);
   });
 
-  it('should analyze all visual files when files is omitted', async () => {
-    mockMessageModelQueryByIds.mockResolvedValue([
-      {
-        id: 'msg-1',
-        imageList: [{ alt: 'image.png', id: 'file-image', url: 'https://example.com/image.png' }],
-        videoList: [{ alt: 'video.mp4', id: 'file-video', url: 'https://example.com/video.mp4' }],
-      },
-    ]);
+  it('should require visual file refs', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' });
-    const stableImageRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'image' });
-    const stableVideoRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'video' });
+    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' } as any);
 
-    expect(result.success).toBe(true);
-    expect(result.content).toBe('visual answer');
-    expect(result.state).toMatchObject({
-      files: [
-        { id: 'file-image', name: 'image.png', ref: stableImageRef, type: 'image' },
-        { id: 'file-video', name: 'video.mp4', ref: stableVideoRef, type: 'video' },
-      ],
-      model: 'vision-model',
-      provider: 'test-provider',
-      trigger: 'lobe-agent.analyzeVisualMedia',
-      usage: { totalTokens: 12 },
+    expect(result).toMatchObject({
+      error: { code: 'INVALID_ARGUMENTS' },
+      success: false,
     });
-    expect(mockChat).toHaveBeenCalledWith(
-      expect.objectContaining({
-        messages: [
-          expect.objectContaining({
-            content: [
-              expect.objectContaining({ type: 'text' }),
-              expect.objectContaining({ type: 'image_url' }),
-              expect.objectContaining({ type: 'video_url' }),
-            ],
-          }),
-        ],
-        model: 'vision-model',
-        stream: false,
-      }),
-      expect.objectContaining({
-        metadata: { trigger: 'lobe-agent.analyzeVisualMedia' },
-      }),
-    );
+    expect(result.content).toContain('files is required');
+    expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
   });
 
   it('should resolve stable refs from earlier topic messages', async () => {
@@ -289,45 +262,18 @@ describe('lobeAgentRuntime', () => {
     );
   });
 
-  it('should fall back to scoped visual messages when current source has no visual files', async () => {
-    const previousImageRef = createVisualFileRef({
-      index: 0,
-      messageId: 'msg-previous',
-      type: 'image',
-    });
-    mockMessageModelQueryByIds.mockResolvedValue([
-      {
-        content: 'Does the person in the first image wear glasses?',
-        id: 'msg-1',
-        role: 'user',
-        topicId: 'topic-1',
-      },
-    ]);
-    mockMessageModelQuery.mockResolvedValue([
-      {
-        id: 'msg-previous',
-        imageList: [
-          { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
-        ],
-        role: 'user',
-      },
-      {
-        content: 'Does the person in the first image wear glasses?',
-        id: 'msg-1',
-        role: 'user',
-        topicId: 'topic-1',
-      },
-    ]);
+  it('should not fall back to scoped visual messages when files is omitted', async () => {
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
     const result = await runtime.analyzeVisualMedia({
       question: 'Does the person in the first image wear glasses?',
-    });
+    } as any);
 
-    expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({
-      files: [{ id: 'file-previous', name: 'previous.png', ref: previousImageRef, type: 'image' }],
+    expect(result).toMatchObject({
+      error: { code: 'INVALID_ARGUMENTS' },
+      success: false,
     });
+    expect(mockMessageModelQuery).not.toHaveBeenCalled();
   });
 
   it('should use group, agent and legacy session scopes when resolving stable refs', async () => {
@@ -385,7 +331,10 @@ describe('lobeAgentRuntime', () => {
     ]);
     const runtime = lobeAgentRuntime.factory(baseContext);
 
-    const result = await runtime.analyzeVisualMedia({ question: 'what is in the video?' });
+    const result = await runtime.analyzeVisualMedia({
+      files: ['video_1'],
+      question: 'what is in the video?',
+    });
 
     expect(result).toMatchObject({
       error: { code: 'VISUAL_MODEL_VIDEO_UNSUPPORTED' },
