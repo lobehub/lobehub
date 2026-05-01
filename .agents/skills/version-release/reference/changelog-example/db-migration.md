@@ -1,4 +1,4 @@
-# 🚀 LobeHub v2.1.50 (20260416)
+# 🚀 LobeHub Release (20260416)
 
 **Release Date:** April 20, 2026\
 **Migration Scope:** Agent benchmark data model bootstrap (5 new tables, 2 new indexes)
