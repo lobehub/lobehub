@@ -31,6 +31,7 @@ const ToastHost = lazy(() => import('@lobehub/ui/base-ui').then((m) => ({ defaul
 const ContextMenuHost = lazy(() =>
   import('@lobehub/ui').then((m) => ({ default: m.ContextMenuHost })),
 );
+const AgentMockDevtools = lazy(() => import('@/features/AgentMockDevtools'));
 
 const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
   useLayoutEffect(() => {
@@ -82,6 +83,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
             <Suspense>
               <ImportSettings />
               {/* DevPanel disabled in SPA: depends on node:fs */}
+              {process.env.NODE_ENV === 'development' && <AgentMockDevtools />}
             </Suspense>
           </ServerConfigStoreProvider>
         </AppTheme>
