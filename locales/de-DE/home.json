@@ -22,6 +22,7 @@
   "brief.resolved": "Als gelöst markiert",
   "brief.title": "Tagesübersicht",
   "brief.viewAllTasks": "Alle Aufgaben anzeigen",
+  "brief.viewRun": "Lauf anzeigen",
   "project.create": "Neues Projekt",
   "project.deleteConfirm": "Dieses Projekt wird gelöscht und kann nicht wiederhergestellt werden. Bestätigen Sie, um fortzufahren.",
   "starter.createAgent": "Agent erstellen",

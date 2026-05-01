@@ -109,6 +109,7 @@ export default {
   'localFiles.grepContent.glob': 'File filter',
   'localFiles.grepContent.pattern': 'Search pattern',
   'localFiles.grepContent.type': 'File type',
+  'localFiles.listFiles.emptyDirectory': 'This directory is empty',
   'localFiles.moveFiles.itemsMoved': '{{count}} item(s) moved:',
   'localFiles.moveFiles.itemsMoved_one': '{{count}} item moved:',
   'localFiles.moveFiles.itemsMoved_other': '{{count}} items moved:',

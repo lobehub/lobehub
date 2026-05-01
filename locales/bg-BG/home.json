@@ -22,6 +22,7 @@
   "brief.resolved": "Отбелязано като решено",
   "brief.title": "Дневен обзор",
   "brief.viewAllTasks": "Преглед на всички задачи",
+  "brief.viewRun": "Преглед на изпълнението",
   "project.create": "Нов проект",
   "project.deleteConfirm": "Този проект ще бъде изтрит и не може да бъде възстановен. Потвърдете, за да продължите.",
   "starter.createAgent": "Създай агент",

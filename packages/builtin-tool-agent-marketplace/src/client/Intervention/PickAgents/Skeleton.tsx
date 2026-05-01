@@ -2,14 +2,14 @@ import { memo } from 'react';
 
 import { styles } from './style';
 
-const SIDEBAR_ITEMS = 6;
+const TABBAR_ITEMS = 6;
 const CARD_ITEMS = 6;
 
 const PickAgentsSkeleton = memo(() => (
   <div className={styles.container}>
-    <div className={styles.sidebar}>
-      {Array.from({ length: SIDEBAR_ITEMS }).map((_, i) => (
-        <div className={styles.skeletonSidebarItem} key={i} />
+    <div className={styles.tabBar}>
+      {Array.from({ length: TABBAR_ITEMS }).map((_, i) => (
+        <div className={styles.skeletonTabBarItem} key={i} />
       ))}
     </div>
     <div className={styles.content}>

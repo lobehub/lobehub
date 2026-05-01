@@ -11,6 +11,12 @@ export interface InputAction {
   cleanupInput: () => void;
 
   /**
+   * Report the floating overlay height (TodoProgress + QueueTray) so the
+   * ChatList scroll container can reserve matching bottom padding.
+   */
+  setChatInputOverlayHeight: (height: number) => void;
+
+  /**
    * Set the editor instance
    */
   setEditor: (editor: any) => void;
@@ -21,11 +27,16 @@ export interface InputAction {
   updateInputMessage: (message: string) => void;
 }
 
-export const inputSlice: StateCreator<State & InputAction, [], [], InputAction> = (set) => ({
+export const inputSlice: StateCreator<State & InputAction, [], [], InputAction> = (set, get) => ({
   cleanupInput: () => {
-    set({ editor: null, inputMessage: '' });
+    set({ chatInputOverlayHeight: 0, editor: null, inputMessage: '' });
     // Also clear ChatStore's mainInputEditor
     useChatStore.setState({ mainInputEditor: null });
+  },
+
+  setChatInputOverlayHeight: (height) => {
+    if (get().chatInputOverlayHeight === height) return;
+    set({ chatInputOverlayHeight: height });
   },
 
   setEditor: (editor) => {

@@ -1,4 +1,5 @@
 import type { TaskDetailActivity } from '@lobechat/types';
+import { formatActivityTime } from '@lobechat/utils/time';
 import {
   ActionIcon,
   Avatar,
@@ -10,7 +11,6 @@ import {
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { CircleDot, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +36,7 @@ interface TopicCardProps {
 
 const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
+  const { t: tDiscover } = useTranslation('discover');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const isRunning = activity.status === 'running';
 
@@ -68,7 +69,10 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
   }, [activity.operationId]);
 
-  const startedAt = activity.time ? dayjs(activity.time).fromNow() : '';
+  const { text: startedAt, title: startedAtTitle } = formatActivityTime(activity.time, {
+    formatOtherYear: tDiscover('time.formatOtherYear'),
+    formatThisYear: tDiscover('time.formatThisYear'),
+  });
   const durationText = isRunning
     ? formatDuration(elapsed)
     : finalDuration != null && finalDuration >= 0
@@ -149,7 +153,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
           {startedAt && (
-            <Text fontSize={12} type={'secondary'}>
+            <Text fontSize={12} title={startedAtTitle} type={'secondary'}>
               {startedAt}
             </Text>
           )}

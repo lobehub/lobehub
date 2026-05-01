@@ -1,11 +1,14 @@
 import {
   chainGenerateBrief,
+  chainJudgeBriefEmit,
   chainTaskTopicHandoff,
   GENERATE_BRIEF_SCHEMA,
+  JUDGE_BRIEF_EMIT_SCHEMA,
   TASK_TOPIC_HANDOFF_SCHEMA,
 } from '@lobechat/prompts';
 import type {
   BriefArtifacts,
+  BriefDecision,
   TaskItem,
   TaskSchedulerContext,
   TaskTopicHandoff,
@@ -326,15 +329,19 @@ export class TaskLifecycleService {
    * Programmatic brief synthesis for a completed topic.
    *
    * Fired only in `brief.mode === 'auto'` and only when neither the error nor
-   * the judge path has already produced a brief. Three-layer split:
-   *  - decision (whether to emit, which type, which priority): two stages —
-   *    a pure-rule pre-filter (`shouldEmitTopicBrief`) for cheap structural
-   *    skips, then an LLM verdict on the actual content (mid-process working
-   *    notes shouldn't surface as a delivery report)
-   *  - artifacts: programmatic DB query against task_documents
-   *  - title / summary: produced by the same LLM call as the verdict, in
-   *    user-facing language (deliberately separate from handoff, which is
-   *    agent-internal)
+   * the judge path has already produced a brief. Two-stage decision:
+   *  1. Rule layer (`shouldEmitTopicBrief`) — deterministic. Returns
+   *     `'yes'` / `'no'` (caller persists the verdict and is done with the
+   *     decision phase) or `'unknown'` (defer to LLM).
+   *  2. LLM judge (`chainJudgeBriefEmit`) — semantic. Runs only on the
+   *     `'unknown'` branch, returns `{emit, reason}` for content the rule
+   *     can't classify (manual/non-scheduled topic with non-trivial output).
+   *
+   * The verdict (rule or LLM) is persisted to `taskTopics.handoff.briefDecision`
+   * so the emit/skip outcome is auditable per topic. Generation
+   * (`chainGenerateBrief`) is a separate LLM call that runs only when the
+   * decision is `emit: true` — never wasting tokens drafting copy for a
+   * brief that won't be persisted.
    *
    * Failures are swallowed — a missing brief should never block the task
    * lifecycle. The caller still proceeds to the post-tick state transition.
@@ -359,12 +366,69 @@ export class TaskLifecycleService {
         task: currentTask,
       };
 
-      const decision = shouldEmitTopicBrief(decisionInput);
+      const ruleVerdict = shouldEmitTopicBrief(decisionInput);
+
+      // Inputs needed by both the LLM judge (when ruleVerdict === 'unknown')
+      // and by chainGenerateBrief (when emit ends up true). Hoisted so we
+      // only fetch them once.
+      const topicLink = await this.taskTopicModel.findByTopicId(topicId);
+      const topicStartedAt = topicLink?.createdAt ?? new Date(0);
+      const pinnedDocs = await this.taskModel.getDocumentsPinnedSince(taskId, topicStartedAt);
+      const artifacts: BriefArtifacts = { documents: pinnedDocs };
+      const handoff = (topicLink?.handoff as TaskTopicHandoff | null) ?? null;
+
+      const { model, provider } = await (this.systemAgentService as any).getTaskModelConfig(
+        'topic',
+      );
+
+      let decision: BriefDecision;
+      if (ruleVerdict.emit === 'unknown') {
+        // Rule can't decide — ask the LLM judge. Title/summary are NOT
+        // produced here; they come from chainGenerateBrief if emit=true.
+        const judgePayload = chainJudgeBriefEmit({
+          artifacts,
+          handoff,
+          lastAssistantContent,
+          taskInstruction: currentTask.instruction || '',
+          taskName: currentTask.name || taskIdentifier,
+        });
+
+        const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+        const judgeResult = (await modelRuntime.generateObject(
+          {
+            messages: judgePayload.messages as any[],
+            model,
+            schema: { name: 'task_topic_brief_judge', schema: JUDGE_BRIEF_EMIT_SCHEMA },
+          },
+          { metadata: { trigger: 'task-brief-judge' } },
+        )) as { emit?: boolean; reason?: string };
+
+        decision = {
+          decidedAt: new Date().toISOString(),
+          emit: judgeResult.emit === true,
+          model,
+          reason: judgeResult.reason || 'llm-judge-unknown',
+          source: 'llm-judge',
+        };
+      } else {
+        decision = {
+          decidedAt: new Date().toISOString(),
+          emit: ruleVerdict.emit === 'yes',
+          reason: ruleVerdict.reason,
+          source: 'rule',
+        };
+      }
+
+      // Persist the decision regardless of outcome — gives the operator a
+      // per-topic audit trail of why a brief was or wasn't produced.
+      await this.taskTopicModel.updateBriefDecision(taskId, topicId, decision);
+
       if (!decision.emit) {
         log(
-          'synthesize: skip task=%s topic=%s reason=%s',
+          'synthesize: skip task=%s topic=%s source=%s reason=%s',
           taskIdentifier,
           topicId,
+          decision.source,
           decision.reason,
         );
         return;
@@ -372,18 +436,6 @@ export class TaskLifecycleService {
 
       const briefType = selectBriefType(decisionInput);
       const priority = selectBriefPriority(decisionInput);
-
-      const topicLink = await this.taskTopicModel.findByTopicId(topicId);
-      const topicStartedAt = topicLink?.createdAt ?? new Date(0);
-
-      const pinnedDocs = await this.taskModel.getDocumentsPinnedSince(taskId, topicStartedAt);
-      const artifacts: BriefArtifacts = { documents: pinnedDocs };
-
-      const handoff = (topicLink?.handoff as TaskTopicHandoff | null) ?? null;
-
-      const { model, provider } = await (this.systemAgentService as any).getTaskModelConfig(
-        'topic',
-      );
 
       const payload = chainGenerateBrief({
         artifacts,
@@ -403,20 +455,7 @@ export class TaskLifecycleService {
         { metadata: { trigger: 'task-brief' } },
       );
 
-      const generated = result as { emit?: boolean; summary?: string; title?: string };
-      // The LLM is the second-stage gate: even when the rule layer says "this
-      // could be a delivery", the model judges from actual content whether
-      // it's worth surfacing. Mid-process working notes / clarifications get
-      // emit=false here.
-      if (generated.emit === false) {
-        log(
-          'synthesize: LLM voted skip task=%s topic=%s reason=%s',
-          taskIdentifier,
-          topicId,
-          generated.summary?.slice(0, 80) || '(none)',
-        );
-        return;
-      }
+      const generated = result as { summary?: string; title?: string };
       if (!generated.title || !generated.summary) {
         log(
           'synthesize: LLM returned empty title/summary task=%s topic=%s',

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { SYSTEM_FILES_TO_IGNORE } from '@lobechat/file-loaders';
 
 import type { FileEntry, ListFilesParams, ListFilesResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export interface ListFilesOptions {
   /** Whether to filter out system files like .DS_Store, Thumbs.db, etc. */
@@ -11,10 +12,11 @@ export interface ListFilesOptions {
 }
 
 export async function listLocalFiles(
-  { path: dirPath, sortBy = 'modifiedTime', sortOrder = 'desc', limit = 100 }: ListFilesParams,
+  { path: rawPath, sortBy = 'modifiedTime', sortOrder = 'desc', limit = 100 }: ListFilesParams,
   options?: ListFilesOptions,
 ): Promise<ListFilesResult> {
   const { ignoreSystemFiles = true } = options || {};
+  const dirPath = expandTilde(rawPath) ?? rawPath;
 
   try {
     const entries = await readdir(dirPath);

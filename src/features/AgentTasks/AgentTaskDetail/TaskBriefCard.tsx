@@ -109,6 +109,7 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
               briefType={brief.type}
               resolvedAction={brief.resolvedAction}
               taskId={brief.taskId}
+              taskStatus={brief.taskStatus}
               topicId={brief.topicId}
               onAfterAddComment={onAfterAddComment}
               onAfterResolve={onAfterResolve}

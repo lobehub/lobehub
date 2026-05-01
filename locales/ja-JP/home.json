@@ -22,6 +22,7 @@
   "brief.resolved": "解決済みにしました",
   "brief.title": "デイリーブリーフ",
   "brief.viewAllTasks": "すべてのタスクを表示",
+  "brief.viewRun": "実行を表示",
   "project.create": "新しいプロジェクトを作成",
   "project.deleteConfirm": "このプロジェクトは削除され、復元できません。続行するには確認してください。",
   "starter.createAgent": "アシスタントを作成",

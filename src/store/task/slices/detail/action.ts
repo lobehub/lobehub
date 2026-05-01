@@ -10,7 +10,7 @@ import type { StoreSetter } from '@/store/types';
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
 import type { TaskDetailDispatch } from './reducer';
-import { taskDetailReducer } from './reducer';
+import { findSubtaskParentId, taskDetailReducer } from './reducer';
 
 type CreatedTask = NonNullable<Awaited<ReturnType<typeof taskService.create>>['data']>;
 type DeletedTask = NonNullable<Awaited<ReturnType<typeof taskService.delete>>['data']>;
@@ -229,19 +229,30 @@ export class TaskDetailSliceActionImpl {
       ...rest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
     };
+
+    // Snapshot every map entry the optimistic patch will touch BEFORE dispatch.
+    // activeTaskId can change mid-flight, and the patch can mutate a parent's
+    // cached subtree in addition to `id`, so rollback must target both.
+    const patchedParentId = findSubtaskParentId(this.#get().taskDetailMap, id);
+    const snapshotActiveTaskId = this.#get().activeTaskId;
+    const refreshPatchedTargets = async (): Promise<void> => {
+      const targets = new Set<string>([id]);
+      if (patchedParentId) targets.add(patchedParentId);
+      if (snapshotActiveTaskId) targets.add(snapshotActiveTaskId);
+      await Promise.all(
+        Array.from(targets).map((target) => this.internal_refreshTaskDetail(target)),
+      );
+    };
+
     this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
     this.#set({ taskSaveStatus: 'saving' }, false, 'updateTask/saving');
 
     try {
       await taskService.update(id, data);
       this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
-      if (assigneeAgentId !== undefined) {
-        await this.#get().refreshTaskList();
-      }
     } catch (error) {
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
-      // Revert by refreshing from server
-      await this.internal_refreshTaskDetail(id);
+      await refreshPatchedTargets();
       message.error(
         t('taskDetail.updateFailed', {
           defaultValue: 'Failed to update task',
@@ -249,6 +260,10 @@ export class TaskDetailSliceActionImpl {
         }),
       );
       throw error;
+    }
+
+    if (assigneeAgentId !== undefined) {
+      await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
     }
   };
 

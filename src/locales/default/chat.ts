@@ -823,7 +823,6 @@ export default {
   'workflow.toolDisplayName.finishOnboarding': 'Finished onboarding',
   'workflow.toolDisplayName.getCommandOutput': 'Read command output',
   'workflow.toolDisplayName.getDocument': 'Read a document',
-  'workflow.toolDisplayName.getOnboardingState': 'Checked onboarding state',
   'workflow.toolDisplayName.getPageContent': 'Read Page content',
   'workflow.toolDisplayName.getTopicContext': 'Read topic context',
   'workflow.toolDisplayName.globLocalFiles': 'Searched files',

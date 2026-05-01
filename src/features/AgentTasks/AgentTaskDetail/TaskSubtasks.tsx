@@ -59,7 +59,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
       align="center"
       gap={8}
       justify="space-between"
-      style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}
+      style={{ minWidth: 0, width: '100%' }}
     >
       <span
         style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
