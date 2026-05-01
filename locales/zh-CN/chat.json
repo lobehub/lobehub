@@ -853,6 +853,7 @@
   "workingPanel.resources.renameEmpty": "标题不能为空",
   "workingPanel.resources.renameError": "重命名失败",
   "workingPanel.resources.renameSuccess": "重命名成功",
+  "workingPanel.resources.updatedAt": "更新于 {{time}}",
   "workingPanel.resources.viewMode.list": "列表视图",
   "workingPanel.resources.viewMode.tree": "树状视图",
   "workingPanel.review.binary": "二进制文件，无法展示 diff",

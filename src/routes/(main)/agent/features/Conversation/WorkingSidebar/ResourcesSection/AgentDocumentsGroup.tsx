@@ -116,7 +116,12 @@ const DocumentItem = memo<DocumentItemProps>(({ agentId, document, mutate }) => 
   const description = document.description ?? undefined;
   const isWeb = document.sourceType === 'web';
   const IconComponent: LucideIcon = isWeb ? GlobeIcon : FileTextIcon;
-  const createdAtLabel = document.createdAt ? dayjs(document.createdAt).fromNow() : null;
+  const updatedAtLabel = document.updatedAt
+    ? t('workingPanel.resources.updatedAt', {
+        ns: 'chat',
+        time: dayjs(document.updatedAt).fromNow(),
+      })
+    : null;
 
   const activeDocumentId = pageMatch ? pageMatch.params.docId : portalDocumentId;
   const isActive = activeDocumentId === document.documentId;
@@ -190,7 +195,7 @@ const DocumentItem = memo<DocumentItemProps>(({ agentId, document, mutate }) => 
             {description}
           </Text>
         )}
-        {createdAtLabel && <Text className={styles.meta}>{createdAtLabel}</Text>}
+        {updatedAtLabel && <Text className={styles.meta}>{updatedAtLabel}</Text>}
       </Flexbox>
     </Flexbox>
   );
