@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useModelSupportVideo } from '@/hooks/useModelSupportVideo';
 import { useModelSupportVision } from '@/hooks/useModelSupportVision';
+import { useAiInfraStore } from '@/store/aiInfra';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import { useVisualMediaUploadAbility } from './useVisualMediaUploadAbility';
@@ -11,6 +12,21 @@ import { useVisualMediaUploadAbility } from './useVisualMediaUploadAbility';
 vi.mock('@/hooks/useModelSupportToolUse');
 vi.mock('@/hooks/useModelSupportVideo');
 vi.mock('@/hooks/useModelSupportVision');
+vi.mock('@/store/aiInfra', () => ({
+  aiModelSelectors: {
+    getEnabledModelById:
+      (id: string, provider: string) =>
+      (s: {
+        enabledAiModels?: {
+          abilities: { video?: boolean; vision?: boolean };
+          id: string;
+          providerId: string;
+        }[];
+      }) =>
+        s.enabledAiModels?.find((model) => model.id === id && model.providerId === provider),
+  },
+  useAiInfraStore: vi.fn(),
+}));
 vi.mock('@/store/serverConfig', () => ({
   serverConfigSelectors: {
     enableVisualUnderstanding: (s: { enableVisualUnderstanding: boolean }) =>
@@ -24,13 +40,18 @@ vi.mock('@/store/serverConfig', () => ({
 const mockedUseModelSupportToolUse = vi.mocked(useModelSupportToolUse);
 const mockedUseModelSupportVideo = vi.mocked(useModelSupportVideo);
 const mockedUseModelSupportVision = vi.mocked(useModelSupportVision);
+const mockedUseAiInfraStore = vi.mocked(useAiInfraStore);
 const mockedUseServerConfigStore = vi.mocked(useServerConfigStore);
 
 describe('useVisualMediaUploadAbility', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mockedUseModelSupportVision.mockReturnValue(false);
     mockedUseModelSupportVideo.mockReturnValue(false);
     mockedUseModelSupportToolUse.mockReturnValue(false);
+    mockedUseAiInfraStore.mockImplementation((selector) =>
+      selector({ enabledAiModels: [] } as any),
+    );
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({ enableVisualUnderstanding: false, visualUnderstanding: undefined } as any),
     );
@@ -47,8 +68,17 @@ describe('useVisualMediaUploadAbility', () => {
 
   it('should allow fallback visual upload only when tool use is supported', () => {
     mockedUseModelSupportToolUse.mockReturnValue(true);
-    mockedUseModelSupportVision.mockImplementation((id) => id === 'fallback-model');
-    mockedUseModelSupportVideo.mockImplementation((id) => id === 'fallback-model');
+    mockedUseAiInfraStore.mockImplementation((selector) =>
+      selector({
+        enabledAiModels: [
+          {
+            abilities: { video: true, vision: true },
+            id: 'fallback-model',
+            providerId: 'fallback-provider',
+          },
+        ],
+      } as any),
+    );
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({
         enableVisualUnderstanding: true,
@@ -62,9 +92,33 @@ describe('useVisualMediaUploadAbility', () => {
     expect(result.current.canUploadVideo).toBe(true);
   });
 
+  it('should allow fallback visual upload when fallback model abilities are unknown', () => {
+    mockedUseModelSupportToolUse.mockReturnValue(true);
+    mockedUseServerConfigStore.mockImplementation((selector) =>
+      selector({
+        enableVisualUnderstanding: true,
+        visualUnderstanding: { model: 'server-only-model', provider: 'server-only-provider' },
+      } as any),
+    );
+
+    const { result } = renderHook(() => useVisualMediaUploadAbility('model', 'provider'));
+
+    expect(result.current.canUploadImage).toBe(true);
+    expect(result.current.canUploadVideo).toBe(true);
+  });
+
   it('should reject fallback visual upload when tool use is unsupported', () => {
-    mockedUseModelSupportVision.mockImplementation((id) => id === 'fallback-model');
-    mockedUseModelSupportVideo.mockImplementation((id) => id === 'fallback-model');
+    mockedUseAiInfraStore.mockImplementation((selector) =>
+      selector({
+        enabledAiModels: [
+          {
+            abilities: { video: true, vision: true },
+            id: 'fallback-model',
+            providerId: 'fallback-provider',
+          },
+        ],
+      } as any),
+    );
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({
         enableVisualUnderstanding: true,
@@ -80,8 +134,17 @@ describe('useVisualMediaUploadAbility', () => {
 
   it('should respect fallback model media abilities separately', () => {
     mockedUseModelSupportToolUse.mockReturnValue(true);
-    mockedUseModelSupportVision.mockImplementation((id) => id === 'fallback-model');
-    mockedUseModelSupportVideo.mockReturnValue(false);
+    mockedUseAiInfraStore.mockImplementation((selector) =>
+      selector({
+        enabledAiModels: [
+          {
+            abilities: { video: false, vision: true },
+            id: 'fallback-model',
+            providerId: 'fallback-provider',
+          },
+        ],
+      } as any),
+    );
     mockedUseServerConfigStore.mockImplementation((selector) =>
       selector({
         enableVisualUnderstanding: true,
