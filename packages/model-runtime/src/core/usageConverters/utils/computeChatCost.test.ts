@@ -2,6 +2,7 @@ import type { ModelTokensUsage } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
 import anthropicChatModels from 'model-bank/anthropic';
 import azureChatModels from 'model-bank/azure';
+import deepseekChatModels from 'model-bank/deepseek';
 import googleChatModels from 'model-bank/google';
 import { lobehubChatModels } from 'model-bank/lobehub';
 import openaiChatModels from 'model-bank/openai';
@@ -127,6 +128,116 @@ describe('computeChatPricing', () => {
       // Verify totals match the actual billing log
       expect(totalCredits).toBe(13_132); // 116 + 13016 = 13132
       expect(totalCost).toBeCloseTo(0.013132, 6); // 13132 credits = $0.013132
+    });
+  });
+
+  describe('LobeHub-hosted DeepSeek', () => {
+    const usage: ModelTokensUsage = {
+      inputCacheMissTokens: 1_000_000,
+      inputCachedTokens: 1_000_000,
+      inputTextTokens: 2_000_000,
+      outputTextTokens: 1_000_000,
+      totalInputTokens: 2_000_000,
+      totalOutputTokens: 1_000_000,
+      totalTokens: 3_000_000,
+    };
+
+    it.each([
+      {
+        expectedCredits: {
+          textInput: 14_000,
+          textInput_cacheRead: 280,
+          textOutput: 28_000,
+        },
+        expectedUnits: [
+          { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+        modelId: 'deepseek-v4-flash',
+      },
+      {
+        expectedCredits: {
+          textInput: 43_500,
+          textInput_cacheRead: 363,
+          textOutput: 87_000,
+        },
+        expectedUnits: [
+          {
+            name: 'textInput_cacheRead',
+            rate: 0.0003625,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+          { name: 'textInput', rate: 0.0435, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 0.087, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+        modelId: 'deepseek-v4-pro',
+      },
+      {
+        expectedCredits: {
+          textInput: 14_000,
+          textInput_cacheRead: 280,
+          textOutput: 28_000,
+        },
+        expectedUnits: [
+          { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+        modelId: 'deepseek-chat',
+      },
+      {
+        expectedCredits: {
+          textInput: 14_000,
+          textInput_cacheRead: 280,
+          textOutput: 28_000,
+        },
+        expectedUnits: [
+          { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+        modelId: 'deepseek-reasoner',
+      },
+    ])(
+      'applies 10% hosted discount pricing for $modelId',
+      ({ expectedCredits, expectedUnits, modelId }) => {
+        const pricing = lobehubChatModels.find((model) => model.id === modelId)?.pricing;
+        expect(pricing).toBeDefined();
+        expect(pricing?.units).toEqual(expectedUnits);
+
+        const result = computeChatCost(pricing, usage);
+        expect(result).toBeDefined();
+        expect(result?.issues).toHaveLength(0);
+
+        const { breakdown, totalCost, totalCredits } = result!;
+        expect(breakdown).toHaveLength(3);
+
+        for (const [unitName, credits] of Object.entries(expectedCredits)) {
+          const item = breakdown.find((breakdownItem) => breakdownItem.unit.name === unitName);
+          expect(item?.credits).toBe(credits);
+        }
+
+        const expectedTotalCredits = Object.values(expectedCredits).reduce(
+          (sum, credits) => sum + credits,
+          0,
+        );
+        expect(totalCredits).toBe(expectedTotalCredits);
+        expect(totalCost).toBeCloseTo(expectedTotalCredits / 1_000_000, 6);
+      },
+    );
+
+    it('keeps official DeepSeek provider pricing unchanged', () => {
+      const pricing = deepseekChatModels.find((model) => model.id === 'deepseek-v4-flash')?.pricing;
+      expect(pricing).toEqual({
+        currency: 'CNY',
+        units: [
+          { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      });
     });
   });
 

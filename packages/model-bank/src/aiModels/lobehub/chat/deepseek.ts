@@ -14,11 +14,11 @@ export const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-flash',
     maxOutput: 384_000,
     pricing: {
-      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
+      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-24',
@@ -46,12 +46,11 @@ export const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-pro',
     maxOutput: 384_000,
     pricing: {
-      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
-      // DeepSeek V4 Pro limited-time 75% off discount is valid until 2026-05-05 15:59 UTC.
+      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.003625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.435, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.87, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0003625, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.0435, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.087, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-24',
@@ -81,11 +80,11 @@ export const deepseekChatModels: AIChatModelCard[] = [
     legacy: true,
     maxOutput: 384_000,
     pricing: {
-      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
+      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-01',
@@ -106,11 +105,11 @@ export const deepseekChatModels: AIChatModelCard[] = [
     legacy: true,
     maxOutput: 384_000,
     pricing: {
-      // Official cache-hit input price is permanently reduced to 1/10 of the launch price.
+      // LobeHub-hosted discount price. Official DeepSeek API pricing stays in model-bank/deepseek.
       units: [
-        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.00028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.014, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.028, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-01',
