@@ -295,11 +295,14 @@ describe('time utilities', () => {
 
   describe('formatActivityTime', () => {
     it('uses relative phrasing when the gap is below one day', () => {
-      const result = formatActivityTime('2026-05-01T05:00:00Z', {
+      const input = '2026-05-01T05:00:00Z';
+      const result = formatActivityTime(input, {
         now: '2026-05-01T14:00:00Z',
       });
       expect(result.text).toMatch(/hours? ago/);
-      expect(result.title).toBe('2026-05-01 13:00:00');
+      // title is rendered in local timezone — derive expected value the same
+      // way so the assertion stays correct regardless of the runner's TZ.
+      expect(result.title).toBe(dayjs(input).format('YYYY-MM-DD HH:mm:ss'));
     });
 
     it('switches to absolute date once the gap exceeds one day', () => {
