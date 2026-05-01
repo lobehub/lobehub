@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateFeatureFlag, FeatureFlagsSchema, mapFeatureFlagsEnvToState } from './schema';
+import {
+  DEFAULT_FEATURE_FLAGS,
+  evaluateFeatureFlag,
+  FeatureFlagsSchema,
+  mapFeatureFlagsEnvToState,
+} from './schema';
 
 describe('FeatureFlagsSchema', () => {
   it('should validate correct feature flags with boolean values', () => {
@@ -96,6 +101,12 @@ describe('evaluateFeatureFlag', () => {
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
+  it('should enable auth captcha by default', () => {
+    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
+
+    expect(mappedState.enableAuthCaptcha).toBe(true);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,
