@@ -1380,7 +1380,7 @@ export class AiAgentService {
       videoList,
     };
 
-    if (toolsResult.enabledToolIds.includes(LobeAgentManifest.identifier)) {
+    if (toolsResult.enabledToolIds?.includes(LobeAgentManifest.identifier)) {
       const modelAbilities =
         LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider)
           ?.abilities ?? LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)?.abilities;
