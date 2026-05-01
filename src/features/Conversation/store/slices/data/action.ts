@@ -14,6 +14,7 @@ import { messagesReducer } from './reducer';
 import { dataSelectors } from './selectors';
 
 const log = debug('lobe-render:features:Conversation');
+const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
 
 const mergeFetchedMessagesWithLocalState = (
   fetchedMessages: UIChatMessage[],
@@ -159,6 +160,16 @@ export const dataSlice: StateCreator<
       flatList.length,
       messages.slice(0, 5).map((m) => m.id),
     );
+    if (DEBUG_AGENT_MOCK_REPLAY) {
+      console.info('[AgentMockReplay] ConversationStore:replaceMessages', {
+        context: get().context,
+        contextKey,
+        displayIds: flatList.map((message) => message.id),
+        newCount: messages.length,
+        prevCount: prevDbMessages.length,
+        rawIds: messages.map((message) => message.id),
+      });
+    }
 
     set({ dbMessages: messages, displayMessages: flatList }, false, 'replaceMessages');
 

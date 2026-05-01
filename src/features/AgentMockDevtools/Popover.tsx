@@ -13,10 +13,9 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
-import { useChatStore } from '@/store/chat/store';
-
 import { CaseTrigger } from './CaseTrigger';
 import { useAgentMockPlayer } from './hooks/useAgentMockPlayer';
+import { useAgentMockReplayTarget } from './hooks/useAgentMockReplayTarget';
 import { useMockCases } from './hooks/useMockCases';
 import { useAgentMockStore } from './store/agentMockStore';
 
@@ -67,6 +66,7 @@ const clampToViewport = (pos: PanelPosition, width: number, height: number): Pan
 const styles = createStaticStyles(({ css }) => ({
   body: css`
     padding: 12px;
+    padding-block-start: 0;
   `,
   closeBtn: css`
     cursor: pointer;
@@ -197,6 +197,7 @@ export const Popover = memo(() => {
   const { all } = useMockCases();
   const selected = all.find((c) => c.id === selectedCaseId);
   const { pause, resume, seekToEventIndex, start, stepEvent, stop } = useAgentMockPlayer();
+  const resolveReplayTarget = useAgentMockReplayTarget();
 
   const status = playback?.status;
   const running = status === 'running';
@@ -219,7 +220,7 @@ export const Popover = memo(() => {
 
   const launchCase = useCallback(() => {
     if (!selected) return;
-    const { activeAgentId: agentId, activeTopicId: topicId } = useChatStore.getState();
+    const { agentId, threadId, topicId } = resolveReplayTarget();
     if (!agentId) {
       toast.warning('Open an agent conversation first.');
       return;
@@ -228,8 +229,8 @@ export const Popover = memo(() => {
       toast.warning('Open a topic before playing a mock case.');
       return;
     }
-    start({ agentId, case: selected, topicId });
-  }, [selected, start]);
+    start({ agentId, case: selected, threadId, topicId });
+  }, [resolveReplayTarget, selected, start]);
 
   const handlePlay = useCallback(() => {
     if (idleOrComplete) {

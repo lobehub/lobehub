@@ -4,9 +4,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { Pause, Play, Repeat, RotateCcw, SkipForward } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 
-import { useChatStore } from '@/store/chat/store';
-
 import { useAgentMockPlayer } from '../hooks/useAgentMockPlayer';
+import { useAgentMockReplayTarget } from '../hooks/useAgentMockReplayTarget';
 import { useMockCases } from '../hooks/useMockCases';
 import { useAgentMockStore } from '../store/agentMockStore';
 
@@ -75,6 +74,7 @@ export const TransportBar = memo(() => {
 
   const { pause, resume, seekToEventIndex, setSpeed, start, stepEvent, stepStep, stepTool } =
     useAgentMockPlayer();
+  const resolveReplayTarget = useAgentMockReplayTarget();
 
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -88,7 +88,7 @@ export const TransportBar = memo(() => {
 
   const launchCase = useCallback(() => {
     if (!selected) return;
-    const { activeAgentId: agentId, activeTopicId: topicId } = useChatStore.getState();
+    const { agentId, threadId, topicId } = resolveReplayTarget();
     if (!agentId) {
       toast.warning('Open an agent conversation first.');
       return;
@@ -97,8 +97,8 @@ export const TransportBar = memo(() => {
       toast.warning('Open a topic before playing a mock case.');
       return;
     }
-    start({ agentId, case: selected, topicId });
-  }, [selected, start]);
+    start({ agentId, case: selected, threadId, topicId });
+  }, [resolveReplayTarget, selected, start]);
 
   const handlePlay = useCallback(() => {
     if (idleOrComplete) {

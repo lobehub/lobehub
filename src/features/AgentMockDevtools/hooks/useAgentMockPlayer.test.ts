@@ -33,20 +33,61 @@ const mockCase: MockCase = {
   source: { events: [], type: 'fixture' },
 };
 
-const createMockHandle = () => ({
-  player: {
-    pause: vi.fn(),
-    resume: vi.fn(),
-    seekToEventIndex: vi.fn(),
-    setSpeed: vi.fn(),
-    stepNextEvent: vi.fn(),
-    stepNextStep: vi.fn(),
-    stepNextTool: vi.fn(),
-    subscribe: vi.fn(() => vi.fn()),
-  },
-  start: vi.fn(),
-  stop: vi.fn(),
+const createPlaybackState = (overrides: Record<string, unknown> = {}) => ({
+  currentEventIndex: 0,
+  currentStepIndex: 0,
+  elapsedMs: 0,
+  speedMultiplier: 1,
+  status: 'idle',
+  toolsExecuted: 0,
+  totalDurationMs: 0,
+  totalEvents: 8,
+  totalSteps: 0,
+  totalTools: 0,
+  ...overrides,
 });
+
+const createMockHandle = (initialState = createPlaybackState()) => {
+  let state = initialState;
+  const listeners = new Set<(next: typeof state) => void>();
+  const emit = () => {
+    for (const listener of listeners) listener(state);
+  };
+
+  return {
+    player: {
+      getState: vi.fn(() => state),
+      pause: vi.fn(() => {
+        state = { ...state, status: 'paused' };
+        emit();
+      }),
+      resume: vi.fn(() => {
+        state = { ...state, status: 'running' };
+        emit();
+      }),
+      seekToEventIndex: vi.fn((idx: number) => {
+        state = { ...state, currentEventIndex: idx };
+        emit();
+      }),
+      setSpeed: vi.fn(),
+      stepNextEvent: vi.fn(),
+      stepNextStep: vi.fn(),
+      stepNextTool: vi.fn(),
+      subscribe: vi.fn((listener: (next: typeof state) => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }),
+    },
+    start: vi.fn(() => {
+      state = { ...state, status: 'running' };
+      emit();
+    }),
+    stop: vi.fn(() => {
+      state = { ...state, currentEventIndex: 0, status: 'idle' };
+      emit();
+    }),
+  };
+};
 
 const createChatStoreMock = (overrides: Record<string, unknown> = {}) => ({
   associateMessageWithOperation: vi.fn(),
@@ -140,6 +181,60 @@ describe('useAgentMockPlayer', () => {
       }),
     );
     expect(handle.start).toHaveBeenCalled();
+  });
+
+  it('targets the active thread message bucket when replay starts from a thread view', async () => {
+    const handle = createMockHandle();
+    const chatStore = createChatStoreMock();
+
+    executeMockStream.mockReturnValue(handle);
+    getChatStoreState.mockReturnValue(chatStore);
+    lastDisplayMessageId.mockReturnValue('thread-user-1');
+
+    const { result } = renderHook(() => useAgentMockPlayer());
+
+    act(() => {
+      result.current.start({
+        agentId: 'agent-1',
+        case: mockCase,
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+    });
+
+    const operationId = chatStore.startOperation.mock.calls[0][0].operationId as string;
+
+    expect(chatStore.cancelOperations).toHaveBeenCalledWith(
+      {
+        agentId: 'agent-1',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+        type: ['execAgentRuntime', 'execHeterogeneousAgent', 'execServerAgentRuntime'],
+      },
+      'Mock playback started',
+    );
+    expect(chatStore.startOperation).toHaveBeenCalledWith({
+      context: {
+        agentId: 'agent-1',
+        messageId: `mock-msg-${operationId}`,
+        scope: 'thread',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      },
+      operationId,
+      type: 'execAgentRuntime',
+    });
+    expect(chatStore.optimisticCreateTmpMessage).toHaveBeenCalledWith(
+      {
+        agentId: 'agent-1',
+        content: '',
+        parentId: 'thread-user-1',
+        role: 'assistant',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      },
+      { operationId, tempMessageId: `mock-msg-${operationId}` },
+    );
   });
 
   it('injects stream chunks into the frontend message store', async () => {
@@ -320,7 +415,12 @@ describe('useAgentMockPlayer', () => {
       {
         id: 'server-assistant-1',
         type: 'updateMessage',
-        value: { content: '', error: undefined },
+        value: {
+          content: '',
+          error: null,
+          reasoning: { content: '' },
+          tools: [],
+        },
       },
       { operationId },
     );
@@ -328,5 +428,86 @@ describe('useAgentMockPlayer', () => {
       'server-assistant-1',
       operationId,
     );
+  });
+
+  it('rewinds by rebuilding the mock operation and keeps resume on the rewound handle', async () => {
+    const firstHandle = createMockHandle(
+      createPlaybackState({ currentEventIndex: 4, status: 'paused' }),
+    );
+    const secondHandle = createMockHandle();
+    const chatStore = createChatStoreMock();
+
+    executeMockStream.mockReturnValueOnce(firstHandle).mockReturnValueOnce(secondHandle);
+    getChatStoreState.mockReturnValue(chatStore);
+    lastDisplayMessageId.mockReturnValue('user-1');
+
+    const { result } = renderHook(() => useAgentMockPlayer());
+
+    act(() => {
+      result.current.start({ agentId: 'agent-1', case: mockCase, topicId: 'topic-1' });
+    });
+
+    const firstOperationId = chatStore.startOperation.mock.calls[0][0].operationId as string;
+    const assistantMessageId = chatStore.startOperation.mock.calls[0][0].context
+      .messageId as string;
+
+    act(() => {
+      result.current.pause();
+    });
+
+    act(() => {
+      result.current.seekToEventIndex(2);
+    });
+
+    const secondOperationId = chatStore.startOperation.mock.calls[1][0].operationId as string;
+
+    expect(firstHandle.stop).toHaveBeenCalledTimes(1);
+    expect(chatStore.cancelOperation).toHaveBeenCalledWith(
+      firstOperationId,
+      'Mock playback rewound',
+    );
+    expect(chatStore.startOperation).toHaveBeenCalledTimes(2);
+    expect(chatStore.startOperation.mock.calls[1][0]).toMatchObject({
+      context: {
+        agentId: 'agent-1',
+        messageId: assistantMessageId,
+        scope: 'main',
+        topicId: 'topic-1',
+      },
+      operationId: secondOperationId,
+      type: 'execAgentRuntime',
+    });
+    expect(chatStore.optimisticCreateTmpMessage).toHaveBeenCalledTimes(1);
+    expect(chatStore.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: assistantMessageId,
+        type: 'deleteMessage',
+      },
+      { operationId: secondOperationId },
+    );
+    expect(chatStore.internal_dispatchMessage).toHaveBeenCalledWith(
+      {
+        id: assistantMessageId,
+        type: 'createMessage',
+        value: {
+          agentId: 'agent-1',
+          content: '',
+          parentId: 'user-1',
+          role: 'assistant',
+          topicId: 'topic-1',
+        },
+      },
+      { operationId: secondOperationId },
+    );
+    expect(secondHandle.player.seekToEventIndex).toHaveBeenCalledWith(2);
+    expect(secondHandle.start).toHaveBeenCalledTimes(1);
+    expect(secondHandle.player.pause).toHaveBeenCalledTimes(1);
+    expect(useAgentMockStore.getState().playback?.status).toBe('paused');
+
+    act(() => {
+      result.current.resume();
+    });
+
+    expect(secondHandle.player.resume).toHaveBeenCalledTimes(1);
   });
 });

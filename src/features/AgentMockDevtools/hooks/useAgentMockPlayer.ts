@@ -14,22 +14,35 @@ import { createMockStoreInjector } from './createMockStoreInjector';
 
 type MockStreamHandle = ReturnType<typeof executeMockStream>;
 
+interface PlaybackSession {
+  args: StartArgs;
+  assistantMessageId: string;
+  parentMessageId: string | null;
+  reuseAssistantMessage: boolean;
+}
+
 const playerController = {
   handle: null as MockStreamHandle | null,
   operationId: null as string | null,
+  session: null as PlaybackSession | null,
+  unsubscribe: null as (() => void) | null,
 };
 
 interface StartArgs {
-  /** Required — store dispatches messages keyed by agentId/topicId. */
+  /** Required — store dispatches messages keyed by the active conversation target. */
   agentId: string;
   case: MockCase;
+  threadId?: string | null;
   topicId?: string;
 }
+
+const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
 
 const findRunningServerAssistantMessageId = (chatStore: ChatStore, args: StartArgs) => {
   const contextKey = messageMapKey({
     agentId: args.agentId,
-    scope: 'main',
+    scope: args.threadId ? 'thread' : 'main',
+    threadId: args.threadId ?? null,
     topicId: args.topicId ?? null,
   });
   const messages = chatStore.dbMessagesMap[contextKey] ?? [];
@@ -77,41 +90,169 @@ const clearLocalTopicRunningOperation = (chatStore: ChatStore, topicId: string |
   chatStore.internal_updateTopicLoading(topicId, false);
 };
 
+const getContextKey = (args: StartArgs) =>
+  messageMapKey({
+    agentId: args.agentId,
+    scope: args.threadId ? 'thread' : 'main',
+    threadId: args.threadId ?? null,
+    topicId: args.topicId ?? null,
+  });
+
+const getMockToolMessagePrefix = (assistantMessageId: string) =>
+  `mock-tool-msg-${assistantMessageId}-`;
+
+const clearMockToolMessages = (
+  chatStore: ChatStore,
+  args: StartArgs,
+  assistantMessageId: string,
+  operationId: string,
+) => {
+  const messages = chatStore.dbMessagesMap[getContextKey(args)] ?? [];
+  const prefix = getMockToolMessagePrefix(assistantMessageId);
+  const toolMessageIds = messages
+    .filter(
+      (message) =>
+        message.role === 'tool' &&
+        message.parentId === assistantMessageId &&
+        message.id.startsWith(prefix),
+    )
+    .map((message) => message.id);
+
+  if (toolMessageIds.length === 0) return;
+
+  chatStore.internal_dispatchMessage(
+    {
+      ids: toolMessageIds,
+      type: 'deleteMessages',
+    },
+    { operationId },
+  );
+};
+
+const resetAssistantProjection = (
+  chatStore: ChatStore,
+  session: PlaybackSession,
+  operationId: string,
+) => {
+  clearMockToolMessages(chatStore, session.args, session.assistantMessageId, operationId);
+
+  if (session.reuseAssistantMessage) {
+    chatStore.internal_dispatchMessage(
+      {
+        id: session.assistantMessageId,
+        type: 'updateMessage',
+        value: {
+          content: '',
+          error: null as never,
+          reasoning: { content: '' },
+          tools: [],
+        },
+      },
+      { operationId },
+    );
+  } else {
+    chatStore.internal_dispatchMessage(
+      {
+        id: session.assistantMessageId,
+        type: 'deleteMessage',
+      },
+      { operationId },
+    );
+    chatStore.internal_dispatchMessage(
+      {
+        id: session.assistantMessageId,
+        type: 'createMessage',
+        value: {
+          agentId: session.args.agentId,
+          content: '',
+          parentId: session.parentMessageId ?? undefined,
+          role: 'assistant',
+          threadId: session.args.threadId ?? undefined,
+          topicId: session.args.topicId,
+        },
+      },
+      { operationId },
+    );
+  }
+
+  chatStore.internal_toggleToolCallingStreaming(session.assistantMessageId, undefined);
+};
+
 export function useAgentMockPlayer() {
   const setPlayback = useAgentMockStore((s) => s.setPlayback);
   const speed = useAgentMockStore((s) => s.speed);
 
-  const start = useCallback(
-    (args: StartArgs) => {
-      const chatStore = useChatStore.getState();
+  const disposeCurrentPlayback = useCallback(
+    (chatStore: ChatStore, reason: string, keepSession: boolean = false) => {
+      playerController.unsubscribe?.();
+      playerController.unsubscribe = null;
 
       playerController.handle?.stop();
+
       if (playerController.operationId) {
-        chatStore.cancelOperation(playerController.operationId, 'Mock playback restarted');
+        chatStore.cancelOperation(playerController.operationId, reason);
         playerController.operationId = null;
       }
 
-      chatStore.cancelOperations(
-        {
-          agentId: args.agentId,
-          topicId: args.topicId ?? null,
-          type: AI_RUNTIME_OPERATION_TYPES,
-        },
-        'Mock playback started',
-      );
+      playerController.handle = null;
+      if (!keepSession) {
+        playerController.session = null;
+      }
+    },
+    [],
+  );
+
+  const createPlayback = useCallback(
+    (
+      args: StartArgs,
+      sessionOverride?: Pick<
+        PlaybackSession,
+        'assistantMessageId' | 'parentMessageId' | 'reuseAssistantMessage'
+      >,
+    ) => {
+      const chatStore = useChatStore.getState();
+
+      playerController.unsubscribe?.();
+      playerController.unsubscribe = null;
+
       clearLocalTopicRunningOperation(chatStore, args.topicId);
 
-      const operationId = `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const now = Date.now();
+      const operationId = `mock-${now}-${Math.random().toString(36).slice(2, 8)}`;
       const context: ConversationContext = {
         agentId: args.agentId,
-        scope: 'main',
+        scope: args.threadId ? 'thread' : 'main',
         topicId: args.topicId,
+        ...(args.threadId ? { threadId: args.threadId } : {}),
       };
-      const reusableAssistantMessageId = findRunningServerAssistantMessageId(chatStore, args);
-      const assistantMessageId = reusableAssistantMessageId ?? `mock-msg-${operationId}`;
 
-      if (reusableAssistantMessageId) {
-        cancelRunningMessageRuntimeOperations(chatStore, reusableAssistantMessageId);
+      const reusableAssistantMessageId =
+        sessionOverride?.assistantMessageId ?? findRunningServerAssistantMessageId(chatStore, args);
+      const reuseAssistantMessage =
+        sessionOverride?.reuseAssistantMessage ?? reusableAssistantMessageId != null;
+      const assistantMessageId = reusableAssistantMessageId ?? `mock-msg-${operationId}`;
+      const parentMessageId =
+        sessionOverride?.parentMessageId ??
+        (reuseAssistantMessage
+          ? null
+          : displayMessageSelectors.lastDisplayMessageId(useChatStore.getState()));
+      const contextKey = messageMapKey(context);
+
+      if (DEBUG_AGENT_MOCK_REPLAY) {
+        console.info('[AgentMockReplay] createPlayback:start', {
+          activeAgentId: chatStore.activeAgentId,
+          activeThreadId: chatStore.activeThreadId,
+          activeTopicId: chatStore.activeTopicId,
+          context,
+          contextKey,
+          existingBucketCount: chatStore.dbMessagesMap[contextKey]?.length ?? 0,
+          parentMessageId,
+          reuseAssistantMessage,
+        });
+      }
+
+      if (!sessionOverride && reuseAssistantMessage) {
+        cancelRunningMessageRuntimeOperations(chatStore, assistantMessageId);
       }
 
       chatStore.startOperation({
@@ -121,27 +262,53 @@ export function useAgentMockPlayer() {
       });
       playerController.operationId = operationId;
 
-      if (reusableAssistantMessageId) {
-        chatStore.internal_dispatchMessage(
+      if (sessionOverride) {
+        resetAssistantProjection(
+          chatStore,
           {
-            id: assistantMessageId,
-            type: 'updateMessage',
-            value: { content: '', error: undefined },
+            args,
+            assistantMessageId,
+            parentMessageId,
+            reuseAssistantMessage,
           },
-          { operationId },
+          operationId,
         );
-      } else {
-        const parentId = displayMessageSelectors.lastDisplayMessageId(useChatStore.getState());
+      } else if (reuseAssistantMessage) {
+        resetAssistantProjection(
+          chatStore,
+          {
+            args,
+            assistantMessageId,
+            parentMessageId,
+            reuseAssistantMessage: true,
+          },
+          operationId,
+        );
+      }
+
+      if (!reuseAssistantMessage && !sessionOverride) {
         chatStore.optimisticCreateTmpMessage(
           {
             agentId: args.agentId,
             content: '',
-            parentId,
+            parentId: parentMessageId ?? undefined,
             role: 'assistant',
+            threadId: args.threadId ?? undefined,
             topicId: args.topicId,
           },
           { operationId, tempMessageId: assistantMessageId },
         );
+      }
+
+      if (DEBUG_AGENT_MOCK_REPLAY) {
+        const nextChatStore = useChatStore.getState();
+        console.info('[AgentMockReplay] createPlayback:after-message-create', {
+          assistantMessageId,
+          bucketIds: (nextChatStore.dbMessagesMap[contextKey] ?? []).map((message) => message.id),
+          contextKey,
+          operationContext: nextChatStore.operations[operationId]?.context,
+          operationId,
+        });
       }
 
       chatStore.associateMessageWithOperation(assistantMessageId, operationId);
@@ -159,31 +326,104 @@ export function useAgentMockPlayer() {
         speedMultiplier: speed,
       });
 
-      handle.player.subscribe((state) => setPlayback(state));
-      handle.start();
       playerController.handle = handle;
+      playerController.session = {
+        args,
+        assistantMessageId,
+        parentMessageId,
+        reuseAssistantMessage,
+      };
+      playerController.unsubscribe = handle.player.subscribe((state) => setPlayback(state));
+      setPlayback(handle.player.getState());
+
+      return handle;
     },
     [setPlayback, speed],
+  );
+
+  const start = useCallback(
+    (args: StartArgs) => {
+      const chatStore = useChatStore.getState();
+
+      disposeCurrentPlayback(chatStore, 'Mock playback restarted');
+
+      chatStore.cancelOperations(
+        {
+          agentId: args.agentId,
+          threadId: args.threadId,
+          topicId: args.topicId ?? null,
+          type: AI_RUNTIME_OPERATION_TYPES,
+        },
+        'Mock playback started',
+      );
+      const handle = createPlayback(args);
+      handle.start();
+      setPlayback(handle.player.getState());
+    },
+    [createPlayback, disposeCurrentPlayback, setPlayback],
   );
 
   const pause = useCallback(() => playerController.handle?.player.pause(), []);
   const resume = useCallback(() => playerController.handle?.player.resume(), []);
   const stop = useCallback(() => {
-    playerController.handle?.stop();
-    const operationId = playerController.operationId;
-    if (operationId) {
-      useChatStore.getState().cancelOperation(operationId, 'Mock playback stopped');
-      playerController.operationId = null;
-    }
-    playerController.handle = null;
+    disposeCurrentPlayback(useChatStore.getState(), 'Mock playback stopped');
     setPlayback(null);
-  }, [setPlayback]);
+  }, [disposeCurrentPlayback, setPlayback]);
   const stepEvent = useCallback(() => playerController.handle?.player.stepNextEvent(), []);
   const stepStep = useCallback(() => playerController.handle?.player.stepNextStep(), []);
   const stepTool = useCallback(() => playerController.handle?.player.stepNextTool(), []);
   const seekToEventIndex = useCallback(
-    (idx: number) => playerController.handle?.player.seekToEventIndex(idx),
-    [],
+    (idx: number) => {
+      const handle = playerController.handle;
+      const session = playerController.session;
+
+      if (!handle || !session) return;
+
+      const currentState = handle.player.getState();
+      if (idx >= currentState.currentEventIndex) {
+        handle.player.seekToEventIndex(idx);
+        setPlayback(handle.player.getState());
+        return;
+      }
+
+      const chatStore = useChatStore.getState();
+      const shouldResumeRunning = currentState.status === 'running';
+      const shouldPauseAtTarget =
+        currentState.status === 'paused' || currentState.status === 'complete';
+
+      disposeCurrentPlayback(chatStore, 'Mock playback rewound', true);
+      chatStore.cancelOperations(
+        {
+          agentId: session.args.agentId,
+          threadId: session.args.threadId ?? undefined,
+          topicId: session.args.topicId ?? null,
+          type: AI_RUNTIME_OPERATION_TYPES,
+        },
+        'Mock playback rewound',
+      );
+
+      const rebuiltHandle = createPlayback(session.args, {
+        assistantMessageId: session.assistantMessageId,
+        parentMessageId: session.parentMessageId,
+        reuseAssistantMessage: session.reuseAssistantMessage,
+      });
+
+      rebuiltHandle.player.seekToEventIndex(idx);
+      setPlayback(rebuiltHandle.player.getState());
+
+      if (shouldResumeRunning) {
+        rebuiltHandle.start();
+        setPlayback(rebuiltHandle.player.getState());
+        return;
+      }
+
+      if (shouldPauseAtTarget || idx > 0) {
+        rebuiltHandle.start();
+        rebuiltHandle.player.pause();
+        setPlayback(rebuiltHandle.player.getState());
+      }
+    },
+    [createPlayback, disposeCurrentPlayback, setPlayback],
   );
   const setSpeed = useCallback(
     (s: Parameters<MockStreamHandle['player']['setSpeed']>[0]) =>

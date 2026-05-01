@@ -2,13 +2,12 @@ import { Flexbox, Segmented, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { useChatStore } from '@/store/chat/store';
-
 import { CaseTrigger } from './CaseTrigger';
 import { StatsStrip } from './components/StatsStrip';
 import { StatusPill } from './components/StatusPill';
 import { TransportBar } from './components/TransportBar';
 import { useAgentMockPlayer } from './hooks/useAgentMockPlayer';
+import { useAgentMockReplayTarget } from './hooks/useAgentMockReplayTarget';
 import { useMockCases } from './hooks/useMockCases';
 import { type DevtoolsTab, useAgentMockStore } from './store/agentMockStore';
 import { FixtureView } from './views/FixtureView';
@@ -79,15 +78,16 @@ export const DevtoolsLayout = memo(() => {
   const selected = all.find((c) => c.id === selectedCaseId);
 
   const { start } = useAgentMockPlayer();
+  const resolveReplayTarget = useAgentMockReplayTarget();
 
   const lastReplayedId = useRef<string | null>(null);
 
   const launchCase = useCallback(() => {
     if (!selected) return;
-    const { activeAgentId: agentId, activeTopicId: topicId } = useChatStore.getState();
+    const { agentId, threadId, topicId } = resolveReplayTarget();
     if (!agentId || !topicId) return;
-    start({ agentId, case: selected, topicId });
-  }, [selected, start]);
+    start({ agentId, case: selected, threadId, topicId });
+  }, [resolveReplayTarget, selected, start]);
 
   useEffect(() => {
     if (!loop) {

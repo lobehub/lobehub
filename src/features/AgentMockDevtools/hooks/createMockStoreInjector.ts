@@ -13,12 +13,15 @@ import type {
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
 import type { ChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface MockStoreInjectorParams {
   assistantMessageId: string;
   context: ConversationContext;
   operationId: string;
 }
+
+const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
 
 const toChatMessageError = (data: unknown): ChatMessageError => {
   if (typeof data === 'object' && data && 'type' in data && typeof data.type === 'string') {
@@ -86,6 +89,28 @@ export const createMockStoreInjector = (get: () => ChatStore, params: MockStoreI
   return (event: AgentStreamEvent) => {
     if (terminalState) return;
 
+    if (DEBUG_AGENT_MOCK_REPLAY) {
+      const state = get();
+      const resolvedContext = state.operations[operationId]?.context;
+      const contextKey = resolvedContext?.agentId
+        ? messageMapKey({
+            agentId: resolvedContext.agentId,
+            groupId: resolvedContext.groupId,
+            scope: resolvedContext.scope,
+            threadId: resolvedContext.threadId,
+            topicId: resolvedContext.topicId,
+          })
+        : undefined;
+      console.info('[AgentMockReplay] injector:event', {
+        assistantMessageId,
+        bucketCount: contextKey ? state.dbMessagesMap[contextKey]?.length : undefined,
+        contextKey,
+        eventType: event.type,
+        operationId,
+        resolvedContext,
+      });
+    }
+
     if (event.type === 'agent_runtime_end' || event.type === 'error') {
       terminalState = event.type === 'error' ? 'error' : 'completed';
     }
@@ -111,6 +136,13 @@ export const createMockStoreInjector = (get: () => ChatStore, params: MockStoreI
             },
             dispatchContext,
           );
+          if (DEBUG_AGENT_MOCK_REPLAY) {
+            console.info('[AgentMockReplay] injector:text-dispatched', {
+              assistantMessageId,
+              contentLength: accumulatedContent.length,
+              operationId,
+            });
+          }
         }
 
         if (data.chunkType === 'reasoning' && data.reasoning) {
@@ -150,7 +182,7 @@ export const createMockStoreInjector = (get: () => ChatStore, params: MockStoreI
         if (!data?.toolCalling) break;
 
         const payload = toToolPayload(data.toolCalling);
-        const toolMessageId = `mock-tool-msg-${operationId}-${payload.id}`;
+        const toolMessageId = `mock-tool-msg-${assistantMessageId}-${payload.id}`;
         toolMessageIds.set(payload.id, toolMessageId);
 
         tools = tools.some((tool) => tool.id === payload.id)

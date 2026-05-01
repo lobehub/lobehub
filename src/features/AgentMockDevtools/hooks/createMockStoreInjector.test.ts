@@ -70,4 +70,52 @@ describe('createMockStoreInjector', () => {
       { content: 'hello', id: assistantMessageId, role: 'assistant' },
     ]);
   });
+
+  it('writes stream chunks into a thread-scoped message bucket', () => {
+    const context = {
+      agentId: 'agent-1',
+      scope: 'thread',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    } satisfies ConversationContext;
+
+    const { operationId } = useChatStore.getState().startOperation({
+      context,
+      type: 'execAgentRuntime',
+    });
+    const assistantMessageId = 'mock-thread-msg-1';
+
+    useChatStore.getState().optimisticCreateTmpMessage(
+      {
+        agentId: context.agentId,
+        content: '',
+        role: 'assistant',
+        threadId: context.threadId,
+        topicId: context.topicId,
+      },
+      { operationId, tempMessageId: assistantMessageId },
+    );
+
+    const inject = createMockStoreInjector(() => useChatStore.getState(), {
+      assistantMessageId,
+      context,
+      operationId,
+    });
+
+    act(() => {
+      inject({
+        data: { chunkType: 'text', content: 'thread hello' },
+        operationId,
+        stepIndex: 0,
+        timestamp: Date.now(),
+        type: 'stream_chunk',
+      });
+    });
+
+    const key = messageMapKey(context);
+    expect(useChatStore.getState().dbMessagesMap[key]).toMatchObject([
+      { content: 'thread hello', id: assistantMessageId, role: 'assistant' },
+    ]);
+    expect(useChatStore.getState().dbMessagesMap['main_agent-1_topic-1']).toBeUndefined();
+  });
 });
