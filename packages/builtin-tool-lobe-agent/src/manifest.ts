@@ -14,7 +14,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
         properties: {
           files: {
             description:
-              'Optional visual file refs from the current message, such as image_1 or video_1. Omit this field to analyze all current visual files.',
+              'Optional visual file refs, such as image_1 for the current message or msg_xxx.image_1 for earlier messages. Omit this field to analyze all current visual files.',
             items: {
               type: 'string',
             },

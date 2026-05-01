@@ -4,7 +4,7 @@ import type {
   ChatImageItem,
   ChatVideoItem,
 } from '@lobechat/types';
-import { BaseExecutor } from '@lobechat/types';
+import { BaseExecutor, createVisualFileRef, createVisualLocalRef } from '@lobechat/types';
 
 import { LobeAgentManifest } from '../manifest';
 import type { AnalyzeVisualMediaParams } from '../types';
@@ -12,6 +12,8 @@ import { LobeAgentApiName } from '../types';
 
 interface VisualFileItem {
   description: string;
+  localRef: string;
+  messageId?: string;
   name: string;
   ref: string;
   type: 'image' | 'video';
@@ -19,6 +21,7 @@ interface VisualFileItem {
 }
 
 interface VisualSourceMessage {
+  id?: string;
   imageList?: ChatImageItem[];
   parentId?: string;
   role?: string;
@@ -44,32 +47,41 @@ const createAbortController = (signal?: AbortSignal) => {
 };
 
 const toVisualFileItems = (
+  message: VisualSourceMessage | undefined,
   images: ChatImageItem[] = [],
   videos: ChatVideoItem[] = [],
 ): VisualFileItem[] => [
   ...images.map((image, index) => ({
     description: image.alt || `Image ${index + 1}`,
+    localRef: createVisualLocalRef('image', index),
+    messageId: message?.id,
     name: image.alt || image.id,
-    ref: `image_${index + 1}`,
+    ref: createVisualFileRef({ index, messageId: message?.id, type: 'image' }),
     type: 'image' as const,
     uri: image.url,
   })),
   ...videos.map((video, index) => ({
     description: video.alt || `Video ${index + 1}`,
+    localRef: createVisualLocalRef('video', index),
+    messageId: message?.id,
     name: video.alt || video.id,
-    ref: `video_${index + 1}`,
+    ref: createVisualFileRef({ index, messageId: message?.id, type: 'video' }),
     type: 'video' as const,
     uri: video.url,
   })),
 ];
 
-const selectFiles = (items: VisualFileItem[], refs?: string[]) => {
+const selectFiles = (items: VisualFileItem[], sourceMessageId?: string, refs?: string[]) => {
   if (!refs || refs.length === 0) return { selected: items };
 
+  const findItem = (ref: string) =>
+    items.find(
+      (item) => item.ref === ref || (item.messageId === sourceMessageId && item.localRef === ref),
+    );
   const selected = refs
-    .map((ref) => items.find((item) => item.ref === ref))
+    .map((ref) => findItem(ref))
     .filter((item): item is VisualFileItem => !!item);
-  const invalidRefs = refs.filter((ref) => !items.some((item) => item.ref === ref));
+  const invalidRefs = refs.filter((ref) => !findItem(ref));
 
   return { invalidRefs, selected };
 };
@@ -132,7 +144,16 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       : hasVisualFiles(parentUserMessage)
         ? parentUserMessage
         : dbMessageSelectors.latestUserMessage(chatState);
-    const files = toVisualFileItems(sourceMessage?.imageList, sourceMessage?.videoList);
+    const activeVisualMessages = dbMessageSelectors
+      .activeDbMessages(chatState)
+      .filter(hasVisualFiles);
+    const visualMessages = [
+      ...(hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
+      ...activeVisualMessages.filter((message) => message.id !== sourceMessage?.id),
+    ];
+    const files = visualMessages.flatMap((message) =>
+      toVisualFileItems(message, message.imageList, message.videoList),
+    );
 
     if (files.length === 0) {
       return {
@@ -144,14 +165,18 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
-    const { invalidRefs, selected } = selectFiles(files, params.files);
+    const currentFiles = files.filter((file) => file.messageId === sourceMessage?.id);
+    const selectableFiles = params.files?.length ? files : currentFiles;
+    const { invalidRefs, selected } = selectFiles(selectableFiles, sourceMessage?.id, params.files);
     if (invalidRefs?.length) {
+      const availableRefs = selectableFiles.flatMap((file) =>
+        file.messageId === sourceMessage?.id ? [file.ref, file.localRef] : [file.ref],
+      );
+
       return {
-        content: `Unknown file refs: ${invalidRefs.join(', ')}. Available refs: ${files
-          .map((file) => file.ref)
-          .join(', ')}`,
+        content: `Unknown file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}`,
         error: { message: 'Unknown visual file refs', type: 'InvalidToolArguments' },
-        state: { availableFiles: files, invalidRefs },
+        state: { availableFiles: selectableFiles, invalidRefs },
         success: false,
       };
     }

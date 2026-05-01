@@ -215,6 +215,7 @@ export class MessageContentProcessor extends BaseProcessor {
         addUrl: this.config.fileContext.includeFileUrl ?? true,
         fileList: message.fileList,
         imageList: message.imageList || [],
+        messageId: message.id,
         videoList: message.videoList || [],
       });
 

@@ -1,7 +1,13 @@
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
-import type { BuiltinServerRuntimeOutput, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import {
+  type BuiltinServerRuntimeOutput,
+  type ChatImageItem,
+  type ChatVideoItem,
+  createVisualFileRef,
+  createVisualLocalRef,
+} from '@lobechat/types';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 
 import { MessageModel } from '@/database/models/message';
@@ -18,6 +24,8 @@ interface AnalyzeVisualMediaParams {
 
 interface VisualFileItem {
   id: string;
+  localRef: string;
+  messageId?: string;
   mimeType?: string;
   name?: string;
   ref: string;
@@ -26,8 +34,12 @@ interface VisualFileItem {
 }
 
 interface LobeAgentRuntimeContext {
+  agentId?: string | null;
+  groupId?: string | null;
   messageId: string;
   serverDB: LobeChatDatabase;
+  threadId?: string | null;
+  topicId?: string;
   userId: string;
 }
 
@@ -44,22 +56,35 @@ const getModelAbilities = (model: string, provider: string) => {
   )?.abilities;
 };
 
-const buildVisualItems = (message: {
+interface VisualSourceMessage {
+  agentId?: string | null;
+  groupId?: string | null;
+  id?: string;
   imageList?: ChatImageItem[];
+  role?: string;
+  sessionId?: string | null;
+  threadId?: string | null;
+  topicId?: string | null;
   videoList?: ChatVideoItem[];
-}): VisualFileItem[] => {
+}
+
+const buildVisualItems = (message: VisualSourceMessage): VisualFileItem[] => {
   const images: VisualFileItem[] = (message.imageList ?? []).map((item, index) => ({
     id: item.id,
+    localRef: createVisualLocalRef('image', index),
+    messageId: message.id,
     name: item.alt,
-    ref: `image_${index + 1}`,
+    ref: createVisualFileRef({ index, messageId: message.id, type: 'image' }),
     type: 'image',
     url: item.url,
   }));
 
   const videos: VisualFileItem[] = (message.videoList ?? []).map((item, index) => ({
     id: item.id,
+    localRef: createVisualLocalRef('video', index),
+    messageId: message.id,
     name: item.alt,
-    ref: `video_${index + 1}`,
+    ref: createVisualFileRef({ index, messageId: message.id, type: 'video' }),
     type: 'video',
     url: item.url,
   }));
@@ -67,16 +92,83 @@ const buildVisualItems = (message: {
   return [...images, ...videos];
 };
 
+const hasVisualFiles = (message: VisualSourceMessage) =>
+  (message.imageList?.length ?? 0) > 0 || (message.videoList?.length ?? 0) > 0;
+
+const selectVisualItems = (
+  items: VisualFileItem[],
+  sourceMessageId: string,
+  requestedRefs?: string[],
+) => {
+  const findItem = (ref: string) =>
+    items.find(
+      (item) => item.ref === ref || (item.messageId === sourceMessageId && item.localRef === ref),
+    );
+
+  const availableRefs = items.flatMap((item) =>
+    item.messageId === sourceMessageId ? [item.ref, item.localRef] : [item.ref],
+  );
+  const unknownRefs = requestedRefs?.filter((ref) => !findItem(ref)) ?? [];
+  const selectedItems =
+    requestedRefs && requestedRefs.length > 0
+      ? requestedRefs.map((ref) => findItem(ref)).filter((item): item is VisualFileItem => !!item)
+      : items;
+
+  return { availableRefs, selectedItems, unknownRefs };
+};
+
 class LobeAgentExecutionRuntime {
+  private agentId?: string | null;
   private db: LobeChatDatabase;
+  private groupId?: string | null;
   private userId: string;
   private messageId: string;
+  private threadId?: string | null;
+  private topicId?: string;
 
   constructor(context: LobeAgentRuntimeContext) {
+    this.agentId = context.agentId;
     this.db = context.serverDB;
+    this.groupId = context.groupId;
     this.messageId = context.messageId;
+    this.threadId = context.threadId;
+    this.topicId = context.topicId;
     this.userId = context.userId;
   }
+
+  private queryScopeMessages = (
+    messageModel: MessageModel,
+    sourceMessage: VisualSourceMessage,
+    postProcessUrl: (path: string | null, file: { fileType: string }) => Promise<string>,
+  ) => {
+    const topicId = this.topicId ?? sourceMessage.topicId ?? undefined;
+    const threadId = sourceMessage.threadId ?? this.threadId ?? undefined;
+    const groupId = sourceMessage.groupId ?? this.groupId ?? undefined;
+    const agentId = sourceMessage.agentId ?? this.agentId ?? undefined;
+    const sessionId = sourceMessage.sessionId ?? undefined;
+
+    if (threadId) {
+      return messageModel.query({ threadId, topicId }, { postProcessUrl });
+    }
+
+    if (groupId) {
+      return messageModel.query({ groupId, topicId }, { postProcessUrl });
+    }
+
+    if (agentId) {
+      return messageModel.query({ agentId, topicId }, { postProcessUrl });
+    }
+
+    if (sessionId) {
+      return messageModel.query({ sessionId, topicId }, { postProcessUrl });
+    }
+
+    if (topicId) {
+      return messageModel.query({ topicId }, { postProcessUrl });
+    }
+
+    return Promise.resolve([sourceMessage]);
+  };
 
   analyzeVisualMedia = async (
     params: AnalyzeVisualMediaParams,
@@ -97,23 +189,43 @@ class LobeAgentExecutionRuntime {
 
     const fileService = new FileService(this.db, this.userId);
     const messageModel = new MessageModel(this.db, this.userId);
+    const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
     const [sourceMessage] = await messageModel.queryByIds([this.messageId], {
-      postProcessUrl: (path) => fileService.getFullFileUrl(path),
+      postProcessUrl,
     });
+
+    const requestedRefs = params.files?.filter(Boolean);
+    const visualMessages =
+      requestedRefs && requestedRefs.length > 0 && sourceMessage
+        ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
+        : sourceMessage
+          ? [sourceMessage]
+          : [];
+    const orderedVisualMessages = [
+      ...(sourceMessage && hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
+      ...visualMessages.filter(
+        (message) =>
+          message.id !== sourceMessage?.id && message.role === 'user' && hasVisualFiles(message),
+      ),
+    ];
 
     if (!sourceMessage) {
       return buildError(`Source message not found: ${this.messageId}`, 'SOURCE_MESSAGE_NOT_FOUND');
     }
 
-    const visualItems = buildVisualItems(sourceMessage);
+    const visualItems = orderedVisualMessages.flatMap((message) => buildVisualItems(message));
 
     if (visualItems.length === 0) {
       return buildError('No visual files are attached to the current message.', 'NO_VISUAL_FILES');
     }
 
-    const availableRefs = visualItems.map((item) => item.ref);
-    const requestedRefs = params.files?.filter(Boolean);
-    const unknownRefs = requestedRefs?.filter((ref) => !availableRefs.includes(ref)) ?? [];
+    const defaultItems = visualItems.filter((item) => item.messageId === this.messageId);
+    const selectableItems = requestedRefs && requestedRefs.length > 0 ? visualItems : defaultItems;
+    const { availableRefs, selectedItems, unknownRefs } = selectVisualItems(
+      selectableItems,
+      this.messageId,
+      requestedRefs,
+    );
 
     if (unknownRefs.length > 0) {
       return buildError(
@@ -122,10 +234,9 @@ class LobeAgentExecutionRuntime {
       );
     }
 
-    const selectedItems =
-      requestedRefs && requestedRefs.length > 0
-        ? visualItems.filter((item) => requestedRefs.includes(item.ref))
-        : visualItems;
+    if (selectedItems.length === 0) {
+      return buildError('No visual files selected.', 'NO_VISUAL_FILES_SELECTED');
+    }
 
     const abilities = getModelAbilities(model, provider);
     const hasImages = selectedItems.some((item) => item.type === 'image');
@@ -223,8 +334,12 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
     }
 
     return new LobeAgentExecutionRuntime({
+      agentId: context.agentId,
+      groupId: context.groupId,
       messageId: context.messageId,
       serverDB: context.serverDB,
+      threadId: context.threadId,
+      topicId: context.topicId,
       userId: context.userId,
     });
   },
