@@ -14,11 +14,16 @@ services:
         condition: service_healthy
       rustfs-init:
         condition: service_completed_successfully
+      market:
+        condition: service_started
     environment:
       - 'KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}'
       - 'AUTH_SECRET=${AUTH_SECRET}'
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
       - 'INTERNAL_APP_URL=http://localhost:3210'
+      - 'MARKET_BASE_URL=http://market:3211'
+      - 'MARKET_TRUSTED_CLIENT_ID=${MARKET_TRUSTED_CLIENT_ID}'
+      - 'MARKET_TRUSTED_CLIENT_SECRET=${MARKET_TRUSTED_CLIENT_SECRET}'
       - 'S3_ENDPOINT=${S3_ENDPOINT}'
       - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
       - 'S3_ENABLE_PATH_STYLE=1'
@@ -33,6 +38,26 @@ services:
       - 'REDIS_TLS=0'
     env_file:
       - .env
+    restart: always
+    networks:
+      - lobe-network
+
+  market:
+    build:
+      context: ../..
+      dockerfile: apps/market/Dockerfile
+    container_name: lobehub-market
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+      - 'MARKET_BASE_URL=http://market:3211'
+      - 'MARKET_PORT=3211'
+      - 'MARKET_PUBLIC_BASE_URL=${APP_URL}/market-api'
+      - 'MARKET_TRUSTED_CLIENT_ID=${MARKET_TRUSTED_CLIENT_ID}'
+      - 'MARKET_TRUSTED_CLIENT_SECRET=${MARKET_TRUSTED_CLIENT_SECRET}'
+      - 'MARKET_UPSTREAM_BASE_URL=${MARKET_UPSTREAM_BASE_URL}'
     restart: always
     networks:
       - lobe-network

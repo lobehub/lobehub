@@ -108,6 +108,7 @@ vertex-ai-key.json
 .agent-tracing/
 
 # AI coding tools
+.worktrees/
 .local/
 .claude/
 .mcp.json
