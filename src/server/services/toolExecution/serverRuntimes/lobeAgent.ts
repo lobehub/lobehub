@@ -19,7 +19,9 @@ import type { ServerRuntimeRegistration } from './types';
 
 interface AnalyzeVisualMediaParams {
   files?: string[];
+  imageRef?: string;
   question: string;
+  videoRef?: string;
 }
 
 interface VisualFileItem {
@@ -117,6 +119,14 @@ const selectVisualItems = (
   return { availableRefs, selectedItems, unknownRefs };
 };
 
+const normalizeRequestedRefs = (params: AnalyzeVisualMediaParams) => {
+  const refs = [...(params.files ?? []), params.imageRef, params.videoRef]
+    .filter((ref): ref is string => typeof ref === 'string' && ref.trim().length > 0)
+    .map((ref) => ref.trim());
+
+  return refs.length > 0 ? refs : undefined;
+};
+
 class LobeAgentExecutionRuntime {
   private agentId?: string | null;
   private db: LobeChatDatabase;
@@ -194,9 +204,9 @@ class LobeAgentExecutionRuntime {
       postProcessUrl,
     });
 
-    const requestedRefs = params.files?.filter(Boolean);
+    const requestedRefs = normalizeRequestedRefs(params);
     const visualMessages =
-      requestedRefs && requestedRefs.length > 0 && sourceMessage
+      sourceMessage && (requestedRefs?.length || !hasVisualFiles(sourceMessage))
         ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
         : sourceMessage
           ? [sourceMessage]
@@ -220,7 +230,11 @@ class LobeAgentExecutionRuntime {
     }
 
     const defaultItems = visualItems.filter((item) => item.messageId === this.messageId);
-    const selectableItems = requestedRefs && requestedRefs.length > 0 ? visualItems : defaultItems;
+    const selectableItems = requestedRefs?.length
+      ? visualItems
+      : defaultItems.length > 0
+        ? defaultItems
+        : visualItems;
     const { availableRefs, selectedItems, unknownRefs } = selectVisualItems(
       selectableItems,
       this.messageId,

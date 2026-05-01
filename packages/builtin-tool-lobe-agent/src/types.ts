@@ -8,5 +8,7 @@ export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAg
 
 export interface AnalyzeVisualMediaParams {
   files?: string[];
+  imageRef?: string;
   question: string;
+  videoRef?: string;
 }

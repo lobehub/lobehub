@@ -86,6 +86,14 @@ const selectFiles = (items: VisualFileItem[], sourceMessageId?: string, refs?: s
   return { invalidRefs, selected };
 };
 
+const normalizeRequestedRefs = (params: AnalyzeVisualMediaParams) => {
+  const refs = [...(params.files ?? []), params.imageRef, params.videoRef]
+    .filter((ref): ref is string => typeof ref === 'string' && ref.trim().length > 0)
+    .map((ref) => ref.trim());
+
+  return refs.length > 0 ? refs : undefined;
+};
+
 const isVisualSourceMessage = (message: unknown): message is VisualSourceMessage =>
   !!message && typeof message === 'object';
 
@@ -165,9 +173,18 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
+    const requestedRefs = normalizeRequestedRefs(params);
     const currentFiles = files.filter((file) => file.messageId === sourceMessage?.id);
-    const selectableFiles = params.files?.length ? files : currentFiles;
-    const { invalidRefs, selected } = selectFiles(selectableFiles, sourceMessage?.id, params.files);
+    const selectableFiles = requestedRefs?.length
+      ? files
+      : currentFiles.length > 0
+        ? currentFiles
+        : files;
+    const { invalidRefs, selected } = selectFiles(
+      selectableFiles,
+      sourceMessage?.id,
+      requestedRefs,
+    );
     if (invalidRefs?.length) {
       const availableRefs = selectableFiles.flatMap((file) =>
         file.messageId === sourceMessage?.id ? [file.ref, file.localRef] : [file.ref],
