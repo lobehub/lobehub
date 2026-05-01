@@ -213,7 +213,7 @@ jobs:
         uses: ./.github/actions/setup-env
 
       - name: Install deps
-        run: pnpm i --config.enable-global-virtual-store=false
+        run: pnpm i
 
       - name: Lint
         run: bun run lint

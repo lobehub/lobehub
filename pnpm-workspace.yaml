@@ -4,69 +4,17 @@ packages:
   - e2e
   - apps/desktop/src/main
 
-lockfile: false
-resolutionMode: highest
-dedupePeerDependents: true
-ignoreWorkspaceRootCheck: true
-enablePrePostScripts: true
-enableGlobalVirtualStore: true
-
-publicHoistPattern:
-  - '*@umijs/lint*'
-  - '*changelog*'
-  - '*commitlint*'
-  - '*eslint*'
-  - '*postcss*'
-  - '*prettier*'
-  - '*remark*'
-  - '*semantic-release*'
-  - '*stylelint*'
-  - '@auth/core'
-  - 'pdfjs-dist'
-  - '@napi-rs/canvas-*'
-
-packageExtensions:
-  '@ant-design/pro-descriptions':
-    dependencies:
-      '@ant-design/icons': ^6.2.1
-  '@azure-rest/ai-inference':
-    dependencies:
-      '@azure/core-util': ^1.13.1
-  '@cucumber/cucumber':
-    dependencies:
-      tsx: ^4.21.0
-  rc-util:
-    dependencies:
-      react: 19.2.4
-  stylelint:
-    dependencies:
-      postcss-styled-syntax: ^0.7.1
-
-allowBuilds:
-  '@lobehub/editor': true
-  '@vercel/speed-insights': true
-  core-js: true
-  electron: true
-  es5-ext: true
-  esbuild: true
-  'ffmpeg-static': true
-  protobufjs: true
-  sharp: true
-  unrs-resolver: true
+onlyBuiltDependencies:
+  - '@vercel/speed-insights'
+  - '@lobehub/editor'
 
 overrides:
+  jose: ^6.1.3
+  stylelint-config-clean-order: 7.0.0
+  pdfjs-dist: 5.4.530
+  react: 19.2.4
+  react-dom: 19.2.4
   '@react-pdf/image': 3.0.4
-  '@types/react': 19.2.13
-  'better-auth': 1.4.6
-  'better-call': 1.1.8
-  'drizzle-orm': ^0.45.1
-  'fast-xml-parser': 5.4.2
-  'jose': ^6.1.3
-  'lexical': 0.42.0
-  'pdfjs-dist': 5.4.530
-  'react': 19.2.4
-  'react-dom': 19.2.4
-  'stylelint-config-clean-order': 7.0.0
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch

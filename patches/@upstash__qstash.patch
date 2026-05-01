@@ -1,8 +1,8 @@
-diff --git a/chunk-35B33QW3.mjs b/chunk-35B33QW3.mjs
-index 06da5e4fb496772eceb471b3b51135e3e0c3574b..6b21ab7a4f3c3bb23b0c678f279f62496be81762 100644
---- a/chunk-35B33QW3.mjs
-+++ b/chunk-35B33QW3.mjs
-@@ -1019,6 +1019,20 @@ var HttpClient = class {
+diff --git a/chunk-RQPZUJXG.mjs b/chunk-RQPZUJXG.mjs
+index d1a9b4a460efc59304ec30e6bc63a127f1aac6d6..4303089796e63297f79926fc9f9bd976029b1a8e 100644
+--- a/chunk-RQPZUJXG.mjs
++++ b/chunk-RQPZUJXG.mjs
+@@ -326,6 +326,20 @@ var HttpClient = class {
      }
      if (response.status < 200 || response.status >= 300) {
        const body = await response.text();
@@ -23,7 +23,7 @@ index 06da5e4fb496772eceb471b3b51135e3e0c3574b..6b21ab7a4f3c3bb23b0c678f279f6249
        throw new QstashError(
          body.length > 0 ? body : `Error: status=${response.status}`,
          response.status
-@@ -2264,8 +2278,10 @@ var AutoExecutor = class _AutoExecutor {
+@@ -1841,8 +1855,10 @@ var AutoExecutor = class _AutoExecutor {
            if (error instanceof QStashWorkflowAbort) {
              throw error;
            }

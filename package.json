@@ -536,9 +536,29 @@
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^3.2.4"
   },
-  "packageManager": "pnpm@11.0.0+sha512.5bd187500e49cc6c3d891d973b432c02b844a5eb7209172c90a517a3ef4f579ed5c23d409b699e6a9dc418ff7b2b1890e63f6d74f1d3fc49848f37779c89c84c",
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@lobehub/editor",
+      "ffmpeg-static"
+    ],
+    "overrides": {
+      "@react-pdf/image": "3.0.4",
+      "@types/react": "19.2.13",
+      "better-auth": "1.4.6",
+      "better-call": "1.1.8",
+      "drizzle-orm": "^0.45.1",
+      "fast-xml-parser": "5.4.2",
+      "lexical": "0.42.0",
+      "pdfjs-dist": "5.4.530",
+      "stylelint-config-clean-order": "7.0.0"
+    },
+    "patchedDependencies": {
+      "@upstash/qstash": "patches/@upstash__qstash.patch"
+    }
   }
 }
