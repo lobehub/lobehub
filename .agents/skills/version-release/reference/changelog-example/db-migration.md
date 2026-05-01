@@ -7,14 +7,6 @@
 
 ---
 
-## ✨ Highlights
-
-- **Benchmark Lifecycle Schema** — Added a relational model that tracks benchmark setup, runs, per-topic execution, and record outputs end-to-end.
-- **Queryability Upgrade** — Added indexes for run status and benchmark-topic joins, improving operational queries in dashboard and debugging workflows.
-- **Safer Operator Rollout** — Migration is startup-driven and backward-compatible with existing non-benchmark chat workflows.
-
----
-
 ## 🗄️ Migration Overview
 
 Added tables:
