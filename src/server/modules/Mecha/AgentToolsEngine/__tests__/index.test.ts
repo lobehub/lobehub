@@ -7,9 +7,7 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-import { toolsEnv } from '@/envs/tools';
+import { describe, expect, it } from 'vitest';
 
 import { createServerAgentToolsEngine, createServerToolsEngine } from '../index';
 import { type InstalledPlugin, type ServerAgentToolsContext } from '../types';
@@ -145,16 +143,6 @@ describe('createServerToolsEngine', () => {
 });
 
 describe('createServerAgentToolsEngine', () => {
-  beforeEach(() => {
-    (toolsEnv as any).VISUAL_UNDERSTANDING_PROVIDER = undefined;
-    (toolsEnv as any).VISUAL_UNDERSTANDING_MODEL = undefined;
-  });
-
-  afterEach(() => {
-    (toolsEnv as any).VISUAL_UNDERSTANDING_PROVIDER = undefined;
-    (toolsEnv as any).VISUAL_UNDERSTANDING_MODEL = undefined;
-  });
-
   it('should return a ToolsEngine instance', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
@@ -224,12 +212,10 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
   });
 
-  it('should enable VisualUnderstanding for non-vision models when configured', () => {
-    (toolsEnv as any).VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
-    (toolsEnv as any).VISUAL_UNDERSTANDING_MODEL = 'vision-model';
+  it('should enable VisualUnderstanding when injected into runtime plugins', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
-      agentConfig: { plugins: [] },
+      agentConfig: { plugins: [LobeAgentManifest.identifier] },
       model: 'deepseek-chat',
       provider: 'deepseek',
     });
@@ -237,13 +223,13 @@ describe('createServerAgentToolsEngine', () => {
     const result = engine.generateToolsDetailed({
       model: 'deepseek-chat',
       provider: 'deepseek',
-      toolIds: [],
+      toolIds: [LobeAgentManifest.identifier],
     });
 
     expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
   });
 
-  it('should not enable VisualUnderstanding when visual model is not configured', () => {
+  it('should not enable VisualUnderstanding by default', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: { plugins: [] },

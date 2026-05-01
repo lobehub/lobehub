@@ -700,12 +700,32 @@ export class AiAgentService {
         isModelSupportToolUse,
       };
 
-      // Dynamically inject topic-reference tool when prompt contains <refer_topic> tags
+      // Dynamically inject turn-scoped builtin tools.
       const hasTopicReference = /refer_topic/.test(prompt ?? '');
+      const modelAbilities =
+        LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider)
+          ?.abilities ?? LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)?.abilities;
+      const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
+      let attachedFileTypes: string[] = [];
+      if (attachedFileIds && attachedFileIds.length > 0) {
+        const fileModel = new FileModel(this.db, this.userId);
+        const fileRecords = await fileModel.findByIds(Array.from(new Set(attachedFileIds)));
+        attachedFileTypes = fileRecords.map((file) => file.fileType || '');
+      }
+      const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];
+      const needsImageUnderstanding =
+        inputFileTypes.some((fileType) => fileType.startsWith('image')) && !modelAbilities?.vision;
+      const needsVideoUnderstanding =
+        inputFileTypes.some((fileType) => fileType.startsWith('video')) && !modelAbilities?.video;
+      const shouldEnableVisualUnderstanding =
+        !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER &&
+        !!toolsEnv.VISUAL_UNDERSTANDING_MODEL &&
+        (needsImageUnderstanding || needsVideoUnderstanding);
       agentPlugins = [
         ...agentPlugins,
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
         ...(isBotConversation ? [MessageToolIdentifier] : []),
+        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
       ];
 
       // Derive activeDeviceId from device context:
@@ -746,14 +766,14 @@ export class AiAgentService {
 
       // 5f. Generate tools and manifest map
       const pluginIds = [
-        ...(agentConfig.plugins || []),
-        ...(additionalPluginIds || []),
-        LocalSystemManifest.identifier,
-        RemoteDeviceManifest.identifier,
-        ...(isBotConversation ? [MessageToolIdentifier] : []),
-        // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
-        ...lobehubSkillManifests.map((m) => m.identifier),
-        ...klavisManifests.map((m) => m.identifier),
+        ...new Set([
+          ...agentPlugins,
+          LocalSystemManifest.identifier,
+          RemoteDeviceManifest.identifier,
+          // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
+          ...lobehubSkillManifests.map((m) => m.identifier),
+          ...klavisManifests.map((m) => m.identifier),
+        ]),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
 
@@ -1379,33 +1399,6 @@ export class AiAgentService {
       role: 'user' as const,
       videoList,
     };
-
-    if (toolsResult.enabledToolIds?.includes(LobeAgentManifest.identifier)) {
-      const modelAbilities =
-        LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider)
-          ?.abilities ?? LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)?.abilities;
-      const needsImageUnderstanding = !!imageList?.length && !modelAbilities?.vision;
-      const needsVideoUnderstanding = !!videoList?.length && !modelAbilities?.video;
-      const shouldKeepVisualUnderstanding =
-        !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER &&
-        !!toolsEnv.VISUAL_UNDERSTANDING_MODEL &&
-        (needsImageUnderstanding || needsVideoUnderstanding);
-
-      if (!shouldKeepVisualUnderstanding) {
-        const visualToolNamePrefix = `${LobeAgentManifest.identifier}____`;
-        tools = tools?.filter((tool) => !tool.function.name.startsWith(visualToolNamePrefix));
-        toolsResult = {
-          ...toolsResult,
-          enabledToolIds: toolsResult.enabledToolIds.filter(
-            (id) => id !== LobeAgentManifest.identifier,
-          ),
-          tools,
-        };
-        delete toolManifestMap[LobeAgentManifest.identifier];
-        delete toolSourceMap[LobeAgentManifest.identifier];
-        delete toolExecutorMap[LobeAgentManifest.identifier];
-      }
-    }
 
     // Combine history messages with user message
     const allMessages = effectiveResume ? historyMessages : [...historyMessages, userMessage];

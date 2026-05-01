@@ -157,17 +157,7 @@ describe('toolEngineering', () => {
     mockInstalledPluginManifestList = () => [];
     mockUseApplicationBuiltinSearchTool = true;
     mockCurrentAgentPlugins = [];
-    Reflect.deleteProperty(window, 'global_serverConfigStore');
   });
-
-  const setVisualUnderstandingConfig = (enabled: boolean) => {
-    Object.defineProperty(window, 'global_serverConfigStore', {
-      configurable: true,
-      value: {
-        getState: () => ({ serverConfig: { enableVisualUnderstanding: enabled } }),
-      },
-    });
-  };
 
   describe('createToolsEngine', () => {
     it('should generate tools array for enabled plugins', () => {
@@ -258,14 +248,10 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).toHaveLength(2);
     });
 
-    it('should enable visual understanding when explicitly requested for the current turn', () => {
-      setVisualUnderstandingConfig(true);
-
-      const toolsEngine = createAgentToolsEngine(
-        { model: 'deepseek-chat', provider: 'deepseek' },
-        undefined,
-        { enableVisualUnderstanding: true },
-      );
+    it('should enable visual understanding when it is injected into runtime plugin ids', () => {
+      const toolsEngine = createAgentToolsEngine({ model: 'deepseek-chat', provider: 'deepseek' }, [
+        'lobe-agent',
+      ]);
 
       const result = toolsEngine.generateToolsDetailed({
         model: 'deepseek-chat',
@@ -277,8 +263,6 @@ describe('toolEngineering', () => {
     });
 
     it('should not enable visual understanding by default', () => {
-      setVisualUnderstandingConfig(true);
-
       const toolsEngine = createAgentToolsEngine({
         model: 'deepseek-chat',
         provider: 'deepseek',

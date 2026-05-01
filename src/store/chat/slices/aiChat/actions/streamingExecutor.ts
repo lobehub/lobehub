@@ -6,6 +6,7 @@ import {
   type Usage,
 } from '@lobechat/agent-runtime';
 import { AgentRuntime, computeStepContext, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
@@ -162,10 +163,6 @@ export class StreamingExecutorActionImpl {
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
       (tool) => tool.identifier,
     );
-    const mergedToolIds =
-      selectedToolIds && selectedToolIds.length > 0
-        ? [...new Set([...(pluginIds || []), ...selectedToolIds])]
-        : pluginIds;
 
     if (!agentConfigData || !agentConfigData.model) {
       throw new Error(
@@ -173,11 +170,8 @@ export class StreamingExecutorActionImpl {
       );
     }
 
-    // Dynamically inject topic-reference tool when messages contain refer-topic nodes
+    // Dynamically inject turn-scoped builtin tools.
     const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
-    const effectivePluginIds = hasTopicReference
-      ? [...(pluginIds || []), 'lobe-topic-reference']
-      : pluginIds;
     let currentUserMessage: UIChatMessage | undefined;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       if (messages[index].role === 'user') {
@@ -185,15 +179,32 @@ export class StreamingExecutorActionImpl {
         break;
       }
     }
-    const enableVisualUnderstanding =
-      (!!currentUserMessage?.imageList?.length &&
+    const visualUnderstandingConfigured =
+      typeof window !== 'undefined' &&
+      !!window.global_serverConfigStore?.getState().serverConfig.enableVisualUnderstanding;
+    const shouldEnableVisualUnderstanding =
+      visualUnderstandingConfigured &&
+      ((!!currentUserMessage?.imageList?.length &&
         !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
-      (!!currentUserMessage?.videoList?.length &&
-        !isCanUseVideo(agentConfigData.model, agentConfigData.provider!));
+        (!!currentUserMessage?.videoList?.length &&
+          !isCanUseVideo(agentConfigData.model, agentConfigData.provider!)));
+    const effectivePluginIds = [
+      ...new Set([
+        ...(pluginIds || []),
+        ...(hasTopicReference ? ['lobe-topic-reference'] : []),
+        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+      ]),
+    ];
+    const effectivePluginIdsOrUndefined =
+      effectivePluginIds.length > 0 ? effectivePluginIds : undefined;
+    const mergedToolIds =
+      selectedToolIds && selectedToolIds.length > 0
+        ? [...new Set([...effectivePluginIds, ...selectedToolIds])]
+        : effectivePluginIdsOrUndefined;
 
     log(
       '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',
-      effectivePluginIds,
+      effectivePluginIdsOrUndefined,
       isSubTask,
       disableTools,
       hasTopicReference,
@@ -203,8 +214,7 @@ export class StreamingExecutorActionImpl {
     // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
-      effectivePluginIds,
-      { enableVisualUnderstanding },
+      effectivePluginIdsOrUndefined,
     );
     // When skillActivateMode is 'manual':
     // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults

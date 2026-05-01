@@ -1,3 +1,4 @@
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import type { AgentContextDocument } from '@lobechat/context-engine';
 import { type UIChatMessage } from '@lobechat/types';
 
@@ -43,20 +44,29 @@ class AgentRuntimeService {
       provider: agentConfig.provider!,
     };
     const currentUserMessage = data.messages.find((message) => message.id === data.userMessageId);
-    const enableVisualUnderstanding =
-      (!!currentUserMessage?.imageList?.length &&
+    const visualUnderstandingConfigured =
+      typeof window !== 'undefined' &&
+      !!window.global_serverConfigStore?.getState().serverConfig.enableVisualUnderstanding;
+    const shouldEnableVisualUnderstanding =
+      visualUnderstandingConfigured &&
+      ((!!currentUserMessage?.imageList?.length &&
         !isCanUseVision(modelRuntimeConfig.model, modelRuntimeConfig.provider)) ||
-      (!!currentUserMessage?.videoList?.length &&
-        !isCanUseVideo(modelRuntimeConfig.model, modelRuntimeConfig.provider));
+        (!!currentUserMessage?.videoList?.length &&
+          !isCanUseVideo(modelRuntimeConfig.model, modelRuntimeConfig.provider)));
+    const runtimePluginIds = [
+      ...new Set([
+        ...(agentConfig.plugins || []),
+        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+      ]),
+    ];
+    const runtimePluginIdsOrUndefined = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;
 
-    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig, undefined, {
-      enableVisualUnderstanding,
-    });
+    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig, runtimePluginIdsOrUndefined);
 
     const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({
       model: agentConfig.model,
       provider: agentConfig.provider!,
-      toolIds: agentConfig.plugins,
+      toolIds: runtimePluginIdsOrUndefined,
     });
 
     // Apply context engineering with preprocessing configuration
@@ -69,7 +79,7 @@ class AgentRuntimeService {
       inputTemplate: chatConfig.inputTemplate,
       messages: data.messages as any,
       ...modelRuntimeConfig,
-      plugins: agentConfig.plugins,
+      plugins: runtimePluginIdsOrUndefined,
       systemRole: agentConfig.systemRole,
       tools: enabledToolIds,
     });

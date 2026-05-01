@@ -1,5 +1,5 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentRuntimeService } from '../index';
 
@@ -86,6 +86,16 @@ describe('AgentRuntimeService', () => {
     createOperationMutateMock.mockResolvedValue({ operationId: 'op-1' });
     isCanUseVideoMock.mockReturnValue(true);
     isCanUseVisionMock.mockReturnValue(true);
+    Object.defineProperty(window, 'global_serverConfigStore', {
+      configurable: true,
+      value: {
+        getState: () => ({ serverConfig: { enableVisualUnderstanding: true } }),
+      },
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'global_serverConfigStore');
   });
 
   it('should keep agent documents optional when hydration returns undefined', async () => {
@@ -129,8 +139,7 @@ describe('AgentRuntimeService', () => {
 
     expect(createAgentToolsEngineMock).toHaveBeenCalledWith(
       { model: 'gpt-4o', provider: 'openai' },
-      undefined,
-      { enableVisualUnderstanding: true },
+      ['plugin-1', 'lobe-agent'],
     );
   });
 
@@ -148,8 +157,7 @@ describe('AgentRuntimeService', () => {
 
     expect(createAgentToolsEngineMock).toHaveBeenCalledWith(
       { model: 'gpt-4o', provider: 'openai' },
-      undefined,
-      { enableVisualUnderstanding: false },
+      ['plugin-1'],
     );
   });
 });
