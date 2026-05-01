@@ -17,6 +17,12 @@ export default {
   'messenger.linkModal.title': 'Connect Messenger',
   'messenger.noPlatformsConfigured':
     'No messenger platforms are configured. Set bot tokens (e.g. LOBE_TELEGRAM_BOT_TOKEN) in your environment to enable.',
+  'messenger.slack.connectModal.continueButton': 'Continue in Slack',
+  'messenger.slack.connectModal.description':
+    'You will be redirected to Slack to authorize the LobeHub workspace install.',
+  'messenger.slack.connectModal.notConfigured':
+    'Slack OAuth is not configured. Set LOBE_SLACK_CLIENT_ID, LOBE_SLACK_CLIENT_SECRET, LOBE_SLACK_SIGNING_SECRET and LOBE_SLACK_APP_ID.',
+  'messenger.slack.connectModal.title': 'Continue setup in Slack',
   'messenger.setActiveFailed': 'Failed to set as active.',
   'messenger.setActiveSuccess': 'Active agent updated.',
   'messenger.statusLinked': 'Connected',

@@ -249,12 +249,47 @@ const MessengerSettings = memo(() => {
             const platform = p.platform as MessengerPlatform;
             const platformLabel = PLATFORM_LABELS[platform] ?? platform;
             const isTelegram = platform === 'telegram';
+            const isSlack = platform === 'slack';
             const deepLink =
               isTelegram && p.botUsername ? buildTelegramDeepLink(p.botUsername) : undefined;
             return {
               children: (
                 <Flexbox align="center" gap={20} style={{ paddingBlock: 16 }}>
-                  {deepLink ? (
+                  {isSlack ? (
+                    // Slack workspace install — kicks off OAuth at the LobeHub
+                    // install route (which validates session + state) and lets
+                    // Slack handle the rest of the consent flow. Manus pattern.
+                    <>
+                      <div className={styles.qrWrap}>
+                        <div
+                          className={styles.qrIconOverlay}
+                          style={{
+                            background: PLATFORM_BRAND_COLOR[platform],
+                            position: 'static',
+                            transform: 'none',
+                          }}
+                        >
+                          <PlatformBrandIcon platform={platform} />
+                        </div>
+                      </div>
+                      <Flexbox align="center" gap={6}>
+                        <Text strong style={{ fontSize: 18 }}>
+                          {t('messenger.slack.connectModal.title')}
+                        </Text>
+                        <Text style={{ textAlign: 'center' }} type="secondary">
+                          {t('messenger.slack.connectModal.description')}
+                        </Text>
+                      </Flexbox>
+                      <Button
+                        block
+                        href="/api/agent/messenger/slack/install"
+                        size="large"
+                        type="primary"
+                      >
+                        {t('messenger.slack.connectModal.continueButton')}
+                      </Button>
+                    </>
+                  ) : deepLink ? (
                     <>
                       <div className={styles.qrWrap}>
                         <QRCode bordered={false} size={200} value={deepLink} />
