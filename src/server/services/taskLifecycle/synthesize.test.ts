@@ -18,10 +18,10 @@ const baseInput = (overrides: Partial<Parameters<typeof shouldEmitTopicBrief>[0]
 });
 
 describe('shouldEmitTopicBrief', () => {
-  it("returns 'no' when reason=error (error branch handles its own brief)", () => {
+  it("returns 'yes' when reason=error (user must be told the run failed)", () => {
     const result = shouldEmitTopicBrief(baseInput({ reason: 'error' }));
-    expect(result.emit).toBe('no');
-    expect(result.reason).toBe('error-branch-handled');
+    expect(result.emit).toBe('yes');
+    expect(result.reason).toBe('execution-error');
   });
 
   it("returns 'no' when judge already terminated the lifecycle", () => {
@@ -36,10 +36,10 @@ describe('shouldEmitTopicBrief', () => {
     expect(result.reason).toBe('review-config-enabled');
   });
 
-  it("returns 'no' for heartbeat automation ticks (mid-loop, not a delivery)", () => {
+  it("returns 'unknown' for heartbeat ticks (defers to LLM — most are noise but some warrant surfacing)", () => {
     const result = shouldEmitTopicBrief(baseInput({ task: { automationMode: 'heartbeat' } }));
-    expect(result.emit).toBe('no');
-    expect(result.reason).toBe('heartbeat-tick');
+    expect(result.emit).toBe('unknown');
+    expect(result.reason).toBe('heartbeat-needs-judge');
   });
 
   it("returns 'yes' on every schedule tick (contractual daily brief)", () => {
@@ -67,7 +67,7 @@ describe('shouldEmitTopicBrief', () => {
     expect(result.reason).toBe('needs-llm-judge');
   });
 
-  it("returns 'no' for heartbeat even when other conditions look fine", () => {
+  it("returns 'unknown' for heartbeat even when other conditions look fine", () => {
     const result = shouldEmitTopicBrief(
       baseInput({
         hasReviewConfigEnabled: false,
@@ -75,7 +75,7 @@ describe('shouldEmitTopicBrief', () => {
         task: { automationMode: 'heartbeat' },
       }),
     );
-    expect(result.emit).toBe('no');
+    expect(result.emit).toBe('unknown');
   });
 });
 

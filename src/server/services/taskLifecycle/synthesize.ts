@@ -30,26 +30,33 @@ export interface ShouldEmitTopicBriefResult {
  * the rule pure makes it easy to unit-test and to reason about.
  *
  * Conclusive branches:
- * - `'no'` — error / review-judge already produced a brief, review is
- *   configured (judge owns the next run), heartbeat tick (mid-loop nudge),
- *   or trivial content on a non-scheduled tick.
- * - `'yes'` — scheduled tick (contractually owes the user a brief every run).
+ * - `'yes'` — scheduled tick (contractually owes the user a brief every
+ *   run); execution error (the user must be told the run failed). Note:
+ *   today the error branch in `onTopicComplete` builds its own urgent
+ *   error brief inline, so this rule only fires once that path is folded
+ *   into `synthesizeTopicBrief`. The verdict is correct ahead of time.
+ * - `'no'` — review-judge already produced a brief upstream, review is
+ *   configured (judge owns the next run), or trivial content on a manual
+ *   tick. Heartbeat used to be `'no'` here too, but is now deferred to the
+ *   judge: most heartbeat ticks are mid-loop noise, but the occasional one
+ *   surfaces something the user would want to see, and that judgment
+ *   requires reading the content.
  *
  * Non-conclusive branch:
- * - `'unknown'` — non-trivial content on a manual / non-scheduled task with
- *   no review configured. Whether this is "worth surfacing" is a semantic
- *   call; the caller defers to `chainJudgeBriefEmit`.
+ * - `'unknown'` — heartbeat tick, OR non-trivial content on a manual /
+ *   non-scheduled task with no review configured. Caller defers to
+ *   `chainJudgeBriefEmit`.
  */
 export const shouldEmitTopicBrief = (
   input: ShouldEmitTopicBriefInput,
 ): ShouldEmitTopicBriefResult => {
-  if (input.reason === 'error') return { emit: 'no', reason: 'error-branch-handled' };
+  if (input.reason === 'error') return { emit: 'yes', reason: 'execution-error' };
   if (input.reviewTerminated) return { emit: 'no', reason: 'judge-handled' };
   // The judge path may not have terminated (e.g. review disabled or threw),
   // but if review is configured we still defer to it on subsequent runs.
   if (input.hasReviewConfigEnabled) return { emit: 'no', reason: 'review-config-enabled' };
   if (input.task?.automationMode === 'heartbeat') {
-    return { emit: 'no', reason: 'heartbeat-tick' };
+    return { emit: 'unknown', reason: 'heartbeat-needs-judge' };
   }
   if (input.task?.automationMode === 'schedule') {
     return { emit: 'yes', reason: 'scheduled-tick' };
