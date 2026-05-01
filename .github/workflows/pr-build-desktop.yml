@@ -31,7 +31,7 @@ jobs:
         uses: ./.github/actions/setup-env
 
       - name: Install deps
-        run: pnpm install --config.enable-global-virtual-store=false
+        run: pnpm install
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
