@@ -4,7 +4,6 @@ import type {
 } from '@lobechat/agent-signal/source';
 
 import { agentSignalService } from '@/services/agentSignal';
-import { getChatStoreState } from '@/store/chat/store';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
@@ -68,11 +67,6 @@ export const emitClientAgentSignalSourceEvent = async <
   input: ClientAgentSignalSourceEvent<TSourceType>,
 ) => {
   if (!shouldEmitClientAgentSignalSourceEvent()) return undefined;
-
-  // agent-mock: dev-only short-circuit when mock playback is silencing side effects.
-  if (process.env.NODE_ENV === 'development' && getChatStoreState().__agentMockSilent) {
-    return undefined;
-  }
 
   const timestamp = input.timestamp ?? Date.now();
 

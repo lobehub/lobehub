@@ -52,9 +52,6 @@ export const TimelinePanel = memo(() => {
         event={ev}
         index={idx}
         isActive={playback?.currentEventIndex === idx}
-        onClick={() => {
-          /* TODO: wire to player.seekToEventIndex via useAgentMockPlayer */
-        }}
       />
     ),
     [cumulative, playback?.currentEventIndex],

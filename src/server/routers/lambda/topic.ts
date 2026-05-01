@@ -191,18 +191,6 @@ export const topicRouter = router({
       return data.id;
     }),
 
-  devClearMockTopics: topicProcedure.input(z.object({}).optional()).mutation(async ({ ctx }) => {
-    if (process.env.NODE_ENV !== 'development') {
-      throw new Error('devClearMockTopics is only available in development');
-    }
-    const all = await ctx.topicModel.queryAll();
-    const mockOnes = all.filter((t) => t.title?.startsWith('[MOCK] '));
-    for (const topic of mockOnes) {
-      await ctx.topicModel.delete(topic.id);
-    }
-    return { deleted: mockOnes.length };
-  }),
-
   /**
    * Disable sharing for a topic (deletes share record)
    */

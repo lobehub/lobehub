@@ -16,8 +16,6 @@ const COLOR_BY_TYPE: Record<string, string> = {
 
 const styles = createStaticStyles(({ css }) => ({
   row: css`
-    cursor: pointer;
-
     display: grid;
     grid-template-columns: 70px 30px 140px 1fr;
     gap: 8px;
@@ -58,7 +56,6 @@ interface Props {
   event: MockEvent;
   index: number;
   isActive: boolean;
-  onClick: () => void;
 }
 
 const previewOf = (event: MockEvent): string => {
@@ -76,8 +73,8 @@ const previewOf = (event: MockEvent): string => {
   return JSON.stringify(data).slice(0, 80);
 };
 
-export const EventRow = memo<Props>(({ event, index, cumulativeMs, isActive, onClick }) => (
-  <div className={`${styles.row} ${isActive ? styles.active : ''}`} onClick={onClick}>
+export const EventRow = memo<Props>(({ event, index, cumulativeMs, isActive }) => (
+  <div className={`${styles.row} ${isActive ? styles.active : ''}`}>
     <span className={styles.type}>+{(cumulativeMs / 1000).toFixed(2)}s</span>
     <span className={styles.dot} style={{ background: COLOR_BY_TYPE[event.type] ?? '#94a3b8' }} />
     <span className={styles.type}>
