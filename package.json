@@ -193,7 +193,7 @@
     "@fal-ai/client": "^1.8.4",
     "@floating-ui/react": "^0.27.19",
     "@formkit/auto-animate": "^0.9.0",
-    "@google/genai": "^1.38.0",
+    "@google/genai": "~1.50.1",
     "@henrygd/queue": "^1.2.0",
     "@huggingface/inference": "^4.13.10",
     "@icons-pack/react-simple-icons": "^13.8.0",
