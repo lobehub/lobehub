@@ -40,6 +40,39 @@ export const nativeModules = [
   'node-screenshots',
 ];
 
+const optionalNativePackagePrefixes = new Map([
+  ['@napi-rs/canvas', ['@napi-rs/canvas-']],
+  ['node-screenshots', ['node-screenshots-']],
+]);
+
+const runtimeOptionalDependencies = new Map([['get-windows', ['@mapbox/node-pre-gyp']]]);
+
+const runtimeDependencyOverrides = new Map([
+  // get-windows imports @mapbox/node-pre-gyp at runtime only for find().
+  // Keep the narrow find() dependency path and avoid shipping its install,
+  // publish, and CLI dependency tree into app.asar.
+  ['@mapbox/node-pre-gyp', ['detect-libc', 'nopt', 'npmlog', 'semver']],
+]);
+
+function getRuntimeDependencies(moduleName, dependencies) {
+  return runtimeDependencyOverrides.get(moduleName) || Object.keys(dependencies);
+}
+
+function getRuntimeOptionalDependencies(moduleName, optionalDependencies) {
+  const prefixes = optionalNativePackagePrefixes.get(moduleName);
+  const dependencies = [...(runtimeOptionalDependencies.get(moduleName) || [])];
+
+  if (prefixes) {
+    dependencies.push(
+      ...Object.keys(optionalDependencies).filter((dep) =>
+        prefixes.some((prefix) => dep.startsWith(prefix)),
+      ),
+    );
+  }
+
+  return dependencies;
+}
+
 /**
  * Recursively resolve all dependencies of a module
  * @param {string} moduleName - The module to resolve
@@ -73,13 +106,15 @@ function resolveDependencies(
     const optionalDependencies = packageJson.optionalDependencies || {};
 
     // Resolve regular dependencies
-    for (const dep of Object.keys(dependencies)) {
+    for (const dep of getRuntimeDependencies(moduleName, dependencies)) {
       resolveDependencies(dep, visited, nodeModulesPath);
     }
 
-    // Also resolve optional dependencies (important for native modules like @napi-rs/canvas
-    // which have platform-specific binaries in optional deps)
-    for (const dep of Object.keys(optionalDependencies)) {
+    // Only include optional packages that are runtime native binaries for the
+    // module itself. Native packages can also list install-time toolchains such
+    // as node-gyp or node-pre-gyp as optional deps; those must not be copied or
+    // externalized into the packaged Electron app.
+    for (const dep of getRuntimeOptionalDependencies(moduleName, optionalDependencies)) {
       resolveDependencies(dep, visited, nodeModulesPath);
     }
   } catch {
