@@ -1,10 +1,11 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { PencilLine, Trash } from 'lucide-react';
+import { PanelTop, PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { useChatStore } from '@/store/chat';
 
 interface ThreadItemDropdownMenuProps {
@@ -19,7 +20,7 @@ export const useThreadItemDropdownMenu = ({
   const { t } = useTranslation(['thread', 'common']);
   const { modal } = App.useApp();
 
-  const [removeThread] = useChatStore((s) => [s.removeThread]);
+  const [removeThread, pushPortalView] = useChatStore((s) => [s.removeThread, s.pushPortalView]);
 
   return useCallback(() => {
     return [
@@ -29,6 +30,14 @@ export const useThreadItemDropdownMenu = ({
         label: t('rename', { ns: 'common' }),
         onClick: () => {
           toggleEditing(true);
+        },
+      },
+      {
+        icon: <Icon icon={PanelTop} />,
+        key: 'openInPortal',
+        label: t('openInPortal'),
+        onClick: () => {
+          pushPortalView({ threadId: id, type: PortalViewType.Thread });
         },
       },
       {
@@ -51,5 +60,5 @@ export const useThreadItemDropdownMenu = ({
         },
       },
     ].filter(Boolean) as MenuProps['items'];
-  }, [id, removeThread, toggleEditing, t, modal]);
+  }, [id, removeThread, pushPortalView, toggleEditing, t, modal]);
 };
