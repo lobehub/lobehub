@@ -18,6 +18,13 @@ interface VisualFileItem {
   uri: string;
 }
 
+interface VisualSourceMessage {
+  imageList?: ChatImageItem[];
+  parentId?: string;
+  role?: string;
+  videoList?: ChatVideoItem[];
+}
+
 const getVisualUnderstandingConfig = () =>
   typeof window === 'undefined'
     ? undefined
@@ -67,12 +74,12 @@ const selectFiles = (items: VisualFileItem[], refs?: string[]) => {
   return { invalidRefs, selected };
 };
 
-const hasVisualFiles = (message?: {
-  imageList?: unknown[];
-  role?: string;
-  videoList?: unknown[];
-}) =>
-  message?.role === 'user' &&
+const isVisualSourceMessage = (message: unknown): message is VisualSourceMessage =>
+  !!message && typeof message === 'object';
+
+const hasVisualFiles = (message: unknown): message is VisualSourceMessage =>
+  isVisualSourceMessage(message) &&
+  message.role === 'user' &&
   ((message.imageList?.length ?? 0) > 0 || (message.videoList?.length ?? 0) > 0);
 
 class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
@@ -113,9 +120,12 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       ctx.sourceMessageId && dbMessageSelectors.getDbMessageById(ctx.sourceMessageId)(chatState);
     const toolMessage = dbMessageSelectors.getDbMessageById(ctx.messageId)(chatState);
     const assistantMessage =
-      toolMessage?.parentId && dbMessageSelectors.getDbMessageById(toolMessage.parentId)(chatState);
+      isVisualSourceMessage(toolMessage) &&
+      toolMessage.parentId &&
+      dbMessageSelectors.getDbMessageById(toolMessage.parentId)(chatState);
     const parentUserMessage =
-      assistantMessage?.parentId &&
+      isVisualSourceMessage(assistantMessage) &&
+      assistantMessage.parentId &&
       dbMessageSelectors.getDbMessageById(assistantMessage.parentId)(chatState);
     const sourceMessage = hasVisualFiles(sourceCandidate)
       ? sourceCandidate
@@ -193,7 +203,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
         stream: true,
       },
       {
-        onFinish: (output, metadata) => {
+        onFinish: async (output, metadata) => {
           content = output || content;
           usage = metadata.usage;
         },
