@@ -1,12 +1,14 @@
 'use client';
 
-import { Button, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Skeleton, TextArea } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { SmilePlus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
+import { useDocumentStore } from '@/store/document';
+import { editorSelectors } from '@/store/document/slices/editor';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { truncateByWeightedLength } from '@/utils/textLength';
@@ -17,11 +19,14 @@ const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
+  const documentId = usePageEditorStore((s) => s.documentId);
   const emoji = usePageEditorStore((s) => s.emoji);
   const title = usePageEditorStore((s) => s.title);
   const setEmoji = usePageEditorStore((s) => s.setEmoji);
   const setTitle = usePageEditorStore((s) => s.setTitle);
   const handleTitleSubmit = usePageEditorStore((s) => s.handleTitleSubmit);
+  const isDocumentLoading = useDocumentStore(editorSelectors.isDocumentLoading(documentId));
+  const showTitleSkeleton = isDocumentLoading && !title;
 
   const [isHoveringTitle, setIsHoveringTitle] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -85,29 +90,33 @@ const TitleSection = memo(() => {
       )}
 
       {/* Title Input */}
-      <TextArea
-        autoSize={{ minRows: 1 }}
-        placeholder={t('pageEditor.titlePlaceholder')}
-        value={title}
-        variant={'borderless'}
-        style={{
-          fontSize: 36,
-          fontWeight: 600,
-          padding: 0,
-          resize: 'none',
-          width: '100%',
-        }}
-        onChange={(e) => {
-          const truncated = truncateByWeightedLength(e.target.value, 100);
-          setTitle(truncated);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            handleTitleSubmit();
-          }
-        }}
-      />
+      {showTitleSkeleton ? (
+        <Skeleton.Button active style={{ height: 44, width: 320 }} />
+      ) : (
+        <TextArea
+          autoSize={{ minRows: 1 }}
+          placeholder={t('pageEditor.titlePlaceholder')}
+          value={title}
+          variant={'borderless'}
+          style={{
+            fontSize: 36,
+            fontWeight: 600,
+            padding: 0,
+            resize: 'none',
+            width: '100%',
+          }}
+          onChange={(e) => {
+            const truncated = truncateByWeightedLength(e.target.value, 100);
+            setTitle(truncated);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleTitleSubmit();
+            }
+          }}
+        />
+      )}
     </Flexbox>
   );
 });
