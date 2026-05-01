@@ -43,17 +43,3 @@ export interface PlaybackState {
   totalSteps: number;
   totalTools: number;
 }
-
-export interface SideEffectFlags {
-  emitAgentSignal: boolean;
-  emitAnalytics: boolean;
-  recordTracing: boolean;
-  writeToDb: boolean;
-}
-
-export const DEFAULT_SIDE_EFFECT_FLAGS: SideEffectFlags = {
-  recordTracing: false,
-  emitAgentSignal: false,
-  emitAnalytics: false,
-  writeToDb: true,
-};

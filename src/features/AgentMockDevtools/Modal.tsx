@@ -6,7 +6,6 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import { CaseList } from './CaseList';
 import { FixtureViewer } from './FixtureViewer/FixtureViewer';
 import { PlayerPanel } from './Player/PlayerPanel';
-import { SettingsPanel } from './Settings/SettingsPanel';
 import { type DevtoolsTab, useAgentMockStore } from './store/agentMockStore';
 import { TimelinePanel } from './Timeline/TimelinePanel';
 
@@ -54,7 +53,6 @@ const TABS: Array<{ key: DevtoolsTab; label: string }> = [
   { key: 'player', label: '▶ Player' },
   { key: 'timeline', label: '≡ Timeline' },
   { key: 'fixture', label: '{ } Fixture' },
-  { key: 'settings', label: '⚙ Settings' },
 ];
 
 const ModalContent = memo(() => {
@@ -71,9 +69,6 @@ const ModalContent = memo(() => {
       }
       case 'fixture': {
         return <FixtureViewer />;
-      }
-      case 'settings': {
-        return <SettingsPanel />;
       }
     }
   }, [activeTab]);

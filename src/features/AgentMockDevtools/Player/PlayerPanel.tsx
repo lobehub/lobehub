@@ -7,7 +7,6 @@ import { useAgentMockStore } from '../store/agentMockStore';
 import { Controls } from './Controls';
 import { ProgressBar } from './ProgressBar';
 import { StatusGrid } from './StatusGrid';
-import { TargetPicker } from './TargetPicker';
 
 const styles = createStaticStyles(({ css }) => ({
   head: css`
@@ -56,7 +55,6 @@ export const PlayerPanel = memo(() => {
       <StatusGrid />
       <Controls />
       <ProgressBar />
-      <TargetPicker />
     </div>
   );
 });

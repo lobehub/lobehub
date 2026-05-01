@@ -3,6 +3,8 @@ import { Button } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
+import { useChatStore } from '@/store/chat/store';
+
 import { useAgentMockPlayer } from '../hooks/useAgentMockPlayer';
 import { useMockCases } from '../hooks/useMockCases';
 import { useAgentMockStore } from '../store/agentMockStore';
@@ -74,19 +76,15 @@ export const Controls = memo(() => {
     if (idleOrComplete) {
       const c = all.find((x) => x.id === selectedCaseId);
       if (!c) return;
-      const topicId = useAgentMockStore.getState().activeMockTopicId;
-      if (!topicId) {
-        alert('Choose a target topic first (TargetPicker)');
+      const { activeAgentId: agentId, activeTopicId: topicId } = useChatStore.getState();
+      if (!agentId) {
+        alert('Open an agent conversation first.');
         return;
       }
-      // Note: agentId is hardcoded to a placeholder here; in v2 the TargetPicker
-      // should provide it from the active session's agentId.
       start({
-        agentId: 'mock-agent',
+        agentId,
         case: c,
-        topicId,
-        assistantMessageId: `mock-asst-${Date.now()}`,
-        sessionId: 'mock-session',
+        topicId: topicId ?? undefined,
       });
     } else if (paused) {
       resume();

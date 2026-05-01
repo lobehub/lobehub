@@ -8,6 +8,9 @@ import { useAgentMockStore } from './store/agentMockStore';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
+    cursor: pointer;
+    user-select: none;
+
     position: fixed;
     z-index: 1100;
     inset-block-end: 16px;
@@ -64,7 +67,18 @@ export const MiniBar = memo(() => {
   const running = playback.status === 'running';
 
   return (
-    <div className={styles.bar}>
+    <div
+      className={styles.bar}
+      role="button"
+      tabIndex={0}
+      onClick={() => setModalState('open')}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setModalState('open');
+        }
+      }}
+    >
       <div className={styles.row}>
         <span style={{ color: '#a78bfa' }}>▶</span>
         <span className={styles.title}>{selectedCaseId}</span>
@@ -75,7 +89,11 @@ export const MiniBar = memo(() => {
       <div className={styles.progress}>
         <div className={styles.fill} style={{ width: `${pct}%` }} />
       </div>
-      <div className={styles.row} style={{ marginBlockEnd: 0 }}>
+      <div
+        className={styles.row}
+        style={{ marginBlockEnd: 0 }}
+        onClick={(event) => event.stopPropagation()}
+      >
         <ActionIcon icon={running ? Pause : Play} size="small" onClick={running ? pause : resume} />
         <ActionIcon icon={SkipForward} size="small" title="next step" onClick={stepStep} />
         <span style={{ flex: 1 }} />
