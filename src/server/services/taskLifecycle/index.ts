@@ -385,8 +385,15 @@ export class TaskLifecycleService {
         'topic',
       );
 
+      // Scheduled tasks owe the user a brief on every tick — switch to a
+      // forked prompt that removes the skip branch and mandates a real title
+      // / summary, instead of letting the model vote `emit=false` (which the
+      // default prompt instructs it to pair with an empty title).
+      const isScheduled = currentTask.automationMode === 'schedule';
+
       const payload = chainGenerateBrief({
         artifacts,
+        forceEmit: isScheduled,
         handoff,
         lastAssistantContent,
         taskInstruction: currentTask.instruction || '',
@@ -404,12 +411,11 @@ export class TaskLifecycleService {
       );
 
       const generated = result as { emit?: boolean; summary?: string; title?: string };
-      // The LLM is the second-stage gate: even when the rule layer says "this
-      // could be a delivery", the model judges from actual content whether
-      // it's worth surfacing. Mid-process working notes / clarifications get
-      // emit=false here. Scheduled tasks bypass this vote — by contract every
-      // scheduled tick must produce a brief.
-      const isScheduled = currentTask.automationMode === 'schedule';
+      // The LLM is the second-stage gate for non-scheduled briefs: even when
+      // the rule layer says "this could be a delivery", the model judges from
+      // actual content whether it's worth surfacing. The scheduled-mode
+      // prompt removes that vote, so we don't honor `emit=false` for
+      // scheduled tasks.
       if (!isScheduled && generated.emit === false) {
         log(
           'synthesize: LLM voted skip task=%s topic=%s reason=%s',

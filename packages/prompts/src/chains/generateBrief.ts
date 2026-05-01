@@ -13,9 +13,15 @@ import type { BriefArtifacts, ChatStreamPayload, TaskTopicHandoff } from '@lobec
  * with what was just summarized), but the LLM rewrites it from scratch in
  * user-facing tone. Type / priority / artifacts are determined programmatically
  * outside this chain and are NOT in the schema.
+ *
+ * `forceEmit` switches to a different system prompt for scheduled-task ticks:
+ * the skip branch is removed and the model is required to always produce a
+ * non-empty title and summary, since each scheduled tick contractually owes
+ * the user a daily report.
  */
 export const chainGenerateBrief = (params: {
   artifacts?: BriefArtifacts | null;
+  forceEmit?: boolean;
   handoff?: TaskTopicHandoff | null;
   lastAssistantContent: string;
   taskInstruction: string;
@@ -34,10 +40,27 @@ export const chainGenerateBrief = (params: {
 ${params.artifacts.documents.map((d) => `- ${d.title || '(untitled)'} [id=${d.id}]`).join('\n')}`
     : 'Artifacts: (none)';
 
-  return {
-    messages: [
-      {
-        content: `You decide whether the topic just completed is worth reporting to the end user as a "brief", and if so, write that brief.
+  const systemContent = params.forceEmit
+    ? `You are writing the user-facing brief for a scheduled-task tick. This run is part of a recurring schedule (daily / hourly / weekly), and every tick contractually owes the user a delivery report — there is NO skip option.
+
+Output a JSON object with these fields:
+- "emit": boolean. ALWAYS true for scheduled ticks. Do not return false under any circumstance.
+- "title": string. A non-empty user-facing headline for this tick (max 60 chars, same language as the assistant's content). Required.
+- "summary": string. A 2-4 sentence delivery report describing what this tick produced or observed and why it matters to the user. Required, non-empty.
+
+Even when this tick had little new activity ("no new tickets today", "no changes since last run"), you MUST still write a brief that states that outcome plainly — that itself is the report the user is subscribed to. Do not return empty strings; do not invent activity that did not occur.
+
+Voice and style:
+- Write FOR THE USER, not for the agent or developer.
+- Use the same language as the assistant's content.
+- Lead with the outcome of this tick (what changed, what was found, what is unchanged).
+- Do NOT reference internal tool names, operation IDs, topic IDs, or implementation details.
+- Do NOT say "I" or "the agent" — describe the outcome, not the actor.
+- If artifacts are listed, you may mention them by their human title, but do not paste their IDs.
+- Avoid filler ("As requested...", "I have completed..."). Be specific about the result.
+
+Output ONLY the JSON object, no markdown fences or explanations.`
+    : `You decide whether the topic just completed is worth reporting to the end user as a "brief", and if so, write that brief.
 
 A brief is a short delivery report. Not every topic deserves one — many topics are mid-process working steps that the user does not need surfaced. Your job is two-part: judge whether to emit, and if so, produce user-facing title + summary.
 
@@ -66,7 +89,12 @@ Voice and style rules (apply only when emit=true):
 - If artifacts are listed, you may mention them by their human title, but do not paste their IDs.
 - Avoid filler ("As requested...", "I have completed..."). Be specific about the result.
 
-Output ONLY the JSON object, no markdown fences or explanations.`,
+Output ONLY the JSON object, no markdown fences or explanations.`;
+
+  return {
+    messages: [
+      {
+        content: systemContent,
         role: 'system',
       },
       {
