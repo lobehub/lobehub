@@ -9,6 +9,7 @@
 import { type ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
 import { agentDocumentsRuntime } from './agentDocuments';
+import { agentManagementRuntime } from './agentManagement';
 import { agentMarketplaceRuntime } from './agentMarketplace';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
@@ -50,6 +51,7 @@ registerRuntimes([
   cloudSandboxRuntime,
   calculatorRuntime,
   agentDocumentsRuntime,
+  agentManagementRuntime,
   notebookRuntime,
   skillStoreRuntime,
   skillsRuntime,
