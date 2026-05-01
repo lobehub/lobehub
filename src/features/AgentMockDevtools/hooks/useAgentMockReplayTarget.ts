@@ -3,8 +3,6 @@ import { useParams, useSearchParams } from 'react-router-dom';
 
 import { useChatStore } from '@/store/chat/store';
 
-const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
-
 export interface AgentMockReplayTarget {
   agentId?: string;
   threadId?: string | null;
@@ -23,23 +21,6 @@ export const useAgentMockReplayTarget = () => {
       threadId: routeThreadId ?? store.activeThreadId ?? null,
       topicId: params.topicId ?? store.activeTopicId ?? null,
     };
-
-    if (DEBUG_AGENT_MOCK_REPLAY) {
-      console.info('[AgentMockReplay] resolve-target', {
-        route: {
-          agentId: params.aid,
-          threadId: routeThreadId,
-          topicId: params.topicId,
-        },
-        store: {
-          agentId: store.activeAgentId,
-          threadId: store.activeThreadId,
-          topicId: store.activeTopicId,
-        },
-        target,
-      });
-    }
-
     return target;
   }, [params.aid, params.topicId, searchParams]);
 };

@@ -24,7 +24,6 @@ import { useActionsBarConfig } from './useActionsBarConfig';
 import { useAgentContext } from './useAgentContext';
 
 const log = debug('lobe-render:agent:ConversationArea');
-const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
 
 /**
  * ConversationArea
@@ -50,14 +49,6 @@ const Conversation = memo(() => {
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
 
   log('contextKey %s: %o', chatKey, messages);
-  if (DEBUG_AGENT_MOCK_REPLAY) {
-    console.info('[AgentMockReplay] ConversationArea:messages-prop', {
-      chatKey,
-      context,
-      messageCount: messages?.length ?? 0,
-      messageIds: messages?.map((message) => message.id) ?? [],
-    });
-  }
 
   // Get operation state from ChatStore for reactive updates
   const operationState = useOperationState(context);

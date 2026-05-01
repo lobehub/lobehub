@@ -16,7 +16,6 @@ import {
 } from './types';
 
 const log = debug('lobe-render:features:Conversation');
-const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
 
 export interface StoreUpdaterProps {
   /**
@@ -62,17 +61,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const useStoreUpdater = createStoreUpdater(storeApi);
     const prevMessagesRef = useRef<UIChatMessage[] | undefined>(undefined);
     const contextKey = messageMapKey(context);
-
-    if (DEBUG_AGENT_MOCK_REPLAY) {
-      console.info('[AgentMockReplay] StoreUpdater:render', {
-        context,
-        contextKey,
-        hasInitMessages,
-        messageCount: messages?.length ?? 0,
-        messageIds: messages?.map((message) => message.id) ?? [],
-        skipFetch,
-      });
-    }
 
     useStoreUpdater('actionsBar', actionsBar);
     useStoreUpdater('context', context);
@@ -128,17 +116,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
           storeMessages.length,
           messages.slice(0, 5).map((m) => m.id),
         );
-        if (DEBUG_AGENT_MOCK_REPLAY) {
-          console.info('[AgentMockReplay] StoreUpdater:messages-effect', {
-            contextKey,
-            newCount,
-            prevCount,
-            sameReference: isSameReference,
-            storeCount: storeMessages.length,
-            storeIds: storeMessages.map((message) => message.id),
-            incomingIds: messages.map((message) => message.id),
-          });
-        }
 
         prevMessagesRef.current = messages;
         storeApi.getState().replaceMessages(messages);

@@ -36,8 +36,6 @@ interface StartArgs {
   topicId?: string;
 }
 
-const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
-
 const findRunningServerAssistantMessageId = (chatStore: ChatStore, args: StartArgs) => {
   const contextKey = messageMapKey({
     agentId: args.agentId,
@@ -236,20 +234,6 @@ export function useAgentMockPlayer() {
         (reuseAssistantMessage
           ? null
           : displayMessageSelectors.lastDisplayMessageId(useChatStore.getState()));
-      const contextKey = messageMapKey(context);
-
-      if (DEBUG_AGENT_MOCK_REPLAY) {
-        console.info('[AgentMockReplay] createPlayback:start', {
-          activeAgentId: chatStore.activeAgentId,
-          activeThreadId: chatStore.activeThreadId,
-          activeTopicId: chatStore.activeTopicId,
-          context,
-          contextKey,
-          existingBucketCount: chatStore.dbMessagesMap[contextKey]?.length ?? 0,
-          parentMessageId,
-          reuseAssistantMessage,
-        });
-      }
 
       if (!sessionOverride && reuseAssistantMessage) {
         cancelRunningMessageRuntimeOperations(chatStore, assistantMessageId);
@@ -298,17 +282,6 @@ export function useAgentMockPlayer() {
           },
           { operationId, tempMessageId: assistantMessageId },
         );
-      }
-
-      if (DEBUG_AGENT_MOCK_REPLAY) {
-        const nextChatStore = useChatStore.getState();
-        console.info('[AgentMockReplay] createPlayback:after-message-create', {
-          assistantMessageId,
-          bucketIds: (nextChatStore.dbMessagesMap[contextKey] ?? []).map((message) => message.id),
-          contextKey,
-          operationContext: nextChatStore.operations[operationId]?.context,
-          operationId,
-        });
       }
 
       chatStore.associateMessageWithOperation(assistantMessageId, operationId);

@@ -29,8 +29,6 @@ import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector'
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
 
-const DEBUG_AGENT_MOCK_REPLAY = process.env.NODE_ENV === 'development';
-
 interface VirtualizedListProps {
   dataSource: string[];
   itemContent: (index: number, data: string) => ReactNode;
@@ -73,17 +71,6 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     isSecondLastMessageFromUser,
     virtuaRef,
   });
-
-  useEffect(() => {
-    if (!DEBUG_AGENT_MOCK_REPLAY) return;
-    console.info('[AgentMockReplay] VirtualizedList:data', {
-      contextKey,
-      dataSource,
-      dataSourceLength: dataSource.length,
-      listData,
-      listDataLength: listData.length,
-    });
-  }, [contextKey, dataSource, listData]);
 
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
@@ -240,15 +227,6 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         onScrollEnd={handleScrollEnd}
       >
         {(messageId, index): ReactElement => {
-          if (DEBUG_AGENT_MOCK_REPLAY) {
-            console.info('[AgentMockReplay] VirtualizedList:item-render', {
-              contextKey,
-              index,
-              isSpacer: isSpacerMessage(messageId),
-              messageId,
-            });
-          }
-
           if (isSpacerMessage(messageId)) {
             // Only animate the collapse-to-zero (unmount). Any non-zero height
             // change (initial mount, shrink as assistant grows) is applied
