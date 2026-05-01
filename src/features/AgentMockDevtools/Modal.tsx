@@ -1,6 +1,7 @@
-import { Modal as BaseModal } from '@lobehub/ui/base-ui';
+import type { ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 
 import { CaseList } from './CaseList';
 import { FixtureViewer } from './FixtureViewer/FixtureViewer';
@@ -56,13 +57,9 @@ const TABS: Array<{ key: DevtoolsTab; label: string }> = [
   { key: 'settings', label: '⚙ Settings' },
 ];
 
-export const Modal = memo(() => {
-  const modalState = useAgentMockStore((s) => s.modalState);
-  const setModalState = useAgentMockStore((s) => s.setModalState);
+const ModalContent = memo(() => {
   const activeTab = useAgentMockStore((s) => s.activeTab);
   const setActiveTab = useAgentMockStore((s) => s.setActiveTab);
-
-  const open = modalState === 'open';
 
   const content = useMemo(() => {
     switch (activeTab) {
@@ -82,32 +79,59 @@ export const Modal = memo(() => {
   }, [activeTab]);
 
   return (
-    <BaseModal
-      footer={null}
-      open={open}
-      title="Agent Mock DevTools (dev)"
-      width={1200}
-      onCancel={() => setModalState('minimized')}
-    >
-      <div className={styles.body}>
-        <CaseList />
-        <div className={styles.main}>
-          <div className={styles.tabBar}>
-            {TABS.map((t) => (
-              <div
-                className={`${styles.tab} ${activeTab === t.key ? styles.tabActive : ''}`}
-                key={t.key}
-                onClick={() => setActiveTab(t.key)}
-              >
-                {t.label}
-              </div>
-            ))}
-          </div>
-          <div className={styles.content}>{content}</div>
+    <div className={styles.body}>
+      <CaseList />
+      <div className={styles.main}>
+        <div className={styles.tabBar}>
+          {TABS.map((t) => (
+            <div
+              className={`${styles.tab} ${activeTab === t.key ? styles.tabActive : ''}`}
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+            >
+              {t.label}
+            </div>
+          ))}
         </div>
+        <div className={styles.content}>{content}</div>
       </div>
-    </BaseModal>
+    </div>
   );
+});
+
+ModalContent.displayName = 'AgentMockModalContent';
+
+export const Modal = memo(() => {
+  const modalState = useAgentMockStore((s) => s.modalState);
+  const setModalState = useAgentMockStore((s) => s.setModalState);
+  const instanceRef = useRef<ModalInstance | null>(null);
+
+  useEffect(() => {
+    if (modalState === 'open' && !instanceRef.current) {
+      instanceRef.current = createModal({
+        content: <ModalContent />,
+        footer: null,
+        onOpenChange: (open) => {
+          if (!open) setModalState('minimized');
+        },
+        title: 'Agent Mock DevTools (dev)',
+        width: 1200,
+      });
+    } else if (modalState !== 'open' && instanceRef.current) {
+      instanceRef.current.destroy();
+      instanceRef.current = null;
+    }
+  }, [modalState, setModalState]);
+
+  useEffect(
+    () => () => {
+      instanceRef.current?.destroy();
+      instanceRef.current = null;
+    },
+    [],
+  );
+
+  return null;
 });
 
 Modal.displayName = 'AgentMockModal';
