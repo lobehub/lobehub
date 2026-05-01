@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, memo, type ReactNode, use } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, memo, use } from 'react';
 
-import { type IFeatureFlagsState } from '@/config/featureFlags';
-import { type GlobalServerConfig } from '@/types/serverConfig';
+import type { IFeatureFlagsState } from '@/config/featureFlags';
+import type { GlobalServerConfig } from '@/types/serverConfig';
 
 interface AuthServerConfigState {
   featureFlags: Partial<IFeatureFlagsState>;
