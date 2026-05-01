@@ -1,4 +1,5 @@
 import type { ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import { createVisualFileRef } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { filesPrompts } from './index';
@@ -187,6 +188,25 @@ describe('filesPrompts', () => {
       </files_info>
       <!-- END SYSTEM CONTEXT -->"
     `);
+  });
+
+  it('should generate stable visual refs when message id is provided', () => {
+    const messageId = 'message-with-visual-media';
+    const imageRef = createVisualFileRef({ index: 0, messageId, type: 'image' });
+    const videoRef = createVisualFileRef({ index: 0, messageId, type: 'video' });
+
+    const result = filesPrompts({
+      imageList: [mockImage],
+      messageId,
+      videoList: [mockVideo],
+    });
+
+    expect(result).toContain(
+      `<image ref="${imageRef}" local_ref="image_1" name="test image" url="https://example.com/image.jpg"></image>`,
+    );
+    expect(result).toContain(
+      `<video ref="${videoRef}" local_ref="video_1" name="test video" url="https://example.com/video.mp4"></video>`,
+    );
   });
 
   describe('Video functionality', () => {

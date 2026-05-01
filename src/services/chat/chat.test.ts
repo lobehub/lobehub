@@ -1,7 +1,12 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { type ChatStreamPayload, type LobeTool, type UIChatMessage } from '@lobechat/types';
-import { ChatErrorType } from '@lobechat/types';
+import {
+  ChatErrorType,
+  type ChatStreamPayload,
+  createVisualFileRef,
+  type LobeTool,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -683,6 +688,12 @@ describe('ChatService', () => {
         );
         expect(imageUrlToBase64).toHaveBeenCalledWith('http://127.0.0.1:3000/uploads/image.png');
 
+        const visualRef = createVisualFileRef({
+          index: 0,
+          messageId: 'test-id',
+          type: 'image',
+        });
+
         // Verify the final result contains base64 converted URL
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
@@ -705,7 +716,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="image_1" name="local-image.png" url="http://127.0.0.1:3000/uploads/image.png"></image>
+<image ref="${visualRef}" local_ref="image_1" name="local-image.png" url="http://127.0.0.1:3000/uploads/image.png"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -779,6 +790,12 @@ describe('ChatService', () => {
         );
         expect(imageUrlToBase64).not.toHaveBeenCalled(); // Should NOT be called for remote URLs
 
+        const visualRef = createVisualFileRef({
+          index: 0,
+          messageId: 'test-id-2',
+          type: 'image',
+        });
+
         // Verify the final result preserves original URL
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
@@ -801,7 +818,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="image_1" name="remote-image.jpg" url="https://example.com/remote-image.jpg"></image>
+<image ref="${visualRef}" local_ref="image_1" name="remote-image.jpg" url="https://example.com/remote-image.jpg"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,

@@ -1,4 +1,5 @@
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { createVisualFileRef } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
@@ -8,6 +9,7 @@ const mockToolsEnv = vi.hoisted(() => ({
   VISUAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
 }));
 const mockMessageModelQueryByIds = vi.hoisted(() => vi.fn());
+const mockMessageModelQuery = vi.hoisted(() => vi.fn());
 const mockChat = vi.hoisted(() => vi.fn());
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
 const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
@@ -18,6 +20,7 @@ vi.mock('@/envs/tools', () => ({
 
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
+    query: (...args: any[]) => mockMessageModelQuery(...args),
     queryByIds: (...args: any[]) => mockMessageModelQueryByIds(...args),
   })),
 }));
@@ -63,6 +66,7 @@ describe('lobeAgentRuntime', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMessageModelQuery.mockResolvedValue([]);
     mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'vision-model';
     mockToolsEnv.VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
     mockChat.mockImplementation(async (_payload, options) => {
@@ -132,8 +136,10 @@ describe('lobeAgentRuntime', () => {
       question: 'what is this?',
     });
 
+    const stableImageRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'image' });
+
     expect(result.success).toBe(false);
-    expect(result.content).toContain('Available refs: image_1');
+    expect(result.content).toContain(`Available refs: ${stableImageRef}, image_1`);
   });
 
   it('should analyze all visual files when files is omitted', async () => {
@@ -147,13 +153,15 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({ question: 'what is this?' });
+    const stableImageRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'image' });
+    const stableVideoRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'video' });
 
     expect(result.success).toBe(true);
     expect(result.content).toBe('visual answer');
     expect(result.state).toMatchObject({
       files: [
-        { id: 'file-image', name: 'image.png', ref: 'image_1', type: 'image' },
-        { id: 'file-video', name: 'video.mp4', ref: 'video_1', type: 'video' },
+        { id: 'file-image', name: 'image.png', ref: stableImageRef, type: 'image' },
+        { id: 'file-video', name: 'video.mp4', ref: stableVideoRef, type: 'video' },
       ],
       model: 'vision-model',
       provider: 'test-provider',
@@ -178,6 +186,152 @@ describe('lobeAgentRuntime', () => {
         metadata: { trigger: 'lobe-agent.analyzeVisualMedia' },
       }),
     );
+  });
+
+  it('should resolve stable refs from earlier topic messages', async () => {
+    const previousImageRef = createVisualFileRef({
+      index: 0,
+      messageId: 'msg-previous',
+      type: 'image',
+    });
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        id: 'msg-1',
+        imageList: [
+          { alt: 'current.png', id: 'file-current', url: 'https://example.com/current.png' },
+        ],
+        role: 'user',
+      },
+    ]);
+    mockMessageModelQuery.mockResolvedValue([
+      {
+        id: 'msg-previous',
+        imageList: [
+          { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
+        ],
+        role: 'user',
+      },
+      {
+        id: 'msg-1',
+        imageList: [
+          { alt: 'current.png', id: 'file-current', url: 'https://example.com/current.png' },
+        ],
+        role: 'user',
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
+
+    const result = await runtime.analyzeVisualMedia({
+      files: [previousImageRef],
+      question: 'what was in the earlier image?',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockMessageModelQuery).toHaveBeenCalledWith(
+      { topicId: 'topic-1' },
+      expect.objectContaining({ postProcessUrl: expect.any(Function) }),
+    );
+    expect(result.state).toMatchObject({
+      files: [{ id: 'file-previous', name: 'previous.png', ref: previousImageRef, type: 'image' }],
+    });
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: [
+              expect.objectContaining({ type: 'text' }),
+              expect.objectContaining({
+                image_url: { detail: 'auto', url: 'https://example.com/previous.png' },
+                type: 'image_url',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('should use the source thread scope when resolving stable refs', async () => {
+    const previousImageRef = createVisualFileRef({
+      index: 0,
+      messageId: 'msg-previous',
+      type: 'image',
+    });
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        id: 'msg-1',
+        role: 'user',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      },
+    ]);
+    mockMessageModelQuery.mockResolvedValue([
+      {
+        id: 'msg-previous',
+        imageList: [
+          { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
+        ],
+        role: 'user',
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
+
+    const result = await runtime.analyzeVisualMedia({
+      files: [previousImageRef],
+      question: 'what was in the earlier image?',
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockMessageModelQuery).toHaveBeenCalledWith(
+      { threadId: 'thread-1', topicId: 'topic-1' },
+      expect.objectContaining({ postProcessUrl: expect.any(Function) }),
+    );
+  });
+
+  it('should use group, agent and legacy session scopes when resolving stable refs', async () => {
+    const cases = [
+      {
+        expectedQuery: { groupId: 'group-1', topicId: 'topic-1' },
+        sourceMessage: { groupId: 'group-1', id: 'msg-1', role: 'user', topicId: 'topic-1' },
+      },
+      {
+        expectedQuery: { agentId: 'agent-1', topicId: 'topic-1' },
+        sourceMessage: { agentId: 'agent-1', id: 'msg-1', role: 'user', topicId: 'topic-1' },
+      },
+      {
+        expectedQuery: { sessionId: 'session-1', topicId: 'topic-1' },
+        sourceMessage: { id: 'msg-1', role: 'user', sessionId: 'session-1', topicId: 'topic-1' },
+      },
+    ];
+
+    for (const { expectedQuery, sourceMessage } of cases) {
+      vi.clearAllMocks();
+      mockMessageModelQueryByIds.mockResolvedValue([sourceMessage]);
+      mockMessageModelQuery.mockResolvedValue([
+        {
+          id: 'msg-previous',
+          imageList: [
+            { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
+          ],
+          role: 'user',
+        },
+      ]);
+      mockInitModelRuntimeFromDB.mockResolvedValue({ chat: mockChat });
+      mockConsumeStreamUntilDone.mockResolvedValue(undefined);
+
+      const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
+      const result = await runtime.analyzeVisualMedia({
+        files: [createVisualFileRef({ index: 0, messageId: 'msg-previous', type: 'image' })],
+        question: 'what was in the earlier image?',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockMessageModelQuery).toHaveBeenCalledWith(
+        expectedQuery,
+        expect.objectContaining({ postProcessUrl: expect.any(Function) }),
+      );
+    }
   });
 
   it('should reject video files when the configured model lacks video support', async () => {
