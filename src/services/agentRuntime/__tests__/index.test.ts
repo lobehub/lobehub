@@ -1,5 +1,5 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentRuntimeService } from '../index';
 
@@ -8,15 +8,11 @@ const {
   createOperationMutateMock,
   createAgentToolsEngineMock,
   getAgentStoreStateMock,
-  isCanUseVideoMock,
-  isCanUseVisionMock,
 } = vi.hoisted(() => ({
   contextEngineeringMock: vi.fn(),
   createAgentToolsEngineMock: vi.fn(),
   createOperationMutateMock: vi.fn(),
   getAgentStoreStateMock: vi.fn(),
-  isCanUseVideoMock: vi.fn(),
-  isCanUseVisionMock: vi.fn(),
 }));
 
 vi.mock('@/helpers/toolEngineering', () => ({
@@ -41,11 +37,6 @@ vi.mock('@/libs/trpc/client', () => ({
 
 vi.mock('@/services/chat/mecha', () => ({
   contextEngineering: contextEngineeringMock,
-}));
-
-vi.mock('@/services/chat/helper', () => ({
-  isCanUseVideo: isCanUseVideoMock,
-  isCanUseVision: isCanUseVisionMock,
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -84,18 +75,6 @@ describe('AgentRuntimeService', () => {
 
     contextEngineeringMock.mockResolvedValue([{ content: 'compiled', role: 'system' }]);
     createOperationMutateMock.mockResolvedValue({ operationId: 'op-1' });
-    isCanUseVideoMock.mockReturnValue(true);
-    isCanUseVisionMock.mockReturnValue(true);
-    Object.defineProperty(window, 'global_serverConfigStore', {
-      configurable: true,
-      value: {
-        getState: () => ({ serverConfig: { enableVisualUnderstanding: true } }),
-      },
-    });
-  });
-
-  afterEach(() => {
-    Reflect.deleteProperty(window, 'global_serverConfigStore');
   });
 
   it('should keep agent documents optional when hydration returns undefined', async () => {
@@ -126,26 +105,7 @@ describe('AgentRuntimeService', () => {
     );
   });
 
-  it('should opt into visual understanding for image messages when the model cannot see images', async () => {
-    isCanUseVisionMock.mockReturnValue(false);
-    getAgentStoreStateMock.mockReturnValue({
-      activeAgentId: 'agent-1',
-    });
-
-    await agentRuntimeService.createOperation({
-      messages: [{ id: 'msg-1', imageList: [{ id: 'file-1' }], role: 'user' }] as UIChatMessage[],
-      userMessageId: 'msg-1',
-    });
-
-    expect(createAgentToolsEngineMock).toHaveBeenCalledWith(
-      { model: 'gpt-4o', provider: 'openai' },
-      ['plugin-1', 'lobe-agent'],
-    );
-  });
-
-  it('should not opt into visual understanding when the current message has no visual attachments', async () => {
-    isCanUseVisionMock.mockReturnValue(false);
-    isCanUseVideoMock.mockReturnValue(false);
+  it('should use current agent plugins when creating operation tools', async () => {
     getAgentStoreStateMock.mockReturnValue({
       activeAgentId: 'agent-1',
     });
@@ -155,9 +115,14 @@ describe('AgentRuntimeService', () => {
       userMessageId: 'msg-1',
     });
 
-    expect(createAgentToolsEngineMock).toHaveBeenCalledWith(
-      { model: 'gpt-4o', provider: 'openai' },
-      ['plugin-1'],
+    expect(createAgentToolsEngineMock).toHaveBeenCalledWith({
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+    expect(contextEngineeringMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: ['plugin-1'],
+      }),
     );
   });
 });
