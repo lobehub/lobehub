@@ -407,8 +407,10 @@ export class TaskLifecycleService {
       // The LLM is the second-stage gate: even when the rule layer says "this
       // could be a delivery", the model judges from actual content whether
       // it's worth surfacing. Mid-process working notes / clarifications get
-      // emit=false here.
-      if (generated.emit === false) {
+      // emit=false here. Scheduled tasks bypass this vote — by contract every
+      // scheduled tick must produce a brief.
+      const isScheduled = currentTask.automationMode === 'schedule';
+      if (!isScheduled && generated.emit === false) {
         log(
           'synthesize: LLM voted skip task=%s topic=%s reason=%s',
           taskIdentifier,

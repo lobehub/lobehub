@@ -22,9 +22,10 @@ export interface ShouldEmitTopicBriefResult {
  * the rule pure makes it easy to unit-test and to reason about.
  *
  * The error and judge paths build their own briefs upstream; we skip them here
- * to avoid duplicates. Heartbeat/schedule ticks default to "no brief" because
- * each tick is just a status nudge, not a delivery moment — that policy can be
- * revisited later if we want periodic insight briefs.
+ * to avoid duplicates. Heartbeat ticks are mid-loop nudges, not delivery
+ * moments. Scheduled tasks, by contrast, are contractually expected to
+ * produce a brief on every tick — they fall through to `emit: true` and the
+ * caller additionally bypasses the LLM emit-vote.
  */
 export const shouldEmitTopicBrief = (
   input: ShouldEmitTopicBriefInput,
@@ -34,8 +35,14 @@ export const shouldEmitTopicBrief = (
   // The judge path may not have terminated (e.g. review disabled or threw),
   // but if review is configured we still defer to it on subsequent runs.
   if (input.hasReviewConfigEnabled) return { emit: false, reason: 'review-config-enabled' };
-  if (input.task?.automationMode) return { emit: false, reason: 'automation-tick' };
-  if (input.isTrivialContent) return { emit: false, reason: 'trivial-content' };
+  if (input.task?.automationMode === 'heartbeat') {
+    return { emit: false, reason: 'heartbeat-tick' };
+  }
+  const isScheduled = input.task?.automationMode === 'schedule';
+  // Scheduled tasks must produce a brief every tick — short outputs included.
+  if (input.isTrivialContent && !isScheduled) {
+    return { emit: false, reason: 'trivial-content' };
+  }
   return { emit: true };
 };
 

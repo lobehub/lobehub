@@ -39,16 +39,22 @@ describe('shouldEmitTopicBrief', () => {
   it('skips heartbeat automation ticks (mid-loop, not a delivery)', () => {
     const result = shouldEmitTopicBrief(baseInput({ task: { automationMode: 'heartbeat' } }));
     expect(result.emit).toBe(false);
-    expect(result.reason).toBe('automation-tick');
+    expect(result.reason).toBe('heartbeat-tick');
   });
 
-  it('skips schedule automation ticks', () => {
+  it('emits on every schedule tick (contractual daily brief)', () => {
     const result = shouldEmitTopicBrief(baseInput({ task: { automationMode: 'schedule' } }));
-    expect(result.emit).toBe(false);
-    expect(result.reason).toBe('automation-tick');
+    expect(result.emit).toBe(true);
   });
 
-  it('skips trivial content (empty / whitespace-only acks)', () => {
+  it('still emits a schedule brief even when content looks trivial', () => {
+    const result = shouldEmitTopicBrief(
+      baseInput({ isTrivialContent: true, task: { automationMode: 'schedule' } }),
+    );
+    expect(result.emit).toBe(true);
+  });
+
+  it('skips trivial content for non-scheduled tasks (empty / whitespace-only acks)', () => {
     const result = shouldEmitTopicBrief(baseInput({ isTrivialContent: true }));
     expect(result.emit).toBe(false);
     expect(result.reason).toBe('trivial-content');
@@ -59,7 +65,7 @@ describe('shouldEmitTopicBrief', () => {
     expect(result.emit).toBe(true);
   });
 
-  it('skips automation even when other conditions look fine', () => {
+  it('skips heartbeat even when other conditions look fine', () => {
     const result = shouldEmitTopicBrief(
       baseInput({
         hasReviewConfigEnabled: false,
