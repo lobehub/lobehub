@@ -19,9 +19,7 @@ import type { ServerRuntimeRegistration } from './types';
 
 interface AnalyzeVisualMediaParams {
   files?: string[];
-  imageRef?: string;
   question: string;
-  videoRef?: string;
 }
 
 interface VisualFileItem {
@@ -119,14 +117,6 @@ const selectVisualItems = (
   return { availableRefs, selectedItems, unknownRefs };
 };
 
-const normalizeRequestedRefs = (params: AnalyzeVisualMediaParams) => {
-  const refs = [...(params.files ?? []), params.imageRef, params.videoRef]
-    .filter((ref): ref is string => typeof ref === 'string' && ref.trim().length > 0)
-    .map((ref) => ref.trim());
-
-  return refs.length > 0 ? refs : undefined;
-};
-
 class LobeAgentExecutionRuntime {
   private agentId?: string | null;
   private db: LobeChatDatabase;
@@ -204,7 +194,7 @@ class LobeAgentExecutionRuntime {
       postProcessUrl,
     });
 
-    const requestedRefs = normalizeRequestedRefs(params);
+    const requestedRefs = params.files?.filter(Boolean);
     const visualMessages =
       sourceMessage && (requestedRefs?.length || !hasVisualFiles(sourceMessage))
         ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)

@@ -289,41 +289,6 @@ describe('lobeAgentRuntime', () => {
     );
   });
 
-  it('should accept imageRef alias when resolving stable refs', async () => {
-    const previousImageRef = createVisualFileRef({
-      index: 0,
-      messageId: 'msg-previous',
-      type: 'image',
-    });
-    mockMessageModelQueryByIds.mockResolvedValue([
-      {
-        id: 'msg-1',
-        role: 'user',
-        topicId: 'topic-1',
-      },
-    ]);
-    mockMessageModelQuery.mockResolvedValue([
-      {
-        id: 'msg-previous',
-        imageList: [
-          { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
-        ],
-        role: 'user',
-      },
-    ]);
-    const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
-
-    const result = await runtime.analyzeVisualMedia({
-      imageRef: previousImageRef,
-      question: 'what was in the earlier image?',
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.state).toMatchObject({
-      files: [{ id: 'file-previous', name: 'previous.png', ref: previousImageRef, type: 'image' }],
-    });
-  });
-
   it('should fall back to scoped visual messages when current source has no visual files', async () => {
     const previousImageRef = createVisualFileRef({
       index: 0,
