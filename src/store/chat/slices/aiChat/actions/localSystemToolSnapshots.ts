@@ -8,8 +8,8 @@ import { localFileService } from '@/services/electron/localFileService';
 import type { ParsedLocalFileReference } from './commandBus/parseCommands';
 
 const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
-const READ_LOCAL_FILE = 'readLocalFile';
-const LIST_LOCAL_FILES = 'listLocalFiles';
+const READ_FILE = 'readFile';
+const LIST_FILES = 'listFiles';
 const DEFAULT_DIRECTORY_LIMIT = 100;
 
 const createSnapshotId = () => `local-system-snapshot-${nanoid()}`;
@@ -52,7 +52,7 @@ const createReadSnapshot = async (
     };
 
     return {
-      apiName: READ_LOCAL_FILE,
+      apiName: READ_FILE,
       arguments: args,
       capturedAt,
       content,
@@ -67,7 +67,7 @@ const createReadSnapshot = async (
     const message = error instanceof Error ? error.message : String(error);
 
     return {
-      apiName: READ_LOCAL_FILE,
+      apiName: READ_FILE,
       arguments: args,
       capturedAt,
       content: message,
@@ -104,7 +104,7 @@ const createListSnapshot = async (
     });
 
     return {
-      apiName: LIST_LOCAL_FILES,
+      apiName: LIST_FILES,
       arguments: args,
       capturedAt,
       content,
@@ -119,7 +119,7 @@ const createListSnapshot = async (
     const message = error instanceof Error ? error.message : String(error);
 
     return {
-      apiName: LIST_LOCAL_FILES,
+      apiName: LIST_FILES,
       arguments: args,
       capturedAt,
       content: message,

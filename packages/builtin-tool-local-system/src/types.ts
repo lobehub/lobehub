@@ -15,18 +15,17 @@ export type {
 export const LocalSystemIdentifier = 'lobe-local-system';
 
 export const LocalSystemApiName = {
-  editLocalFile: 'editLocalFile',
+  editFile: 'editFile',
   getCommandOutput: 'getCommandOutput',
-  globLocalFiles: 'globLocalFiles',
+  globFiles: 'globFiles',
   grepContent: 'grepContent',
   killCommand: 'killCommand',
-  listLocalFiles: 'listLocalFiles',
-  moveLocalFiles: 'moveLocalFiles',
-  readLocalFile: 'readLocalFile',
-  renameLocalFile: 'renameLocalFile',
+  listFiles: 'listFiles',
+  moveFiles: 'moveFiles',
+  readFile: 'readFile',
   runCommand: 'runCommand',
-  searchLocalFiles: 'searchLocalFiles',
-  writeLocalFile: 'writeLocalFile',
+  searchFiles: 'searchFiles',
+  writeFile: 'writeFile',
 };
 
 export interface FileResult {

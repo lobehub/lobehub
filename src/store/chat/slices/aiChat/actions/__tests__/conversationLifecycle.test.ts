@@ -916,7 +916,7 @@ describe('ConversationLifecycle actions', () => {
         const payload = sendMessageInServerSpy.mock.calls[0]?.[0];
         expect(payload?.newUserMessage.metadata?.localSystemToolSnapshots).toMatchObject([
           {
-            apiName: 'readLocalFile',
+            apiName: 'readFile',
             arguments: { path: '/Users/me/project/foo.ts' },
             content: expect.stringContaining('export const x = 1;'),
             identifier: 'lobe-local-system',
@@ -992,7 +992,7 @@ describe('ConversationLifecycle actions', () => {
 
         expect(runtimeUserMessage?.metadata?.localSystemToolSnapshots).toMatchObject([
           {
-            apiName: 'readLocalFile',
+            apiName: 'readFile',
             arguments: { path: '/Users/me/project/foo.ts' },
             content: expect.stringContaining('export const x = 1;'),
             identifier: 'lobe-local-system',

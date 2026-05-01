@@ -13,17 +13,28 @@ import { WriteLocalFileInspector } from './WriteLocalFile';
 
 /**
  * Code Interpreter Inspector Components Registry
+ *
+ * Each component is also registered under the legacy long API name so old DB
+ * messages with apiName like 'readLocalFile' still render after the rename.
  */
 export const CloudSandboxInspectors = {
-  [CloudSandboxApiName.editLocalFile]: EditLocalFileInspector,
+  [CloudSandboxApiName.editFile]: EditLocalFileInspector,
   [CloudSandboxApiName.executeCode]: ExecuteCodeInspector,
   [CloudSandboxApiName.exportFile]: ExportFileInspector,
-  [CloudSandboxApiName.globLocalFiles]: GlobLocalFilesInspector,
+  [CloudSandboxApiName.globFiles]: GlobLocalFilesInspector,
   [CloudSandboxApiName.grepContent]: GrepContentInspector,
-  [CloudSandboxApiName.listLocalFiles]: ListLocalFilesInspector,
-  [CloudSandboxApiName.moveLocalFiles]: MoveLocalFilesInspector,
-  [CloudSandboxApiName.readLocalFile]: ReadLocalFileInspector,
+  [CloudSandboxApiName.listFiles]: ListLocalFilesInspector,
+  [CloudSandboxApiName.moveFiles]: MoveLocalFilesInspector,
+  [CloudSandboxApiName.readFile]: ReadLocalFileInspector,
   [CloudSandboxApiName.runCommand]: RunCommandInspector,
-  [CloudSandboxApiName.searchLocalFiles]: SearchLocalFilesInspector,
-  [CloudSandboxApiName.writeLocalFile]: WriteLocalFileInspector,
+  [CloudSandboxApiName.searchFiles]: SearchLocalFilesInspector,
+  [CloudSandboxApiName.writeFile]: WriteLocalFileInspector,
+  // Legacy aliases — keep these so historical messages keep rendering
+  editLocalFile: EditLocalFileInspector,
+  globLocalFiles: GlobLocalFilesInspector,
+  listLocalFiles: ListLocalFilesInspector,
+  moveLocalFiles: MoveLocalFilesInspector,
+  readLocalFile: ReadLocalFileInspector,
+  searchLocalFiles: SearchLocalFilesInspector,
+  writeLocalFile: WriteLocalFileInspector,
 };

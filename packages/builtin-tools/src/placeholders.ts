@@ -16,8 +16,11 @@ import { type BuiltinPlaceholder } from '@lobechat/types';
  */
 export const BuiltinToolPlaceholders: Record<string, Record<string, any>> = {
   [LocalSystemIdentifier]: {
-    [LocalSystemApiName.searchLocalFiles]: LocalSystemSearchFilesPlaceholder,
-    [LocalSystemApiName.listLocalFiles]: LocalSystemListFilesPlaceholder,
+    [LocalSystemApiName.searchFiles]: LocalSystemSearchFilesPlaceholder,
+    [LocalSystemApiName.listFiles]: LocalSystemListFilesPlaceholder,
+    // Legacy aliases — keep these so historical messages keep rendering
+    listLocalFiles: LocalSystemListFilesPlaceholder,
+    searchLocalFiles: LocalSystemSearchFilesPlaceholder,
   },
   [WebBrowsingManifest.identifier]: WebBrowsingPlaceholders as Record<string, any>,
 };
