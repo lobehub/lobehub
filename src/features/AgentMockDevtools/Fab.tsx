@@ -1,5 +1,5 @@
 import { Tooltip } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Bot } from 'lucide-react';
 import { memo } from 'react';
 
@@ -21,44 +21,78 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 36px;
     height: 36px;
+    border: 1px solid transparent;
     border-radius: 50%;
 
-    color: #fff;
+    color: ${cssVar.colorBgContainer};
 
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    box-shadow: 0 4px 14px rgb(99 102 241 / 40%);
+    background: ${cssVar.colorText};
+    box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+
+    transition:
+      transform 160ms ease,
+      background 160ms ease,
+      color 160ms ease,
+      border-color 160ms ease;
 
     &:hover {
-      transform: scale(1.05);
+      transform: scale(1.04);
     }
   `,
+  fabActive: css`
+    border-color: ${cssVar.colorBorder};
+    color: ${cssVar.colorText};
+    background: ${cssVar.colorFillSecondary};
+  `,
   ring: css`
+    pointer-events: none;
+
     position: absolute;
     inset: -3px;
 
-    border: 2px solid transparent;
-    border-block-start-color: #fff;
-    border-inline-end-color: #fff;
+    border: 1.5px solid ${cssVar.colorText};
     border-radius: 50%;
 
-    animation: agent-mock-spin 1.6s linear infinite;
+    opacity: 0.4;
 
-    @keyframes agent-mock-spin {
-      to {
-        transform: rotate(360deg);
+    animation: agent-mock-pulse 2.4s ease-in-out infinite;
+
+    @keyframes agent-mock-pulse {
+      0%,
+      100% {
+        opacity: 0.3;
+      }
+
+      50% {
+        opacity: 0.8;
       }
     }
   `,
 }));
 
 export const Fab = memo(() => {
-  const setModalState = useAgentMockStore((s) => s.setModalState);
+  const popoverOpen = useAgentMockStore((s) => s.popoverOpen);
+  const setPopoverOpen = useAgentMockStore((s) => s.setPopoverOpen);
+  const modalOpen = useAgentMockStore((s) => s.modalOpen);
   const playback = useAgentMockStore((s) => s.playback);
   const playing = playback?.status === 'running';
 
+  if (modalOpen) return null;
+
   return (
     <Tooltip title="Agent Mock (dev only)">
-      <div className={styles.fab} onClick={() => setModalState('open')}>
+      <div
+        className={`${styles.fab} ${popoverOpen ? styles.fabActive : ''}`}
+        role="button"
+        tabIndex={0}
+        onClick={() => setPopoverOpen(!popoverOpen)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setPopoverOpen(!popoverOpen);
+          }
+        }}
+      >
         <Bot size={18} />
         {playing && <span className={styles.ring} />}
       </div>

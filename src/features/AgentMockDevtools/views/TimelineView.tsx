@@ -1,33 +1,47 @@
 import type { MockEvent } from '@lobechat/agent-mock';
+import { Center, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useCallback, useMemo } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 
+import { useAgentMockPlayer } from '../hooks/useAgentMockPlayer';
 import { useMockCases } from '../hooks/useMockCases';
 import { useAgentMockStore } from '../store/agentMockStore';
-import { EventRow } from './EventRow';
+import { EventRow } from '../Timeline/EventRow';
 
 const styles = createStaticStyles(({ css }) => ({
-  wrap: css`
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-  `,
   list: css`
     overflow: hidden;
     flex: 1;
+
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 6px;
+    border-radius: 8px;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  meta: css`
+    margin-block-end: 8px;
+    font-size: 11px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  wrap: css`
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+
+    height: 100%;
+    min-height: 0;
   `,
 }));
 
-export const TimelinePanel = memo(() => {
+export const TimelineView = memo(() => {
   const { all } = useMockCases();
   const selectedCaseId = useAgentMockStore((s) => s.selectedCaseId);
   const playback = useAgentMockStore((s) => s.playback);
+  const { seekToEventIndex } = useAgentMockPlayer();
   const c = all.find((x) => x.id === selectedCaseId);
 
-  const events = useMemo(() => {
+  const events = useMemo<MockEvent[]>(() => {
     if (!c) return [];
     if (c.source.type === 'fixture') return c.source.events;
     if (c.source.type === 'snapshot') return c.source.events ?? [];
@@ -52,17 +66,24 @@ export const TimelinePanel = memo(() => {
         event={ev}
         index={idx}
         isActive={playback?.currentEventIndex === idx}
+        onClick={() => seekToEventIndex(idx)}
       />
     ),
-    [cumulative, playback?.currentEventIndex],
+    [cumulative, playback?.currentEventIndex, seekToEventIndex],
   );
 
-  if (!c) return <div style={{ color: 'var(--lobe-color-text-secondary)' }}>Select a case.</div>;
+  if (!c) {
+    return (
+      <Center flex={1}>
+        <Text type="secondary">Pick a case to begin.</Text>
+      </Center>
+    );
+  }
 
   return (
     <div className={styles.wrap}>
-      <div style={{ marginBlockEnd: 8, fontSize: 11, color: 'var(--lobe-color-text-tertiary)' }}>
-        {events.length} events · {(cumulative.at(-1) ?? 0) / 1000} s total
+      <div className={styles.meta}>
+        {events.length} events · {((cumulative.at(-1) ?? 0) / 1000).toFixed(1)}s total
       </div>
       <div className={styles.list}>
         <Virtuoso data={events} itemContent={renderItem} />
@@ -71,4 +92,4 @@ export const TimelinePanel = memo(() => {
   );
 });
 
-TimelinePanel.displayName = 'AgentMockTimelinePanel';
+TimelineView.displayName = 'AgentMockTimelineView';

@@ -1,8 +1,8 @@
 import { memo, useEffect, useState } from 'react';
 
 import { Fab } from './Fab';
-import { MiniBar } from './MiniBar';
 import { Modal } from './Modal';
+import { Popover } from './Popover';
 
 const isDevEnv = process.env.NODE_ENV === 'development';
 const STORAGE_KEY = 'LOBE_AGENT_MOCK_ENABLED';
@@ -32,8 +32,8 @@ const AgentMockDevtools = memo(() => {
   return (
     <>
       <Fab />
+      <Popover />
       <Modal />
-      <MiniBar />
     </>
   );
 });

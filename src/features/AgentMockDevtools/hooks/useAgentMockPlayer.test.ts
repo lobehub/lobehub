@@ -37,6 +37,7 @@ const createMockHandle = () => ({
   player: {
     pause: vi.fn(),
     resume: vi.fn(),
+    seekToEventIndex: vi.fn(),
     setSpeed: vi.fn(),
     stepNextEvent: vi.fn(),
     stepNextStep: vi.fn(),
@@ -73,9 +74,11 @@ describe('useAgentMockPlayer', () => {
     vi.clearAllMocks();
 
     useAgentMockStore.setState({
-      activeTab: 'player',
-      modalState: 'closed',
+      activeTab: 'timeline',
+      loop: false,
+      modalOpen: false,
       playback: null,
+      popoverOpen: false,
       selectedCaseId: null,
       speed: 1,
     });

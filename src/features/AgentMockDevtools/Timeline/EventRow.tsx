@@ -2,52 +2,63 @@ import type { MockEvent } from '@lobechat/agent-mock';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
-const COLOR_BY_TYPE: Record<string, string> = {
-  stream_chunk: '#6b7280',
-  stream_start: '#0ea5e9',
-  stream_end: '#0ea5e9',
-  tool_start: '#3b82f6',
-  tool_end: '#10b981',
-  tool_execute: '#8b5cf6',
-  step_start: '#f59e0b',
-  step_complete: '#f59e0b',
-  error: '#ef4444',
+type EventTone = 'info' | 'neutral' | 'muted' | 'error';
+
+const TONE_BY_TYPE: Record<string, EventTone> = {
+  error: 'error',
+  step_complete: 'neutral',
+  step_start: 'neutral',
+  stream_chunk: 'neutral',
+  stream_end: 'muted',
+  stream_start: 'muted',
+  tool_end: 'info',
+  tool_execute: 'info',
+  tool_start: 'info',
+};
+
+const toneVar: Record<EventTone, string> = {
+  error: cssVar.colorError,
+  info: cssVar.colorText,
+  muted: cssVar.colorTextQuaternary,
+  neutral: cssVar.colorTextTertiary,
 };
 
 const styles = createStaticStyles(({ css }) => ({
-  row: css`
-    display: grid;
-    grid-template-columns: 70px 30px 140px 1fr;
-    gap: 8px;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: ui-monospace, monospace;
-    font-size: 11px;
-
-    &:hover {
-      background: ${cssVar.colorFillAlter};
-    }
-  `,
   active: css`
-    background: ${cssVar.colorPrimaryBg};
+    background: ${cssVar.colorFillSecondary};
   `,
   dot: css`
-    width: 8px;
-    height: 8px;
-    margin-block-start: 4px;
+    width: 6px;
+    height: 6px;
+    margin-block-start: 5px;
     border-radius: 50%;
-  `,
-  type: css`
-    color: ${cssVar.colorTextSecondary};
   `,
   preview: css`
     overflow: hidden;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  row: css`
+    cursor: pointer;
+
+    display: grid;
+    grid-template-columns: 64px 16px 140px 1fr;
+    gap: 8px;
+
+    padding-block: 4px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  type: css`
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -56,6 +67,7 @@ interface Props {
   event: MockEvent;
   index: number;
   isActive: boolean;
+  onClick?: () => void;
 }
 
 const previewOf = (event: MockEvent): string => {
@@ -73,15 +85,19 @@ const previewOf = (event: MockEvent): string => {
   return JSON.stringify(data).slice(0, 80);
 };
 
-export const EventRow = memo<Props>(({ event, index, cumulativeMs, isActive }) => (
-  <div className={`${styles.row} ${isActive ? styles.active : ''}`}>
-    <span className={styles.type}>+{(cumulativeMs / 1000).toFixed(2)}s</span>
-    <span className={styles.dot} style={{ background: COLOR_BY_TYPE[event.type] ?? '#94a3b8' }} />
-    <span className={styles.type}>
-      #{index} {event.type}
-    </span>
-    <span className={styles.preview}>{previewOf(event)}</span>
-  </div>
-));
+export const EventRow = memo<Props>(({ event, index, cumulativeMs, isActive, onClick }) => {
+  const tone = TONE_BY_TYPE[event.type] ?? 'neutral';
+
+  return (
+    <div className={`${styles.row} ${isActive ? styles.active : ''}`} onClick={onClick}>
+      <span className={styles.type}>+{(cumulativeMs / 1000).toFixed(2)}s</span>
+      <span className={styles.dot} style={{ background: toneVar[tone] }} />
+      <span className={styles.type}>
+        #{index} {event.type}
+      </span>
+      <span className={styles.preview}>{previewOf(event)}</span>
+    </div>
+  );
+});
 
 EventRow.displayName = 'AgentMockEventRow';

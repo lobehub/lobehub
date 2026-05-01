@@ -181,11 +181,25 @@ export function useAgentMockPlayer() {
   const stepEvent = useCallback(() => playerController.handle?.player.stepNextEvent(), []);
   const stepStep = useCallback(() => playerController.handle?.player.stepNextStep(), []);
   const stepTool = useCallback(() => playerController.handle?.player.stepNextTool(), []);
+  const seekToEventIndex = useCallback(
+    (idx: number) => playerController.handle?.player.seekToEventIndex(idx),
+    [],
+  );
   const setSpeed = useCallback(
     (s: Parameters<MockStreamHandle['player']['setSpeed']>[0]) =>
       playerController.handle?.player.setSpeed(s),
     [],
   );
 
-  return { pause, resume, setSpeed, start, stepEvent, stepStep, stepTool, stop };
+  return {
+    pause,
+    resume,
+    seekToEventIndex,
+    setSpeed,
+    start,
+    stepEvent,
+    stepStep,
+    stepTool,
+    stop,
+  };
 }
