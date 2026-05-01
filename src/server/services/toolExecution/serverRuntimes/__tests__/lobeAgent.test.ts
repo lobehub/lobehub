@@ -105,7 +105,7 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({
-      files: ['image_1'],
+      refs: ['image_1'],
       question: 'what is this?',
     });
 
@@ -118,7 +118,7 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({
-      files: ['image_1'],
+      refs: ['image_1'],
       question: 'what is this?',
     });
 
@@ -138,7 +138,7 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({
-      files: ['image_2'],
+      refs: ['image_2'],
       question: 'what is this?',
     });
 
@@ -148,7 +148,7 @@ describe('lobeAgentRuntime', () => {
     expect(result.content).toContain(`Available refs: ${stableImageRef}, image_1`);
   });
 
-  it('should require visual file refs', async () => {
+  it('should require refs or urls', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({ question: 'what is this?' } as any);
@@ -157,8 +157,39 @@ describe('lobeAgentRuntime', () => {
       error: { code: 'INVALID_ARGUMENTS' },
       success: false,
     });
-    expect(result.content).toContain('files is required');
+    expect(result.content).toContain('Either refs or urls is required');
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
+  });
+
+  it('should analyze direct media urls without querying message refs', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/generated.png'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
+    expect(result.state).toMatchObject({
+      files: [{ name: 'generated.png', ref: 'url_1', type: 'image' }],
+    });
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: [
+              expect.objectContaining({ type: 'text' }),
+              expect.objectContaining({
+                image_url: { detail: 'auto', url: 'https://example.com/generated.png' },
+                type: 'image_url',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
   });
 
   it('should resolve stable refs from earlier topic messages', async () => {
@@ -195,7 +226,7 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
     const result = await runtime.analyzeVisualMedia({
-      files: [previousImageRef],
+      refs: [previousImageRef],
       question: 'what was in the earlier image?',
     });
 
@@ -251,7 +282,7 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
     const result = await runtime.analyzeVisualMedia({
-      files: [previousImageRef],
+      refs: [previousImageRef],
       question: 'what was in the earlier image?',
     });
 
@@ -262,7 +293,7 @@ describe('lobeAgentRuntime', () => {
     );
   });
 
-  it('should not fall back to scoped visual messages when files is omitted', async () => {
+  it('should not fall back to scoped visual messages when refs and urls are omitted', async () => {
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
     const result = await runtime.analyzeVisualMedia({
@@ -309,7 +340,7 @@ describe('lobeAgentRuntime', () => {
 
       const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
       const result = await runtime.analyzeVisualMedia({
-        files: [createVisualFileRef({ index: 0, messageId: 'msg-previous', type: 'image' })],
+        refs: [createVisualFileRef({ index: 0, messageId: 'msg-previous', type: 'image' })],
         question: 'what was in the earlier image?',
       });
 
@@ -332,7 +363,7 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({
-      files: ['video_1'],
+      refs: ['video_1'],
       question: 'what is in the video?',
     });
 

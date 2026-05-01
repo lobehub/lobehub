@@ -67,12 +67,17 @@ vi.mock('@/store/tool', () => ({
               description: 'Analyze visual media',
               name: 'analyzeVisualMedia',
               parameters: {
+                anyOf: [{ required: ['refs'] }, { required: ['urls'] }],
                 properties: {
-                  files: {
+                  question: { type: 'string' },
+                  refs: {
                     items: { type: 'string' },
                     type: 'array',
                   },
-                  question: { type: 'string' },
+                  urls: {
+                    items: { type: 'string' },
+                    type: 'array',
+                  },
                 },
                 required: ['question'],
                 type: 'object',

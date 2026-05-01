@@ -7,6 +7,7 @@ export const LobeAgentApiName = {
 export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAgentApiName];
 
 export interface AnalyzeVisualMediaParams {
-  files: string[];
   question: string;
+  refs?: string[];
+  urls?: string[];
 }

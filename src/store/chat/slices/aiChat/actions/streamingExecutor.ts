@@ -77,6 +77,11 @@ const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): 
   return walk(editorData.root);
 };
 
+const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
+  hasImages: messages.some((message) => message.role === 'user' && !!message.imageList?.length),
+  hasVideos: messages.some((message) => message.role === 'user' && !!message.videoList?.length),
+});
+
 /**
  * Core streaming execution actions for AI chat
  */
@@ -172,21 +177,15 @@ export class StreamingExecutorActionImpl {
 
     // Dynamically inject turn-scoped builtin tools.
     const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
-    let currentUserMessage: UIChatMessage | undefined;
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (messages[index].role === 'user') {
-        currentUserMessage = messages[index];
-        break;
-      }
-    }
+    const visualMediaAvailability = getVisualMediaAvailability(messages);
     const visualUnderstandingConfigured =
       typeof window !== 'undefined' &&
       !!window.global_serverConfigStore?.getState().serverConfig.enableVisualUnderstanding;
     const shouldEnableVisualUnderstanding =
       visualUnderstandingConfigured &&
-      ((!!currentUserMessage?.imageList?.length &&
+      ((visualMediaAvailability.hasImages &&
         !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
-        (!!currentUserMessage?.videoList?.length &&
+        (visualMediaAvailability.hasVideos &&
           !isCanUseVideo(agentConfigData.model, agentConfigData.provider!)));
     const runtimePluginIds = [
       ...new Set([

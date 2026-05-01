@@ -20,6 +20,8 @@ interface VisualFileItem {
   uri: string;
 }
 
+const VIDEO_URL_PATTERN = /\.(?:mp4|m4v|mov|webm|mpeg|mpg|avi|mkv)(?:[?#]|$)/i;
+
 interface VisualSourceMessage {
   id?: string;
   imageList?: ChatImageItem[];
@@ -71,8 +73,39 @@ const toVisualFileItems = (
   })),
 ];
 
+const inferVisualTypeFromUrl = (url: string): VisualFileItem['type'] => {
+  if (url.startsWith('data:video/')) return 'video';
+  if (url.startsWith('data:image/')) return 'image';
+
+  return VIDEO_URL_PATTERN.test(url) ? 'video' : 'image';
+};
+
+const getUrlName = (url: string, index: number) => {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.split('/').findLast(Boolean) || `URL ${index + 1}`;
+  } catch {
+    return `URL ${index + 1}`;
+  }
+};
+
+const toUrlVisualFileItems = (urls: string[]): VisualFileItem[] =>
+  urls.map((url, index) => {
+    const type = inferVisualTypeFromUrl(url);
+    const name = getUrlName(url, index);
+
+    return {
+      description: name,
+      localRef: `url_${index + 1}`,
+      name,
+      ref: `url_${index + 1}`,
+      type,
+      uri: url,
+    };
+  });
+
 const selectFiles = (items: VisualFileItem[], sourceMessageId?: string, refs?: string[]) => {
-  if (!refs || refs.length === 0) return { selected: items };
+  if (!refs || refs.length === 0) return { selected: [] };
 
   const findItem = (ref: string) =>
     items.find(
@@ -93,6 +126,18 @@ const hasVisualFiles = (message: unknown): message is VisualSourceMessage =>
   isVisualSourceMessage(message) &&
   message.role === 'user' &&
   ((message.imageList?.length ?? 0) > 0 || (message.videoList?.length ?? 0) > 0);
+
+const toStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.length > 0)
+    : [];
+
+const getUnexpectedArgumentKeys = (params: AnalyzeVisualMediaParams) =>
+  Object.keys(params as Record<string, unknown>).filter(
+    (key) => key !== 'question' && key !== 'refs' && key !== 'urls',
+  );
 
 class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
   readonly identifier = LobeAgentManifest.identifier;
@@ -121,81 +166,95 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
-    const requestedRefs = params.files?.filter(Boolean);
-    if (!requestedRefs?.length) {
+    const requestedRefs = toStringArray(params.refs);
+    const requestedUrls = toStringArray(params.urls);
+    if (requestedRefs.length === 0 && requestedUrls.length === 0) {
+      const unexpectedKeys = getUnexpectedArgumentKeys(params);
+      const aliasHint =
+        unexpectedKeys.length > 0 ? ` Do not use ${unexpectedKeys.join(', ')}.` : '';
+
       return {
         error: {
-          message: '`files` is required and must include at least one visual file ref',
+          message: `Either \`refs\` or \`urls\` is required and must include at least one visual file ref or media URL.${aliasHint}`,
           type: 'InvalidToolArguments',
         },
         success: false,
       };
     }
 
-    const [{ chatService }, { getChatStoreState }, { dbMessageSelectors }] = await Promise.all([
-      import('@/services/chat'),
-      import('@/store/chat'),
-      import('@/store/chat/selectors'),
-    ]);
+    const selectedUrls = toUrlVisualFileItems(requestedUrls);
+    let selectedRefs: VisualFileItem[] = [];
 
-    const chatState = getChatStoreState();
-    const sourceCandidate =
-      ctx.sourceMessageId && dbMessageSelectors.getDbMessageById(ctx.sourceMessageId)(chatState);
-    const toolMessage = dbMessageSelectors.getDbMessageById(ctx.messageId)(chatState);
-    const assistantMessage =
-      isVisualSourceMessage(toolMessage) &&
-      toolMessage.parentId &&
-      dbMessageSelectors.getDbMessageById(toolMessage.parentId)(chatState);
-    const parentUserMessage =
-      isVisualSourceMessage(assistantMessage) &&
-      assistantMessage.parentId &&
-      dbMessageSelectors.getDbMessageById(assistantMessage.parentId)(chatState);
-    const sourceMessage = hasVisualFiles(sourceCandidate)
-      ? sourceCandidate
-      : hasVisualFiles(parentUserMessage)
-        ? parentUserMessage
-        : dbMessageSelectors.latestUserMessage(chatState);
-    const activeVisualMessages = dbMessageSelectors
-      .activeDbMessages(chatState)
-      .filter(hasVisualFiles);
-    const visualMessages = [
-      ...(hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
-      ...activeVisualMessages.filter((message) => message.id !== sourceMessage?.id),
-    ];
-    const files = visualMessages.flatMap((message) =>
-      toVisualFileItems(message, message.imageList, message.videoList),
-    );
+    if (requestedRefs.length > 0) {
+      const [{ getChatStoreState }, { dbMessageSelectors }] = await Promise.all([
+        import('@/store/chat'),
+        import('@/store/chat/selectors'),
+      ]);
 
-    if (files.length === 0) {
-      return {
-        error: {
-          message: 'No visual files are available in the current message',
-          type: 'VisualFilesNotFound',
-        },
-        success: false,
-      };
-    }
-
-    const selectableFiles = files;
-    const { invalidRefs, selected } = selectFiles(
-      selectableFiles,
-      sourceMessage?.id,
-      requestedRefs,
-    );
-    if (invalidRefs?.length) {
-      const availableRefs = selectableFiles.flatMap((file) =>
-        file.messageId === sourceMessage?.id ? [file.ref, file.localRef] : [file.ref],
+      const chatState = getChatStoreState();
+      const sourceCandidate =
+        ctx.sourceMessageId && dbMessageSelectors.getDbMessageById(ctx.sourceMessageId)(chatState);
+      const toolMessage = dbMessageSelectors.getDbMessageById(ctx.messageId)(chatState);
+      const assistantMessage =
+        isVisualSourceMessage(toolMessage) &&
+        toolMessage.parentId &&
+        dbMessageSelectors.getDbMessageById(toolMessage.parentId)(chatState);
+      const parentUserMessage =
+        isVisualSourceMessage(assistantMessage) &&
+        assistantMessage.parentId &&
+        dbMessageSelectors.getDbMessageById(assistantMessage.parentId)(chatState);
+      const sourceMessage = hasVisualFiles(sourceCandidate)
+        ? sourceCandidate
+        : hasVisualFiles(parentUserMessage)
+          ? parentUserMessage
+          : dbMessageSelectors.latestUserMessage(chatState);
+      const activeVisualMessages = dbMessageSelectors
+        .activeDbMessages(chatState)
+        .filter(hasVisualFiles);
+      const visualMessages = [
+        ...(hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
+        ...activeVisualMessages.filter((message) => message.id !== sourceMessage?.id),
+      ];
+      const files = visualMessages.flatMap((message) =>
+        toVisualFileItems(message, message.imageList, message.videoList),
       );
 
-      return {
-        content: `Unknown file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}`,
-        error: { message: 'Unknown visual file refs', type: 'InvalidToolArguments' },
-        state: { availableFiles: selectableFiles, invalidRefs },
-        success: false,
-      };
+      if (files.length === 0) {
+        return {
+          error: {
+            message: 'No visual files are available in the current message',
+            type: 'VisualFilesNotFound',
+          },
+          success: false,
+        };
+      }
+
+      const selectableFiles = files;
+      const { invalidRefs, selected } = selectFiles(
+        selectableFiles,
+        sourceMessage?.id,
+        requestedRefs,
+      );
+
+      if (invalidRefs?.length) {
+        const availableRefs = selectableFiles.flatMap((file) =>
+          file.messageId === sourceMessage?.id ? [file.ref, file.localRef] : [file.ref],
+        );
+
+        return {
+          content: `Unknown file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}`,
+          error: { message: 'Unknown visual file refs', type: 'InvalidToolArguments' },
+          state: { availableFiles: selectableFiles, invalidRefs },
+          success: false,
+        };
+      }
+
+      selectedRefs = selected;
     }
 
-    if (selected.length === 0) {
+    const selectedItems = [...selectedRefs, ...selectedUrls];
+
+    if (selectedItems.length === 0) {
       return {
         error: { message: 'No visual files selected', type: 'InvalidToolArguments' },
         success: false,
@@ -206,7 +265,8 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     let error: { message?: string } | undefined;
     let usage: unknown;
     const abortController = createAbortController(ctx.signal);
-    const fileSummary = selected
+    const { chatService } = await import('@/services/chat');
+    const fileSummary = selectedItems
       .map((file) => `- ${file.ref}: ${file.name} (${file.type})`)
       .join('\n');
 
@@ -228,7 +288,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
                 ].join('\n'),
                 type: 'text',
               },
-              ...selected.map((file) =>
+              ...selectedItems.map((file) =>
                 file.type === 'image'
                   ? { image_url: { detail: 'auto', url: file.uri }, type: 'image_url' as const }
                   : { type: 'video_url' as const, video_url: { url: file.uri } },
@@ -274,7 +334,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     return {
       content,
       state: {
-        files: selected,
+        files: selectedItems,
         model: config.model,
         provider: config.provider,
         trigger: 'lobe-agent.analyzeVisualMedia',

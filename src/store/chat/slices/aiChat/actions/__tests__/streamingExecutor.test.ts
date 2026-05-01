@@ -705,7 +705,7 @@ describe('StreamingExecutor actions', () => {
       expect(capturedInitialContexts.length).toBeGreaterThanOrEqual(1);
 
       // All captured initialContexts should be the same (preserved through steps)
-      capturedInitialContexts.forEach((ctx, index) => {
+      capturedInitialContexts.forEach((ctx) => {
         expect(ctx).toEqual(mockInitialContext);
       });
 
@@ -955,6 +955,68 @@ describe('StreamingExecutor actions', () => {
         expect.objectContaining({
           skipDefaultTools: undefined,
           toolIds: ['lobe-artifacts', 'lobe-notebook'],
+        }),
+      );
+    });
+
+    it('should enable visual understanding when a previous user message has visual media', () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      Object.assign(window, {
+        global_serverConfigStore: {
+          getState: () => ({
+            serverConfig: {
+              enableVisualUnderstanding: true,
+            },
+          }),
+        },
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const previousVisualMessage = {
+        id: 'msg_with_image',
+        role: 'user',
+        content: 'Please inspect this image',
+        imageList: [{ id: 'image-file', url: 'https://example.com/image.png' }],
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+      const currentTextMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: 'Does the person in the first image wear glasses?',
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      const generateToolsDetailed = vi.fn().mockReturnValue({
+        enabledManifests: [],
+        enabledToolIds: ['lobe-agent'],
+        tools: [],
+      });
+
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig({ model: 'text-only-model', provider: 'openai' }),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
+      });
+      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
+        generateToolsDetailed,
+      } as any);
+
+      result.current.internal_createAgentState({
+        messages: [previousVisualMessage, currentTextMessage],
+        parentMessageId: currentTextMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+
+      expect(generateToolsDetailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolIds: ['lobe-agent'],
         }),
       );
     });

@@ -18,12 +18,13 @@ import { FileService } from '@/server/services/file';
 import type { ServerRuntimeRegistration } from './types';
 
 interface AnalyzeVisualMediaParams {
-  files: string[];
   question: string;
+  refs?: string[];
+  urls?: string[];
 }
 
 interface VisualFileItem {
-  id: string;
+  id?: string;
   localRef: string;
   messageId?: string;
   mimeType?: string;
@@ -32,6 +33,8 @@ interface VisualFileItem {
   type: 'image' | 'video';
   url: string;
 }
+
+const VIDEO_URL_PATTERN = /\.(?:mp4|m4v|mov|webm|mpeg|mpg|avi|mkv)(?:[?#]|$)/i;
 
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
@@ -95,6 +98,43 @@ const buildVisualItems = (message: VisualSourceMessage): VisualFileItem[] => {
 const hasVisualFiles = (message: VisualSourceMessage) =>
   (message.imageList?.length ?? 0) > 0 || (message.videoList?.length ?? 0) > 0;
 
+const toStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.length > 0)
+    : [];
+
+const inferVisualTypeFromUrl = (url: string): VisualFileItem['type'] => {
+  if (url.startsWith('data:video/')) return 'video';
+  if (url.startsWith('data:image/')) return 'image';
+
+  return VIDEO_URL_PATTERN.test(url) ? 'video' : 'image';
+};
+
+const getUrlName = (url: string, index: number) => {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.split('/').findLast(Boolean) || `URL ${index + 1}`;
+  } catch {
+    return `URL ${index + 1}`;
+  }
+};
+
+const buildUrlVisualItems = (urls: string[]): VisualFileItem[] =>
+  urls.map((url, index) => {
+    const type = inferVisualTypeFromUrl(url);
+    const name = getUrlName(url, index);
+
+    return {
+      localRef: `url_${index + 1}`,
+      name,
+      ref: `url_${index + 1}`,
+      type,
+      url,
+    };
+  });
+
 const selectVisualItems = (
   items: VisualFileItem[],
   sourceMessageId: string,
@@ -109,10 +149,9 @@ const selectVisualItems = (
     item.messageId === sourceMessageId ? [item.ref, item.localRef] : [item.ref],
   );
   const unknownRefs = requestedRefs?.filter((ref) => !findItem(ref)) ?? [];
-  const selectedItems =
-    requestedRefs && requestedRefs.length > 0
-      ? requestedRefs.map((ref) => findItem(ref)).filter((item): item is VisualFileItem => !!item)
-      : items;
+  const selectedItems = (requestedRefs ?? [])
+    .map((ref) => findItem(ref))
+    .filter((item): item is VisualFileItem => !!item);
 
   return { availableRefs, selectedItems, unknownRefs };
 };
@@ -187,55 +226,70 @@ class LobeAgentExecutionRuntime {
       return buildError('question is required.', 'INVALID_ARGUMENTS');
     }
 
-    const requestedRefs = params.files?.filter(Boolean);
-    if (!requestedRefs?.length) {
+    const requestedRefs = toStringArray(params.refs);
+    const requestedUrls = toStringArray(params.urls);
+    if (requestedRefs.length === 0 && requestedUrls.length === 0) {
       return buildError(
-        'files is required and must include at least one visual file ref.',
+        'Either refs or urls is required and must include at least one visual file ref or media URL.',
         'INVALID_ARGUMENTS',
       );
     }
 
-    const fileService = new FileService(this.db, this.userId);
-    const messageModel = new MessageModel(this.db, this.userId);
-    const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
-    const [sourceMessage] = await messageModel.queryByIds([this.messageId], {
-      postProcessUrl,
-    });
+    const selectedUrlItems = buildUrlVisualItems(requestedUrls);
+    let selectedRefItems: VisualFileItem[] = [];
 
-    const visualMessages = sourceMessage
-      ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
-      : [];
-    const orderedVisualMessages = [
-      ...(sourceMessage && hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
-      ...visualMessages.filter(
-        (message) =>
-          message.id !== sourceMessage?.id && message.role === 'user' && hasVisualFiles(message),
-      ),
-    ];
+    if (requestedRefs.length > 0) {
+      const fileService = new FileService(this.db, this.userId);
+      const messageModel = new MessageModel(this.db, this.userId);
+      const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
+      const [sourceMessage] = await messageModel.queryByIds([this.messageId], {
+        postProcessUrl,
+      });
 
-    if (!sourceMessage) {
-      return buildError(`Source message not found: ${this.messageId}`, 'SOURCE_MESSAGE_NOT_FOUND');
-    }
+      const visualMessages = sourceMessage
+        ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
+        : [];
+      const orderedVisualMessages = [
+        ...(sourceMessage && hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
+        ...visualMessages.filter(
+          (message) =>
+            message.id !== sourceMessage?.id && message.role === 'user' && hasVisualFiles(message),
+        ),
+      ];
 
-    const visualItems = orderedVisualMessages.flatMap((message) => buildVisualItems(message));
+      if (!sourceMessage) {
+        return buildError(
+          `Source message not found: ${this.messageId}`,
+          'SOURCE_MESSAGE_NOT_FOUND',
+        );
+      }
 
-    if (visualItems.length === 0) {
-      return buildError('No visual files are attached to the current message.', 'NO_VISUAL_FILES');
-    }
+      const visualItems = orderedVisualMessages.flatMap((message) => buildVisualItems(message));
 
-    const selectableItems = visualItems;
-    const { availableRefs, selectedItems, unknownRefs } = selectVisualItems(
-      selectableItems,
-      this.messageId,
-      requestedRefs,
-    );
+      if (visualItems.length === 0) {
+        return buildError(
+          'No visual files are attached to the current message.',
+          'NO_VISUAL_FILES',
+        );
+      }
 
-    if (unknownRefs.length > 0) {
-      return buildError(
-        `Unknown visual file refs: ${unknownRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
-        'UNKNOWN_VISUAL_FILE_REFS',
+      const { availableRefs, selectedItems, unknownRefs } = selectVisualItems(
+        visualItems,
+        this.messageId,
+        requestedRefs,
       );
+
+      if (unknownRefs.length > 0) {
+        return buildError(
+          `Unknown visual file refs: ${unknownRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
+          'UNKNOWN_VISUAL_FILE_REFS',
+        );
+      }
+
+      selectedRefItems = selectedItems;
     }
+
+    const selectedItems = [...selectedRefItems, ...selectedUrlItems];
 
     if (selectedItems.length === 0) {
       return buildError('No visual files selected.', 'NO_VISUAL_FILES_SELECTED');
