@@ -27,6 +27,10 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       log('Disabled or no phaseGuidance configured, skipping');
       return true;
     }
+    if (this.config.onboardingContext.finished) {
+      log('Onboarding is complete, skipping action hint injection');
+      return true;
+    }
     return false;
   }
 

@@ -35,6 +35,10 @@ export class OnboardingSyntheticStateInjector extends BaseProcessor {
       log('Disabled or no phaseGuidance, skipping');
       return this.markAsExecuted(context);
     }
+    if (this.config.onboardingContext.finished) {
+      log('Onboarding is complete, skipping synthetic state injection');
+      return this.markAsExecuted(context);
+    }
 
     const ctx = this.config.onboardingContext;
 

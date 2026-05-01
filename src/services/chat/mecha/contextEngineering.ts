@@ -694,7 +694,7 @@ export const contextEngineering = async ({
         // Ignore — document may not exist yet
       }
 
-      onboardingContext = { personaContent, phaseGuidance, soulContent };
+      onboardingContext = { personaContent, phaseGuidance, soulContent, finished: state.finished };
       log('Built onboarding context, phase: %s', state.phase);
     } catch (error) {
       log('Failed to build onboarding context: %O', error);

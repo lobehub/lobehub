@@ -12,6 +12,8 @@ export interface OnboardingContext {
   phaseGuidance: string;
   /** SOUL.md document content */
   soulContent?: string | null;
+  /** Whether onboarding is complete. When true, injectors must not fire. */
+  finished?: boolean;
 }
 
 export interface OnboardingContextInjectorConfig {
@@ -80,4 +82,6 @@ const numberLines = (source: string): string => {
   const lines = normalized === '' ? [''] : normalized.split('\n');
   const width = Math.max(String(lines.length).length, 2);
   return lines.map((line, i) => `${String(i + 1).padStart(width, ' ')}→${line}`).join('\n');
+  /** Whether onboarding is complete. When true, injectors must not fire. */
+  finished?: boolean;
 };
