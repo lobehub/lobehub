@@ -15,6 +15,8 @@ export const getToolsConfig = () => {
       CRAWLER_IMPLS: process.env.CRAWLER_IMPLS,
       SEARCH_PROVIDERS: process.env.SEARCH_PROVIDERS,
       SEARXNG_URL: process.env.SEARXNG_URL,
+      VISUAL_UNDERSTANDING_MODEL: process.env.VISUAL_UNDERSTANDING_MODEL,
+      VISUAL_UNDERSTANDING_PROVIDER: process.env.VISUAL_UNDERSTANDING_PROVIDER,
     },
 
     server: {
@@ -23,6 +25,8 @@ export const getToolsConfig = () => {
       CRAWLER_IMPLS: z.string().optional(),
       SEARCH_PROVIDERS: z.string().optional(),
       SEARXNG_URL: z.string().url().optional(),
+      VISUAL_UNDERSTANDING_MODEL: z.string().optional(),
+      VISUAL_UNDERSTANDING_PROVIDER: z.string().optional(),
     },
   });
 };

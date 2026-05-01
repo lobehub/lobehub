@@ -463,6 +463,11 @@ export interface BuiltinToolContext {
   signal?: AbortSignal;
 
   /**
+   * The source user message ID for tools that need to inspect the current turn.
+   */
+  sourceMessageId?: string;
+
+  /**
    * Step context computed at the beginning of each step
    * Contains dynamic state like GTD todos that changes between steps
    * Computed by AgentRuntime and passed to Tool Executors

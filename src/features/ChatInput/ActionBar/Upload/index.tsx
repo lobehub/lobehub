@@ -13,7 +13,7 @@ import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import TipGuide from '@/components/TipGuide';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
-import { useModelSupportVision } from '@/hooks/useModelSupportVision';
+import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -48,7 +48,7 @@ const FileUpload = memo(() => {
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
 
-  const canUploadImage = useModelSupportVision(model, provider);
+  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
 
   const [showTip, updateGuideState] = useUserStore((s) => [
     preferenceSelectors.showUploadFileInKnowledgeBaseTip(s),
@@ -105,7 +105,10 @@ const FileUpload = memo(() => {
           multiple
           showUploadList={false}
           beforeUpload={async (file) => {
-            if (!canUploadImage && (file.type.startsWith('image') || file.type.startsWith('video')))
+            if (
+              (file.type.startsWith('image') && !canUploadImage) ||
+              (file.type.startsWith('video') && !canUploadVideo)
+            )
               return false;
 
             // Validate video file size
@@ -139,7 +142,10 @@ const FileUpload = memo(() => {
           multiple={true}
           showUploadList={false}
           beforeUpload={async (file) => {
-            if (!canUploadImage && (file.type.startsWith('image') || file.type.startsWith('video')))
+            if (
+              (file.type.startsWith('image') && !canUploadImage) ||
+              (file.type.startsWith('video') && !canUploadVideo)
+            )
               return false;
 
             // Validate video file size

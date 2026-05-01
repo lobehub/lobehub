@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { toolsEnv } from '@/envs/tools';
 
 import { createServerAgentToolsEngine, createServerToolsEngine } from '../index';
 import { type InstalledPlugin, type ServerAgentToolsContext } from '../types';
@@ -142,6 +145,16 @@ describe('createServerToolsEngine', () => {
 });
 
 describe('createServerAgentToolsEngine', () => {
+  beforeEach(() => {
+    (toolsEnv as any).VISUAL_UNDERSTANDING_PROVIDER = undefined;
+    (toolsEnv as any).VISUAL_UNDERSTANDING_MODEL = undefined;
+  });
+
+  afterEach(() => {
+    (toolsEnv as any).VISUAL_UNDERSTANDING_PROVIDER = undefined;
+    (toolsEnv as any).VISUAL_UNDERSTANDING_MODEL = undefined;
+  });
+
   it('should return a ToolsEngine instance', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
@@ -209,6 +222,42 @@ describe('createServerAgentToolsEngine', () => {
     });
 
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
+  });
+
+  it('should enable VisualUnderstanding for non-vision models when configured', () => {
+    (toolsEnv as any).VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
+    (toolsEnv as any).VISUAL_UNDERSTANDING_MODEL = 'vision-model';
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
+  });
+
+  it('should not enable VisualUnderstanding when visual model is not configured', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
   });
 
   it('should enable KnowledgeBase when hasEnabledKnowledgeBases is true', () => {

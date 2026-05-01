@@ -1,0 +1,201 @@
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ToolExecutionContext } from '../../types';
+
+const mockToolsEnv = vi.hoisted(() => ({
+  VISUAL_UNDERSTANDING_MODEL: undefined as string | undefined,
+  VISUAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
+}));
+const mockMessageModelQueryByIds = vi.hoisted(() => vi.fn());
+const mockChat = vi.hoisted(() => vi.fn());
+const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn());
+const mockConsumeStreamUntilDone = vi.hoisted(() => vi.fn());
+
+vi.mock('@/envs/tools', () => ({
+  toolsEnv: mockToolsEnv,
+}));
+
+vi.mock('@/database/models/message', () => ({
+  MessageModel: vi.fn().mockImplementation(() => ({
+    queryByIds: (...args: any[]) => mockMessageModelQueryByIds(...args),
+  })),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({
+    getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
+  })),
+}));
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: (...args: any[]) => mockInitModelRuntimeFromDB(...args),
+}));
+
+vi.mock('@lobechat/model-runtime', () => ({
+  consumeStreamUntilDone: (...args: any[]) => mockConsumeStreamUntilDone(...args),
+}));
+
+vi.mock('model-bank', () => ({
+  LOBE_DEFAULT_MODEL_LIST: [
+    {
+      abilities: { video: true, vision: true },
+      id: 'vision-model',
+      providerId: 'test-provider',
+    },
+    {
+      abilities: { video: false, vision: true },
+      id: 'image-only-model',
+      providerId: 'test-provider',
+    },
+  ],
+}));
+
+const { lobeAgentRuntime } = await import('../lobeAgent');
+
+describe('lobeAgentRuntime', () => {
+  const baseContext: ToolExecutionContext = {
+    messageId: 'msg-1',
+    serverDB: {} as any,
+    toolManifestMap: {},
+    userId: 'user-1',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'vision-model';
+    mockToolsEnv.VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
+    mockChat.mockImplementation(async (_payload, options) => {
+      options?.callback?.onText?.('visual answer');
+      options?.callback?.onCompletion?.({ usage: { totalTokens: 12 } });
+      return new Response('ok');
+    });
+    mockInitModelRuntimeFromDB.mockResolvedValue({ chat: mockChat });
+    mockConsumeStreamUntilDone.mockResolvedValue(undefined);
+  });
+
+  it('should have the correct identifier', () => {
+    expect(lobeAgentRuntime.identifier).toBe(LobeAgentIdentifier);
+  });
+
+  it('should require serverDB, userId and messageId', () => {
+    expect(() => lobeAgentRuntime.factory({ toolManifestMap: {}, userId: 'user-1' })).toThrow(
+      'serverDB is required for LobeAgent execution',
+    );
+
+    expect(() => lobeAgentRuntime.factory({ serverDB: {} as any, toolManifestMap: {} })).toThrow(
+      'userId is required for LobeAgent execution',
+    );
+
+    expect(() =>
+      lobeAgentRuntime.factory({
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'user-1',
+      }),
+    ).toThrow('messageId is required for LobeAgent execution');
+  });
+
+  it('should return a configuration error when visual model env is missing', async () => {
+    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = undefined;
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' });
+
+    expect(result.success).toBe(false);
+    expect(result.error.code).toBe('VISUAL_UNDERSTANDING_NOT_CONFIGURED');
+  });
+
+  it('should return an error when the source message has no visual files', async () => {
+    mockMessageModelQueryByIds.mockResolvedValue([{ id: 'msg-1' }]);
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' });
+
+    expect(result).toMatchObject({
+      error: { code: 'NO_VISUAL_FILES' },
+      success: false,
+    });
+  });
+
+  it('should validate requested visual file refs', async () => {
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        id: 'msg-1',
+        imageList: [{ alt: 'image.png', id: 'file-image', url: 'https://example.com/image.png' }],
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({
+      files: ['image_2'],
+      question: 'what is this?',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Available refs: image_1');
+  });
+
+  it('should analyze all visual files when files is omitted', async () => {
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        id: 'msg-1',
+        imageList: [{ alt: 'image.png', id: 'file-image', url: 'https://example.com/image.png' }],
+        videoList: [{ alt: 'video.mp4', id: 'file-video', url: 'https://example.com/video.mp4' }],
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({ question: 'what is this?' });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe('visual answer');
+    expect(result.state).toMatchObject({
+      files: [
+        { id: 'file-image', name: 'image.png', ref: 'image_1', type: 'image' },
+        { id: 'file-video', name: 'video.mp4', ref: 'video_1', type: 'video' },
+      ],
+      model: 'vision-model',
+      provider: 'test-provider',
+      trigger: 'lobe-agent.analyzeVisualMedia',
+      usage: { totalTokens: 12 },
+    });
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: [
+              expect.objectContaining({ type: 'text' }),
+              expect.objectContaining({ type: 'image_url' }),
+              expect.objectContaining({ type: 'video_url' }),
+            ],
+          }),
+        ],
+        model: 'vision-model',
+        stream: false,
+      }),
+      expect.objectContaining({
+        metadata: { trigger: 'lobe-agent.analyzeVisualMedia' },
+      }),
+    );
+  });
+
+  it('should reject video files when the configured model lacks video support', async () => {
+    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'image-only-model';
+    mockMessageModelQueryByIds.mockResolvedValue([
+      {
+        id: 'msg-1',
+        videoList: [{ alt: 'video.mp4', id: 'file-video', url: 'https://example.com/video.mp4' }],
+      },
+    ]);
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({ question: 'what is in the video?' });
+
+    expect(result).toMatchObject({
+      error: { code: 'VISUAL_MODEL_VIDEO_UNSUPPORTED' },
+      success: false,
+    });
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+});
