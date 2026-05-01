@@ -514,6 +514,7 @@
   "taskDetail.properties": "Properties",
   "taskDetail.reassignDisabled": "Cannot reassign agent while task is running",
   "taskDetail.rerunTask": "Re-run task",
+  "taskDetail.runNow": "Run now",
   "taskDetail.runTask": "Run",
   "taskDetail.saveModelConfig": "Save",
   "taskDetail.status.backlog": "Backlog",

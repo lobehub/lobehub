@@ -514,6 +514,7 @@
   "taskDetail.properties": "属性",
   "taskDetail.reassignDisabled": "任务运行中，无法切换 Agent",
   "taskDetail.rerunTask": "重新运行",
+  "taskDetail.runNow": "立即运行",
   "taskDetail.runTask": "运行",
   "taskDetail.saveModelConfig": "保存",
   "taskDetail.status.backlog": "待办",
