@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { chainGenerateBrief } from '../generateBrief';
+import { chainGenerateBrief, GENERATE_BRIEF_SCHEMA } from '../generateBrief';
 
 describe('chainGenerateBrief', () => {
   const baseParams = {
@@ -11,37 +11,38 @@ describe('chainGenerateBrief', () => {
     taskName: 'Q2 Planning',
   };
 
-  it('default mode keeps the skip branch in the prompt', () => {
+  it('produces a payload that mandates non-empty title + summary, with no skip option', () => {
     const payload = chainGenerateBrief(baseParams);
     const system = (payload.messages?.[0] as { content: string }).content;
 
-    expect(system).toContain('decide whether the topic just completed is worth reporting');
-    expect(system).toContain('emit=false');
-    expect(system).not.toContain('scheduled-task tick');
+    expect(system).toContain('already been judged worth surfacing');
+    expect(system).toContain('no skip option');
+    expect(system).toContain('no emit vote');
+    expect(system).toMatch(/non-empty title and summary/i);
   });
 
-  it('forceEmit swaps in the scheduled-tick prompt', () => {
-    const payload = chainGenerateBrief({ ...baseParams, forceEmit: true });
-    const system = (payload.messages?.[0] as { content: string }).content;
+  it('embeds task name + instruction + assistant content in the user message', () => {
+    const payload = chainGenerateBrief(baseParams);
+    const user = (payload.messages?.[1] as { content: string }).content;
 
-    expect(system).toContain('scheduled-task tick');
-    expect(system).toContain('there is NO skip option');
-    expect(system).toContain('ALWAYS true');
-    expect(system).not.toMatch(/return false under any circumstance[\s\S]*emit=false/);
+    expect(user).toContain('Q2 Planning');
+    expect(user).toContain('Plan Q2 priorities.');
+    expect(user).toContain('Drafted the Q2 plan and pinned three documents.');
   });
 
-  it('forceEmit prompt covers the no-activity path explicitly', () => {
-    const payload = chainGenerateBrief({ ...baseParams, forceEmit: true });
-    const system = (payload.messages?.[0] as { content: string }).content;
+  it('renders an empty handoff and empty artifacts block when both are null', () => {
+    const payload = chainGenerateBrief(baseParams);
+    const user = (payload.messages?.[1] as { content: string }).content;
 
-    expect(system).toContain('no new tickets today');
-    expect(system).toContain('do not invent activity that did not occur');
+    expect(user).toContain('Handoff summary: (not available)');
+    expect(user).toContain('Artifacts: (none)');
   });
+});
 
-  it('user message is unchanged across modes', () => {
-    const auto = chainGenerateBrief(baseParams);
-    const forced = chainGenerateBrief({ ...baseParams, forceEmit: true });
-
-    expect(auto.messages?.[1]).toEqual(forced.messages?.[1]);
+describe('GENERATE_BRIEF_SCHEMA', () => {
+  it('only requires title + summary — emit was moved to chainJudgeBriefEmit', () => {
+    expect(GENERATE_BRIEF_SCHEMA.required).toEqual(['title', 'summary']);
+    expect(Object.keys(GENERATE_BRIEF_SCHEMA.properties)).toEqual(['summary', 'title']);
+    expect((GENERATE_BRIEF_SCHEMA.properties as any).emit).toBeUndefined();
   });
 });

@@ -10,9 +10,17 @@ export interface ShouldEmitTopicBriefInput {
   task: Pick<TaskItem, 'automationMode'> | null;
 }
 
+/**
+ * Three-state result so the caller can tell "rule has a definite answer" from
+ * "rule is not equipped to decide — defer to the LLM judge".
+ *
+ * - `'yes'` / `'no'` — deterministic; persist as-is with `source: 'rule'`.
+ * - `'unknown'` — pure rules can't tell; caller invokes `chainJudgeBriefEmit`
+ *   and records the LLM's verdict with `source: 'llm-judge'`.
+ */
 export interface ShouldEmitTopicBriefResult {
-  emit: boolean;
-  reason?: string;
+  emit: 'no' | 'unknown' | 'yes';
+  reason: string;
 }
 
 /**
@@ -21,29 +29,35 @@ export interface ShouldEmitTopicBriefResult {
  * Pure function — caller wires inputs from `task` / `reason` / etc. Keeping
  * the rule pure makes it easy to unit-test and to reason about.
  *
- * The error and judge paths build their own briefs upstream; we skip them here
- * to avoid duplicates. Heartbeat ticks are mid-loop nudges, not delivery
- * moments. Scheduled tasks, by contrast, are contractually expected to
- * produce a brief on every tick — they fall through to `emit: true` and the
- * caller additionally bypasses the LLM emit-vote.
+ * Conclusive branches:
+ * - `'no'` — error / review-judge already produced a brief, review is
+ *   configured (judge owns the next run), heartbeat tick (mid-loop nudge),
+ *   or trivial content on a non-scheduled tick.
+ * - `'yes'` — scheduled tick (contractually owes the user a brief every run).
+ *
+ * Non-conclusive branch:
+ * - `'unknown'` — non-trivial content on a manual / non-scheduled task with
+ *   no review configured. Whether this is "worth surfacing" is a semantic
+ *   call; the caller defers to `chainJudgeBriefEmit`.
  */
 export const shouldEmitTopicBrief = (
   input: ShouldEmitTopicBriefInput,
 ): ShouldEmitTopicBriefResult => {
-  if (input.reason === 'error') return { emit: false, reason: 'error-branch-handled' };
-  if (input.reviewTerminated) return { emit: false, reason: 'judge-handled' };
+  if (input.reason === 'error') return { emit: 'no', reason: 'error-branch-handled' };
+  if (input.reviewTerminated) return { emit: 'no', reason: 'judge-handled' };
   // The judge path may not have terminated (e.g. review disabled or threw),
   // but if review is configured we still defer to it on subsequent runs.
-  if (input.hasReviewConfigEnabled) return { emit: false, reason: 'review-config-enabled' };
+  if (input.hasReviewConfigEnabled) return { emit: 'no', reason: 'review-config-enabled' };
   if (input.task?.automationMode === 'heartbeat') {
-    return { emit: false, reason: 'heartbeat-tick' };
+    return { emit: 'no', reason: 'heartbeat-tick' };
   }
-  const isScheduled = input.task?.automationMode === 'schedule';
-  // Scheduled tasks must produce a brief every tick — short outputs included.
-  if (input.isTrivialContent && !isScheduled) {
-    return { emit: false, reason: 'trivial-content' };
+  if (input.task?.automationMode === 'schedule') {
+    return { emit: 'yes', reason: 'scheduled-tick' };
   }
-  return { emit: true };
+  if (input.isTrivialContent) {
+    return { emit: 'no', reason: 'trivial-content' };
+  }
+  return { emit: 'unknown', reason: 'needs-llm-judge' };
 };
 
 /** Heuristic for "this content isn't a real delivery". */
