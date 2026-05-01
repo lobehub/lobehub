@@ -4,6 +4,7 @@ import { type UIChatMessage } from '@lobechat/types';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type HumanInterventionRequest } from '@/services/agentRuntime/type';
+import { isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { contextEngineering } from '@/services/chat/mecha';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -41,10 +42,15 @@ class AgentRuntimeService {
       model: agentConfig.model,
       provider: agentConfig.provider!,
     };
+    const currentUserMessage = data.messages.find((message) => message.id === data.userMessageId);
+    const enableVisualUnderstanding =
+      (!!currentUserMessage?.imageList?.length &&
+        !isCanUseVision(modelRuntimeConfig.model, modelRuntimeConfig.provider)) ||
+      (!!currentUserMessage?.videoList?.length &&
+        !isCanUseVideo(modelRuntimeConfig.model, modelRuntimeConfig.provider));
 
-    const toolsEngine = createAgentToolsEngine({
-      model: agentConfig.model,
-      provider: agentConfig.provider!,
+    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig, undefined, {
+      enableVisualUnderstanding,
     });
 
     const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({

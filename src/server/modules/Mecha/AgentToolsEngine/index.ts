@@ -12,6 +12,7 @@
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
@@ -22,6 +23,9 @@ import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-en
 import { ToolsEngine } from '@lobechat/context-engine';
 import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
+import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
+
+import { toolsEnv } from '@/envs/tools';
 
 import {
   type ServerAgentToolsContext,
@@ -37,6 +41,13 @@ export type {
 } from './types';
 
 const log = debug('lobe-server:agent-tools-engine');
+
+const getModelAbilities = (model: string, provider: string) => {
+  return (
+    LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider) ??
+    LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)
+  )?.abilities;
+};
 
 /**
  * Initialize ToolsEngine with server-side context
@@ -136,6 +147,12 @@ export const createServerAgentToolsEngine = (
 
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
+  const modelAbilities = getModelAbilities(model, provider);
+  const visualUnderstandingConfigured = !!(
+    toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && toolsEnv.VISUAL_UNDERSTANDING_MODEL
+  );
+  const shouldEnableVisualUnderstanding =
+    visualUnderstandingConfigured && (!modelAbilities?.vision || !modelAbilities?.video);
 
   log(
     'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasClientExecutor=%s hasDeviceProxy=%s',
@@ -199,6 +216,7 @@ export const createServerAgentToolsEngine = (
           !isBotConversation,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
+        [LobeAgentManifest.identifier]: shouldEnableVisualUnderstanding,
       },
     }),
   });

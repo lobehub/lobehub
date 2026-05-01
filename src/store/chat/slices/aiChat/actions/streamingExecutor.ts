@@ -21,6 +21,7 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import { isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
@@ -177,6 +178,18 @@ export class StreamingExecutorActionImpl {
     const effectivePluginIds = hasTopicReference
       ? [...(pluginIds || []), 'lobe-topic-reference']
       : pluginIds;
+    let currentUserMessage: UIChatMessage | undefined;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].role === 'user') {
+        currentUserMessage = messages[index];
+        break;
+      }
+    }
+    const enableVisualUnderstanding =
+      (!!currentUserMessage?.imageList?.length &&
+        !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
+      (!!currentUserMessage?.videoList?.length &&
+        !isCanUseVideo(agentConfigData.model, agentConfigData.provider!));
 
     log(
       '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',
@@ -191,6 +204,7 @@ export class StreamingExecutorActionImpl {
     const toolsEngine = createAgentToolsEngine(
       { model: agentConfigData.model, provider: agentConfigData.provider! },
       effectivePluginIds,
+      { enableVisualUnderstanding },
     );
     // When skillActivateMode is 'manual':
     // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults

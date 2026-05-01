@@ -3,6 +3,7 @@
  */
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
@@ -36,6 +37,14 @@ export interface ToolsEngineConfig {
   defaultToolIds?: string[];
   /** Custom enable checker for plugins */
   enableChecker?: PluginEnableChecker;
+}
+
+export interface AgentToolsEngineOptions {
+  /**
+   * Enable the visual understanding fallback tool for turns with visual attachments.
+   * Callers should opt in only after checking the current message and model abilities.
+   */
+  enableVisualUnderstanding?: boolean;
 }
 
 /**
@@ -121,10 +130,16 @@ export const createAgentToolsEngine = (
   workingModel: WorkingModel,
   /** Runtime-resolved plugin IDs (from agentConfigResolver), may include tools beyond the active agent */
   pluginIds?: string[],
+  options: AgentToolsEngineOptions = {},
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
+  const visualUnderstandingConfigured =
+    typeof window !== 'undefined' &&
+    !!window.global_serverConfigStore?.getState().serverConfig.enableVisualUnderstanding;
+  const shouldEnableVisualUnderstanding =
+    !!options.enableVisualUnderstanding && visualUnderstandingConfigured;
 
   return createToolsEngine({
     defaultToolIds,
@@ -160,6 +175,7 @@ export const createAgentToolsEngine = (
         [MemoryManifest.identifier]:
           agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
           settingsSelectors.memoryEnabled(useUserStore.getState()),
+        [LobeAgentManifest.identifier]: shouldEnableVisualUnderstanding,
         [WebBrowsingManifest.identifier]: searchConfig.useApplicationBuiltinSearchTool,
       },
     }),

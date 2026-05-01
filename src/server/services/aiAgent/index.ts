@@ -1,6 +1,7 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -49,6 +50,7 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { toolsEnv } from '@/envs/tools';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
@@ -1377,6 +1379,33 @@ export class AiAgentService {
       role: 'user' as const,
       videoList,
     };
+
+    if (toolsResult.enabledToolIds.includes(LobeAgentManifest.identifier)) {
+      const modelAbilities =
+        LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider)
+          ?.abilities ?? LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)?.abilities;
+      const needsImageUnderstanding = !!imageList?.length && !modelAbilities?.vision;
+      const needsVideoUnderstanding = !!videoList?.length && !modelAbilities?.video;
+      const shouldKeepVisualUnderstanding =
+        !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER &&
+        !!toolsEnv.VISUAL_UNDERSTANDING_MODEL &&
+        (needsImageUnderstanding || needsVideoUnderstanding);
+
+      if (!shouldKeepVisualUnderstanding) {
+        const visualToolNamePrefix = `${LobeAgentManifest.identifier}____`;
+        tools = tools?.filter((tool) => !tool.function.name.startsWith(visualToolNamePrefix));
+        toolsResult = {
+          ...toolsResult,
+          enabledToolIds: toolsResult.enabledToolIds.filter(
+            (id) => id !== LobeAgentManifest.identifier,
+          ),
+          tools,
+        };
+        delete toolManifestMap[LobeAgentManifest.identifier];
+        delete toolSourceMap[LobeAgentManifest.identifier];
+        delete toolExecutorMap[LobeAgentManifest.identifier];
+      }
+    }
 
     // Combine history messages with user message
     const allMessages = effectiveResume ? historyMessages : [...historyMessages, userMessage];

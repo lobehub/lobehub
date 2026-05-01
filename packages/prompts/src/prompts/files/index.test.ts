@@ -41,7 +41,7 @@ describe('filesPrompts', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="test image" url="https://example.com/image.jpg"></image>
+<image ref="image_1" name="test image" url="https://example.com/image.jpg"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -87,7 +87,7 @@ describe('filesPrompts', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="test image" url="https://example.com/image.jpg"></image>
+<image ref="image_1" name="test image" url="https://example.com/image.jpg"></image>
 </images>
 <files>
 <files_docstring>here are user upload files you can refer to</files_docstring>
@@ -135,8 +135,8 @@ describe('filesPrompts', () => {
 
     expect(result).toContain('second image');
     expect(result).toContain('document.docx');
-    expect(result).toMatch(/<image.*?>.*<image.*?>/s); // Check for multiple image tags
-    expect(result).toMatch(/<file.*?>.*<file.*?>/s); // Check for multiple file tags
+    expect(result.match(/<image\b/g)).toHaveLength(2);
+    expect(result.match(/<file\b/g)).toHaveLength(2);
   });
 
   it('should handle without url', () => {
@@ -176,8 +176,8 @@ describe('filesPrompts', () => {
       <files_info>
       <images>
       <images_docstring>here are user upload images you can refer to</images_docstring>
-      <image name="test image"></image>
-      <image name="second image"></image>
+      <image ref="image_1" name="test image"></image>
+      <image ref="image_2" name="second image"></image>
       </images>
       <files>
       <files_docstring>here are user upload files you can refer to</files_docstring>
@@ -205,7 +205,7 @@ describe('filesPrompts', () => {
 <files_info>
 <videos>
 <videos_docstring>here are user upload videos you can refer to</videos_docstring>
-<video name="test video" url="https://example.com/video.mp4"></video>
+<video ref="video_1" name="test video" url="https://example.com/video.mp4"></video>
 </videos>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -228,11 +228,11 @@ describe('filesPrompts', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="test image" url="https://example.com/image.jpg"></image>
+<image ref="image_1" name="test image" url="https://example.com/image.jpg"></image>
 </images>
 <videos>
 <videos_docstring>here are user upload videos you can refer to</videos_docstring>
-<video name="test video" url="https://example.com/video.mp4"></video>
+<video ref="video_1" name="test video" url="https://example.com/video.mp4"></video>
 </videos>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -256,7 +256,7 @@ describe('filesPrompts', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="test image" url="https://example.com/image.jpg"></image>
+<image ref="image_1" name="test image" url="https://example.com/image.jpg"></image>
 </images>
 <files>
 <files_docstring>here are user upload files you can refer to</files_docstring>
@@ -264,7 +264,7 @@ describe('filesPrompts', () => {
 </files>
 <videos>
 <videos_docstring>here are user upload videos you can refer to</videos_docstring>
-<video name="test video" url="https://example.com/video.mp4"></video>
+<video ref="video_1" name="test video" url="https://example.com/video.mp4"></video>
 </videos>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -287,7 +287,7 @@ describe('filesPrompts', () => {
 
       expect(result).toContain('test video');
       expect(result).toContain('second video');
-      expect(result).toMatch(/<video.*?>.*<video.*?>/s); // Check for multiple video tags
+      expect(result.match(/<video\b/g)).toHaveLength(2);
     });
 
     it('should handle videos without url when addUrl is false', () => {
@@ -306,7 +306,7 @@ describe('filesPrompts', () => {
         <files_info>
         <videos>
         <videos_docstring>here are user upload videos you can refer to</videos_docstring>
-        <video name="test video"></video>
+        <video ref="video_1" name="test video"></video>
         </videos>
         </files_info>
         <!-- END SYSTEM CONTEXT -->"

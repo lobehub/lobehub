@@ -59,6 +59,35 @@ vi.mock('@/store/tool', () => ({
         } as unknown as ToolManifest,
         type: 'builtin' as const,
       },
+      {
+        identifier: 'lobe-agent',
+        manifest: {
+          api: [
+            {
+              description: 'Analyze visual media',
+              name: 'analyzeVisualMedia',
+              parameters: {
+                properties: {
+                  files: {
+                    items: { type: 'string' },
+                    type: 'array',
+                  },
+                  question: { type: 'string' },
+                },
+                required: ['question'],
+                type: 'object',
+              },
+            },
+          ],
+          identifier: 'lobe-agent',
+          meta: {
+            title: 'Lobe Agent',
+            avatar: 'V',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
     ],
   }),
 }));
@@ -128,7 +157,17 @@ describe('toolEngineering', () => {
     mockInstalledPluginManifestList = () => [];
     mockUseApplicationBuiltinSearchTool = true;
     mockCurrentAgentPlugins = [];
+    Reflect.deleteProperty(window, 'global_serverConfigStore');
   });
+
+  const setVisualUnderstandingConfig = (enabled: boolean) => {
+    Object.defineProperty(window, 'global_serverConfigStore', {
+      configurable: true,
+      value: {
+        getState: () => ({ serverConfig: { enableVisualUnderstanding: enabled } }),
+      },
+    });
+  };
 
   describe('createToolsEngine', () => {
     it('should generate tools array for enabled plugins', () => {
@@ -217,6 +256,41 @@ describe('toolEngineering', () => {
 
       expect(result.enabledToolIds).toEqual(['search', 'lobe-web-browsing']);
       expect(result.enabledToolIds).toHaveLength(2);
+    });
+
+    it('should enable visual understanding when explicitly requested for the current turn', () => {
+      setVisualUnderstandingConfig(true);
+
+      const toolsEngine = createAgentToolsEngine(
+        { model: 'deepseek-chat', provider: 'deepseek' },
+        undefined,
+        { enableVisualUnderstanding: true },
+      );
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-agent');
+    });
+
+    it('should not enable visual understanding by default', () => {
+      setVisualUnderstandingConfig(true);
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-agent');
     });
   });
 

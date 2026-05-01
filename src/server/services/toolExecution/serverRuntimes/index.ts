@@ -16,6 +16,7 @@ import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { cronRuntime } from './cron';
 import { gtdRuntime } from './gtd';
+import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
@@ -67,6 +68,7 @@ registerRuntimes([
   gtdRuntime,
   webOnboardingRuntime,
   agentMarketplaceRuntime,
+  lobeAgentRuntime,
 ]);
 
 // ==================== Registry API ====================
