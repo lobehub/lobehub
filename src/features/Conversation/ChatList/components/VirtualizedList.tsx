@@ -12,6 +12,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import WideScreenContainer from '../../../WideScreenContainer';
 import {
   dataSelectors,
+  inputSelectors,
   messageStateSelectors,
   useConversationStore,
   virtuaListSelectors,
@@ -202,6 +203,15 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
 
+  // The ChatInput's floating overlay (TodoProgress + QueueTray) covers the
+  // bottom of this scroll viewport like a layer. Extend VList's internal
+  // padding-bottom by the overlay height so the last message can still be
+  // scrolled into view *above* the overlay; the +12 compensates for the
+  // ChatInput's `marginTop: -12` (skipScrollMarginWithList) so the last
+  // message lands exactly on the overlay's top edge.
+  const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
+  const paddingBottom = Math.max(24, overlayHeight + 12);
+
   return (
     <div style={{ height: '100%', position: 'relative' }}>
       {/* Debug Inspector - placed outside VList so it won't be recycled by the virtual list */}
@@ -211,7 +221,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         data={listData}
         keepMounted={keepMountedIndices}
         ref={virtuaRef}
-        style={{ height: '100%', overflowAnchor: 'none', paddingBottom: 24 }}
+        style={{ height: '100%', overflowAnchor: 'none', paddingBottom }}
         onScroll={handleScroll}
         onScrollEnd={handleScrollEnd}
       >
@@ -268,6 +278,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       <WideScreenContainer style={{ position: 'relative' }}>
         <BackBottom
           atBottom={atBottom}
+          bottomOffset={overlayHeight}
           visible={!atBottom}
           onScrollToBottom={() => scrollToBottom(true)}
         />

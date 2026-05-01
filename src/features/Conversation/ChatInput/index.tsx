@@ -5,7 +5,7 @@ import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ActionKeys } from '@/features/ChatInput';
@@ -26,6 +26,7 @@ import {
   useConversationStore,
   useConversationStoreApi,
 } from '../store';
+import TodoProgress from '../TodoProgress';
 import QueueTray from './QueueTray';
 import { getConversationChatInputUiState } from './utils';
 
@@ -173,6 +174,24 @@ const ChatInput = memo<ChatInputProps>(
     ]);
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
+    const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
+
+    // Observe the floating overlay's height (TodoProgress + QueueTray) and
+    // publish it so the ChatList container can reserve matching bottom
+    // padding — keeps the overlay floating without occluding chat content.
+    const overlayRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+      const node = overlayRef.current;
+      if (!node) return;
+      const observer = new ResizeObserver(([entry]) => {
+        setChatInputOverlayHeight(Math.round(entry.contentRect.height));
+      });
+      observer.observe(node);
+      return () => {
+        observer.disconnect();
+        setChatInputOverlayHeight(0);
+      };
+    }, [setChatInputOverlayHeight]);
 
     // Loading state from ConversationStore (bridged from ChatStore)
     const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
@@ -271,7 +290,7 @@ const ChatInput = memo<ChatInputProps>(
 
     const defaultContent = (
       <WideScreenContainer
-        style={skipScrollMarginWithList ? { marginTop: -12, position: 'relative' } : undefined}
+        style={{ position: 'relative', ...(skipScrollMarginWithList ? { marginTop: -12 } : null) }}
       >
         {hasPendingInterventions ? (
           <InterventionBar interventions={pendingInterventions} />
@@ -287,20 +306,20 @@ const ChatInput = memo<ChatInputProps>(
                 />
               </Flexbox>
             )}
-            {!disableQueue && hasQueuedMessages && (
-              <Flexbox
-                paddingInline={12}
-                style={{
-                  position: 'absolute',
-                  zIndex: 10,
-                  bottom: '100%',
-                  left: 12,
-                  right: 12,
-                }}
-              >
-                <QueueTray />
-              </Flexbox>
-            )}
+            <Flexbox
+              paddingInline={12}
+              ref={overlayRef}
+              style={{
+                bottom: '100%',
+                left: 12,
+                position: 'absolute',
+                right: 12,
+                zIndex: 10,
+              }}
+            >
+              {!disableQueue && hasQueuedMessages && <QueueTray />}
+              <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
+            </Flexbox>
             <DesktopChatInput
               actionBarStyle={actionBarStyle}
               borderRadius={12}
