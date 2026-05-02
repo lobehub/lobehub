@@ -139,14 +139,15 @@ describe('lobeAgentRuntime', () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({
-      refs: ['image_2'],
+      refs: ['image_1'],
       question: 'what is this?',
     });
 
     const stableImageRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'image' });
 
     expect(result.success).toBe(false);
-    expect(result.content).toContain(`Available refs: ${stableImageRef}, image_1`);
+    expect(result.content).toContain(`Available refs: ${stableImageRef}`);
+    expect(result.content).not.toContain(`Available refs: ${stableImageRef}, image_1`);
   });
 
   it('should require refs or urls', async () => {
@@ -412,9 +413,10 @@ describe('lobeAgentRuntime', () => {
       },
     ]);
     const runtime = lobeAgentRuntime.factory(baseContext);
+    const stableVideoRef = createVisualFileRef({ index: 0, messageId: 'msg-1', type: 'video' });
 
     const result = await runtime.analyzeVisualMedia({
-      refs: ['video_1'],
+      refs: [stableVideoRef],
       question: 'what is in the video?',
     });
 

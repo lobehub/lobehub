@@ -150,16 +150,10 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       }
 
       const selectableFiles = files;
-      const { invalidRefs, selected } = selectVisualFileItems(
-        selectableFiles,
-        sourceMessage?.id,
-        requestedRefs,
-      );
+      const { invalidRefs, selected } = selectVisualFileItems(selectableFiles, requestedRefs);
 
       if (invalidRefs?.length) {
-        const availableRefs = selectableFiles.flatMap((file) =>
-          file.messageId === sourceMessage?.id ? [file.ref, file.localRef] : [file.ref],
-        );
+        const availableRefs = selectableFiles.map((file) => file.ref);
 
         return {
           content: `Unknown file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}`,

@@ -202,10 +202,10 @@ describe('filesPrompts', () => {
     });
 
     expect(result).toContain(
-      `<image ref="${imageRef}" local_ref="image_1" name="test image" url="https://example.com/image.jpg"></image>`,
+      `<image ref="${imageRef}" name="test image" url="https://example.com/image.jpg"></image>`,
     );
     expect(result).toContain(
-      `<video ref="${videoRef}" local_ref="video_1" name="test video" url="https://example.com/video.mp4"></video>`,
+      `<video ref="${videoRef}" name="test video" url="https://example.com/video.mp4"></video>`,
     );
   });
 

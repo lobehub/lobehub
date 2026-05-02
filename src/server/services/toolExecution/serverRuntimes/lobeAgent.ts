@@ -186,7 +186,6 @@ class LobeAgentExecutionRuntime {
 
       const { availableRefs, invalidRefs, selected } = selectVisualFileItems(
         visualItems,
-        this.messageId,
         requestedRefs,
       );
 

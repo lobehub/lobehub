@@ -133,24 +133,15 @@ export const createUrlVisualFileItems = (urls: string[]): VisualFileItem[] =>
     };
   });
 
-export const selectVisualFileItems = (
-  items: VisualFileItem[],
-  sourceMessageId?: string,
-  refs?: string[],
-) => {
+export const selectVisualFileItems = (items: VisualFileItem[], refs?: string[]) => {
   if (!refs || refs.length === 0) return { availableRefs: [], invalidRefs: [], selected: [] };
 
-  const findItem = (ref: string) =>
-    items.find(
-      (item) => item.ref === ref || (item.messageId === sourceMessageId && item.localRef === ref),
-    );
+  const findItem = (ref: string) => items.find((item) => item.ref === ref);
   const selected = refs
     .map((ref) => findItem(ref))
     .filter((item): item is VisualFileItem => !!item);
   const invalidRefs = refs.filter((ref) => !findItem(ref));
-  const availableRefs = items.flatMap((item) =>
-    item.messageId === sourceMessageId ? [item.ref, item.localRef] : [item.ref],
-  );
+  const availableRefs = items.map((item) => item.ref);
 
   return { availableRefs, invalidRefs, selected };
 };

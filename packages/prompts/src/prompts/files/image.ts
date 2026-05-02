@@ -1,5 +1,5 @@
 import type { ChatImageItem } from '@lobechat/types';
-import { createVisualFileRef, createVisualLocalRef } from '@lobechat/types';
+import { createVisualFileRef } from '@lobechat/types';
 
 const imagePrompt = (
   item: ChatImageItem,
@@ -8,12 +8,10 @@ const imagePrompt = (
   messageId?: string,
 ) => {
   const ref = createVisualFileRef({ index, messageId, type: 'image' });
-  const localRef = createVisualLocalRef('image', index);
-  const localRefAttr = messageId ? ` local_ref="${localRef}"` : '';
 
   return attachUrl
-    ? `<image ref="${ref}"${localRefAttr} name="${item.alt}" url="${item.url}"></image>`
-    : `<image ref="${ref}"${localRefAttr} name="${item.alt}"></image>`;
+    ? `<image ref="${ref}" name="${item.alt}" url="${item.url}"></image>`
+    : `<image ref="${ref}" name="${item.alt}"></image>`;
 };
 
 export const imagesPrompts = (

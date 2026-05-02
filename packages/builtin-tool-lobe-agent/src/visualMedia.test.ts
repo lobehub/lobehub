@@ -81,7 +81,7 @@ describe('visualMedia', () => {
     ]);
   });
 
-  it('should select stable refs from history and local refs only from the source message', () => {
+  it('should select only stable refs from visual messages', () => {
     const currentItems = createVisualFileItems({ id: 'msg-current' }, [
       { alt: 'current.png', id: 'file-current', url: 'https://example.com/current.png' },
     ]);
@@ -93,16 +93,20 @@ describe('visualMedia', () => {
       messageId: 'msg-previous',
       type: 'image',
     });
+    const currentStableRef = createVisualFileRef({
+      index: 0,
+      messageId: 'msg-current',
+      type: 'image',
+    });
 
     expect(
-      selectVisualFileItems([...currentItems, ...previousItems], 'msg-current', [
-        'image_1',
-        previousStableRef,
-        'missing',
-      ]),
+      selectVisualFileItems(
+        [...currentItems, ...previousItems],
+        [currentStableRef, previousStableRef, 'image_1', 'missing'],
+      ),
     ).toMatchObject({
-      availableRefs: [currentItems[0].ref, 'image_1', previousStableRef],
-      invalidRefs: ['missing'],
+      availableRefs: [currentStableRef, previousStableRef],
+      invalidRefs: ['image_1', 'missing'],
       selected: [currentItems[0], previousItems[0]],
     });
   });

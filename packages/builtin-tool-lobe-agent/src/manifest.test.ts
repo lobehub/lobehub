@@ -17,6 +17,7 @@ describe('LobeAgentManifest', () => {
     expect(apiDescription).toContain('native multimodal capability');
     expect(apiDescription).toContain('use this tool only as a fallback');
     expect(apiDescription).toContain('msg_xxx.image_1');
+    expect(apiDescription).toContain('Use only stable refs');
     expect(apiDescription).toContain('answer the user directly with the result');
   });
 });
