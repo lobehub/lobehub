@@ -18,8 +18,19 @@ import {
 } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
+const serverConfigMock = vi.hoisted(() => ({ enableVisualUnderstanding: false }));
+
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
+vi.mock('@/store/serverConfig', () => ({
+  getServerConfigStoreState: () => ({
+    serverConfig: { enableVisualUnderstanding: serverConfigMock.enableVisualUnderstanding },
+  }),
+  serverConfigSelectors: {
+    enableVisualUnderstanding: (state: { serverConfig: { enableVisualUnderstanding?: boolean } }) =>
+      !!state.serverConfig.enableVisualUnderstanding,
+  },
+}));
 
 const realExecAgentRuntime = useChatStore.getState().internal_execAgentRuntime;
 
@@ -27,6 +38,7 @@ beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
   spyOnMessageService();
+  serverConfigMock.enableVisualUnderstanding = false;
 
   act(() => {
     useChatStore.setState({
@@ -964,15 +976,7 @@ describe('StreamingExecutor actions', () => {
         useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
       });
 
-      Object.assign(window, {
-        global_serverConfigStore: {
-          getState: () => ({
-            serverConfig: {
-              enableVisualUnderstanding: true,
-            },
-          }),
-        },
-      });
+      serverConfigMock.enableVisualUnderstanding = true;
 
       const { result } = renderHook(() => useChatStore());
       const previousVisualMessage = {

@@ -27,7 +27,6 @@ interface VisualFileItem {
   id?: string;
   localRef: string;
   messageId?: string;
-  mimeType?: string;
   name?: string;
   ref: string;
   type: 'image' | 'video';

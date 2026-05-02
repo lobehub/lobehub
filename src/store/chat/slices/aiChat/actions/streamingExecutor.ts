@@ -36,6 +36,7 @@ import {
   notifyDesktopHumanApprovalRequired,
   resolveNotificationNavigatePath,
 } from '@/store/chat/utils/desktopNotification';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
@@ -178,9 +179,9 @@ export class StreamingExecutorActionImpl {
     // Dynamically inject turn-scoped builtin tools.
     const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
     const visualMediaAvailability = getVisualMediaAvailability(messages);
+    const serverConfigState = getServerConfigStoreState();
     const visualUnderstandingConfigured =
-      typeof window !== 'undefined' &&
-      !!window.global_serverConfigStore?.getState().serverConfig.enableVisualUnderstanding;
+      !!serverConfigState && serverConfigSelectors.enableVisualUnderstanding(serverConfigState);
     const shouldEnableVisualUnderstanding =
       visualUnderstandingConfigured &&
       ((visualMediaAvailability.hasImages &&
