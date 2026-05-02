@@ -24,6 +24,12 @@ const getRateFromUnit = (unit: PricingUnit): number | undefined => {
   }
 };
 
+const getOriginalRateFromUnit = (unit: PricingUnit): number | undefined => {
+  if (unit.strategy !== 'fixed') return undefined;
+
+  return unit.originalRate;
+};
+
 /**
  * Get unit rate by unit name, used to deduplicate logic across helpers
  */
@@ -35,6 +41,24 @@ export const getUnitRateByName = (
   const unit = pricing.units.find((u) => u.name === unitName);
   if (!unit) return undefined;
   return getRateFromUnit(unit);
+};
+
+/**
+ * Get fixed unit original rate by unit name when it is higher than the current rate.
+ */
+export const getOriginalUnitRateByName = (
+  pricing?: Pricing,
+  unitName?: PricingUnitName,
+): number | undefined => {
+  if (!pricing?.units || !unitName) return undefined;
+  const unit = pricing.units.find((u) => u.name === unitName);
+  if (!unit) return undefined;
+
+  const originalRate = getOriginalRateFromUnit(unit);
+  const currentRate = getRateFromUnit(unit);
+  if (typeof originalRate !== 'number' || typeof currentRate !== 'number') return undefined;
+
+  return originalRate > currentRate ? originalRate : undefined;
 };
 
 /**

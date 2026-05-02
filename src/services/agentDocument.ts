@@ -63,30 +63,6 @@ class AgentDocumentService {
     return lambdaClient.agentDocument.listDocuments.query(params);
   };
 
-  readDocumentByFilename = async (params: {
-    agentId: string;
-    filename: string;
-    format?: 'xml' | 'markdown' | 'both';
-  }) => {
-    return lambdaClient.agentDocument.readDocumentByFilename.query(params);
-  };
-
-  upsertDocumentByFilename = async (params: {
-    agentId: string;
-    content: string;
-    filename: string;
-  }) => {
-    const result = await lambdaClient.agentDocument.upsertDocumentByFilename.mutate(params);
-    await invalidateDocumentMutation({
-      agentDocumentId: getAgentDocumentId(result),
-      agentId: params.agentId,
-      cause: 'agent-document',
-      documentId: getDocumentId(result),
-    });
-
-    return result;
-  };
-
   associateDocument = async (params: { agentId: string; documentId: string }) => {
     const result = await lambdaClient.agentDocument.associateDocument.mutate(params);
     await invalidateDocumentMutation({
@@ -137,8 +113,8 @@ class AgentDocumentService {
     return lambdaClient.agentDocument.readDocument.query(params);
   };
 
-  editDocument = async (params: { agentId: string; content: string; id: string }) => {
-    const result = await lambdaClient.agentDocument.editDocument.mutate(params);
+  replaceDocumentContent = async (params: { agentId: string; content: string; id: string }) => {
+    const result = await lambdaClient.agentDocument.replaceDocumentContent.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: params.id,
       agentId: params.agentId,

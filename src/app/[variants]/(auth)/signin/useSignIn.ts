@@ -4,8 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
-import { type ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
+import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
+import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
@@ -13,6 +13,8 @@ import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 
 import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
+import type { AuthFetchOptions } from '../utils/authFetchOptions';
+import { withCaptchaToken } from '../utils/authFetchOptions';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
@@ -57,6 +59,7 @@ export const useSignIn = () => {
     ssoProviders,
     preSocialSigninCheck,
     getAdditionalData,
+    getCaptchaTokenOnError,
     getFetchOptions,
   } = useBusinessSignin();
 
@@ -228,19 +231,30 @@ export const useSignIn = () => {
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
       const fetchOptions = await getFetchOptions();
-      const result = isBuiltinProvider(normalizedProvider)
-        ? await signIn.social({
-            additionalData,
-            callbackURL: callbackUrl,
-            fetchOptions,
-            provider: normalizedProvider,
-          })
-        : await signIn.oauth2({
-            additionalData,
-            callbackURL: callbackUrl,
-            fetchOptions,
-            providerId: normalizedProvider,
-          });
+      const signInWithFetchOptions = async (nextFetchOptions?: AuthFetchOptions) =>
+        isBuiltinProvider(normalizedProvider)
+          ? await signIn.social({
+              additionalData,
+              callbackURL: callbackUrl,
+              fetchOptions: nextFetchOptions,
+              provider: normalizedProvider,
+            })
+          : await signIn.oauth2({
+              additionalData,
+              callbackURL: callbackUrl,
+              fetchOptions: nextFetchOptions,
+              providerId: normalizedProvider,
+            });
+
+      let result = await signInWithFetchOptions(fetchOptions);
+      if (result && 'error' in result && result.error) {
+        const captchaToken = await getCaptchaTokenOnError(result.error);
+        if (captchaToken === null) return;
+        if (captchaToken) {
+          result = await signInWithFetchOptions(withCaptchaToken(fetchOptions, captchaToken));
+        }
+      }
+
       if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);

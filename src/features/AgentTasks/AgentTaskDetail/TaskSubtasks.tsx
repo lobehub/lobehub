@@ -42,38 +42,11 @@ interface TaskTreeNode {
   task: TaskDetailSubtask;
 }
 
-const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] => {
-  if (subtasks.some((item) => (item.children?.length ?? 0) > 0)) {
-    return subtasks.map((task) => ({
-      children: buildTree(task.children ?? []),
-      task,
-    }));
-  }
-
-  const nodeMap = new Map(
-    subtasks.map((task) => [
-      task.identifier,
-      { children: [] as TaskTreeNode[], task } satisfies TaskTreeNode,
-    ]),
-  );
-  const roots: TaskTreeNode[] = [];
-
-  for (const task of subtasks) {
-    const node = nodeMap.get(task.identifier);
-    if (!node) continue;
-
-    const parentIdentifier = task.blockedBy;
-    const parent = parentIdentifier ? nodeMap.get(parentIdentifier) : undefined;
-    if (parent && parent.task.identifier !== task.identifier) {
-      parent.children.push(node);
-      continue;
-    }
-
-    roots.push(node);
-  }
-
-  return roots;
-};
+const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] =>
+  subtasks.map((task) => ({
+    children: buildTree(task.children ?? []),
+    task,
+  }));
 
 const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
   const status = toTaskStatus(task.status);
@@ -86,7 +59,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
       align="center"
       gap={8}
       justify="space-between"
-      style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}
+      style={{ minWidth: 0, width: '100%' }}
     >
       <span
         style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
@@ -114,6 +87,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
           onClick={(e) => e.stopPropagation()}
         >
           <TaskTriggerTag
+            automationMode={task.automationMode}
             heartbeatInterval={task.heartbeat?.interval}
             schedulePattern={task.schedule?.pattern}
             scheduleTimezone={task.schedule?.timezone}

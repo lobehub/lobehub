@@ -191,6 +191,31 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - 默认值：-
 - 示例：`https://cdn.example.com`
 
+## 视觉理解
+
+### `VISUAL_UNDERSTANDING_PROVIDER`
+
+- 类型：可选
+- 描述：兜底视觉理解模型的服务商 ID。与 `VISUAL_UNDERSTANDING_MODEL` 一起配置后，不具备原生图片或视频理解能力的模型可以通过内置视觉理解工具分析上传的视觉媒体。
+- 默认值：-
+- 示例：`openai`、`google` 或 `ollama`
+
+### `VISUAL_UNDERSTANDING_MODEL`
+
+- 类型：可选
+- 描述：内置视觉理解工具使用的模型 ID。该模型应支持你希望分析的视觉媒体类型。仅当 `VISUAL_UNDERSTANDING_PROVIDER` 与 `VISUAL_UNDERSTANDING_MODEL` 同时配置时，此功能才会启用。
+- 默认值：-
+- 示例：`gpt-4o`、`gemini-2.5-flash` 或你的本地视觉模型 ID
+
+配置示例：
+
+```bash
+VISUAL_UNDERSTANDING_PROVIDER=google
+VISUAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+```
+
+启用后，当当前模型没有原生视觉能力但支持工具调用时，用户仍可上传图片或视频，并由兜底视觉理解模型进行分析。文件上传本身仍需要部署中正常配置文件存储能力。
+
 ## AI 图像
 
 ### `AI_IMAGE_DEFAULT_IMAGE_NUM`

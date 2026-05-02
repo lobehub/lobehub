@@ -191,7 +191,11 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       }
 
       // Get the authorization URL from the market API
-      const redirectUri = `${typeof window !== 'undefined' ? window.location.origin : ''}/oauth/callback/success?provider=${provider}`;
+      // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
+      const redirectUri =
+        typeof window !== 'undefined' && window.location.protocol.startsWith('http')
+          ? `${window.location.origin}/oauth/callback/success?provider=${provider}`
+          : undefined;
       const response = await toolsClient.market.connectGetAuthorizeUrl.query({
         provider,
         redirectUri,

@@ -9,9 +9,8 @@ import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
 import { useMenu } from './useMenu';
@@ -25,10 +24,7 @@ const Header = memo(() => {
     s.parentId,
     s.onBack,
   ]);
-  const [showPageAgentPanel, togglePageAgentPanel] = useGlobalStore((s) => [
-    systemStatusSelectors.showPageAgentPanel(s),
-    s.togglePageAgentPanel,
-  ]);
+  const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const { menuItems } = useMenu();
 
   return (

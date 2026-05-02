@@ -34,6 +34,11 @@ export interface GlobalMemoryConfig {
   userMemory?: GlobalMemoryExtractionConfig;
 }
 
+export interface VisualUnderstandingConfig {
+  model: string;
+  provider: string;
+}
+
 export interface ServerModelProviderConfig {
   enabled?: boolean;
   enabledModels?: string[];
@@ -67,6 +72,7 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableUploadFileToServer?: boolean;
+  enableVisualUnderstanding?: boolean;
   image?: PartialDeep<UserImageConfig>;
   isQStashConfigured?: boolean;
   memory?: GlobalMemoryConfig;
@@ -75,6 +81,7 @@ export interface GlobalServerConfig {
   telemetry: {
     langfuse?: boolean;
   };
+  visualUnderstanding?: VisualUnderstandingConfig;
 }
 
 export interface GlobalBillboardItemLocaleFields {

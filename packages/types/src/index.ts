@@ -18,6 +18,7 @@ export * from './eval';
 export * from './export';
 export * from './fetch';
 export * from './files';
+export * from './followUpAction';
 export * from './generation';
 export * from './home';
 export * from './hotkey';

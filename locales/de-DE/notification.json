@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Ihre geplante Aufgabe „{{jobName}}“ ist fehlgeschlagen. Öffnen Sie die Aufgabe, um den vollständigen Fehler zu sehen.",
+  "agent_cron_job_failed_insufficient_budget": "Ihre geplante Aufgabe „{{jobName}}“ konnte nicht ausgeführt werden, da Ihr Guthaben aufgebraucht ist. Laden Sie Ihr Konto auf oder upgraden Sie Ihren Tarif, um zukünftige Ausführungen fortzusetzen.",
+  "agent_cron_job_failed_insufficient_budget_title": "Geplante Aufgabe pausiert: unzureichendes Guthaben",
+  "agent_cron_job_failed_title": "Geplante Aufgabe fehlgeschlagen",
   "billboard.learnMore": "Mehr erfahren",
   "billboard.menuLabel": "Ankündigungen",
+  "image_generation_completed": "Ihr Bild „{{prompt}}“ ist fertig.",
+  "image_generation_completed_title": "Bilderstellung abgeschlossen",
   "inbox.archiveAll": "Alle archivieren",
   "inbox.empty": "Noch keine Benachrichtigungen",
   "inbox.emptyUnread": "Keine ungelesenen Benachrichtigungen",
   "inbox.filterUnread": "Nur ungelesene anzeigen",
   "inbox.markAllRead": "Alle als gelesen markieren",
-  "inbox.title": "Benachrichtigungen"
+  "inbox.title": "Benachrichtigungen",
+  "video_generation_completed": "Ihr Video „{{prompt}}“ ist fertig.",
+  "video_generation_completed_title": "Videoerstellung abgeschlossen"
 }

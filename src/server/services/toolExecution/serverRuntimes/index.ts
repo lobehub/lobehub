@@ -9,12 +9,14 @@
 import { type ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
 import { agentDocumentsRuntime } from './agentDocuments';
+import { agentMarketplaceRuntime } from './agentMarketplace';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { cronRuntime } from './cron';
 import { gtdRuntime } from './gtd';
+import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
@@ -65,6 +67,8 @@ registerRuntimes([
   cronRuntime,
   gtdRuntime,
   webOnboardingRuntime,
+  agentMarketplaceRuntime,
+  lobeAgentRuntime,
 ]);
 
 // ==================== Registry API ====================

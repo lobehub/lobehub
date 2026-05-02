@@ -11,6 +11,7 @@ import {
 } from '@/features/AgentTasks/AgentTaskDetail/scheduler/helpers';
 
 interface TaskTriggerTagProps {
+  automationMode?: 'heartbeat' | 'schedule' | null;
   heartbeatInterval?: number | null;
   mode?: 'inline' | 'tag';
   schedulePattern?: string | null;
@@ -18,7 +19,7 @@ interface TaskTriggerTagProps {
 }
 
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
-  ({ heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
+  ({ automationMode, heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
     const { t, i18n } = useTranslation('chat');
     const data = useMemo<
       | {
@@ -28,7 +29,9 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
         }
       | undefined
     >(() => {
-      if (schedulePattern) {
+      // automationMode is the source of truth — DB may carry stale fields from
+      // a previous mode (e.g. a heartbeat task that was once on a schedule).
+      if (automationMode === 'schedule' && schedulePattern) {
         const primary = formatScheduleDescription(schedulePattern, t);
         const tzName = scheduleTimezone
           ? formatTimezoneName(scheduleTimezone, i18n.language)
@@ -40,7 +43,7 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
         };
       }
 
-      if (heartbeatInterval && heartbeatInterval > 0) {
+      if (automationMode === 'heartbeat' && heartbeatInterval && heartbeatInterval > 0) {
         const every = t('taskSchedule.tag.every', {
           interval: formatIntervalLabel(heartbeatInterval, t),
         });
@@ -51,7 +54,7 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
       }
 
       return undefined;
-    }, [heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
+    }, [automationMode, heartbeatInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
     if (mode === 'inline') {
       return (

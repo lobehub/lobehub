@@ -56,6 +56,7 @@
   "renameModal.title": "トピック名を変更",
   "searchPlaceholder": "トピックを検索...",
   "searchResultEmpty": "検索結果はありません",
+  "taskManager.agent": "タスクエージェント",
   "taskManager.welcome": "タスクについて聞いてください",
   "temp": "一時的",
   "title": "トピック"

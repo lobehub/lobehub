@@ -20,6 +20,8 @@
     "@lobechat/builtin-tool-activator": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",
+    "@lobechat/builtin-tool-agent-management": "workspace:*",
+    "@lobechat/builtin-tool-agent-marketplace": "workspace:*",
     "@lobechat/builtin-tool-brief": "workspace:*",
     "@lobechat/builtin-tool-claude-code": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
@@ -29,12 +31,14 @@
     "@lobechat/builtin-tool-group-management": "workspace:*",
     "@lobechat/builtin-tool-gtd": "workspace:*",
     "@lobechat/builtin-tool-knowledge-base": "workspace:*",
+    "@lobechat/builtin-tool-lobe-agent": "workspace:*",
     "@lobechat/builtin-tool-local-system": "workspace:*",
     "@lobechat/builtin-tool-memory": "workspace:*",
     "@lobechat/builtin-tool-message": "workspace:*",
     "@lobechat/builtin-tool-notebook": "workspace:*",
     "@lobechat/builtin-tool-page-agent": "workspace:*",
     "@lobechat/builtin-tool-remote-device": "workspace:*",
+    "@lobechat/builtin-tool-skill-maintainer": "workspace:*",
     "@lobechat/builtin-tool-skill-store": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
@@ -45,7 +49,8 @@
     "@lobechat/const": "workspace:*"
   },
   "devDependencies": {
-    "@lobechat/types": "workspace:*"
+    "@lobechat/types": "workspace:*",
+    "zod": "^3.25.76"
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",

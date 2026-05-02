@@ -438,35 +438,33 @@ export const createRuntimeExecutors = (
           try {
             const { formatWebOnboardingStateMessage } =
               await import('@lobechat/builtin-tool-web-onboarding/utils');
+            const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
             const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-            const onboardingState = await onboardingService.getState();
-            const phaseGuidance = formatWebOnboardingStateMessage(onboardingState);
+            const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+            const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
-            // Fetch SOUL.md from inbox agent's documents
-            let soulContent: string | null = null;
-            try {
-              const inboxAgentId = await onboardingService.getInboxAgentId();
-              if (inboxAgentId) {
-                const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-                const soulDoc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
-                soulContent = soulDoc?.content ?? null;
-              }
-            } catch (error) {
-              log('Failed to fetch SOUL.md for onboarding context: %O', error);
-            }
+            const [onboardingState, soulDoc, persona] = await Promise.all([
+              onboardingService.getState(),
+              onboardingService
+                .getInboxAgentId()
+                .then((inboxAgentId) =>
+                  inboxAgentId ? docService.getDocumentByFilename(inboxAgentId, 'SOUL.md') : null,
+                )
+                .catch((error) => {
+                  log('Failed to fetch SOUL.md for onboarding context: %O', error);
+                  return null;
+                }),
+              personaModel.getLatestPersonaDocument().catch((error) => {
+                log('Failed to fetch user persona for onboarding context: %O', error);
+                return null;
+              }),
+            ]);
 
-            // Fetch user persona
-            let personaContent: string | null = null;
-            try {
-              const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
-              const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
-              const persona = await personaModel.getLatestPersonaDocument();
-              personaContent = persona?.persona ?? null;
-            } catch (error) {
-              log('Failed to fetch user persona for onboarding context: %O', error);
-            }
-
-            onboardingContext = { personaContent, phaseGuidance, soulContent };
+            onboardingContext = {
+              personaContent: persona?.persona ?? null,
+              phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+              soulContent: soulDoc?.content ?? null,
+            };
             log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
           } catch (error) {
             log('Failed to build onboarding context: %O', error);
@@ -526,9 +524,9 @@ export const createRuntimeExecutors = (
               return info?.abilities?.functionCall ?? true;
             },
             isCanUseVideo: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
+              const info =
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
               return info?.abilities?.video ?? false;
             },
             isCanUseVision: (m: string, p: string) => {
@@ -690,6 +688,7 @@ export const createRuntimeExecutors = (
         const imageList: any[] = [];
         let grounding: any = null;
         let currentStepUsage: any = undefined;
+        let currentStepFinishReason: string | undefined = undefined;
         let streamError: any = undefined;
         const contentParts: ContentPart[] = [];
         const reasoningParts: ContentPart[] = [];
@@ -730,6 +729,12 @@ export const createRuntimeExecutors = (
                 // Capture usage (may or may not include cost)
                 if (data.usage) {
                   currentStepUsage = data.usage;
+                }
+                // Capture provider's terminal finishReason so soft interrupts
+                // (e.g. Gemini RECITATION / MAX_TOKENS with empty content)
+                // are visible in tracing instead of being silently swallowed.
+                if (data.finishReason) {
+                  currentStepFinishReason = data.finishReason;
                 }
               },
               onGrounding: async (groundingData) => {
@@ -869,7 +874,13 @@ export const createRuntimeExecutors = (
 
           // Add a complete llm_stream event (including all streaming chunks)
           events.push({
-            result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
+            result: {
+              content,
+              finishReason: currentStepFinishReason,
+              reasoning: thinkingContent,
+              tool_calls,
+              usage: currentStepUsage,
+            },
             type: 'llm_result',
           });
 
@@ -1530,10 +1541,15 @@ export const createRuntimeExecutors = (
               activeDeviceId: state.metadata?.activeDeviceId,
               agentId: state.metadata?.agentId,
               documentId: state.metadata?.documentId,
+              groupId: state.metadata?.groupId,
               memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
+              messageId: state.metadata?.sourceMessageId,
+              operationId,
               scope: state.metadata?.scope,
               serverDB: ctx.serverDB,
               taskId: state.metadata?.taskId,
+              threadId: state.metadata?.threadId,
+              toolCallId: chatToolPayload.id,
               toolManifestMap: effectiveManifestMap,
               toolResultMaxLength,
               topicId: ctx.topicId,
@@ -1964,10 +1980,15 @@ export const createRuntimeExecutors = (
                   activeDeviceId: state.metadata?.activeDeviceId,
                   agentId: state.metadata?.agentId,
                   documentId: state.metadata?.documentId,
+                  groupId: state.metadata?.groupId,
                   memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
+                  messageId: state.metadata?.sourceMessageId,
+                  operationId,
                   scope: state.metadata?.scope,
                   serverDB: ctx.serverDB,
                   taskId: state.metadata?.taskId,
+                  threadId: state.metadata?.threadId,
+                  toolCallId: chatToolPayload.id,
                   toolManifestMap: batchManifestMap,
                   toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
                   topicId: ctx.topicId,

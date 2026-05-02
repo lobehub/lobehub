@@ -19,6 +19,33 @@ Generate text, images, videos, and audio. Alias: \`lh generate\`.
 - \`--stream\` for text generation outputs tokens as they arrive
 - \`--pipe\` for text generation outputs only the raw text (no formatting)
 
+## Finding Available Video / Image Models
+
+Before generating, always look up the correct model ID with \`lh model list\`:
+
+\`\`\`bash
+# List all video models for the lobehub provider
+lh model list lobehub --type video
+
+# List only enabled video models
+lh model list lobehub --type video --enabled
+
+# List image generation models
+lh model list lobehub --type image
+\`\`\`
+
+Use the \`id\` field from the output as the \`-m\` argument. Model IDs for video/image are
+**not** the same as human-readable display names — always use the exact \`id\` field.
+
+Example:
+\`\`\`bash
+# ✅ Correct — use the id from lh model list
+lh gen video "a cat riding a skateboard" -p lobehub -m dreamina-seedance-2-0-260128
+
+# ❌ Wrong — guessed slugs will fail with no_valid_channel_error
+lh gen video "a cat riding a skateboard" -p lobehub -m seedance-2.0
+\`\`\`
+
 ## ⚠️ asyncTaskId vs generationId
 
 \`gen status\` and \`gen download\` require TWO different IDs:

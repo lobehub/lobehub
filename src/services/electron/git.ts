@@ -7,6 +7,7 @@ import {
   type GitPullResult,
   type GitPushResult,
   type GitWorkingTreeFiles,
+  type GitWorkingTreePatches,
   type GitWorkingTreeStatus,
 } from '@lobechat/electron-client-ipc';
 
@@ -47,6 +48,10 @@ class ElectronGitService {
 
   async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
     return this.ipc.git.getGitWorkingTreeFiles(dirPath);
+  }
+
+  async getGitWorkingTreePatches(dirPath: string): Promise<GitWorkingTreePatches> {
+    return this.ipc.git.getGitWorkingTreePatches(dirPath);
   }
 
   async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {

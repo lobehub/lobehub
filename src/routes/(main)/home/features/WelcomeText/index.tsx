@@ -1,4 +1,4 @@
-import { Center } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { LoadingDots } from '@lobehub/ui/chat';
 import { cssVar } from 'antd-style';
@@ -16,11 +16,10 @@ const WelcomeText = memo(() => {
   }, [t]);
 
   return (
-    <Center
+    <Flexbox
       style={{
-        fontSize: 28,
-        fontWeight: 'bold',
-        marginBlock: '36px 24px',
+        fontSize: 16,
+        paddingInlineStart: 5,
       }}
     >
       <TypewriterEffect
@@ -34,7 +33,7 @@ const WelcomeText = memo(() => {
         sentences={sentences}
         typingSpeed={64}
       />
-    </Center>
+    </Flexbox>
   );
 });
 

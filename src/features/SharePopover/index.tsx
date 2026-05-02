@@ -31,9 +31,10 @@ type Visibility = 'private' | 'link';
 
 interface SharePopoverContentProps {
   onOpenModal?: () => void;
+  topicId?: string;
 }
 
-const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => {
+const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topicId }) => {
   const { t } = useTranslation('chat');
   const { message, modal } = App.useApp();
   const [updating, setUpdating] = useState(false);
@@ -41,7 +42,8 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
   const containerRef = useRef<HTMLDivElement>(null);
   const appOrigin = useAppOrigin();
 
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const chatActiveTopicId = useChatStore((s) => s.activeTopicId);
+  const activeTopicId = topicId ?? chatActiveTopicId;
   const [hideTopicSharePrivacyWarning, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.systemStatus(s).hideTopicSharePrivacyWarning ?? false,
     s.updateSystemStatus,
@@ -240,15 +242,16 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
 interface SharePopoverProps {
   children?: ReactNode;
   onOpenModal?: () => void;
+  topicId?: string;
 }
 
-const SharePopover = memo<SharePopoverProps>(({ children, onOpenModal }) => {
+const SharePopover = memo<SharePopoverProps>(({ children, onOpenModal, topicId }) => {
   const isMobile = useIsMobile();
 
   return (
     <Popover
       arrow={false}
-      content={<SharePopoverContent onOpenModal={onOpenModal} />}
+      content={<SharePopoverContent topicId={topicId} onOpenModal={onOpenModal} />}
       placement={isMobile ? 'top' : 'bottomRight'}
       trigger={['click']}
       styles={{

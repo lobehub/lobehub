@@ -41,8 +41,12 @@ export class UserService {
     return lambdaClient.user.getOrCreateOnboardingState.query();
   };
 
-  getOnboardingState = async (): Promise<UserAgentOnboardingContext> => {
-    return lambdaClient.user.getOnboardingState.query();
+  getOnboardingAgentContext = async (): Promise<{
+    personaContent: string | null;
+    phaseGuidance: string;
+    soulContent: string | null;
+  }> => {
+    return lambdaClient.user.getOnboardingAgentContext.query();
   };
 
   saveUserQuestion = async (params: SaveUserQuestionInput) => {

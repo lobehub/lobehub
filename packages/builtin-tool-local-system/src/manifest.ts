@@ -298,6 +298,12 @@ export const LocalSystemManifest: BuiltinToolManifest = {
               'Clear description of what this command does (5-10 words, in active voice). Use the same language as the user input.',
             type: 'string',
           },
+          env: {
+            additionalProperties: { type: 'string' },
+            description:
+              'Optional environment variables to set for this command. Use this for securely passing credentials (e.g., API tokens) — do NOT embed secrets in the command string. Values are merged into the child process environment.',
+            type: 'object',
+          },
           run_in_background: {
             description: 'Set to true to run command in background and return shell_id',
             type: 'boolean',

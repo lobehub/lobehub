@@ -23,7 +23,7 @@ import type {
 } from '@/server/services/bot/platforms/types';
 import { isDev } from '@/utils/env';
 
-import { platformCredentialBodyMap } from '../platform/registry';
+import { platformCredentialBodyMap, platformCredentialExtrasMap } from '../platform/registry';
 import { extractSettingsDefaults } from './formState';
 import type { ChannelFormValues } from './index';
 
@@ -351,6 +351,7 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onA
   const t = _t as (key: string) => string;
 
   const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
+  const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
 
   const applicationIdField = useMemo(
     () => platformDef.schema.find((f) => f.key === 'applicationId'),
@@ -415,6 +416,7 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onA
               parentKey="credentials"
             />
           ))}
+          {CredentialExtras && <CredentialExtras />}
         </>
       )}
       {settingsFields.length > 0 && (

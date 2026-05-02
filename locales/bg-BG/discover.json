@@ -624,6 +624,8 @@
   "user.logout": "Изход",
   "user.myProfile": "Моят профил",
   "user.noAgents": "Този потребител все още не е публикувал агенти",
+  "user.noAgents.ownerDescription": "Създай своя първи агент и го сподели с общността.",
+  "user.noAgents.title": "Все още няма агенти",
   "user.noFavoriteAgents": "Няма запазени агенти",
   "user.noFavoritePlugins": "Няма запазени умения",
   "user.noForkedAgentGroups": "Все още няма групи с разклонени агенти",

@@ -147,6 +147,7 @@ export type PricingUnitName =
   | 'imageOutput'
 
   // Video-based pricing units
+  | 'videoInput'
   | 'videoGeneration';
 
 export type PricingUnitType =
@@ -166,6 +167,10 @@ export interface PricingUnitBase {
 }
 
 export interface FixedPricingUnit extends PricingUnitBase {
+  /**
+   * Original display price before discounts. Billing and cost calculation use `rate`.
+   */
+  originalRate?: number;
   rate: number;
   strategy: 'fixed';
 }
@@ -254,6 +259,7 @@ export type ExtendParamsType =
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
   | 'grok4_20ReasoningEffort'
+  | 'hy3ReasoningEffort'
   | 'deepseekV4ReasoningEffort'
   | 'codexMaxReasoningEffort'
   | 'opus47Effort'
@@ -312,6 +318,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
   'grok4_20ReasoningEffort',
+  'hy3ReasoningEffort',
   'deepseekV4ReasoningEffort',
   'codexMaxReasoningEffort',
   'opus47Effort',

@@ -48,6 +48,40 @@ export interface GitWorkingTreeFiles {
   modified: string[];
 }
 
+export type GitFileDiffStatus = 'added' | 'modified' | 'deleted';
+
+export interface GitWorkingTreePatch {
+  /** Number of `+` lines in the patch (excluding the `+++ b/...` header). */
+  additions: number;
+  /** Number of `-` lines in the patch (excluding the `--- a/...` header). */
+  deletions: number;
+  /** Repo-relative path of the file. */
+  filePath: string;
+  /**
+   * True when git reported `Binary files … differ` for this entry — the UI
+   * should show a placeholder instead of a textual diff.
+   */
+  isBinary: boolean;
+  /**
+   * Unified diff patch text exactly as `git diff` produced it (including the
+   * `diff --git` header line). Empty when isBinary or truncated.
+   */
+  patch: string;
+  /** Same status bucket as GitWorkingTreeFiles. */
+  status: GitFileDiffStatus;
+  /** Patch was elided because it exceeded the per-file size cap. */
+  truncated: boolean;
+}
+
+export interface GitWorkingTreePatches {
+  /**
+   * All dirty file patches, ordered added → modified → deleted to match the
+   * working-tree file listing. Each entry corresponds to one file path in
+   * GitWorkingTreeFiles.
+   */
+  patches: GitWorkingTreePatch[];
+}
+
 export interface GitCheckoutResult {
   error?: string;
   success: boolean;

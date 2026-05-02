@@ -7,30 +7,26 @@ import type {
   GeneratedSourceEventResult,
   SignalPlan,
 } from '@lobechat/agent-signal';
+import { type AgentSignalSourceType, createSourceEvent } from '@lobechat/agent-signal/source';
 
 import {
   type AgentSignalEmitOptions,
   type AgentSignalExecutionContext,
-  type AgentSignalSourceEnvelope,
   type AgentSignalSourceEventInput,
-  resolveSourceScopeKey,
 } from './emitter';
 import { projectAgentSignalObservability } from './observability/projector';
 import { persistAgentSignalObservability } from './observability/store';
-import {
-  createDefaultAgentSignalPolicies,
-  type CreateDefaultAgentSignalPoliciesOptions,
-} from './policies';
+import { createDefaultAgentSignalPolicies } from './policies';
+import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 import { emitSourceEvent } from './sources';
-import type { AgentSignalSourceType } from './sourceTypes';
+import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
 import type { AgentSignalSourceEventStore } from './store/types';
 
 export { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 
 interface ExecuteAgentSignalSourceEventOptions extends AgentSignalEmitOptions {
-  policyOptions?: Partial<CreateDefaultAgentSignalPoliciesOptions>;
   runtimeGuardBackend?: RuntimeGuardBackend;
   store?: AgentSignalSourceEventStore;
 }
@@ -96,19 +92,20 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
   options: ExecuteAgentSignalSourceEventOptions = {},
 ): Promise<DedupedSourceEventResult | GeneratedAgentSignalEmissionResult | undefined> => {
   try {
-    const sourceEvent: AgentSignalSourceEnvelope = {
-      payload: input.payload,
-      scopeKey: input.scopeKey ?? resolveSourceScopeKey(input.payload),
-      sourceId: input.sourceId,
-      sourceType: input.sourceType,
-      timestamp: input.timestamp ?? Date.now(),
-    };
+    const sourceEvent = createSourceEvent(input);
 
     const emission = await emitSourceEvent(
       sourceEvent,
       options.store ? { store: options.store } : undefined,
     );
     if (emission.deduped) return emission;
+
+    const procedurePolicyOptions =
+      options.policyOptions?.procedure ??
+      createProcedurePolicyOptions({
+        policyStateStore: redisPolicyStateStore,
+        ttlSeconds: 7 * 24 * 60 * 60,
+      });
 
     const runtime = await createAgentSignalRuntime({
       guardBackend: options.runtimeGuardBackend,
@@ -123,9 +120,18 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
           ...options.policyOptions?.feedbackSatisfactionJudge,
           userId: context.userId,
         },
+        classifierDiagnostics: options.policyOptions?.classifierDiagnostics,
+        procedure: procedurePolicyOptions,
         userMemory: {
           db: context.db,
           ...options.policyOptions?.userMemory,
+          userId: context.userId,
+        },
+        skillManagement: {
+          db: context.db,
+          ...options.policyOptions?.skillManagement,
+          selfIterationEnabled:
+            options.policyOptions?.skillManagement?.selfIterationEnabled ?? false,
           userId: context.userId,
         },
       }),

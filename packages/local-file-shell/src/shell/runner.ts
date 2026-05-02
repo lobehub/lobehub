@@ -25,6 +25,10 @@ export async function runCommand(
   }: RunCommandParams,
   { processManager, logger }: RunCommandOptions,
 ): Promise<RunCommandResult> {
+  if (!command) {
+    return { error: 'command is required', success: false };
+  }
+
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 

@@ -1,3 +1,5 @@
+import type { BriefArtifacts } from '../brief';
+
 // ── Task type aliases ──
 
 export type TaskStatus =
@@ -52,7 +54,33 @@ export interface WorkspaceData {
   tree: WorkspaceTreeNode[];
 }
 
+/**
+ * Audit record of the brief-emission decision for a completed topic.
+ *
+ * Persisted under `taskTopics.handoff.briefDecision`. Written for *every*
+ * synthesizeTopicBrief invocation (rule-conclusive and LLM-deferred alike) so
+ * the emit/skip outcome is inspectable per topic.
+ *
+ * - source='rule' — the deterministic gate (`shouldEmitTopicBrief`) was
+ *   conclusive on its own. `reason` mirrors the rule's reason string.
+ * - source='llm-judge' — the rule returned 'unknown' and an LLM made the call
+ *   via `chainJudgeBriefEmit`. `model` records which model voted.
+ */
+export interface BriefDecision {
+  decidedAt: string;
+  emit: boolean;
+  model?: string;
+  reason: string;
+  source: 'rule' | 'llm-judge';
+}
+
 export interface TaskTopicHandoff {
+  /**
+   * Outcome of the emit-vs-skip decision for the brief on this topic. The
+   * three LLM-produced fields above are agent-internal; this one is metadata
+   * about the brief delivery itself, written by the lifecycle service.
+   */
+  briefDecision?: BriefDecision;
   keyFindings?: string[];
   nextAction?: string;
   summary?: string;
@@ -210,13 +238,26 @@ export interface TaskDetailActivity {
   actions?: unknown;
   agentId?: string | null;
   agents?: TaskDetailActivityAgent[];
-  artifacts?: unknown;
+  artifacts?: BriefArtifacts | null;
   author?: TaskDetailActivityAuthor;
   briefType?: string;
+  /**
+   * Topic-only: ISO timestamp when the topic run terminated (any of
+   * completed / failed / canceled / timeout). Pair with `time` (start) to
+   * compute elapsed duration.
+   */
+  completedAt?: string;
   content?: string;
   createdAt?: string;
   cronJobId?: string | null;
   id?: string;
+  /**
+   * Topic-only: persisted Gateway operation ID for the task topic, sourced
+   * from `task_topics.operationId`. Survives across runs (created on add,
+   * updated on resume) so it remains available after the topic completes —
+   * unlike `runningOperation`, which is cleared when the run terminates.
+   */
+  operationId?: string | null;
   priority?: string | null;
   readAt?: string | null;
   resolvedAction?: string | null;

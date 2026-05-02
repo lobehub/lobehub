@@ -132,8 +132,19 @@ export class TaskRunnerService {
 
       const checkpoint = this.taskModel.getCheckpointConfig(task);
       const reviewConfig = this.taskModel.getReviewConfig(task);
+      // Default mode is 'auto' — brief synthesis happens programmatically in
+      // TaskLifecycleService.synthesizeTopicBrief. 'agent' is an explicit
+      // escape hatch that re-mounts the legacy createBrief tool surface.
+      const briefMode = (
+        (task.config as { brief?: { mode?: string } } | null)?.brief?.mode === 'agent'
+          ? 'agent'
+          : 'auto'
+      ) as 'agent' | 'auto';
       const pluginIds = [TaskSkillIdentifier];
-      if (!reviewConfig?.enabled && checkpoint.onAgentRequest !== false) {
+      // Mount BriefIdentifier (createBrief + requestCheckpoint) only in the
+      // legacy 'agent' path; in 'auto' the agent must not also call
+      // createBrief or we'd double up.
+      if (briefMode === 'agent' && !reviewConfig?.enabled && checkpoint.onAgentRequest !== false) {
         pluginIds.push(BriefIdentifier);
       }
 

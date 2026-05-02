@@ -29,8 +29,9 @@ describe('createI18nNext', () => {
     expect(i18n.instance.hasResourceBundle('zh-CN', 'common')).toBe(true);
     expect(i18n.instance.hasResourceBundle('zh-CN', 'chat')).toBe(true);
     expect(i18n.instance.hasResourceBundle('zh-CN', 'error')).toBe(true);
+    expect(i18n.instance.hasResourceBundle('zh-CN', 'home')).toBe(true);
 
-    expect(reloadSpy).toHaveBeenCalledWith(['zh-CN'], ['chat', 'common', 'error']);
+    expect(reloadSpy).toHaveBeenCalledWith(['zh-CN'], ['chat', 'common', 'error', 'home']);
     expect(loadI18nNamespaceModule).toHaveBeenCalledWith(
       expect.objectContaining({ lng: 'zh-CN', ns: 'common' }),
     );
@@ -39,6 +40,9 @@ describe('createI18nNext', () => {
     );
     expect(loadI18nNamespaceModule).toHaveBeenCalledWith(
       expect.objectContaining({ lng: 'zh-CN', ns: 'error' }),
+    );
+    expect(loadI18nNamespaceModule).toHaveBeenCalledWith(
+      expect.objectContaining({ lng: 'zh-CN', ns: 'home' }),
     );
   });
 });

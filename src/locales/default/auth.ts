@@ -62,6 +62,11 @@ export default {
   'betterAuth.resetPassword.success':
     'Password reset successful, please sign in with your new password',
   'betterAuth.resetPassword.title': 'Reset Password',
+  'betterAuth.captcha.continue': 'Continue',
+  'betterAuth.captcha.description':
+    'Complete the security verification below. We will continue your sign up or sign in automatically.',
+  'betterAuth.captcha.pendingDescription': 'Please complete the verification first, then continue.',
+  'betterAuth.captcha.title': 'Security verification required',
   'betterAuth.signin.backToEmail': 'Back to change email',
   'betterAuth.signin.continueWithApple': 'Continue with Apple',
   'betterAuth.signin.continueWithAuth0': 'Sign in with Auth0',

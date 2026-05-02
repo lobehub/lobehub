@@ -290,6 +290,30 @@ export class AgentSliceActionImpl {
     );
   };
 
+  useHydrateAgentConfig = (
+    isLogin: boolean | undefined,
+    agentId: string,
+  ): SWRResponse<LobeAgentConfig> => {
+    const swrKey =
+      isLogin === true && agentId && !isChatGroupSessionId(agentId)
+        ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
+        : null;
+
+    return useClientDataSWRWithSync<LobeAgentConfig>(
+      swrKey,
+      async () => {
+        const data = await agentService.getAgentConfigById(agentId);
+        return data as LobeAgentConfig;
+      },
+      {
+        onData: (data) => {
+          if (!data) return;
+          this.#get().internal_dispatchAgentMap(agentId, data);
+        },
+      },
+    );
+  };
+
   useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentContextDocument[]> => {
     return useClientDataSWRWithSync<AgentContextDocument[]>(
       agentId ? agentDocumentSWRKeys.documents(agentId) : null,

@@ -227,8 +227,8 @@ export class ResponsesService extends BaseService {
   /**
    * Decode internal tool name format to display name.
    * - lobe-client-fn____get_weather → get_weather
-   * - lobe-cloud-sandbox____executeCode____builtin → lobe-cloud-sandbox/executeCode
-   * - my-plugin____myApi → my-plugin/myApi
+   * - lobe-cloud-sandbox____executeCode → lobe-cloud-sandbox/executeCode
+   * - my-plugin____myApi____mcp → my-plugin/myApi (legacy 3-segment still tolerated)
    */
   private decodeToolName(rawName: string): string {
     const SEPARATOR = '____';

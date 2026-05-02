@@ -1,4 +1,5 @@
 import type { TaskDetailActivity } from '@lobechat/types';
+import { formatActivityTime } from '@lobechat/utils/time';
 import {
   ActionIcon,
   Avatar,
@@ -10,7 +11,6 @@ import {
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { CircleDot, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,11 +36,17 @@ interface TopicCardProps {
 
 const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
+  const { t: tDiscover } = useTranslation('discover');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const isRunning = activity.status === 'running';
 
+  const finalDuration =
+    !isRunning && activity.time && activity.completedAt
+      ? new Date(activity.completedAt).getTime() - new Date(activity.time).getTime()
+      : null;
+
   const [elapsed, setElapsed] = useState(() =>
-    activity.time ? Date.now() - new Date(activity.time).getTime() : 0,
+    isRunning && activity.time ? Date.now() - new Date(activity.time).getTime() : 0,
   );
 
   useEffect(() => {
@@ -59,8 +65,19 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.id) void navigator.clipboard.writeText(activity.id);
   }, [activity.id]);
 
-  const startedAt = activity.time ? dayjs(activity.time).fromNow() : '';
-  const durationText = isRunning ? formatDuration(elapsed) : '';
+  const handleCopyOperationId = useCallback(() => {
+    if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
+  }, [activity.operationId]);
+
+  const { text: startedAt, title: startedAtTitle } = formatActivityTime(activity.time, {
+    formatOtherYear: tDiscover('time.formatOtherYear'),
+    formatThisYear: tDiscover('time.formatThisYear'),
+  });
+  const durationText = isRunning
+    ? formatDuration(elapsed)
+    : finalDuration != null && finalDuration >= 0
+      ? formatDuration(finalDuration)
+      : '';
 
   const menuItems: DropdownItem[] = [
     {
@@ -75,6 +92,13 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       key: 'copy',
       label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy topic ID' }),
       onClick: handleCopyId,
+    },
+    {
+      disabled: !activity.operationId,
+      icon: Copy,
+      key: 'copyOperationId',
+      label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy operation ID' }),
+      onClick: handleCopyOperationId,
     },
   ];
 
@@ -129,7 +153,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
           {startedAt && (
-            <Text fontSize={12} type={'secondary'}>
+            <Text fontSize={12} title={startedAtTitle} type={'secondary'}>
               {startedAt}
             </Text>
           )}

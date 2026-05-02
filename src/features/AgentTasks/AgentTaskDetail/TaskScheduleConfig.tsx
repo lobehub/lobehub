@@ -2,6 +2,7 @@ import type { TaskAutomationMode } from '@lobechat/types';
 import {
   ActionIcon,
   Avatar,
+  Button,
   Flexbox,
   Icon,
   InputNumber,
@@ -13,7 +14,7 @@ import {
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
+import { CalendarClockIcon, CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -189,6 +190,8 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const activeTaskInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const setAutomationMode = useTaskStore((s) => s.setAutomationMode);
+  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+  const status = useTaskStore(taskDetailSelectors.activeTaskStatus);
   const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
@@ -197,6 +200,15 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const finalCurrentInterval = currentInterval ?? activeTaskInterval;
 
   const enabled = !!automationMode;
+  const [isStartingSchedule, setIsStartingSchedule] = useState(false);
+  // Heartbeat tasks are re-armed only by maybeRearmHeartbeat after a topic
+  // completes; there is no dispatcher that picks up `scheduled` heartbeat tasks,
+  // so flipping one to `scheduled` from here would leave it dormant.
+  const canStartSchedule =
+    automationMode === 'schedule' &&
+    !!finalTaskId &&
+    status !== 'scheduled' &&
+    status !== 'running';
 
   const summary = useMemo<{ primary: string; secondary?: string } | null>(() => {
     if (automationMode === 'heartbeat' && finalCurrentInterval > 0) {
@@ -266,6 +278,16 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     [finalTaskId, setAutomationMode],
   );
 
+  const handleStartScheduling = useCallback(async () => {
+    if (!finalTaskId) return;
+    setIsStartingSchedule(true);
+    try {
+      await updateTaskStatus(finalTaskId, 'scheduled');
+    } finally {
+      setIsStartingSchedule(false);
+    }
+  }, [finalTaskId, updateTaskStatus]);
+
   const content = (
     <Flexbox gap={16} style={{ padding: 4, width: 440 }} onClick={(e) => e.stopPropagation()}>
       <Flexbox horizontal align="center" gap={12}>
@@ -330,6 +352,17 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
             <IntervalTab currentInterval={finalCurrentInterval} taskId={finalTaskId} />
           )}
           {automationMode === 'schedule' && <SchedulerTab taskId={finalTaskId} />}
+          {canStartSchedule && (
+            <Button
+              block
+              icon={CalendarClockIcon}
+              loading={isStartingSchedule}
+              type="primary"
+              onClick={handleStartScheduling}
+            >
+              {t('taskSchedule.startScheduling')}
+            </Button>
+          )}
         </>
       )}
     </Flexbox>

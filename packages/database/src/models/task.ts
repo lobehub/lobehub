@@ -6,10 +6,11 @@ import type {
   WorkspaceDocNode,
   WorkspaceTreeNode,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, notInArray, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
+import { documents } from '../schemas/file';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
@@ -478,6 +479,22 @@ export class TaskModel {
       .where(eq(tasks.id, id));
   }
 
+  // Tasks eligible for cron-based dispatch.
+  // Excludes terminal/paused/running — `paused` requires user attention,
+  // `running` is already in flight (and `runTask` would CONFLICT anyway).
+  static async getScheduledTasks(db: LobeChatDatabase): Promise<TaskItem[]> {
+    return db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.automationMode, 'schedule'),
+          isNotNull(tasks.schedulePattern),
+          notInArray(tasks.status, ['canceled', 'completed', 'failed', 'paused', 'running']),
+        ),
+      );
+  }
+
   // Find stuck tasks (running but heartbeat timed out)
   // Only checks tasks that have both lastHeartbeatAt and heartbeatTimeout set
   static async findStuckTasks(db: LobeChatDatabase): Promise<TaskItem[]> {
@@ -601,6 +618,40 @@ export class TaskModel {
       .from(taskDocuments)
       .where(eq(taskDocuments.taskId, taskId))
       .orderBy(taskDocuments.createdAt);
+  }
+
+  /**
+   * Documents pinned to a task at or after a given timestamp, joined with the
+   * `documents` table so callers receive `{ id, kind, title }` directly.
+   *
+   * Used by topic-brief synthesis to attribute artifacts to the topic that
+   * just completed: pass the topic's start time as `since`.
+   */
+  async getDocumentsPinnedSince(
+    taskId: string,
+    since: Date,
+  ): Promise<{ id: string; kind: string | null; title: string | null }[]> {
+    const rows = await this.db
+      .select({
+        fileType: documents.fileType,
+        id: documents.id,
+        title: documents.title,
+      })
+      .from(taskDocuments)
+      .innerJoin(documents, eq(taskDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(taskDocuments.taskId, taskId),
+          eq(taskDocuments.userId, this.userId),
+          gte(taskDocuments.createdAt, since),
+        ),
+      );
+
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.fileType ?? null,
+      title: row.title ?? null,
+    }));
   }
 
   // Get all pinned docs from a task tree (recursive), returns nodeMap + tree structure

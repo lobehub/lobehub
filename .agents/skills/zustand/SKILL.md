@@ -174,9 +174,64 @@ export const chatGroupAction: StateCreator<
   - `ChatGroupStoreWithRefresh` for member refresh
   - `ChatGroupStoreWithInternal` for curd `internal_dispatchChatGroup`
 
+### Slices That Don't Currently Need `set`
+
+When a slice doesn't write local state at the moment — e.g. it reads context
+from `#get()` and forwards calls to another store, or just runs hooks — drop
+the `#set` field. Otherwise ESLint's `no-unused-vars` flags the unused private
+field.
+
+Mark the constructor's `set` param as `_set` and `void _set` it to keep the
+`(set, get, api)` shape aligned with `StateCreator`. This is **a snapshot of
+the current need, not a permanent contract** — if a later change needs `set`,
+restore the `#set` field and use it; do not invent a workaround to keep the
+"unused" form.
+
+```ts
+type Setter = StoreSetter<ConversationStore>;
+
+export const toolSlice = (set: Setter, get: () => ConversationStore, _api?: unknown) =>
+  new ToolActionImpl(set, get, _api);
+
+export class ToolActionImpl {
+  readonly #get: () => ConversationStore;
+
+  // Mark unused params with `_` prefix and `void _x` so the constructor still
+  // matches StateCreator's `(set, get, api)` shape without triggering unused
+  // diagnostics.
+  constructor(_set: Setter, get: () => ConversationStore, _api?: unknown) {
+    void _set;
+    void _api;
+    this.#get = get;
+  }
+
+  approveToolCall = async (id: string) => {
+    const { context, hooks } = this.#get();
+    await useChatStore.getState().approveToolCalling(id, '', context);
+    hooks.onToolCallComplete?.(id, undefined);
+  };
+}
+
+export type ToolAction = Pick<ToolActionImpl, keyof ToolActionImpl>;
+```
+
+Rules of thumb:
+
+- If a slice doesn't currently call `set`, drop `#set` (use `_set` + `void _set`
+  in the constructor). When a later edit needs `set`, restore `#set` and use it.
+- Don't add `setNamespace` for slices that don't write state. Add it when the
+  slice starts writing state.
+- Never leave `#set` declared but unused "for future use" — lint will fail and
+  re-adding it later costs nothing.
+
 ### Do / Don't
 
 - **Do**: keep constructor signature aligned with `StateCreator` params `(set, get, api)`.
 - **Do**: use `#private` to avoid `set/get` being exposed.
 - **Do**: use `flattenActions` instead of spreading class instances.
+- **Do**: drop `#set` (and use `_set` + `void _set` in the constructor) for
+  delegate-only slices that never write state — keeps lint green without
+  breaking the `(set, get, api)` shape.
 - **Don't**: keep both old slice objects and class actions active at the same time.
+- **Don't**: keep an unused `#set` field "for future use" — it fails ESLint and
+  re-adding it later costs nothing.

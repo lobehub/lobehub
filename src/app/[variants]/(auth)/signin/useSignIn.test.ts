@@ -14,6 +14,7 @@ const mockSignInOauth2 = vi.hoisted(() => vi.fn());
 const mockSignInEmail = vi.hoisted(() => vi.fn());
 const mockSignInMagicLink = vi.hoisted(() => vi.fn());
 const mockRequestPasswordReset = vi.hoisted(() => vi.fn());
+const mockGetCaptchaTokenOnError = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -48,6 +49,7 @@ vi.mock('@/business/client/hooks/useBusinessSignin', () => ({
   useBusinessSignin: () => ({
     businessElement: null,
     getAdditionalData: async () => ({}),
+    getCaptchaTokenOnError: mockGetCaptchaTokenOnError,
     getFetchOptions: async () => undefined,
     preSocialSigninCheck: async () => true,
     ssoProviders: [],
@@ -97,6 +99,7 @@ describe('useSignIn', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSearchParamsGet.mockReturnValue(null);
+    mockGetCaptchaTokenOnError.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -344,6 +347,46 @@ describe('useSignIn', () => {
       });
 
       expect(mockMessageError).toHaveBeenCalled();
+    });
+
+    it('should retry social sign in with captcha token when captcha is required', async () => {
+      mockGetCaptchaTokenOnError.mockResolvedValue('captcha-token');
+      mockSignInSocial
+        .mockResolvedValueOnce({
+          error: { code: 'CAPTCHA_REQUIRED', message: 'Missing CAPTCHA response', status: 400 },
+        })
+        .mockResolvedValueOnce({ url: 'https://google.com/auth' });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleSocialSignIn('google');
+      });
+
+      expect(mockSignInSocial).toHaveBeenCalledTimes(2);
+      expect(mockSignInSocial).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          fetchOptions: { headers: { 'x-captcha-response': 'captcha-token' } },
+          provider: 'google',
+        }),
+      );
+      expect(mockMessageError).not.toHaveBeenCalled();
+    });
+
+    it('should stop social sign in when captcha modal is cancelled', async () => {
+      mockGetCaptchaTokenOnError.mockResolvedValue(null);
+      mockSignInSocial.mockResolvedValue({
+        error: { code: 'CAPTCHA_REQUIRED', message: 'Missing CAPTCHA response', status: 400 },
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleSocialSignIn('google');
+      });
+
+      expect(mockSignInSocial).toHaveBeenCalledTimes(1);
+      expect(mockMessageError).not.toHaveBeenCalled();
     });
 
     it('should save last auth provider to localStorage', async () => {

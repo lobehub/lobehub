@@ -9,6 +9,11 @@ import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionR
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
+import {
+  emitToolOutcomeSafely,
+  resolveToolOutcomeScope,
+} from '@/server/services/agentSignal/procedure';
+import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -19,6 +24,45 @@ import { type ServerRuntimeRegistration } from './types';
 export const activatorRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
     const activatedIds: string[] = [];
+    const emitActivationOutcome = async (input: {
+      errorReason?: string;
+      identifiers: string[];
+      status: 'failed' | 'succeeded';
+      summary: string;
+    }) => {
+      if (!context.userId) return;
+
+      const { scope, scopeKey } = resolveToolOutcomeScope({
+        agentId: context.agentId,
+        taskId: context.taskId,
+        topicId: context.topicId,
+        userId: context.userId,
+      });
+
+      await emitToolOutcomeSafely({
+        apiName: 'activateSkill',
+        context: { agentId: context.agentId, userId: context.userId },
+        domainKey: 'skill:builtin-skill',
+        errorReason: input.errorReason,
+        identifier: LobeActivatorIdentifier,
+        intentClass: 'tool_command',
+        messageId: context.messageId,
+        operationId: context.operationId,
+        policyStateStore: redisPolicyStateStore,
+        relatedObjects: input.identifiers.map((id) => ({
+          objectId: id,
+          objectType: 'skill',
+          relation: 'selected',
+        })),
+        scope,
+        scopeKey,
+        status: input.status,
+        summary: input.summary,
+        ttlSeconds: 7 * 24 * 60 * 60,
+        toolAction: 'activate',
+        toolCallId: context.toolCallId,
+      });
+    };
 
     // Create SkillsExecutionRuntime for activateSkill delegation
     let skillsRuntime: SkillsExecutionRuntime | undefined;
@@ -38,7 +82,27 @@ export const activatorRuntime: ServerRuntimeRegistration = {
     }
 
     const service: ActivatorRuntimeService = {
-      activateSkill: skillsRuntime ? (args) => skillsRuntime!.activateSkill(args) : undefined,
+      activateSkill: skillsRuntime
+        ? async (args) => {
+            try {
+              const result = await skillsRuntime!.activateSkill(args);
+              await emitActivationOutcome({
+                identifiers: [args.name],
+                status: 'succeeded',
+                summary: 'Activator selected a skill.',
+              });
+              return result;
+            } catch (error) {
+              await emitActivationOutcome({
+                errorReason: (error as Error).message,
+                identifiers: [args.name],
+                status: 'failed',
+                summary: 'Activator failed to select a skill.',
+              });
+              throw error;
+            }
+          }
+        : undefined,
       getActivatedToolIds: () => [...activatedIds],
       getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
         // Note: context.toolManifestMap should only contain discoverable tools.
@@ -68,6 +132,13 @@ export const activatorRuntime: ServerRuntimeRegistration = {
             activatedIds.push(id);
           }
         }
+        void emitActivationOutcome({
+          identifiers,
+          status: 'succeeded',
+          summary: 'Activator marked skills as active.',
+        }).catch((error) => {
+          console.error('[AgentSignal] Failed to emit activator outcome:', error);
+        });
       },
     };
 

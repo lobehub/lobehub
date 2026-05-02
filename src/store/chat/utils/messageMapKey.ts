@@ -141,6 +141,8 @@ const generateKey = (context: MessageMapContext): string => {
  * - Group existing topic: `group_grp_xxx_tpc_yyy`
  * - Group agent new topic: `group_agent_grp_xxx_tpc_yyy_new`
  * - Group agent existing topic: `group_agent_grp_xxx_tpc_yyy_tpc_zzz`
+ * - Task new topic: `task_agt_xxx_new`
+ * - Task existing topic: `task_agt_xxx_tpc_yyy`
  *
  * Auto-detection rules (when scope is not explicitly set):
  * - If threadId exists: scope = 'thread', subTopicId = threadId

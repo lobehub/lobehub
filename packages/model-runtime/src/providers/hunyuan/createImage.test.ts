@@ -25,24 +25,60 @@ afterEach(() => {
 
 describe('createHunyuanImage', () => {
   describe('Success scenarios', () => {
+    it('should successfully generate image with lite model', async () => {
+      const mockImageUrl = 'https://hyimg.tencentmaas.com/test/lite.png';
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          created: 1774806537,
+          request_id: 'req-lite-123',
+          data: [{ url: mockImageUrl }],
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'HY-Image-Lite',
+        params: {
+          prompt: '雨中, 竹林, 小路',
+        },
+      };
+
+      const result = await createHunyuanImage(payload, mockOptions);
+
+      const submitCall = (fetch as any).mock.calls[0];
+      expect(submitCall[0]).toBe('https://api.cloudai.tencent.com/v1/api/image/lite');
+      const submitBody = JSON.parse(submitCall[1].body);
+      expect(submitBody).toEqual({
+        model: 'HY-Image-Lite',
+        prompt: '雨中, 竹林, 小路',
+        resolution: '1024:1024',
+        rsp_img_type: 'url',
+      });
+
+      expect(result).toEqual({
+        imageUrl: mockImageUrl,
+      });
+    });
+
     it('should successfully generate image with basic prompt', async () => {
-      const mockJobId = '1301052320-1774048771-3ff52e2c-24b3-11f1-aca3-525400cc0b9a-0';
-      const mockImageUrl = 'https://aiart-1258344699.cos.ap-guangzhou.myqcloud.com/test/image.png';
+      const mockJobId = '251*************0';
+      const mockImageUrl = 'https://****965e';
 
       global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
+            id: mockJobId,
             request_id: 'req-123',
-            job_id: mockJobId,
           }),
         })
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
             request_id: 'req-456',
-            status: '5',
+            status: 'completed',
             data: [{ url: mockImageUrl }],
           }),
         });
@@ -50,7 +86,7 @@ describe('createHunyuanImage', () => {
       const payload: CreateImagePayload = {
         model: 'HY-Image-V3.0',
         params: {
-          prompt: '生成一个可爱猫猫',
+          prompt: '在图片中增加一个橘猫',
         },
       };
 
@@ -59,22 +95,18 @@ describe('createHunyuanImage', () => {
       const result = await resultPromise;
 
       const submitCall = (fetch as any).mock.calls[0];
-      expect(submitCall[0]).toBe('https://api.cloudai.tencent.com/v1/aiart/submit');
+      expect(submitCall[0]).toBe('https://api.cloudai.tencent.com/v1/api/image/submit');
       const submitBody = JSON.parse(submitCall[1].body);
       expect(submitBody).toEqual({
         model: 'HY-Image-V3.0',
-        prompt: '生成一个可爱猫猫',
-        size: '1024:1024',
-        extra_body: {
-          logo_add: 0,
-          revise: 0,
-        },
+        prompt: '在图片中增加一个橘猫',
+        resolution: '1024:1024',
       });
 
       const queryCall = (fetch as any).mock.calls[1];
-      expect(queryCall[0]).toBe('https://api.cloudai.tencent.com/v1/aiart/query');
+      expect(queryCall[0]).toBe('https://api.cloudai.tencent.com/v1/api/image/query');
       const queryBody = JSON.parse(queryCall[1].body);
-      expect(queryBody).toEqual({ job_id: mockJobId });
+      expect(queryBody).toEqual({ model: 'HY-Image-V3.0', id: mockJobId });
 
       expect(result).toEqual({
         imageUrl: mockImageUrl,
@@ -89,12 +121,12 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            status: '5',
+            status: 'completed',
             data: [{ url: mockImageUrl }],
           }),
         });
@@ -112,7 +144,7 @@ describe('createHunyuanImage', () => {
       const result = await resultPromise;
 
       const submitBody = JSON.parse((fetch as any).mock.calls[0][1].body);
-      expect(submitBody.size).toBe('1024:1024');
+      expect(submitBody.resolution).toBe('1024:1024');
       expect(result.imageUrl).toBe(mockImageUrl);
     });
 
@@ -124,12 +156,12 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            status: '5',
+            status: 'completed',
             data: [{ url: mockImageUrl }],
           }),
         });
@@ -148,7 +180,7 @@ describe('createHunyuanImage', () => {
       const result = await resultPromise;
 
       const submitBody = JSON.parse((fetch as any).mock.calls[0][1].body);
-      expect(submitBody.size).toBe('1024:768');
+      expect(submitBody.resolution).toBe('1024:768');
       expect(result.imageUrl).toBe(mockImageUrl);
     });
 
@@ -160,12 +192,12 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            status: '5',
+            status: 'completed',
             data: [{ url: mockImageUrl }],
           }),
         });
@@ -183,7 +215,7 @@ describe('createHunyuanImage', () => {
       await resultPromise;
 
       const submitBody = JSON.parse((fetch as any).mock.calls[0][1].body);
-      expect(submitBody.extra_body.seed).toBe(84445);
+      expect(submitBody.seed).toBe(84445);
     });
 
     it('should handle imageUrls for image-to-image', async () => {
@@ -194,12 +226,12 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            status: '5',
+            status: 'completed',
             data: [{ url: mockImageUrl }],
           }),
         });
@@ -229,20 +261,20 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ status: '1' }),
+          json: async () => ({ status: 'queued' }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ status: '2' }),
+          json: async () => ({ status: 'processing' }),
         })
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            status: '5',
+            status: 'completed',
             data: [{ url: mockImageUrl }],
           }),
         });
@@ -294,7 +326,7 @@ describe('createHunyuanImage', () => {
         ok: true,
         json: async () => ({
           request_id: 'req-123',
-          job_id: '',
+          id: '',
           error: {
             message: '图片下载错误。',
             type: 'api_error',
@@ -316,7 +348,7 @@ describe('createHunyuanImage', () => {
       );
     });
 
-    it('should handle missing job_id', async () => {
+    it('should handle missing job id', async () => {
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({ request_id: 'req-123' }),
@@ -339,9 +371,7 @@ describe('createHunyuanImage', () => {
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
         status: 400,
-        json: async () => ({
-          message: 'Invalid prompt',
-        }),
+        json: async () => ({ message: 'Invalid prompt' }),
       });
 
       const payload: CreateImagePayload = {
@@ -366,7 +396,7 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -404,7 +434,7 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -436,11 +466,11 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ status: '4' }),
+          json: async () => ({ status: 'failed' }),
         });
 
       const payload: CreateImagePayload = {
@@ -468,11 +498,11 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ status: '5', data: null }),
+          json: async () => ({ status: 'completed', data: null }),
         });
 
       const payload: CreateImagePayload = {
@@ -500,11 +530,11 @@ describe('createHunyuanImage', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ job_id: mockJobId }),
+          json: async () => ({ id: mockJobId }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ status: '5', data: [] }),
+          json: async () => ({ status: 'completed', data: [] }),
         });
 
       const payload: CreateImagePayload = {

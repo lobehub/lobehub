@@ -11,8 +11,8 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
-import { useGlobalStore } from '@/store/global';
 
+import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../store';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -31,6 +31,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
   const pageId = usePageEditorStore((s) => s.documentId);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
+  const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
   return useMemo(() => {
     if (!editor) return [];
@@ -76,7 +77,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
 
               // Open right panel if not opened
               setRightPanelMode('copilot');
-              useGlobalStore.getState().togglePageAgentPanel(true);
+              togglePageAgentPanel(true);
 
               // Focus on chat input after a short delay to ensure panel is opened
               setTimeout(() => {
@@ -102,5 +103,5 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
         onClick: () => {},
       },
     ];
-  }, [addSelectionContext, editor, pageId, setRightPanelMode, t]);
+  }, [addSelectionContext, editor, pageId, setRightPanelMode, t, togglePageAgentPanel]);
 };

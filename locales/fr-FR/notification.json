@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Votre tâche planifiée « {{jobName}} » a échoué. Ouvrez la tâche pour consulter l’erreur complète.",
+  "agent_cron_job_failed_insufficient_budget": "Votre tâche planifiée « {{jobName}} » n’a pas pu s’exécuter, car votre compte n’a plus de crédits. Rechargez votre solde ou mettez à niveau votre abonnement pour reprendre les prochaines exécutions.",
+  "agent_cron_job_failed_insufficient_budget_title": "Tâche planifiée en pause : crédits insuffisants",
+  "agent_cron_job_failed_title": "Échec de la tâche planifiée",
   "billboard.learnMore": "En savoir plus",
   "billboard.menuLabel": "Annonces",
+  "image_generation_completed": "Votre image « {{prompt}} » est prête.",
+  "image_generation_completed_title": "Génération d’image terminée",
   "inbox.archiveAll": "Archiver tout",
   "inbox.empty": "Aucune notification pour le moment",
   "inbox.emptyUnread": "Aucune notification non lue",
   "inbox.filterUnread": "Afficher uniquement les non lues",
   "inbox.markAllRead": "Marquer tout comme lu",
-  "inbox.title": "Notifications"
+  "inbox.title": "Notifications",
+  "video_generation_completed": "Votre vidéo « {{prompt}} » est prête.",
+  "video_generation_completed_title": "Génération de vidéo terminée"
 }

@@ -314,6 +314,14 @@ describe('OnboardingService', () => {
       id: 'topic-1',
       metadata: {
         onboardingSession: {
+          agentMarketplacePick: {
+            categoryHints: ['engineering'],
+            installedAgentIds: ['agent-1'],
+            requestId: 'req-1',
+            resolvedAt: '2026-04-16T00:30:00.000Z',
+            selectedTemplateIds: ['template-1'],
+            status: 'submitted',
+          },
           lastActiveAt: '2026-04-16T00:00:00.000Z',
           phase: 'summary',
           startedAt: '2026-04-16T00:00:00.000Z',
@@ -393,6 +401,14 @@ describe('OnboardingService', () => {
       'Coder',
       'Ops',
     ]);
+    expect(persistedTopics['topic-1']?.metadata?.onboardingSession?.agentMarketplacePick).toEqual({
+      categoryHints: ['engineering'],
+      installedAgentIds: ['agent-1'],
+      requestId: 'req-1',
+      resolvedAt: '2026-04-16T00:30:00.000Z',
+      selectedTemplateIds: ['template-1'],
+      status: 'submitted',
+    });
   });
 
   it('is idempotent when finishOnboarding is called after completion', async () => {
@@ -507,7 +523,7 @@ describe('OnboardingService', () => {
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 4 user messages total, baseline was 3 → only 1 discovery exchange (< MIN_DISCOVERY_USER_MESSAGES=5)
+    // 4 user messages total, baseline was 3 → only 1 discovery exchange (< MIN_DISCOVERY_USER_MESSAGES=2)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(async () => [{ count: 4 }]),
@@ -519,8 +535,8 @@ describe('OnboardingService', () => {
 
     expect(context.phase).toBe('discovery');
     expect(context.discoveryUserMessageCount).toBe(1);
-    // remaining = RECOMMENDED_DISCOVERY_USER_MESSAGES(8) - 1 = 7
-    expect(context.remainingDiscoveryExchanges).toBe(7);
+    // remaining = RECOMMENDED_DISCOVERY_USER_MESSAGES(3) - 1 = 2
+    expect(context.remainingDiscoveryExchanges).toBe(2);
   });
 
   it('advances to summary when discovery exchanges reach minimum threshold', async () => {
@@ -538,7 +554,7 @@ describe('OnboardingService', () => {
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 8 user messages total, baseline was 3 → 5 discovery exchanges (= MIN_DISCOVERY_USER_MESSAGES)
+    // 8 user messages total, baseline was 3 → 5 discovery exchanges (>= MIN_DISCOVERY_USER_MESSAGES=2)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(async () => [{ count: 8 }]),

@@ -123,13 +123,11 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
 
   // Agent documents
   copyDocument: 'workflow.toolDisplayName.copyDocument',
-  editDocument: 'workflow.toolDisplayName.editDocument',
   listDocuments: 'workflow.toolDisplayName.listDocuments',
   readDocument: 'workflow.toolDisplayName.readDocument',
-  readDocumentByFilename: 'workflow.toolDisplayName.readDocumentByFilename',
   removeDocument: 'workflow.toolDisplayName.removeDocument',
   renameDocument: 'workflow.toolDisplayName.renameDocument',
-  upsertDocumentByFilename: 'workflow.toolDisplayName.upsertDocumentByFilename',
+  replaceDocumentContent: 'workflow.toolDisplayName.replaceDocumentContent',
   updateLoadRule: 'workflow.toolDisplayName.updateLoadRule',
 
   // Calculator
@@ -200,7 +198,6 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
 
   // Misc
   finishOnboarding: 'workflow.toolDisplayName.finishOnboarding',
-  getOnboardingState: 'workflow.toolDisplayName.getOnboardingState',
   getTopicContext: 'workflow.toolDisplayName.getTopicContext',
   listOnlineDevices: 'workflow.toolDisplayName.listOnlineDevices',
   activateDevice: 'workflow.toolDisplayName.activateDevice',

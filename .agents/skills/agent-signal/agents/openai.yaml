@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Agent Signal'
+  short_description: 'Build AgentSignal sources, signals, actions, and policies.'
+  default_prompt: 'Use $agent-signal to add a new Agent Signal source, policy, handler, or observability flow.'

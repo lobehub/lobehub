@@ -4,31 +4,35 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
-import { TASK_MANAGER_INCLUDE_TRIGGERS } from '@/const/topic';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
 import TopicItem from '@/features/PageEditor/Copilot/TopicSelector/TopicItem';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { useGlobalStore } from '@/store/global';
-import { useTaskChatStore } from '@/store/taskChat';
 
 const Toolbar = memo(() => {
   const { t } = useTranslation('topic');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
-  useTaskChatStore((s) => s.useFetchTopics)(agentId, TASK_MANAGER_INCLUDE_TRIGGERS);
+  useChatStore((s) => s.useFetchTopics)(true, { agentId });
 
-  const [activeTopicId, switchTopic] = useTaskChatStore((s) => [s.activeTopicId, s.switchTopic]);
-  const topics = useTaskChatStore((s) => s.topics);
+  const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
+    s.activeTopicId,
+    s.switchTopic,
+    topicSelectors.currentTopics(s),
+  ]);
+  const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
 
   const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
 
   const isLoadingTopics = topics === undefined;
-  const topicTitle = topics?.find((topic) => topic.id === activeTopicId)?.title || t('title');
+  const topicTitle = currentTopic?.title || t('title');
   const hasTopics = !!topics && topics.length > 0;
 
   const handleCreate = () => {
-    switchTopic(null);
+    switchTopic(null, { scope: 'task' });
   };
 
   return (
@@ -76,11 +80,6 @@ const Toolbar = memo(() => {
                       topicTitle={topic.title}
                       onClose={() => setTopicPopoverOpen(false)}
                       onTopicChange={(id) => switchTopic(id)}
-                      onDelete={(deletedId) => {
-                        const store = useTaskChatStore.getState();
-                        void store.refreshTopics();
-                        if (store.activeTopicId === deletedId) store.switchTopic(null);
-                      }}
                     />
                   ))}
                 </Flexbox>

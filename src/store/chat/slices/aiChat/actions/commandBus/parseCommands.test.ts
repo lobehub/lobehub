@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   parseCommandsFromEditorData,
+  parseLocalFileReferencesFromEditorData,
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
@@ -655,5 +656,46 @@ describe('parseSingleAgentMentionDirectRoute', () => {
     };
 
     expect(parseSingleAgentMentionDirectRoute(editorData)).toBeUndefined();
+  });
+});
+
+describe('parseLocalFileReferencesFromEditorData', () => {
+  it('should extract local file mention metadata in document order', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                label: 'README.md',
+                metadata: {
+                  name: 'README.md',
+                  path: '/Users/me/project/README.md',
+                  type: 'localFile',
+                },
+                type: 'mention',
+              },
+              {
+                label: 'src',
+                metadata: {
+                  isDirectory: true,
+                  name: 'src',
+                  path: '/Users/me/project/src',
+                  type: 'localFile',
+                },
+                type: 'mention',
+              },
+            ],
+            type: 'paragraph',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    expect(parseLocalFileReferencesFromEditorData(editorData)).toEqual([
+      { isDirectory: false, name: 'README.md', path: '/Users/me/project/README.md' },
+      { isDirectory: true, name: 'src', path: '/Users/me/project/src' },
+    ]);
   });
 });

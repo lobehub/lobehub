@@ -5,6 +5,11 @@ const ACTION_IDEMPOTENCY_LANE_PREFIX = 'action-idempotency';
 /**
  * Creates the scope-local guard lane for one planned action idempotency key.
  *
+ * Agent Signal stores guard state inside `RuntimeProcessorContext.runtimeState`, so this lane is
+ * evaluated within the current runtime scope key, such as `topic:tpc_xxx`. Reusing the same
+ * source/message id in the same scope will therefore skip after the first successful application;
+ * using a new source id or a different scope gets a separate guard record.
+ *
  * Before:
  * - `source_1:memory:msg_1`
  *
@@ -58,5 +63,7 @@ export const markAppliedActionIdempotency = async (
 ) => {
   if (!idempotencyKey) return;
 
+  // The marker is written only after the durable side effect succeeds, so failed/skipped attempts
+  // remain retryable while successful memory/skill mutations are protected from duplicate replay.
   await ctx.runtimeState.touchGuardState(createActionIdempotencyLane(idempotencyKey), ctx.now());
 };

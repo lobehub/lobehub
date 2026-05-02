@@ -5,6 +5,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import Conversation from './Conversation';
+import { TaskAgentProvider } from './TaskAgentProvider';
 
 const AgentTaskManager = memo(() => {
   const [expand, toggleTaskAgentPanel] = useGlobalStore((s) => [
@@ -20,7 +21,9 @@ const AgentTaskManager = memo(() => {
       minWidth={320}
       onExpandChange={(next) => toggleTaskAgentPanel(next)}
     >
-      <Conversation />
+      <TaskAgentProvider>
+        <Conversation />
+      </TaskAgentProvider>
     </RightPanel>
   );
 });

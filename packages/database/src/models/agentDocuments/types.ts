@@ -39,8 +39,10 @@ export interface AgentDocument {
   documentId: string;
   editorData: Record<string, any> | null;
   filename: string;
+  fileType: string;
   id: string;
   metadata: Record<string, any> | null;
+  parentId: string | null;
   policy: AgentDocumentPolicy | null;
   policyLoad: PolicyLoad;
   policyLoadFormat: DocumentLoadFormat;
