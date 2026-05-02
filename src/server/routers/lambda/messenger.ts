@@ -38,6 +38,9 @@ export const messengerRouter = router({
   availablePlatforms: publicProcedure.query(() => {
     const platforms = getEnabledMessengerPlatforms();
     return platforms.map((platform) => ({
+      // Slack App ID — used by the verify-im success state to build a
+      // `slack://app?team=…&id=…` deep link straight into the bot DM.
+      appId: platform === 'slack' ? messengerEnv.LOBE_SLACK_APP_ID : undefined,
       botUsername: platform === 'telegram' ? messengerEnv.LOBE_TELEGRAM_BOT_USERNAME : undefined,
       enabled: true,
       platform,

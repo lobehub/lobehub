@@ -1,7 +1,5 @@
 export default {
   'messenger.activeAgent': 'Active agent',
-  'messenger.activeAgentHintEmpty':
-    'No active agent. Pick one above or use /agents in the bot. Until then inbound messages will be parked.',
   'messenger.activeAgentPlaceholder': 'Select an agent',
   'messenger.detail.addWorkspace': 'Add workspace',
   'messenger.detail.connections.connected': 'Connected',
@@ -13,12 +11,7 @@ export default {
   'messenger.detail.connections.userLabel': 'user',
   'messenger.detail.connections.workspaceLabel': 'workspace',
   'messenger.detail.disconnect': 'Disconnect',
-  'messenger.helpCommands':
-    'In the bot: send /agents to list your agents and tap one to switch which agent receives messages.',
   'messenger.linkCta': 'Connect',
-  'messenger.list.slack.description': 'Use @LobeHub in Slack to assign tasks',
-  'messenger.list.telegram.description': 'Message your task, get results delivered instantly',
-  'messenger.linkedAccount': 'Linked to {{platform}} account {{handle}}',
   'messenger.linkModal.continueIn': 'Continue setup in {{platform}}',
   'messenger.linkModal.instructions':
     'Open the bot, send /start, then tap "Link Account" to connect your LobeHub account.',
@@ -35,19 +28,17 @@ export default {
   'messenger.slack.connectModal.notConfigured':
     'Slack OAuth is not configured. Set LOBE_SLACK_CLIENT_ID, LOBE_SLACK_CLIENT_SECRET, LOBE_SLACK_SIGNING_SECRET and LOBE_SLACK_APP_ID.',
   'messenger.slack.connectModal.title': 'Continue setup in Slack',
-  'messenger.slack.connections.disconnect': 'Disconnect',
   'messenger.slack.connections.disconnectConfirm':
     'Disconnect the LobeHub bot from this Slack workspace? Existing user links will pause until you re-install.',
   'messenger.slack.connections.disconnectFailed': 'Failed to disconnect.',
   'messenger.slack.connections.disconnectSuccess': 'Workspace disconnected.',
   'messenger.slack.connections.disconnectTitle': 'Disconnect workspace',
-  'messenger.slack.connections.installedAt': 'Installed {{date}}',
-  'messenger.slack.connections.title': 'Connected workspaces',
-  'messenger.slack.connections.workspace': 'Workspace: {{name}}',
+  'messenger.list.slack.description':
+    'Chat with your LobeHub agents from any Slack workspace via DM or @LobeHub.',
+  'messenger.list.telegram.description':
+    'Chat with your LobeHub agents in Telegram and pick which one answers from anywhere.',
   'messenger.setActiveFailed': 'Failed to set as active.',
   'messenger.setActiveSuccess': 'Active agent updated.',
-  'messenger.statusLinked': 'Connected',
-  'messenger.statusNotLinked': 'Not connected',
   'messenger.subtitle':
     'Connect your account to the official LobeHub bot once. Pick which agent receives messages, switch any time from here or from the bot.',
   'messenger.title': 'Messenger',
@@ -62,10 +53,9 @@ export default {
   'verify.confirm.defaultAgentHint':
     'Your messages will be routed here first. You can switch any time via /agents in the bot or from Settings → Messenger.',
   'verify.confirm.defaultAgentPlaceholder': 'Select an agent',
-  'verify.confirm.description':
-    'Your LobeHub account "{{lobeAccount}}" will be linked with {{platform}} account "{{handle}}".',
-  'verify.confirm.descriptionWithWorkspace':
-    'Your LobeHub account "{{lobeAccount}}" will be linked with {{platform}} account "{{handle}}" in workspace "{{workspace}}".',
+  'verify.confirm.fields.lobeHubAccount': 'LobeHub account',
+  'verify.confirm.fields.platformAccount': '{{platform}} account',
+  'verify.confirm.fields.workspace': 'Workspace',
   'verify.confirm.noAgents':
     "You don't have any agents yet. Create one in LobeHub, then come back to finish linking.",
   'verify.confirm.title': 'Confirm linking',

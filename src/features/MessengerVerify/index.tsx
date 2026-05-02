@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Slack, Telegram } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -29,18 +29,30 @@ const PLATFORM_BRAND_ICONS: Record<string, ReactNode> = {
 
 /**
  * Build the deep-link back to the platform's bot so the success state can
- * bounce the user straight into the chat. Returns null when the platform has
- * no useful deep-link mechanism (Slack workspaces vary per-tenant; not worth
- * guessing) or when the bot username isn't configured.
+ * bounce the user straight into the chat.
  *
- * Note: we deliberately skip Telegram's `?start=` query param here. Including
- * it would trigger the bot's auto-`/start` flow, but the user just finished
- * binding and only wants to open the chat — re-triggering /start would
- * confuse the bot into re-issuing a link button.
+ * - Telegram: `https://t.me/<bot>` (skips `?start=` so we don't re-trigger
+ *   the bot's auto-/start flow right after binding).
+ * - Slack: prefer `https://slack.com/app_redirect?app=<APP_ID>&team=<TEAM_ID>`
+ *   when both are known — Slack handles desktop hand-off and lands the user
+ *   in the bot DM. Falls back to the workspace URL when only the team id is
+ *   known.
  */
-const buildOpenBotUrl = (platform: string, botUsername: string | undefined): string | null => {
-  if (platform === 'telegram' && botUsername) {
-    return `https://t.me/${botUsername.replace(/^@/, '')}`;
+interface OpenBotOptions {
+  appId?: string;
+  botUsername?: string;
+  tenantId?: string;
+}
+
+const buildOpenBotUrl = (platform: string, opts: OpenBotOptions): string | null => {
+  if (platform === 'telegram' && opts.botUsername) {
+    return `https://t.me/${opts.botUsername.replace(/^@/, '')}`;
+  }
+  if (platform === 'slack' && opts.tenantId) {
+    if (opts.appId) {
+      return `https://slack.com/app_redirect?app=${opts.appId}&team=${opts.tenantId}`;
+    }
+    return `https://app.slack.com/client/${opts.tenantId}`;
   }
   return null;
 };
@@ -84,6 +96,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     justify-content: center;
 
     margin-block-end: 8px;
+  `,
+  infoRow: css`
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block: 10px;
+
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  infoValue: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -246,8 +275,15 @@ const MessengerVerifyPage = memo(() => {
       | string
       | undefined;
     const platformLabelSuccess = platform ? (PLATFORM_LABELS[platform] ?? platform) : '';
-    const botUsername = platformsSWR.data?.find((p) => p.platform === platform)?.botUsername;
-    const openBotUrl = platform ? buildOpenBotUrl(platform, botUsername) : null;
+    const platformMeta = platformsSWR.data?.find((p) => p.platform === platform);
+    const tenantId = existingLinkSWR.data?.tenantId ?? tokenSWR.data?.tenantId ?? undefined;
+    const openBotUrl = platform
+      ? buildOpenBotUrl(platform, {
+          appId: platformMeta?.appId,
+          botUsername: platformMeta?.botUsername,
+          tenantId,
+        })
+      : null;
     return (
       <Flexbox align="center" className={styles.card} gap={24}>
         <div className={styles.iconRow}>
@@ -286,6 +322,18 @@ const MessengerVerifyPage = memo(() => {
   const platformLabel = PLATFORM_LABELS[tokenSWR.data.platform] ?? tokenSWR.data.platform;
   const handle = tokenSWR.data.platformUsername ?? `ID ${tokenSWR.data.platformUserId}`;
   const workspaceName = tokenSWR.data.tenantName;
+  const lobeAccount = session?.user?.email ?? session?.user?.name ?? '';
+
+  const infoRows: { label: string; value: string }[] = [
+    { label: t('verify.confirm.fields.lobeHubAccount'), value: lobeAccount },
+    {
+      label: t('verify.confirm.fields.platformAccount', { platform: platformLabel }),
+      value: handle,
+    },
+  ];
+  if (workspaceName) {
+    infoRows.push({ label: t('verify.confirm.fields.workspace'), value: workspaceName });
+  }
 
   return (
     <Flexbox align="center" className={styles.card} gap={32}>
@@ -298,16 +346,20 @@ const MessengerVerifyPage = memo(() => {
         <PlatformBubble className={styles.bubble} platform={tokenSWR.data.platform} />
       </div>
 
-      <Heading
-        subtitle={t('verify.confirm.description', { handle, platform: platformLabel })}
-        title={t('verify.confirm.title')}
-      />
+      <Heading title={t('verify.confirm.title')} />
 
-      {workspaceName && (
-        <Text align="center" type="secondary">
-          {t('verify.confirm.workspace', { workspace: workspaceName })}
-        </Text>
-      )}
+      <Block padding={4} style={{ width: '100%' }} variant={'outlined'}>
+        <Flexbox paddingInline={16}>
+          {infoRows.map((row) => (
+            <div className={styles.infoRow} key={row.label}>
+              <Text type="secondary">{row.label}</Text>
+              <Text strong className={styles.infoValue} title={row.value}>
+                {row.value}
+              </Text>
+            </div>
+          ))}
+        </Flexbox>
+      </Block>
 
       <Flexbox gap={8} style={{ width: '100%' }}>
         <Text strong>{t('verify.confirm.defaultAgent')}</Text>

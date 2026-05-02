@@ -42,7 +42,7 @@ const MessengerSettings = memo(() => {
 
   return (
     <div className={styles.page}>
-      <Flexbox gap={20} style={{ margin: '0 auto', maxWidth: 720 }}>
+      <Flexbox gap={20}>
         {selected ? (
           <IntegrationDetail
             botUsername={selectedMeta?.botUsername}
@@ -51,12 +51,7 @@ const MessengerSettings = memo(() => {
           />
         ) : (
           <>
-            <Flexbox gap={4}>
-              <Text strong style={{ fontSize: 20 }}>
-                {t('messenger.title')}
-              </Text>
-              <Text type="secondary">{t('messenger.subtitle')}</Text>
-            </Flexbox>
+            <Text type="secondary">{t('messenger.subtitle')}</Text>
             {platformsSWR.isLoading ? (
               <Skeleton active paragraph={{ rows: 3 }} title={false} />
             ) : platforms.length === 0 ? (
