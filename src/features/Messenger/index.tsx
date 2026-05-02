@@ -358,6 +358,7 @@ const MessengerSettings = memo(() => {
                         block
                         href="/api/agent/messenger/slack/install"
                         size="large"
+                        target="_blank"
                         type="primary"
                       >
                         {t('messenger.slack.connectModal.continueButton')}
