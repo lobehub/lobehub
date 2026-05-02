@@ -4,6 +4,7 @@ import { SLACK_API_BASE } from '@/server/services/bot/platforms/slack/api';
 
 const SLACK_AUTHORIZE_URL = 'https://slack.com/oauth/v2/authorize';
 const SLACK_OAUTH_ACCESS_URL = `${SLACK_API_BASE}/oauth.v2.access`;
+const SLACK_AUTH_REVOKE_URL = `${SLACK_API_BASE}/auth.revoke`;
 const SLACK_SIGNATURE_VERSION = 'v0';
 const DEFAULT_SIGNATURE_TOLERANCE_SECONDS = 300;
 
@@ -97,6 +98,27 @@ export const exchangeCode = async (params: ExchangeCodeParams): Promise<OAuthV2A
     throw new Error(`oauth.v2.access failed: ${data.error ?? 'unknown_error'}`);
   }
   return data;
+};
+
+/**
+ * Invalidate a Slack token via `auth.revoke`. Used when we reject a freshly
+ * minted token (e.g. another LobeHub user already owns this workspace's
+ * install) so the workspace doesn't end up with a dangling unused bot token.
+ */
+export const revokeToken = async (token: string): Promise<void> => {
+  const body = new URLSearchParams({ token });
+  const response = await fetch(SLACK_AUTH_REVOKE_URL, {
+    body,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' },
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`auth.revoke HTTP ${response.status}: ${await response.text()}`);
+  }
+  const data = (await response.json()) as { error?: string; ok: boolean };
+  if (!data.ok) {
+    throw new Error(`auth.revoke failed: ${data.error ?? 'unknown_error'}`);
+  }
 };
 
 export interface RefreshTokenParams {

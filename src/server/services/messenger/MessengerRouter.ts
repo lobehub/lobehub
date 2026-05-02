@@ -1,6 +1,12 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
+import {
+  Chat,
+  ConsoleLogger,
+  type Message,
+  type MessageContext,
+  type SlashCommandEvent,
+} from 'chat';
 import debug from 'debug';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 
@@ -523,6 +529,97 @@ export class MessengerRouter {
       log('onSubscribedMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
       await handle(thread, message);
     });
+
+    // Slack slash commands — mirrors Telegram's `/start`, `/agents`, `/new`,
+    // `/stop` (Slack reserves `/help` for itself). Telegram already routes
+    // these via message text (parsed by `parseCommand` above), so we only wire
+    // this for Slack. `bot` is a per-install Chat SDK instance, so the
+    // registration is scoped correctly.
+    if (platform === 'slack') {
+      bot.onSlashCommand(['/start', '/agents', '/new', '/stop'], async (event) => {
+        await this.handleSlackSlashCommand({ binder, event, serverDB, tenantId });
+      });
+    }
+  }
+
+  /**
+   * One handler for every Slack slash command we register. Replies ephemerally
+   * so output is private regardless of where the slash was invoked. `/new` and
+   * `/stop` need a live chat-sdk `thread` instance the slash command path
+   * doesn't surface, so we ack with a hint to type them inside the bot DM
+   * where `parseCommand` still picks them up.
+   */
+  private async handleSlackSlashCommand(params: {
+    binder: MessengerPlatformBinder;
+    event: SlashCommandEvent;
+    serverDB: LobeChatDatabase;
+    tenantId: string;
+  }): Promise<void> {
+    const { binder, event, serverDB, tenantId } = params;
+    const senderId = event.user.userId;
+    if (!senderId) {
+      log('handleSlackSlashCommand: missing user id, dropping');
+      return;
+    }
+
+    // `event.command` is the literal "/foo" Slack sent.
+    const cmd = event.command.replace(/^\//, '').toLowerCase();
+    const chatId = (event.channel as any).id as string;
+
+    const replyEphemeral = async (text: string): Promise<void> => {
+      try {
+        await event.channel.postEphemeral(event.user, text, { fallbackToDM: true });
+      } catch (error) {
+        log('handleSlackSlashCommand: postEphemeral failed: %O', error);
+      }
+    };
+
+    const link = await MessengerAccountLinkModel.findByPlatformUser(
+      serverDB,
+      'slack',
+      senderId,
+      tenantId,
+    );
+
+    try {
+      switch (cmd) {
+        case 'start': {
+          await binder.handleUnlinkedMessage({
+            authorUserId: senderId,
+            authorUserName: event.user.userName,
+            chatId,
+            // The link-flow only reads author + chatId; no inbound message exists
+            // for slash commands.
+            message: undefined as unknown as Message,
+          });
+          return;
+        }
+        case 'agents': {
+          await this.handleAgentsCommand({
+            binder,
+            chatId,
+            command: { args: event.text.trim(), name: 'agents' },
+            link,
+            serverDB,
+            tenantId,
+          });
+          return;
+        }
+        case 'new':
+        case 'stop': {
+          await replyEphemeral(
+            `Open your direct message with the LobeHub bot and send \`/${cmd}\` there.`,
+          );
+          return;
+        }
+        default: {
+          await replyEphemeral(`Unknown command: /${cmd}`);
+        }
+      }
+    } catch (error) {
+      log('handleSlackSlashCommand: handler error: %O', error);
+      await replyEphemeral('Something went wrong.');
+    }
   }
 
   /**

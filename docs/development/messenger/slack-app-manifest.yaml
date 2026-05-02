@@ -33,6 +33,27 @@ features:
     home_tab_enabled: false
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
+  # Mirrors the Telegram bot's commands one-for-one. `/help` is intentionally
+  # omitted — Slack reserves it for the workspace's built-in help, so apps
+  # can't register it; users discover the rest via Slack's autocomplete.
+  slash_commands:
+    - command: /start
+      url: https://app.lobehub.com/api/agent/messenger/webhooks/slack
+      description: Bind your LobeHub account
+      should_escape: false
+    - command: /agents
+      url: https://app.lobehub.com/api/agent/messenger/webhooks/slack
+      description: List agents and switch the active one
+      usage_hint: '[number]'
+      should_escape: false
+    - command: /new
+      url: https://app.lobehub.com/api/agent/messenger/webhooks/slack
+      description: Start a new conversation
+      should_escape: false
+    - command: /stop
+      url: https://app.lobehub.com/api/agent/messenger/webhooks/slack
+      description: Stop the current execution
+      should_escape: false
 
 oauth_config:
   redirect_urls:

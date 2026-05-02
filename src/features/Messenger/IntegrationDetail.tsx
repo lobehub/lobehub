@@ -334,14 +334,16 @@ const IntegrationDetail = memo<IntegrationDetailProps>(({ botUsername, onBack, p
         </Flexbox>
       </Block>
 
-      <Flexbox gap={8}>
-        <Text strong style={{ fontSize: 15 }}>
-          {t('messenger.detail.connections.title')}
-        </Text>
-        <Block className={styles.card}>
-          {isSlack ? renderSlackConnections() : renderTelegramConnections()}
-        </Block>
-      </Flexbox>
+      {(hasInstallations || hasLinks) && (
+        <Flexbox gap={8}>
+          <Text strong style={{ fontSize: 15 }}>
+            {t('messenger.detail.connections.title')}
+          </Text>
+          <Block className={styles.card}>
+            {isSlack ? renderSlackConnections() : renderTelegramConnections()}
+          </Block>
+        </Flexbox>
+      )}
 
       <LinkModal
         botUsername={botUsername}

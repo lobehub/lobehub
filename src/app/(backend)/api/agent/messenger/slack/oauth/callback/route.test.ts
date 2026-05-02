@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { exchangeCode } from '@/server/services/messenger/oauth/slackOAuth';
+import { exchangeCode, revokeToken } from '@/server/services/messenger/oauth/slackOAuth';
 import { consumeOAuthState } from '@/server/services/messenger/oauth/stateStore';
 
 import { GET } from './route';
@@ -14,6 +14,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/messengerInstallation', () => ({
   MessengerInstallationModel: {
+    findByTenant: vi.fn(),
     upsert: vi.fn(),
   },
 }));
@@ -24,6 +25,7 @@ vi.mock('@/server/services/messenger/oauth/stateStore', () => ({
 
 vi.mock('@/server/services/messenger/oauth/slackOAuth', () => ({
   exchangeCode: vi.fn(),
+  revokeToken: vi.fn(),
 }));
 
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -66,6 +68,9 @@ beforeEach(() => {
     scope: 'chat:write,im:history',
     team: { id: 'T_ACME', name: 'Acme Inc' },
   });
+  // Default: no prior install for this tenant. Tests for the takeover guard
+  // override this to return an existing row owned by another user.
+  vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -184,6 +189,70 @@ describe('GET /api/agent/messenger/slack/oauth/callback', () => {
         refreshToken: 'xoxe-1-r',
       });
       expect(params.tokenExpiresAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('takeover guard — workspace already installed by another user', () => {
+    const existingInstall = {
+      applicationId: 'A_APP',
+      credentials: {},
+      id: 'install-1',
+      installedByPlatformUserId: 'U_FIRST_PLATFORM',
+      installedByUserId: 'lobe-user-other',
+      platform: 'slack',
+      revokedAt: null,
+      tenantId: 'T_ACME',
+    } as any;
+
+    it('blocks the upsert, revokes the fresh token, and redirects with already_installed', async () => {
+      vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue(existingInstall);
+
+      const res = await GET(buildRequest('code=c&state=s'));
+
+      expect(MessengerInstallationModel.upsert).not.toHaveBeenCalled();
+      expect(revokeToken).toHaveBeenCalledWith('xoxb-real');
+      expect(res.status).toBe(302);
+      const loc = new URL(res.headers.get('location')!);
+      expect(loc.pathname).toBe('/settings/messenger');
+      expect(loc.searchParams.get('slack_error')).toBe('already_installed');
+    });
+
+    it('still redirects with already_installed even if auth.revoke errors out', async () => {
+      vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue(existingInstall);
+      vi.mocked(revokeToken).mockRejectedValueOnce(new Error('slack 503'));
+
+      const res = await GET(buildRequest('code=c&state=s'));
+
+      expect(MessengerInstallationModel.upsert).not.toHaveBeenCalled();
+      expect(res.status).toBe(302);
+      const loc = new URL(res.headers.get('location')!);
+      expect(loc.searchParams.get('slack_error')).toBe('already_installed');
+    });
+
+    it('allows takeover when the previous installer was deleted (installedByUserId null)', async () => {
+      vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue({
+        ...existingInstall,
+        installedByUserId: null,
+      });
+
+      const res = await GET(buildRequest('code=c&state=s'));
+
+      expect(MessengerInstallationModel.upsert).toHaveBeenCalled();
+      expect(revokeToken).not.toHaveBeenCalled();
+      expect(res.status).toBe(302);
+    });
+
+    it('allows the same user to re-install (token refresh / scope bump)', async () => {
+      vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue({
+        ...existingInstall,
+        installedByUserId: 'lobe-user-1',
+      });
+
+      const res = await GET(buildRequest('code=c&state=s'));
+
+      expect(MessengerInstallationModel.upsert).toHaveBeenCalled();
+      expect(revokeToken).not.toHaveBeenCalled();
+      expect(res.status).toBe(302);
     });
   });
 

@@ -5,7 +5,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { exchangeCode } from '@/server/services/messenger/oauth/slackOAuth';
+import { exchangeCode, revokeToken } from '@/server/services/messenger/oauth/slackOAuth';
 import { consumeOAuthState } from '@/server/services/messenger/oauth/stateStore';
 
 const log = debug('lobe-server:messenger:slack-callback');
@@ -101,7 +101,44 @@ export const GET = async (req: Request): Promise<Response> => {
     return redirectToSettings(url.origin, 'slack_error=missing_app_id');
   }
 
-  // 4. Encrypt + upsert. Token rotation is opt-in per App; presence of
+  // 4. Block takeover by another LobeHub user. A workspace install is shared
+  // infrastructure: whoever connected first owns the row in
+  // `messenger_installations`, and the second user's OAuth would otherwise
+  // upsert and silently steal `installed_by_user_id`, leaving the original
+  // installer with no Disconnect button. Reject up front and revoke the
+  // freshly minted token so Slack doesn't keep a dangling bot credential.
+  // Re-installs by the SAME user (token refresh / scope bump) and takeovers
+  // after the previous owner was deleted (`installed_by_user_id IS NULL`)
+  // or the install was revoked (`revoked_at IS NOT NULL`) are still allowed.
+  const serverDB = await getServerDB();
+  const existing = await MessengerInstallationModel.findByTenant(
+    serverDB,
+    'slack',
+    tenantId,
+    oauth.app_id,
+  );
+  if (
+    existing &&
+    existing.installedByUserId &&
+    existing.installedByUserId !== statePayload.lobeUserId
+  ) {
+    log(
+      'callback: tenant=%s already installed by user=%s, blocking takeover by user=%s',
+      tenantId,
+      existing.installedByUserId,
+      statePayload.lobeUserId,
+    );
+    if (oauth.access_token) {
+      try {
+        await revokeToken(oauth.access_token);
+      } catch (error) {
+        log('callback: auth.revoke for blocked install failed: %O', error);
+      }
+    }
+    return redirectToSettings(url.origin, 'slack_error=already_installed');
+  }
+
+  // 5. Encrypt + upsert. Token rotation is opt-in per App; presence of
   // `expires_in` + `refresh_token` is what tells us this install is rotating.
   const credentials: Record<string, unknown> = { botToken: oauth.access_token };
   if (oauth.refresh_token) credentials.refreshToken = oauth.refresh_token;
@@ -128,7 +165,6 @@ export const GET = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const serverDB = await getServerDB();
     await MessengerInstallationModel.upsert(
       serverDB,
       {
