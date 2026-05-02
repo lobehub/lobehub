@@ -133,6 +133,7 @@ describe('lobeAgentRuntime', () => {
       {
         id: 'msg-1',
         imageList: [{ alt: 'image.png', id: 'file-image', url: 'https://example.com/image.png' }],
+        role: 'user',
       },
     ]);
     const runtime = lobeAgentRuntime.factory(baseContext);
@@ -182,6 +183,55 @@ describe('lobeAgentRuntime', () => {
               expect.objectContaining({ type: 'text' }),
               expect.objectContaining({
                 image_url: { detail: 'auto', url: 'https://example.com/generated.png' },
+                type: 'image_url',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('should reject unsupported direct media url protocols', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({
+      question: 'what is this?',
+      urls: ['file:///private/image.png', 'ftp://example.com/image.png'],
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'UNSUPPORTED_VISUAL_MEDIA_URLS' },
+      success: false,
+    });
+    expect(result.content).toContain('Only http:, https: and data: URLs are supported');
+    expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('should allow http and data direct media urls', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({
+      question: 'what is this?',
+      urls: ['http://example.com/generated.png', 'data:image/png;base64,abcd'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: [
+              expect.objectContaining({ type: 'text' }),
+              expect.objectContaining({
+                image_url: { detail: 'auto', url: 'http://example.com/generated.png' },
+                type: 'image_url',
+              }),
+              expect.objectContaining({
+                image_url: { detail: 'auto', url: 'data:image/png;base64,abcd' },
                 type: 'image_url',
               }),
             ],
@@ -357,6 +407,7 @@ describe('lobeAgentRuntime', () => {
     mockMessageModelQueryByIds.mockResolvedValue([
       {
         id: 'msg-1',
+        role: 'user',
         videoList: [{ alt: 'video.mp4', id: 'file-video', url: 'https://example.com/video.mp4' }],
       },
     ]);

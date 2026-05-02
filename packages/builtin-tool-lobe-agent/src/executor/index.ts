@@ -1,33 +1,21 @@
-import type {
-  BuiltinToolContext,
-  BuiltinToolResult,
-  ChatImageItem,
-  ChatVideoItem,
-} from '@lobechat/types';
-import { BaseExecutor, createVisualFileRef, createVisualLocalRef } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult, ChatStreamPayload } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 import { LobeAgentManifest } from '../manifest';
 import type { AnalyzeVisualMediaParams } from '../types';
 import { LobeAgentApiName } from '../types';
-
-interface VisualFileItem {
-  description: string;
-  localRef: string;
-  messageId?: string;
-  name: string;
-  ref: string;
-  type: 'image' | 'video';
-  uri: string;
-}
-
-const VIDEO_URL_PATTERN = /\.(?:mp4|m4v|mov|webm|mpeg|mpg|avi|mkv)(?:[?#]|$)/i;
+import type { VisualFileItem } from '../visualMedia';
+import {
+  createUrlVisualFileItems,
+  createVisualFileItems,
+  filterAllowedVisualMediaUrls,
+  hasUserVisualFiles,
+  normalizeStringArray,
+  selectVisualFileItems,
+} from '../visualMedia';
 
 interface VisualSourceMessage {
-  id?: string;
-  imageList?: ChatImageItem[];
   parentId?: string;
-  role?: string;
-  videoList?: ChatVideoItem[];
 }
 
 const getVisualUnderstandingConfig = async () => {
@@ -52,91 +40,8 @@ const createAbortController = (signal?: AbortSignal) => {
   return abortController;
 };
 
-const toVisualFileItems = (
-  message: VisualSourceMessage | undefined,
-  images: ChatImageItem[] = [],
-  videos: ChatVideoItem[] = [],
-): VisualFileItem[] => [
-  ...images.map((image, index) => ({
-    description: image.alt || `Image ${index + 1}`,
-    localRef: createVisualLocalRef('image', index),
-    messageId: message?.id,
-    name: image.alt || image.id,
-    ref: createVisualFileRef({ index, messageId: message?.id, type: 'image' }),
-    type: 'image' as const,
-    uri: image.url,
-  })),
-  ...videos.map((video, index) => ({
-    description: video.alt || `Video ${index + 1}`,
-    localRef: createVisualLocalRef('video', index),
-    messageId: message?.id,
-    name: video.alt || video.id,
-    ref: createVisualFileRef({ index, messageId: message?.id, type: 'video' }),
-    type: 'video' as const,
-    uri: video.url,
-  })),
-];
-
-const inferVisualTypeFromUrl = (url: string): VisualFileItem['type'] => {
-  if (url.startsWith('data:video/')) return 'video';
-  if (url.startsWith('data:image/')) return 'image';
-
-  return VIDEO_URL_PATTERN.test(url) ? 'video' : 'image';
-};
-
-const getUrlName = (url: string, index: number) => {
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.split('/').findLast(Boolean) || `URL ${index + 1}`;
-  } catch {
-    return `URL ${index + 1}`;
-  }
-};
-
-const toUrlVisualFileItems = (urls: string[]): VisualFileItem[] =>
-  urls.map((url, index) => {
-    const type = inferVisualTypeFromUrl(url);
-    const name = getUrlName(url, index);
-
-    return {
-      description: name,
-      localRef: `url_${index + 1}`,
-      name,
-      ref: `url_${index + 1}`,
-      type,
-      uri: url,
-    };
-  });
-
-const selectFiles = (items: VisualFileItem[], sourceMessageId?: string, refs?: string[]) => {
-  if (!refs || refs.length === 0) return { selected: [] };
-
-  const findItem = (ref: string) =>
-    items.find(
-      (item) => item.ref === ref || (item.messageId === sourceMessageId && item.localRef === ref),
-    );
-  const selected = refs
-    .map((ref) => findItem(ref))
-    .filter((item): item is VisualFileItem => !!item);
-  const invalidRefs = refs.filter((ref) => !findItem(ref));
-
-  return { invalidRefs, selected };
-};
-
 const isVisualSourceMessage = (message: unknown): message is VisualSourceMessage =>
   !!message && typeof message === 'object';
-
-const hasVisualFiles = (message: unknown): message is VisualSourceMessage =>
-  isVisualSourceMessage(message) &&
-  message.role === 'user' &&
-  ((message.imageList?.length ?? 0) > 0 || (message.videoList?.length ?? 0) > 0);
-
-const toStringArray = (value: unknown) =>
-  Array.isArray(value)
-    ? value
-        .map((item) => (typeof item === 'string' ? item.trim() : ''))
-        .filter((item) => item.length > 0)
-    : [];
 
 const getUnexpectedArgumentKeys = (params: AnalyzeVisualMediaParams) =>
   Object.keys(params as unknown as Record<string, unknown>).filter(
@@ -170,8 +75,8 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
-    const requestedRefs = toStringArray(params.refs);
-    const requestedUrls = toStringArray(params.urls);
+    const requestedRefs = normalizeStringArray(params.refs);
+    const requestedUrls = normalizeStringArray(params.urls);
     if (requestedRefs.length === 0 && requestedUrls.length === 0) {
       const unexpectedKeys = getUnexpectedArgumentKeys(params);
       const aliasHint =
@@ -186,7 +91,18 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
-    const selectedUrls = toUrlVisualFileItems(requestedUrls);
+    const { invalidUrls, validUrls } = filterAllowedVisualMediaUrls(requestedUrls);
+    if (invalidUrls.length > 0) {
+      return {
+        error: {
+          message: `Unsupported visual media URLs: ${invalidUrls.join(', ')}. Only http:, https: and data: URLs are supported.`,
+          type: 'InvalidToolArguments',
+        },
+        success: false,
+      };
+    }
+
+    const selectedUrls = createUrlVisualFileItems(validUrls);
     let selectedRefs: VisualFileItem[] = [];
 
     if (requestedRefs.length > 0) {
@@ -207,20 +123,20 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
         isVisualSourceMessage(assistantMessage) &&
         assistantMessage.parentId &&
         dbMessageSelectors.getDbMessageById(assistantMessage.parentId)(chatState);
-      const sourceMessage = hasVisualFiles(sourceCandidate)
+      const sourceMessage = hasUserVisualFiles(sourceCandidate)
         ? sourceCandidate
-        : hasVisualFiles(parentUserMessage)
+        : hasUserVisualFiles(parentUserMessage)
           ? parentUserMessage
           : dbMessageSelectors.latestUserMessage(chatState);
       const activeVisualMessages = dbMessageSelectors
         .activeDbMessages(chatState)
-        .filter(hasVisualFiles);
+        .filter(hasUserVisualFiles);
       const visualMessages = [
-        ...(hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
+        ...(hasUserVisualFiles(sourceMessage) ? [sourceMessage] : []),
         ...activeVisualMessages.filter((message) => message.id !== sourceMessage?.id),
       ];
       const files = visualMessages.flatMap((message) =>
-        toVisualFileItems(message, message.imageList, message.videoList),
+        createVisualFileItems(message, message.imageList, message.videoList),
       );
 
       if (files.length === 0) {
@@ -234,7 +150,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       }
 
       const selectableFiles = files;
-      const { invalidRefs, selected } = selectFiles(
+      const { invalidRefs, selected } = selectVisualFileItems(
         selectableFiles,
         sourceMessage?.id,
         requestedRefs,
@@ -274,51 +190,53 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       .map((file) => `- ${file.ref}: ${file.name} (${file.type})`)
       .join('\n');
 
-    await chatService.getChatCompletion(
-      {
-        max_tokens: 2000,
-        messages: [
-          {
-            content: [
-              {
-                text: [
-                  'Analyze the attached visual media and answer the user question.',
-                  'Do not mention that you are a fallback tool unless it is relevant.',
-                  '',
-                  'Files:',
-                  fileSummary,
-                  '',
-                  `Question: ${params.question}`,
-                ].join('\n'),
-                type: 'text',
-              },
-              ...selectedItems.map((file) =>
-                file.type === 'image'
-                  ? { image_url: { detail: 'auto', url: file.uri }, type: 'image_url' as const }
-                  : { type: 'video_url' as const, video_url: { url: file.uri } },
-              ),
-            ],
-            role: 'user',
-          },
-        ] as any,
-        model: config.model,
-        provider: config.provider,
-        stream: true,
+    const payload = {
+      max_tokens: 2000,
+      messages: [
+        {
+          content: [
+            {
+              text: [
+                'Analyze the attached visual media and answer the user question.',
+                'Do not mention that you are a fallback tool unless it is relevant.',
+                '',
+                'Files:',
+                fileSummary,
+                '',
+                `Question: ${params.question}`,
+              ].join('\n'),
+              type: 'text',
+            },
+            ...selectedItems.map((file) =>
+              file.type === 'image'
+                ? {
+                    image_url: { detail: 'auto' as const, url: file.uri },
+                    type: 'image_url' as const,
+                  }
+                : { type: 'video_url' as const, video_url: { url: file.uri } },
+            ),
+          ],
+          role: 'user' as const,
+        },
+      ],
+      model: config.model,
+      provider: config.provider,
+      stream: true,
+    } satisfies Partial<ChatStreamPayload>;
+
+    await chatService.getChatCompletion(payload, {
+      onFinish: async (output, metadata) => {
+        content = output || content;
+        usage = metadata.usage;
       },
-      {
-        onFinish: async (output, metadata) => {
-          content = output || content;
-          usage = metadata.usage;
-        },
-        onErrorHandle: (err) => {
-          error = err;
-        },
-        onMessageHandle: (chunk) => {
-          if (chunk.type === 'text') content += chunk.text || '';
-        },
-        signal: abortController.signal,
+      onErrorHandle: (err) => {
+        error = err;
       },
-    );
+      onMessageHandle: (chunk) => {
+        if (chunk.type === 'text') content += chunk.text || '';
+      },
+      signal: abortController.signal,
+    });
 
     if (abortController.signal.aborted) {
       return { stop: true, success: false };

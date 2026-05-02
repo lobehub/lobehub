@@ -1,13 +1,17 @@
-import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import type { LobeChatDatabase } from '@lobechat/database';
-import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+import type { VisualFileItem, VisualSourceMessage } from '@lobechat/builtin-tool-lobe-agent';
 import {
-  type BuiltinServerRuntimeOutput,
-  type ChatImageItem,
-  type ChatVideoItem,
-  createVisualFileRef,
-  createVisualLocalRef,
-} from '@lobechat/types';
+  createUrlVisualFileItems,
+  createVisualFileItems,
+  filterAllowedVisualMediaUrls,
+  hasUserVisualFiles,
+  LobeAgentIdentifier,
+  normalizeStringArray,
+  selectVisualFileItems,
+} from '@lobechat/builtin-tool-lobe-agent';
+import type { LobeChatDatabase } from '@lobechat/database';
+import type { ChatStreamPayload } from '@lobechat/model-runtime';
+import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 
 import { MessageModel } from '@/database/models/message';
@@ -22,18 +26,6 @@ interface AnalyzeVisualMediaParams {
   refs?: string[];
   urls?: string[];
 }
-
-interface VisualFileItem {
-  id?: string;
-  localRef: string;
-  messageId?: string;
-  name?: string;
-  ref: string;
-  type: 'image' | 'video';
-  url: string;
-}
-
-const VIDEO_URL_PATTERN = /\.(?:mp4|m4v|mov|webm|mpeg|mpg|avi|mkv)(?:[?#]|$)/i;
 
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
@@ -58,102 +50,13 @@ const getModelAbilities = (model: string, provider: string) => {
   )?.abilities;
 };
 
-interface VisualSourceMessage {
+interface ServerVisualSourceMessage extends VisualSourceMessage {
   agentId?: string | null;
   groupId?: string | null;
-  id?: string;
-  imageList?: ChatImageItem[];
-  role?: string;
   sessionId?: string | null;
   threadId?: string | null;
   topicId?: string | null;
-  videoList?: ChatVideoItem[];
 }
-
-const buildVisualItems = (message: VisualSourceMessage): VisualFileItem[] => {
-  const images: VisualFileItem[] = (message.imageList ?? []).map((item, index) => ({
-    id: item.id,
-    localRef: createVisualLocalRef('image', index),
-    messageId: message.id,
-    name: item.alt,
-    ref: createVisualFileRef({ index, messageId: message.id, type: 'image' }),
-    type: 'image',
-    url: item.url,
-  }));
-
-  const videos: VisualFileItem[] = (message.videoList ?? []).map((item, index) => ({
-    id: item.id,
-    localRef: createVisualLocalRef('video', index),
-    messageId: message.id,
-    name: item.alt,
-    ref: createVisualFileRef({ index, messageId: message.id, type: 'video' }),
-    type: 'video',
-    url: item.url,
-  }));
-
-  return [...images, ...videos];
-};
-
-const hasVisualFiles = (message: VisualSourceMessage) =>
-  (message.imageList?.length ?? 0) > 0 || (message.videoList?.length ?? 0) > 0;
-
-const toStringArray = (value: unknown) =>
-  Array.isArray(value)
-    ? value
-        .map((item) => (typeof item === 'string' ? item.trim() : ''))
-        .filter((item) => item.length > 0)
-    : [];
-
-const inferVisualTypeFromUrl = (url: string): VisualFileItem['type'] => {
-  if (url.startsWith('data:video/')) return 'video';
-  if (url.startsWith('data:image/')) return 'image';
-
-  return VIDEO_URL_PATTERN.test(url) ? 'video' : 'image';
-};
-
-const getUrlName = (url: string, index: number) => {
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.split('/').findLast(Boolean) || `URL ${index + 1}`;
-  } catch {
-    return `URL ${index + 1}`;
-  }
-};
-
-const buildUrlVisualItems = (urls: string[]): VisualFileItem[] =>
-  urls.map((url, index) => {
-    const type = inferVisualTypeFromUrl(url);
-    const name = getUrlName(url, index);
-
-    return {
-      localRef: `url_${index + 1}`,
-      name,
-      ref: `url_${index + 1}`,
-      type,
-      url,
-    };
-  });
-
-const selectVisualItems = (
-  items: VisualFileItem[],
-  sourceMessageId: string,
-  requestedRefs?: string[],
-) => {
-  const findItem = (ref: string) =>
-    items.find(
-      (item) => item.ref === ref || (item.messageId === sourceMessageId && item.localRef === ref),
-    );
-
-  const availableRefs = items.flatMap((item) =>
-    item.messageId === sourceMessageId ? [item.ref, item.localRef] : [item.ref],
-  );
-  const unknownRefs = requestedRefs?.filter((ref) => !findItem(ref)) ?? [];
-  const selectedItems = (requestedRefs ?? [])
-    .map((ref) => findItem(ref))
-    .filter((item): item is VisualFileItem => !!item);
-
-  return { availableRefs, selectedItems, unknownRefs };
-};
 
 class LobeAgentExecutionRuntime {
   private agentId?: string | null;
@@ -176,7 +79,7 @@ class LobeAgentExecutionRuntime {
 
   private queryScopeMessages = (
     messageModel: MessageModel,
-    sourceMessage: VisualSourceMessage,
+    sourceMessage: ServerVisualSourceMessage,
     postProcessUrl: (path: string | null, file: { fileType: string }) => Promise<string>,
   ) => {
     const topicId = this.topicId ?? sourceMessage.topicId ?? undefined;
@@ -225,8 +128,8 @@ class LobeAgentExecutionRuntime {
       return buildError('question is required.', 'INVALID_ARGUMENTS');
     }
 
-    const requestedRefs = toStringArray(params.refs);
-    const requestedUrls = toStringArray(params.urls);
+    const requestedRefs = normalizeStringArray(params.refs);
+    const requestedUrls = normalizeStringArray(params.urls);
     if (requestedRefs.length === 0 && requestedUrls.length === 0) {
       return buildError(
         'Either refs or urls is required and must include at least one visual file ref or media URL.',
@@ -234,7 +137,15 @@ class LobeAgentExecutionRuntime {
       );
     }
 
-    const selectedUrlItems = buildUrlVisualItems(requestedUrls);
+    const { invalidUrls, validUrls } = filterAllowedVisualMediaUrls(requestedUrls);
+    if (invalidUrls.length > 0) {
+      return buildError(
+        `Unsupported visual media URLs: ${invalidUrls.join(', ')}. Only http:, https: and data: URLs are supported.`,
+        'UNSUPPORTED_VISUAL_MEDIA_URLS',
+      );
+    }
+
+    const selectedUrlItems = createUrlVisualFileItems(validUrls);
     let selectedRefItems: VisualFileItem[] = [];
 
     if (requestedRefs.length > 0) {
@@ -249,10 +160,9 @@ class LobeAgentExecutionRuntime {
         ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
         : [];
       const orderedVisualMessages = [
-        ...(sourceMessage && hasVisualFiles(sourceMessage) ? [sourceMessage] : []),
+        ...(sourceMessage && hasUserVisualFiles(sourceMessage) ? [sourceMessage] : []),
         ...visualMessages.filter(
-          (message) =>
-            message.id !== sourceMessage?.id && message.role === 'user' && hasVisualFiles(message),
+          (message) => message.id !== sourceMessage?.id && hasUserVisualFiles(message),
         ),
       ];
 
@@ -263,7 +173,9 @@ class LobeAgentExecutionRuntime {
         );
       }
 
-      const visualItems = orderedVisualMessages.flatMap((message) => buildVisualItems(message));
+      const visualItems = orderedVisualMessages.flatMap((message) =>
+        createVisualFileItems(message, message.imageList, message.videoList),
+      );
 
       if (visualItems.length === 0) {
         return buildError(
@@ -272,20 +184,20 @@ class LobeAgentExecutionRuntime {
         );
       }
 
-      const { availableRefs, selectedItems, unknownRefs } = selectVisualItems(
+      const { availableRefs, invalidRefs, selected } = selectVisualFileItems(
         visualItems,
         this.messageId,
         requestedRefs,
       );
 
-      if (unknownRefs.length > 0) {
+      if (invalidRefs.length > 0) {
         return buildError(
-          `Unknown visual file refs: ${unknownRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
+          `Unknown visual file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
           'UNKNOWN_VISUAL_FILE_REFS',
         );
       }
 
-      selectedRefItems = selectedItems;
+      selectedRefItems = selected;
     }
 
     const selectedItems = [...selectedRefItems, ...selectedUrlItems];
@@ -315,51 +227,50 @@ class LobeAgentExecutionRuntime {
     let content = '';
     let usage: unknown;
     const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider);
-    const response = await runtime.chat(
-      {
-        messages: [
-          {
-            content: [
-              {
-                text: [
-                  'Analyze the attached visual media and answer the user question.',
-                  '',
-                  `Question: ${params.question}`,
-                ].join('\n'),
-                type: 'text',
-              },
-              ...selectedItems.map((item) =>
-                item.type === 'image'
-                  ? {
-                      image_url: { detail: 'auto', url: item.url },
-                      type: 'image_url',
-                    }
-                  : {
-                      type: 'video_url',
-                      video_url: { url: item.url },
-                    },
-              ),
-            ],
-            role: 'user',
-          },
-        ],
-        model,
-        stream: false,
-      } as any,
-      {
-        callback: {
-          onCompletion: (data) => {
-            usage = data.usage;
-          },
-          onText: (text) => {
-            content += text;
-          },
+    const payload = {
+      messages: [
+        {
+          content: [
+            {
+              text: [
+                'Analyze the attached visual media and answer the user question.',
+                '',
+                `Question: ${params.question}`,
+              ].join('\n'),
+              type: 'text',
+            },
+            ...selectedItems.map((item) =>
+              item.type === 'image'
+                ? {
+                    image_url: { detail: 'auto' as const, url: item.uri },
+                    type: 'image_url' as const,
+                  }
+                : {
+                    type: 'video_url' as const,
+                    video_url: { url: item.uri },
+                  },
+            ),
+          ],
+          role: 'user' as const,
         },
-        metadata: {
-          trigger: 'lobe-agent.analyzeVisualMedia',
+      ],
+      model,
+      stream: false,
+    } satisfies ChatStreamPayload;
+
+    const response = await runtime.chat(payload, {
+      callback: {
+        onCompletion: (data) => {
+          usage = data.usage;
+        },
+        onText: (text) => {
+          content += text;
         },
       },
-    );
+      metadata: {
+        trigger: 'lobe-agent.analyzeVisualMedia',
+      },
+    });
 
     await consumeStreamUntilDone(response);
 
