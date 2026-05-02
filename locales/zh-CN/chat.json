@@ -490,6 +490,7 @@
   "taskDetail.comment.edit": "编辑",
   "taskDetail.comment.save": "保存",
   "taskDetail.commentPlaceholder": "留下反馈,帮助 Agent 在下次执行时产出更准确的结果...",
+  "taskDetail.commentSubmitAndRun": "反馈并立即运行",
   "taskDetail.deleteConfirm.content": "此操作不可撤销。",
   "taskDetail.deleteConfirm.ok": "删除",
   "taskDetail.deleteConfirm.title": "确认删除此任务？",

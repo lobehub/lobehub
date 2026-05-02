@@ -25,15 +25,17 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import TopicStatusIcon from '../TopicStatusIcon';
+import FeedbackInput from './FeedbackInput';
 
 const SharePopover = dynamic(() => import('@/features/SharePopover'));
 
 interface TopicChatDrawerBodyProps {
   agentId: string;
+  taskId: string;
   topicId: string;
 }
 
-const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }) => {
+const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, taskId, topicId }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
@@ -83,8 +85,13 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, topicId }
       }}
     >
       <TaskCardScopeProvider value={true}>
-        <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-          <ChatList disableActionsBar itemContent={itemContent} />
+        <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
+          <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
+            <ChatList disableActionsBar itemContent={itemContent} />
+          </Flexbox>
+          <Flexbox padding={12} style={{ flexShrink: 0 }}>
+            <FeedbackInput taskId={taskId} topicId={topicId} />
+          </Flexbox>
         </Flexbox>
       </TaskCardScopeProvider>
     </ConversationProvider>
@@ -208,7 +215,9 @@ const TopicChatDrawer = memo(() => {
       }}
       onClose={closeTopicDrawer}
     >
-      {open && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
+      {open && activeTaskId && (
+        <TopicChatDrawerBody agentId={agentId!} taskId={activeTaskId} topicId={topicId!} />
+      )}
     </Drawer>
   );
 });
