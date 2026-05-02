@@ -6,6 +6,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
+import { createStoreUpdater } from 'zustand-utils';
 import { useChatStore } from '@/store/chat';
 
 interface ThreadItemDropdownMenuProps {
@@ -21,6 +22,7 @@ export const useThreadItemDropdownMenu = ({
   const { modal } = App.useApp();
 
   const [removeThread, pushPortalView] = useChatStore((s) => [s.removeThread, s.pushPortalView]);
+  const updatePortalThreadId = createStoreUpdater(useChatStore, 'portalThreadId');
 
   return useCallback(() => {
     return [
@@ -60,5 +62,5 @@ export const useThreadItemDropdownMenu = ({
         },
       },
     ].filter(Boolean) as MenuProps['items'];
-  }, [id, removeThread, pushPortalView, toggleEditing, t, modal]);
+  }, [id, removeThread, pushPortalView, updatePortalThreadId, toggleEditing, t, modal]);
 };
