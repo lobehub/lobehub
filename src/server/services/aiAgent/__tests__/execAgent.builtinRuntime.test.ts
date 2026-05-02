@@ -137,6 +137,11 @@ vi.mock('model-bank', async (importOriginal) => {
         id: 'text-only',
         providerId: 'openai',
       },
+      {
+        abilities: { functionCall: true, video: true, vision: true },
+        id: 'gemini-3.1-flash-lite-preview',
+        providerId: 'google',
+      },
     ],
   };
 });
@@ -355,5 +360,32 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
         }),
       }),
     );
+  });
+
+  it('should not inject lobe-agent when the LobeHub routed model supports visual media natively', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-custom',
+      model: 'gemini-3.1-flash-lite-preview',
+      plugins: [],
+      provider: 'lobehub',
+      systemRole: '',
+    });
+    mockMessageQuery.mockResolvedValue([
+      {
+        id: 'history-video',
+        role: 'user',
+        videoList: [{ id: 'file-video', url: 'https://example.com/video.mp4' }],
+      },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'What is in the previous video?',
+    });
+
+    const callArgs = vi.mocked(createServerAgentToolsEngine).mock.calls[0][1];
+    expect(callArgs.agentConfig.plugins).not.toContain('lobe-agent');
   });
 });

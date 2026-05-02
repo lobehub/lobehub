@@ -7,7 +7,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Analyze images or videos selected by visual file refs or direct media URLs and answer a visual question. Use this only when the current model cannot inspect the visual media directly.',
+        "Analyze images or videos selected by visual file refs or direct media URLs and answer a visual question. Prefer the active model's native multimodal capability when it can inspect the visual media directly; use this tool only as a fallback when the active model cannot inspect the requested images or videos. Use stable refs shown in <files_info>, such as msg_xxx.image_1 or msg_xxx.video_1, for earlier visual files. For the current user message, local refs such as image_1 or video_1 are also accepted. Pass refs for message attachments, or urls for direct media URLs that are not available as message refs. After this tool returns, answer the user directly with the result.",
       name: LobeAgentApiName.analyzeVisualMedia,
       parameters: {
         additionalProperties: false,
@@ -42,10 +42,9 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   ],
   identifier: LobeAgentIdentifier,
   meta: {
-    avatar: '👁️',
-    description: 'Run built-in agent capabilities, including visual media analysis.',
-    readme:
-      'Analyze visual media from the current user message when the active chat model cannot directly inspect images or videos.',
+    avatar: '🤖',
+    description: 'Run built-in Lobe Agent capabilities.',
+    readme: 'Lobe Agent provides built-in assistant capabilities that can be expanded over time.',
     title: 'Lobe Agent',
   },
   systemRole: systemPrompt,
