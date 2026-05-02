@@ -78,10 +78,13 @@ export interface MessengerPlatformBinder {
    * Best-effort confirmation back to the IM thread once verify-im writes the
    * link row. `activeAgentName` is included when the verify-im flow set an
    * initial active agent so the user knows where their next message is going.
+   * `tenantId` is required for per-tenant platforms (Slack workspace) — the
+   * binder uses it to resolve which install's bot token to send with.
    */
   notifyLinkSuccess: (params: {
     activeAgentName?: string;
     platformUserId: string;
+    tenantId?: string;
   }) => Promise<void>;
 
   /**

@@ -1,7 +1,13 @@
 import debug from 'debug';
 
+import { appEnv } from '@/envs/app';
 import type { PlatformClient } from '@/server/services/bot/platforms';
+import { SlackApi } from '@/server/services/bot/platforms/slack/api';
+import { SlackClientFactory } from '@/server/services/bot/platforms/slack/client';
 
+import { getInstallationStore } from '../installations';
+import type { InstallationCredentials } from '../installations/types';
+import { issueLinkToken } from '../linkTokenStore';
 import type {
   AgentPickerEntry,
   CallbackAcknowledgement,
@@ -20,27 +26,83 @@ const log = debug('lobe-server:messenger:slack');
  */
 const ACTION_PREFIX = 'messenger:';
 
+/** Build the verify-im URL with all Slack context Manus passes (so the
+ *  consent page can render the email + workspace and the user has nothing
+ *  more to type). */
+const buildVerifyImUrl = (params: {
+  appUrl: string;
+  channel: string;
+  randomId: string;
+  slackTeamId: string;
+  slackUserEmail: string;
+  slackUserId: string;
+  thread?: string;
+}): string => {
+  const url = new URL('/verify-im', params.appUrl);
+  url.searchParams.set('im_type', 'slack');
+  url.searchParams.set('random_id', params.randomId);
+  url.searchParams.set('slack_user_id', params.slackUserId);
+  url.searchParams.set('slack_team_id', params.slackTeamId);
+  if (params.slackUserEmail) {
+    url.searchParams.set('slack_user_email', params.slackUserEmail);
+  }
+  url.searchParams.set('channel', params.channel);
+  url.searchParams.set('thread', params.thread ?? '');
+  url.searchParams.set('utm_source', 'messenger_slack');
+  return url.toString();
+};
+
+const buildSwitchButtons = (
+  entries: AgentPickerEntry[],
+): Array<{ actionId: string; style?: 'primary'; text: string; value: string }> =>
+  entries.map((entry) => ({
+    actionId: `${ACTION_PREFIX}switch:${entry.id}`,
+    text: entry.isActive ? `✅ ${entry.title}` : entry.title,
+    value: entry.id,
+    ...(entry.isActive ? { style: 'primary' as const } : {}),
+  }));
+
 /**
- * **PR1 intermediate state (LOBE-8442 / LOBE-8445)**: this binder is wired
- * through but disabled — `createClient()` returns null so the router never
- * registers a Slack chat-bot. The reason: `LOBE_SLACK_BOT_TOKEN` env was
- * removed in favour of OAuth-acquired per-workspace tokens stored in
- * `messenger_installations`. PR2 (LOBE-8443 / LOBE-8453) rebuilds this binder
- * to receive `InstallationCredentials` from the `MessengerInstallationStore`
- * and restores live inbound routing. The picker / callback-extraction logic
- * below is preserved so PR2 can wire it back up against per-install creds.
+ * Per-Slack-workspace binder. Constructed by `MessengerRouter` from
+ * `InstallationCredentials` resolved out of the inbound webhook (or by
+ * `notifyLinkSuccess` from `installationStore.resolveByKey('slack:'+tenantId)`).
+ *
+ * All outbound calls use `this.creds.botToken` — env is no longer read.
+ * Constructed without creds, the binder no-ops every method (the legacy
+ * env-only call sites still exist during PR2 rollout).
  */
 export class MessengerSlackBinder implements MessengerPlatformBinder {
+  protected readonly creds?: InstallationCredentials;
+
+  constructor(creds?: InstallationCredentials) {
+    this.creds = creds;
+  }
+
   createClient(): PlatformClient | null {
-    log('createClient: Slack binder is OAuth-only; PR2 will wire per-install credentials');
-    return null;
+    if (!this.creds) {
+      log('createClient: no InstallationCredentials supplied');
+      return null;
+    }
+    return new SlackClientFactory().createClient(
+      {
+        // Per-install applicationId so chat-sdk's bookkeeping / dedupe / queue
+        // keys never collide across workspaces.
+        applicationId: this.creds.installationKey,
+        credentials: {
+          botToken: this.creds.botToken,
+          signingSecret: this.creds.signingSecret ?? '',
+        },
+        platform: 'slack',
+        settings: {},
+      },
+      { appUrl: appEnv.WEBHOOK_PUBLIC_URL },
+    );
   }
 
   /**
    * Slack delivers events to a webhook URL configured in the Slack App
-   * settings UI ("Event Subscriptions" → "Request URL"); there is no API to
-   * register it programmatically. We log so operators can confirm the URL
-   * the bot expects matches what's configured upstream.
+   * console — there is no API to register it programmatically. Logged so
+   * operators see the URL the bot expects matches what's configured upstream.
    */
   async registerWebhook(params: { webhookUrl: string }): Promise<void> {
     log(
@@ -49,39 +111,163 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     );
   }
 
-  async handleUnlinkedMessage(_ctx: UnlinkedMessageContext): Promise<void> {
-    log('handleUnlinkedMessage: disabled in PR1 — see LOBE-8453 for the rebuild');
+  /**
+   * First-touch: post the link prompt as a normal in-history DM with a
+   * Block Kit button AND the same URL as a plain inline link below it.
+   * Email-style fallback — the button is the primary CTA, the link is the
+   * fallback for mobile / copy-paste / weird Block Kit renders.
+   */
+  async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
+    if (!this.creds) {
+      log('handleUnlinkedMessage: no creds, skipping');
+      return;
+    }
+    const appUrl = appEnv.APP_URL;
+    if (!appUrl) {
+      log('handleUnlinkedMessage: APP_URL not set, cannot build verify-im link');
+      return;
+    }
+
+    const tenantName = String(this.creds.metadata?.tenantName ?? '');
+
+    let randomId: string;
+    try {
+      randomId = await issueLinkToken({
+        platform: 'slack',
+        platformUserId: ctx.authorUserId,
+        platformUsername: ctx.authorUserName,
+        tenantId: this.creds.tenantId,
+        tenantName,
+      });
+    } catch (error) {
+      log('handleUnlinkedMessage: failed to issue link token: %O', error);
+      const api = new SlackApi(this.creds.botToken);
+      await api.postMessage(
+        ctx.chatId,
+        'LobeHub is temporarily unavailable. Please try again in a moment.',
+      );
+      return;
+    }
+
+    // Best-effort prefill of the user's email for the verify-im page. Falls
+    // back to '' if `users:read.email` scope wasn't granted or the API call
+    // fails — verify-im handles a missing email gracefully.
+    let email = '';
+    try {
+      const api = new SlackApi(this.creds.botToken);
+      const user = await api.getUserInfo(ctx.authorUserId);
+      email = user?.profile?.email ?? '';
+    } catch (error) {
+      log('handleUnlinkedMessage: getUserInfo failed: %O', error);
+    }
+
+    const verifyUrl = buildVerifyImUrl({
+      appUrl,
+      channel: ctx.chatId,
+      randomId,
+      slackTeamId: this.creds.tenantId,
+      slackUserEmail: email,
+      slackUserId: ctx.authorUserId,
+      thread: '',
+    });
+
+    const intro =
+      "Hi, I'm LobeHub — your AI agent in Slack.\n" + 'To start, link your LobeHub account.';
+    const linkLabel = `Or copy this link: <${verifyUrl}|${verifyUrl}>`;
+
+    const api = new SlackApi(this.creds.botToken);
+    try {
+      await api.postMessageWithButtonAndLink(
+        ctx.chatId,
+        intro,
+        { text: ':link: Link Account', url: verifyUrl },
+        linkLabel,
+      );
+    } catch (error) {
+      log('handleUnlinkedMessage: postMessageWithButtonAndLink failed: %O', error);
+    }
   }
 
-  async notifyLinkSuccess(_params: {
+  /**
+   * Confirmation back into the Slack DM after the user finishes verify-im.
+   *
+   * Lazily resolves install credentials by `tenantId` because this call
+   * originates from the TRPC lambda router (which constructs binders without
+   * creds). For per-tenant platforms the caller MUST supply `tenantId` so we
+   * can pick the right workspace's bot token.
+   */
+  async notifyLinkSuccess(params: {
     activeAgentName?: string;
     platformUserId: string;
+    tenantId?: string;
   }): Promise<void> {
-    log('notifyLinkSuccess: disabled in PR1 — see LOBE-8453 for the rebuild');
+    let creds = this.creds;
+    if (!creds) {
+      if (!params.tenantId) {
+        log('notifyLinkSuccess: missing tenantId for slack — cannot resolve install');
+        return;
+      }
+      const store = getInstallationStore('slack');
+      if (!store) return;
+      const resolved = await store.resolveByKey(`slack:${params.tenantId}`);
+      if (!resolved) {
+        log('notifyLinkSuccess: install not found for tenantId=%s', params.tenantId);
+        return;
+      }
+      creds = resolved;
+    }
+
+    const headline =
+      ':white_check_mark: Linked successfully! Your LobeHub account is now connected.';
+    const tail = params.activeAgentName
+      ? `\n\nActive agent: *${params.activeAgentName}*\n\nGo ahead and send your first message — send \`/agents\` any time to switch the active agent.`
+      : '\n\nSend `/agents` to list your agents and pick the active one.';
+
+    try {
+      // Slack accepts a user id as the `channel` arg and auto-opens the IM
+      // (requires `im:write` scope on the App).
+      const api = new SlackApi(creds.botToken);
+      await api.postMessage(params.platformUserId, `${headline}${tail}`);
+    } catch (error) {
+      log('notifyLinkSuccess: failed to send to %s: %O', params.platformUserId, error);
+    }
   }
 
-  async sendDmText(_chatId: string, _text: string): Promise<void> {
-    log('sendDmText: disabled in PR1 — see LOBE-8453 for the rebuild');
+  async sendDmText(chatId: string, text: string): Promise<void> {
+    if (!this.creds) {
+      log('sendDmText: no creds, skipping');
+      return;
+    }
+    try {
+      await new SlackApi(this.creds.botToken).postMessage(chatId, text);
+    } catch (error) {
+      log('sendDmText: failed to send to chat=%s: %O', chatId, error);
+    }
   }
 
   async sendAgentPicker(
-    _chatId: string,
-    _params: { entries: AgentPickerEntry[]; text: string },
+    chatId: string,
+    params: { entries: AgentPickerEntry[]; text: string },
   ): Promise<void> {
-    log('sendAgentPicker: disabled in PR1 — see LOBE-8453 for the rebuild');
+    if (!this.creds) {
+      log('sendAgentPicker: no creds, skipping');
+      return;
+    }
+    try {
+      const api = new SlackApi(this.creds.botToken);
+      await api.postMessageWithButtonGrid(chatId, params.text, buildSwitchButtons(params.entries));
+    } catch (error) {
+      log('sendAgentPicker: failed for chat=%s: %O', chatId, error);
+    }
   }
 
   /**
    * Pull our `messenger:switch:<agentId>` action out of a Slack interactive
    * webhook payload. Slack delivers `block_actions` as
    * `application/x-www-form-urlencoded` with a single `payload` field whose
-   * value is JSON, so we have to parse the body here rather than relying on
-   * the router's JSON-only path. Returns null for any other update so the
-   * caller can hand off to chat-sdk.
-   *
-   * Stays live in PR1: this function reads the request body only and doesn't
-   * need bot credentials — PR2 just plugs the resulting action into the
-   * per-install router.
+   * value is JSON, so we parse here rather than rely on the router's JSON
+   * path. Returns null for any other update so the caller can hand off to
+   * chat-sdk.
    */
   async extractCallbackAction(req: Request): Promise<InboundCallbackAction | null> {
     const contentType = req.headers.get('content-type') ?? '';
@@ -111,9 +297,9 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     if (!fromUserId || !chatId) return null;
 
     return {
-      // `response_url` is what we use to ack — Slack accepts up to 5 calls
-      // within 30 minutes per response_url and applies the update to the
-      // exact message that triggered the action.
+      // `response_url` is what we'd use to ack via response payload — Slack
+      // accepts up to 5 calls within 30 minutes per response_url. We use
+      // chat.update + chat.postEphemeral via `acknowledgeCallback` instead.
       callbackId: payload.response_url ? String(payload.response_url) : '',
       chatId,
       data: actionId,
@@ -123,9 +309,39 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
   }
 
   async acknowledgeCallback(
-    _action: InboundCallbackAction,
-    _ack: CallbackAcknowledgement,
+    action: InboundCallbackAction,
+    ack: CallbackAcknowledgement,
   ): Promise<void> {
-    log('acknowledgeCallback: disabled in PR1 — see LOBE-8453 for the rebuild');
+    if (!this.creds) {
+      log('acknowledgeCallback: no creds, skipping');
+      return;
+    }
+    const api = new SlackApi(this.creds.botToken);
+
+    // Re-render the picker first so the new active marker shows up before any
+    // ephemeral feedback fires (and even if the ephemeral post fails).
+    if (ack.updatedPicker && action.messageId !== undefined) {
+      try {
+        await api.updateMessageWithButtonGrid(
+          action.chatId,
+          String(action.messageId),
+          ack.updatedPicker.text,
+          buildSwitchButtons(ack.updatedPicker.entries),
+        );
+      } catch (error) {
+        log('acknowledgeCallback: update picker failed: %O', error);
+      }
+    }
+
+    if (ack.toast) {
+      try {
+        // Slack has no native toast for button taps (unlike Telegram's
+        // `answerCallbackQuery`) — the closest UX is an ephemeral message
+        // visible only to the tapper.
+        await api.postEphemeral(action.chatId, action.fromUserId, ack.toast);
+      } catch (error) {
+        log('acknowledgeCallback: postEphemeral failed: %O', error);
+      }
+    }
   }
 }

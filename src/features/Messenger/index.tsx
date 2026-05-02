@@ -106,10 +106,16 @@ const MessengerSettings = memo(() => {
     messengerService.availablePlatforms(),
   );
   const linksSWR = useSWR('messenger:listMyLinks', () => messengerService.listMyLinks());
+  // Slack-only: workspaces this user has installed the bot into. Drives the
+  // Connections panel below the per-platform cards (Manus pattern).
+  const installationsSWR = useSWR('messenger:listMyInstallations', () =>
+    messengerService.listMyInstallations(),
+  );
 
   const platforms = platformsSWR.data ?? [];
   const links = linksSWR.data ?? [];
   const linksByPlatform = new Map(links.map((link) => [link.platform, link]));
+  const slackInstallations = (installationsSWR.data ?? []).filter((i) => i.platform === 'slack');
 
   const isLoading = platformsSWR.isLoading || linksSWR.isLoading;
 
@@ -137,6 +143,24 @@ const MessengerSettings = memo(() => {
         }
       },
       title: t('messenger.unlinkTitle'),
+    });
+  };
+
+  const handleDisconnectInstallation = (params: { id: string; tenantName: string }) => {
+    modal.confirm({
+      content: t('messenger.slack.connections.disconnectConfirm'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await messengerService.uninstallSlack({ installationId: params.id });
+          await installationsSWR.mutate();
+          await linksSWR.mutate();
+          message.success(t('messenger.slack.connections.disconnectSuccess'));
+        } catch (error: any) {
+          message.error(error?.message ?? t('messenger.slack.connections.disconnectFailed'));
+        }
+      },
+      title: t('messenger.slack.connections.disconnectTitle'),
     });
   };
 
@@ -233,6 +257,56 @@ const MessengerSettings = memo(() => {
             <Text style={{ fontSize: 12 }} type="secondary">
               {t('messenger.helpCommands')}
             </Text>
+
+            {/* Slack-only "Connections" panel (Manus pattern) — lists the
+                workspaces this LobeHub user has installed the bot into, with
+                Disconnect actions. Only renders when there's at least one
+                install; the per-platform card above already handles the
+                "Connect" CTA. */}
+            {slackInstallations.length > 0 && (
+              <Block className={styles.card}>
+                <Flexbox gap={12}>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {t('messenger.slack.connections.title')}
+                  </Text>
+                  {slackInstallations.map((install) => (
+                    <Flexbox
+                      horizontal
+                      align="center"
+                      gap={12}
+                      justify="space-between"
+                      key={install.id}
+                    >
+                      <Flexbox gap={2}>
+                        <Text strong>
+                          {t('messenger.slack.connections.workspace', {
+                            name: install.tenantName || install.tenantId,
+                          })}
+                        </Text>
+                        <Text style={{ fontSize: 12 }} type="secondary">
+                          {t('messenger.slack.connections.installedAt', {
+                            date: new Date(install.installedAt).toLocaleDateString(),
+                          })}
+                        </Text>
+                      </Flexbox>
+                      <Button
+                        danger
+                        icon={<Icon icon={Trash2Icon} />}
+                        size="small"
+                        onClick={() =>
+                          handleDisconnectInstallation({
+                            id: install.id,
+                            tenantName: install.tenantName,
+                          })
+                        }
+                      >
+                        {t('messenger.slack.connections.disconnect')}
+                      </Button>
+                    </Flexbox>
+                  ))}
+                </Flexbox>
+              </Block>
+            )}
           </Flexbox>
         )}
       </Flexbox>

@@ -73,6 +73,47 @@ export class SlackApi {
     return { ts: data.ts };
   }
 
+  /**
+   * Post a message that combines a Block Kit URL button AND the same URL
+   * rendered as a plain inline link below it (邮件式 fallback). Mirrors how
+   * email templates render "Click [Verify] / Or copy this link: …" so users
+   * have a path through every Slack client (mobile, screen reader, copy-to-
+   * other-device, future Block Kit regressions).
+   *
+   * Posted via `chat.postMessage` (NOT `chat.postEphemeral`) so the message
+   * stays in DM history and the user can come back to it.
+   */
+  async postMessageWithButtonAndLink(
+    channel: string,
+    intro: string,
+    button: { text: string; url: string },
+    linkLabel: string,
+  ): Promise<{ ts: string }> {
+    log('postMessageWithButtonAndLink: channel=%s', channel);
+    const fallback = this.truncateText(intro);
+    const data = await this.call('chat.postMessage', {
+      blocks: [
+        { text: { text: fallback, type: 'mrkdwn' }, type: 'section' },
+        {
+          elements: [
+            {
+              text: { emoji: true, text: button.text, type: 'plain_text' },
+              type: 'button',
+              url: button.url,
+            },
+          ],
+          type: 'actions',
+        },
+        // mrkdwn auto-linkifies the URL when rendered; older clients that
+        // can't render the actions block above still see this section.
+        { text: { text: this.truncateText(linkLabel), type: 'mrkdwn' }, type: 'section' },
+      ],
+      channel,
+      text: fallback,
+    });
+    return { ts: data.ts };
+  }
+
   async postMessageInThread(
     channel: string,
     threadTs: string,

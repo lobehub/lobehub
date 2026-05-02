@@ -23,6 +23,15 @@ export default {
   'messenger.slack.connectModal.notConfigured':
     'Slack OAuth is not configured. Set LOBE_SLACK_CLIENT_ID, LOBE_SLACK_CLIENT_SECRET, LOBE_SLACK_SIGNING_SECRET and LOBE_SLACK_APP_ID.',
   'messenger.slack.connectModal.title': 'Continue setup in Slack',
+  'messenger.slack.connections.disconnect': 'Disconnect',
+  'messenger.slack.connections.disconnectConfirm':
+    'Disconnect the LobeHub bot from this Slack workspace? Existing user links will pause until you re-install.',
+  'messenger.slack.connections.disconnectFailed': 'Failed to disconnect.',
+  'messenger.slack.connections.disconnectSuccess': 'Workspace disconnected.',
+  'messenger.slack.connections.disconnectTitle': 'Disconnect workspace',
+  'messenger.slack.connections.installedAt': 'Installed {{date}}',
+  'messenger.slack.connections.title': 'Connected workspaces',
+  'messenger.slack.connections.workspace': 'Workspace: {{name}}',
   'messenger.setActiveFailed': 'Failed to set as active.',
   'messenger.setActiveSuccess': 'Active agent updated.',
   'messenger.statusLinked': 'Connected',
@@ -36,6 +45,12 @@ export default {
   'messenger.unlinkFailed': 'Failed to disconnect.',
   'messenger.unlinkSuccess': 'Disconnected.',
   'messenger.unlinkTitle': 'Disconnect account',
+  'verify.slack.description':
+    'Slack is requesting access to LobeHub. By clicking "Confirm," you grant LobeHub the following permissions under your Slack identity.',
+  'verify.slack.identityLine': '{{email}} in {{workspace}}',
+  'verify.slack.identityLineNoWorkspace': '{{email}}',
+  'verify.slack.identityLineNoEmail': 'Slack user {{userId}} in {{workspace}}',
+  'verify.slack.title': 'Slack is requesting access to LobeHub',
   'verify.confirm.cta': 'Confirm linking',
   'verify.confirm.defaultAgent': 'Default agent',
   'verify.confirm.defaultAgentHint':

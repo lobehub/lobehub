@@ -4,7 +4,11 @@ import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
 import debug from 'debug';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 
-import { getEnabledMessengerPlatforms, type MessengerPlatform } from '@/config/messenger';
+import {
+  getEnabledMessengerPlatforms,
+  getMessengerSlackConfig,
+  type MessengerPlatform,
+} from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import type { MessengerAccountLinkItem } from '@/database/schemas';
@@ -17,6 +21,10 @@ import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
+import { getInstallationStore } from './installations';
+import { TELEGRAM_INSTALLATION_KEY } from './installations/telegram';
+import type { InstallationCredentials } from './installations/types';
+import { verifySignature as verifySlackSignature } from './oauth/slackOAuth';
 import { MessengerSlackBinder } from './platforms/slack';
 import { MessengerTelegramBinder } from './platforms/telegram';
 import type {
@@ -32,6 +40,8 @@ interface RegisteredMessengerBot {
   binder: MessengerPlatformBinder;
   chatBot: Chat<any>;
   client: PlatformClient;
+  /** Cached resolved credentials — null for global-bot platforms (Telegram). */
+  creds: InstallationCredentials;
 }
 
 interface CommandMatch {
@@ -57,21 +67,87 @@ const parseCommand = (text: string | undefined): CommandMatch | null => {
 };
 
 /**
- * Routes inbound messages from the shared Messenger bots (one per platform,
- * credentials in env) to the right LobeHub user + agent.
+ * Slack lifecycle events we treat specially before falling into normal
+ * routing. Both indicate the install is gone — flag the row revoked so
+ * subsequent webhooks short-circuit, and acknowledge with 200 (no retries).
+ */
+const SLACK_LIFECYCLE_EVENTS = new Set(['app_uninstalled', 'tokens_revoked']);
+
+const isSlackLifecycleEvent = (rawBody: string): { eventType: string } | null => {
+  try {
+    const parsed = JSON.parse(rawBody);
+    if (parsed?.type !== 'event_callback') return null;
+    const eventType = parsed?.event?.type;
+    if (typeof eventType === 'string' && SLACK_LIFECYCLE_EVENTS.has(eventType)) {
+      return { eventType };
+    }
+  } catch {
+    /* not JSON / not an Events API payload — fall through */
+  }
+  return null;
+};
+
+/** Slack `url_verification` is the once-only setup challenge; reply with the challenge value. */
+const handleSlackUrlVerification = (rawBody: string): Response | null => {
+  try {
+    const parsed = JSON.parse(rawBody);
+    if (parsed?.type === 'url_verification' && typeof parsed?.challenge === 'string') {
+      return new Response(parsed.challenge, {
+        headers: { 'Content-Type': 'text/plain' },
+        status: 200,
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+};
+
+/**
+ * Re-pack a request body that was already drained by `req.text()` so we can
+ * pass it on to chat-sdk / the binder. Original headers + URL preserved.
+ */
+const reconstructRequest = (req: Request, rawBody: string): Request =>
+  new Request(req.url, {
+    body: rawBody,
+    // `Request.duplex` is required when supplying a body to `new Request` in
+    // some runtimes; cast to avoid TS narrowing differences across DOM lib
+    // versions.
+    headers: req.headers,
+    method: req.method,
+  } as RequestInit);
+
+/**
+ * Routes inbound messages from the shared Messenger bots to the right
+ * LobeHub user + agent.
  *
- * Account model: each user binds their IM account to LobeHub ONCE per
- * platform (one row in `messenger_account_links`). The `activeAgentId` column
- * tracks which of the user's agents currently receives messages — switchable
- * via `/agents` (tap to switch) or the web UI without re-running verify-im.
+ * **Multi-tenant routing (PR2)**: per-tenant platforms (Slack today) keep
+ * one Chat SDK instance per `installationKey` (e.g. `slack:T0123`). Global-
+ * bot platforms (Telegram, future Discord) collapse to a single bot per
+ * platform via the special `telegram:singleton` key.
+ *
+ * Account model: each `(LobeHub user, platform, tenant_id)` triple has at
+ * most one row in `messenger_account_links`, so a single LobeHub user can
+ * link into multiple Slack workspaces simultaneously without collisions.
  */
 export class MessengerRouter {
-  private bots = new Map<MessengerPlatform, RegisteredMessengerBot>();
-  private loadingPromises = new Map<MessengerPlatform, Promise<RegisteredMessengerBot | null>>();
+  private bots = new Map<string, RegisteredMessengerBot>();
+  private loadingPromises = new Map<string, Promise<RegisteredMessengerBot | null>>();
 
   /**
-   * Webhook handler for `/api/agent/messenger/webhooks/[platform]`. Returns 404
-   * if the platform is not enabled (no env credentials configured).
+   * Webhook handler for `/api/agent/messenger/webhooks/[platform]`. The flow:
+   *
+   *   1. Read the raw body (must happen before any parsing — Slack's signature
+   *      is over the exact bytes Slack sent)
+   *   2. Slack: verify the signing secret, short-circuit `url_verification`
+   *      and `app_uninstalled` / `tokens_revoked`
+   *   3. Resolve the install via the platform's `MessengerInstallationStore`
+   *      (Slack: DB lookup by `team_id` / `enterprise_id`; Telegram: env
+   *      singleton)
+   *   4. Lazy-load (and cache) a Chat SDK bot for that install
+   *   5. Run `binder.extractCallbackAction` to intercept tap-action callbacks
+   *      that chat-sdk doesn't surface
+   *   6. Otherwise hand the (reconstructed) request to chat-sdk's webhook handler
    */
   getWebhookHandler(platform: string): (req: Request) => Promise<Response> {
     return async (req: Request) => {
@@ -79,22 +155,68 @@ export class MessengerRouter {
         return new Response(`Unknown messenger platform: ${platform}`, { status: 404 });
       }
 
-      const bot = await this.getOrCreateBot(platform);
-      if (!bot) {
-        return new Response(`Messenger ${platform} bot not configured`, { status: 404 });
+      const rawBody = await req.text();
+
+      // ----- Slack-specific gate ------------------------------------------
+      if (platform === 'slack') {
+        const config = getMessengerSlackConfig();
+        if (!config) {
+          return new Response('Slack messenger not configured', { status: 404 });
+        }
+
+        const ts = req.headers.get('x-slack-request-timestamp');
+        const sig = req.headers.get('x-slack-signature');
+        if (!ts || !sig) {
+          log('webhook: missing Slack signature headers');
+          return new Response('missing signature', { status: 401 });
+        }
+        const ok = verifySlackSignature({
+          rawBody,
+          signature: sig,
+          signingSecret: config.signingSecret,
+          timestamp: ts,
+        });
+        if (!ok) {
+          log('webhook: invalid Slack signature');
+          return new Response('invalid signature', { status: 401 });
+        }
+
+        // Setup-time URL verification challenge.
+        const verification = handleSlackUrlVerification(rawBody);
+        if (verification) return verification;
+
+        // Workspace removed the App / rotated tokens away — mark the install
+        // revoked and ack so Slack stops retrying.
+        const lifecycle = isSlackLifecycleEvent(rawBody);
+        if (lifecycle) {
+          await this.handleSlackLifecycleEvent(rawBody, lifecycle.eventType);
+          return new Response('OK', { status: 200 });
+        }
       }
 
-      // Intercept tap-action callbacks before chat-sdk: Telegram's
-      // callback_query / Slack's interactive payload aren't surfaced through
-      // chat-sdk's onNewMessage / onDirectMessage, so binders peek the raw
-      // body and the router orchestrates the response. Each binder owns its
-      // own body parsing because the wire formats differ (Telegram = JSON,
-      // Slack = form-urlencoded).
+      // ----- Resolve install + lazy-load bot -------------------------------
+      const store = getInstallationStore(platform);
+      if (!store) {
+        return new Response(`Messenger ${platform} has no installation store`, { status: 500 });
+      }
+
+      const creds = await store.resolveByPayload(reconstructRequest(req, rawBody), rawBody);
+      if (!creds) {
+        log('webhook: no install resolved for platform=%s', platform);
+        return new Response('install not found', { status: 404 });
+      }
+
+      const bot = await this.getOrCreateBot(creds);
+      if (!bot) {
+        return new Response(`Messenger ${platform} bot unavailable`, { status: 503 });
+      }
+
+      // ----- Tap-action callbacks (binder peeks raw body) -----------------
       if (bot.binder.extractCallbackAction) {
         try {
-          const action = await bot.binder.extractCallbackAction(req.clone());
+          const action = await bot.binder.extractCallbackAction(reconstructRequest(req, rawBody));
           if (action) {
-            await this.handleCallbackAction(bot, platform, action);
+            await this.handleCallbackAction(bot, platform, creds, action);
             return new Response('OK', { status: 200 });
           }
         } catch (error) {
@@ -102,12 +224,12 @@ export class MessengerRouter {
         }
       }
 
+      // ----- Normal message → chat-sdk handler ----------------------------
       const handler = (bot.chatBot.webhooks as any)?.[platform];
       if (!handler) {
         return new Response(`Messenger ${platform} webhook unavailable`, { status: 500 });
       }
-
-      return handler(req);
+      return handler(reconstructRequest(req, rawBody));
     };
   }
 
@@ -118,13 +240,14 @@ export class MessengerRouter {
 
   /**
    * Connect every enabled messenger platform so inbound messages reach us.
-   * Today this means registering a webhook against
-   * `${WEBHOOK_PUBLIC_URL}/api/agent/messenger/webhooks/<platform>`; future
-   * platforms may use polling or a gateway instead.
    *
-   * Idempotent — safe to call on every server start and on every cloud cron
-   * tick. Per-platform failures are isolated and logged so a misconfigured
-   * platform never blocks the others.
+   * - **Telegram**: registers the webhook via `setWebhook` (the binder's
+   *   `registerWebhook`).
+   * - **Slack**: skipped — the webhook URL is configured in the Slack App
+   *   manifest / console, not via API. The router still handles signature
+   *   verification on every inbound request.
+   *
+   * Idempotent — safe to call on every server start.
    */
   async ensureConnected(): Promise<void> {
     const url = appEnv.WEBHOOK_PUBLIC_URL;
@@ -141,9 +264,30 @@ export class MessengerRouter {
 
     await Promise.all(
       platforms.map(async (platform) => {
-        const binder = this.createBinder(platform);
+        // Slack's webhook URL lives in the App manifest — there's no API to
+        // register it. Operators configure Event Subscriptions / Interactivity
+        // URLs manually (see docs/development/messenger/slack-app-setup.md).
+        if (platform === 'slack') {
+          log(
+            'ensureConnected: slack webhook URL must be set in the Slack App manifest -> %s',
+            `${trimmedUrl}/api/agent/messenger/webhooks/slack`,
+          );
+          return;
+        }
+
+        const store = getInstallationStore(platform);
+        if (!store) return;
+        const creds = await store.resolveByKey(
+          platform === 'telegram' ? TELEGRAM_INSTALLATION_KEY : '',
+        );
+        if (!creds) {
+          log('ensureConnected: %s install not resolved, skipping', platform);
+          return;
+        }
+
+        const binder = this.createBinder(creds);
         if (!binder) {
-          log('ensureConnected: %s has no binder yet, skipping', platform);
+          log('ensureConnected: %s has no binder, skipping', platform);
           return;
         }
 
@@ -158,43 +302,46 @@ export class MessengerRouter {
     );
   }
 
+  // -------------------------------------------------------------------------
+
   private async getOrCreateBot(
-    platform: MessengerPlatform,
+    creds: InstallationCredentials,
   ): Promise<RegisteredMessengerBot | null> {
-    const existing = this.bots.get(platform);
+    const key = creds.installationKey;
+    const existing = this.bots.get(key);
     if (existing) return existing;
 
-    const inflight = this.loadingPromises.get(platform);
+    const inflight = this.loadingPromises.get(key);
     if (inflight) return inflight;
 
-    const promise = this.loadBot(platform);
-    this.loadingPromises.set(platform, promise);
+    const promise = this.loadBot(creds);
+    this.loadingPromises.set(key, promise);
 
     try {
       return await promise;
     } finally {
-      this.loadingPromises.delete(platform);
+      this.loadingPromises.delete(key);
     }
   }
 
-  private async loadBot(platform: MessengerPlatform): Promise<RegisteredMessengerBot | null> {
-    const binder = this.createBinder(platform);
+  private async loadBot(creds: InstallationCredentials): Promise<RegisteredMessengerBot | null> {
+    const binder = this.createBinder(creds);
     if (!binder) {
-      log('loadBot: no binder available for %s', platform);
+      log('loadBot: no binder available for %s', creds.installationKey);
       return null;
     }
 
     const client = binder.createClient();
     if (!client) {
-      log('loadBot: binder %s returned no client (missing env?)', platform);
+      log('loadBot: binder %s returned no client', creds.installationKey);
       return null;
     }
 
     const adapters = client.createAdapter();
-    const chatBot = this.createChatBot(adapters, platform);
+    const chatBot = this.createChatBot(adapters, creds);
 
     const serverDB = await getServerDB();
-    this.registerHandlers(chatBot, serverDB, client, binder, platform);
+    this.registerHandlers(chatBot, serverDB, client, binder, creds);
 
     await chatBot.initialize();
 
@@ -207,23 +354,25 @@ export class MessengerRouter {
           { command: 'stop', description: 'Stop the current execution' },
           { command: 'help', description: 'Show usage' },
         ])
-        .catch((error) => log('registerBotCommands failed for %s: %O', platform, error));
+        .catch((error) =>
+          log('registerBotCommands failed for %s: %O', creds.installationKey, error),
+        );
     }
 
-    const registered: RegisteredMessengerBot = { binder, chatBot, client };
-    this.bots.set(platform, registered);
+    const registered: RegisteredMessengerBot = { binder, chatBot, client, creds };
+    this.bots.set(creds.installationKey, registered);
 
-    log('loadBot: registered messenger %s bot', platform);
+    log('loadBot: registered messenger %s bot', creds.installationKey);
     return registered;
   }
 
-  private createBinder(platform: MessengerPlatform): MessengerPlatformBinder | null {
-    switch (platform) {
+  private createBinder(creds: InstallationCredentials): MessengerPlatformBinder | null {
+    switch (creds.platform) {
       case 'telegram': {
         return new MessengerTelegramBinder();
       }
       case 'slack': {
-        return new MessengerSlackBinder();
+        return new MessengerSlackBinder(creds);
       }
       default: {
         return null;
@@ -231,18 +380,21 @@ export class MessengerRouter {
     }
   }
 
-  private createChatBot(adapters: Record<string, any>, platform: MessengerPlatform): Chat<any> {
+  private createChatBot(adapters: Record<string, any>, creds: InstallationCredentials): Chat<any> {
     const config: any = {
       adapters,
       concurrency: 'queue',
-      userName: `messenger-bot-${platform}`,
+      // Per-install Chat SDK identity so the queue / state / debounce keys
+      // never overlap across workspaces.
+      userName: `messenger-bot-${creds.installationKey}`,
     };
 
     const redisClient = getAgentRuntimeRedisClient();
     if (redisClient) {
       config.state = createIoRedisState({
         client: redisClient,
-        keyPrefix: `chat-sdk:messenger-${platform}`,
+        // Per-install key prefix → Redis state isolation per workspace.
+        keyPrefix: `chat-sdk:messenger-${creds.installationKey}`,
         logger: new ConsoleLogger(),
       });
     }
@@ -250,13 +402,43 @@ export class MessengerRouter {
     return new Chat(config);
   }
 
+  private async handleSlackLifecycleEvent(rawBody: string, eventType: string): Promise<void> {
+    try {
+      const parsed = JSON.parse(rawBody);
+      const auth = Array.isArray(parsed.authorizations) ? parsed.authorizations[0] : null;
+      const isEnterprise =
+        auth?.is_enterprise_install === true || parsed.is_enterprise_install === true;
+      const tenantId = isEnterprise
+        ? (auth?.enterprise_id ?? parsed.enterprise_id)
+        : (auth?.team_id ?? parsed.team_id);
+      if (!tenantId) {
+        log('lifecycle %s: missing tenant id, skipping', eventType);
+        return;
+      }
+      const installationKey = `slack:${tenantId}`;
+      const store = getInstallationStore('slack');
+      if (store?.markRevoked) {
+        await store.markRevoked(installationKey);
+      }
+      // Drop the cached bot so a re-install (which clears `revoked_at`) gets
+      // a fresh Chat SDK instance with the new token.
+      this.bots.delete(installationKey);
+      log('lifecycle %s: revoked install %s', eventType, installationKey);
+    } catch (error) {
+      log('lifecycle %s: failed to process: %O', eventType, error);
+    }
+  }
+
   private registerHandlers(
     bot: Chat<any>,
     serverDB: LobeChatDatabase,
     client: PlatformClient,
     binder: MessengerPlatformBinder,
-    platform: MessengerPlatform,
+    creds: InstallationCredentials,
   ): void {
+    const platform = creds.platform;
+    const tenantId = creds.tenantId;
+
     const handle = async (thread: any, message: Message): Promise<void> => {
       if (message.author.isBot === true) return;
 
@@ -267,7 +449,12 @@ export class MessengerRouter {
       }
 
       const chatId = client.extractChatId(thread.id);
-      const link = await MessengerAccountLinkModel.findByPlatformUser(serverDB, platform, senderId);
+      const link = await MessengerAccountLinkModel.findByPlatformUser(
+        serverDB,
+        platform,
+        senderId,
+        tenantId,
+      );
 
       try {
         const command = parseCommand(message.text);
@@ -282,6 +469,7 @@ export class MessengerRouter {
             message,
             platform,
             serverDB,
+            tenantId,
             thread,
           });
           if (handled) return;
@@ -322,7 +510,7 @@ export class MessengerRouter {
     // than "direct") still route here. `onNewMessage(/./)` does NOT match DMs;
     // those fall through to `onNewMention` if `onDirectMessage` is unregistered.
     bot.onDirectMessage(async (thread, message, _channel, _context?: MessageContext) => {
-      log('onDirectMessage: platform=%s, msgId=%s', platform, (message as any).id);
+      log('onDirectMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
       try {
         await thread.subscribe();
       } catch {
@@ -332,7 +520,7 @@ export class MessengerRouter {
     });
 
     bot.onSubscribedMessage(async (thread, message, _context?: MessageContext) => {
-      log('onSubscribedMessage: platform=%s, msgId=%s', platform, (message as any).id);
+      log('onSubscribedMessage: install=%s, msgId=%s', creds.installationKey, (message as any).id);
       await handle(thread, message);
     });
   }
@@ -351,6 +539,7 @@ export class MessengerRouter {
     message: Message;
     platform: MessengerPlatform;
     serverDB: LobeChatDatabase;
+    tenantId: string;
     thread: any;
   }): Promise<boolean> {
     const {
@@ -362,6 +551,7 @@ export class MessengerRouter {
       link,
       message,
       serverDB,
+      tenantId,
       thread,
     } = params;
 
@@ -379,7 +569,7 @@ export class MessengerRouter {
         return true;
       }
       case 'agents': {
-        await this.handleAgentsCommand({ binder, chatId, command, link, serverDB });
+        await this.handleAgentsCommand({ binder, chatId, command, link, serverDB, tenantId });
         return true;
       }
       case 'new': {
@@ -470,6 +660,7 @@ export class MessengerRouter {
     command?: CommandMatch;
     link: MessengerAccountLinkItem | undefined;
     serverDB: LobeChatDatabase;
+    tenantId: string;
   }): Promise<void> {
     const { binder, chatId, command, link, serverDB } = params;
 
@@ -550,6 +741,7 @@ export class MessengerRouter {
   private async handleCallbackAction(
     bot: RegisteredMessengerBot,
     platform: MessengerPlatform,
+    creds: InstallationCredentials,
     action: InboundCallbackAction,
   ): Promise<void> {
     const { binder } = bot;
@@ -569,6 +761,7 @@ export class MessengerRouter {
       serverDB,
       platform,
       action.fromUserId,
+      creds.tenantId,
     );
     if (!link) {
       await ack({ toast: 'Not linked. Send /start first.' });
@@ -648,8 +841,9 @@ export class MessengerRouter {
     platform: MessengerPlatform,
   ): Promise<void> {
     log(
-      'dispatchToAgent: platform=%s, sender=%s, agent=%s, user=%s',
+      'dispatchToAgent: platform=%s, tenant=%s, sender=%s, agent=%s, user=%s',
       platform,
+      link.tenantId,
       link.platformUserId,
       agentId,
       link.userId,
@@ -661,7 +855,11 @@ export class MessengerRouter {
     await bridge.handleMention(thread, message, {
       agentId,
       botContext: {
-        applicationId: `messenger-${platform}`,
+        // Per-install applicationId so the agent runtime can distinguish
+        // workspaces in its own bookkeeping (logs, traces, dedupe).
+        applicationId: link.tenantId
+          ? `messenger-${platform}-${link.tenantId}`
+          : `messenger-${platform}`,
         platform,
         platformThreadId: thread.id,
       },

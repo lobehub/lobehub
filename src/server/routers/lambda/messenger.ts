@@ -10,9 +10,11 @@ import {
   type MessengerPlatform,
 } from '@/config/messenger';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
+import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { agents } from '@/database/schemas';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   consumeLinkToken,
   MessengerSlackBinder,
@@ -60,6 +62,11 @@ export const messengerRouter = router({
         platform: payload.platform,
         platformUserId: payload.platformUserId,
         platformUsername: payload.platformUsername,
+        // Tenant fields are populated by the binder for per-tenant platforms
+        // (Slack workspace name) and absent for global-bot platforms; the
+        // verify-im page conditionally renders the workspace blurb.
+        tenantId: payload.tenantId,
+        tenantName: payload.tenantName,
       };
     }),
 
@@ -100,12 +107,14 @@ export const messengerRouter = router({
         platform: payload.platform,
         platformUserId: payload.platformUserId,
         platformUsername: payload.platformUsername ?? null,
+        tenantId: payload.tenantId ?? '',
       });
 
       // Best-effort confirmation back to the IM platform.
       void notifyLinkSuccess(payload.platform, {
         activeAgentName: agentRow.title ?? undefined,
         platformUserId: payload.platformUserId,
+        tenantId: payload.tenantId,
       });
 
       return { data: link, success: true };
@@ -162,14 +171,17 @@ export const messengerRouter = router({
     return mapped.map(({ slug: _slug, ...rest }) => rest);
   }),
 
-  /** Get the current user's link for one platform (or null). */
+  /**
+   * Get the current user's link for one platform (or null). `tenantId`
+   * narrows to a specific Slack workspace; omit for Telegram (global bot).
+   */
   getMyLink: messengerProcedure
-    .input(z.object({ platform: platformEnum }))
+    .input(z.object({ platform: platformEnum, tenantId: z.string().optional() }))
     .query(async ({ input, ctx }) => {
-      return (await ctx.messengerLinkModel.findByPlatform(input.platform)) ?? null;
+      return (await ctx.messengerLinkModel.findByPlatform(input.platform, input.tenantId)) ?? null;
     }),
 
-  /** List all the current user's links across platforms. */
+  /** List all the current user's links across platforms (and tenants). */
   listMyLinks: messengerProcedure.query(async ({ ctx }) => {
     return ctx.messengerLinkModel.list();
   }),
@@ -177,13 +189,14 @@ export const messengerRouter = router({
   /**
    * Set which agent the IM session routes to. Pass `agentId: null` to clear
    * the active agent (next inbound message will get the "/agents to pick"
-   * prompt).
+   * prompt). Pass `tenantId` to scope to a specific Slack workspace.
    */
   setActiveAgent: messengerProcedure
     .input(
       z.object({
         agentId: z.string().nullable(),
         platform: platformEnum,
+        tenantId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -199,7 +212,11 @@ export const messengerRouter = router({
         }
       }
 
-      const updated = await ctx.messengerLinkModel.setActiveAgent(input.platform, input.agentId);
+      const updated = await ctx.messengerLinkModel.setActiveAgent(
+        input.platform,
+        input.agentId,
+        input.tenantId,
+      );
       if (!updated) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -209,9 +226,9 @@ export const messengerRouter = router({
       return { data: updated, success: true };
     }),
 
-  /** Remove the user's account link for a platform. */
+  /** Remove the user's account link for a platform (optionally scoped to one tenant). */
   unlink: messengerProcedure
-    .input(z.object({ platform: platformEnum }))
+    .input(z.object({ platform: platformEnum, tenantId: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       if (!isMessengerPlatformEnabled(input.platform)) {
         throw new TRPCError({
@@ -219,14 +236,80 @@ export const messengerRouter = router({
           message: `Messenger ${input.platform} bot is not configured`,
         });
       }
-      await ctx.messengerLinkModel.deleteByPlatform(input.platform);
+      await ctx.messengerLinkModel.deleteByPlatform(input.platform, input.tenantId);
+      return { success: true };
+    }),
+
+  /**
+   * List the Slack workspaces this LobeHub user has installed the bot into.
+   * Used by the messenger settings page to render the "Connections" panel
+   * (Manus's `manus.im/app#settings/integrations/slack` analogue). Returns
+   * the safe metadata only — never the encrypted credentials.
+   */
+  listMyInstallations: messengerProcedure.query(async ({ ctx }) => {
+    const rows = await MessengerInstallationModel.listByInstallerUserId(ctx.serverDB, ctx.userId);
+    return rows.map((row) => ({
+      applicationId: row.applicationId,
+      enterpriseId: (row.metadata as Record<string, unknown> | null)?.enterpriseId ?? null,
+      id: row.id,
+      installedAt: row.installedAt,
+      isEnterpriseInstall:
+        (row.metadata as Record<string, unknown> | null)?.isEnterpriseInstall === true,
+      platform: row.platform,
+      scope: ((row.metadata as Record<string, unknown> | null)?.scope as string) ?? '',
+      tenantId: row.tenantId,
+      tenantName: ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? '',
+    }));
+  }),
+
+  /**
+   * Disconnect a Slack install — soft-revoke the row so the router stops
+   * dispatching to it and inbound webhooks short-circuit. Cascading effect on
+   * `messenger_account_links` rows for that tenant is intentional: the user
+   * link rows persist (so re-installing the workspace later restores the
+   * binding without re-running verify-im). To wipe a user's link, call `unlink`
+   * with `tenantId`.
+   *
+   * Slack's `auth.revoke` to also invalidate the token server-side is a
+   * nice-to-have (frees a workspace bot slot), deferred to PR3.
+   */
+  uninstallSlack: messengerProcedure
+    .input(z.object({ installationId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+      const row = await MessengerInstallationModel.findById(
+        ctx.serverDB,
+        input.installationId,
+        gateKeeper,
+      );
+      if (!row) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Installation not found' });
+      }
+      // Authorization: only the user who initiated the install can disconnect
+      // it. Workspace admins who installed via a different LobeHub account
+      // can disconnect through their own settings page.
+      if (row.installedByUserId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You can only disconnect installations you initiated.',
+        });
+      }
+      await MessengerInstallationModel.markRevoked(ctx.serverDB, row.id);
       return { success: true };
     }),
 });
 
+/**
+ * Best-effort confirmation back to the IM platform after a successful link.
+ * Slack needs `tenantId` to resolve the right per-workspace bot token; Telegram
+ * is a global bot and ignores it. PR2.4 (LOBE-8453) rewires the Slack binder
+ * to receive `InstallationCredentials` via the router's installation store —
+ * until then this entry point falls back to no-op for Slack (binder.createClient
+ * returns null in PR1's intermediate state).
+ */
 const notifyLinkSuccess = async (
   platform: MessengerPlatform,
-  params: { activeAgentName?: string; platformUserId: string },
+  params: { activeAgentName?: string; platformUserId: string; tenantId?: string },
 ) => {
   try {
     switch (platform) {

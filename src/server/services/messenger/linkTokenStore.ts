@@ -16,6 +16,20 @@ export interface LinkTokenPayload {
   platformUserId: string;
   /** Best-effort display name shown on the verify-im confirm screen. */
   platformUsername?: string;
+  /**
+   * Per-tenant install id this link belongs to. Slack `team_id` (or
+   * `enterprise_id` for Grid org installs) — written into
+   * `messenger_account_links.tenant_id` on confirm so the router knows which
+   * workspace's bot to dispatch to. Empty / undefined for global-bot
+   * platforms (Telegram).
+   */
+  tenantId?: string;
+  /**
+   * Human-readable workspace / tenant name (e.g. `"Acme Inc"`) so the
+   * verify-im page can render "Linking <user> in **Acme Inc** workspace"
+   * without a server-side `team.info` round-trip.
+   */
+  tenantName?: string;
 }
 
 const tokenKey = (token: LinkToken): string => `messenger:link-token:${token}`;

@@ -31,8 +31,16 @@ class MessengerService {
     return lambdaClient.messenger.setActiveAgent.mutate(params);
   };
 
-  unlink = async (params: { platform: MessengerPlatform }) => {
+  unlink = async (params: { platform: MessengerPlatform; tenantId?: string }) => {
     return lambdaClient.messenger.unlink.mutate(params);
+  };
+
+  listMyInstallations = async () => {
+    return lambdaClient.messenger.listMyInstallations.query();
+  };
+
+  uninstallSlack = async (params: { installationId: string }) => {
+    return lambdaClient.messenger.uninstallSlack.mutate(params);
   };
 }
 

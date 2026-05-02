@@ -130,6 +130,8 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
   async notifyLinkSuccess(params: {
     activeAgentName?: string;
     platformUserId: string;
+    /** Ignored — Telegram is a global-token bot, no tenant scoping needed. */
+    tenantId?: string;
   }): Promise<void> {
     const config = getMessengerTelegramConfig();
     if (!config) return;

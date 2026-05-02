@@ -872,6 +872,7 @@ table messenger_account_links {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   platform varchar(50) [not null]
+  tenant_id varchar(255) [not null, default: '']
   platform_user_id varchar(255) [not null]
   platform_username text
   active_agent_id text
@@ -881,8 +882,8 @@ table messenger_account_links {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (platform, platform_user_id) [name: 'messenger_account_links_platform_user_unique', unique]
-    (user_id, platform) [name: 'messenger_account_links_user_platform_unique', unique]
+    (platform, tenant_id, platform_user_id) [name: 'messenger_account_links_platform_tenant_user_unique', unique]
+    (user_id, platform, tenant_id) [name: 'messenger_account_links_user_platform_tenant_unique', unique]
     active_agent_id [name: 'messenger_account_links_active_agent_idx']
   }
 }
