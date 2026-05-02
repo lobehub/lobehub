@@ -30,10 +30,14 @@ interface VisualSourceMessage {
   videoList?: ChatVideoItem[];
 }
 
-const getVisualUnderstandingConfig = () =>
-  typeof window === 'undefined'
-    ? undefined
-    : window.global_serverConfigStore?.getState().serverConfig.visualUnderstanding;
+const getVisualUnderstandingConfig = async () => {
+  const { getServerConfigStoreState, serverConfigSelectors } = await import('@/store/serverConfig');
+  const serverConfigState = getServerConfigStoreState();
+
+  return serverConfigState
+    ? serverConfigSelectors.visualUnderstanding(serverConfigState)
+    : undefined;
+};
 
 const createAbortController = (signal?: AbortSignal) => {
   const abortController = new AbortController();
@@ -135,7 +139,7 @@ const toStringArray = (value: unknown) =>
     : [];
 
 const getUnexpectedArgumentKeys = (params: AnalyzeVisualMediaParams) =>
-  Object.keys(params as Record<string, unknown>).filter(
+  Object.keys(params as unknown as Record<string, unknown>).filter(
     (key) => key !== 'question' && key !== 'refs' && key !== 'urls',
   );
 
@@ -147,7 +151,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     params: AnalyzeVisualMediaParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const config = getVisualUnderstandingConfig();
+    const config = await getVisualUnderstandingConfig();
 
     if (!config?.provider || !config.model) {
       return {
