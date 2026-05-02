@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { exchangeCode, revokeToken } from '@/server/services/messenger/oauth/slackOAuth';
+import { exchangeCode } from '@/server/services/messenger/oauth/slackOAuth';
 import { consumeOAuthState } from '@/server/services/messenger/oauth/stateStore';
 
 import { GET } from './route';
@@ -25,7 +25,6 @@ vi.mock('@/server/services/messenger/oauth/stateStore', () => ({
 
 vi.mock('@/server/services/messenger/oauth/slackOAuth', () => ({
   exchangeCode: vi.fn(),
-  revokeToken: vi.fn(),
 }));
 
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -204,29 +203,33 @@ describe('GET /api/agent/messenger/slack/oauth/callback', () => {
       tenantId: 'T_ACME',
     } as any;
 
-    it('blocks the upsert, revokes the fresh token, and redirects with already_installed', async () => {
+    it('refreshes credentials but preserves the original owner, then redirects with already_installed', async () => {
       vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue(existingInstall);
 
       const res = await GET(buildRequest('code=c&state=s'));
 
-      expect(MessengerInstallationModel.upsert).not.toHaveBeenCalled();
-      expect(revokeToken).toHaveBeenCalledWith('xoxb-real');
+      // Slack may have rotated the bot token for this re-install — we MUST
+      // upsert the new credentials so the original installer's bot keeps
+      // working — but we keep the original installer as the owner so the
+      // settings UI doesn't switch hands.
+      expect(MessengerInstallationModel.upsert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          credentials: { botToken: 'xoxb-real' },
+          installedByPlatformUserId: 'U_FIRST_PLATFORM',
+          installedByUserId: 'lobe-user-other',
+          tenantId: 'T_ACME',
+        }),
+        expect.anything(),
+      );
+
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
       expect(loc.pathname).toBe('/settings/messenger');
       expect(loc.searchParams.get('slack_error')).toBe('already_installed');
-    });
-
-    it('still redirects with already_installed even if auth.revoke errors out', async () => {
-      vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue(existingInstall);
-      vi.mocked(revokeToken).mockRejectedValueOnce(new Error('slack 503'));
-
-      const res = await GET(buildRequest('code=c&state=s'));
-
-      expect(MessengerInstallationModel.upsert).not.toHaveBeenCalled();
-      expect(res.status).toBe(302);
-      const loc = new URL(res.headers.get('location')!);
-      expect(loc.searchParams.get('slack_error')).toBe('already_installed');
+      // Workspace name surfaces so the settings page can render a friendly
+      // dialog naming which workspace conflicted.
+      expect(loc.searchParams.get('slack_workspace')).toBe('Acme Inc');
     });
 
     it('allows takeover when the previous installer was deleted (installedByUserId null)', async () => {
@@ -237,9 +240,16 @@ describe('GET /api/agent/messenger/slack/oauth/callback', () => {
 
       const res = await GET(buildRequest('code=c&state=s'));
 
-      expect(MessengerInstallationModel.upsert).toHaveBeenCalled();
-      expect(revokeToken).not.toHaveBeenCalled();
+      expect(MessengerInstallationModel.upsert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          installedByUserId: 'lobe-user-1',
+        }),
+        expect.anything(),
+      );
       expect(res.status).toBe(302);
+      const loc = new URL(res.headers.get('location')!);
+      expect(loc.origin + loc.pathname).toBe('https://slack.com/app/open');
     });
 
     it('allows the same user to re-install (token refresh / scope bump)', async () => {
@@ -250,9 +260,16 @@ describe('GET /api/agent/messenger/slack/oauth/callback', () => {
 
       const res = await GET(buildRequest('code=c&state=s'));
 
-      expect(MessengerInstallationModel.upsert).toHaveBeenCalled();
-      expect(revokeToken).not.toHaveBeenCalled();
+      expect(MessengerInstallationModel.upsert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          installedByUserId: 'lobe-user-1',
+        }),
+        expect.anything(),
+      );
       expect(res.status).toBe(302);
+      const loc = new URL(res.headers.get('location')!);
+      expect(loc.origin + loc.pathname).toBe('https://slack.com/app/open');
     });
   });
 

@@ -33,8 +33,14 @@ export default {
   'messenger.slack.connections.disconnectFailed': 'Failed to disconnect.',
   'messenger.slack.connections.disconnectSuccess': 'Workspace disconnected.',
   'messenger.slack.connections.disconnectTitle': 'Disconnect workspace',
-  'messenger.slack.installResult.alreadyInstalled':
-    'This Slack workspace is already connected to LobeHub by another user. DM the bot in Slack to link your personal account, or ask the original installer to disconnect first.',
+  'messenger.slack.installBlocked.dismiss': 'Got it',
+  'messenger.slack.installBlocked.suggestion':
+    "DM @LobeHub in Slack to link your personal account — you don't need to install again. Or ask the original installer to disconnect this workspace first if you want to take over ownership.",
+  'messenger.slack.installBlocked.title': 'Workspace already connected',
+  'messenger.slack.installBlocked.withName':
+    '"{{workspace}}" is already connected to LobeHub by another user.',
+  'messenger.slack.installBlocked.withoutName':
+    'This Slack workspace is already connected to LobeHub by another user.',
   'messenger.slack.installResult.failed':
     'Slack install failed ({{reason}}). Please try again or contact support.',
   'messenger.slack.installResult.success': 'Slack workspace connected.',

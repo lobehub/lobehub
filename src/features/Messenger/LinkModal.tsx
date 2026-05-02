@@ -54,7 +54,13 @@ const LinkModal = memo<LinkModalProps>(({ botUsername, onClose, open, platform }
   const deepLink = !isSlack && botUsername ? buildTelegramDeepLink(botUsername) : undefined;
 
   return (
-    <Modal footer={null} open={open} title={t('messenger.linkModal.title')} onCancel={onClose}>
+    <Modal
+      footer={null}
+      open={open}
+      title={t('messenger.linkModal.title')}
+      width={480}
+      onCancel={onClose}
+    >
       <Flexbox align="center" gap={20} style={{ paddingBlock: 16 }}>
         {isSlack ? (
           <>

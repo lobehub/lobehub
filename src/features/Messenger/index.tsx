@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Button, Flexbox, Modal, Skeleton, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
@@ -9,7 +9,7 @@ import useSWR from 'swr';
 
 import { messengerService } from '@/services/messenger';
 
-import { type MessengerPlatform } from './constants';
+import { type MessengerPlatform, PlatformAvatar } from './constants';
 import IntegrationDetail from './IntegrationDetail';
 import IntegrationList from './IntegrationList';
 
@@ -33,30 +33,39 @@ const MessengerSettings = memo(() => {
   const { t } = useTranslation('messenger');
   const { message } = App.useApp();
   const [selected, setSelected] = useState<MessengerPlatform | null>(null);
+  // Workspace name from `?slack_workspace=...`. When set, render the takeover
+  // explainer modal — toast is too transient for a flow where the user just
+  // round-tripped through Slack OAuth and needs clear next-step guidance.
+  const [blockedWorkspace, setBlockedWorkspace] = useState<string | null>(null);
 
   const platformsSWR = useSWR('messenger:availablePlatforms', () =>
     messengerService.availablePlatforms(),
   );
 
-  // Surface Slack OAuth callback outcomes (success / blocked / failed) as a
-  // toast and scrub the query params so a refresh doesn't keep firing.
+  // Surface Slack OAuth callback outcomes. Success / generic failure stay as
+  // toasts; the "already installed by another user" case is escalated to a
+  // modal because the user needs to understand what happened and what to do
+  // next.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     const installed = url.searchParams.get('slack_installed');
     const error = url.searchParams.get('slack_error');
+    const workspace = url.searchParams.get('slack_workspace');
     if (!installed && !error) return;
 
     if (installed) {
       message.success(t('messenger.slack.installResult.success'));
     } else if (error === 'already_installed') {
-      message.warning(t('messenger.slack.installResult.alreadyInstalled'));
+      // Empty string sentinel = open modal even when workspace name is unknown.
+      setBlockedWorkspace(workspace ?? '');
     } else if (error) {
       message.error(t('messenger.slack.installResult.failed', { reason: error }));
     }
 
     url.searchParams.delete('slack_installed');
     url.searchParams.delete('slack_error');
+    url.searchParams.delete('slack_workspace');
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
   }, [message, t]);
 
@@ -85,6 +94,31 @@ const MessengerSettings = memo(() => {
           </>
         )}
       </Flexbox>
+
+      <Modal
+        footer={null}
+        open={blockedWorkspace !== null}
+        title={t('messenger.slack.installBlocked.title')}
+        width={480}
+        onCancel={() => setBlockedWorkspace(null)}
+      >
+        <Flexbox align="center" gap={20} style={{ paddingBlock: 16 }}>
+          <PlatformAvatar platform="slack" size={56} />
+          <Flexbox align="center" gap={8}>
+            <Text strong style={{ fontSize: 16, textAlign: 'center' }}>
+              {blockedWorkspace
+                ? t('messenger.slack.installBlocked.withName', { workspace: blockedWorkspace })
+                : t('messenger.slack.installBlocked.withoutName')}
+            </Text>
+            <Text style={{ textAlign: 'center' }} type="secondary">
+              {t('messenger.slack.installBlocked.suggestion')}
+            </Text>
+          </Flexbox>
+          <Button block size="large" type="primary" onClick={() => setBlockedWorkspace(null)}>
+            {t('messenger.slack.installBlocked.dismiss')}
+          </Button>
+        </Flexbox>
+      </Modal>
     </div>
   );
 });

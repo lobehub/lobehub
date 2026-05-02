@@ -530,14 +530,15 @@ export class MessengerRouter {
       await handle(thread, message);
     });
 
-    // Slack slash commands — mirrors Telegram's `/start`, `/agents`, `/new`,
-    // `/stop` (Slack reserves `/help` for itself). Telegram already routes
-    // these via message text (parsed by `parseCommand` above), so we only wire
-    // this for Slack. `bot` is a per-install Chat SDK instance, so the
-    // registration is scoped correctly.
+    // Slack slash commands — `/agents`, `/new`, `/stop`. Telegram routes
+    // commands via message text (parsed by `parseCommand` above), so we only
+    // wire this for Slack. `/start` isn't registered: Slack apps bind via
+    // OAuth and the per-user link flow auto-fires on first DM, so a manual
+    // /start would be redundant. `bot` is a per-install Chat SDK instance, so
+    // the registration is scoped correctly.
     if (platform === 'slack') {
-      bot.onSlashCommand(['/start', '/agents', '/new', '/stop'], async (event) => {
-        await this.handleSlackSlashCommand({ binder, event, serverDB, tenantId });
+      bot.onSlashCommand(['/agents', '/new', '/stop'], async (event) => {
+        await this.handleSlackSlashCommand({ binder, client, event, serverDB, tenantId });
       });
     }
   }
@@ -551,11 +552,12 @@ export class MessengerRouter {
    */
   private async handleSlackSlashCommand(params: {
     binder: MessengerPlatformBinder;
+    client: PlatformClient;
     event: SlashCommandEvent;
     serverDB: LobeChatDatabase;
     tenantId: string;
   }): Promise<void> {
-    const { binder, event, serverDB, tenantId } = params;
+    const { binder, client, event, serverDB, tenantId } = params;
     const senderId = event.user.userId;
     if (!senderId) {
       log('handleSlackSlashCommand: missing user id, dropping');
@@ -564,7 +566,10 @@ export class MessengerRouter {
 
     // `event.command` is the literal "/foo" Slack sent.
     const cmd = event.command.replace(/^\//, '').toLowerCase();
-    const chatId = (event.channel as any).id as string;
+    // chat-sdk wraps the raw channel id as `slack:<channel>` — strip the
+    // prefix so direct Slack API calls (postMessage / postEphemeral) get the
+    // bare channel id Slack expects.
+    const chatId = client.extractChatId((event.channel as any).id as string);
 
     const replyEphemeral = async (text: string): Promise<void> => {
       try {
@@ -583,17 +588,6 @@ export class MessengerRouter {
 
     try {
       switch (cmd) {
-        case 'start': {
-          await binder.handleUnlinkedMessage({
-            authorUserId: senderId,
-            authorUserName: event.user.userName,
-            chatId,
-            // The link-flow only reads author + chatId; no inbound message exists
-            // for slash commands.
-            message: undefined as unknown as Message,
-          });
-          return;
-        }
         case 'agents': {
           await this.handleAgentsCommand({
             binder,

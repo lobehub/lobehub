@@ -33,14 +33,10 @@ features:
     home_tab_enabled: false
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
-  # Mirrors the Telegram bot's commands one-for-one. `/help` is intentionally
-  # omitted — Slack reserves it for the workspace's built-in help, so apps
-  # can't register it; users discover the rest via Slack's autocomplete.
+  # `/start` is intentionally omitted — Slack apps bind their workspace via
+  # OAuth, and the per-user link flow auto-triggers on first DM (no Telegram-
+  # style /start needed). `/help` is reserved by Slack for built-in help.
   slash_commands:
-    - command: /start
-      url: https://app.lobehub.com/api/agent/messenger/webhooks/slack
-      description: Bind your LobeHub account
-      should_escape: false
     - command: /agents
       url: https://app.lobehub.com/api/agent/messenger/webhooks/slack
       description: List agents and switch the active one
@@ -65,12 +61,15 @@ oauth_config:
       - im:history
       - im:read
       - im:write
+      # Slash commands (/agents, /new, /stop) — Slack only registers the
+      # `slash_commands` block when this scope is present.
+      - commands
       # Inline feedback emoji (👀 → ✅) on the user's message
       - reactions:write
       # Resolve user → email for account linking on first DM
       - users:read
       - users:read.email
-      # PR3 will add: app_mentions:read, channels:history, commands, reactions:read
+      # PR3 will add: app_mentions:read, channels:history, reactions:read
 
 settings:
   event_subscriptions:
