@@ -109,6 +109,9 @@ export const inferVisualTypeFromUrl = (url: string): VisualFileItem['type'] => {
 export const getVisualUrlName = (url: string, index: number) => {
   try {
     const parsed = new URL(url);
+
+    if (parsed.protocol === 'data:') return `URL ${index + 1}`;
+
     return parsed.pathname.split('/').findLast(Boolean) || `URL ${index + 1}`;
   } catch {
     return `URL ${index + 1}`;
