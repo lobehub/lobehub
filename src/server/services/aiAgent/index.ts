@@ -122,6 +122,15 @@ const getVisualAvailabilityFromMessages = (messages: VisualAvailabilityMessage[]
   ),
 });
 
+const isVisualUnderstandingConfigured = () => {
+  try {
+    return !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && !!toolsEnv.VISUAL_UNDERSTANDING_MODEL;
+  } catch {
+    // The env proxy rejects server-only keys in client-like runtimes; treat that as disabled.
+    return false;
+  }
+};
+
 /**
  * Internal params for execAgent with step lifecycle callbacks
  * This extends the public ExecAgentParams with server-side only options
@@ -769,8 +778,7 @@ export class AiAgentService {
       const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];
       const inputVisualAvailability = getVisualAvailabilityFromFileTypes(inputFileTypes);
       let historyVisualAvailability = { hasImages: false, hasVideos: false };
-      const visualUnderstandingConfigured =
-        !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && !!toolsEnv.VISUAL_UNDERSTANDING_MODEL;
+      const visualUnderstandingConfigured = isVisualUnderstandingConfigured();
 
       if (
         visualUnderstandingConfigured &&
