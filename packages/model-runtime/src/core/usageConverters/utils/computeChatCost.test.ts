@@ -165,12 +165,25 @@ describe('computeChatPricing', () => {
         expectedUnits: [
           {
             name: 'textInput_cacheRead',
+            originalRate: 0.0145,
             rate: 0.0003625,
             strategy: 'fixed',
             unit: 'millionTokens',
           },
-          { name: 'textInput', rate: 0.0435, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textOutput', rate: 0.087, strategy: 'fixed', unit: 'millionTokens' },
+          {
+            name: 'textInput',
+            originalRate: 1.74,
+            rate: 0.0435,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+          {
+            name: 'textOutput',
+            originalRate: 3.48,
+            rate: 0.087,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
         ],
         modelId: 'deepseek-v4-pro',
       },
