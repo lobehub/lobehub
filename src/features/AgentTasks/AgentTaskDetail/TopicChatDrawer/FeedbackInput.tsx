@@ -18,8 +18,12 @@ const FeedbackInput = memo<FeedbackInputProps>(({ taskId, topicId }) => {
   const { t } = useTranslation('chat');
   const editor = useEditor();
   const userAvatar = useUserAvatar();
-  const { addComment, runTask } = useTaskStore(
-    (s) => ({ addComment: s.addComment, runTask: s.runTask }),
+  const { addComment, runTask, closeTopicDrawer } = useTaskStore(
+    (s) => ({
+      addComment: s.addComment,
+      closeTopicDrawer: s.closeTopicDrawer,
+      runTask: s.runTask,
+    }),
     shallow,
   );
   const [submitting, setSubmitting] = useState(false);
@@ -41,10 +45,11 @@ const FeedbackInput = memo<FeedbackInputProps>(({ taskId, topicId }) => {
       }
       editor?.cleanDocument?.();
       setHasContent(false);
+      closeTopicDrawer();
     } finally {
       setSubmitting(false);
     }
-  }, [taskId, topicId, editor, addComment, runTask, submitting]);
+  }, [taskId, topicId, editor, addComment, runTask, closeTopicDrawer, submitting]);
 
   return (
     <Flexbox horizontal align={'center'} className={styles.commentInputCard} gap={8}>
