@@ -764,7 +764,6 @@
   "workflow.toolDisplayName.finishOnboarding": "完成了引导",
   "workflow.toolDisplayName.getCommandOutput": "读取了命令输出",
   "workflow.toolDisplayName.getDocument": "读取了文档",
-  "workflow.toolDisplayName.getOnboardingState": "检查了引导状态",
   "workflow.toolDisplayName.getPageContent": "读取了文稿内容",
   "workflow.toolDisplayName.getTopicContext": "读取了话题上下文",
   "workflow.toolDisplayName.globLocalFiles": "搜索了文件",

@@ -5,6 +5,7 @@
   "agentSelection.search": "Nenhum agente correspondente encontrado",
   "brief.action.acknowledge": "Reconhecer",
   "brief.action.approve": "Aprovar",
+  "brief.action.confirm": "Confirmar",
   "brief.action.confirmDone": "Confirmar conclusão",
   "brief.action.feedback": "Feedback",
   "brief.action.retry": "Tentar novamente",

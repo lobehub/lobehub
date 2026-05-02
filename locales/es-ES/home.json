@@ -5,6 +5,7 @@
   "agentSelection.search": "No se encontraron agentes coincidentes",
   "brief.action.acknowledge": "Reconocer",
   "brief.action.approve": "Aprobar",
+  "brief.action.confirm": "Confirmar",
   "brief.action.confirmDone": "Confirmar finalización",
   "brief.action.feedback": "Comentarios",
   "brief.action.retry": "Reintentar",

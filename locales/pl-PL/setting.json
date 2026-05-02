@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "Dokumenty",
   "tools.builtins.lobe-agent-management.description": "Twórz, zarządzaj i orkiestruj agentów AI",
   "tools.builtins.lobe-agent-management.title": "Zarządzanie Agentami",
+  "tools.builtins.lobe-agent-marketplace.description": "Pokaż użytkownikom wyselekcjonowaną kartę Agent Marketplace i zarejestruj, które szablony wybierają.",
+  "tools.builtins.lobe-agent-marketplace.title": "Agent Marketplace",
   "tools.builtins.lobe-artifacts.description": "Twórz i podglądaj na żywo interaktywne komponenty UI, wizualizacje danych, wykresy, grafikę SVG i aplikacje internetowe. Twórz bogate treści wizualne, z którymi użytkownicy mogą bezpośrednio wchodzić w interakcję.",
   "tools.builtins.lobe-artifacts.readme": "Twórz i podglądaj na żywo interaktywne komponenty UI, wizualizacje danych, wykresy, grafiki SVG oraz aplikacje internetowe. Twórz bogate treści wizualne, z którymi użytkownicy mogą wchodzić w interakcję bezpośrednio.",
   "tools.builtins.lobe-artifacts.title": "Artefakty",

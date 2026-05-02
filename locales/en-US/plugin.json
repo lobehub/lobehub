@@ -263,7 +263,6 @@
   "builtins.lobe-web-browsing.inspector.noResults": "No results",
   "builtins.lobe-web-browsing.title": "Web Search",
   "builtins.lobe-web-onboarding.apiName.finishOnboarding": "Finish onboarding",
-  "builtins.lobe-web-onboarding.apiName.getOnboardingState": "Read onboarding state",
   "builtins.lobe-web-onboarding.apiName.readDocument": "Read document",
   "builtins.lobe-web-onboarding.apiName.saveUserQuestion": "Save user question",
   "builtins.lobe-web-onboarding.apiName.updateDocument": "Update document",
