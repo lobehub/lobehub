@@ -3,9 +3,21 @@ export default {
   'messenger.activeAgentHintEmpty':
     'No active agent. Pick one above or use /agents in the bot. Until then inbound messages will be parked.',
   'messenger.activeAgentPlaceholder': 'Select an agent',
+  'messenger.detail.addWorkspace': 'Add workspace',
+  'messenger.detail.connections.connected': 'Connected',
+  'messenger.detail.connections.empty': 'Open the bot and send /start to link your account.',
+  'messenger.detail.connections.linkHint':
+    'Workspace installed. Open Slack and DM the bot to finish linking your personal account.',
+  'messenger.detail.connections.pending': 'Pending',
+  'messenger.detail.connections.title': 'Connections',
+  'messenger.detail.connections.userLabel': 'user',
+  'messenger.detail.connections.workspaceLabel': 'workspace',
+  'messenger.detail.disconnect': 'Disconnect',
   'messenger.helpCommands':
     'In the bot: send /agents to list your agents and tap one to switch which agent receives messages.',
   'messenger.linkCta': 'Connect',
+  'messenger.list.slack.description': 'Use @LobeHub in Slack to assign tasks',
+  'messenger.list.telegram.description': 'Message your task, get results delivered instantly',
   'messenger.linkedAccount': 'Linked to {{platform}} account {{handle}}',
   'messenger.linkModal.continueIn': 'Continue setup in {{platform}}',
   'messenger.linkModal.instructions':
@@ -45,22 +57,19 @@ export default {
   'messenger.unlinkFailed': 'Failed to disconnect.',
   'messenger.unlinkSuccess': 'Disconnected.',
   'messenger.unlinkTitle': 'Disconnect account',
-  'verify.slack.description':
-    'Slack is requesting access to LobeHub. By clicking "Confirm," you grant LobeHub the following permissions under your Slack identity.',
-  'verify.slack.identityLine': '{{email}} in {{workspace}}',
-  'verify.slack.identityLineNoWorkspace': '{{email}}',
-  'verify.slack.identityLineNoEmail': 'Slack user {{userId}} in {{workspace}}',
-  'verify.slack.title': 'Slack is requesting access to LobeHub',
   'verify.confirm.cta': 'Confirm linking',
   'verify.confirm.defaultAgent': 'Default agent',
   'verify.confirm.defaultAgentHint':
     'Your messages will be routed here first. You can switch any time via /agents in the bot or from Settings → Messenger.',
   'verify.confirm.defaultAgentPlaceholder': 'Select an agent',
   'verify.confirm.description':
-    'Your LobeHub account will be linked with {{platform}} account "{{handle}}".',
+    'Your LobeHub account "{{lobeAccount}}" will be linked with {{platform}} account "{{handle}}".',
+  'verify.confirm.descriptionWithWorkspace':
+    'Your LobeHub account "{{lobeAccount}}" will be linked with {{platform}} account "{{handle}}" in workspace "{{workspace}}".',
   'verify.confirm.noAgents':
     "You don't have any agents yet. Create one in LobeHub, then come back to finish linking.",
   'verify.confirm.title': 'Confirm linking',
+  'verify.confirm.workspace': 'Workspace: {{workspace}}',
   'verify.error.expired': 'This link has expired. Please return to the bot and send /start again.',
   'verify.error.generic': 'Something went wrong. Please try again.',
   'verify.error.missingToken': 'Invalid link. Open this page from the bot.',

@@ -204,7 +204,16 @@ const MessengerVerifyPage = memo(() => {
       `/verify-im?${searchParams.toString()}`,
     )}`;
     return (
-      <Flexbox align="center" className={styles.card} gap={24}>
+      <Flexbox align="center" className={styles.card} gap={32}>
+        {PLATFORM_BRAND_ICONS[imType] && (
+          <div className={styles.iconRow}>
+            <div className={styles.bubble}>
+              <ProductLogo size={36} type="3d" />
+            </div>
+            <ChainBubble className={styles.chainBubble} />
+            <PlatformBubble className={styles.bubble} platform={imType} />
+          </div>
+        )}
         <Heading subtitle={t('verify.signInRequired')} title={t('verify.confirm.title')} />
         <Button block href={signInUrl} size="large" type="primary">
           {t('verify.signInCta')}
@@ -276,32 +285,7 @@ const MessengerVerifyPage = memo(() => {
 
   const platformLabel = PLATFORM_LABELS[tokenSWR.data.platform] ?? tokenSWR.data.platform;
   const handle = tokenSWR.data.platformUsername ?? `ID ${tokenSWR.data.platformUserId}`;
-
-  // Slack-specific copy: Manus-style "Slack is requesting access to LobeHub"
-  // with workspace name + email surfaced. URL params (`slack_user_email`,
-  // `slack_team_id`) are echoed in the link the bot sent so the page can
-  // render rich identity context without an extra round-trip.
-  const isSlack = tokenSWR.data.platform === 'slack';
-  const slackEmail = isSlack ? (searchParams.get('slack_user_email') ?? '') : '';
-  const slackUserId = isSlack ? (searchParams.get('slack_user_id') ?? '') : '';
-  const tenantName = isSlack ? (tokenSWR.data.tenantName ?? '') : '';
-
-  const headingTitle = isSlack ? t('verify.slack.title') : t('verify.confirm.title');
-  const headingSubtitle = isSlack
-    ? t('verify.slack.description')
-    : t('verify.confirm.description', { handle, platform: platformLabel });
-
-  // Identity line shown above the agent picker for Slack — fall back through
-  // email-with-workspace → email-only → user-id-with-workspace as fields drop.
-  const slackIdentityLine = (() => {
-    if (!isSlack) return null;
-    if (slackEmail && tenantName)
-      return t('verify.slack.identityLine', { email: slackEmail, workspace: tenantName });
-    if (slackEmail) return t('verify.slack.identityLineNoWorkspace', { email: slackEmail });
-    if (tenantName)
-      return t('verify.slack.identityLineNoEmail', { userId: slackUserId, workspace: tenantName });
-    return null;
-  })();
+  const workspaceName = tokenSWR.data.tenantName;
 
   return (
     <Flexbox align="center" className={styles.card} gap={32}>
@@ -314,11 +298,14 @@ const MessengerVerifyPage = memo(() => {
         <PlatformBubble className={styles.bubble} platform={tokenSWR.data.platform} />
       </div>
 
-      <Heading subtitle={headingSubtitle} title={headingTitle} />
+      <Heading
+        subtitle={t('verify.confirm.description', { handle, platform: platformLabel })}
+        title={t('verify.confirm.title')}
+      />
 
-      {slackIdentityLine && (
-        <Text strong align="center" style={{ fontSize: 15 }}>
-          {slackIdentityLine}
+      {workspaceName && (
+        <Text align="center" type="secondary">
+          {t('verify.confirm.workspace', { workspace: workspaceName })}
         </Text>
       )}
 
