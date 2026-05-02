@@ -40,7 +40,7 @@ export interface OpenRouterModelCard {
 }
 
 export interface OpenRouterReasoning {
-  effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   enabled?: boolean;
   exclude?: boolean;
   max_tokens?: number;
