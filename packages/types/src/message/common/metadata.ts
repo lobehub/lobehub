@@ -34,13 +34,33 @@ export interface LocalSystemToolSnapshot {
 export interface ModelTokensUsage {
   // Prediction tokens
   acceptedPredictionTokens?: number;
+  /**
+   * Total input audio tokens for the request. This is a modality breakdown, not
+   * a cache-miss count.
+   */
   inputAudioTokens?: number;
+  /**
+   * Cached audio tokens for the request.
+   */
+  inputCachedAudioTokens?: number;
+  /**
+   * Cached image tokens for the request.
+   */
+  inputCachedImageTokens?: number;
+  /**
+   * Cached text tokens for the request.
+   */
+  inputCachedTextTokens?: number;
   // Input tokens breakdown
   /**
    * user prompt input
    */
   // Input cache tokens
   inputCachedTokens?: number;
+  /**
+   * Cached video tokens for the request.
+   */
+  inputCachedVideoTokens?: number;
 
   inputCacheMissTokens?: number;
   /**
@@ -48,15 +68,24 @@ export interface ModelTokensUsage {
    */
   inputCitationTokens?: number;
   /**
-   * user prompt image
+   * Total user prompt image tokens for the request. This is a modality
+   * breakdown, not a cache-miss count.
    */
   inputImageTokens?: number;
+  /**
+   * Total user prompt text tokens for the request. This is a modality
+   * breakdown, not a cache-miss count.
+   */
   inputTextTokens?: number;
   /**
    * tool use prompt tokens (Google AI / Vertex AI)
    */
   inputToolTokens?: number;
 
+  /**
+   * Total user prompt video tokens for the request. This is a modality
+   * breakdown, not a cache-miss count.
+   */
   inputVideoTokens?: number;
   inputWriteCacheTokens?: number;
   outputAudioTokens?: number;
@@ -79,6 +108,10 @@ export const ModelUsageSchema = z.object({
   inputCachedTokens: z.number().optional(),
   inputCacheMissTokens: z.number().optional(),
   inputWriteCacheTokens: z.number().optional(),
+  inputCachedTextTokens: z.number().optional(),
+  inputCachedImageTokens: z.number().optional(),
+  inputCachedAudioTokens: z.number().optional(),
+  inputCachedVideoTokens: z.number().optional(),
   inputTextTokens: z.number().optional(),
   inputImageTokens: z.number().optional(),
   inputAudioTokens: z.number().optional(),
@@ -195,7 +228,15 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.usage` instead */
   inputAudioTokens?: number;
   /** @deprecated use `metadata.usage` instead */
+  inputCachedAudioTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedImageTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedTextTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
   inputCachedTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedVideoTokens?: number;
   /** @deprecated use `metadata.usage` instead */
   inputCacheMissTokens?: number;
   /** @deprecated use `metadata.usage` instead */

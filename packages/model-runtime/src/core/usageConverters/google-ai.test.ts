@@ -14,6 +14,10 @@ describe('convertGoogleAIUsage', () => {
         { modality: MediaModality.TEXT, tokenCount: 30 },
         { modality: MediaModality.IMAGE, tokenCount: 10 },
       ],
+      cacheTokensDetails: [
+        { modality: MediaModality.TEXT, tokenCount: 4 },
+        { modality: MediaModality.VIDEO, tokenCount: 2 },
+      ],
       promptTokenCount: 70,
       promptTokensDetails: [
         { modality: MediaModality.TEXT, tokenCount: 60 },
@@ -28,8 +32,12 @@ describe('convertGoogleAIUsage', () => {
 
     expect(result).toEqual({
       inputAudioTokens: undefined,
+      inputCachedAudioTokens: undefined,
+      inputCachedImageTokens: undefined,
+      inputCachedTextTokens: 4,
       inputCacheMissTokens: 64,
       inputCachedTokens: 6,
+      inputCachedVideoTokens: 2,
       inputImageTokens: 5,
       inputTextTokens: 60,
       inputVideoTokens: 4,
@@ -57,8 +65,12 @@ describe('convertGoogleAIUsage', () => {
 
     expect(result).toEqual({
       inputAudioTokens: undefined,
+      inputCachedAudioTokens: undefined,
+      inputCachedImageTokens: undefined,
+      inputCachedTextTokens: undefined,
       inputCacheMissTokens: undefined,
       inputCachedTokens: undefined,
+      inputCachedVideoTokens: undefined,
       inputImageTokens: 3,
       inputTextTokens: undefined,
       inputVideoTokens: undefined,
@@ -102,8 +114,12 @@ describe('convertGoogleAIUsage', () => {
 
     expect(result).toEqual({
       inputAudioTokens: undefined,
+      inputCachedAudioTokens: undefined,
+      inputCachedImageTokens: undefined,
+      inputCachedTextTokens: undefined,
       inputCacheMissTokens: undefined,
       inputCachedTokens: undefined,
+      inputCachedVideoTokens: undefined,
       inputImageTokens: undefined,
       inputTextTokens: undefined,
       inputToolTokens: 7596,

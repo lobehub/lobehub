@@ -300,6 +300,87 @@ describe('computeChatPricing', () => {
       expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(100);
     });
 
+    it('bills Google cache reads with cached modality details without double counting', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'videoInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      const usage: ModelTokensUsage = {
+        inputCacheMissTokens: 40,
+        inputCachedTokens: 60,
+        inputCachedTextTokens: 50,
+        inputCachedVideoTokens: 10,
+        inputTextTokens: 80,
+        inputVideoTokens: 20,
+        outputTextTokens: 10,
+        totalInputTokens: 100,
+        totalOutputTokens: 10,
+        totalTokens: 110,
+      };
+
+      const result = computeChatCost(pricing, usage);
+
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+
+      const { breakdown, totalCredits } = result!;
+      expect(breakdown.find((item) => item.unit.name === 'textInput_cacheRead')?.quantity).toBe(60);
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(30);
+      expect(breakdown.find((item) => item.unit.name === 'videoInput')?.quantity).toBe(10);
+      expect(totalCredits).toBe(232);
+    });
+
+    it('splits cache reads by modality when dedicated modality cache units exist', () => {
+      const pricing: Pricing = {
+        units: [
+          { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'audioInput_cacheRead', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'imageInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'audioInput', rate: 32, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'imageInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      };
+
+      const usage: ModelTokensUsage = {
+        inputAudioTokens: 40,
+        inputCachedAudioTokens: 30,
+        inputCachedImageTokens: 10,
+        inputCachedTextTokens: 50,
+        inputCachedTokens: 90,
+        inputImageTokens: 20,
+        inputTextTokens: 80,
+        outputTextTokens: 10,
+        totalInputTokens: 140,
+        totalOutputTokens: 10,
+        totalTokens: 150,
+      };
+
+      const result = computeChatCost(pricing, usage);
+
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+
+      const { breakdown, totalCredits } = result!;
+      expect(breakdown.find((item) => item.unit.name === 'textInput_cacheRead')?.quantity).toBe(50);
+      expect(breakdown.find((item) => item.unit.name === 'audioInput_cacheRead')?.quantity).toBe(
+        30,
+      );
+      expect(breakdown.find((item) => item.unit.name === 'imageInput_cacheRead')?.quantity).toBe(
+        10,
+      );
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.quantity).toBe(30);
+      expect(breakdown.find((item) => item.unit.name === 'audioInput')?.quantity).toBe(10);
+      expect(breakdown.find((item) => item.unit.name === 'imageInput')?.quantity).toBe(10);
+      expect(totalCredits).toBe(577);
+    });
+
     it('charges image input at the official Gemini 3.1 Flash Image rate', () => {
       const pricing = lobehubChatModels.find(
         (model: { id: string }) => model.id === 'gemini-3.1-flash-image-preview',
