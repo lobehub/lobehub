@@ -106,6 +106,8 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
   imageInput_cacheRead: () => undefined,
   imageOutput: (usage) => usage.outputImageTokens,
 
+  videoInput: (usage) => usage.inputVideoTokens,
+
   imageGeneration: () => undefined,
 
   audioInput: (usage) => usage.inputAudioTokens,

@@ -43,6 +43,7 @@ export const convertGoogleAIUsage = (
     inputImageTokens: getTokenCount(usage.promptTokensDetails, MediaModality.IMAGE),
     inputTextTokens: getTokenCount(usage.promptTokensDetails, MediaModality.TEXT),
     inputToolTokens: toolUseTokens,
+    inputVideoTokens: getTokenCount(usage.promptTokensDetails, MediaModality.VIDEO),
     outputImageTokens,
     outputReasoningTokens: reasoningTokens,
     outputTextTokens,

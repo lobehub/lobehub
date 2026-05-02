@@ -18,6 +18,7 @@ describe('convertGoogleAIUsage', () => {
       promptTokensDetails: [
         { modality: MediaModality.TEXT, tokenCount: 60 },
         { modality: MediaModality.IMAGE, tokenCount: 5 },
+        { modality: MediaModality.VIDEO, tokenCount: 4 },
       ],
       thoughtsTokenCount: 12,
       totalTokenCount: 122,
@@ -31,6 +32,7 @@ describe('convertGoogleAIUsage', () => {
       inputCachedTokens: 6,
       inputImageTokens: 5,
       inputTextTokens: 60,
+      inputVideoTokens: 4,
       outputImageTokens: 10,
       outputReasoningTokens: 12,
       outputTextTokens: 30,
@@ -59,6 +61,7 @@ describe('convertGoogleAIUsage', () => {
       inputCachedTokens: undefined,
       inputImageTokens: 3,
       inputTextTokens: undefined,
+      inputVideoTokens: undefined,
       outputImageTokens: 15,
       outputReasoningTokens: 5,
       outputTextTokens: 40,
@@ -104,10 +107,11 @@ describe('convertGoogleAIUsage', () => {
       inputImageTokens: undefined,
       inputTextTokens: undefined,
       inputToolTokens: 7596,
+      inputVideoTokens: undefined,
       outputImageTokens: 0,
       outputReasoningTokens: undefined,
       outputTextTokens: 367,
-      totalInputTokens: 7646,  // promptTokenCount (50) + toolUsePromptTokenCount (7596)
+      totalInputTokens: 7646, // promptTokenCount (50) + toolUsePromptTokenCount (7596)
       totalOutputTokens: 367,
       totalTokens: 8013,
     });

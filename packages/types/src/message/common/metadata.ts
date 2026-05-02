@@ -52,11 +52,12 @@ export interface ModelTokensUsage {
    */
   inputImageTokens?: number;
   inputTextTokens?: number;
-
   /**
    * tool use prompt tokens (Google AI / Vertex AI)
    */
   inputToolTokens?: number;
+
+  inputVideoTokens?: number;
   inputWriteCacheTokens?: number;
   outputAudioTokens?: number;
   outputImageTokens?: number;
@@ -81,6 +82,7 @@ export const ModelUsageSchema = z.object({
   inputTextTokens: z.number().optional(),
   inputImageTokens: z.number().optional(),
   inputAudioTokens: z.number().optional(),
+  inputVideoTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
   inputToolTokens: z.number().optional(),
 
@@ -204,6 +206,8 @@ export interface MessageMetadata {
   inputTextTokens?: number;
   /** @deprecated use `metadata.usage` instead */
   inputToolTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputVideoTokens?: number;
   /** @deprecated use `metadata.usage` instead */
   inputWriteCacheTokens?: number;
   /**

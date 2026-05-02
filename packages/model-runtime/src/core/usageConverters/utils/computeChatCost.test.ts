@@ -3,6 +3,7 @@ import type { Pricing } from 'model-bank';
 import anthropicChatModels from 'model-bank/anthropic';
 import azureChatModels from 'model-bank/azure';
 import googleChatModels from 'model-bank/google';
+import { lobehubChatModels } from 'model-bank/lobehub';
 import openaiChatModels from 'model-bank/openai';
 import { describe, expect, it } from 'vitest';
 
@@ -205,6 +206,127 @@ describe('computeChatPricing', () => {
 
       const imageOutput = result?.breakdown.find((item) => item.unit.name === 'imageOutput');
       expect(imageOutput?.credits).toBe(12_000);
+    });
+
+    it('charges Gemini 3.1 Flash-Lite image, video, and audio input tokens', () => {
+      const pricing = googleChatModels.find(
+        (model: { id: string }) => model.id === 'gemini-3.1-flash-lite-preview',
+      )?.pricing;
+      expect(pricing).toBeDefined();
+
+      const usage: ModelTokensUsage = {
+        inputAudioTokens: 443,
+        inputImageTokens: 1104,
+        inputTextTokens: 123,
+        inputVideoTokens: 1188,
+        outputTextTokens: 346,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+      expect(result?.totalCredits).toBe(1345);
+      expect(result?.totalCost).toBeCloseTo(0.001345, 6);
+
+      const { breakdown } = result!;
+      expect(breakdown).toHaveLength(5);
+
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.credits).toBe(31);
+      expect(breakdown.find((item) => item.unit.name === 'imageInput')?.credits).toBe(276);
+      expect(breakdown.find((item) => item.unit.name === 'videoInput')?.credits).toBe(297);
+      expect(breakdown.find((item) => item.unit.name === 'audioInput')?.credits).toBe(222);
+      expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(519);
+    });
+
+    it('charges multimodal input units for LobeHub-hosted Gemini 3 Flash', () => {
+      const pricing = lobehubChatModels.find(
+        (model: { id: string }) => model.id === 'gemini-3-flash-preview',
+      )?.pricing;
+      expect(pricing).toBeDefined();
+
+      const usage: ModelTokensUsage = {
+        inputAudioTokens: 400,
+        inputImageTokens: 200,
+        inputTextTokens: 100,
+        inputVideoTokens: 300,
+        outputTextTokens: 10,
+        totalInputTokens: 1000,
+        totalOutputTokens: 10,
+        totalTokens: 1010,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+      expect(result?.totalCredits).toBe(730);
+
+      const { breakdown } = result!;
+      expect(breakdown).toHaveLength(5);
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.credits).toBe(50);
+      expect(breakdown.find((item) => item.unit.name === 'imageInput')?.credits).toBe(100);
+      expect(breakdown.find((item) => item.unit.name === 'videoInput')?.credits).toBe(150);
+      expect(breakdown.find((item) => item.unit.name === 'audioInput')?.credits).toBe(400);
+      expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(30);
+    });
+
+    it('charges multimodal input units for LobeHub-hosted tiered Gemini Pro', () => {
+      const pricing = lobehubChatModels.find(
+        (model: { id: string }) => model.id === 'gemini-2.5-pro',
+      )?.pricing;
+      expect(pricing).toBeDefined();
+
+      const usage: ModelTokensUsage = {
+        inputAudioTokens: 400,
+        inputImageTokens: 200,
+        inputTextTokens: 100,
+        inputVideoTokens: 300,
+        outputTextTokens: 10,
+        totalInputTokens: 1000,
+        totalOutputTokens: 10,
+        totalTokens: 1010,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+      expect(result?.totalCredits).toBe(1350);
+
+      const { breakdown } = result!;
+      expect(breakdown).toHaveLength(5);
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.credits).toBe(125);
+      expect(breakdown.find((item) => item.unit.name === 'imageInput')?.credits).toBe(250);
+      expect(breakdown.find((item) => item.unit.name === 'videoInput')?.credits).toBe(375);
+      expect(breakdown.find((item) => item.unit.name === 'audioInput')?.credits).toBe(500);
+      expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(100);
+    });
+
+    it('charges image input at the official Gemini 3.1 Flash Image rate', () => {
+      const pricing = lobehubChatModels.find(
+        (model: { id: string }) => model.id === 'gemini-3.1-flash-image-preview',
+      )?.pricing;
+      expect(pricing).toBeDefined();
+
+      const usage: ModelTokensUsage = {
+        inputImageTokens: 200,
+        inputTextTokens: 100,
+        outputImageTokens: 20,
+        outputTextTokens: 10,
+        totalInputTokens: 300,
+        totalOutputTokens: 30,
+        totalTokens: 330,
+      };
+
+      const result = computeChatCost(pricing, usage);
+      expect(result).toBeDefined();
+      expect(result?.issues).toHaveLength(0);
+      expect(result?.totalCredits).toBe(1380);
+
+      const { breakdown } = result!;
+      expect(breakdown).toHaveLength(4);
+      expect(breakdown.find((item) => item.unit.name === 'textInput')?.credits).toBe(50);
+      expect(breakdown.find((item) => item.unit.name === 'imageInput')?.credits).toBe(100);
+      expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(30);
+      expect(breakdown.find((item) => item.unit.name === 'imageOutput')?.credits).toBe(1200);
     });
 
     it('handles multi-modal image generation for Nano Banana', () => {
