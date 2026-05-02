@@ -79,6 +79,21 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
   const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
 
+  const warnIfVisualUploadUnsupported = useCallback(
+    (files: File[]) => {
+      const hasImageFiles = files.some((file) => file.type.startsWith('image/'));
+      const hasVideoFiles = files.some((file) => file.type.startsWith('video/'));
+
+      if ((hasImageFiles && !canUploadImage) || (hasVideoFiles && !canUploadVideo)) {
+        message.warning(t('upload.clientMode.visionNotSupported'));
+        return true;
+      }
+
+      return false;
+    },
+    [canUploadImage, canUploadVideo, message, t],
+  );
+
   const handleDragEnter = useCallback((e: DragEvent) => {
     if (!e.dataTransfer?.items || e.dataTransfer.items.length === 0) return;
 
@@ -125,18 +140,12 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
 
       if (files.length === 0) return;
 
-      // Check if there are visual files and the current model cannot receive them directly or via fallback.
-      const hasImageFiles = files.some((file) => file.type.startsWith('image/'));
-      const hasVideoFiles = files.some((file) => file.type.startsWith('video/'));
-      if ((hasImageFiles && !canUploadImage) || (hasVideoFiles && !canUploadVideo)) {
-        message.warning(t('upload.clientMode.visionNotSupported'));
-        return;
-      }
+      if (warnIfVisualUploadUnsupported(files)) return;
 
       // upload files
       onUploadFiles(files);
     },
-    [canUploadImage, canUploadVideo, message, onUploadFiles, t],
+    [onUploadFiles, warnIfVisualUploadUnsupported],
   );
 
   const handlePaste = useCallback(
@@ -148,17 +157,11 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
       const files = await getFileListFromDataTransferItems(items);
       if (files.length === 0) return;
 
-      // Check if there are visual files and the current model cannot receive them directly or via fallback.
-      const hasImageFiles = files.some((file) => file.type.startsWith('image/'));
-      const hasVideoFiles = files.some((file) => file.type.startsWith('video/'));
-      if ((hasImageFiles && !canUploadImage) || (hasVideoFiles && !canUploadVideo)) {
-        message.warning(t('upload.clientMode.visionNotSupported'));
-        return;
-      }
+      if (warnIfVisualUploadUnsupported(files)) return;
 
       onUploadFiles(files);
     },
-    [canUploadImage, canUploadVideo, message, onUploadFiles, t],
+    [onUploadFiles, warnIfVisualUploadUnsupported],
   );
 
   useEffect(() => {

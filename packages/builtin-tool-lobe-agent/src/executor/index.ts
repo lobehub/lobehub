@@ -6,12 +6,15 @@ import type { AnalyzeVisualMediaParams } from '../types';
 import { LobeAgentApiName } from '../types';
 import type { VisualFileItem } from '../visualMedia';
 import {
+  buildAnalyzeVisualMediaContent,
   createUrlVisualFileItems,
   createVisualFileItems,
-  filterAllowedVisualMediaUrls,
+  formatVisualMediaUrlValidationError,
+  getUnexpectedAnalyzeVisualMediaArgumentKeys,
   hasUserVisualFiles,
-  normalizeStringArray,
+  normalizeAnalyzeVisualMediaInput,
   selectVisualFileItems,
+  validateVisualMediaUrls,
 } from '../visualMedia';
 
 interface VisualSourceMessage {
@@ -43,11 +46,6 @@ const createAbortController = (signal?: AbortSignal) => {
 const isVisualSourceMessage = (message: unknown): message is VisualSourceMessage =>
   !!message && typeof message === 'object';
 
-const getUnexpectedArgumentKeys = (params: AnalyzeVisualMediaParams) =>
-  Object.keys(params as unknown as Record<string, unknown>).filter(
-    (key) => key !== 'question' && key !== 'refs' && key !== 'urls',
-  );
-
 class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
   readonly identifier = LobeAgentManifest.identifier;
   protected readonly apiEnum = LobeAgentApiName;
@@ -75,10 +73,13 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
-    const requestedRefs = normalizeStringArray(params.refs);
-    const requestedUrls = normalizeStringArray(params.urls);
+    const { requestedRefs, requestedUrls } = normalizeAnalyzeVisualMediaInput(
+      params as unknown as Record<PropertyKey, unknown>,
+    );
     if (requestedRefs.length === 0 && requestedUrls.length === 0) {
-      const unexpectedKeys = getUnexpectedArgumentKeys(params);
+      const unexpectedKeys = getUnexpectedAnalyzeVisualMediaArgumentKeys(
+        params as unknown as Record<PropertyKey, unknown>,
+      );
       const aliasHint =
         unexpectedKeys.length > 0 ? ` Do not use ${unexpectedKeys.join(', ')}.` : '';
 
@@ -91,18 +92,19 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
-    const { invalidUrls, validUrls } = filterAllowedVisualMediaUrls(requestedUrls);
-    if (invalidUrls.length > 0) {
+    const urlValidation = validateVisualMediaUrls(requestedUrls);
+    const urlValidationError = formatVisualMediaUrlValidationError(urlValidation);
+    if (urlValidationError) {
       return {
         error: {
-          message: `Unsupported visual media URLs: ${invalidUrls.join(', ')}. Only http:, https: and data: URLs are supported.`,
+          message: urlValidationError,
           type: 'InvalidToolArguments',
         },
         success: false,
       };
     }
 
-    const selectedUrls = createUrlVisualFileItems(validUrls);
+    const selectedUrls = createUrlVisualFileItems(urlValidation.validUrls);
     let selectedRefs: VisualFileItem[] = [];
 
     if (requestedRefs.length > 0) {
@@ -180,36 +182,15 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     let usage: unknown;
     const abortController = createAbortController(ctx.signal);
     const { chatService } = await import('@/services/chat');
-    const fileSummary = selectedItems
-      .map((file) => `- ${file.ref}: ${file.name} (${file.type})`)
-      .join('\n');
 
     const payload = {
       max_tokens: 2000,
       messages: [
         {
-          content: [
-            {
-              text: [
-                'Analyze the attached visual media and answer the user question.',
-                'Do not mention that you are a fallback tool unless it is relevant.',
-                '',
-                'Files:',
-                fileSummary,
-                '',
-                `Question: ${params.question}`,
-              ].join('\n'),
-              type: 'text',
-            },
-            ...selectedItems.map((file) =>
-              file.type === 'image'
-                ? {
-                    image_url: { detail: 'auto' as const, url: file.uri },
-                    type: 'image_url' as const,
-                  }
-                : { type: 'video_url' as const, video_url: { url: file.uri } },
-            ),
-          ],
+          content: buildAnalyzeVisualMediaContent(selectedItems, params.question, {
+            includeFallbackInstruction: true,
+            includeFileSummary: true,
+          }),
           role: 'user' as const,
         },
       ],

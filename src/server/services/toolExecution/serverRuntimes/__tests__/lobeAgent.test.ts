@@ -1,4 +1,4 @@
-import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentIdentifier, MAX_VISUAL_MEDIA_URLS } from '@lobechat/builtin-tool-lobe-agent';
 import { createVisualFileRef } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -199,19 +199,43 @@ describe('lobeAgentRuntime', () => {
 
     const result = await runtime.analyzeVisualMedia({
       question: 'what is this?',
-      urls: ['file:///private/image.png', 'ftp://example.com/image.png'],
+      urls: [
+        'data:text/plain;base64,abcd',
+        'file:///private/image.png',
+        'ftp://example.com/image.png',
+      ],
     });
 
     expect(result).toMatchObject({
       error: { code: 'UNSUPPORTED_VISUAL_MEDIA_URLS' },
       success: false,
     });
-    expect(result.content).toContain('Only http:, https: and data: URLs are supported');
+    expect(result.content).toContain('Only http:, https:, data:image/* and data:video/* URLs');
     expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
     expect(mockChat).not.toHaveBeenCalled();
   });
 
-  it('should allow http and data direct media urls', async () => {
+  it('should reject too many direct media urls before querying message refs', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeVisualMedia({
+      question: 'what is this?',
+      urls: Array.from(
+        { length: MAX_VISUAL_MEDIA_URLS + 1 },
+        (_, index) => `https://example.com/${index}.png`,
+      ),
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'UNSUPPORTED_VISUAL_MEDIA_URLS' },
+      success: false,
+    });
+    expect(result.content).toContain(`At most ${MAX_VISUAL_MEDIA_URLS} URLs are supported`);
+    expect(mockMessageModelQueryByIds).not.toHaveBeenCalled();
+    expect(mockChat).not.toHaveBeenCalled();
+  });
+
+  it('should allow http and visual data direct media urls', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
     const result = await runtime.analyzeVisualMedia({

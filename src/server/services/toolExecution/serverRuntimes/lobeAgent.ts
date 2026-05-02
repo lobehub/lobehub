@@ -1,12 +1,14 @@
 import type { VisualFileItem, VisualSourceMessage } from '@lobechat/builtin-tool-lobe-agent';
 import {
+  buildAnalyzeVisualMediaContent,
   createUrlVisualFileItems,
   createVisualFileItems,
-  filterAllowedVisualMediaUrls,
+  formatVisualMediaUrlValidationError,
   hasUserVisualFiles,
   LobeAgentIdentifier,
-  normalizeStringArray,
+  normalizeAnalyzeVisualMediaInput,
   selectVisualFileItems,
+  validateVisualMediaUrls,
 } from '@lobechat/builtin-tool-lobe-agent';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
@@ -128,8 +130,9 @@ class LobeAgentExecutionRuntime {
       return buildError('question is required.', 'INVALID_ARGUMENTS');
     }
 
-    const requestedRefs = normalizeStringArray(params.refs);
-    const requestedUrls = normalizeStringArray(params.urls);
+    const { requestedRefs, requestedUrls } = normalizeAnalyzeVisualMediaInput(
+      params as unknown as Record<PropertyKey, unknown>,
+    );
     if (requestedRefs.length === 0 && requestedUrls.length === 0) {
       return buildError(
         'Either refs or urls is required and must include at least one visual file ref or media URL.',
@@ -137,15 +140,13 @@ class LobeAgentExecutionRuntime {
       );
     }
 
-    const { invalidUrls, validUrls } = filterAllowedVisualMediaUrls(requestedUrls);
-    if (invalidUrls.length > 0) {
-      return buildError(
-        `Unsupported visual media URLs: ${invalidUrls.join(', ')}. Only http:, https: and data: URLs are supported.`,
-        'UNSUPPORTED_VISUAL_MEDIA_URLS',
-      );
+    const urlValidation = validateVisualMediaUrls(requestedUrls);
+    const urlValidationError = formatVisualMediaUrlValidationError(urlValidation);
+    if (urlValidationError) {
+      return buildError(urlValidationError, 'UNSUPPORTED_VISUAL_MEDIA_URLS');
     }
 
-    const selectedUrlItems = createUrlVisualFileItems(validUrls);
+    const selectedUrlItems = createUrlVisualFileItems(urlValidation.validUrls);
     let selectedRefItems: VisualFileItem[] = [];
 
     if (requestedRefs.length > 0) {
@@ -229,27 +230,7 @@ class LobeAgentExecutionRuntime {
     const payload = {
       messages: [
         {
-          content: [
-            {
-              text: [
-                'Analyze the attached visual media and answer the user question.',
-                '',
-                `Question: ${params.question}`,
-              ].join('\n'),
-              type: 'text',
-            },
-            ...selectedItems.map((item) =>
-              item.type === 'image'
-                ? {
-                    image_url: { detail: 'auto' as const, url: item.uri },
-                    type: 'image_url' as const,
-                  }
-                : {
-                    type: 'video_url' as const,
-                    video_url: { url: item.uri },
-                  },
-            ),
-          ],
+          content: buildAnalyzeVisualMediaContent(selectedItems, params.question),
           role: 'user' as const,
         },
       ],

@@ -2,12 +2,17 @@ import { createVisualFileRef } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildAnalyzeVisualMediaContent,
   createUrlVisualFileItems,
   createVisualFileItems,
   filterAllowedVisualMediaUrls,
+  formatVisualMediaUrlValidationError,
   hasUserVisualFiles,
+  MAX_VISUAL_MEDIA_URL_LENGTH,
+  MAX_VISUAL_MEDIA_URLS,
   normalizeStringArray,
   selectVisualFileItems,
+  validateVisualMediaUrls,
 } from './visualMedia';
 
 describe('visualMedia', () => {
@@ -16,24 +21,53 @@ describe('visualMedia', () => {
     expect(normalizeStringArray('image_1')).toEqual([]);
   });
 
-  it('should allow only http, https and data visual media urls', () => {
+  it('should allow only http, https and visual data urls', () => {
     expect(
       filterAllowedVisualMediaUrls([
         'https://example.com/image.png',
         'http://example.com/video.mp4',
         'data:image/png;base64,abcd',
+        'data:video/mp4;base64,abcd',
+        'data:text/plain;base64,abcd',
         'file:///private/image.png',
         'ftp://example.com/image.png',
         'not-a-url',
       ]),
     ).toEqual({
-      invalidUrls: ['file:///private/image.png', 'ftp://example.com/image.png', 'not-a-url'],
+      invalidUrls: [
+        'data:text/plain;base64,abcd',
+        'file:///private/image.png',
+        'ftp://example.com/image.png',
+        'not-a-url',
+      ],
       validUrls: [
         'https://example.com/image.png',
         'http://example.com/video.mp4',
         'data:image/png;base64,abcd',
+        'data:video/mp4;base64,abcd',
       ],
     });
+  });
+
+  it('should reject too many or oversized direct visual media urls', () => {
+    const urls = Array.from(
+      { length: MAX_VISUAL_MEDIA_URLS + 1 },
+      (_, index) => `https://example.com/image-${index}.png`,
+    );
+    const tooManyValidation = validateVisualMediaUrls(urls);
+
+    expect(tooManyValidation.tooManyUrls).toBe(true);
+    expect(formatVisualMediaUrlValidationError(tooManyValidation)).toContain(
+      `At most ${MAX_VISUAL_MEDIA_URLS} URLs are supported`,
+    );
+
+    const oversizedUrl = `data:image/png;base64,${'a'.repeat(MAX_VISUAL_MEDIA_URL_LENGTH)}`;
+    const oversizedValidation = validateVisualMediaUrls([oversizedUrl]);
+
+    expect(oversizedValidation.oversizedUrls).toEqual([oversizedUrl]);
+    expect(formatVisualMediaUrlValidationError(oversizedValidation)).toContain(
+      `${MAX_VISUAL_MEDIA_URL_LENGTH} character limit`,
+    );
   });
 
   it('should create visual file refs for message attachments', () => {
@@ -78,6 +112,34 @@ describe('visualMedia', () => {
       { name: 'generated.png', ref: 'url_1', type: 'image' },
       { name: 'video.webm', ref: 'url_2', type: 'video' },
       { name: 'URL 3', ref: 'url_3', type: 'video' },
+    ]);
+  });
+
+  it('should build shared visual media model content', () => {
+    const content = buildAnalyzeVisualMediaContent(
+      [
+        {
+          description: 'generated.png',
+          localRef: 'url_1',
+          name: 'generated.png',
+          ref: 'url_1',
+          type: 'image',
+          uri: 'https://example.com/generated.png',
+        },
+      ],
+      'what is this?',
+      { includeFallbackInstruction: true, includeFileSummary: true },
+    );
+
+    expect(content).toEqual([
+      expect.objectContaining({
+        text: expect.stringContaining('Files:\n- url_1: generated.png (image)'),
+        type: 'text',
+      }),
+      {
+        image_url: { detail: 'auto', url: 'https://example.com/generated.png' },
+        type: 'image_url',
+      },
     ]);
   });
 

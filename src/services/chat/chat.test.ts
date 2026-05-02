@@ -8,7 +8,7 @@ import {
   type UIChatMessage,
 } from '@lobechat/types';
 import { act } from '@testing-library/react';
-import { ModelProvider } from 'model-bank';
+import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
@@ -636,6 +636,19 @@ describe('ChatService', () => {
     });
 
     describe('local image URL conversion', () => {
+      beforeEach(() => {
+        useAiInfraStore.setState({
+          enabledAiModels: [
+            {
+              abilities: { vision: true },
+              id: 'gpt-4-vision-preview',
+              providerId: ModelProvider.OpenAI,
+              type: 'chat',
+            } as EnabledAiModel,
+          ],
+        });
+      });
+
       it('should convert local image URLs to base64 and call processImageList', async () => {
         const { imageUrlToBase64 } = await import('@lobechat/utils/imageToBase64');
         const { parseDataUri } = await import('@lobechat/utils/uriParser');
@@ -648,9 +661,6 @@ describe('ChatService', () => {
           base64: 'converted-base64-content',
           mimeType: 'image/png',
         });
-
-        // Mock aiModelSelectors to return true for vision support
-        vi.spyOn(aiModelSelectors, 'isModelSupportVision').mockReturnValue(() => true);
 
         const messages = [
           {
@@ -676,6 +686,7 @@ describe('ChatService', () => {
         await chatService.createAssistantMessage({
           messages,
           model: 'gpt-4-vision-preview',
+          provider: ModelProvider.OpenAI,
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
           }),
@@ -734,6 +745,7 @@ describe('ChatService', () => {
               },
             ],
             model: 'gpt-4-vision-preview',
+            provider: ModelProvider.OpenAI,
             stream: true,
             enabledSearch: undefined,
             tools: undefined,
@@ -751,9 +763,6 @@ describe('ChatService', () => {
         vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
         vi.mocked(isDesktopLocalStaticServerUrl).mockReturnValue(false); // This is NOT a local URL
         vi.mocked(imageUrlToBase64).mockClear(); // Clear to ensure it's not called
-
-        // Mock aiModelSelectors to return true for vision support
-        vi.spyOn(aiModelSelectors, 'isModelSupportVision').mockReturnValue(() => true);
 
         const messages = [
           {
@@ -778,6 +787,7 @@ describe('ChatService', () => {
         await chatService.createAssistantMessage({
           messages,
           model: 'gpt-4-vision-preview',
+          provider: ModelProvider.OpenAI,
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
           }),
@@ -833,6 +843,7 @@ describe('ChatService', () => {
               },
             ],
             model: 'gpt-4-vision-preview',
+            provider: ModelProvider.OpenAI,
             stream: true,
             enabledSearch: undefined,
             tools: undefined,
@@ -859,9 +870,6 @@ describe('ChatService', () => {
           base64: 'local-file-base64',
           mimeType: 'image/jpeg',
         });
-
-        // Mock aiModelSelectors to return true for vision support
-        vi.spyOn(aiModelSelectors, 'isModelSupportVision').mockReturnValue(() => true);
 
         const messages = [
           {
@@ -895,6 +903,7 @@ describe('ChatService', () => {
         await chatService.createAssistantMessage({
           messages,
           model: 'gpt-4-vision-preview',
+          provider: ModelProvider.OpenAI,
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
           }),
