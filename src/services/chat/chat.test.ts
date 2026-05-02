@@ -584,7 +584,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="image_1" name="abc.png" url="http://example.com/image.jpg"></image>
+<image ref="image_1" name="abc.png"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -727,7 +727,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="${visualRef}" name="local-image.png" url="http://127.0.0.1:3000/uploads/image.png"></image>
+<image ref="${visualRef}" name="local-image.png"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -828,7 +828,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="${visualRef}" name="remote-image.jpg" url="https://example.com/remote-image.jpg"></image>
+<image ref="${visualRef}" name="remote-image.jpg"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,

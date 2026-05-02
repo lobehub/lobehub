@@ -181,12 +181,12 @@ describe('contextEngineering', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="image_1" name="ttt.png" url="http://example.com/xxx0asd-dsd.png"></image>
+<image ref="image_1" name="ttt.png"></image>
 </images>
 <files>
 <files_docstring>here are user upload files you can refer to</files_docstring>
-<file id="file1" name="abc.png" type="plain/txt" size="100000" url="http://abc.com/abc.txt"></file>
-<file id="file_oKMve9qySLMI" name="2402.16667v1.pdf" type="undefined" size="11256078" url="https://xxx.com/ppp/480497/5826c2b8-fde0-4de1-a54b-a224d5e3d898.pdf"></file>
+<file id="file1" name="abc.png" type="plain/txt" size="100000"></file>
+<file id="file_oKMve9qySLMI" name="2402.16667v1.pdf" type="undefined" size="11256078"></file>
 </files>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -254,7 +254,7 @@ describe('contextEngineering', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="image_1" name="abc.png" url="http://example.com/image.jpg"></image>
+<image ref="image_1" name="abc.png"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,

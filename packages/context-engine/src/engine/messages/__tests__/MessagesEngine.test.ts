@@ -389,7 +389,7 @@ describe('MessagesEngine', () => {
       expect(result).toBeDefined();
     });
 
-    it('should default to enabled with includeFileUrl true', async () => {
+    it('should default to enabled without file URLs', async () => {
       const params = createBasicParams();
       const engine = new MessagesEngine(params);
 
