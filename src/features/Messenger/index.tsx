@@ -25,7 +25,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   page: css`
     overflow-y: auto;
     flex: 1;
-    padding: 24px;
   `,
 }));
 
