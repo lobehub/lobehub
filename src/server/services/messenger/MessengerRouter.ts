@@ -31,6 +31,7 @@ import { getInstallationStore } from './installations';
 import { TELEGRAM_INSTALLATION_KEY } from './installations/telegram';
 import type { InstallationCredentials } from './installations/types';
 import { verifySignature as verifySlackSignature } from './oauth/slackOAuth';
+import { MessengerDiscordBinder } from './platforms/discord';
 import { MessengerSlackBinder } from './platforms/slack';
 import { MessengerTelegramBinder } from './platforms/telegram';
 import type {
@@ -281,6 +282,16 @@ export class MessengerRouter {
           return;
         }
 
+        // Discord's Interactions Endpoint URL is configured in the
+        // Developer Portal — same story as Slack, no programmatic register.
+        if (platform === 'discord') {
+          log(
+            'ensureConnected: discord interactions URL must be set in the Developer Portal -> %s',
+            `${trimmedUrl}/api/agent/messenger/webhooks/discord`,
+          );
+          return;
+        }
+
         const store = getInstallationStore(platform);
         if (!store) return;
         const creds = await store.resolveByKey(
@@ -351,7 +362,12 @@ export class MessengerRouter {
 
     await chatBot.initialize();
 
-    if (client.registerBotCommands) {
+    // Skip Discord slash command registration: we don't wire `bot.onSlashCommand`
+    // for Discord (MVP is DM text-only — `parseCommand` handles `/agents` etc.
+    // typed as plain text). Registering the commands without a handler would
+    // surface them in Discord's autocomplete and reply with a generic error
+    // when invoked.
+    if (client.registerBotCommands && creds.platform !== 'discord') {
       client
         .registerBotCommands([
           { command: 'start', description: 'Bind your account to LobeHub' },
@@ -379,6 +395,9 @@ export class MessengerRouter {
       }
       case 'slack': {
         return new MessengerSlackBinder(creds);
+      }
+      case 'discord': {
+        return new MessengerDiscordBinder();
       }
       default: {
         return null;
@@ -960,7 +979,7 @@ export class MessengerRouter {
 }
 
 const isMessengerPlatform = (platform: string): platform is MessengerPlatform =>
-  platform === 'telegram' || platform === 'slack';
+  platform === 'telegram' || platform === 'slack' || platform === 'discord';
 
 let singleton: MessengerRouter | undefined;
 

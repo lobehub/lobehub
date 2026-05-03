@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Slack, Telegram } from '@lobehub/ui/icons';
+import { Discord, Slack, Telegram } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2Icon, LinkIcon } from 'lucide-react';
@@ -18,11 +18,13 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { messengerService } from '@/services/messenger';
 
 const PLATFORM_LABELS: Record<string, string> = {
+  discord: 'Discord',
   slack: 'Slack',
   telegram: 'Telegram',
 };
 
 const PLATFORM_BRAND_ICONS: Record<string, ReactNode> = {
+  discord: <Discord.Color size={32} />,
   slack: <Slack.Color size={32} />,
   telegram: <Telegram.Color size={36} />,
 };
@@ -53,6 +55,12 @@ const buildOpenBotUrl = (platform: string, opts: OpenBotOptions): string | null 
       return `https://slack.com/app_redirect?app=${opts.appId}&team=${opts.tenantId}`;
     }
     return `https://app.slack.com/client/${opts.tenantId}`;
+  }
+  // Discord App IDs are the bot user id for bot accounts, so the canonical
+  // user-profile URL opens the bot's profile page where the user can hit
+  // "Send Message" to start a DM.
+  if (platform === 'discord' && opts.appId) {
+    return `https://discord.com/users/${opts.appId}`;
   }
   return null;
 };
@@ -159,10 +167,10 @@ const MessengerVerifyPage = memo(() => {
   // refreshing the page after a successful link looks like an expired-token
   // error (the random_id token gets consumed on confirm).
   const existingLinkSWR = useSWR(
-    isSignedIn && (imType === 'telegram' || imType === 'slack')
+    isSignedIn && (imType === 'telegram' || imType === 'slack' || imType === 'discord')
       ? ['messenger:myLink', imType]
       : null,
-    async () => messengerService.getMyLink(imType as 'telegram' | 'slack'),
+    async () => messengerService.getMyLink(imType as 'telegram' | 'slack' | 'discord'),
   );
   const alreadyLinked = !!existingLinkSWR.data;
 

@@ -105,255 +105,270 @@ const ConnectionRow = memo<ConnectionRowProps>(
 ConnectionRow.displayName = 'MessengerConnectionRow';
 
 interface IntegrationDetailProps {
+  appId?: string;
   botUsername?: string;
   onBack: () => void;
   platform: MessengerPlatform;
 }
 
-const IntegrationDetail = memo<IntegrationDetailProps>(({ botUsername, onBack, platform }) => {
-  const { t } = useTranslation('messenger');
-  const { message, modal } = App.useApp();
-  const [linkOpen, setLinkOpen] = useState(false);
+const IntegrationDetail = memo<IntegrationDetailProps>(
+  ({ appId, botUsername, onBack, platform }) => {
+    const { t } = useTranslation('messenger');
+    const { message, modal } = App.useApp();
+    const [linkOpen, setLinkOpen] = useState(false);
 
-  const linksSWR = useSWR('messenger:listMyLinks', () => messengerService.listMyLinks());
-  const installationsSWR = useSWR('messenger:listMyInstallations', () =>
-    messengerService.listMyInstallations(),
-  );
+    const linksSWR = useSWR('messenger:listMyLinks', () => messengerService.listMyLinks());
+    const installationsSWR = useSWR('messenger:listMyInstallations', () =>
+      messengerService.listMyInstallations(),
+    );
 
-  const platformLabel = PLATFORM_LABELS[platform];
-  const allLinks = linksSWR.data ?? [];
-  const links = allLinks.filter((l) => l.platform === platform);
-  const installations = (installationsSWR.data ?? []).filter((i) => i.platform === platform);
-  const tenantNameByTenantId = new Map(installations.map((i) => [i.tenantId, i.tenantName]));
+    const platformLabel = PLATFORM_LABELS[platform];
+    const allLinks = linksSWR.data ?? [];
+    const links = allLinks.filter((l) => l.platform === platform);
+    const installations = (installationsSWR.data ?? []).filter((i) => i.platform === platform);
+    const tenantNameByTenantId = new Map(installations.map((i) => [i.tenantId, i.tenantName]));
 
-  const handleSetActive = async (tenantId: string, agentId: string | null) => {
-    try {
-      await messengerService.setActiveAgent({ agentId, platform, tenantId: tenantId || undefined });
-      await linksSWR.mutate();
-      message.success(t('messenger.setActiveSuccess'));
-    } catch (error: any) {
-      message.error(error?.message ?? t('messenger.setActiveFailed'));
-    }
-  };
+    const handleSetActive = async (tenantId: string, agentId: string | null) => {
+      try {
+        await messengerService.setActiveAgent({
+          agentId,
+          platform,
+          tenantId: tenantId || undefined,
+        });
+        await linksSWR.mutate();
+        message.success(t('messenger.setActiveSuccess'));
+      } catch (error: any) {
+        message.error(error?.message ?? t('messenger.setActiveFailed'));
+      }
+    };
 
-  const handleUnlink = (tenantId: string) => {
-    modal.confirm({
-      content: t('messenger.unlinkConfirm', { platform: platformLabel }),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await messengerService.unlink({ platform, tenantId: tenantId || undefined });
-          await linksSWR.mutate();
-          message.success(t('messenger.unlinkSuccess'));
-        } catch (error: any) {
-          message.error(error?.message ?? t('messenger.unlinkFailed'));
-        }
-      },
-      title: t('messenger.unlinkTitle'),
-    });
-  };
+    const handleUnlink = (tenantId: string) => {
+      modal.confirm({
+        content: t('messenger.unlinkConfirm', { platform: platformLabel }),
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          try {
+            await messengerService.unlink({ platform, tenantId: tenantId || undefined });
+            await linksSWR.mutate();
+            message.success(t('messenger.unlinkSuccess'));
+          } catch (error: any) {
+            message.error(error?.message ?? t('messenger.unlinkFailed'));
+          }
+        },
+        title: t('messenger.unlinkTitle'),
+      });
+    };
 
-  const handleDisconnectInstallation = (id: string) => {
-    modal.confirm({
-      content: t('messenger.slack.connections.disconnectConfirm'),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await messengerService.uninstallSlack({ installationId: id });
-          await installationsSWR.mutate();
-          await linksSWR.mutate();
-          message.success(t('messenger.slack.connections.disconnectSuccess'));
-        } catch (error: any) {
-          message.error(error?.message ?? t('messenger.slack.connections.disconnectFailed'));
-        }
-      },
-      title: t('messenger.slack.connections.disconnectTitle'),
-    });
-  };
+    const handleDisconnectInstallation = (id: string) => {
+      modal.confirm({
+        content: t('messenger.slack.connections.disconnectConfirm'),
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          try {
+            await messengerService.uninstallSlack({ installationId: id });
+            await installationsSWR.mutate();
+            await linksSWR.mutate();
+            message.success(t('messenger.slack.connections.disconnectSuccess'));
+          } catch (error: any) {
+            message.error(error?.message ?? t('messenger.slack.connections.disconnectFailed'));
+          }
+        },
+        title: t('messenger.slack.connections.disconnectTitle'),
+      });
+    };
 
-  const isSlack = platform === 'slack';
-  const hasInstallations = installations.length > 0;
-  const hasLinks = links.length > 0;
+    const isSlack = platform === 'slack';
+    // Discord uses a single global bot token (no per-tenant install records),
+    // so its connection UX matches Telegram: one row per linked account, no
+    // "Connections > Workspace" panel.
+    const usesPerTenantInstall = isSlack;
+    const hasInstallations = installations.length > 0;
+    const hasLinks = links.length > 0;
 
-  // Header action — Slack always lets the user add another workspace; Telegram
-  // toggles between Connect (no link) and Disconnect (linked).
-  const headerAction = isSlack ? (
-    <Button
-      icon={<Icon icon={LinkIcon} />}
-      type={hasInstallations ? 'default' : 'primary'}
-      onClick={() => setLinkOpen(true)}
-    >
-      {hasInstallations ? t('messenger.detail.addWorkspace') : t('messenger.linkCta')}
-    </Button>
-  ) : hasLinks ? (
-    <Button danger icon={<Icon icon={Trash2Icon} />} onClick={() => handleUnlink('')}>
-      {t('messenger.unlinkCta')}
-    </Button>
-  ) : (
-    <Button icon={<Icon icon={LinkIcon} />} type="primary" onClick={() => setLinkOpen(true)}>
-      {t('messenger.linkCta')}
-    </Button>
-  );
+    // Header action — Slack always lets the user add another workspace; the
+    // global-bot platforms (Telegram, Discord) toggle between Connect (no link)
+    // and Disconnect (linked).
+    const headerAction = usesPerTenantInstall ? (
+      <Button
+        icon={<Icon icon={LinkIcon} />}
+        type={hasInstallations ? 'default' : 'primary'}
+        onClick={() => setLinkOpen(true)}
+      >
+        {hasInstallations ? t('messenger.detail.addWorkspace') : t('messenger.linkCta')}
+      </Button>
+    ) : hasLinks ? (
+      <Button danger icon={<Icon icon={Trash2Icon} />} onClick={() => handleUnlink('')}>
+        {t('messenger.unlinkCta')}
+      </Button>
+    ) : (
+      <Button icon={<Icon icon={LinkIcon} />} type="primary" onClick={() => setLinkOpen(true)}>
+        {t('messenger.linkCta')}
+      </Button>
+    );
 
-  // Slack: render one workspace row per install + one user row per link.
-  // Installs without a matching link are surfaced with `pending` status so the
-  // user knows they still need to DM the bot to finish per-account binding.
-  const renderSlackConnections = () => {
-    const linkByTenantId = new Map(links.map((l) => [l.tenantId, l]));
-    return (
-      <Flexbox>
-        {installations.map((install) => (
-          <ConnectionRow
-            icon={<Icon icon={BriefcaseIcon} size="small" />}
-            key={install.id}
-            label={t('messenger.detail.connections.workspaceLabel')}
-            name={install.tenantName || install.tenantId}
-            status="connected"
-            action={
-              <Button
-                danger
-                icon={<Icon icon={Trash2Icon} />}
-                size="small"
-                onClick={() => handleDisconnectInstallation(install.id)}
-              >
-                {t('messenger.detail.disconnect')}
-              </Button>
-            }
-          />
-        ))}
-        {links.map((link) => {
-          const workspace = tenantNameByTenantId.get(link.tenantId) || link.tenantId;
-          const handle = link.platformUsername
-            ? `@${link.platformUsername}`
-            : `ID ${link.platformUserId}`;
-          return (
+    // Slack: render one workspace row per install + one user row per link.
+    // Installs without a matching link are surfaced with `pending` status so the
+    // user knows they still need to DM the bot to finish per-account binding.
+    const renderSlackConnections = () => {
+      const linkByTenantId = new Map(links.map((l) => [l.tenantId, l]));
+      return (
+        <Flexbox>
+          {installations.map((install) => (
             <ConnectionRow
-              icon={<Icon icon={UserIcon} size="small" />}
-              key={link.id}
-              label={t('messenger.detail.connections.userLabel')}
-              name={`${handle} · ${workspace}`}
+              icon={<Icon icon={BriefcaseIcon} size="small" />}
+              key={install.id}
+              label={t('messenger.detail.connections.workspaceLabel')}
+              name={install.tenantName || install.tenantId}
               status="connected"
               action={
                 <Button
                   danger
                   icon={<Icon icon={Trash2Icon} />}
                   size="small"
-                  onClick={() => handleUnlink(link.tenantId)}
+                  onClick={() => handleDisconnectInstallation(install.id)}
                 >
                   {t('messenger.detail.disconnect')}
                 </Button>
               }
+            />
+          ))}
+          {links.map((link) => {
+            const workspace = tenantNameByTenantId.get(link.tenantId) || link.tenantId;
+            const handle = link.platformUsername
+              ? `@${link.platformUsername}`
+              : `ID ${link.platformUserId}`;
+            return (
+              <ConnectionRow
+                icon={<Icon icon={UserIcon} size="small" />}
+                key={link.id}
+                label={t('messenger.detail.connections.userLabel')}
+                name={`${handle} · ${workspace}`}
+                status="connected"
+                action={
+                  <Button
+                    danger
+                    icon={<Icon icon={Trash2Icon} />}
+                    size="small"
+                    onClick={() => handleUnlink(link.tenantId)}
+                  >
+                    {t('messenger.detail.disconnect')}
+                  </Button>
+                }
+              >
+                <Flexbox gap={6}>
+                  <Text style={{ fontSize: 12 }} type="secondary">
+                    {t('messenger.activeAgent')}
+                  </Text>
+                  <AgentSelect
+                    placeholder={t('messenger.activeAgentPlaceholder')}
+                    value={link.activeAgentId ?? undefined}
+                    onChange={(agentId) =>
+                      handleSetActive(link.tenantId, (agentId ?? null) as string | null)
+                    }
+                  />
+                </Flexbox>
+              </ConnectionRow>
+            );
+          })}
+          {/* Installs without any user link yet — gentle nudge to /start in Slack. */}
+          {hasInstallations &&
+            installations.every((install) => !linkByTenantId.has(install.tenantId)) &&
+            !hasLinks && (
+              <div className={styles.emptyRow}>{t('messenger.detail.connections.linkHint')}</div>
+            )}
+        </Flexbox>
+      );
+    };
+
+    // Generic single-account connection rendering — used by Telegram and Discord
+    // (any platform with a global-token bot and a single account-link row).
+    const renderGlobalBotConnections = () => {
+      if (!hasLinks) {
+        return <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>;
+      }
+      const link = links[0];
+      const handle = link.platformUsername
+        ? `@${link.platformUsername}`
+        : `ID ${link.platformUserId}`;
+      return (
+        <ConnectionRow
+          icon={<Icon icon={UserIcon} size="small" />}
+          label={t('messenger.detail.connections.userLabel')}
+          name={handle}
+          status="connected"
+          action={
+            <Button
+              danger
+              icon={<Icon icon={Trash2Icon} />}
+              size="small"
+              onClick={() => handleUnlink('')}
             >
-              <Flexbox gap={6}>
-                <Text style={{ fontSize: 12 }} type="secondary">
-                  {t('messenger.activeAgent')}
-                </Text>
-                <AgentSelect
-                  placeholder={t('messenger.activeAgentPlaceholder')}
-                  value={link.activeAgentId ?? undefined}
-                  onChange={(agentId) =>
-                    handleSetActive(link.tenantId, (agentId ?? null) as string | null)
-                  }
-                />
-              </Flexbox>
-            </ConnectionRow>
-          );
-        })}
-        {/* Installs without any user link yet — gentle nudge to /start in Slack. */}
-        {hasInstallations &&
-          installations.every((install) => !linkByTenantId.has(install.tenantId)) &&
-          !hasLinks && (
-            <div className={styles.emptyRow}>{t('messenger.detail.connections.linkHint')}</div>
-          )}
-      </Flexbox>
-    );
-  };
-
-  const renderTelegramConnections = () => {
-    if (!hasLinks) {
-      return <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>;
-    }
-    const link = links[0];
-    const handle = link.platformUsername
-      ? `@${link.platformUsername}`
-      : `ID ${link.platformUserId}`;
-    return (
-      <ConnectionRow
-        icon={<Icon icon={UserIcon} size="small" />}
-        label={t('messenger.detail.connections.userLabel')}
-        name={handle}
-        status="connected"
-        action={
-          <Button
-            danger
-            icon={<Icon icon={Trash2Icon} />}
-            size="small"
-            onClick={() => handleUnlink('')}
-          >
-            {t('messenger.detail.disconnect')}
-          </Button>
-        }
-      >
-        <Flexbox gap={6}>
-          <Text style={{ fontSize: 12 }} type="secondary">
-            {t('messenger.activeAgent')}
-          </Text>
-          <AgentSelect
-            placeholder={t('messenger.activeAgentPlaceholder')}
-            value={link.activeAgentId ?? undefined}
-            onChange={(agentId) => handleSetActive('', (agentId ?? null) as string | null)}
-          />
-        </Flexbox>
-      </ConnectionRow>
-    );
-  };
-
-  return (
-    <Flexbox gap={20}>
-      <Flexbox horizontal align="center" gap={8}>
-        <span className={styles.backButton} onClick={onBack}>
-          <Icon icon={ArrowLeftIcon} size="small" />
-        </span>
-        <Text strong style={{ fontSize: 20 }}>
-          {platformLabel}
-        </Text>
-      </Flexbox>
-
-      <Block className={styles.card}>
-        <Flexbox horizontal align="center" gap={16}>
-          <PlatformAvatar platform={platform} size={48} />
-          <Flexbox flex={1} gap={2}>
-            <Text strong style={{ fontSize: 15 }}>
-              {platformLabel}
+              {t('messenger.detail.disconnect')}
+            </Button>
+          }
+        >
+          <Flexbox gap={6}>
+            <Text style={{ fontSize: 12 }} type="secondary">
+              {t('messenger.activeAgent')}
             </Text>
-            <Text style={{ fontSize: 13 }} type="secondary">
-              {t(`messenger.list.${platform}.description` as any)}
-            </Text>
+            <AgentSelect
+              placeholder={t('messenger.activeAgentPlaceholder')}
+              value={link.activeAgentId ?? undefined}
+              onChange={(agentId) => handleSetActive('', (agentId ?? null) as string | null)}
+            />
           </Flexbox>
-          {headerAction}
-        </Flexbox>
-      </Block>
+        </ConnectionRow>
+      );
+    };
 
-      {(hasInstallations || hasLinks) && (
-        <Flexbox gap={8}>
-          <Text strong style={{ fontSize: 15 }}>
-            {t('messenger.detail.connections.title')}
+    return (
+      <Flexbox gap={20}>
+        <Flexbox horizontal align="center" gap={8}>
+          <span className={styles.backButton} onClick={onBack}>
+            <Icon icon={ArrowLeftIcon} size="small" />
+          </span>
+          <Text strong style={{ fontSize: 20 }}>
+            {platformLabel}
           </Text>
-          <Block className={styles.card}>
-            {isSlack ? renderSlackConnections() : renderTelegramConnections()}
-          </Block>
         </Flexbox>
-      )}
 
-      <LinkModal
-        botUsername={botUsername}
-        open={linkOpen}
-        platform={platform}
-        onClose={() => setLinkOpen(false)}
-      />
-    </Flexbox>
-  );
-});
+        <Block className={styles.card}>
+          <Flexbox horizontal align="center" gap={16}>
+            <PlatformAvatar platform={platform} size={48} />
+            <Flexbox flex={1} gap={2}>
+              <Text strong style={{ fontSize: 15 }}>
+                {platformLabel}
+              </Text>
+              <Text style={{ fontSize: 13 }} type="secondary">
+                {t(`messenger.list.${platform}.description` as any)}
+              </Text>
+            </Flexbox>
+            {headerAction}
+          </Flexbox>
+        </Block>
+
+        {(hasInstallations || hasLinks) && (
+          <Flexbox gap={8}>
+            <Text strong style={{ fontSize: 15 }}>
+              {t('messenger.detail.connections.title')}
+            </Text>
+            <Block className={styles.card}>
+              {usesPerTenantInstall ? renderSlackConnections() : renderGlobalBotConnections()}
+            </Block>
+          </Flexbox>
+        )}
+
+        <LinkModal
+          appId={appId}
+          botUsername={botUsername}
+          open={linkOpen}
+          platform={platform}
+          onClose={() => setLinkOpen(false)}
+        />
+      </Flexbox>
+    );
+  },
+);
 
 IntegrationDetail.displayName = 'MessengerIntegrationDetail';
 

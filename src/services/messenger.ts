@@ -1,6 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
-type MessengerPlatform = 'telegram' | 'slack';
+type MessengerPlatform = 'telegram' | 'slack' | 'discord';
 
 class MessengerService {
   availablePlatforms = async () => {
@@ -27,7 +27,11 @@ class MessengerService {
     return lambdaClient.messenger.listMyLinks.query();
   };
 
-  setActiveAgent = async (params: { agentId: string | null; platform: MessengerPlatform }) => {
+  setActiveAgent = async (params: {
+    agentId: string | null;
+    platform: MessengerPlatform;
+    tenantId?: string;
+  }) => {
     return lambdaClient.messenger.setActiveAgent.mutate(params);
   };
 

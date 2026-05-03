@@ -1,5 +1,6 @@
 import type { MessengerPlatform } from '@/config/messenger';
 
+import { DiscordInstallationStore } from './discord';
 import { SlackInstallationStore } from './slack';
 import { TelegramInstallationStore } from './telegram';
 import type { MessengerInstallationStore } from './types';
@@ -19,6 +20,9 @@ const create = (platform: MessengerPlatform): MessengerInstallationStore | null 
     case 'telegram': {
       return new TelegramInstallationStore();
     }
+    case 'discord': {
+      return new DiscordInstallationStore();
+    }
     default: {
       return null;
     }
@@ -36,6 +40,7 @@ export const getInstallationStore = (
   return stores[platform] ?? null;
 };
 
+export { DISCORD_INSTALLATION_KEY, DiscordInstallationStore } from './discord';
 export { SlackInstallationStore } from './slack';
 export { TELEGRAM_INSTALLATION_KEY, TelegramInstallationStore } from './telegram';
 export type { InstallationCredentials, MessengerInstallationStore } from './types';

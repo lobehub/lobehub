@@ -44,6 +44,15 @@ export default {
   'messenger.slack.installResult.failed':
     'Slack install failed ({{reason}}). Please try again or contact support.',
   'messenger.slack.installResult.success': 'Slack workspace connected.',
+  'messenger.discord.connectModal.continueButton': 'Open in Discord',
+  'messenger.discord.connectModal.description':
+    'Add the bot to a Discord server you own (so it can DM you), then open the bot in Discord and send any message to start linking.',
+  'messenger.discord.connectModal.inviteButton': 'Add to Discord server',
+  'messenger.discord.connectModal.notConfigured':
+    'Discord is not configured. Set LOBE_DISCORD_BOT_TOKEN, LOBE_DISCORD_PUBLIC_KEY and LOBE_DISCORD_APPLICATION_ID.',
+  'messenger.discord.connectModal.title': 'Continue setup in Discord',
+  'messenger.list.discord.description':
+    'Chat with your LobeHub agents from any Discord server via DM with the LobeHub bot.',
   'messenger.list.slack.description':
     'Chat with your LobeHub agents from any Slack workspace via DM or @LobeHub.',
   'messenger.list.telegram.description':

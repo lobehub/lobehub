@@ -77,6 +77,7 @@ const MessengerSettings = memo(() => {
       <Flexbox gap={20}>
         {selected ? (
           <IntegrationDetail
+            appId={selectedMeta?.appId}
             botUsername={selectedMeta?.botUsername}
             platform={selected}
             onBack={() => setSelected(null)}

@@ -17,12 +17,17 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   consumeLinkToken,
+  MessengerDiscordBinder,
   MessengerSlackBinder,
   MessengerTelegramBinder,
   peekLinkToken,
 } from '@/server/services/messenger';
 
-const platformEnum = z.enum(['telegram', 'slack']) satisfies z.ZodType<MessengerPlatform>;
+const platformEnum = z.enum([
+  'telegram',
+  'slack',
+  'discord',
+]) satisfies z.ZodType<MessengerPlatform>;
 
 const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -40,8 +45,20 @@ export const messengerRouter = router({
     return platforms.map((platform) => ({
       // Slack App ID — used by the verify-im success state to build a
       // `slack://app?team=…&id=…` deep link straight into the bot DM.
-      appId: platform === 'slack' ? messengerEnv.LOBE_SLACK_APP_ID : undefined,
-      botUsername: platform === 'telegram' ? messengerEnv.LOBE_TELEGRAM_BOT_USERNAME : undefined,
+      // Discord Application ID — same role; doubles as the bot user id and
+      // is used by the LinkModal to build the OAuth2 install URL.
+      appId:
+        platform === 'slack'
+          ? messengerEnv.LOBE_SLACK_APP_ID
+          : platform === 'discord'
+            ? messengerEnv.LOBE_DISCORD_APPLICATION_ID
+            : undefined,
+      botUsername:
+        platform === 'telegram'
+          ? messengerEnv.LOBE_TELEGRAM_BOT_USERNAME
+          : platform === 'discord'
+            ? messengerEnv.LOBE_DISCORD_BOT_USERNAME
+            : undefined,
       enabled: true,
       platform,
     }));
@@ -322,6 +339,10 @@ const notifyLinkSuccess = async (
       }
       case 'slack': {
         await new MessengerSlackBinder().notifyLinkSuccess(params);
+        break;
+      }
+      case 'discord': {
+        await new MessengerDiscordBinder().notifyLinkSuccess(params);
         break;
       }
     }

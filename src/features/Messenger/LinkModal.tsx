@@ -8,6 +8,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  buildDiscordInviteUrl,
+  buildDiscordOpenBotUrl,
   buildTelegramDeepLink,
   type MessengerPlatform,
   PLATFORM_LABELS,
@@ -41,17 +43,115 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface LinkModalProps {
+  appId?: string;
   botUsername?: string;
   onClose: () => void;
   open: boolean;
   platform: MessengerPlatform;
 }
 
-const LinkModal = memo<LinkModalProps>(({ botUsername, onClose, open, platform }) => {
+const LinkModal = memo<LinkModalProps>(({ appId, botUsername, onClose, open, platform }) => {
   const { t } = useTranslation('messenger');
   const platformLabel = PLATFORM_LABELS[platform];
   const isSlack = platform === 'slack';
-  const deepLink = !isSlack && botUsername ? buildTelegramDeepLink(botUsername) : undefined;
+  const isDiscord = platform === 'discord';
+  const isTelegram = platform === 'telegram';
+  const telegramDeepLink =
+    isTelegram && botUsername ? buildTelegramDeepLink(botUsername) : undefined;
+  const discordInviteUrl = isDiscord && appId ? buildDiscordInviteUrl(appId) : undefined;
+  const discordOpenBotUrl = isDiscord && appId ? buildDiscordOpenBotUrl(appId) : undefined;
+
+  const renderBody = () => {
+    if (isSlack) {
+      return (
+        <>
+          <PlatformAvatar platform={platform} size={64} />
+          <Flexbox align="center" gap={6}>
+            <Text strong style={{ fontSize: 18 }}>
+              {t('messenger.slack.connectModal.title')}
+            </Text>
+            <Text style={{ textAlign: 'center' }} type="secondary">
+              {t('messenger.slack.connectModal.description')}
+            </Text>
+          </Flexbox>
+          <Button
+            block
+            href="/api/agent/messenger/slack/install"
+            size="large"
+            target="_blank"
+            type="primary"
+          >
+            {t('messenger.slack.connectModal.continueButton')}
+          </Button>
+        </>
+      );
+    }
+
+    if (isDiscord) {
+      if (!discordInviteUrl) {
+        return (
+          <>
+            <Icon icon={LinkIcon} size={36} />
+            <Text strong>{t('messenger.linkModal.continueIn', { platform: platformLabel })}</Text>
+            <Text type="warning">{t('messenger.discord.connectModal.notConfigured')}</Text>
+          </>
+        );
+      }
+      return (
+        <>
+          <PlatformAvatar platform={platform} size={64} />
+          <Flexbox align="center" gap={6}>
+            <Text strong style={{ fontSize: 18 }}>
+              {t('messenger.discord.connectModal.title')}
+            </Text>
+            <Text style={{ textAlign: 'center' }} type="secondary">
+              {t('messenger.discord.connectModal.description')}
+            </Text>
+          </Flexbox>
+          <Button block href={discordInviteUrl} size="large" target="_blank" type="primary">
+            {t('messenger.discord.connectModal.inviteButton')}
+          </Button>
+          {discordOpenBotUrl && (
+            <Button block href={discordOpenBotUrl} size="large" target="_blank">
+              {t('messenger.discord.connectModal.continueButton')}
+            </Button>
+          )}
+        </>
+      );
+    }
+
+    if (telegramDeepLink) {
+      return (
+        <>
+          <div className={styles.qrWrap}>
+            <QRCode bordered={false} size={200} value={telegramDeepLink} />
+            <div className={styles.qrIconOverlay}>
+              <PlatformAvatar platform={platform} size={44} />
+            </div>
+          </div>
+          <Flexbox align="center" gap={6}>
+            <Text strong style={{ fontSize: 18 }}>
+              {t('messenger.linkModal.continueIn', { platform: platformLabel })}
+            </Text>
+            <Text style={{ textAlign: 'center' }} type="secondary">
+              {t('messenger.linkModal.scanHint', { platform: platformLabel })}
+            </Text>
+          </Flexbox>
+          <Button block href={telegramDeepLink} size="large" target="_blank" type="primary">
+            {t('messenger.linkModal.openCta', { platform: platformLabel })}
+          </Button>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <Icon icon={LinkIcon} size={36} />
+        <Text strong>{t('messenger.linkModal.continueIn', { platform: platformLabel })}</Text>
+        <Text type="warning">{t('messenger.linkModal.notConfigured')}</Text>
+      </>
+    );
+  };
 
   return (
     <Modal
@@ -62,54 +162,7 @@ const LinkModal = memo<LinkModalProps>(({ botUsername, onClose, open, platform }
       onCancel={onClose}
     >
       <Flexbox align="center" gap={20} style={{ paddingBlock: 16 }}>
-        {isSlack ? (
-          <>
-            <PlatformAvatar platform={platform} size={64} />
-            <Flexbox align="center" gap={6}>
-              <Text strong style={{ fontSize: 18 }}>
-                {t('messenger.slack.connectModal.title')}
-              </Text>
-              <Text style={{ textAlign: 'center' }} type="secondary">
-                {t('messenger.slack.connectModal.description')}
-              </Text>
-            </Flexbox>
-            <Button
-              block
-              href="/api/agent/messenger/slack/install"
-              size="large"
-              target="_blank"
-              type="primary"
-            >
-              {t('messenger.slack.connectModal.continueButton')}
-            </Button>
-          </>
-        ) : deepLink ? (
-          <>
-            <div className={styles.qrWrap}>
-              <QRCode bordered={false} size={200} value={deepLink} />
-              <div className={styles.qrIconOverlay}>
-                <PlatformAvatar platform={platform} size={44} />
-              </div>
-            </div>
-            <Flexbox align="center" gap={6}>
-              <Text strong style={{ fontSize: 18 }}>
-                {t('messenger.linkModal.continueIn', { platform: platformLabel })}
-              </Text>
-              <Text style={{ textAlign: 'center' }} type="secondary">
-                {t('messenger.linkModal.scanHint', { platform: platformLabel })}
-              </Text>
-            </Flexbox>
-            <Button block href={deepLink} size="large" target="_blank" type="primary">
-              {t('messenger.linkModal.openCta', { platform: platformLabel })}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Icon icon={LinkIcon} size={36} />
-            <Text strong>{t('messenger.linkModal.continueIn', { platform: platformLabel })}</Text>
-            <Text type="warning">{t('messenger.linkModal.notConfigured')}</Text>
-          </>
-        )}
+        {renderBody()}
       </Flexbox>
     </Modal>
   );
