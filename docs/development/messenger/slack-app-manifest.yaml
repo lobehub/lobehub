@@ -69,7 +69,15 @@ oauth_config:
       # Resolve user → email for account linking on first DM
       - users:read
       - users:read.email
-      # PR3 will add: app_mentions:read, channels:history, reactions:read
+      # Download user-uploaded attachments (images / files) in DM. Without
+      # this scope `url_private` returns Slack's HTML login page instead of
+      # the file bytes, so vision / file-aware agents silently lose context.
+      - files:read
+      # Future PR3 (channel support) will add: app_mentions:read,
+      # channels:history, channels:read, groups:history, groups:read,
+      # reactions:read.
+      # Future PR4 (Slack AI Assistant integration) will add: assistant:write.
+      # Future (multi-person DMs) will add: mpim:history, mpim:read.
 
 settings:
   event_subscriptions:

@@ -61,19 +61,24 @@ The webhook handler dispatches by payload shape — so events, interactivity, an
 
 ## Scope rationale
 
-| Scope                  | Why                                                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `chat:write`           | Post DM responses + the first-time link prompt                                                                                     |
-| `im:history` `im:read` | Read the user's DM messages so the bot can reply                                                                                   |
-| `im:write`             | Open the IM channel for `notifyLinkSuccess` after the user binds                                                                   |
-| `commands`             | Required for the `/agents`, `/new`, `/stop` slash commands (without it, the manifest's `slash_commands` block is silently ignored) |
-| `reactions:write`      | Inline feedback emoji on the user's message (👀 "processing" → ✅ done)                                                            |
-| `users:read`           | Resolve `slack_user_id` → user profile                                                                                             |
-| `users:read.email`     | Pull `email` for the verify-im URL prefill (the user can still edit it)                                                            |
+| Scope                  | Why                                                                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat:write`           | Post DM responses + the first-time link prompt                                                                                                                                              |
+| `im:history` `im:read` | Read the user's DM messages so the bot can reply                                                                                                                                            |
+| `im:write`             | Open the IM channel for `notifyLinkSuccess` after the user binds                                                                                                                            |
+| `commands`             | Required for the `/agents`, `/new`, `/stop` slash commands (without it, the manifest's `slash_commands` block is silently ignored)                                                          |
+| `reactions:write`      | Inline feedback emoji on the user's message (👀 "processing" → ✅ done)                                                                                                                     |
+| `users:read`           | Resolve `slack_user_id` → user profile                                                                                                                                                      |
+| `users:read.email`     | Pull `email` for the verify-im URL prefill (the user can still edit it)                                                                                                                     |
+| `files:read`           | Download user-uploaded attachments via `url_private` so vision / file-aware agents see the actual bytes. Without it Slack returns an HTML login page and the agent silently loses the file. |
 
 > **Why narrower than `docs/usage/channels/slack.zh-CN.mdx`?** The two paths are different products. The channel docs cover a per-agent bot a user installs themselves and may use for @mentions / channel reads / Slack AI assistant — needs the full set. The messenger app is the LobeHub-distributed Marketplace App, DM-only in v1, so we ask for the minimum that delivers the feature. Smaller scope = friendlier consent screen and faster Marketplace review.
 
-PR3 will request `app_mentions:read` (channel mentions), `channels:history` (read context for replies), and `reactions:read` (act on user-added reactions like ❌ to cancel). Each scope addition triggers Marketplace re-review — keep PR3 batched.
+Future batched scope additions (each triggers Marketplace re-review, so keep batched):
+
+- **PR3 — channel support**: `app_mentions:read` (channel mentions), `channels:history` + `channels:read`, `groups:history` + `groups:read` (private channels), `reactions:read` (act on user-added reactions like ❌ to cancel).
+- **PR4 — Slack AI Assistant integration**: `assistant:write` plus the `assistant_thread_started` / `assistant_thread_context_changed` events.
+- **Future — multi-person DMs**: `mpim:history`, `mpim:read`, plus the `message.mpim` event.
 
 ## Slash commands
 
