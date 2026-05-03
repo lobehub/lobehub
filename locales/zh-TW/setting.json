@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "文件",
   "tools.builtins.lobe-agent-management.description": "建立、管理並協調 AI 代理",
   "tools.builtins.lobe-agent-management.title": "代理管理",
+  "tools.builtins.lobe-agent-marketplace.description": "向用戶展示精選的代理市場卡片，並記錄他們選擇的模板。",
+  "tools.builtins.lobe-agent-marketplace.title": "代理市場",
   "tools.builtins.lobe-artifacts.description": "產生並即時預覽互動式 UI 元件、資料視覺化、圖表、SVG 圖形與網頁應用程式。建立使用者可直接互動的豐富視覺內容。",
   "tools.builtins.lobe-artifacts.readme": "生成並即時預覽互動式 UI 元件、資料視覺化、圖表、SVG 圖形與網頁應用程式。創建使用者可直接互動的豐富視覺內容。",
   "tools.builtins.lobe-artifacts.title": "視覺產物",

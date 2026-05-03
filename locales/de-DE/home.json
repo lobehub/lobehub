@@ -5,6 +5,7 @@
   "agentSelection.search": "Keine passenden Agenten gefunden",
   "brief.action.acknowledge": "Bestätigen",
   "brief.action.approve": "Genehmigen",
+  "brief.action.confirm": "Bestätigen",
   "brief.action.confirmDone": "Vervollständigen bestätigen",
   "brief.action.feedback": "Feedback",
   "brief.action.retry": "Erneut versuchen",

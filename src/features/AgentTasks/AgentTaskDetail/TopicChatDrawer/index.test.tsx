@@ -131,6 +131,10 @@ vi.mock('../TopicStatusIcon', () => ({
   default: () => <span data-testid="topic-status-icon" />,
 }));
 
+vi.mock('./FeedbackInput', () => ({
+  default: () => <div data-testid="feedback-input" />,
+}));
+
 describe('TopicChatDrawer', () => {
   beforeEach(() => {
     mocks.agentState.useHydrateAgentConfig.mockClear();

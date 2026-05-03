@@ -160,6 +160,7 @@ export default {
   'ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite': 'Input (Cache Write)',
   'ModelSwitchPanel.detail.pricing.unit.textOutput': 'Output',
   'ModelSwitchPanel.detail.pricing.unit.videoGeneration': 'Video Generation',
+  'ModelSwitchPanel.detail.pricing.unit.videoInput': 'Video Input',
   'ModelSwitchPanel.detail.releasedAt': 'Released {{date}}',
   'ModelSwitchPanel.emptyModel': 'No enabled model. Please go to settings to enable.',
   'ModelSwitchPanel.emptyProvider': 'No enabled providers. Please go to settings to enable one.',

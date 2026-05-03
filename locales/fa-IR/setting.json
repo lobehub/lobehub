@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "اسناد",
   "tools.builtins.lobe-agent-management.description": "ایجاد، مدیریت و هماهنگ‌سازی عامل‌های هوش مصنوعی",
   "tools.builtins.lobe-agent-management.title": "مدیریت عامل",
+  "tools.builtins.lobe-agent-marketplace.description": "به کاربران کارت بازارچه نماینده منتخب را نشان دهید و ثبت کنید که کدام الگوها را انتخاب می‌کنند.",
+  "tools.builtins.lobe-agent-marketplace.title": "بازارچه نماینده",
   "tools.builtins.lobe-artifacts.description": "تولید و پیش‌نمایش زنده اجزای تعاملی رابط کاربری، نمودارها، گرافیک‌های SVG و برنامه‌های وب. ایجاد محتوای بصری غنی که کاربران بتوانند مستقیماً با آن تعامل داشته باشند.",
   "tools.builtins.lobe-artifacts.readme": "اجزای رابط کاربری تعاملی، نمودارها، گرافیک‌های SVG و برنامه‌های وب را تولید کرده و به‌صورت زنده پیش‌نمایش دهید. محتوای بصری غنی ایجاد کنید که کاربران بتوانند مستقیماً با آن تعامل داشته باشند.",
   "tools.builtins.lobe-artifacts.title": "آرتیفکت‌ها",

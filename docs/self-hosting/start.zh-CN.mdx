@@ -123,6 +123,8 @@ LobeHub 由以下几个关键组件组成：
 - **Cloudflare R2** — 无出口流量费用
 - **RustFS / MinIO** — 自托管 S3 替代方案（Docker Compose 已内置）
 
+**视觉理解兜底模型** — 可选，但如果用户会在没有原生视觉能力的模型中上传图片或视频，建议配置。你可以使用已启用 AI 提供商中的视觉模型配置 `VISUAL_UNDERSTANDING_PROVIDER` 和 `VISUAL_UNDERSTANDING_MODEL`。详见 [基础环境变量](/zh/docs/self-hosting/environment-variables/basic#视觉理解)。
+
 **认证提供商** — 支持 SSO 和团队功能（Google OAuth、GitHub OAuth、Microsoft Azure AD、Auth0、Keycloak）。配置详见 [认证设置](/docs/self-hosting/auth)。
 
 ## 安全注意事项

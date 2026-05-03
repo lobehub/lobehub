@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "Documenti",
   "tools.builtins.lobe-agent-management.description": "Crea, gestisci e organizza agenti AI",
   "tools.builtins.lobe-agent-management.title": "Gestione Agente",
+  "tools.builtins.lobe-agent-marketplace.description": "Mostra agli utenti una scheda del Mercato degli Agenti curata e registra i modelli che scelgono.",
+  "tools.builtins.lobe-agent-marketplace.title": "Mercato degli Agenti",
   "tools.builtins.lobe-artifacts.description": "Genera e visualizza in anteprima componenti UI interattivi, grafici e contenuti web",
   "tools.builtins.lobe-artifacts.readme": "Genera e visualizza in anteprima componenti UI interattivi, visualizzazioni di dati, grafici, grafica SVG e applicazioni web. Crea contenuti visivi ricchi con cui gli utenti possono interagire direttamente.",
   "tools.builtins.lobe-artifacts.title": "Artefatti",

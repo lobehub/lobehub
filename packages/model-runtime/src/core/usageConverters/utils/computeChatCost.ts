@@ -52,11 +52,72 @@ export interface PricingComputationResult {
   totalCredits: number;
 }
 
-type UnitQuantityResolver = (usage: ModelTokensUsage) => number | undefined;
+interface UnitQuantityResolverContext {
+  hasDedicatedModalityCacheReadUnit: boolean;
+}
+
+type UnitQuantityResolver = (
+  usage: ModelTokensUsage,
+  context: UnitQuantityResolverContext,
+) => number | undefined;
+
+const hasCachedModalityBreakdown = (usage: ModelTokensUsage) =>
+  typeof usage.inputCachedTextTokens === 'number' ||
+  typeof usage.inputCachedImageTokens === 'number' ||
+  typeof usage.inputCachedAudioTokens === 'number' ||
+  typeof usage.inputCachedVideoTokens === 'number';
+
+const subtractCachedTokens = (
+  totalTokens: number | undefined,
+  cachedTokens: number | undefined,
+): number | undefined => {
+  if (typeof totalTokens !== 'number') return undefined;
+
+  return Math.max(0, totalTokens - (cachedTokens ?? 0));
+};
+
+const resolveInputTextTokens = (usage: ModelTokensUsage) => {
+  if (hasCachedModalityBreakdown(usage)) {
+    return subtractCachedTokens(usage.inputTextTokens, usage.inputCachedTextTokens);
+  }
+
+  return usage.inputTextTokens;
+};
+
+const resolveInputImageTokens = (usage: ModelTokensUsage) => {
+  if (hasCachedModalityBreakdown(usage)) {
+    return subtractCachedTokens(usage.inputImageTokens, usage.inputCachedImageTokens);
+  }
+
+  return usage.inputImageTokens;
+};
+
+const resolveInputAudioTokens = (usage: ModelTokensUsage) => {
+  if (hasCachedModalityBreakdown(usage)) {
+    return subtractCachedTokens(usage.inputAudioTokens, usage.inputCachedAudioTokens);
+  }
+
+  return usage.inputAudioTokens;
+};
+
+const resolveInputVideoTokens = (usage: ModelTokensUsage) => {
+  if (hasCachedModalityBreakdown(usage)) {
+    return subtractCachedTokens(usage.inputVideoTokens, usage.inputCachedVideoTokens);
+  }
+
+  return usage.inputVideoTokens;
+};
 
 const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResolver>> = {
   textInput: (usage) => {
     const toolTokens = usage.inputToolTokens ?? 0;
+
+    if (hasCachedModalityBreakdown(usage)) {
+      const textTokens = resolveInputTextTokens(usage);
+      if (textTokens === undefined && toolTokens === 0) return undefined;
+
+      return (textTokens ?? 0) + toolTokens;
+    }
 
     if (usage.inputCacheMissTokens !== undefined) {
       // inputCacheMissTokens only covers non-cached prompt tokens;
@@ -78,9 +139,15 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
       return usage.totalInputTokens;
     }
 
-    return usage.inputTextTokens ?? usage.totalInputTokens;
+    return resolveInputTextTokens(usage) ?? usage.totalInputTokens;
   },
-  textInput_cacheRead: (usage) => usage.inputCachedTokens,
+  textInput_cacheRead: (usage, context) => {
+    if (hasCachedModalityBreakdown(usage) && context.hasDedicatedModalityCacheReadUnit) {
+      return usage.inputCachedTextTokens;
+    }
+
+    return usage.inputCachedTokens;
+  },
   textInput_cacheWrite: (usage) => usage.inputWriteCacheTokens,
   // reasoning tokens cost within output tokens
   textOutput: (usage) => {
@@ -102,15 +169,16 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
     return undefined;
   },
 
-  imageInput: (usage) => usage.inputImageTokens,
-  imageInput_cacheRead: () => undefined,
+  imageInput: resolveInputImageTokens,
+  imageInput_cacheRead: (usage) => usage.inputCachedImageTokens,
   imageOutput: (usage) => usage.outputImageTokens,
+
+  videoInput: resolveInputVideoTokens,
 
   imageGeneration: () => undefined,
 
-  audioInput: (usage) => usage.inputAudioTokens,
-  // TODO: Support this when ModelTokensUsage includes this data
-  audioInput_cacheRead: () => undefined,
+  audioInput: resolveInputAudioTokens,
+  audioInput_cacheRead: (usage) => usage.inputCachedAudioTokens,
   audioOutput: (usage) => usage.outputAudioTokens,
 };
 
@@ -243,9 +311,13 @@ const computeLookupCredits = (
   };
 };
 
-const resolveQuantity = (unit: PricingUnit, usage: ModelTokensUsage) => {
+const resolveQuantity = (
+  unit: PricingUnit,
+  usage: ModelTokensUsage,
+  context: UnitQuantityResolverContext,
+) => {
   const resolver = UNIT_QUANTITY_RESOLVERS[unit.name as PricingUnitName];
-  const quantity = resolver?.(usage);
+  const quantity = resolver?.(usage, context);
   return typeof quantity === 'number' ? quantity : undefined;
 };
 
@@ -264,9 +336,14 @@ export const computeChatCost = (
   const issues: PricingComputationIssue[] = [];
   const currency = pricing.currency || 'USD';
   const usdToCnyRate = options?.usdToCnyRate ?? USD_TO_CNY;
+  const pricingUnitNames = new Set(pricing.units.map((unit) => unit.name));
+  const resolverContext: UnitQuantityResolverContext = {
+    hasDedicatedModalityCacheReadUnit:
+      pricingUnitNames.has('audioInput_cacheRead') || pricingUnitNames.has('imageInput_cacheRead'),
+  };
 
   for (const unit of pricing.units) {
-    const quantity = resolveQuantity(unit, usage);
+    const quantity = resolveQuantity(unit, usage, resolverContext);
     if (quantity === undefined) continue;
 
     if (unit.strategy === 'fixed') {

@@ -1,5 +1,4 @@
-export const DEFAULT_MODEL = 'claude-sonnet-4-6';
-export const DEFAULT_MINI_MODEL = 'gpt-5.4-mini';
+export { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from '@lobechat/business-const';
 
 export const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
 

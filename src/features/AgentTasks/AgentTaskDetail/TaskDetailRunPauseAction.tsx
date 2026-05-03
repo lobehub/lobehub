@@ -1,5 +1,6 @@
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
+import { Button, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import { Space } from 'antd';
+import { CalendarOffIcon, ChevronDown, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,6 +44,7 @@ const TaskDetailRunPauseAction = memo(() => {
 
   const [isStarting, setIsStarting] = useState(false);
   const [isCancellingSchedule, setIsCancellingSchedule] = useState(false);
+  const [isRunningNow, setIsRunningNow] = useState(false);
 
   const handleRunOrPause = useCallback(async () => {
     if (!taskId) return;
@@ -70,6 +72,19 @@ const TaskDetailRunPauseAction = memo(() => {
     updateTask,
     updateTaskStatus,
   ]);
+
+  const handleRunNow = useCallback(async () => {
+    if (!taskId) return;
+    setIsRunningNow(true);
+    try {
+      if (!assigneeAgentId && inboxAgentId) {
+        await updateTask(taskId, { assigneeAgentId: inboxAgentId });
+      }
+      await runTask(taskId);
+    } finally {
+      setIsRunningNow(false);
+    }
+  }, [taskId, assigneeAgentId, inboxAgentId, runTask, updateTask]);
 
   const handleCancelSchedule = useCallback(async () => {
     if (!taskId) return;
@@ -116,13 +131,29 @@ const TaskDetailRunPauseAction = memo(() => {
   if (isScheduled) {
     return (
       <Flexbox horizontal align={'center'} gap={12}>
-        <Button
-          icon={CalendarOffIcon}
-          loading={isCancellingSchedule}
-          onClick={handleCancelSchedule}
-        >
-          {t('taskDetail.cancelSchedule')}
-        </Button>
+        <Space.Compact>
+          <Button
+            disabled={isRunningNow}
+            icon={CalendarOffIcon}
+            loading={isCancellingSchedule}
+            onClick={handleCancelSchedule}
+          >
+            {t('taskDetail.cancelSchedule')}
+          </Button>
+          <DropdownMenu
+            items={[
+              {
+                disabled: isRunningNow || isCancellingSchedule,
+                icon: PlayIcon,
+                key: 'runNow',
+                label: t('taskDetail.runNow'),
+                onClick: handleRunNow,
+              },
+            ]}
+          >
+            <Button disabled={isCancellingSchedule} icon={ChevronDown} loading={isRunningNow} />
+          </DropdownMenu>
+        </Space.Compact>
         {countdownText && (
           <Text fontSize={12} type={'secondary'}>
             {t('taskDetail.nextRunCountdown', { countdown: countdownText })}

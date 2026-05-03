@@ -102,6 +102,7 @@ export class ClientToolExecutionActionImpl {
           operationId,
           scope: operation?.context?.scope,
           signal: operation?.abortController?.signal,
+          sourceMessageId: operation?.context?.messageId,
           topicId: operation?.context?.topicId ?? undefined,
         };
 
