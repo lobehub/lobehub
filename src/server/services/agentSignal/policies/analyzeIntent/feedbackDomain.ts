@@ -16,7 +16,7 @@ interface FeedbackDomainJudgeResolverInput {
   chain: SignalFeedbackSatisfaction['chain'];
   feedback: Pick<
     SignalFeedbackSatisfaction['payload'],
-    'confidence' | 'evidence' | 'message' | 'messageId' | 'reason' | 'result'
+    'confidence' | 'evidence' | 'message' | 'messageId' | 'reason' | 'result' | 'serializedContext'
   >;
   source: SignalFeedbackSatisfaction['source'];
   sourceHints: SignalFeedbackSatisfaction['payload']['sourceHints'];
@@ -64,6 +64,7 @@ const createDomainResolver = (
         message: signal.feedback.message,
         reason: signal.feedback.reason,
         result: signal.feedback.result,
+        serializedContext: signal.feedback.serializedContext,
       })
     ).targets;
   };
@@ -108,6 +109,7 @@ export const createFeedbackDomainJudgeSignalHandler = (
                   messageId: input.payload.messageId,
                   reason: input.payload.reason,
                   result: input.payload.result,
+                  serializedContext: input.payload.serializedContext,
                 },
                 source: input.source,
                 sourceHints: input.payload.sourceHints,

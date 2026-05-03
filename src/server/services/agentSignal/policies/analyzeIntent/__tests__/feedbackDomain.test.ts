@@ -231,7 +231,7 @@ describe('feedbackDomainJudge', () => {
     );
   });
 
-  it('passes structured satisfaction output to the resolver without serialized context', async () => {
+  it('passes structured satisfaction output and serialized context to the resolver', async () => {
     let resolverInput:
       | Parameters<
           NonNullable<
@@ -311,6 +311,7 @@ describe('feedbackDomainJudge', () => {
         messageId: 'msg_structured',
         reason: 'corrective-feedback-cue',
         result: 'not_satisfied',
+        serializedContext: '{"large":"context"}',
       },
       source: { sourceId: 'source_structured', sourceType: 'agent.user.message' },
       sourceHints: { intents: ['memory'] },

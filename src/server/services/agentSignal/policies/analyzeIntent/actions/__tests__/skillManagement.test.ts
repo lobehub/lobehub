@@ -2,25 +2,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import type * as ProviderSkillsAgentDocumentUtils from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
-import { createSkillTree } from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
+import type { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
 import type { RuntimeProcessorContext } from '../../../../runtime/context';
 import {
   collectAgentSkillDecisionCandidates,
   defineSkillManagementActionHandler,
   handleSkillManagementSignal,
+  isAgentDocumentRelatedObject,
   runSkillDecisionAgentRuntime,
 } from '../skillManagement';
 
 const skillDecisionRunner = vi.fn();
+const skillCreateRunner = vi.fn();
 const skillMaintainerRunner = vi.fn();
 const skillMaintainerService = {
-  readSkillFile: vi.fn(),
-  removeSkillFile: vi.fn(),
-  updateSkill: vi.fn(),
-  writeSkillFile: vi.fn(),
+  createSkill: vi.fn(),
+  getSkill: vi.fn(),
+  listSkills: vi.fn(),
+  renameSkill: vi.fn(),
+  replaceSkillIndex: vi.fn(),
 };
+const createSkill = vi.fn();
 
 vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({
   createMarkdownEditorSnapshot: vi.fn(async (content: string) => ({
@@ -29,17 +32,20 @@ vi.mock('@/server/services/agentDocuments/headlessEditor', () => ({
   })),
 }));
 
-vi.mock(
-  '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils',
-  async (importOriginal) => {
-    const actual = await importOriginal<typeof ProviderSkillsAgentDocumentUtils>();
+vi.mock('@/server/services/skillManagement', async (importOriginal) => {
+  const actual = await importOriginal<SkillManagementDocumentService>();
 
-    return {
-      ...actual,
-      createSkillTree: vi.fn(),
-    };
-  },
-);
+  return {
+    ...actual,
+    SkillManagementDocumentService: vi.fn(() => ({
+      createSkill,
+      getSkill: skillMaintainerService.getSkill,
+      listSkills: skillMaintainerService.listSkills,
+      renameSkill: skillMaintainerService.renameSkill,
+      replaceSkillIndex: skillMaintainerService.replaceSkillIndex,
+    })),
+  };
+});
 
 const context = {
   now: () => 1,
@@ -53,12 +59,44 @@ const context = {
 describe('defineSkillManagementActionHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    skillCreateRunner.mockReset();
     skillDecisionRunner.mockReset();
     skillMaintainerRunner.mockReset();
-    skillMaintainerService.readSkillFile.mockReset();
-    skillMaintainerService.removeSkillFile.mockReset();
-    skillMaintainerService.updateSkill.mockReset();
-    skillMaintainerService.writeSkillFile.mockReset();
+    skillMaintainerService.createSkill.mockReset();
+    skillMaintainerService.getSkill.mockReset();
+    skillMaintainerService.listSkills.mockReset();
+    skillMaintainerService.renameSkill.mockReset();
+    skillMaintainerService.replaceSkillIndex.mockReset();
+    createSkill.mockReset();
+    skillCreateRunner.mockResolvedValue({
+      bodyMarkdown: '# PR Review Checklist',
+      confidence: 0.9,
+      description: 'Use when creating reusable PR review checklists.',
+      name: 'pr-review-checklist',
+      reason: 'authored reusable workflow',
+      title: 'PR Review Checklist',
+    });
+    skillMaintainerService.getSkill.mockImplementation(async ({ agentDocumentId }) => ({
+      bundle: {
+        agentDocumentId,
+        documentId: `${agentDocumentId}-doc`,
+        filename: agentDocumentId,
+        title: agentDocumentId,
+      },
+      content: `# ${agentDocumentId}`,
+      description: `${agentDocumentId} description`,
+      frontmatter: { description: `${agentDocumentId} description`, name: agentDocumentId },
+      index: {
+        agentDocumentId: `${agentDocumentId}-index`,
+        documentId: `${agentDocumentId}-index-doc`,
+        filename: 'SKILL.md',
+        title: 'SKILL.md',
+      },
+      name: agentDocumentId,
+      title: agentDocumentId,
+    }));
+    skillMaintainerService.replaceSkillIndex.mockResolvedValue(undefined);
+    skillMaintainerService.renameSkill.mockResolvedValue(undefined);
   });
 
   it('does not run when self iteration is disabled', async () => {
@@ -134,7 +172,7 @@ describe('defineSkillManagementActionHandler', () => {
           toolsCalling: [
             {
               function: {
-                arguments: '{"documentId":"doc_1"}',
+                arguments: '{"agentDocumentId":"agent_doc_1"}',
                 name: 'agent-signal-skill-decision____readDocument',
               },
               id: 'call_read_document',
@@ -150,7 +188,7 @@ describe('defineSkillManagementActionHandler', () => {
             {
               function: {
                 arguments:
-                  '{"action":"reject","confidence":0.9,"documentRefs":["doc_1"],"reason":"The same turn created a document and forbids skill conversion.","requiredReads":[],"targetSkillIds":[]}',
+                  '{"action":"reject","confidence":0.9,"documentRefs":["doc_1"],"reason":"The same turn created a document and forbids skill conversion.","requiredReads":[],"targetSkillRefs":[]}',
                 name: 'agent-signal-skill-decision____submitDecision',
               },
               id: 'call_submit_decision',
@@ -164,14 +202,15 @@ describe('defineSkillManagementActionHandler', () => {
       listCandidateDocuments: vi.fn(),
       listSameTurnDocumentOutcomes: vi.fn().mockResolvedValue([
         {
-          documentId: 'doc_1',
+          agentDocumentId: 'agent_doc_1',
           relation: 'created',
           summary: 'Agent documents created a document.',
         },
       ]),
       readDocument: vi.fn().mockResolvedValue({
+        agentDocumentId: 'agent_doc_1',
         content: '# Draft',
-        documentId: 'doc_1',
+        documentId: 'documents_row_1',
         title: 'Draft',
       }),
     };
@@ -195,12 +234,22 @@ describe('defineSkillManagementActionHandler', () => {
       scopeKey: 'topic:topic_1',
       topicId: 'topic_1',
     });
-    expect(tools.readDocument).toHaveBeenCalledWith({ documentId: 'doc_1' });
+    expect(tools.readDocument).toHaveBeenCalledWith({ agentDocumentId: 'agent_doc_1' });
     expect(result).toMatchObject({
       action: 'reject',
       documentRefs: ['doc_1'],
       reason: 'The same turn created a document and forbids skill conversion.',
     });
+  });
+
+  /**
+   * @example
+   * Same-turn document receipts emitted by lobe-agent-documents use the agent document binding id.
+   */
+  it('accepts agent-document related objects for same-turn document evidence', () => {
+    expect(isAgentDocumentRelatedObject({ objectType: 'agent-document' })).toBe(true);
+    expect(isAgentDocumentRelatedObject({ objectType: 'document' })).toBe(false);
+    expect(isAgentDocumentRelatedObject({ objectType: 'file' })).toBe(false);
   });
 
   /**
@@ -227,39 +276,31 @@ describe('defineSkillManagementActionHandler', () => {
 
   /**
    * @example
-   * Candidate ids are managed package names, while names remain display labels.
+   * Candidate ids are managed bundle agent document ids, while names remain display labels.
    */
-  it('collects managed skill folders as package-name decision candidates', () => {
+  it('collects managed skill bundles as agent-document decision candidates', () => {
     expect(
       collectAgentSkillDecisionCandidates([
         {
-          documentId: 'folder-doc',
-          fileType: 'custom/folder',
+          documentId: 'bundle-doc',
+          fileType: 'skills/bundle',
           filename: 'review-skill',
-          id: 'folder-binding',
-          parentId: 'root-doc',
+          id: 'bundle-binding',
+          parentId: null,
           templateId: 'agent-skill',
           title: 'Review Skill',
         },
         {
-          documentId: 'root-doc',
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'root-binding',
-          parentId: null,
-          templateId: 'agent-skill',
-          title: 'skills',
-        },
-        {
           documentId: 'file-doc',
+          fileType: 'skills/index',
           filename: 'SKILL.md',
           id: 'file-binding',
-          parentId: 'folder-doc',
+          parentId: 'bundle-doc',
           templateId: 'agent-skill',
           title: 'SKILL.md',
         },
       ] as never),
-    ).toEqual([{ id: 'review-skill', name: 'Review Skill', scope: 'agent' }]);
+    ).toEqual([{ id: 'bundle-binding', name: 'Review Skill', scope: 'agent' }]);
   });
 
   /**
@@ -276,6 +317,7 @@ describe('defineSkillManagementActionHandler', () => {
     const handler = defineSkillManagementActionHandler({
       db: {} as never,
       selfIterationEnabled: true,
+      skillCreateRunner,
       skillDecisionRunner,
       userId: 'user_1',
     });
@@ -325,27 +367,29 @@ describe('defineSkillManagementActionHandler', () => {
 
   /**
    * @example
-   * Decision agents receive managed skill package candidates so targetSkillIds can be stable ids.
+   * Decision agents receive managed skill candidates so targetSkillRefs can be stable ids.
    */
   it('passes discovered candidate skills into the decision step', async () => {
     skillDecisionRunner.mockResolvedValue({
       action: 'refine',
       confidence: 0.8,
       reason: 'update existing skill',
-      targetSkillIds: ['review-skill'],
+      targetSkillRefs: ['review-skill-bundle-id'],
     });
-    skillMaintainerService.readSkillFile.mockResolvedValue('# Review Skill');
-    skillMaintainerRunner.mockResolvedValue({ operations: [], reason: 'no file changes' });
+    skillMaintainerRunner.mockResolvedValue({
+      bodyMarkdown: '# Review Skill',
+      reason: 'no file changes',
+    });
 
     const handler = defineSkillManagementActionHandler({
       db: {} as never,
       selfIterationEnabled: true,
       skillCandidateSkillsFactory: async () => [
-        { id: 'review-skill', name: 'Review Skill', scope: 'agent' },
+        { id: 'review-skill-bundle-id', name: 'Review Skill', scope: 'agent' },
       ],
       skillDecisionRunner,
       skillMaintainerRunner,
-      skillMaintainerServiceFactory: () => skillMaintainerService,
+      skillManagementServiceFactory: () => skillMaintainerService,
       userId: 'user_1',
     });
 
@@ -371,7 +415,7 @@ describe('defineSkillManagementActionHandler', () => {
 
     expect(skillDecisionRunner).toHaveBeenCalledWith(
       expect.objectContaining({
-        candidateSkills: [{ id: 'review-skill', name: 'Review Skill', scope: 'agent' }],
+        candidateSkills: [{ id: 'review-skill-bundle-id', name: 'Review Skill', scope: 'agent' }],
       }),
     );
   });
@@ -509,7 +553,7 @@ describe('defineSkillManagementActionHandler', () => {
       context,
     );
 
-    expect(createSkillTree).not.toHaveBeenCalled();
+    expect(createSkill).not.toHaveBeenCalled();
     expect(context.runtimeState.touchGuardState).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       detail: 'decision output was not an object',
@@ -566,7 +610,7 @@ describe('defineSkillManagementActionHandler', () => {
       context,
     );
 
-    expect(createSkillTree).not.toHaveBeenCalled();
+    expect(createSkill).not.toHaveBeenCalled();
     expect(context.runtimeState.touchGuardState).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       detail: 'decision structured output was malformed',
@@ -610,7 +654,7 @@ describe('defineSkillManagementActionHandler', () => {
     );
 
     expect(skillDecisionRunner).not.toHaveBeenCalled();
-    expect(createSkillTree).not.toHaveBeenCalled();
+    expect(createSkill).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       detail: 'self iteration is disabled',
       output: { decision: { action: 'noop' } },
@@ -657,7 +701,7 @@ describe('defineSkillManagementActionHandler', () => {
       status: 'skipped',
     });
     expect(skillDecisionRunner).not.toHaveBeenCalled();
-    expect(createSkillTree).not.toHaveBeenCalled();
+    expect(createSkill).not.toHaveBeenCalled();
     expect(skillMaintainerRunner).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
@@ -692,26 +736,16 @@ describe('defineSkillManagementActionHandler', () => {
 
   /**
    * @example
-   * A refine decision invokes the maintainer agent and applies returned file operations.
+   * A refine decision invokes the maintainer agent and applies returned body content.
    */
   it('runs the maintainer workflow for refine decisions', async () => {
     skillDecisionRunner.mockResolvedValue({
       action: 'refine',
       reason: 'update existing review skill',
-      targetSkillIds: ['review-skill'],
+      targetSkillRefs: ['review-skill-bundle-id'],
     });
-    skillMaintainerService.readSkillFile.mockResolvedValue('# Review Skill');
     skillMaintainerRunner.mockResolvedValue({
-      operations: [
-        {
-          arguments: {
-            content: '# Review Skill\n\n## Procedure\n- Check failed assertions first.',
-            path: 'SKILL.md',
-            skillRef: 'review-skill',
-          },
-          name: 'updateSkill',
-        },
-      ],
+      bodyMarkdown: '# Review Skill\n\n## Procedure\n- Check failed assertions first.',
       reason: 'refined review skill',
     });
 
@@ -720,7 +754,7 @@ describe('defineSkillManagementActionHandler', () => {
       selfIterationEnabled: true,
       skillDecisionRunner,
       skillMaintainerRunner,
-      skillMaintainerServiceFactory: () => skillMaintainerService,
+      skillManagementServiceFactory: () => skillMaintainerService,
       userId: 'user_1',
     });
 
@@ -746,14 +780,22 @@ describe('defineSkillManagementActionHandler', () => {
 
     expect(skillMaintainerRunner).toHaveBeenCalledWith(
       expect.objectContaining({
-        targetSkills: [{ content: '# Review Skill', id: 'review-skill', metadata: {} }],
+        targetSkills: [
+          expect.objectContaining({
+            content: '# review-skill-bundle-id',
+            id: 'review-skill-bundle-id',
+            name: 'review-skill-bundle-id',
+          }),
+        ],
         type: 'refine',
       }),
     );
-    expect(skillMaintainerService.updateSkill).toHaveBeenCalledWith({
-      content: '# Review Skill\n\n## Procedure\n- Check failed assertions first.',
-      path: 'SKILL.md',
-      skillRef: 'review-skill',
+    expect(skillMaintainerService.replaceSkillIndex).toHaveBeenCalledWith({
+      agentDocumentId: 'review-skill-bundle-id',
+      agentId: 'agent_1',
+      bodyMarkdown: '# Review Skill\n\n## Procedure\n- Check failed assertions first.',
+      description: undefined,
+      updateReason: 'refined review skill',
     });
     expect(result).toMatchObject({
       detail: 'refined review skill',
@@ -764,35 +806,22 @@ describe('defineSkillManagementActionHandler', () => {
 
   /**
    * @example
-   * A maintainer operation naming a non-target skill is skipped before mutation.
+   * A refine decision is skipped when the target skill cannot be resolved.
    */
-  it('skips maintainer operations that target skills outside the decision target set', async () => {
+  it('skips maintainer workflow when target refs cannot be resolved', async () => {
     skillDecisionRunner.mockResolvedValue({
       action: 'refine',
       reason: 'update existing review skill',
-      targetSkillIds: ['review-skill'],
+      targetSkillRefs: ['missing-bundle-id'],
     });
-    skillMaintainerService.readSkillFile.mockResolvedValue('# Review Skill');
-    skillMaintainerRunner.mockResolvedValue({
-      operations: [
-        {
-          arguments: {
-            content: '# Other Skill',
-            path: 'SKILL.md',
-            skillRef: 'other-skill',
-          },
-          name: 'updateSkill',
-        },
-      ],
-      reason: 'attempted cross-target write',
-    });
+    skillMaintainerService.getSkill.mockResolvedValueOnce(undefined);
 
     const handler = defineSkillManagementActionHandler({
       db: {} as never,
       selfIterationEnabled: true,
       skillDecisionRunner,
       skillMaintainerRunner,
-      skillMaintainerServiceFactory: () => skillMaintainerService,
+      skillManagementServiceFactory: () => skillMaintainerService,
       userId: 'user_1',
     });
 
@@ -816,11 +845,10 @@ describe('defineSkillManagementActionHandler', () => {
       context,
     );
 
-    expect(skillMaintainerService.updateSkill).not.toHaveBeenCalled();
-    expect(skillMaintainerService.writeSkillFile).not.toHaveBeenCalled();
-    expect(skillMaintainerService.removeSkillFile).not.toHaveBeenCalled();
+    expect(skillMaintainerRunner).not.toHaveBeenCalled();
+    expect(skillMaintainerService.replaceSkillIndex).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      detail: expect.stringContaining('other-skill'),
+      detail: expect.stringContaining('could not resolve targetSkillRefs'),
       output: { decision: { action: 'refine' } },
       status: 'skipped',
     });
@@ -834,29 +862,10 @@ describe('defineSkillManagementActionHandler', () => {
     skillDecisionRunner.mockResolvedValue({
       action: 'consolidate',
       reason: 'overlapping review skills',
-      targetSkillIds: ['review-skill', 'review-checklist'],
+      targetSkillRefs: ['review-skill-bundle-id', 'review-checklist-bundle-id'],
     });
-    skillMaintainerService.readSkillFile
-      .mockResolvedValueOnce('# Review Skill')
-      .mockResolvedValueOnce('# Review Checklist');
     skillMaintainerRunner.mockResolvedValue({
-      operations: [
-        {
-          arguments: {
-            content: '# Review Skill\n\n## Procedure\n- Use one consolidated checklist.',
-            path: 'SKILL.md',
-            skillRef: 'review-skill',
-          },
-          name: 'updateSkill',
-        },
-      ],
-      proposedLifecycleActions: [
-        {
-          action: 'archive',
-          reason: 'merged into review-skill',
-          skillRef: 'review-checklist',
-        },
-      ],
+      bodyMarkdown: '# Review Skill\n\n## Procedure\n- Use one consolidated checklist.',
       reason: 'consolidated review skills',
     });
 
@@ -865,7 +874,7 @@ describe('defineSkillManagementActionHandler', () => {
       selfIterationEnabled: true,
       skillDecisionRunner,
       skillMaintainerRunner,
-      skillMaintainerServiceFactory: () => skillMaintainerService,
+      skillManagementServiceFactory: () => skillMaintainerService,
       userId: 'user_1',
     });
 
@@ -892,16 +901,18 @@ describe('defineSkillManagementActionHandler', () => {
     expect(skillMaintainerRunner).toHaveBeenCalledWith(
       expect.objectContaining({
         targetSkills: [
-          { content: '# Review Skill', id: 'review-skill', metadata: {} },
-          { content: '# Review Checklist', id: 'review-checklist', metadata: {} },
+          expect.objectContaining({ id: 'review-skill-bundle-id' }),
+          expect.objectContaining({ id: 'review-checklist-bundle-id' }),
         ],
         type: 'consolidate',
       }),
     );
-    expect(skillMaintainerService.updateSkill).toHaveBeenCalledWith({
-      content: '# Review Skill\n\n## Procedure\n- Use one consolidated checklist.',
-      path: 'SKILL.md',
-      skillRef: 'review-skill',
+    expect(skillMaintainerService.replaceSkillIndex).toHaveBeenCalledWith({
+      agentDocumentId: 'review-skill-bundle-id',
+      agentId: 'agent_1',
+      bodyMarkdown: '# Review Skill\n\n## Procedure\n- Use one consolidated checklist.',
+      description: undefined,
+      updateReason: 'consolidated review skills',
     });
     expect(result).toMatchObject({
       detail: 'consolidated review skills',
@@ -915,12 +926,13 @@ describe('defineSkillManagementActionHandler', () => {
    * Duplicate skill creation is reported as skipped while preserving the create decision.
    */
   it('skips duplicate skill creation with a structured create decision', async () => {
-    vi.mocked(createSkillTree).mockRejectedValueOnce(new Error('Skill already exists'));
+    createSkill.mockRejectedValueOnce(new Error('Skill already exists'));
     skillDecisionRunner.mockResolvedValue({ action: 'create', reason: 'reusable workflow' });
 
     const handler = defineSkillManagementActionHandler({
       db: {} as never,
       selfIterationEnabled: true,
+      skillCreateRunner,
       skillDecisionRunner,
       userId: 'user_1',
     });

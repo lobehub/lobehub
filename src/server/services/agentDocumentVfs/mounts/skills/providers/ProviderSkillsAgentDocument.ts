@@ -19,10 +19,10 @@ import {
   createSkillTree,
   getResolvedSkillName,
   getScopedSkillDocuments,
+  getSkillBundle,
   getSkillFile,
-  getSkillFolder,
   getValidatedSkillName,
-  listScopedSkillFolders,
+  listScopedSkillBundles,
   projectDocumentContent,
   sortSkillFolders,
 } from './providerSkillsAgentDocumentUtils';
@@ -44,7 +44,7 @@ const DOCUMENT_SKILL_PROVIDER_CONFIGS = {
  * - Serving agent-level skills from agent documents.
  *
  * Expects:
- * - Managed skill documents use the agent-skill template id and document tree paths.
+ * - Managed skill documents use `skills/bundle` parent rows and `skills/index` SKILL.md child rows.
  *
  * Returns:
  * - Skill VFS nodes whose paths use the target unified `./lobe/skills/...` layout.
@@ -71,7 +71,7 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
     const documents = await this.deps.agentDocumentModel.findByAgent(input.agentId);
 
     if (!input.resolvedPath.filePath) {
-      assertSkillDocument(getSkillFolder(documents, this.config.namespace, skillName));
+      assertSkillDocument(getSkillBundle(documents, this.config.namespace, skillName));
       return buildSkillDirectoryNode(this.config.namespace, skillName);
     }
 
@@ -92,7 +92,7 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
     );
 
     if (!input.resolvedPath.skillName) {
-      return sortSkillFolders(listScopedSkillFolders(documents, this.config.namespace)).map(
+      return sortSkillFolders(listScopedSkillBundles(documents, this.config.namespace)).map(
         (document) => buildSkillDirectoryNode(this.config.namespace, document.filename),
       );
     }
@@ -101,7 +101,7 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
       input.resolvedPath.skillName,
       input.resolvedPath.filePath,
     );
-    assertSkillDocument(getSkillFolder(documents, this.config.namespace, skillName));
+    assertSkillDocument(getSkillBundle(documents, this.config.namespace, skillName));
 
     return [
       buildSkillFileNode({
@@ -115,7 +115,7 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
     const skillName = getValidatedSkillName(input.skillName, 'skillName');
     const documents = await this.deps.agentDocumentModel.findByAgent(input.agentId);
 
-    if (getSkillFolder(documents, this.config.namespace, skillName)) {
+    if (getSkillBundle(documents, this.config.namespace, skillName)) {
       throw new AgentDocumentVfsError('Skill already exists', 'CONFLICT');
     }
 
@@ -171,11 +171,11 @@ export class ProviderSkillsAgentDocument implements WritableSkillMountProvider {
       await this.deps.agentDocumentModel.findByAgent(input.agentId),
       this.config.namespace,
     );
-    const folder = assertSkillDocument(getSkillFolder(documents, this.config.namespace, skillName));
+    const bundle = assertSkillDocument(getSkillBundle(documents, this.config.namespace, skillName));
 
     await this.deps.agentDocumentModel.deleteSubtreeByDocumentId(
       input.agentId,
-      folder.documentId,
+      bundle.documentId,
       'skill-delete',
     );
   }

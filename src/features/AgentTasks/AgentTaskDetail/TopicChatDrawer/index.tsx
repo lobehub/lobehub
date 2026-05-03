@@ -59,7 +59,18 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, taskId, t
   const runningOperation = useTaskStore(
     (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
   );
+  const topicStatus = useTaskStore(
+    (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.status,
+  );
   useGatewayReconnect(topicId, runningOperation);
+
+  // Only allow feedback when the topic run has terminated. While the topic is
+  // pending/running, a feedback comment can't safely steer the in-flight run.
+  const canLeaveFeedback =
+    topicStatus === 'completed' ||
+    topicStatus === 'failed' ||
+    topicStatus === 'canceled' ||
+    topicStatus === 'timeout';
 
   const itemContent = useCallback(
     (index: number, id: string) => (
@@ -89,9 +100,11 @@ const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(({ agentId, taskId, t
           <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
             <ChatList disableActionsBar itemContent={itemContent} />
           </Flexbox>
-          <Flexbox padding={12} style={{ flexShrink: 0 }}>
-            <FeedbackInput taskId={taskId} topicId={topicId} />
-          </Flexbox>
+          {canLeaveFeedback && (
+            <Flexbox padding={12} style={{ flexShrink: 0 }}>
+              <FeedbackInput taskId={taskId} topicId={topicId} />
+            </Flexbox>
+          )}
         </Flexbox>
       </TaskCardScopeProvider>
     </ConversationProvider>

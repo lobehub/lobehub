@@ -1,8 +1,16 @@
 import type { AgentDocument } from '@/database/models/agentDocuments';
 import { PolicyLoad } from '@/database/models/agentDocuments';
-import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
+import type { AgentDocumentSourceType } from '@/database/models/agentDocuments/types';
 import { exportEditorDataSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
+import {
+  AGENT_SKILL_TEMPLATE_ID,
+  SKILL_BUNDLE_FILE_TYPE,
+  SKILL_INDEX_FILE_TYPE,
+  SKILL_INDEX_FILENAME,
+  SKILL_MANAGEMENT_SOURCE,
+  SKILL_MANAGEMENT_SOURCE_TYPE,
+} from '@/server/services/skillManagement';
 
 import { getUnifiedSkillNamespaceRootPath } from '../path';
 import type { SkillMountNode } from '../types';
@@ -15,8 +23,11 @@ export interface AgentSkillDocumentModelLike {
     params?: {
       editorData?: Record<string, any>;
       fileType?: string;
+      metadata?: Record<string, any>;
       parentId?: string | null;
       policyLoad?: PolicyLoad;
+      source?: string;
+      sourceType?: AgentDocumentSourceType;
       templateId?: string;
       title?: string;
     },
@@ -59,11 +70,7 @@ export interface CreateSkillTreeInput {
 
 export const EMPTY_EDITOR_DATA = { root: { children: [], type: 'root' } };
 
-export const AGENT_SKILL_TEMPLATE_ID = 'agent-skill';
-
-export const SKILL_FILE_NAME = 'SKILL.md';
-
-export const SKILL_INDEX_FILE_TYPE = 'skill/index';
+export const SKILL_FILE_NAME = SKILL_INDEX_FILENAME;
 
 export const buildSkillDirectoryNode = (
   namespace: Extract<SkillMountNode['namespace'], 'agent'>,
@@ -139,6 +146,10 @@ export const getResolvedSkillName = (skillName?: string, filePath?: string) => {
 };
 
 export const projectDocumentContent = async (document: AgentDocument) => {
+  if (document.fileType === SKILL_INDEX_FILE_TYPE) {
+    return document.content;
+  }
+
   try {
     const snapshot = await exportEditorDataSnapshot({
       editorData: document.editorData,
@@ -161,48 +172,35 @@ export const isManagedSkillDocument = (document: Pick<AgentDocument, 'templateId
 export const getScopedSkillDocuments = (documents: AgentDocument[], namespace: 'agent') =>
   namespace === 'agent' ? documents.filter(isManagedSkillDocument) : [];
 
-export const getNamespaceRoot = (documents: AgentDocument[], namespace: 'agent') =>
-  getScopedSkillDocuments(documents, namespace).find(
-    (document) =>
-      document.fileType === DOCUMENT_FOLDER_TYPE &&
-      document.filename === 'skills' &&
-      document.parentId === null,
-  );
-
-export const getSkillFolder = (
+export const getSkillBundle = (
   documents: AgentDocument[],
   namespace: 'agent',
   skillName: string,
 ) => {
-  const root = getNamespaceRoot(documents, namespace);
-  if (!root) return undefined;
-
   return getScopedSkillDocuments(documents, namespace).find(
     (document) =>
-      document.fileType === DOCUMENT_FOLDER_TYPE &&
+      document.fileType === SKILL_BUNDLE_FILE_TYPE &&
       document.filename === skillName &&
-      document.parentId === root.documentId,
+      document.parentId === null,
   );
 };
 
 export const getSkillFile = (documents: AgentDocument[], namespace: 'agent', skillName: string) => {
-  const folder = getSkillFolder(documents, namespace, skillName);
-  if (!folder) return undefined;
+  const bundle = getSkillBundle(documents, namespace, skillName);
+  if (!bundle) return undefined;
 
   return getScopedSkillDocuments(documents, namespace).find(
-    (document) => document.filename === SKILL_FILE_NAME && document.parentId === folder.documentId,
-  );
-};
-
-export const listScopedSkillFolders = (documents: AgentDocument[], namespace: 'agent') => {
-  const root = getNamespaceRoot(documents, namespace);
-  if (!root) return [];
-
-  return getScopedSkillDocuments(documents, namespace).filter(
     (document) =>
-      document.fileType === DOCUMENT_FOLDER_TYPE && document.parentId === root.documentId,
+      document.fileType === SKILL_INDEX_FILE_TYPE &&
+      document.filename === SKILL_FILE_NAME &&
+      document.parentId === bundle.documentId,
   );
 };
+
+export const listScopedSkillBundles = (documents: AgentDocument[], namespace: 'agent') =>
+  getScopedSkillDocuments(documents, namespace).filter(
+    (document) => document.fileType === SKILL_BUNDLE_FILE_TYPE && document.parentId === null,
+  );
 
 export const assertSkillDocument = <T>(document: T | undefined, message = 'Skill not found') => {
   if (!document) {
@@ -210,33 +208,6 @@ export const assertSkillDocument = <T>(document: T | undefined, message = 'Skill
   }
 
   return document;
-};
-
-export const ensureNamespaceRoot = async ({
-  agentId,
-  agentDocumentModel,
-  namespace,
-}: {
-  agentDocumentModel: AgentSkillDocumentModelLike;
-  agentId: string;
-  namespace: 'agent';
-}): Promise<{ documentId: string }> => {
-  const documents = await agentDocumentModel.findByAgent(agentId);
-  const existingRoot = getNamespaceRoot(documents, namespace);
-
-  if (existingRoot) {
-    return { documentId: existingRoot.documentId };
-  }
-
-  const root = await agentDocumentModel.create(agentId, 'skills', '', {
-    editorData: EMPTY_EDITOR_DATA,
-    fileType: DOCUMENT_FOLDER_TYPE,
-    policyLoad: PolicyLoad.DISABLED,
-    templateId: AGENT_SKILL_TEMPLATE_ID,
-    title: 'skills',
-  });
-
-  return { documentId: root.documentId };
 };
 
 export const createSkillTree = async ({
@@ -248,70 +219,46 @@ export const createSkillTree = async ({
   skillName,
 }: CreateSkillTreeInput) => {
   const existingDocuments = await agentDocumentModel.findByAgent(agentId);
-  const existingRoot = getNamespaceRoot(existingDocuments, namespace);
-  const existingFolder = getSkillFolder(existingDocuments, namespace, skillName);
+  const existingFolder = getSkillBundle(existingDocuments, namespace, skillName);
   const existingFile = getSkillFile(existingDocuments, namespace, skillName);
 
   if (existingFolder || existingFile) {
     throw new AgentDocumentVfsError('Skill already exists', 'CONFLICT');
   }
 
-  const root = existingRoot
-    ? { documentId: existingRoot.documentId }
-    : await ensureNamespaceRoot({
-        agentDocumentModel,
-        agentId,
-        namespace,
-      });
+  // NOTICE:
+  // This path is used by direct Agent Document VFS writes, including `lb agent space fs`.
+  // It creates skill-shaped bundle/index documents for filesystem compatibility only.
+  // These documents are not authored through SkillManagementDocumentService and should not be
+  // assumed to be fully recognized as managed Agent Signal skills until that service supports
+  // importing or normalizing VFS-created skill-shaped documents.
+  // Removal condition: delete this once VFS create/update routes through the skill-management
+  // service or that service explicitly supports this compatibility document shape.
+  const metadata = { skill: { vfs: true } };
+  const bundle = await agentDocumentModel.create(agentId, skillName, '', {
+    editorData: EMPTY_EDITOR_DATA,
+    fileType: SKILL_BUNDLE_FILE_TYPE,
+    metadata,
+    policyLoad: PolicyLoad.DISABLED,
+    source: SKILL_MANAGEMENT_SOURCE,
+    sourceType: SKILL_MANAGEMENT_SOURCE_TYPE,
+    templateId: AGENT_SKILL_TEMPLATE_ID,
+    title: skillName,
+  });
 
-  const createdRootId: string | undefined = existingRoot ? undefined : root.documentId;
-  let createdFolderId: string | undefined;
-  let createdFileId: string | undefined;
+  const file = await agentDocumentModel.create(agentId, SKILL_FILE_NAME, content, {
+    editorData,
+    fileType: SKILL_INDEX_FILE_TYPE,
+    metadata,
+    parentId: bundle.documentId,
+    policyLoad: PolicyLoad.DISABLED,
+    source: SKILL_MANAGEMENT_SOURCE,
+    sourceType: SKILL_MANAGEMENT_SOURCE_TYPE,
+    templateId: AGENT_SKILL_TEMPLATE_ID,
+    title: SKILL_FILE_NAME,
+  });
 
-  try {
-    const folder = await agentDocumentModel.create(agentId, skillName, '', {
-      editorData: EMPTY_EDITOR_DATA,
-      fileType: DOCUMENT_FOLDER_TYPE,
-      parentId: root.documentId,
-      policyLoad: PolicyLoad.DISABLED,
-      templateId: AGENT_SKILL_TEMPLATE_ID,
-      title: skillName,
-    });
-
-    createdFolderId = folder.id;
-
-    const file = await agentDocumentModel.create(agentId, SKILL_FILE_NAME, content, {
-      editorData,
-      fileType: SKILL_INDEX_FILE_TYPE,
-      parentId: folder.documentId,
-      templateId: AGENT_SKILL_TEMPLATE_ID,
-      title: SKILL_FILE_NAME,
-    });
-
-    createdFileId = file.id;
-
-    return { fileDocumentId: file.documentId, folderDocumentId: folder.documentId };
-  } catch (error) {
-    if (createdFileId) {
-      await agentDocumentModel.delete(createdFileId, 'skill-create-rollback');
-    }
-
-    if (createdFolderId) {
-      await agentDocumentModel.delete(createdFolderId, 'skill-create-rollback');
-    }
-
-    if (createdRootId) {
-      const rootBinding = await agentDocumentModel
-        .findByAgent(agentId)
-        .then((documents) => documents.find((document) => document.documentId === createdRootId));
-
-      if (rootBinding) {
-        await agentDocumentModel.delete(rootBinding.id, 'skill-create-rollback');
-      }
-    }
-
-    throw error;
-  }
+  return { fileDocumentId: file.documentId, folderDocumentId: bundle.documentId };
 };
 
 export const sortSkillFolders = (documents: AgentDocument[]) =>

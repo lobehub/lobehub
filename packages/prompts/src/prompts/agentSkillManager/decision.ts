@@ -56,17 +56,21 @@ Rules:
 - Create only when the feedback contains a reusable procedure and enough context.
 - Refine when one existing skill is clearly the target.
 - Consolidate when multiple skills overlap.
-- When candidateSkills are provided, targetSkillIds must be selected from candidateSkills[].id.
-- targetSkillIds are managed skill package names, not document ids or display names.
+- When candidateSkills are provided, targetSkillRefs must be selected from candidateSkills[].id.
+- targetSkillRefs are agent document ids for managed skill bundle documents.
+- targetSkillRefs are not backing documents.id values, package names, filenames, or display names.
 - No-op for generic praise, style preferences, memory-like facts, or insufficient context.
 - Reject when the user asked for document-only behavior, forbids skill conversion, or same-turn document evidence makes skill mutation unsafe.
 - Use read-only tools to inspect same-turn document outcomes before guessing from document names or content shape.
 - Do not infer skill intent from a filename, title, or SKILL.md-shaped content alone.
+- Do not author SKILL.md content, YAML frontmatter, or file-operation patches in this decision.
 - Prefer patch/refine over duplicate creation.
 - Agent-level managed skills are agent documents, not agent_skills rows.
 
 Return exactly:
-{"action":"create"|"refine"|"consolidate"|"noop"|"reject","confidence":0.0,"reason":"short reason","targetSkillIds":[],"requiredReads":[],"documentRefs":[]}`;
+{"action":"create"|"refine"|"consolidate"|"noop"|"reject","confidence":0.0,"reason":"short reason","targetSkillRefs":[],"requiredReads":[],"documentRefs":[]}
+
+Return only the JSON object.`;
 
 /**
  * Builds the user prompt for the skill-management decision agent.

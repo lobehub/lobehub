@@ -131,6 +131,12 @@ export interface JudgeFeedbackDomainsParams {
   message: string;
   reason: string;
   result: AgentSignalFeedbackSatisfactionResult;
+  /**
+   * Recent thread context assembled by the workflow.
+   *
+   * @default undefined
+   */
+  serializedContext?: string;
 }
 
 /**

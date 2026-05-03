@@ -54,6 +54,9 @@ Rules:
 - "skill" can fan out with "memory" when the feedback contains both a personal preference and a reusable workflow/template insight.
 - Route to "skill", not "prompt", when the feedback asks to create, update, refine, merge, consolidate, deduplicate, or reorganize an existing reusable checklist, skill, template, workflow, playbook, or writing pattern.
 - Route to "skill" for explicit requests to create or preserve a reusable operational artifact, even when the message is phrased as an imperative instead of a complaint.
+- If the feedback refers to "this way", "that workflow", "这种方式", "这个流程", or similar deictic phrasing, inspect serializedContext before deciding.
+- Route to "skill" when recent context contains a reusable multi-step workflow and the feedback asks to use that workflow for future similar tasks.
+- Route to "memory", not "skill", when recent context only supports a stable personal style, tool preference, or communication preference.
 - Never output duplicate targets.
 - Return "none" when no durable target is justified.
 
@@ -102,10 +105,11 @@ export const createAgentSignalAnalyzeIntentRoutePrompt = (input: {
   message: string;
   reason: string;
   result: 'neutral' | 'not_satisfied' | 'satisfied';
+  serializedContext?: string;
 }) => {
   return `Route this feedback into durable domains.\nsatisfaction=${JSON.stringify({
     evidence: input.evidence,
     reason: input.reason,
     result: input.result,
-  })}\nmessage=${JSON.stringify(input.message)}`;
+  })}\nmessage=${JSON.stringify(input.message)}\nserializedContext=${JSON.stringify(input.serializedContext ?? null)}`;
 };

@@ -29,6 +29,7 @@ import { MessageManifest, MessageRenders } from '@lobechat/builtin-tool-message/
 import { NotebookManifest, NotebookRenders } from '@lobechat/builtin-tool-notebook/client';
 import { SkillStoreManifest, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsManifest, SkillsRenders } from '@lobechat/builtin-tool-skills/client';
+import { TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
 import {
   WebBrowsingManifest,
   WebBrowsingRenders,
@@ -64,6 +65,7 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
   [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
   [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
+  [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
   [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
   // @deprecated backward compat: old messages stored 'lobe-tools' as identifier
   ['lobe-tools']: LobeActivatorRenders as Record<string, BuiltinRender>,
