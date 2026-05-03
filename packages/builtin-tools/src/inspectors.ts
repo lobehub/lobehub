@@ -7,6 +7,10 @@ import {
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
 import {
+  AgentDocumentsInspectors,
+  AgentDocumentsManifest,
+} from '@lobechat/builtin-tool-agent-documents/client';
+import {
   AgentManagementInspectors,
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management/client';
@@ -62,6 +66,7 @@ import { CodexInspectors } from './codex';
  */
 const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
+  [AgentDocumentsManifest.identifier]: AgentDocumentsInspectors as Record<string, BuiltinInspector>,
   [AgentManagementManifest.identifier]: AgentManagementInspectors as Record<
     string,
     BuiltinInspector
