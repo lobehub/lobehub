@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -250,6 +251,11 @@ describe('defineSkillManagementActionHandler', () => {
     });
 
     expect(chat).toHaveBeenCalledTimes(3);
+    expect(chat).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Object),
+      expect.objectContaining({ metadata: { trigger: RequestTrigger.AgentSignal } }),
+    );
     expect(tools.listSameTurnDocumentOutcomes).toHaveBeenCalledWith({
       agentId: 'agent_1',
       messageId: 'msg_1',

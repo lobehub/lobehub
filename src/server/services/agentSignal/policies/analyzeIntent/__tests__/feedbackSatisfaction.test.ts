@@ -153,7 +153,7 @@ describe('feedbackSatisfactionJudge', () => {
         ],
         model: 'gpt-test',
       }),
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.AgentSignal } },
     );
     expect(result).toEqual(
       expect.objectContaining({

@@ -604,7 +604,7 @@ export const runSkillDecisionAgentRuntime = async (input: SkillDecisionAgentRunt
                   rawToolCalls = toolsCalling;
                 },
               },
-              metadata: { trigger: RequestTrigger.Memory },
+              metadata: { trigger: RequestTrigger.AgentSignal },
             },
           );
           await consumeStreamUntilDone(response);
@@ -722,7 +722,7 @@ export const runSkillDecisionAgentRuntime = async (input: SkillDecisionAgentRunt
       agentId: input.payload.agentId,
       sourceMessageId: input.payload.messageId,
       topicId: input.payload.topicId,
-      trigger: RequestTrigger.Memory,
+      trigger: RequestTrigger.AgentSignal,
     },
     modelRuntimeConfig: {
       model: input.model,
@@ -1061,7 +1061,7 @@ class SkillMaintainerWorkflowAgentService {
           name: `agent_signal_skill_${input.type}`,
         },
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.AgentSignal } },
     );
 
     return toSkillMaintainerWorkflowResult(SkillMaintainerWorkflowResultSchema.parse(result));
@@ -1112,7 +1112,7 @@ class SkillCreateAuthoringAgentService {
         model: this.modelConfig.model,
         schema: SkillCreateAuthoringResultGenerateObjectSchema,
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.AgentSignal } },
     );
 
     return toSkillCreateAuthoringResult(SkillCreateAuthoringResultSchema.parse(result));

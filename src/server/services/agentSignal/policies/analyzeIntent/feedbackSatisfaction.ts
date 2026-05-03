@@ -227,7 +227,7 @@ export class FeedbackSatisfactionJudgeAgentService implements FeedbackSatisfacti
         model: this.modelConfig.model,
         schema: FeedbackSatisfactionGenerateObjectSchema,
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.AgentSignal } },
     );
 
     return FeedbackSatisfactionStagePayloadSchema.parse(result);

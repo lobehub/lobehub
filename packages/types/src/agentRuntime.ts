@@ -1,4 +1,5 @@
 export enum RequestTrigger {
+  AgentSignal = 'agent_signal',
   Api = 'api',
   Bot = 'bot',
   Chat = 'chat',
