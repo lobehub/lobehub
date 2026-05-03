@@ -1,6 +1,7 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
+  type ActionEvent,
   Chat,
   ConsoleLogger,
   type Message,
@@ -362,12 +363,7 @@ export class MessengerRouter {
 
     await chatBot.initialize();
 
-    // Skip Discord slash command registration: we don't wire `bot.onSlashCommand`
-    // for Discord (MVP is DM text-only — `parseCommand` handles `/agents` etc.
-    // typed as plain text). Registering the commands without a handler would
-    // surface them in Discord's autocomplete and reply with a generic error
-    // when invoked.
-    if (client.registerBotCommands && creds.platform !== 'discord') {
+    if (client.registerBotCommands) {
       client
         .registerBotCommands([
           { command: 'start', description: 'Bind your account to LobeHub' },
@@ -560,6 +556,34 @@ export class MessengerRouter {
         await this.handleSlackSlashCommand({ binder, client, event, serverDB, tenantId });
       });
     }
+
+    // Discord slash commands — `/agents`, `/new`, `/stop`, `/help`. Discord
+    // DMs have no ephemeral concept (the user IS the only other party), so
+    // replies are just regular DM posts.
+    //
+    // `/start` is intentionally NOT wired to the slash path: it's still
+    // registered as a Discord global command (so it shows up in autocomplete)
+    // but invoking it goes through the unlinked-message text path inside the
+    // DM — `handleUnlinkedMessage` needs a real chat-sdk `Message` instance
+    // that the slash event doesn't surface, and stub-message workarounds were
+    // ugly. Users who type `/start` as plain text in the DM still hit the
+    // full link flow via `parseCommand`.
+    if (platform === 'discord') {
+      bot.onSlashCommand(['/agents', '/new', '/stop', '/help'], async (event) => {
+        await this.handleDiscordSlashCommand({ binder, client, event, serverDB, tenantId });
+      });
+
+      // Discord interactive picker buttons. Slack/Telegram both peek the raw
+      // webhook bytes via `binder.extractCallbackAction` and short-circuit to
+      // a `200 OK` ack — that doesn't work for Discord because Discord
+      // interactions need a JSON `{type: 6}` ack body. So instead we let
+      // `@chat-adapter/discord` handle the inbound interaction (it ack's with
+      // `DeferredUpdateMessage` on its own), then drive the actual state
+      // update from `bot.onAction`.
+      bot.onAction(async (event) => {
+        await this.handleDiscordButtonAction({ binder, client, creds, event, serverDB });
+      });
+    }
   }
 
   /**
@@ -633,6 +657,166 @@ export class MessengerRouter {
       log('handleSlackSlashCommand: handler error: %O', error);
       await replyEphemeral('Something went wrong.');
     }
+  }
+
+  /**
+   * Discord slash command dispatcher. Mirrors `handleSlackSlashCommand` but
+   * without ephemeral plumbing — Discord DMs are private by definition, so
+   * regular `binder.sendDmText` is the right reply mechanism.
+   *
+   * `/new` and `/stop` need a chat-sdk `thread` instance the slash command
+   * path doesn't surface (same constraint as Slack), so we ack with a hint
+   * to send them as plain text in the DM where `parseCommand` reaches the
+   * full command handler with thread access.
+   */
+  private async handleDiscordSlashCommand(params: {
+    binder: MessengerPlatformBinder;
+    client: PlatformClient;
+    event: SlashCommandEvent;
+    serverDB: LobeChatDatabase;
+    tenantId: string;
+  }): Promise<void> {
+    const { binder, client, event, serverDB, tenantId } = params;
+    const senderId = event.user.userId;
+    if (!senderId) {
+      log('handleDiscordSlashCommand: missing user id, dropping');
+      return;
+    }
+
+    const cmd = event.command.replace(/^\//, '').toLowerCase();
+    // chat-sdk wraps the raw channel id as `discord:guildId:channelId[:threadId]`;
+    // strip back to the bare channel id Discord's REST API expects.
+    const chatId = client.extractChatId((event.channel as any).id as string);
+
+    const link = await MessengerAccountLinkModel.findByPlatformUser(
+      serverDB,
+      'discord',
+      senderId,
+      tenantId,
+    );
+
+    try {
+      switch (cmd) {
+        case 'agents': {
+          await this.handleAgentsCommand({
+            binder,
+            chatId,
+            command: { args: event.text.trim(), name: 'agents' },
+            link,
+            serverDB,
+            tenantId,
+          });
+          return;
+        }
+        case 'new':
+        case 'stop': {
+          await binder.sendDmText(chatId, `Send \`/${cmd}\` as a regular message in this DM.`);
+          return;
+        }
+        case 'help': {
+          await binder.sendDmText(
+            chatId,
+            [
+              'Commands:',
+              '• /agents — list your agents and switch the active one',
+              '• /new — start a new conversation',
+              '• /stop — stop the current execution',
+              '• /start — bind a different LobeHub account',
+            ].join('\n'),
+          );
+          return;
+        }
+        default: {
+          await binder.sendDmText(chatId, `Unknown command: /${cmd}`);
+        }
+      }
+    } catch (error) {
+      log('handleDiscordSlashCommand: handler error: %O', error);
+      try {
+        await binder.sendDmText(chatId, 'Something went wrong.');
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  /**
+   * Discord interactive picker button handler. Fires after `@chat-adapter/discord`
+   * has already ack'd the interaction with `DeferredUpdateMessage` (`type: 6`),
+   * so we have the full ~15-minute follow-up window to update state and
+   * re-render the picker — no 3-second pressure.
+   *
+   * Mirrors `handleCallbackAction` (the Slack/Telegram path) but goes direct
+   * to `binder.updateAgentPicker` + `binder.sendDmText` since Discord's flow
+   * doesn't go through `binder.acknowledgeCallback`.
+   */
+  private async handleDiscordButtonAction(params: {
+    binder: MessengerPlatformBinder;
+    client: PlatformClient;
+    creds: InstallationCredentials;
+    event: ActionEvent;
+    serverDB: LobeChatDatabase;
+  }): Promise<void> {
+    const { binder, client, creds, event, serverDB } = params;
+
+    const actionId = event.actionId ?? '';
+    const switchMatch = actionId.match(/^messenger:switch:(.+)$/);
+    if (!switchMatch) {
+      // Not our button — could be a future picker, an unrelated chat-sdk
+      // action, etc. Ignore quietly so we don't spam logs.
+      return;
+    }
+
+    const targetAgentId = switchMatch[1];
+    const senderId = event.user?.userId;
+    if (!senderId) {
+      log('handleDiscordButtonAction: missing user id, dropping');
+      return;
+    }
+
+    const chatId = client.extractChatId(event.threadId);
+    const messageId = event.messageId;
+
+    const link = await MessengerAccountLinkModel.findByPlatformUser(
+      serverDB,
+      'discord',
+      senderId,
+      creds.tenantId,
+    );
+    if (!link) {
+      await binder.sendDmText(chatId, 'Not linked. Send /start first.');
+      return;
+    }
+
+    const userAgents = await this.fetchUserAgents(serverDB, link.userId);
+    const target = userAgents.find((agent) => agent.id === targetAgentId);
+    if (!target) {
+      await binder.sendDmText(chatId, 'Agent not found.');
+      return;
+    }
+
+    if (link.activeAgentId === targetAgentId) {
+      await binder.sendDmText(chatId, `${target.title} is already active.`);
+      return;
+    }
+
+    await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, targetAgentId);
+
+    const updateAgentPicker = (binder as any).updateAgentPicker as
+      | ((
+          chatId: string,
+          messageId: string,
+          params: { entries: AgentPickerEntry[]; text: string },
+        ) => Promise<void>)
+      | undefined;
+    if (updateAgentPicker && messageId) {
+      await updateAgentPicker.call(binder, chatId, messageId, {
+        entries: this.toPickerEntries(userAgents, targetAgentId),
+        text: 'Pick an agent to receive your messages:',
+      });
+    }
+
+    await binder.sendDmText(chatId, `Switched to ${target.title}.`);
   }
 
   /**

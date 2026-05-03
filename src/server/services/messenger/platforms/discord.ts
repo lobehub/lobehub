@@ -7,9 +7,29 @@ import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import { DiscordClientFactory } from '@/server/services/bot/platforms/discord/client';
 
 import { issueLinkToken } from '../linkTokenStore';
-import type { MessengerPlatformBinder, UnlinkedMessageContext } from '../types';
+import type { AgentPickerEntry, MessengerPlatformBinder, UnlinkedMessageContext } from '../types';
 
 const log = debug('lobe-server:messenger:discord');
+
+/**
+ * Application prefix on Discord button `custom_id`s so we can distinguish
+ * OUR buttons from anything else the bot might emit later. Matches the
+ * Slack/Telegram convention so the action handler can reuse the same
+ * regex (`messenger:switch:<agentId>`).
+ */
+export const DISCORD_ACTION_PREFIX = 'messenger:';
+
+export const buildDiscordSwitchButtons = (
+  entries: AgentPickerEntry[],
+): Array<{ customId: string; isPrimary: boolean; label: string }> =>
+  entries.map((entry) => ({
+    customId: `${DISCORD_ACTION_PREFIX}switch:${entry.id}`,
+    isPrimary: entry.isActive,
+    // Prepend a check so the active option is recognizable on clients that
+    // ignore the primary-style highlight (most Discord clients do honor it,
+    // but the marker is a useful redundancy).
+    label: entry.isActive ? `✓ ${entry.title}` : entry.title,
+  }));
 
 const buildVerifyImUrl = (params: {
   appUrl: string;
@@ -180,6 +200,61 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
       await new DiscordApi(config.botToken).createMessage(chatId, text);
     } catch (error) {
       log('sendDmText: failed to send to chat=%s: %O', chatId, error);
+    }
+  }
+
+  /**
+   * Post the agent picker as a Discord message with an ActionRow grid of
+   * buttons (`messenger:switch:<agentId>` `custom_id`s). Click handling is
+   * wired in `MessengerRouter.registerHandlers` via `bot.onAction(...)`,
+   * which fires after `@chat-adapter/discord` ack's the interaction with
+   * `type: 6 DEFERRED_UPDATE_MESSAGE` (so we have ~15 minutes to do the
+   * actual update via REST without the user seeing a spinner).
+   */
+  async sendAgentPicker(
+    chatId: string,
+    params: { entries: AgentPickerEntry[]; text: string },
+  ): Promise<void> {
+    const config = getMessengerDiscordConfig();
+    if (!config) {
+      log('sendAgentPicker: no config, skipping');
+      return;
+    }
+    try {
+      const api = new DiscordApi(config.botToken);
+      await api.createMessageWithButtons(
+        chatId,
+        params.text,
+        buildDiscordSwitchButtons(params.entries),
+      );
+    } catch (error) {
+      log('sendAgentPicker: failed for chat=%s: %O', chatId, error);
+    }
+  }
+
+  /**
+   * Edit a previously-sent picker message in place — used by the
+   * `bot.onAction` handler to move the active marker to the newly-tapped
+   * agent. Idempotent: if the message no longer exists (user deleted it,
+   * Discord pruned), Discord returns 404 and we swallow the error.
+   */
+  async updateAgentPicker(
+    chatId: string,
+    messageId: string,
+    params: { entries: AgentPickerEntry[]; text: string },
+  ): Promise<void> {
+    const config = getMessengerDiscordConfig();
+    if (!config) return;
+    try {
+      const api = new DiscordApi(config.botToken);
+      await api.editMessageWithButtons(
+        chatId,
+        messageId,
+        params.text,
+        buildDiscordSwitchButtons(params.entries),
+      );
+    } catch (error) {
+      log('updateAgentPicker: failed for chat=%s msg=%s: %O', chatId, messageId, error);
     }
   }
 }
