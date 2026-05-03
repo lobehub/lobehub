@@ -254,9 +254,7 @@ const resolveJudge = (
 };
 
 const explicitSkillChangePattern =
-  /create|update|refine|merge|consolidate|combine|deduplicate|reorganize|创建|更新|合并|去重|整理/i;
-
-const weakPositiveSkillPattern = /keep|reuse|reference|保留|复用|参考/i;
+  /create|update|refine|merge|consolidate|combine|deduplicate|reorganize|创建|更新|合并|去重|整理|变成|变为|转换|转成|做成|沉淀|固化/i;
 
 const resolveSkillHintSatisfaction = (
   source: SourceAgentUserMessage,
@@ -265,20 +263,14 @@ const resolveSkillHintSatisfaction = (
 
   const message = source.payload.message.trim();
   const explicitChangeRequest = explicitSkillChangePattern.test(message);
-  const result =
-    !explicitChangeRequest && weakPositiveSkillPattern.test(message)
-      ? 'satisfied'
-      : 'not_satisfied';
+
+  if (!explicitChangeRequest) return undefined;
 
   return {
     confidence: 0.8,
     evidence: [{ cue: 'skill source hint', excerpt: message }],
-    reason: explicitChangeRequest
-      ? 'source hinted explicit skill-management change request'
-      : result === 'satisfied'
-        ? 'source hinted reusable skill or workflow feedback'
-        : 'source hinted skill-management feedback',
-    result,
+    reason: 'source hinted explicit skill-management change request',
+    result: 'not_satisfied',
   };
 };
 

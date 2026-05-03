@@ -114,6 +114,14 @@ export interface SkillManagementActionResult {
   decision: SkillManagementDecision;
   detail?: string;
   status: 'applied' | 'failed' | 'skipped';
+  target?: SkillManagementActionTarget;
+}
+
+export interface SkillManagementActionTarget {
+  id: string;
+  summary?: string;
+  title: string;
+  type: 'skill';
 }
 
 export interface SkillManagementActionInput {
@@ -1200,6 +1208,15 @@ const isMaintainerDecision = (
 ): decision is SkillManagementDecision & { action: 'consolidate' | 'refine' } =>
   decision.action === 'refine' || decision.action === 'consolidate';
 
+const toSkillActionTarget = (
+  skill: Pick<SkillSummary, 'bundle' | 'description' | 'title'>,
+): SkillManagementActionTarget => ({
+  id: skill.bundle.documentId,
+  summary: skill.description,
+  title: skill.title,
+  type: 'skill',
+});
+
 const readTargetSkills = async (
   service: SkillManagementOperationService,
   agentId: string,
@@ -1276,24 +1293,36 @@ const runMaintainerWorkflow = async (
   );
   const canonical = targetSkills[0];
 
+  if (!canonical) {
+    return {
+      decision,
+      detail: `Skill-management ${decision.action} could not resolve targetSkillRefs.`,
+      status: 'skipped',
+    };
+  }
+
+  let updatedSkill: SkillDetail | SkillSummary = canonical;
+
   try {
     if (workflowResult.rename?.newName || workflowResult.rename?.newTitle) {
-      await service.renameSkill({
-        agentDocumentId: canonical.bundle.agentDocumentId,
-        agentId: input.agentId,
-        newName: workflowResult.rename.newName,
-        newTitle: workflowResult.rename.newTitle,
-        updateReason: workflowResult.reason,
-      });
+      updatedSkill =
+        (await service.renameSkill({
+          agentDocumentId: canonical.bundle.agentDocumentId,
+          agentId: input.agentId,
+          newName: workflowResult.rename.newName,
+          newTitle: workflowResult.rename.newTitle,
+          updateReason: workflowResult.reason,
+        })) ?? updatedSkill;
     }
 
-    await service.replaceSkillIndex({
-      agentDocumentId: canonical.bundle.agentDocumentId,
-      agentId: input.agentId,
-      bodyMarkdown: workflowResult.bodyMarkdown,
-      description: workflowResult.description,
-      updateReason: workflowResult.reason,
-    });
+    updatedSkill =
+      (await service.replaceSkillIndex({
+        agentDocumentId: canonical.bundle.agentDocumentId,
+        agentId: input.agentId,
+        bodyMarkdown: workflowResult.bodyMarkdown,
+        description: workflowResult.description,
+        updateReason: workflowResult.reason,
+      })) ?? updatedSkill;
   } catch (error) {
     return {
       decision,
@@ -1306,6 +1335,7 @@ const runMaintainerWorkflow = async (
     decision,
     detail: workflowResult.reason ?? `Applied ${decision.action} maintainer workflow.`,
     status: 'applied',
+    target: toSkillActionTarget(updatedSkill),
   };
 };
 
@@ -1368,7 +1398,7 @@ const runCreateWorkflow = async (
     createDefaultSkillManagementService(options);
 
   try {
-    await service.createSkill({
+    const skill = await service.createSkill({
       agentId: input.agentId,
       bodyMarkdown: authored.bodyMarkdown,
       description: authored.description,
@@ -1381,6 +1411,7 @@ const runCreateWorkflow = async (
       decision,
       detail: authored.reason ?? `Created skill ${authored.name}.`,
       status: 'applied',
+      target: toSkillActionTarget(skill),
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes('already exists')) {
@@ -1533,7 +1564,7 @@ export const handleSkillManagementAction = async (
         actionId: action.actionId,
         attempt: finalizeAttempt(startedAt, 'succeeded'),
         detail: result.detail,
-        output: { decision: result.decision },
+        output: { decision: result.decision, ...(result.target ? { target: result.target } : {}) },
         status: 'applied',
       };
     }

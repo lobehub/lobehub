@@ -105,4 +105,48 @@ describe('toAgentSignalTraceEvents', () => {
       }),
     );
   });
+
+  /**
+   * @example
+   * const event = toAgentSignalTraceEvents({ signals: [{ payload: { result: 'satisfied' } }] }).at(1);
+   * expect(event?.data.satisfactionResult).toBe('satisfied');
+   */
+  it('copies classifier signal payload summaries into trace events', () => {
+    const events = toAgentSignalTraceEvents({
+      actions: [],
+      results: [],
+      signals: [
+        {
+          chain: { chainId: 'chain_1', parentNodeId: 'source_1', rootSourceId: 'source_1' },
+          payload: {
+            confidence: 0.86,
+            reason: 'implicit but strong future skill-learning instruction',
+            result: 'not_satisfied',
+            target: 'skill',
+          },
+          signalId: 'signal_1',
+          signalType: 'signal.feedback.domain.skill',
+          source: { sourceId: 'source_1', sourceType: 'agent.user.message' },
+          timestamp: 2,
+        },
+      ],
+      source: {
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: { message: 'remember this', messageId: 'msg_1' },
+        scopeKey: 'topic:t1',
+        sourceId: 'source_1',
+        sourceType: 'agent.user.message',
+        timestamp: 1,
+      },
+    });
+
+    expect(events.at(1)?.data).toEqual(
+      expect.objectContaining({
+        confidence: 0.86,
+        reason: 'implicit but strong future skill-learning instruction',
+        satisfactionResult: 'not_satisfied',
+        target: 'skill',
+      }),
+    );
+  });
 });

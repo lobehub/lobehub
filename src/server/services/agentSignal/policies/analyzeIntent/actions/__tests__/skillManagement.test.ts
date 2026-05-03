@@ -76,6 +76,28 @@ describe('defineSkillManagementActionHandler', () => {
       reason: 'authored reusable workflow',
       title: 'PR Review Checklist',
     });
+    createSkill.mockResolvedValue({
+      bundle: {
+        agentDocumentId: 'pr-review-checklist-bundle-id',
+        documentId: 'pr-review-checklist-bundle-doc',
+        filename: 'pr-review-checklist',
+        title: 'PR Review Checklist',
+      },
+      content: '# PR Review Checklist',
+      description: 'Use when creating reusable PR review checklists.',
+      frontmatter: {
+        description: 'Use when creating reusable PR review checklists.',
+        name: 'pr-review-checklist',
+      },
+      index: {
+        agentDocumentId: 'pr-review-checklist-index-id',
+        documentId: 'pr-review-checklist-index-doc',
+        filename: 'SKILL.md',
+        title: 'SKILL.md',
+      },
+      name: 'pr-review-checklist',
+      title: 'PR Review Checklist',
+    });
     skillMaintainerService.getSkill.mockImplementation(async ({ agentDocumentId }) => ({
       bundle: {
         agentDocumentId,
@@ -359,6 +381,12 @@ describe('defineSkillManagementActionHandler', () => {
     expect(result).toMatchObject({
       output: {
         decision: { action: 'create', confidence: 0.9, reason: 'reusable workflow feedback' },
+        target: {
+          id: 'pr-review-checklist-bundle-doc',
+          summary: 'Use when creating reusable PR review checklists.',
+          title: 'PR Review Checklist',
+          type: 'skill',
+        },
       },
       status: 'applied',
     });

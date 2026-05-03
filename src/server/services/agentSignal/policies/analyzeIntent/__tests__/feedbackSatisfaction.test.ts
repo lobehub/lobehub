@@ -216,7 +216,7 @@ describe('feedbackSatisfactionJudge', () => {
     );
   });
 
-  it('treats skill reuse hints as satisfied weak positive feedback', async () => {
+  it('treats explicit Chinese skill conversion requests as unsatisfied actionable feedback', async () => {
     const judge = {
       judgeSatisfaction: vi.fn(),
     };
@@ -234,8 +234,8 @@ describe('feedbackSatisfactionJudge', () => {
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
-        'source_skill_reuse',
-        '这个 review 流程挺好，下次也可以参考。',
+        'source_skill_convert',
+        '刚才 chat agent 写的 SKILL.md 草稿可以用，把它转成真正的 skills/bundle。',
         'topic=repo-review',
         ['skill'],
       ),
@@ -248,7 +248,110 @@ describe('feedbackSatisfactionJudge', () => {
         signals: [
           expect.objectContaining({
             payload: expect.objectContaining({
-              reason: 'source hinted reusable skill or workflow feedback',
+              reason: 'source hinted explicit skill-management change request',
+              result: 'not_satisfied',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('falls back to the judge for implicit strong skill learning instructions', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.86,
+        evidence: [
+          {
+            cue: 'future scoped procedure reuse',
+            excerpt: '以后遇到这种数据库迁移 review，就按刚才那套检查顺序来。',
+          },
+        ],
+        reason: 'implicit but strong future skill-learning instruction',
+        result: 'not_satisfied',
+      }),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_implicit_strong',
+        '以后遇到这种数据库迁移 review，就按刚才那套检查顺序来。',
+        'topic=database-migration-review',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message: '以后遇到这种数据库迁移 review，就按刚才那套检查顺序来。',
+      serializedContext: 'topic=database-migration-review',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'implicit but strong future skill-learning instruction',
+              result: 'not_satisfied',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('falls back to the judge for generic weak positive skill feedback', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.78,
+        evidence: [{ cue: 'generic praise', excerpt: '这个解释挺有帮助的。' }],
+        reason: 'generic positive feedback without a durable learning instruction',
+        result: 'satisfied',
+      }),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_weak_positive',
+        '这个解释挺有帮助的。',
+        'topic=debugging-help',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message: '这个解释挺有帮助的。',
+      serializedContext: 'topic=debugging-help',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'generic positive feedback without a durable learning instruction',
               result: 'satisfied',
             }),
           }),
