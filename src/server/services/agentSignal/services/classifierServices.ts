@@ -2,6 +2,7 @@ import type {
   AgentSignalFeedbackDomainStagePayload,
   AgentSignalFeedbackDomainTarget,
   AgentSignalFeedbackSatisfactionStagePayload,
+  AgentSignalSkillIntentClassification,
   SignalFeedbackSatisfaction,
 } from '../policies/types';
 
@@ -20,6 +21,24 @@ export interface SatisfactionClassifierInput {
 }
 
 /**
+ * Input consumed by skill-intent routing classifiers.
+ */
+export interface SkillIntentClassifierInput {
+  /**
+   * Trimmed user feedback message to classify.
+   */
+  message: string;
+  /**
+   * Optional compact same-turn evidence or execution summary.
+   */
+  serializedContext?: string;
+  /**
+   * Optional compact topic/task label for model-backed classification.
+   */
+  topicLabel?: string;
+}
+
+/**
  * Input recorded when classifier structured output is malformed.
  */
 export interface ClassifierMalformedOutputDiagnosticInput {
@@ -34,7 +53,7 @@ export interface ClassifierMalformedOutputDiagnosticInput {
   /** Source id for the source or current signal root. */
   sourceId?: string;
   /** Classifier stage that produced malformed structured output. */
-  stage: 'domain' | 'satisfaction';
+  stage: 'domain' | 'satisfaction' | 'skill-intent';
 }
 
 /**
@@ -91,4 +110,25 @@ export interface DomainClassifierService {
   classify: (
     input: SignalFeedbackSatisfaction,
   ) => Promise<Array<AgentSignalFeedbackDomainStagePayload<AgentSignalFeedbackDomainTarget>>>;
+}
+
+/**
+ * Classifies one skill-domain feedback signal into a direct, accumulation, or non-skill route.
+ */
+export interface SkillIntentClassifierService {
+  /**
+   * Classifies skill intent after domain routing.
+   *
+   * Use when:
+   * - A feedback-domain signal target is `skill`
+   * - Satisfaction alone is not enough to choose action planning or accumulation
+   *
+   * Expects:
+   * - `input.message` is trimmed
+   * - `input.serializedContext` is compact and may be omitted
+   *
+   * Returns:
+   * - One compact routing classification with no document content leakage
+   */
+  classify: (input: SkillIntentClassifierInput) => Promise<AgentSignalSkillIntentClassification>;
 }

@@ -1,8 +1,5 @@
 import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
-import {
-  AGENT_SIGNAL_SOURCE_TYPES,
-  type SourceAgentUserMessage,
-} from '@lobechat/agent-signal/source';
+import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
 import type { GenerateObjectPayload, GenerateObjectSchema } from '@lobechat/model-runtime';
 import { chainAgentSignalAnalyzeIntentFeedbackSatisfaction } from '@lobechat/prompts';
@@ -31,10 +28,6 @@ const FeedbackSatisfactionStagePayloadSchema = z.object({
   reason: z.string(),
   result: z.enum(['neutral', 'not_satisfied', 'satisfied']),
 });
-
-type FeedbackSatisfactionStagePayloadResult = z.infer<
-  typeof FeedbackSatisfactionStagePayloadSchema
->;
 
 const FeedbackSatisfactionGenerateObjectSchema = {
   name: 'agent_signal_feedback_satisfaction',
@@ -253,27 +246,6 @@ const resolveJudge = (
   });
 };
 
-const explicitSkillChangePattern =
-  /create|update|refine|merge|consolidate|combine|deduplicate|reorganize|创建|更新|合并|去重|整理|变成|变为|转换|转成|做成|沉淀|固化/i;
-
-const resolveSkillHintSatisfaction = (
-  source: SourceAgentUserMessage,
-): FeedbackSatisfactionStagePayloadResult | undefined => {
-  if (!source.payload.intents?.includes('skill')) return undefined;
-
-  const message = source.payload.message.trim();
-  const explicitChangeRequest = explicitSkillChangePattern.test(message);
-
-  if (!explicitChangeRequest) return undefined;
-
-  return {
-    confidence: 0.8,
-    evidence: [{ cue: 'skill source hint', excerpt: message }],
-    reason: 'source hinted explicit skill-management change request',
-    result: 'not_satisfied',
-  };
-};
-
 /**
  * Creates the source handler for the feedback satisfaction judge.
  *
@@ -300,8 +272,7 @@ export const createFeedbackSatisfactionJudgeProcessor = (
     async (source, ctx): Promise<RuntimeProcessorResult | void> => {
       const classifier: SatisfactionClassifierService = {
         async classify(input) {
-          const payload =
-            resolveSkillHintSatisfaction(source) ?? (await judge.judgeSatisfaction(input));
+          const payload = await judge.judgeSatisfaction(input);
 
           return FeedbackSatisfactionStagePayloadSchema.parse(payload);
         },

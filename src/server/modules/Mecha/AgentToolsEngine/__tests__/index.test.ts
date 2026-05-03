@@ -648,6 +648,26 @@ describe('createServerAgentToolsEngine', () => {
       expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
     });
 
+    it('can suppress only LocalSystem while preserving the rest of tool discovery', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier, WebBrowsingManifest.identifier] },
+        clientRuntime: 'desktop',
+        disableLocalSystem: true,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [LocalSystemManifest.identifier, WebBrowsingManifest.identifier],
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+      expect(result.enabledToolIds).toContain(WebBrowsingManifest.identifier);
+    });
+
     it('does not enable LocalSystem for web callers even when gateway is configured', () => {
       const context = createMockContext();
       const engine = createServerAgentToolsEngine(context, {

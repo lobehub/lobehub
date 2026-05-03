@@ -175,50 +175,23 @@ describe('feedbackSatisfactionJudge', () => {
     );
   });
 
-  it('treats explicit skill merge requests as unsatisfied actionable feedback', async () => {
+  /**
+   * @example
+   * explicit skill-management wording still uses the satisfaction judge; skill intent is resolved later.
+   */
+  it('keeps explicit skill-management wording in the satisfaction stage', async () => {
     const judge = {
-      judgeSatisfaction: vi.fn(),
-    };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
-    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
-    const result = await processor.handle(
-      createUserMessageSource(
-        'source_skill_merge',
-        'The PR review checklist and release-risk checklist overlap; combine the repeated parts.',
-        'topic=repo-review',
-        ['skill'],
-      ),
-      ctx,
-    );
-
-    expect(judge.judgeSatisfaction).not.toHaveBeenCalled();
-    expect(result).toEqual(
-      expect.objectContaining({
-        signals: [
-          expect.objectContaining({
-            payload: expect.objectContaining({
-              reason: 'source hinted explicit skill-management change request',
-              result: 'not_satisfied',
-            }),
-          }),
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.81,
+        evidence: [
+          {
+            cue: 'accepted draft',
+            excerpt: 'SKILL.md 草稿可以用',
+          },
         ],
+        reason: 'positive acceptance of the foreground draft',
+        result: 'satisfied',
       }),
-    );
-  });
-
-  it('treats explicit Chinese skill conversion requests as unsatisfied actionable feedback', async () => {
-    const judge = {
-      judgeSatisfaction: vi.fn(),
     };
     const ctx = createRuntimeProcessorContext({
       backend: {
@@ -242,13 +215,71 @@ describe('feedbackSatisfactionJudge', () => {
       ctx,
     );
 
-    expect(judge.judgeSatisfaction).not.toHaveBeenCalled();
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message: '刚才 chat agent 写的 SKILL.md 草稿可以用，把它转成真正的 skills/bundle。',
+      serializedContext: 'topic=repo-review',
+    });
     expect(result).toEqual(
       expect.objectContaining({
         signals: [
           expect.objectContaining({
             payload: expect.objectContaining({
-              reason: 'source hinted explicit skill-management change request',
+              reason: 'positive acceptance of the foreground draft',
+              result: 'satisfied',
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('keeps explicit skill merge requests in the satisfaction judge', async () => {
+    const judge = {
+      judgeSatisfaction: vi.fn().mockResolvedValue({
+        confidence: 0.84,
+        evidence: [
+          {
+            cue: 'merge request',
+            excerpt: 'combine the repeated parts',
+          },
+        ],
+        reason: 'explicit request to change reusable workflow material',
+        result: 'not_satisfied',
+      }),
+    };
+    const ctx = createRuntimeProcessorContext({
+      backend: {
+        async getGuardState() {
+          return {};
+        },
+        async touchGuardState() {
+          return {};
+        },
+      },
+      scopeKey: 'topic:thread_1',
+    });
+    const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
+    const result = await processor.handle(
+      createUserMessageSource(
+        'source_skill_merge',
+        'The PR review checklist and release-risk checklist overlap; combine the repeated parts.',
+        'topic=repo-review',
+        ['skill'],
+      ),
+      ctx,
+    );
+
+    expect(judge.judgeSatisfaction).toHaveBeenCalledWith({
+      message:
+        'The PR review checklist and release-risk checklist overlap; combine the repeated parts.',
+      serializedContext: 'topic=repo-review',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              reason: 'explicit request to change reusable workflow material',
               result: 'not_satisfied',
             }),
           }),

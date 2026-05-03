@@ -149,4 +149,75 @@ describe('toAgentSignalTraceEvents', () => {
       }),
     );
   });
+
+  /**
+   * @example
+   * skill domain signal trace includes compact route and classifier fields.
+   */
+  it('projects skill intent classifier fields on signal trace events', () => {
+    const source = {
+      chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+      payload: { message: 'remember this', messageId: 'msg_1' },
+      scopeKey: 'topic:t1',
+      sourceId: 'source_1',
+      sourceType: 'agent.user.message' as const,
+      timestamp: 1,
+    };
+    const events = toAgentSignalTraceEvents({
+      actions: [],
+      results: [],
+      signals: [
+        {
+          chain: { chainId: 'chain_1', parentNodeId: 'sig_parent', rootSourceId: 'source_1' },
+          payload: {
+            confidence: 0.9,
+            evidence: [
+              { cue: 'future reuse', excerpt: 'follow the review checklist from earlier' },
+            ],
+            message: 'For future database migration reviews, follow the checklist from earlier.',
+            messageId: 'msg_1',
+            reason: 'skill-domain target',
+            satisfactionResult: 'satisfied',
+            skillActionIntent: 'create',
+            skillIntentError: {
+              cause: 'HTTP 401 unauthorized',
+              message: 'provider returned invalid key: [redacted-key]',
+              name: 'Error',
+            },
+            skillIntentConfidence: 0.86,
+            skillIntentExplicitness: 'implicit_strong_learning',
+            skillIntentReason: 'future-scoped procedural reuse instruction',
+            skillRoute: 'direct_decision',
+            target: 'skill',
+          },
+          signalId: 'sig_skill',
+          signalType: 'signal.feedback.domain.skill',
+          source,
+          timestamp: 102,
+        },
+      ],
+      source,
+    });
+
+    expect(events[1]).toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          classifierConfidence: 0.86,
+          classifierError: {
+            cause: 'HTTP 401 unauthorized',
+            message: 'provider returned invalid key: [redacted-key]',
+            name: 'Error',
+          },
+          classifierReason: 'future-scoped procedural reuse instruction',
+          satisfactionResult: 'satisfied',
+          signalId: 'sig_skill',
+          skillActionIntent: 'create',
+          skillIntentExplicitness: 'implicit_strong_learning',
+          skillRoute: 'direct_decision',
+          target: 'skill',
+        }),
+        type: 'agent_signal.signal',
+      }),
+    );
+  });
 });

@@ -136,6 +136,11 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
             options.policyOptions?.skillManagement?.selfIterationEnabled ?? false,
           userId: context.userId,
         },
+        skillIntentClassifier: {
+          db: context.db,
+          ...options.policyOptions?.skillIntentClassifier,
+          userId: context.userId,
+        },
       }),
     });
     const runtimeResult = await runtime.emitNormalized(emission.source);

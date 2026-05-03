@@ -46,13 +46,19 @@ export const toAgentSignalTraceEvents = (input: {
 
     return {
       data: {
+        classifierConfidence: payload?.skillIntentConfidence,
+        classifierError: payload?.skillIntentError,
+        classifierReason: payload?.skillIntentReason,
         confidence: payload?.confidence,
         parentNodeId: signal.chain.parentNodeId,
         reason: payload?.reason,
+        satisfactionResult: payload?.satisfactionResult ?? payload?.result,
         signalId: signal.signalId,
         signalType: signal.signalType,
         sourceId: signal.source.sourceId,
-        satisfactionResult: payload?.result,
+        skillActionIntent: payload?.skillActionIntent,
+        skillIntentExplicitness: payload?.skillIntentExplicitness,
+        skillRoute: payload?.skillRoute,
         target: payload?.target,
       },
       timestamp: signal.timestamp,

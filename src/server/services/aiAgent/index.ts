@@ -144,6 +144,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
   botPlatformContext?: any;
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
+  /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
+  disableLocalSystem?: boolean;
   /** Disable all tools (no plugins, no system manifests). Useful for eval/benchmark scenarios. */
   disableTools?: boolean;
   /** Discord context for injecting channel/guild info into agent system message */
@@ -308,6 +310,7 @@ export class AiAgentService {
       taskId,
       evalContext,
       maxSteps,
+      disableLocalSystem,
       initialStepCount,
       signal,
       userInterventionConfig = { approvalMode: 'headless' },
@@ -831,6 +834,7 @@ export class AiAgentService {
               gatewayConfigured: true,
             }
           : undefined,
+        disableLocalSystem,
         globalMemoryEnabled,
         hasAgentDocuments,
         hasEnabledKnowledgeBases,
@@ -843,7 +847,7 @@ export class AiAgentService {
       const pluginIds = [
         ...new Set([
           ...agentPlugins,
-          LocalSystemManifest.identifier,
+          ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier]),
           RemoteDeviceManifest.identifier,
           // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
           ...lobehubSkillManifests.map((m) => m.identifier),
@@ -876,6 +880,10 @@ export class AiAgentService {
       // (e.g., lobe-creds, lobe-cron). Exclude discoverable:false tools to prevent
       // internal infrastructure tools from being surfaced to the activator.
       for (const tool of builtinTools) {
+        if (disableLocalSystem && tool.identifier === LocalSystemManifest.identifier) {
+          continue;
+        }
+
         if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
           toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
         }
