@@ -320,6 +320,22 @@ export const agentGroupRouter = router({
             response.statusText,
             errorText,
           );
+          
+          // In self-hosted mode (no trusted client token or access token), 
+          // fork registration with central marketplace may fail with 401/403.
+          // This is expected and should not block the local fork operation.
+          // Return a mock success response so the client can create the local fork.
+          if (response.status === 401 || response.status === 403) {
+            log('Fork registration failed due to auth (expected in self-hosted mode). Allowing local fork to proceed.');
+            return {
+              agentGroup: {
+                identifier: input.identifier,
+                name: input.name || input.sourceIdentifier,
+              },
+              success: true,
+            };
+          }
+          
           throw new Error(`Failed to fork agent group: ${response.statusText}`);
         }
 
