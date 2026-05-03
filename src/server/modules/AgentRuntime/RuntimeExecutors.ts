@@ -524,9 +524,9 @@ export const createRuntimeExecutors = (
               return info?.abilities?.functionCall ?? true;
             },
             isCanUseVideo: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
+              const info =
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p) ??
+                LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m);
               return info?.abilities?.video ?? false;
             },
             isCanUseVision: (m: string, p: string) => {
@@ -1541,12 +1541,14 @@ export const createRuntimeExecutors = (
               activeDeviceId: state.metadata?.activeDeviceId,
               agentId: state.metadata?.agentId,
               documentId: state.metadata?.documentId,
+              groupId: state.metadata?.groupId,
               memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
               messageId: state.metadata?.sourceMessageId,
               operationId,
               scope: state.metadata?.scope,
               serverDB: ctx.serverDB,
               taskId: state.metadata?.taskId,
+              threadId: state.metadata?.threadId,
               toolCallId: chatToolPayload.id,
               toolManifestMap: effectiveManifestMap,
               toolResultMaxLength,
@@ -1978,12 +1980,14 @@ export const createRuntimeExecutors = (
                   activeDeviceId: state.metadata?.activeDeviceId,
                   agentId: state.metadata?.agentId,
                   documentId: state.metadata?.documentId,
+                  groupId: state.metadata?.groupId,
                   memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
                   messageId: state.metadata?.sourceMessageId,
                   operationId,
                   scope: state.metadata?.scope,
                   serverDB: ctx.serverDB,
                   taskId: state.metadata?.taskId,
+                  threadId: state.metadata?.threadId,
                   toolCallId: chatToolPayload.id,
                   toolManifestMap: batchManifestMap,
                   toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,

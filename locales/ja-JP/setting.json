@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "ドキュメント",
   "tools.builtins.lobe-agent-management.description": "AI エージェントの作成、管理、オーケストレーションを行います",
   "tools.builtins.lobe-agent-management.title": "エージェント管理",
+  "tools.builtins.lobe-agent-marketplace.description": "ユーザーに厳選されたエージェントマーケットプレイスカードを表示し、選択したテンプレートを記録します。",
+  "tools.builtins.lobe-agent-marketplace.title": "エージェントマーケットプレイス",
   "tools.builtins.lobe-artifacts.description": "インタラクティブなUIコンポーネント、データ可視化、チャート、SVGグラフィック、Webアプリケーションを生成し、リアルタイムでプレビューします。ユーザーが直接操作できるリッチなビジュアルコンテンツを作成します。",
   "tools.builtins.lobe-artifacts.readme": "インタラクティブなUIコンポーネント、データビジュアライゼーション、チャート、SVGグラフィック、Webアプリケーションを生成し、リアルタイムでプレビューできます。ユーザーが直接操作できるリッチなビジュアルコンテンツを作成しましょう。",
   "tools.builtins.lobe-artifacts.title": "アーティファクト",

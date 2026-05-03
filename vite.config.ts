@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { builtinModules, createRequire } from 'node:module';
 import path from 'node:path';
 
 import type { PluginOption, ViteDevServer } from 'vite';
@@ -23,37 +22,6 @@ Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
 const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';
-const require = createRequire(import.meta.url);
-
-const isBareModuleId = (id: string) =>
-  !id.startsWith('.') && !id.startsWith('/') && !id.includes('\0');
-const nodeBuiltinModules = new Set([
-  ...builtinModules,
-  ...builtinModules.map((id) => `node:${id}`),
-]);
-
-const globalVirtualStorePeerFallback = (): PluginOption => {
-  const fallbackPaths = [
-    path.resolve(__dirname, 'node_modules'),
-    path.resolve(__dirname, 'node_modules/.pnpm/node_modules'),
-  ];
-
-  return {
-    enforce: 'post',
-    name: 'global-virtual-store-peer-fallback',
-    resolveId(source, importer) {
-      if (!importer || !isBareModuleId(source)) return;
-      if (nodeBuiltinModules.has(source)) return;
-      if (!importer.includes('/v11/links/')) return;
-
-      try {
-        return require.resolve(source, { paths: fallbackPaths });
-      } catch {
-        return;
-      }
-    },
-  };
-};
 
 const resolveCommandExecutable = (cmd: string) => {
   const pathValue = process.env.PATH;
@@ -148,7 +116,6 @@ export default defineConfig({
   },
   optimizeDeps: sharedOptimizeDeps,
   plugins: [
-    globalVirtualStorePeerFallback(),
     vercelSkewProtection(),
     viteEnvRestartKeys(['APP_URL']),
     ...sharedRendererPlugins({ platform }),

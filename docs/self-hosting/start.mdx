@@ -119,6 +119,8 @@ See [AI Provider Configuration](/docs/self-hosting/environment-variables/model-p
 - **Cloudflare R2** — No egress fees
 - **RustFS / MinIO** — Self-hosted S3 alternative (included in Docker Compose)
 
+**Visual understanding fallback** — Optional, but recommended if users will upload images or videos while chatting with models that do not have native visual capabilities. Configure `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` with a visual-capable model from one of your enabled AI providers. See [Basic environment variables](/docs/self-hosting/environment-variables/basic#visual-understanding) for details.
+
 **Authentication provider** — For SSO and team features (Google OAuth, GitHub OAuth, Microsoft Azure AD, Auth0, Keycloak). See [Authentication Setup](/docs/self-hosting/auth) for configuration.
 
 ## Security Considerations

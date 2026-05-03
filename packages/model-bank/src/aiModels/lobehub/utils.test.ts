@@ -7,6 +7,13 @@ import { lobehubImageModels } from './image';
 import { lobehubVideoModels } from './video';
 
 describe('findLobeHubModel', () => {
+  it('prioritizes hosted DeepSeek models in the chat model list', () => {
+    expect(lobehubChatModels.slice(0, 2).map((model) => model.id)).toEqual([
+      'deepseek-v4-pro',
+      'deepseek-v4-flash',
+    ]);
+  });
+
   it('returns the model when id exists in chat models', () => {
     const sample = lobehubChatModels[0];
     expect(findLobeHubModel(sample.id)).toMatchObject({ id: sample.id, type: 'chat' });

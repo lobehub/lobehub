@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "Belgeler",
   "tools.builtins.lobe-agent-management.description": "Yapay zeka aracılarınızı oluşturun, yönetin ve düzenleyin",
   "tools.builtins.lobe-agent-management.title": "Aracı Yönetimi",
+  "tools.builtins.lobe-agent-marketplace.description": "Kullanıcılara özenle seçilmiş bir Temsilci Pazarı kartı gösterin ve hangi şablonları seçtiklerini kaydedin.",
+  "tools.builtins.lobe-agent-marketplace.title": "Temsilci Pazarı",
   "tools.builtins.lobe-artifacts.description": "Etkileşimli arayüz bileşenleri, grafikler ve web içeriği oluşturun ve önizleyin",
   "tools.builtins.lobe-artifacts.readme": "Etkileşimli kullanıcı arayüzü bileşenleri, veri görselleştirmeleri, grafikler, SVG görselleri ve web uygulamaları oluşturun ve canlı önizleme yapın. Kullanıcıların doğrudan etkileşimde bulunabileceği zengin görsel içerikler oluşturun.",
   "tools.builtins.lobe-artifacts.title": "Artefaktlar",

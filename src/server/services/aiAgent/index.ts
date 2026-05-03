@@ -1,6 +1,7 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -49,6 +50,7 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { toolsEnv } from '@/envs/tools';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
@@ -99,6 +101,35 @@ function formatErrorForMetadata(error: unknown): Record<string, any> | undefined
   // Fallback: wrap in object
   return { message: String(error) };
 }
+
+const getVisualAvailabilityFromFileTypes = (fileTypes: string[]) => ({
+  hasImages: fileTypes.some((fileType) => fileType.startsWith('image')),
+  hasVideos: fileTypes.some((fileType) => fileType.startsWith('video')),
+});
+
+interface VisualAvailabilityMessage {
+  imageList?: unknown[];
+  role?: string;
+  videoList?: unknown[];
+}
+
+const getVisualAvailabilityFromMessages = (messages: VisualAvailabilityMessage[]) => ({
+  hasImages: messages.some(
+    (message) => message.role === 'user' && (message.imageList?.length ?? 0) > 0,
+  ),
+  hasVideos: messages.some(
+    (message) => message.role === 'user' && (message.videoList?.length ?? 0) > 0,
+  ),
+});
+
+const isVisualUnderstandingConfigured = () => {
+  try {
+    return !!toolsEnv.VISUAL_UNDERSTANDING_PROVIDER && !!toolsEnv.VISUAL_UNDERSTANDING_MODEL;
+  } catch {
+    // The env proxy rejects server-only keys in client-like runtimes; treat that as disabled.
+    return false;
+  }
+};
 
 /**
  * Internal params for execAgent with step lifecycle callbacks
@@ -632,6 +663,40 @@ export class AiAgentService {
 
     // model-bank is needed both for tool support check and model metadata
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    // Resolve S3 keys in imageList/videoList before visual tool activation checks and context build.
+    const fileService = new FileService(this.db, this.userId);
+    const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
+    let historyMessagesCache: any[] | undefined;
+    const loadHistoryMessages = async () => {
+      if (historyMessagesCache) return historyMessagesCache;
+
+      if (existingMessageIds.length > 0) {
+        const messages = await this.messageModel.query(
+          {
+            sessionId: appContext?.sessionId,
+            threadId: appContext?.threadId,
+            topicId: appContext?.topicId ?? undefined,
+          },
+          { postProcessUrl },
+        );
+        const idSet = new Set(existingMessageIds);
+        historyMessagesCache = messages.filter((msg) => idSet.has(msg.id));
+      } else if (appContext?.topicId) {
+        // Follow-up message in existing topic: load all history for context.
+        historyMessagesCache = await this.messageModel.query(
+          {
+            sessionId: appContext?.sessionId,
+            threadId: appContext?.threadId,
+            topicId: appContext?.topicId,
+          },
+          { postProcessUrl },
+        );
+      } else {
+        historyMessagesCache = [];
+      }
+
+      return historyMessagesCache;
+    };
 
     if (params.disableTools) {
       log('execAgent: tools disabled by disableTools flag, skipping all tool discovery');
@@ -698,12 +763,44 @@ export class AiAgentService {
         isModelSupportToolUse,
       };
 
-      // Dynamically inject topic-reference tool when prompt contains <refer_topic> tags
+      // Dynamically inject turn-scoped builtin tools.
       const hasTopicReference = /refer_topic/.test(prompt ?? '');
+      const modelAbilities =
+        LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model && item.providerId === provider)
+          ?.abilities ?? LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === model)?.abilities;
+      const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
+      let attachedFileTypes: string[] = [];
+      if (attachedFileIds && attachedFileIds.length > 0) {
+        const fileModel = new FileModel(this.db, this.userId);
+        const fileRecords = await fileModel.findByIds(Array.from(new Set(attachedFileIds)));
+        attachedFileTypes = fileRecords.map((file) => file.fileType || '');
+      }
+      const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];
+      const inputVisualAvailability = getVisualAvailabilityFromFileTypes(inputFileTypes);
+      let historyVisualAvailability = { hasImages: false, hasVideos: false };
+      const visualUnderstandingConfigured = isVisualUnderstandingConfigured();
+
+      if (
+        visualUnderstandingConfigured &&
+        ((!modelAbilities?.vision && !inputVisualAvailability.hasImages) ||
+          (!modelAbilities?.video && !inputVisualAvailability.hasVideos))
+      ) {
+        historyVisualAvailability = getVisualAvailabilityFromMessages(await loadHistoryMessages());
+      }
+
+      const needsImageUnderstanding =
+        (inputVisualAvailability.hasImages || historyVisualAvailability.hasImages) &&
+        !modelAbilities?.vision;
+      const needsVideoUnderstanding =
+        (inputVisualAvailability.hasVideos || historyVisualAvailability.hasVideos) &&
+        !modelAbilities?.video;
+      const shouldEnableVisualUnderstanding =
+        visualUnderstandingConfigured && (needsImageUnderstanding || needsVideoUnderstanding);
       agentPlugins = [
         ...agentPlugins,
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
         ...(isBotConversation ? [MessageToolIdentifier] : []),
+        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
       ];
 
       // Derive activeDeviceId from device context:
@@ -744,14 +841,14 @@ export class AiAgentService {
 
       // 5f. Generate tools and manifest map
       const pluginIds = [
-        ...(agentConfig.plugins || []),
-        ...(additionalPluginIds || []),
-        LocalSystemManifest.identifier,
-        RemoteDeviceManifest.identifier,
-        ...(isBotConversation ? [MessageToolIdentifier] : []),
-        // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
-        ...lobehubSkillManifests.map((m) => m.identifier),
-        ...klavisManifests.map((m) => m.identifier),
+        ...new Set([
+          ...agentPlugins,
+          LocalSystemManifest.identifier,
+          RemoteDeviceManifest.identifier,
+          // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
+          ...lobehubSkillManifests.map((m) => m.identifier),
+          ...klavisManifests.map((m) => m.identifier),
+        ]),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
 
@@ -1085,35 +1182,8 @@ export class AiAgentService {
       }
     }
 
-    // 11. Get existing messages if provided
-    // Use postProcessUrl to resolve S3 keys in imageList to publicly accessible URLs,
-    // matching the frontend flow in aiChatService.getMessagesAndTopics.
-    const fileService = new FileService(this.db, this.userId);
-    const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
-
-    let historyMessages: any[] = [];
-    if (existingMessageIds.length > 0) {
-      historyMessages = await this.messageModel.query(
-        {
-          sessionId: appContext?.sessionId,
-          threadId: appContext?.threadId,
-          topicId: appContext?.topicId ?? undefined,
-        },
-        { postProcessUrl },
-      );
-      const idSet = new Set(existingMessageIds);
-      historyMessages = historyMessages.filter((msg) => idSet.has(msg.id));
-    } else if (appContext?.topicId) {
-      // Follow-up message in existing topic: load all history for context
-      historyMessages = await this.messageModel.query(
-        {
-          sessionId: appContext?.sessionId,
-          threadId: appContext?.threadId,
-          topicId: appContext?.topicId,
-        },
-        { postProcessUrl },
-      );
-    }
+    // 11. Get existing messages if provided.
+    const historyMessages = await loadHistoryMessages();
 
     await throwIfExecutionAborted('message history loading');
 

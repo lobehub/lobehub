@@ -6,7 +6,9 @@ export const useBusinessSignin = () => {
     getAdditionalData: async () => {
       return {};
     },
-    getFetchOptions: async () => undefined as Record<string, any> | undefined,
+    // eslint-disable-next-line unused-imports/no-unused-vars
+    getCaptchaTokenOnError: async (error: unknown) => undefined as string | null | undefined,
+    getFetchOptions: async () => undefined as Record<string, unknown> | undefined,
     preSocialSigninCheck: async () => {
       return true;
     },

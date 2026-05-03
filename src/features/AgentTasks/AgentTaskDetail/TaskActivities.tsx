@@ -1,7 +1,7 @@
 import type { BriefType, TaskDetailActivity } from '@lobechat/types';
+import { formatActivityTime } from '@lobechat/utils/time';
 import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { BotMessageSquare, CircleDot, CirclePlus, MessageCircle } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -64,8 +64,12 @@ const getRowText = (act: TaskDetailActivity, t: TFunction<'chat'>): string => {
 /** Compact one-line row for topic / comment activities. */
 const ActivityRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
   const { t } = useTranslation('chat');
+  const { t: tDiscover } = useTranslation('discover');
   const TypeIcon = ROW_TYPE_ICON[activity.type as keyof typeof ROW_TYPE_ICON] ?? MessageCircle;
-  const relTime = activity.time ? dayjs(activity.time).fromNow() : '';
+  const { text: relTime, title: relTimeTitle } = formatActivityTime(activity.time, {
+    formatOtherYear: tDiscover('time.formatOtherYear'),
+    formatThisYear: tDiscover('time.formatThisYear'),
+  });
   const text = getRowText(activity, t);
 
   const isAgent = activity.author?.type === 'agent';
@@ -112,7 +116,10 @@ const ActivityRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
       <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: 1, minWidth: 0 }}>
         {text}
         {relTime && (
-          <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}>
+          <span
+            style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}
+            title={relTimeTitle}
+          >
             · {relTime}
           </span>
         )}

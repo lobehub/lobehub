@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "Tài Liệu",
   "tools.builtins.lobe-agent-management.description": "Tạo, quản lý và điều phối các tác nhân AI",
   "tools.builtins.lobe-agent-management.title": "Quản Lý Tác Nhân",
+  "tools.builtins.lobe-agent-marketplace.description": "Hiển thị cho người dùng một thẻ Chợ Đại lý được chọn lọc và ghi lại các mẫu mà họ chọn.",
+  "tools.builtins.lobe-agent-marketplace.title": "Chợ Đại lý",
   "tools.builtins.lobe-artifacts.description": "Tạo và xem trước trực tiếp các thành phần giao diện tương tác, biểu đồ dữ liệu, đồ họa SVG và ứng dụng web. Tạo nội dung trực quan phong phú mà người dùng có thể tương tác trực tiếp.",
   "tools.builtins.lobe-artifacts.readme": "Tạo và xem trước trực tiếp các thành phần giao diện người dùng tương tác, biểu đồ dữ liệu, đồ họa SVG và ứng dụng web. Tạo nội dung trực quan phong phú mà người dùng có thể tương tác trực tiếp.",
   "tools.builtins.lobe-artifacts.title": "Tạo tác",

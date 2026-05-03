@@ -581,6 +581,7 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
+  'taskDetail.commentSubmitAndRun': 'Send & run now',
   'taskDetail.deleteConfirm.content': 'This action cannot be undone.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',
@@ -599,6 +600,7 @@ export default {
   'taskDetail.nextRunCountdown': 'Next run in {{countdown}}',
   'taskDetail.pauseTask': 'Pause task',
   'taskDetail.rerunTask': 'Re-run task',
+  'taskDetail.runNow': 'Run now',
   'taskDetail.runTask': 'Run',
   'taskDetail.stopTask': 'Stop task',
   'taskDetail.navigation': 'Navigation',

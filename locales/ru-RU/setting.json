@@ -887,6 +887,8 @@
   "tools.builtins.lobe-agent-documents.title": "Документы",
   "tools.builtins.lobe-agent-management.description": "Создание, управление и оркестрация агентов ИИ",
   "tools.builtins.lobe-agent-management.title": "Управление агентами",
+  "tools.builtins.lobe-agent-marketplace.description": "Показывать пользователям отобранную карточку Агентского Маркетплейса и записывать, какие шаблоны они выбирают.",
+  "tools.builtins.lobe-agent-marketplace.title": "Агентский Маркетплейс",
   "tools.builtins.lobe-artifacts.description": "Создавайте и просматривайте в реальном времени интерактивные UI-компоненты, визуализации данных, графики, SVG-изображения и веб-приложения. Создавайте насыщенный визуальный контент с возможностью взаимодействия.",
   "tools.builtins.lobe-artifacts.readme": "Создавайте и просматривайте в реальном времени интерактивные UI-компоненты, визуализации данных, графики, SVG-изображения и веб-приложения. Создавайте насыщенный визуальный контент, с которым пользователи могут взаимодействовать напрямую.",
   "tools.builtins.lobe-artifacts.title": "Артефакты",

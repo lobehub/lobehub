@@ -567,7 +567,7 @@ describe('GoogleGenerativeAIStream', () => {
         // usage
         'id: chat_1\n',
         'event: usage\n',
-        `data: {"inputCacheMissTokens":1439,"inputCachedTokens":14286,"inputTextTokens":15725,"outputImageTokens":0,"outputTextTokens":1053,"totalInputTokens":15725,"totalOutputTokens":1053,"totalTokens":16778}\n\n`,
+        `data: {"inputCachedTextTokens":14286,"inputCacheMissTokens":1439,"inputCachedTokens":14286,"inputTextTokens":15725,"outputImageTokens":0,"outputTextTokens":1053,"totalInputTokens":15725,"totalOutputTokens":1053,"totalTokens":16778}\n\n`,
       ]);
     });
 

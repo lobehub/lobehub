@@ -263,7 +263,6 @@
   "builtins.lobe-web-browsing.inspector.noResults": "无结果",
   "builtins.lobe-web-browsing.title": "联网搜索",
   "builtins.lobe-web-onboarding.apiName.finishOnboarding": "完成入门",
-  "builtins.lobe-web-onboarding.apiName.getOnboardingState": "读取入门状态",
   "builtins.lobe-web-onboarding.apiName.readDocument": "读取文档",
   "builtins.lobe-web-onboarding.apiName.saveUserQuestion": "保存用户问题",
   "builtins.lobe-web-onboarding.apiName.updateDocument": "更新文档",

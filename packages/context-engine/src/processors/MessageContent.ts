@@ -212,9 +212,13 @@ export class MessageContentProcessor extends BaseProcessor {
     // Add file context (if file context is enabled and has files, images or videos)
     if ((hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled) {
       const filesContext = filesPrompts({
-        addUrl: this.config.fileContext.includeFileUrl ?? true,
+        // Signed file URLs are volatile and can break provider-side prefix cache reuse.
+        // Keep file refs stable by default; structured multimodal parts still carry
+        // the fetchable URL when the target model supports the media type.
+        addUrl: this.config.fileContext.includeFileUrl ?? false,
         fileList: message.fileList,
         imageList: message.imageList || [],
+        messageId: message.id,
         videoList: message.videoList || [],
       });
 

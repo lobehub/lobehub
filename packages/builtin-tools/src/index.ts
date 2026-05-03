@@ -12,6 +12,7 @@ import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-bu
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
@@ -45,6 +46,7 @@ export const defaultToolIds = [
   AgentDocumentsManifest.identifier,
   GTDManifest.identifier,
   TaskManifest.identifier,
+  LobeAgentManifest.identifier,
 ];
 
 /**
@@ -87,6 +89,7 @@ export const runtimeManagedToolIds = [
   LocalSystemManifest.identifier,
   MemoryManifest.identifier,
   RemoteDeviceManifest.identifier,
+  LobeAgentManifest.identifier,
   WebBrowsingManifest.identifier,
 ];
 
@@ -259,6 +262,12 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: BriefManifest.identifier,
     manifest: BriefManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: LobeAgentManifest.identifier,
+    manifest: LobeAgentManifest,
     type: 'builtin',
   },
 ];

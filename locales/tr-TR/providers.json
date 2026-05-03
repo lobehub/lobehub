@@ -33,7 +33,6 @@
   "jina.description": "2020 yılında kurulan Jina AI, önde gelen bir arama yapay zekası şirketidir. Vektör modelleri, yeniden sıralayıcılar ve küçük dil modelleri içeren arama yığını ile güvenilir ve yüksek kaliteli üretken ve çok modlu arama uygulamaları geliştirir.",
   "kimicodingplan.description": "Moonshot AI'den Kimi Code, kodlama görevleri için K2.5 dahil olmak üzere Kimi modellerine erişim sağlar.",
   "lmstudio.description": "LM Studio, bilgisayarınızda büyük dil modelleriyle geliştirme ve denemeler yapmanızı sağlayan bir masaüstü uygulamasıdır.",
-  "lobehub.description": "LobeHub Cloud, resmi API'leri kullanarak yapay zeka modellerine erişir ve kullanımını model jetonlarına bağlı Kredilerle ölçer.",
   "longcat.description": "LongCat, Meituan tarafından bağımsız olarak geliştirilen bir dizi üretken yapay zeka büyük modelidir. Verimli bir hesaplama mimarisi ve güçlü çok modlu yetenekler aracılığıyla kurumsal iç verimliliği artırmak ve yenilikçi uygulamaları mümkün kılmak için tasarlanmıştır.",
   "minimax.description": "2021 yılında kurulan MiniMax, çok modlu temel modellerle genel amaçlı yapay zeka geliştirir. Trilyon parametreli MoE metin modelleri, ses ve görsel modellerin yanı sıra Hailuo AI gibi uygulamalar sunar.",
   "minimaxcodingplan.description": "MiniMax Token Planı, sabit ücretli bir abonelik aracılığıyla kodlama görevleri için M2.7 dahil olmak üzere MiniMax modellerine erişim sağlar.",

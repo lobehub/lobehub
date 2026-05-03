@@ -6,6 +6,7 @@ import {
   type Usage,
 } from '@lobechat/agent-runtime';
 import { AgentRuntime, computeStepContext, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
@@ -21,6 +22,7 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import { isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
@@ -34,6 +36,7 @@ import {
   notifyDesktopHumanApprovalRequired,
   resolveNotificationNavigatePath,
 } from '@/store/chat/utils/desktopNotification';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
@@ -74,6 +77,11 @@ const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): 
   };
   return walk(editorData.root);
 };
+
+const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
+  hasImages: messages.some((message) => message.role === 'user' && !!message.imageList?.length),
+  hasVideos: messages.some((message) => message.role === 'user' && !!message.videoList?.length),
+});
 
 /**
  * Core streaming execution actions for AI chat
@@ -161,10 +169,6 @@ export class StreamingExecutorActionImpl {
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
       (tool) => tool.identifier,
     );
-    const mergedToolIds =
-      selectedToolIds && selectedToolIds.length > 0
-        ? [...new Set([...(pluginIds || []), ...selectedToolIds])]
-        : pluginIds;
 
     if (!agentConfigData || !agentConfigData.model) {
       throw new Error(
@@ -172,11 +176,30 @@ export class StreamingExecutorActionImpl {
       );
     }
 
-    // Dynamically inject topic-reference tool when messages contain refer-topic nodes
+    // Dynamically inject turn-scoped builtin tools.
     const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
-    const effectivePluginIds = hasTopicReference
-      ? [...(pluginIds || []), 'lobe-topic-reference']
-      : pluginIds;
+    const visualMediaAvailability = getVisualMediaAvailability(messages);
+    const serverConfigState = getServerConfigStoreState();
+    const visualUnderstandingConfigured =
+      !!serverConfigState && serverConfigSelectors.enableVisualUnderstanding(serverConfigState);
+    const shouldEnableVisualUnderstanding =
+      visualUnderstandingConfigured &&
+      ((visualMediaAvailability.hasImages &&
+        !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
+        (visualMediaAvailability.hasVideos &&
+          !isCanUseVideo(agentConfigData.model, agentConfigData.provider!)));
+    const runtimePluginIds = [
+      ...new Set([
+        ...(pluginIds || []),
+        ...(hasTopicReference ? ['lobe-topic-reference'] : []),
+        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+      ]),
+    ];
+    const effectivePluginIds = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;
+    const mergedToolIds =
+      selectedToolIds && selectedToolIds.length > 0
+        ? [...new Set([...runtimePluginIds, ...selectedToolIds])]
+        : effectivePluginIds;
 
     log(
       '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',

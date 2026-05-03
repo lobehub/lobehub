@@ -1,66 +1,6 @@
-import { existsSync, realpathSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, relative, resolve, sep } from 'node:path';
-
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
-
-const require = createRequire(import.meta.url);
-
-const getPathSegments = (value: string) =>
-  resolve(value)
-    .split(/[\\/]+/)
-    .filter(Boolean);
-
-const getCommonDirectory = (paths: string[]) => {
-  const [firstPath = [], ...remainingPaths] = paths.map(getPathSegments);
-  const commonSegments: string[] = [];
-
-  for (const [index, segment] of firstPath.entries()) {
-    if (remainingPaths.every((pathSegments) => pathSegments[index] === segment)) {
-      commonSegments.push(segment);
-      continue;
-    }
-
-    break;
-  }
-
-  return commonSegments.length > 0 ? resolve(sep, ...commonSegments) : process.cwd();
-};
-
-const getTurbopackRoot = () => {
-  const nextPackageDirectory = dirname(require.resolve('next/package.json'));
-
-  return getCommonDirectory([realpathSync(process.cwd()), realpathSync(nextPackageDirectory)]);
-};
-
-const resolvePackageDirectory = (packageName: string) => {
-  const candidateDirectories = [
-    resolve(process.cwd(), 'node_modules', packageName),
-    resolve(process.cwd(), 'node_modules/.pnpm/node_modules', packageName),
-  ];
-
-  return candidateDirectories.find((directory) => existsSync(resolve(directory, 'package.json')));
-};
-
-const toTurbopackAliasPath = (directory: string) =>
-  `./${relative(process.cwd(), directory).replaceAll(sep, '/')}`;
-
-const createTurbopackPeerAliases = () =>
-  Object.fromEntries(
-    [
-      '@azure/core-util',
-      '@opentelemetry/context-async-hooks',
-      'drizzle-orm',
-      'vscode-jsonrpc',
-      'vscode-languageserver-types',
-    ].flatMap((packageName) => {
-      const packageDirectory = resolvePackageDirectory(packageName);
-
-      return packageDirectory ? [[packageName, toTurbopackAliasPath(packageDirectory)]] : [];
-    }),
-  );
 
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
@@ -75,9 +15,6 @@ interface CustomNextConfig {
 export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
-  const { resolveAlias: customTurbopackResolveAlias, ...customTurbopackConfig } =
-    config.turbopack ?? {};
-  const turbopackRoot = getTurbopackRoot();
 
   const shouldUseCSP = process.env.ENABLED_CSP === '1';
 
@@ -428,12 +365,6 @@ export function defineConfig(config: CustomNextConfig) {
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
     turbopack: {
-      ...customTurbopackConfig,
-      resolveAlias: {
-        ...createTurbopackPeerAliases(),
-        ...customTurbopackResolveAlias,
-      },
-      root: turbopackRoot,
       rules: {
         ...(isTest
           ? void 0
@@ -445,8 +376,8 @@ export function defineConfig(config: CustomNextConfig) {
           as: '*.js',
           loaders: ['raw-loader'],
         },
-        ...customTurbopackConfig.rules,
       },
+      ...config.turbopack,
     },
 
     typescript: {
