@@ -356,6 +356,7 @@ describe('Generation Actions', () => {
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         internal_execAgentRuntime: mockInternalExecAgentRuntime.mockResolvedValue(undefined),
+        isGatewayModeEnabled: mockIsGatewayModeEnabled,
       } as any);
 
       const onContinueComplete = vi.fn();

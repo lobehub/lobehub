@@ -1186,47 +1186,6 @@ export class ConversationLifecycleActionImpl {
     }
   }
 
-  continueGenerationMessage = async (id: string, messageId: string): Promise<void> => {
-    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
-    if (!message) return;
-
-    const { activeAgentId, activeTopicId, activeThreadId, activeGroupId } = this.#get();
-
-    // Create base context for continue operation (using global state)
-    const continueContext = {
-      agentId: activeAgentId,
-      topicId: activeTopicId,
-      threadId: activeThreadId ?? undefined,
-      groupId: activeGroupId,
-    };
-
-    // Create continue operation
-    const { operationId } = this.#get().startOperation({
-      type: 'continue',
-      context: { ...continueContext, messageId },
-    });
-
-    try {
-      const chats = displayMessageSelectors.mainAIChatsWithHistoryConfig(this.#get());
-
-      await this.#get().internal_execAgentRuntime({
-        context: continueContext,
-        messages: chats,
-        parentMessageId: id,
-        parentMessageType: message.role as 'assistant' | 'tool' | 'user',
-        parentOperationId: operationId,
-      });
-
-      this.#get().completeOperation(operationId);
-    } catch (error) {
-      this.#get().failOperation(operationId, {
-        type: 'ContinueError',
-        message: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  };
-
   /**
    * Execute context compression for /compact command.
    * Reuses the same service methods as the agent runtime's compress_context executor.
