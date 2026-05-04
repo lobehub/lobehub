@@ -138,11 +138,29 @@ const loadEditorState = (
   hydrateMarkdownOrEmptyState(editor, fallbackContent, { keepId: true });
 };
 
+const createHeadlessEditorWithNodes = async () => {
+  const [{ createHeadlessEditor }, { LinkNode, AutoLinkNode }] = await Promise.all([
+    import('@lobehub/editor/headless'),
+    import('@lexical/link'),
+  ]);
+
+  return createHeadlessEditor({
+    additionalPlugins: [
+      class LinkNodePlugin {
+        static pluginName = 'LinkNodePlugin';
+        constructor(kernel: any) {
+          kernel.registerNodes([LinkNode, AutoLinkNode]);
+        }
+        destroy() {}
+      },
+    ],
+  });
+};
+
 export const createMarkdownEditorSnapshot = async (
   content: string,
 ): Promise<AgentDocumentEditorSnapshot> => {
-  const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const editor = createHeadlessEditor();
+  const editor = await createHeadlessEditorWithNodes();
 
   try {
     hydrateMarkdownOrEmptyState(editor, content);
@@ -155,8 +173,7 @@ export const createMarkdownEditorSnapshot = async (
 export const exportEditorDataSnapshot = async (
   params: LoadEditorStateParams & { litexml?: boolean },
 ): Promise<AgentDocumentEditorSnapshot> => {
-  const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const editor = createHeadlessEditor();
+  const editor = await createHeadlessEditorWithNodes();
 
   try {
     loadEditorState(editor, params);
@@ -173,8 +190,7 @@ export const applyLiteXMLOperations = async ({
 }: LoadEditorStateParams & {
   operations: AgentDocumentLiteXMLOperation[];
 }): Promise<AgentDocumentEditorSnapshot> => {
-  const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const editor = createHeadlessEditor();
+  const editor = await createHeadlessEditorWithNodes();
 
   try {
     loadEditorState(editor, { editorData, fallbackContent });

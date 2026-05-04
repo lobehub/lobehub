@@ -1,6 +1,6 @@
 'use client';
 
-import { ModelIcon, ProviderIcon } from '@lobehub/icons';
+import { ModelIcon } from '@lobehub/icons';
 import { Block, Flexbox, Icon, Popover, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
@@ -11,6 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelInfoTags } from '@/components/ModelSelect';
+import { ProviderIcon } from '@/components/ProviderIcon';
 import PublishedTime from '@/components/PublishedTime';
 import { type DiscoverModelItem } from '@/types/discover';
 

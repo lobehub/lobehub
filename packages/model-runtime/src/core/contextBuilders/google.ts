@@ -112,11 +112,13 @@ export const buildGooglePart = async (
 
 /**
  * Convert OpenAI message to Google Content format
+ * Note: For parallel tool calls, all tool responses should be in the same Content message
+ * @returns Content object, or null if the message should be skipped (e.g., unmatched tool response)
  */
 export const buildGoogleMessage = async (
   message: OpenAIChatMessage,
   toolCallNameMap?: Map<string, string>,
-): Promise<Content> => {
+): Promise<Content | null> => {
   const content = message.content as string | UserMessageContentPart[];
 
   // Handle assistant messages with tool_calls
@@ -170,6 +172,8 @@ export const buildGoogleMessage = async (
   }
 
   // Convert tool_call result to functionResponse part
+  // Note: This will return null if no matching function name is found
+  // The caller (buildGoogleMessages) will aggregate all tool responses
   if (message.role === 'tool' && toolCallNameMap && message.tool_call_id) {
     const functionName = toolCallNameMap.get(message.tool_call_id);
     if (functionName) {
@@ -185,6 +189,7 @@ export const buildGoogleMessage = async (
         role: 'user',
       };
     }
+    return null; // Skip if no matching function name
   }
 
   const getParts = async () => {
@@ -202,9 +207,81 @@ export const buildGoogleMessage = async (
 };
 
 /**
+ * Count tool calls and responses in messages
+ * Used to validate that all tool calls have corresponding responses
+ */
+const countToolCallsAndResponses = (
+  messages: OpenAIChatMessage[],
+): {
+  pendingToolCallIds: string[];
+  toolCallCount: number;
+  toolResponseCount: number;
+} => {
+  let toolCallCount = 0;
+  const toolResponseIds = new Set<string>();
+
+  for (const message of messages) {
+    // Count tool calls from assistant messages
+    if (message.role === 'assistant' && message.tool_calls) {
+      for (const tc of message.tool_calls) {
+        if (tc.type === 'function') {
+          toolCallCount++;
+        }
+      }
+    }
+
+    // Track tool response IDs
+    if (message.role === 'tool' && message.tool_call_id) {
+      toolResponseIds.add(message.tool_call_id);
+    }
+  }
+
+  // Find pending tool calls (calls without corresponding responses)
+  const pendingToolCallIds: string[] = [];
+  for (const message of messages) {
+    if (message.role === 'assistant' && message.tool_calls) {
+      for (const tc of message.tool_calls) {
+        if (tc.type === 'function' && !toolResponseIds.has(tc.id)) {
+          pendingToolCallIds.push(tc.id);
+        }
+      }
+    }
+  }
+
+  return {
+    pendingToolCallIds,
+    toolCallCount,
+    toolResponseCount: toolResponseIds.size,
+  };
+};
+
+/**
  * Convert messages from the OpenAI format to Google GenAI SDK format
+ * For parallel tool calls, all tool responses are aggregated into a single user message
+ *
+ * @see https://ai.google.dev/gemini-api/docs/thought-signatures
+ *
+ * Gemini API requirements for parallel function calls:
+ * - All functionResponse parts must be in the same user message
+ * - The number of functionResponse parts should match the functionCall parts
+ * - thoughtSignature must be preserved and passed back correctly
  */
 export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promise<Content[]> => {
+  // Validate tool calls and responses count
+  // Gemini API requires matching number of calls and responses
+  const { toolCallCount, toolResponseCount, pendingToolCallIds } =
+    countToolCallsAndResponses(messages);
+
+  if (toolCallCount > toolResponseCount && pendingToolCallIds.length > 0) {
+    const pendingList = pendingToolCallIds.join(', ');
+    throw new Error(
+      `[Google AI] Mismatched tool calls and responses: ` +
+        `${toolCallCount} calls, ${toolResponseCount} responses. ` +
+        `Missing responses for tool calls: ${pendingList}. ` +
+        `Please ensure all tool responses are collected before calling the model.`,
+    );
+  }
+
   const toolCallNameMap = new Map<string, string>();
 
   // Build tool call id to name mapping
@@ -218,35 +295,51 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
     }
   });
 
-  const pools = messages
-    .filter((message) => message.role !== 'function')
-    .map(async (msg) => await buildGoogleMessage(msg, toolCallNameMap));
+  const result: Content[] = [];
+  let pendingToolResponseParts: Part[] = [];
 
-  const contents = await Promise.all(pools);
+  // Process messages, aggregating tool responses into a single user message
+  for (const msg of messages) {
+    // Handle tool role: aggregate all tool responses
+    if (msg.role === 'tool') {
+      const content = await buildGoogleMessage(msg, toolCallNameMap);
+      if (content?.parts?.length) {
+        pendingToolResponseParts.push(...content.parts);
+      }
+      continue;
+    }
 
-  // Filter out empty messages: contents.parts must not be empty.
-  const nonEmptyContents = contents.filter(
-    (content: Content) => content.parts && content.parts.length > 0,
-  );
+    // If we have pending tool responses and encounter a non-tool message,
+    // flush the aggregated tool responses as a single user message
+    if (pendingToolResponseParts.length > 0) {
+      result.push({
+        parts: pendingToolResponseParts,
+        role: 'user',
+      });
+      pendingToolResponseParts = [];
+    }
 
-  // Merge consecutive functionResponse contents into a single Content.
-  // Vertex AI requires the number of functionResponse parts to equal
-  // the number of functionCall parts in the preceding model turn.
-  const filteredContents: Content[] = [];
-  for (const content of nonEmptyContents) {
-    const isFunctionResponse =
-      content.role === 'user' && content.parts?.every((p) => p.functionResponse);
-
-    const last = filteredContents.at(-1);
-    const lastIsFunctionResponse =
-      last?.role === 'user' && last.parts?.every((p) => p.functionResponse);
-
-    if (isFunctionResponse && lastIsFunctionResponse) {
-      last!.parts = [...(last!.parts || []), ...(content.parts || [])];
-    } else {
-      filteredContents.push(content);
+    // Process non-tool messages normally
+    if (msg.role !== 'function') {
+      const content = await buildGoogleMessage(msg, toolCallNameMap);
+      if (content) {
+        result.push(content);
+      }
     }
   }
+
+  // Flush any remaining tool responses at the end
+  if (pendingToolResponseParts.length > 0) {
+    result.push({
+      parts: pendingToolResponseParts,
+      role: 'user',
+    });
+  }
+
+  // Filter out empty messages: contents.parts must not be empty
+  const filteredContents = result.filter(
+    (content: Content) => content.parts && content.parts.length > 0,
+  );
 
   // Check if the last message is a tool message
   const lastMessage = messages.at(-1);

@@ -1,6 +1,5 @@
 'use client';
 
-import { ProviderIcon } from '@lobehub/icons';
 import { Button } from '@lobehub/ui';
 import { ModelProvider } from 'model-bank';
 import { memo } from 'react';
@@ -8,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { ProviderIcon } from '@/components/ProviderIcon';
 import BaseErrorForm from '@/features/Conversation/Error/BaseErrorForm';
 import { useProviderName } from '@/hooks/useProviderName';
 import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';

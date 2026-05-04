@@ -81,6 +81,11 @@ vi.mock('@lobehub/editor/headless', () => ({
   }),
 }));
 
+vi.mock('@lexical/link', () => ({
+  AutoLinkNode: class {},
+  LinkNode: class {},
+}));
+
 describe('AgentDocumentsService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
