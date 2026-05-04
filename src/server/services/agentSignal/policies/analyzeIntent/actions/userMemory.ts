@@ -7,6 +7,7 @@ import type {
 } from '@lobechat/agent-signal';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
+import { RequestTrigger } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { PluginModel } from '@/database/models/plugin';
@@ -299,7 +300,7 @@ const runMemoryActionAgent = async (
       agentId: input.agentId,
       scope: 'chat',
       topicId: input.topicId ?? null,
-      trigger: 'agent-signal',
+      trigger: RequestTrigger.AgentSignal,
     },
     autoStart: false,
     initialContext,

@@ -200,7 +200,7 @@ export class FeedbackDomainJudgeAgentService {
         model: this.modelConfig.model,
         schema: FeedbackDomainGenerateObjectSchema,
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.AgentSignal } },
     );
 
     return FeedbackDomainJudgeAgentResultSchema.parse({

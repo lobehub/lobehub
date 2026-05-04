@@ -54,33 +54,28 @@ Rules:
 - "skill" can fan out with "memory" when the feedback contains both a personal preference and a reusable workflow/template insight.
 - Route to "skill", not "prompt", when the feedback asks to create, update, refine, merge, consolidate, deduplicate, or reorganize an existing reusable checklist, skill, template, workflow, playbook, or writing pattern.
 - Route to "skill" for explicit requests to create or preserve a reusable operational artifact, even when the message is phrased as an imperative instead of a complaint.
-- If the feedback refers to "this way", "that workflow", "这种方式", "这个流程", or similar deictic phrasing, inspect serializedContext before deciding.
+- Route to "skill" for future-scoped reuse of a concrete procedure, review checklist, troubleshooting sequence, migration-review order, deploy/rollback checklist, or repeatable working method.
+- Treat "use this next time", "follow the previous order", "do it like that for this class of task", "reuse this procedure later", and similar phrasing as "skill" when recent context contains procedural steps.
+- Do not route to "memory" merely because the feedback contains future-oriented language such as "future", "next time", "going forward", or "later". If the durable directive mainly preserves a repeatable procedure, checklist, or workflow, route to "skill" instead.
+- Route to "memory" only when removing the procedural/checklist content still leaves a useful personal preference, such as brevity, tone, priority, tool choice, or do-not-do guidance.
+- If the feedback refers to "this way", "that workflow", "this procedure", "that flow", or similar deictic phrasing, inspect serializedContext before deciding.
 - Route to "skill" when recent context contains a reusable multi-step workflow and the feedback asks to use that workflow for future similar tasks.
 - Route to "memory", not "skill", when recent context only supports a stable personal style, tool preference, or communication preference.
 - Never output duplicate targets.
 - Return "none" when no durable target is justified.
 
-Examples:
+Compact boundary examples:
 Input satisfaction=result:not_satisfied, message:"Going forward, I prefer concise file-specific review comments."
 Output: {"targets":[{"target":"memory","confidence":0.92,"reason":"durable user preference for future code review replies","evidence":[{"cue":"going forward","excerpt":"Going forward, I prefer concise file-specific review comments."},{"cue":"i prefer","excerpt":"Going forward, I prefer concise file-specific review comments."}]}]}
 
 Input satisfaction=result:not_satisfied, message:"Stop saying \\"Below is a detailed analysis\\" before every answer."
 Output: {"targets":[{"target":"prompt","confidence":0.97,"reason":"assistant self-wording rule","evidence":[{"cue":"stop saying","excerpt":"Stop saying \\"Below is a detailed analysis\\" before every answer."}]}]}
 
-Input satisfaction=result:not_satisfied, message:"In code review I prefer concise comments and a reusable checklist template."
-Output: {"targets":[{"target":"memory","confidence":0.86,"reason":"future personal preference for code review","evidence":[{"cue":"i prefer","excerpt":"In code review I prefer concise comments and a reusable checklist template."}]},{"target":"skill","confidence":0.78,"reason":"reusable checklist template idea","evidence":[{"cue":"template","excerpt":"In code review I prefer concise comments and a reusable checklist template."}]}]}
+Input satisfaction=result:not_satisfied, message:"For future database migration reviews, follow the checklist from earlier."
+Output: {"targets":[{"target":"skill","confidence":0.9,"reason":"future reuse of a database migration review checklist","evidence":[{"cue":"future database migration reviews","excerpt":"For future database migration reviews"},{"cue":"follow the checklist","excerpt":"follow the checklist from earlier"}]}]}
 
-Input satisfaction=result:satisfied, message:"This workflow is much better and should become our reusable template."
-Output: {"targets":[{"target":"skill","confidence":0.83,"reason":"reusable workflow worth capturing for future reuse","evidence":[{"cue":"reusable template","excerpt":"This workflow is much better and should become our reusable template."}]}]}
-
-Input satisfaction=result:not_satisfied, message:"Create a reusable skill for future PR reviews: always check correctness, tests, security, rollout risk, and rollback risk."
-Output: {"targets":[{"target":"skill","confidence":0.94,"reason":"explicit reusable skill creation request","evidence":[{"cue":"create reusable skill","excerpt":"Create a reusable skill for future PR reviews"},{"cue":"future PR reviews","excerpt":"future PR reviews"}]}]}
-
-Input satisfaction=result:satisfied, message:"这个 review 流程挺好，下次也可以参考。"
-Output: {"targets":[{"target":"skill","confidence":0.78,"reason":"positive reusable workflow signal","evidence":[{"cue":"review 流程","excerpt":"这个 review 流程挺好"},{"cue":"下次参考","excerpt":"下次也可以参考"}]}]}
-
-Input satisfaction=result:not_satisfied, message:"The PR review checklist and release-risk checklist overlap; combine the repeated parts."
-Output: {"targets":[{"target":"skill","confidence":0.88,"reason":"maintains existing reusable checklist artifacts","evidence":[{"cue":"checklist","excerpt":"The PR review checklist and release-risk checklist overlap; combine the repeated parts."},{"cue":"combine","excerpt":"combine the repeated parts"}]}]}
+Input satisfaction=result:not_satisfied, message:"This approach is not suitable. Please do not do this again."
+Output: {"targets":[{"target":"memory","confidence":0.82,"reason":"durable negative preference about future approach selection","evidence":[{"cue":"not suitable","excerpt":"This approach is not suitable"},{"cue":"do not do this again","excerpt":"Please do not do this again"}]}]}
 
 Return only the JSON object.`;
 

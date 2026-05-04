@@ -32,6 +32,11 @@ export default {
   'agentProfile.knowledgeBases_other': '{{count}} knowledge bases',
   'agentProfile.skills_one': '{{count}} skill',
   'agentProfile.skills_other': '{{count}} skills',
+  'agentSignal.receipts.memory.detail': 'Saved this for future replies',
+  'agentSignal.receipts.memory.title': 'Memory saved',
+  'agentSignal.receipts.recentActivity': 'Recent activity',
+  'agentSignal.receipts.skill.detail': 'Improved how this assistant handles similar requests',
+  'agentSignal.receipts.skill.title': 'Skill updated',
   'agents': 'Agents',
   'artifact.generating': 'Generating',
   'artifact.inThread':

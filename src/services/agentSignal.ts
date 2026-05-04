@@ -10,7 +10,18 @@ type ClientGatewaySourceType = Extract<AgentSignalSourceType, `client.${string}`
 type ClientGatewaySourceEventInput<TSourceType extends ClientGatewaySourceType> =
   AgentSignalSourceEventInput<TSourceType>;
 
+export interface ListAgentSignalReceiptsParams {
+  agentId: string;
+  cursor?: number;
+  limit?: number;
+  topicId: string;
+}
+
 class AgentSignalService {
+  listReceipts = async (params: ListAgentSignalReceiptsParams) => {
+    return lambdaClient.agentSignal.listReceipts.query(params);
+  };
+
   emitSourceEvent = async (payload: ClientGatewaySourceEventInput<ClientGatewaySourceType>) => {
     return lambdaClient.agentSignal.emitSourceEvent.mutate(payload);
   };

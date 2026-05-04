@@ -21,15 +21,14 @@ describe('agent signal analyze-intent route prompt', () => {
       'Route to "skill", not "prompt"',
     );
     expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
-      'The PR review checklist and release-risk checklist overlap',
-    );
-    expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
-      'Create a reusable skill for future PR reviews',
+      'create, update, refine, merge, consolidate, deduplicate, or reorganize',
     );
     expect(AGENT_SIGNAL_ANALYZE_INTENT_FEEDBACK_SATISFACTION_SYSTEM_ROLE).toContain(
       'Create a reusable skill for future PR reviews',
     );
-    expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain('这个 review 流程挺好');
+    expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
+      'Route to "skill" for explicit requests',
+    );
     expect(AGENT_SIGNAL_ANALYZE_INTENT_FEEDBACK_SATISFACTION_SYSTEM_ROLE).toContain(
       '这个 review 流程挺好',
     );
@@ -44,8 +43,8 @@ describe('agent signal analyze-intent route prompt', () => {
    */
   it('includes serialized context and rules for implicit reusable workflow feedback', () => {
     const prompt = createAgentSignalAnalyzeIntentRoutePrompt({
-      evidence: [{ cue: '这种方式', excerpt: '以后都用这种方式做吧。' }],
-      message: '以后都用这种方式做吧。',
+      evidence: [{ cue: 'this workflow', excerpt: 'Use this workflow next time.' }],
+      message: 'Use this workflow next time.',
       reason: 'positive reusable workflow reinforcement',
       result: 'satisfied',
       serializedContext:
@@ -59,6 +58,26 @@ describe('agent signal analyze-intent route prompt', () => {
     );
     expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
       'recent context contains a reusable multi-step workflow',
+    );
+  });
+
+  /**
+   * @example
+   * Future-scoped procedural reuse should route to skill, while personal style
+   * and negative approach preferences remain memory candidates.
+   */
+  it('documents the memory versus skill boundary for future-scoped feedback', () => {
+    expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
+      'future-scoped reuse of a concrete procedure',
+    );
+    expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
+      'Do not route to "memory" merely because the feedback contains future-oriented language',
+    );
+    expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
+      'For future database migration reviews',
+    );
+    expect(AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE).toContain(
+      'This approach is not suitable',
     );
   });
 });
