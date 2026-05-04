@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { access, appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
+import { finished as streamFinished } from 'node:stream/promises';
 
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import {
@@ -926,44 +927,59 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       });
 
       proc.on('exit', (code, signal) => {
-        void stdoutBroadcastQueue.finally(async () => {
-          void this.writeCliTraceJson(traceSession, 'exit.json', {
-            code,
-            finishedAt: new Date().toISOString(),
-            signal,
-          });
-          await this.flushCliTrace(traceSession);
-
-          logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
-          session.process = undefined;
-
-          // If *we* killed it (cancel / stop / before-quit), treat the non-zero
-          // exit as a clean shutdown — surfacing it as an error would make a
-          // user-initiated cancel look like an agent failure, and an Electron
-          // shutdown affecting OTHER running CC sessions would pollute their
-          // topics with a misleading "Agent exited with code 143" message.
-          if (session.cancelledByUs) {
-            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-            resolve();
-            return;
-          }
-
-          if (code === 0) {
-            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-            resolve();
-          } else {
-            const stderrOutput = stderrChunks.join('').trim();
-            const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
-            const sessionError = this.getSessionErrorPayload(errorMsg, session);
-            this.broadcast('heteroAgentSessionError', {
-              error: sessionError,
-              sessionId: session.sessionId,
-            });
-            reject(
-              new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
-            );
-          }
+        // Node may emit `'exit'` BEFORE stdio finishes draining (documented:
+        // child_process docs note "stdio streams might still be open" at exit
+        // time). Wait for stdout to fully end/close so the `stdout.on('end')`
+        // handler has scheduled `pipeline.flush()` onto `stdoutBroadcastQueue`,
+        // THEN wait for the queue itself to settle. Without this two-step
+        // gate, trailing flushed events (final synthesized tool_end /
+        // tool_result) would race against — and lose to — the
+        // `heteroAgentSessionComplete` broadcast, leaving renderer-side
+        // persistence to finalize on incomplete state.
+        const stdoutDrained = streamFinished(stdout, { writable: false }).catch(() => {
+          /* end / close / error are all "done"; we still want to settle. */
         });
+
+        void stdoutDrained
+          .then(() => stdoutBroadcastQueue)
+          .finally(async () => {
+            void this.writeCliTraceJson(traceSession, 'exit.json', {
+              code,
+              finishedAt: new Date().toISOString(),
+              signal,
+            });
+            await this.flushCliTrace(traceSession);
+
+            logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
+            session.process = undefined;
+
+            // If *we* killed it (cancel / stop / before-quit), treat the non-zero
+            // exit as a clean shutdown — surfacing it as an error would make a
+            // user-initiated cancel look like an agent failure, and an Electron
+            // shutdown affecting OTHER running CC sessions would pollute their
+            // topics with a misleading "Agent exited with code 143" message.
+            if (session.cancelledByUs) {
+              this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+              resolve();
+              return;
+            }
+
+            if (code === 0) {
+              this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+              resolve();
+            } else {
+              const stderrOutput = stderrChunks.join('').trim();
+              const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
+              const sessionError = this.getSessionErrorPayload(errorMsg, session);
+              this.broadcast('heteroAgentSessionError', {
+                error: sessionError,
+                sessionId: session.sessionId,
+              });
+              reject(
+                new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
+              );
+            }
+          });
       });
     });
   }
