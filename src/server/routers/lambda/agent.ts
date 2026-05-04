@@ -276,7 +276,7 @@ export const agentRouter = router({
       z
         .object({
           keyword: z.string().optional(),
-          limit: z.number().optional(),
+          limit: z.number().optional().max(100),
           offset: z.number().optional(),
         })
         .optional(),
