@@ -82,15 +82,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       contain-intrinsic-size: auto 56px;
     }
 
-    /* antd's header is a flex row whose children don't get min-width:0 by
-       default — long file paths inside our header would push the stats and
-       expand-icon off-screen instead of triggering text-overflow ellipsis. */
-    & :where(.ant-collapse-header) {
-      overflow: hidden;
-    }
-
-    & :where(.ant-collapse-header-text) {
-      min-width: 0;
+    /* antd v6 renders the label slot as .ant-collapse-title (was
+       .ant-collapse-header-text in v4/v5). When collapsible is 'header'
+       (the @lobehub/ui Collapse default), antd applies a (0,4,0) rule
+       on .ant-collapse .ant-item .ant-collapsible-header .ant-title
+       that locks flex to 0 0 auto — long paths then push stats and
+       chevron off-screen instead of triggering ellipsis on .path. Our
+       parent-className selector is only (0,3,0), so we !important to win.
+       Verified via getComputedStyle on a real row: without !important the
+       title resolves to flex: 0 0 auto; with it, flex: 1 1 0%. */
+    & .ant-collapse-collapsible-header .ant-collapse-title {
+      overflow: hidden !important;
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
     }
   `,
   scopeChip: css`

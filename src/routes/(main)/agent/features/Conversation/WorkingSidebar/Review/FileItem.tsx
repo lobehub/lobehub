@@ -18,6 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // visual noise to the long file list. Mirrors GitHub's "Files changed".
   copy: css`
     flex: none;
+    color: ${cssVar.colorTextTertiary};
     opacity: 0;
     transition: opacity 0.15s;
 
@@ -37,6 +38,27 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
+  dir: css`
+    direction: rtl;
+
+    /* Only the directory portion shrinks + head-truncates. Short dirs
+       sit naturally next to the filename (no awkward right-alignment);
+       long dirs collapse leading segments into "…" via the RTL trick. */
+    overflow: hidden;
+    flex: 0 1 auto;
+
+    min-width: 0;
+
+    color: ${cssVar.colorTextTertiary};
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  fileName: css`
+    flex: none;
+    color: ${cssVar.colorText};
+    white-space: nowrap;
+  `,
   header: css`
     display: flex;
     gap: 8px;
@@ -47,20 +69,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 12px;
   `,
-  path: css`
-    /* Head-truncate so the filename (the meaningful part) stays visible
-       and only leading directory segments collapse into "…". Paths are
-       strongly-LTR so RTL container direction is safe here. */
-    direction: rtl;
+  pathWrapper: css`
     overflow: hidden;
-    flex: 1;
 
+    /* Shrink-only (no grow): short paths stay content-sized so stats sit
+       right after the filename; long paths still shrink so the dir part
+       can head-truncate. */
+    display: flex;
+    flex: 0 1 auto;
     min-width: 0;
-
-    color: ${cssVar.colorText};
-    text-align: start;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   stats: css`
     flex: none;
@@ -82,6 +99,10 @@ interface FileItemHeaderProps {
 export const FileItemHeader = memo<FileItemHeaderProps>(({ filePath, additions, deletions }) => {
   const { t } = useTranslation('chat');
 
+  const lastSlash = filePath.lastIndexOf('/');
+  const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash + 1) : '';
+  const fileName = lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath;
+
   const handleCopy = useCallback(
     async (event: MouseEvent<HTMLDivElement>) => {
       // Stop propagation so the row doesn't toggle expand on copy click.
@@ -94,10 +115,20 @@ export const FileItemHeader = memo<FileItemHeaderProps>(({ filePath, additions, 
 
   return (
     <span className={styles.header}>
-      <span className={styles.path} title={filePath}>
-        {/* bdi keeps the path's visual order LTR while the container is
-            direction: rtl for head-side truncation. */}
-        <bdi dir={'ltr'}>{filePath}</bdi>
+      <span className={styles.pathWrapper} title={filePath}>
+        {dir && (
+          // bdi keeps the dir's visual order LTR while the span is
+          // direction: rtl for head-side truncation of leading segments.
+          <span className={styles.dir}>
+            <bdi dir={'ltr'}>{dir}</bdi>
+          </span>
+        )}
+        <span className={styles.fileName}>{fileName}</span>
+      </span>
+      <span className={styles.stats}>
+        {additions > 0 && <span className={styles.additions}>+{additions}</span>}
+        {additions > 0 && deletions > 0 && ' '}
+        {deletions > 0 && <span className={styles.deletions}>-{deletions}</span>}
       </span>
       <ActionIcon
         className={styles.copy}
@@ -106,11 +137,6 @@ export const FileItemHeader = memo<FileItemHeaderProps>(({ filePath, additions, 
         title={t('workingPanel.review.copyPath')}
         onClick={handleCopy}
       />
-      <span className={styles.stats}>
-        {additions > 0 && <span className={styles.additions}>+{additions}</span>}
-        {additions > 0 && deletions > 0 && ' '}
-        {deletions > 0 && <span className={styles.deletions}>-{deletions}</span>}
-      </span>
     </span>
   );
 });
