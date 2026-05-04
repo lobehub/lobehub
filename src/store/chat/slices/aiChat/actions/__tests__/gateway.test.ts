@@ -52,8 +52,10 @@ function createMockClient(): GatewayConnection['client'] & {
       }
       set.add(listener);
     }),
+    reconnect: vi.fn(async () => {}),
     sendInterrupt: vi.fn(),
     sendToolResult: vi.fn(() => true),
+    updateToken: vi.fn(),
   };
 }
 
@@ -220,6 +222,76 @@ describe('GatewayActionImpl', () => {
       mockClient.emitEvent('auth_failed', 'invalid token');
       mockClient.emitEvent('disconnected');
       expect(onSessionComplete).toHaveBeenCalledOnce();
+    });
+
+    describe('auth_expired (recoverable)', () => {
+      it('should refresh token, reconnect, and NOT fire onSessionComplete', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSessionComplete = vi.fn();
+        const tokenRefresher = vi.fn(async () => 'fresh-token');
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete,
+          operationId: 'op-1',
+          token: 'old-token',
+          tokenRefresher,
+        });
+
+        mockClient.emitEvent('auth_expired');
+        // The handler is async — let the promise chain settle.
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(tokenRefresher).toHaveBeenCalledOnce();
+        expect(mockClient.updateToken).toHaveBeenCalledWith('fresh-token');
+        expect(mockClient.reconnect).toHaveBeenCalledOnce();
+        // Critical: this is recoverable, so the local op MUST keep running.
+        expect(onSessionComplete).not.toHaveBeenCalled();
+      });
+
+      it('should fire onSessionComplete (terminal) when no tokenRefresher is provided', () => {
+        const { action, mockClient } = createTestAction();
+        const onSessionComplete = vi.fn();
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete,
+          operationId: 'op-1',
+          token: 'test-token',
+        });
+
+        mockClient.emitEvent('auth_expired');
+        // Without a refresher there's no path to recover; must end the session
+        // so the input clears instead of staying stuck.
+        expect(onSessionComplete).toHaveBeenCalledOnce();
+      });
+
+      it('should fire onSessionComplete when token refresh itself throws', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSessionComplete = vi.fn();
+        const tokenRefresher = vi.fn(async () => {
+          throw new Error('refresh API down');
+        });
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete,
+          operationId: 'op-1',
+          token: 'old-token',
+          tokenRefresher,
+        });
+
+        mockClient.emitEvent('auth_expired');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(tokenRefresher).toHaveBeenCalledOnce();
+        // No reconnect attempted — refresh failed, give up cleanly.
+        expect(mockClient.reconnect).not.toHaveBeenCalled();
+        expect(mockClient.disconnect).toHaveBeenCalled();
+        expect(onSessionComplete).toHaveBeenCalledOnce();
+      });
     });
 
     it('should disconnect existing connection before creating new one', () => {

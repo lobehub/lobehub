@@ -23,7 +23,13 @@ type Setter = StoreSetter<ChatStore>;
 export interface GatewayConnection {
   client: Pick<
     AgentStreamClient,
-    'connect' | 'disconnect' | 'on' | 'sendInterrupt' | 'sendToolResult'
+    | 'connect'
+    | 'disconnect'
+    | 'on'
+    | 'reconnect'
+    | 'sendInterrupt'
+    | 'sendToolResult'
+    | 'updateToken'
   >;
   status: ConnectionStatus;
 }
@@ -53,6 +59,15 @@ export interface ConnectGatewayParams {
    * Auth token for the Gateway
    */
   token: string;
+  /**
+   * Called when the server signals `auth_expired` (JWT past `exp` while the
+   * op is still alive). Should resolve to a freshly-minted token. The client
+   * will then `updateToken()` and `reconnect()` automatically.
+   *
+   * If omitted, `auth_expired` is treated like `auth_failed` (terminal),
+   * because there's no way to recover without a refresher.
+   */
+  tokenRefresher?: () => Promise<string>;
 }
 
 // ─── Action Implementation ───
@@ -76,7 +91,15 @@ export class GatewayActionImpl {
    * Creates an AgentStreamClient, manages its lifecycle, and wires up event callbacks.
    */
   connectToGateway = (params: ConnectGatewayParams): void => {
-    const { operationId, gatewayUrl, token, onEvent, onSessionComplete, resumeOnConnect } = params;
+    const {
+      operationId,
+      gatewayUrl,
+      token,
+      onEvent,
+      onSessionComplete,
+      resumeOnConnect,
+      tokenRefresher,
+    } = params;
 
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
@@ -156,6 +179,33 @@ export class GatewayActionImpl {
       console.error(`[Gateway] Auth failed for operation ${operationId}: ${reason}`);
       this.internal_cleanupGatewayConnection(operationId);
       fireSessionComplete();
+    });
+
+    // Handle expired-but-recoverable auth: the JWT is past `exp` but the op
+    // is still alive on the server. Refresh the token, hand it to the client,
+    // and reconnect. If the refresher itself fails (network down, server
+    // refused refresh, no refresher provided), fall back to terminal —
+    // there's nothing else we can do, and leaving the op `running` would
+    // freeze the input.
+    client.on('auth_expired', async () => {
+      if (!tokenRefresher) {
+        console.error(
+          `[Gateway] Auth expired for operation ${operationId} but no tokenRefresher provided`,
+        );
+        this.internal_cleanupGatewayConnection(operationId);
+        fireSessionComplete();
+        return;
+      }
+      try {
+        const fresh = await tokenRefresher();
+        client.updateToken(fresh);
+        await client.reconnect();
+      } catch (error) {
+        console.error(`[Gateway] Token refresh failed for operation ${operationId}:`, error);
+        client.disconnect();
+        this.internal_cleanupGatewayConnection(operationId);
+        fireSessionComplete();
+      }
     });
 
     client.connect();
@@ -335,6 +385,12 @@ export class GatewayActionImpl {
       },
       operationId: result.operationId,
       token: result.token || '',
+      tokenRefresher: result.topicId
+        ? async () => {
+            const refreshed = await aiAgentService.refreshGatewayToken(result.topicId!);
+            return refreshed.token;
+          }
+        : undefined,
     });
 
     return result;
@@ -407,6 +463,10 @@ export class GatewayActionImpl {
       operationId,
       resumeOnConnect: true,
       token,
+      tokenRefresher: async () => {
+        const refreshed = await aiAgentService.refreshGatewayToken(topicId);
+        return refreshed.token;
+      },
     });
   };
 
