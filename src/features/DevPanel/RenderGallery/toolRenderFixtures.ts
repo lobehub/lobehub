@@ -2,11 +2,11 @@
 
 import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code/client';
 import { builtinTools } from '@lobechat/builtin-tools';
-import type { BuiltinRenderProps, BuiltinToolManifest, LobeChatPluginApi } from '@lobechat/types';
+import type { BuiltinToolManifest, LobeChatPluginApi } from '@lobechat/types';
 
-export interface ToolRenderFixture extends Partial<
-  Pick<BuiltinRenderProps, 'args' | 'content' | 'pluginError' | 'pluginState'>
-> {}
+import type { ToolRenderFixture, ToolRenderFixtureVariant } from './lifecycleMode';
+
+export type { ToolRenderFixture, ToolRenderFixtureVariant } from './lifecycleMode';
 
 export interface ToolRenderMeta {
   api?: LobeChatPluginApi;
@@ -185,8 +185,35 @@ const buildSchemaSample = (schema: any, key = 'value'): any => {
 
 const keyOf = (identifier: string, apiName: string) => `${identifier}:${apiName}`;
 
+/**
+ * Wrap a single fixture body into the canonical `{ variants: [...] }` shape so
+ * APIs that only need one preview state stay terse.
+ */
+const single = (
+  variant: Omit<ToolRenderFixtureVariant, 'id' | 'label'> & {
+    id?: string;
+    label?: string;
+  } = {},
+): ToolRenderFixture => ({
+  variants: [{ id: 'default', label: 'Default', ...variant }],
+});
+
+/**
+ * Author multiple lifecycle-state variants (e.g. success / empty / failure) for
+ * an API. Each entry only needs `label`; `id` defaults to a slugified label.
+ */
+
+const variants = (
+  list: Array<Omit<ToolRenderFixtureVariant, 'id'> & { id?: string }>,
+): ToolRenderFixture => ({
+  variants: list.map((variant, index) => ({
+    id: variant.id ?? (variant.label.toLowerCase().replaceAll(/\s+/g, '-') || `variant-${index}`),
+    ...variant,
+  })),
+});
+
 const toolRenderFixtures: Record<string, ToolRenderFixture> = {
-  [keyOf('codex', 'command_execution')]: {
+  [keyOf('codex', 'command_execution')]: single({
     args: { command: 'bun run type-check' },
     content: 'Checked 1247 files in 2.3s\nNo type errors found.',
     pluginState: {
@@ -196,8 +223,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       stdout: 'Checked 1247 files in 2.3s\nNo type errors found.',
       success: true,
     },
-  },
-  [keyOf('codex', 'file_change')]: {
+  }),
+  [keyOf('codex', 'file_change')]: single({
     args: {
       changes: [
         {
@@ -245,8 +272,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       linesAdded: 113,
       linesDeleted: 0,
     },
-  },
-  [keyOf('codex', 'todo_list')]: {
+  }),
+  [keyOf('codex', 'todo_list')]: single({
     args: {
       items: [
         { completed: true, text: 'Wire up the render registry export' },
@@ -255,112 +282,192 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       ],
     },
     content: 'Todo list updated (1/3 completed).',
-  },
+  }),
 
-  [keyOf(ClaudeCodeIdentifier, 'Agent')]: {
+  [keyOf(ClaudeCodeIdentifier, 'Agent')]: single({
     args: {
       prompt:
         'Inspect the generated preview fixtures and reply with a short note about the riskiest missing case.',
     },
     content:
       '- Search-driven renders still need richer empty-state fixtures.\n- The grouped execute-tasks preview depends on seeded agent-group state.',
-  },
-  [keyOf(ClaudeCodeIdentifier, 'Bash')]: {
-    args: { command: 'rg -n "TodoListRender" packages src' },
-    content:
-      'packages/builtin-tools/src/codex/TodoListRender.tsx:11:const TodoListRender = memo<...>',
-    pluginState: {
-      exitCode: 0,
-      isBackground: false,
-      output:
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'Bash')]: variants([
+    {
+      args: { command: 'rg -n "TodoListRender" packages src' },
+      content:
         'packages/builtin-tools/src/codex/TodoListRender.tsx:11:const TodoListRender = memo<...>',
-      stdout:
-        'packages/builtin-tools/src/codex/TodoListRender.tsx:11:const TodoListRender = memo<...>',
-      success: true,
+      label: 'Match found',
+      pluginState: {
+        exitCode: 0,
+        isBackground: false,
+        output:
+          'packages/builtin-tools/src/codex/TodoListRender.tsx:11:const TodoListRender = memo<...>',
+        stdout:
+          'packages/builtin-tools/src/codex/TodoListRender.tsx:11:const TodoListRender = memo<...>',
+        success: true,
+      },
     },
-  },
-  [keyOf(ClaudeCodeIdentifier, 'Edit')]: {
+    {
+      args: { command: 'bun run type-check' },
+      content:
+        'src/features/DevPanel/RenderGallery/ToolPreview.tsx(48,12): error TS2304: Cannot find name "Foo".\n',
+      label: 'Non-zero exit',
+      pluginState: {
+        exitCode: 2,
+        isBackground: false,
+        output:
+          'src/features/DevPanel/RenderGallery/ToolPreview.tsx(48,12): error TS2304: Cannot find name "Foo".\n',
+        stderr:
+          'src/features/DevPanel/RenderGallery/ToolPreview.tsx(48,12): error TS2304: Cannot find name "Foo".\n',
+        success: false,
+      },
+    },
+    {
+      args: { command: 'find . -name "*.tsx" -not -path "*/node_modules/*" | head -20' },
+      content: Array.from({ length: 20 }, (_, i) => `./src/components/Card${i}.tsx`).join('\n'),
+      label: 'Large output',
+      pluginState: {
+        exitCode: 0,
+        isBackground: false,
+        output: Array.from({ length: 20 }, (_, i) => `./src/components/Card${i}.tsx`).join('\n'),
+        stdout: Array.from({ length: 20 }, (_, i) => `./src/components/Card${i}.tsx`).join('\n'),
+        success: true,
+      },
+    },
+  ]),
+  [keyOf(ClaudeCodeIdentifier, 'Edit')]: single({
     args: {
       file_path: 'src/spa/router/desktopRouter.config.desktop.tsx',
       new_string: "path: 'tasks',",
       old_string: "path: 'tasks',",
     },
-  },
-  [keyOf(ClaudeCodeIdentifier, 'Glob')]: {
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'Glob')]: single({
     args: { path: 'src/routes', pattern: '**/index.tsx' },
     content: 'src/routes/(main)/agent/index.tsx\nsrc/routes/(main)/devtools/index.tsx',
-  },
-  [keyOf(ClaudeCodeIdentifier, 'Grep')]: {
-    args: { path: 'packages', pattern: 'BuiltinRenderProps', type: 'ts' },
-    content:
-      'packages/types/src/tool/builtin.ts:244:export interface BuiltinRenderProps<Arguments = any, State = any, Content = any> {',
-  },
-  [keyOf(ClaudeCodeIdentifier, 'Read')]: {
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'Grep')]: variants([
+    {
+      args: { path: 'packages', pattern: 'BuiltinRenderProps', type: 'ts' },
+      content:
+        'packages/types/src/tool/builtin.ts:244:export interface BuiltinRenderProps<Arguments = any, State = any, Content = any> {\npackages/builtin-tools/src/renders.ts:18:type Render = (p: BuiltinRenderProps) => ReactNode;',
+      label: 'Many matches',
+    },
+    {
+      args: { path: 'src', pattern: 'NEVER_MATCH_THIS_TOKEN', type: 'tsx' },
+      content: '',
+      label: 'No matches',
+    },
+  ]),
+  [keyOf(ClaudeCodeIdentifier, 'Read')]: single({
     args: { file_path: 'packages/builtin-tools/src/renders.ts' },
     content:
       "1  import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';\n2  export interface BuiltinRenderRegistryEntry { ... }",
-  },
-  [keyOf(ClaudeCodeIdentifier, 'ScheduleWakeup')]: {
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'ScheduleWakeup')]: single({
     args: {
       delaySeconds: 1200,
       reason: 'Recheck the failing build once dependencies finish installing.',
     },
-  },
-  [keyOf(ClaudeCodeIdentifier, 'Skill')]: {
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'Skill')]: single({
     args: { skill: 'codebase-search' },
     content: 'Use ripgrep first, then open only the relevant files to keep context sharp.',
-  },
-  [keyOf(ClaudeCodeIdentifier, 'TaskOutput')]: {
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'TaskOutput')]: single({
     args: { block: false, task_id: 'task-build-2025-04-25', timeout_ms: 8000 },
     content:
       '✅  Vite: compile and bundle finished (200) http://localhost:9876/\nDebug Proxy: https://app.lobehub.com/_dangerous_local_dev_proxy?debug-host=http://localhost:9876',
-  },
-  [keyOf(ClaudeCodeIdentifier, 'TaskStop')]: {
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'TaskStop')]: single({
     args: { task_id: 'task-build-2025-04-25' },
     content: 'Background task stopped (exit code 0).',
-  },
-  [keyOf(ClaudeCodeIdentifier, 'TodoWrite')]: {
-    args: {
-      todos: [
-        {
-          activeForm: 'Capture current registry coverage',
-          content: 'Capture current registry coverage',
-          status: 'completed',
-        },
-        {
-          activeForm: 'Build /devtools page',
-          content: 'Build /devtools page',
-          status: 'in_progress',
-        },
-        {
-          activeForm: 'Audit missing fixtures',
-          content: 'Audit missing fixtures',
-          status: 'pending',
-        },
-      ],
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'TodoWrite')]: variants([
+    {
+      args: {
+        todos: [
+          {
+            activeForm: 'Capture current registry coverage',
+            content: 'Capture current registry coverage',
+            status: 'completed',
+          },
+          {
+            activeForm: 'Build /devtools page',
+            content: 'Build /devtools page',
+            status: 'in_progress',
+          },
+          {
+            activeForm: 'Audit missing fixtures',
+            content: 'Audit missing fixtures',
+            status: 'pending',
+          },
+        ],
+      },
+      label: 'Mixed progress',
     },
-  },
-  [keyOf(ClaudeCodeIdentifier, 'ToolSearch')]: {
+    {
+      args: {
+        todos: [
+          {
+            activeForm: 'Plan render gallery rewrite',
+            content: 'Plan render gallery rewrite',
+            status: 'pending',
+          },
+          {
+            activeForm: 'Sketch lifecycle modes',
+            content: 'Sketch lifecycle modes',
+            status: 'pending',
+          },
+        ],
+      },
+      label: 'All pending',
+    },
+    {
+      args: {
+        todos: [
+          {
+            activeForm: 'Migrate fixtures to variants',
+            content: 'Migrate fixtures to variants',
+            status: 'completed',
+          },
+          {
+            activeForm: 'Verify in /devtools',
+            content: 'Verify in /devtools',
+            status: 'completed',
+          },
+          {
+            activeForm: 'Push to remote',
+            content: 'Push to remote',
+            status: 'completed',
+          },
+        ],
+      },
+      label: 'All done',
+    },
+  ]),
+  [keyOf(ClaudeCodeIdentifier, 'ToolSearch')]: single({
     args: { max_results: 5, query: 'select:Read,Edit,Grep' },
     content: 'Loaded 3 deferred tool schemas: Read, Edit, Grep.',
-  },
-  [keyOf(ClaudeCodeIdentifier, 'Write')]: {
+  }),
+  [keyOf(ClaudeCodeIdentifier, 'Write')]: single({
     args: {
       content: "export const previewEnabled = process.env.NODE_ENV === 'development';\n",
       file_path: 'src/routes/(main)/devtools/featureFlag.ts',
     },
-  },
+  }),
 
-  [keyOf('lobe-activator', 'activateSkill')]: {
+  [keyOf('lobe-activator', 'activateSkill')]: single({
     content:
       'This skill focuses on shipping UI previews fast while keeping the registry easy to extend.',
     pluginState: {
       description: 'A lightweight workflow for building internal preview harnesses.',
       name: 'Preview Builder',
     },
-  },
+  }),
 
-  [keyOf('lobe-agent-builder', 'getAvailableModels')]: {
+  [keyOf('lobe-agent-builder', 'getAvailableModels')]: single({
     pluginState: {
       providers: [
         {
@@ -378,8 +485,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-agent-builder', 'installPlugin')]: {
+  }),
+  [keyOf('lobe-agent-builder', 'installPlugin')]: single({
     pluginState: {
       awaitingApproval: false,
       installed: true,
@@ -387,8 +494,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       pluginName: 'Web Browsing',
       serverStatus: 'active',
     },
-  },
-  [keyOf('lobe-agent-builder', 'searchMarketTools')]: {
+  }),
+  [keyOf('lobe-agent-builder', 'searchMarketTools')]: single({
     pluginState: {
       query: 'browser',
       tools: [
@@ -413,8 +520,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       ],
       totalCount: 2,
     },
-  },
-  [keyOf('lobe-agent-builder', 'updateAgentConfig')]: {
+  }),
+  [keyOf('lobe-agent-builder', 'updateAgentConfig')]: single({
     pluginState: {
       config: {
         newValues: { model: 'gpt-5.4', temperature: 0.4 },
@@ -434,15 +541,15 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         pluginId: 'lobe-web-browsing',
       },
     },
-  },
-  [keyOf('lobe-agent-builder', 'updatePrompt')]: {
+  }),
+  [keyOf('lobe-agent-builder', 'updatePrompt')]: single({
     pluginState: {
       newPrompt:
         'Be concise, keep teammates unblocked, and prefer reusable preview infrastructure over one-off screenshots.',
     },
-  },
+  }),
 
-  [keyOf('lobe-agent-documents', 'createDocument')]: {
+  [keyOf('lobe-agent-documents', 'createDocument')]: single({
     args: {
       content:
         '# Devtools Preview Plan\n\n- Enumerate every render.\n- Provide a stable sample fixture.\n- Keep the page development-only.',
@@ -451,15 +558,15 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     pluginState: {
       documentId: 'doc_devtools_preview_plan',
     },
-  },
+  }),
 
-  [keyOf('lobe-agent-management', 'callAgent')]: {
+  [keyOf('lobe-agent-management', 'callAgent')]: single({
     args: {
       instruction:
         'Review the `/devtools` route and list any preview cards that still need richer fixtures.',
     },
-  },
-  [keyOf('lobe-agent-management', 'createAgent')]: {
+  }),
+  [keyOf('lobe-agent-management', 'createAgent')]: single({
     args: {
       description: 'Internal helper for preview and QA workflows.',
       model: 'gpt-5.4',
@@ -468,15 +575,15 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       systemRole: 'You help engineers verify UI changes quickly and carefully.',
       title: 'Preview QA Agent',
     },
-  },
-  [keyOf('lobe-agent-management', 'duplicateAgent')]: {
+  }),
+  [keyOf('lobe-agent-management', 'duplicateAgent')]: single({
     pluginState: {
       newAgentId: 'agent_preview_clone',
       sourceAgentId: 'agent_workspace_helper',
       success: true,
     },
-  },
-  [keyOf('lobe-agent-management', 'getAgentDetail')]: {
+  }),
+  [keyOf('lobe-agent-management', 'getAgentDetail')]: single({
     pluginState: {
       config: {
         model: 'gpt-5.4',
@@ -492,15 +599,15 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         title: 'Preview Specialist',
       },
     },
-  },
-  [keyOf('lobe-agent-management', 'installPlugin')]: {
+  }),
+  [keyOf('lobe-agent-management', 'installPlugin')]: single({
     pluginState: {
       installed: true,
       pluginId: 'lobe-cloud-sandbox',
       pluginName: 'Cloud Sandbox',
     },
-  },
-  [keyOf('lobe-agent-management', 'searchAgent')]: {
+  }),
+  [keyOf('lobe-agent-management', 'searchAgent')]: single({
     pluginState: {
       agents: [
         {
@@ -521,8 +628,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-agent-management', 'updateAgent')]: {
+  }),
+  [keyOf('lobe-agent-management', 'updateAgent')]: single({
     args: {
       config: JSON.stringify({
         model: 'gpt-5.4',
@@ -533,15 +640,15 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         title: 'Workspace Preview Partner',
       }),
     },
-  },
-  [keyOf('lobe-agent-management', 'updatePrompt')]: {
+  }),
+  [keyOf('lobe-agent-management', 'updatePrompt')]: single({
     args: {
       prompt:
         'When asked for a visual check, prefer building a reusable preview harness before taking a screenshot.',
     },
-  },
+  }),
 
-  [keyOf('lobe-cloud-sandbox', 'editLocalFile')]: {
+  [keyOf('lobe-cloud-sandbox', 'editLocalFile')]: single({
     args: { path: '/sandbox/src/routes/devtools.tsx' },
     pluginState: {
       diffText:
@@ -550,8 +657,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       linesDeleted: 0,
       replacements: 1,
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'executeCode')]: {
+  }),
+  [keyOf('lobe-cloud-sandbox', 'executeCode')]: single({
     args: {
       code: 'const tools = ["todo", "file_change", "command_execution"]; console.log(tools.length);',
       language: 'typescript',
@@ -560,26 +667,45 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       output: '3',
       stderr: '',
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'exportFile')]: {
+  }),
+  [keyOf('lobe-cloud-sandbox', 'exportFile')]: single({
     args: { path: '/sandbox/reports/devtools-preview.html' },
     pluginState: {
       downloadUrl: 'https://example.com/devtools-preview.html',
       filename: 'devtools-preview.html',
       success: true,
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'listLocalFiles')]: {
-    args: { directoryPath: '/sandbox/src/routes' },
-    pluginState: {
-      files: [
-        { isDirectory: true, name: 'agent' },
-        { isDirectory: false, name: 'index.tsx', size: 2048 },
-        { isDirectory: false, name: 'devtools.tsx', size: 4096 },
-      ],
+  }),
+  [keyOf('lobe-cloud-sandbox', 'listLocalFiles')]: variants([
+    {
+      args: { directoryPath: '/sandbox/src/routes' },
+      label: 'Mixed entries',
+      pluginState: {
+        files: [
+          { isDirectory: true, name: 'agent' },
+          { isDirectory: false, name: 'index.tsx', size: 2048 },
+          { isDirectory: false, name: 'devtools.tsx', size: 4096 },
+        ],
+      },
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'moveLocalFiles')]: {
+    {
+      args: { directoryPath: '/sandbox/empty' },
+      label: 'Empty directory',
+      pluginState: { files: [] },
+    },
+    {
+      args: { directoryPath: '/sandbox/many' },
+      label: 'Many files',
+      pluginState: {
+        files: Array.from({ length: 24 }, (_, i) => ({
+          isDirectory: false,
+          name: `report-${i.toString().padStart(2, '0')}.csv`,
+          size: 4096 + i * 128,
+        })),
+      },
+    },
+  ]),
+  [keyOf('lobe-cloud-sandbox', 'moveLocalFiles')]: single({
     pluginState: {
       results: [
         {
@@ -591,8 +717,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       successCount: 1,
       totalCount: 1,
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'readLocalFile')]: {
+  }),
+  [keyOf('lobe-cloud-sandbox', 'readLocalFile')]: single({
     args: { path: '/sandbox/src/routes/devtools.tsx' },
     pluginState: {
       content: 'export default function Devtools() {\n  return <div>Preview</div>;\n}\n',
@@ -600,40 +726,69 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       startLine: 1,
       totalLines: 3,
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'runCommand')]: {
-    args: { command: 'bunx vitest run src/spa/router/desktopRouter.sync.test.tsx' },
-    content: '1 passed',
-    pluginState: {
-      exitCode: 0,
-      isBackground: false,
-      output: '1 passed',
-      stdout: '1 passed',
-      success: true,
+  }),
+  [keyOf('lobe-cloud-sandbox', 'runCommand')]: variants([
+    {
+      args: { command: 'bunx vitest run src/spa/router/desktopRouter.sync.test.tsx' },
+      content: '1 passed',
+      label: 'Tests pass',
+      pluginState: {
+        exitCode: 0,
+        isBackground: false,
+        output: '1 passed',
+        stdout: '1 passed',
+        success: true,
+      },
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'searchLocalFiles')]: {
-    args: { directory: '/sandbox/src', keyword: 'devtools' },
-    pluginState: {
-      results: [
-        { isDirectory: false, name: 'devtools.tsx', path: '/sandbox/src/routes/devtools.tsx' },
-        {
-          isDirectory: false,
-          name: 'desktopRouter.config.tsx',
-          path: '/sandbox/src/spa/router/desktopRouter.config.tsx',
-        },
-      ],
-      totalCount: 2,
+    {
+      args: { command: 'bunx vitest run src/spa/router/desktopRouter.sync.test.tsx' },
+      content:
+        'FAIL  src/spa/router/desktopRouter.sync.test.tsx > desktop router config sync\n  expected route /devtools but received undefined.\n',
+      label: 'Test failure',
+      pluginState: {
+        exitCode: 1,
+        isBackground: false,
+        output:
+          'FAIL  src/spa/router/desktopRouter.sync.test.tsx > desktop router config sync\n  expected route /devtools but received undefined.\n',
+        stderr:
+          'FAIL  src/spa/router/desktopRouter.sync.test.tsx > desktop router config sync\n  expected route /devtools but received undefined.\n',
+        success: false,
+      },
     },
-  },
-  [keyOf('lobe-cloud-sandbox', 'writeLocalFile')]: {
+  ]),
+  [keyOf('lobe-cloud-sandbox', 'searchLocalFiles')]: variants([
+    {
+      args: { directory: '/sandbox/src', keyword: 'devtools' },
+      label: 'Two matches',
+      pluginState: {
+        results: [
+          { isDirectory: false, name: 'devtools.tsx', path: '/sandbox/src/routes/devtools.tsx' },
+          {
+            isDirectory: false,
+            name: 'desktopRouter.config.tsx',
+            path: '/sandbox/src/spa/router/desktopRouter.config.tsx',
+          },
+        ],
+        totalCount: 2,
+      },
+    },
+    {
+      args: { directory: '/sandbox/src', keyword: 'no-such-keyword' },
+      label: 'No results',
+      pluginState: {
+        results: [],
+        totalCount: 0,
+      },
+    },
+  ]),
+  [keyOf('lobe-cloud-sandbox', 'writeLocalFile')]: single({
     args: {
       content: 'export const isDevtoolsEnabled = true;\n',
       path: '/sandbox/src/routes/devtools/flags.ts',
     },
-  },
+  }),
 
-  [keyOf('lobe-group-agent-builder', 'batchCreateAgents')]: {
+  [keyOf('lobe-group-agent-builder', 'batchCreateAgents')]: single({
     args: {
       agents: [
         {
@@ -656,32 +811,32 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         { agentId: 'agent_docs_writer', success: true, title: 'Docs Writer' },
       ],
     },
-  },
-  [keyOf('lobe-group-agent-builder', 'updateAgentPrompt')]: {
+  }),
+  [keyOf('lobe-group-agent-builder', 'updateAgentPrompt')]: single({
     pluginState: {
       newPrompt: 'Focus on validating preview fixtures and reporting only concrete UI issues.',
     },
-  },
-  [keyOf('lobe-group-agent-builder', 'updateGroupPrompt')]: {
+  }),
+  [keyOf('lobe-group-agent-builder', 'updateGroupPrompt')]: single({
     pluginState: {
       newPrompt: 'Coordinate fixture coverage across agents and avoid overlapping work.',
     },
-  },
+  }),
 
-  [keyOf('lobe-group-management', 'broadcast')]: {
+  [keyOf('lobe-group-management', 'broadcast')]: single({
     args: {
       instruction:
         'Everyone review one tool render section and flag any empty states that look broken.',
     },
-  },
-  [keyOf('lobe-group-management', 'executeAgentTask')]: {
+  }),
+  [keyOf('lobe-group-management', 'executeAgentTask')]: single({
     args: {
       instruction: 'Verify the `/devtools` route works in desktop development mode.',
       timeout: 1_800_000,
       title: 'Desktop smoke check',
     },
-  },
-  [keyOf('lobe-group-management', 'executeAgentTasks')]: {
+  }),
+  [keyOf('lobe-group-management', 'executeAgentTasks')]: single({
     args: {
       tasks: [
         {
@@ -697,15 +852,15 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-group-management', 'speak')]: {
+  }),
+  [keyOf('lobe-group-management', 'speak')]: single({
     args: {
       instruction:
         'Summarize the preview harness approach in two short sentences for the issue update.',
     },
-  },
+  }),
 
-  [keyOf('lobe-gtd', 'clearTodos')]: {
+  [keyOf('lobe-gtd', 'clearTodos')]: single({
     pluginState: {
       todos: {
         items: [
@@ -714,8 +869,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         ],
       },
     },
-  },
-  [keyOf('lobe-gtd', 'createPlan')]: {
+  }),
+  [keyOf('lobe-gtd', 'createPlan')]: single({
     pluginState: {
       plan: {
         context:
@@ -725,19 +880,45 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         id: 'plan_devtools_preview',
       },
     },
-  },
-  [keyOf('lobe-gtd', 'createTodos')]: {
-    pluginState: {
-      todos: {
-        items: [
-          { status: 'completed', text: 'Enumerate all render entries' },
-          { status: 'processing', text: 'Create preview fixtures' },
-          { status: 'todo', text: 'Smoke test the route locally' },
-        ],
+  }),
+  [keyOf('lobe-gtd', 'createTodos')]: variants([
+    {
+      label: 'Mixed',
+      pluginState: {
+        todos: {
+          items: [
+            { status: 'completed', text: 'Enumerate all render entries' },
+            { status: 'processing', text: 'Create preview fixtures' },
+            { status: 'todo', text: 'Smoke test the route locally' },
+          ],
+        },
       },
     },
-  },
-  [keyOf('lobe-gtd', 'execTask')]: {
+    {
+      label: 'Many todos',
+      pluginState: {
+        todos: {
+          items: Array.from({ length: 10 }, (_, i) => ({
+            status: i < 3 ? 'completed' : i < 5 ? 'processing' : 'todo',
+            text: `Subtask ${i + 1}: prepare fixtures for batch ${i + 1}`,
+          })),
+        },
+      },
+    },
+    {
+      label: 'All done',
+      pluginState: {
+        todos: {
+          items: [
+            { status: 'completed', text: 'Enumerate render entries' },
+            { status: 'completed', text: 'Author preview fixtures' },
+            { status: 'completed', text: 'Smoke-test the gallery' },
+          ],
+        },
+      },
+    },
+  ]),
+  [keyOf('lobe-gtd', 'execTask')]: single({
     pluginState: {
       task: {
         description: 'Smoke test the desktop router config',
@@ -745,8 +926,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
           'Run the desktop router sync test and confirm /devtools only appears in development.',
       },
     },
-  },
-  [keyOf('lobe-gtd', 'execTasks')]: {
+  }),
+  [keyOf('lobe-gtd', 'execTasks')]: single({
     pluginState: {
       tasks: [
         {
@@ -759,8 +940,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-gtd', 'updatePlan')]: {
+  }),
+  [keyOf('lobe-gtd', 'updatePlan')]: single({
     pluginState: {
       plan: {
         context:
@@ -770,8 +951,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         id: 'plan_devtools_preview',
       },
     },
-  },
-  [keyOf('lobe-gtd', 'updateTodos')]: {
+  }),
+  [keyOf('lobe-gtd', 'updateTodos')]: single({
     pluginState: {
       todos: {
         items: [
@@ -781,9 +962,9 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         ],
       },
     },
-  },
+  }),
 
-  [keyOf('lobe-knowledge-base', 'readKnowledge')]: {
+  [keyOf('lobe-knowledge-base', 'readKnowledge')]: single({
     pluginState: {
       files: [
         {
@@ -796,8 +977,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-knowledge-base', 'searchKnowledgeBase')]: {
+  }),
+  [keyOf('lobe-knowledge-base', 'searchKnowledgeBase')]: single({
     pluginState: {
       fileResults: [
         {
@@ -812,16 +993,16 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
+  }),
 
-  [keyOf('lobe-local-system', 'editLocalFile')]: {
+  [keyOf('lobe-local-system', 'editLocalFile')]: single({
     args: { path: '/workspace/src/spa/router/desktopRouter.config.tsx' },
     pluginState: {
       diffText:
         "--- a/workspace/src/spa/router/desktopRouter.config.tsx\n+++ b/workspace/src/spa/router/desktopRouter.config.tsx\n@@ -1,3 +1,7 @@\n export const desktopRoutes = [\n+  {\n+    path: 'devtools',\n+  },\n ];\n",
     },
-  },
-  [keyOf('lobe-local-system', 'listLocalFiles')]: {
+  }),
+  [keyOf('lobe-local-system', 'listLocalFiles')]: single({
     pluginState: {
       files: [
         { isDirectory: true, name: 'src' },
@@ -829,8 +1010,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         { isDirectory: false, name: 'README.md', size: 4096 },
       ],
     },
-  },
-  [keyOf('lobe-local-system', 'moveLocalFiles')]: {
+  }),
+  [keyOf('lobe-local-system', 'moveLocalFiles')]: single({
     args: {
       items: [
         {
@@ -839,8 +1020,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-local-system', 'readLocalFile')]: {
+  }),
+  [keyOf('lobe-local-system', 'readLocalFile')]: single({
     args: { path: '/workspace/src/routes/(main)/devtools/index.tsx' },
     pluginState: {
       content: 'export default function DevtoolsPage() {\n  return <div>Render preview</div>;\n}\n',
@@ -850,8 +1031,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       startLine: 1,
       totalLines: 3,
     },
-  },
-  [keyOf('lobe-local-system', 'runCommand')]: {
+  }),
+  [keyOf('lobe-local-system', 'runCommand')]: single({
     args: { command: 'bun run type-check' },
     content: 'Checked 1247 files in 2.3s\nNo type errors found.',
     pluginState: {
@@ -861,47 +1042,58 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       stdout: 'Checked 1247 files in 2.3s\nNo type errors found.',
       success: true,
     },
-  },
-  [keyOf('lobe-local-system', 'searchLocalFiles')]: {
-    args: { keywords: 'quarterly report sample' },
-    pluginState: {
-      results: [
-        {
-          isDirectory: false,
-          name: 'sample-quarterly-report-q1.xlsx',
-          path: '/Users/sample-user/Downloads/sample-quarterly-report-q1.xlsx',
-          size: 9_400,
-        },
-        {
-          isDirectory: false,
-          name: 'sample_quarterly_report_q2_draft.xlsx',
-          path: '/Users/sample-user/Downloads/sample_quarterly_report_q2_draft.xlsx',
-          size: 35_600,
-        },
-        {
-          isDirectory: false,
-          name: 'sample-quarterly-report-q3.xlsx',
-          path: '/Users/sample-user/Documents/reports/sample-quarterly-report-q3.xlsx',
-          size: 8_300,
-        },
-        {
-          isDirectory: false,
-          name: 'sample-quarterly-report-archived.xlsx',
-          path: '/Users/sample-user/Documents/archive/2024/sample-quarterly-report-archived.xlsx',
-          size: 16_200,
-        },
-      ],
-      totalCount: 4,
+  }),
+  [keyOf('lobe-local-system', 'searchLocalFiles')]: variants([
+    {
+      args: { keywords: 'quarterly report sample' },
+      label: 'Multiple matches',
+      pluginState: {
+        results: [
+          {
+            isDirectory: false,
+            name: 'sample-quarterly-report-q1.xlsx',
+            path: '/Users/sample-user/Downloads/sample-quarterly-report-q1.xlsx',
+            size: 9_400,
+          },
+          {
+            isDirectory: false,
+            name: 'sample_quarterly_report_q2_draft.xlsx',
+            path: '/Users/sample-user/Downloads/sample_quarterly_report_q2_draft.xlsx',
+            size: 35_600,
+          },
+          {
+            isDirectory: false,
+            name: 'sample-quarterly-report-q3.xlsx',
+            path: '/Users/sample-user/Documents/reports/sample-quarterly-report-q3.xlsx',
+            size: 8_300,
+          },
+          {
+            isDirectory: false,
+            name: 'sample-quarterly-report-archived.xlsx',
+            path: '/Users/sample-user/Documents/archive/2024/sample-quarterly-report-archived.xlsx',
+            size: 16_200,
+          },
+        ],
+        totalCount: 4,
+      },
     },
-  },
-  [keyOf('lobe-local-system', 'writeLocalFile')]: {
+    {
+      args: { keywords: 'no-such-keyword-on-disk' },
+      label: 'No results',
+      pluginState: {
+        results: [],
+        totalCount: 0,
+      },
+    },
+  ]),
+  [keyOf('lobe-local-system', 'writeLocalFile')]: single({
     args: {
       content: 'export const devtoolsEnabled = process.env.NODE_ENV === "development";\n',
       path: '/workspace/src/routes/(main)/devtools/flags.ts',
     },
-  },
+  }),
 
-  [keyOf('lobe-user-memory', 'addExperienceMemory')]: {
+  [keyOf('lobe-user-memory', 'addExperienceMemory')]: single({
     args: {
       details: 'A reusable preview harness saved time compared with manual screenshot stitching.',
       summary: 'Building /devtools made visual QA faster and repeatable.',
@@ -915,8 +1107,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         situation: 'We needed to verify many builtin tool cards quickly.',
       },
     },
-  },
-  [keyOf('lobe-user-memory', 'addPreferenceMemory')]: {
+  }),
+  [keyOf('lobe-user-memory', 'addPreferenceMemory')]: single({
     args: {
       details: 'Prefer route-based previews for UI verification over isolated screenshots.',
       summary: 'Use reusable local preview routes for internal QA.',
@@ -940,40 +1132,51 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         type: 'workflow',
       },
     },
-  },
-  [keyOf('lobe-user-memory', 'searchUserMemory')]: {
-    pluginState: {
-      activities: [
-        {
-          feedback: 'The page made local validation much easier.',
-          id: 'activity_devtools',
-          narrative: 'Implemented a dev-only /devtools route for builtin render previews.',
-          notes: 'Devtools preview route',
-          tags: ['preview', 'devtools'],
-          type: 'engineering',
-        },
-      ],
-      experiences: [
-        {
-          action: 'Adopted a route-based preview harness.',
-          id: 'experience_devtools',
-          keyLearning: 'Stable fixtures are cheaper than repeating manual screenshots.',
-          situation: 'Needed to verify many render components in one place.',
-          tags: ['render', 'qa'],
-        },
-      ],
-      preferences: [
-        {
-          conclusionDirectives: 'Prefer reusable preview infrastructure for repeated UI checks.',
-          id: 'preference_devtools',
-          tags: ['workflow'],
-          title: 'Preview harness preference',
-        },
-      ],
+  }),
+  [keyOf('lobe-user-memory', 'searchUserMemory')]: variants([
+    {
+      label: 'Has results',
+      pluginState: {
+        activities: [
+          {
+            feedback: 'The page made local validation much easier.',
+            id: 'activity_devtools',
+            narrative: 'Implemented a dev-only /devtools route for builtin render previews.',
+            notes: 'Devtools preview route',
+            tags: ['preview', 'devtools'],
+            type: 'engineering',
+          },
+        ],
+        experiences: [
+          {
+            action: 'Adopted a route-based preview harness.',
+            id: 'experience_devtools',
+            keyLearning: 'Stable fixtures are cheaper than repeating manual screenshots.',
+            situation: 'Needed to verify many render components in one place.',
+            tags: ['render', 'qa'],
+          },
+        ],
+        preferences: [
+          {
+            conclusionDirectives: 'Prefer reusable preview infrastructure for repeated UI checks.',
+            id: 'preference_devtools',
+            tags: ['workflow'],
+            title: 'Preview harness preference',
+          },
+        ],
+      },
     },
-  },
+    {
+      label: 'No results',
+      pluginState: {
+        activities: [],
+        experiences: [],
+        preferences: [],
+      },
+    },
+  ]),
 
-  [keyOf('lobe-notebook', 'createDocument')]: {
+  [keyOf('lobe-notebook', 'createDocument')]: single({
     pluginState: {
       document: {
         content:
@@ -982,25 +1185,25 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         title: 'Devtools Route Notes',
       },
     },
-  },
+  }),
 
-  [keyOf('lobe-skill-store', 'importFromMarket')]: {
+  [keyOf('lobe-skill-store', 'importFromMarket')]: single({
     content: 'preview-builder',
     pluginState: {
       name: 'preview-builder',
       status: 'created',
       success: true,
     },
-  },
-  [keyOf('lobe-skill-store', 'importSkill')]: {
+  }),
+  [keyOf('lobe-skill-store', 'importSkill')]: single({
     content: 'preview-builder',
     pluginState: {
       name: 'preview-builder',
       status: 'updated',
       success: true,
     },
-  },
-  [keyOf('lobe-skill-store', 'searchSkill')]: {
+  }),
+  [keyOf('lobe-skill-store', 'searchSkill')]: single({
     pluginState: {
       items: [
         {
@@ -1015,23 +1218,23 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
+  }),
 
-  [keyOf('lobe-skills', 'activateSkill')]: {
+  [keyOf('lobe-skills', 'activateSkill')]: single({
     content: 'Use a fixture-backed route to preview all builtin tool cards locally.',
     pluginState: {
       description: 'Reusable workflow for internal preview harnesses.',
       name: 'Preview Builder',
     },
-  },
-  [keyOf('lobe-skills', 'execScript')]: {
+  }),
+  [keyOf('lobe-skills', 'execScript')]: single({
     args: { command: 'pnpm lint src/routes/(main)/devtools' },
     content: 'No lint issues found.',
     pluginState: {
       command: 'pnpm lint src/routes/(main)/devtools',
     },
-  },
-  [keyOf('lobe-skills', 'readReference')]: {
+  }),
+  [keyOf('lobe-skills', 'readReference')]: single({
     content:
       'export const listBuiltinRenderEntries = () => [{ identifier: "codex", apiName: "todo_list" }];\n',
     pluginState: {
@@ -1040,8 +1243,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       path: 'packages/builtin-tools/src/renders.ts',
       size: 2048,
     },
-  },
-  [keyOf('lobe-skills', 'runCommand')]: {
+  }),
+  [keyOf('lobe-skills', 'runCommand')]: single({
     args: { command: 'bunx vitest run src/spa/router/desktopRouter.sync.test.tsx' },
     content: '1 passed',
     pluginState: {
@@ -1051,9 +1254,9 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       stdout: '1 passed',
       success: true,
     },
-  },
+  }),
 
-  [keyOf('lobe-web-browsing', 'crawlMultiPages')]: {
+  [keyOf('lobe-web-browsing', 'crawlMultiPages')]: single({
     args: {
       urls: ['https://lobehub.com', 'https://docs.lobehub.com'],
     },
@@ -1081,8 +1284,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-web-browsing', 'crawlSinglePage')]: {
+  }),
+  [keyOf('lobe-web-browsing', 'crawlSinglePage')]: single({
     args: { url: 'https://lobehub.com/blog' },
     pluginState: {
       results: [
@@ -1098,49 +1301,63 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
       ],
     },
-  },
-  [keyOf('lobe-web-browsing', 'search')]: {
-    args: {
-      query: 'LobeHub devtools preview route',
-      searchEngines: ['google', 'bing'],
+  }),
+  [keyOf('lobe-web-browsing', 'search')]: variants([
+    {
+      args: {
+        query: 'LobeHub devtools preview route',
+        searchEngines: ['google', 'bing'],
+      },
+      label: 'With results',
+      pluginState: {
+        query: 'LobeHub devtools preview route',
+        results: [
+          {
+            content: 'Documentation and implementation notes about local preview tooling.',
+            engines: ['google'],
+            title: 'Preview tooling guide',
+            url: 'https://docs.example.com/preview-tooling',
+          },
+          {
+            content: 'Issue thread describing the /devtools route rollout.',
+            engines: ['bing'],
+            title: 'Builtin render devtools issue',
+            url: 'https://linear.example.com/issue/LOBE-8114',
+          },
+        ],
+      },
     },
-    pluginState: {
-      query: 'LobeHub devtools preview route',
-      results: [
-        {
-          content: 'Documentation and implementation notes about local preview tooling.',
-          engines: ['google'],
-          title: 'Preview tooling guide',
-          url: 'https://docs.example.com/preview-tooling',
-        },
-        {
-          content: 'Issue thread describing the /devtools route rollout.',
-          engines: ['bing'],
-          title: 'Builtin render devtools issue',
-          url: 'https://linear.example.com/issue/LOBE-8114',
-        },
-      ],
+    {
+      args: {
+        query: 'undocumented internal preview snapshot harness',
+        searchEngines: ['google'],
+      },
+      label: 'No results',
+      pluginState: {
+        query: 'undocumented internal preview snapshot harness',
+        results: [],
+      },
     },
-  },
+  ]),
 
-  [keyOf('lobe-page-agent', 'initPage')]: {
+  [keyOf('lobe-page-agent', 'initPage')]: single({
     args: {
       markdown:
         '# Devtools Render Gallery\n\nA development-only preview surface for every builtin tool render.\n\n- Inspector previews mirror the chat title bar.\n- Body segments switch between Render, Streaming, Placeholder, and Intervention.\n',
     },
     pluginState: { nodeCount: 6 },
-  },
-  [keyOf('lobe-page-agent', 'editTitle')]: {
+  }),
+  [keyOf('lobe-page-agent', 'editTitle')]: single({
     args: { title: 'Devtools Render Gallery — Builtin Tool Previews' },
     pluginState: { previousTitle: 'Devtools Render Gallery' },
-  },
-  [keyOf('lobe-page-agent', 'getPageContent')]: {
+  }),
+  [keyOf('lobe-page-agent', 'getPageContent')]: single({
     args: {},
     pluginState: { nodeCount: 12 },
     content:
       '<doc><heading id="h-1">Devtools Render Gallery</heading><para id="p-1">Preview every registered builtin tool component.</para></doc>',
-  },
-  [keyOf('lobe-page-agent', 'modifyNodes')]: {
+  }),
+  [keyOf('lobe-page-agent', 'modifyNodes')]: single({
     args: {
       operations: [
         { afterId: 'h-1', kind: 'insertAfter', xml: '<para>Updated description.</para>' },
@@ -1153,8 +1370,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       ],
     },
     pluginState: { applied: 3 },
-  },
-  [keyOf('lobe-page-agent', 'replaceText')]: {
+  }),
+  [keyOf('lobe-page-agent', 'replaceText')]: single({
     args: {
       isRegex: false,
       newText: 'Body segments',
@@ -1162,9 +1379,9 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       searchText: 'Body section',
     },
     pluginState: { replacements: 2 },
-  },
+  }),
 
-  [keyOf('lobe-user-interaction', 'askUserQuestion')]: {
+  [keyOf('lobe-user-interaction', 'askUserQuestion')]: single({
     args: {
       question: {
         description:
@@ -1195,9 +1412,9 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         prompt: 'Which builtin tool surface should we focus the next preview iteration on?',
       },
     },
-  },
+  }),
 
-  [keyOf('lobe-web-onboarding', 'saveUserQuestion')]: {
+  [keyOf('lobe-web-onboarding', 'saveUserQuestion')]: single({
     args: {
       agentEmoji: '🧪',
       agentName: 'Devtools Tester',
@@ -1205,9 +1422,9 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       interests: ['observability', 'dev-tools', 'agent-runtime'],
       responseLanguage: 'en-US',
     },
-  },
+  }),
 
-  [keyOf('github', 'run_command')]: {
+  [keyOf('github', 'run_command')]: single({
     args: {
       command: 'gh api /repos/lobehub/lobe-chat/issues?state=open',
     },
@@ -1216,7 +1433,7 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       exitCode: 0,
       success: true,
     },
-  },
+  }),
 };
 
 export const getToolRenderFixture = (
@@ -1227,11 +1444,9 @@ export const getToolRenderFixture = (
   const fixture = toolRenderFixtures[keyOf(identifier, apiName)];
   if (fixture) return fixture;
 
-  return {
+  return single({
     args: buildSchemaSample(api?.parameters, apiName) || {},
-    content: '',
-    pluginState: undefined,
-  };
+  });
 };
 
 export const getToolRenderMeta = (identifier: string, apiName: string): ToolRenderMeta => {
