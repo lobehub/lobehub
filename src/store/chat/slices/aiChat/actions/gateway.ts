@@ -173,20 +173,18 @@ export class GatewayActionImpl {
 
     // Handle expired-but-recoverable auth: the JWT is past `exp` but the op
     // is still alive on the server. Refresh the token, hand it to the client,
-    // and reconnect. If the refresher itself fails (network down, server
-    // refused refresh, no refresher provided), fall back to terminal —
-    // there's nothing else we can do, and leaving the op `running` would
-    // freeze the input.
+    // and reconnect. If the refresh itself fails (refresh API down, server
+    // refused refresh, etc.), fall back to terminal — leaving the op
+    // `running` would freeze the input. The server keeps the ws open after
+    // `auth_expired` to give the client a chance to recover, so we must
+    // explicitly `disconnect()` before completing — otherwise heartbeat and
+    // autoReconnect would keep running past the local op's lifetime.
     client.on('auth_expired', async () => {
       try {
         const { token: fresh } = await aiAgentService.refreshGatewayToken(topicId);
         client.updateToken(fresh);
         await client.reconnect();
       } catch (error) {
-        // Refresh itself failed (refresh API down, server refused, etc.). The
-        // server keeps the ws open after `auth_expired` so the client can
-        // refresh + retry — without an explicit `disconnect` here, heartbeat
-        // and autoReconnect would keep running past the local op's lifetime.
         console.error(`[Gateway] Token refresh failed for operation ${operationId}:`, error);
         client.disconnect();
         this.internal_cleanupGatewayConnection(operationId);
