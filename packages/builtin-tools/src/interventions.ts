@@ -19,8 +19,6 @@ import {
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryInterventions, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
 import { MessageInterventions, MessageManifest } from '@lobechat/builtin-tool-message/client';
-import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
-import { NotebookInterventions } from '@lobechat/builtin-tool-notebook/client';
 import {
   UserInteractionIdentifier,
   UserInteractionInterventions,
@@ -45,7 +43,6 @@ export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [LocalSystemIdentifier]: LocalSystemInterventions,
   [MemoryManifest.identifier]: MemoryInterventions,
   [MessageManifest.identifier]: MessageInterventions,
-  [NotebookManifest.identifier]: NotebookInterventions,
   [UserInteractionIdentifier]: UserInteractionInterventions,
   [WebOnboardingManifest.identifier]: WebOnboardingInterventions,
 };
