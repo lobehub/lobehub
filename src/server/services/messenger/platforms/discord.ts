@@ -97,18 +97,6 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     );
   }
 
-  /**
-   * Discord delivers Interactions to the URL configured in the Developer
-   * Portal — there is no API to register it programmatically. Logged so
-   * operators see the URL the bot expects matches what's configured upstream.
-   */
-  async registerWebhook(params: { webhookUrl: string }): Promise<void> {
-    log(
-      'registerWebhook: discord interactions URL must be set in the Developer Portal -> %s',
-      params.webhookUrl,
-    );
-  }
-
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
     const config = await getMessengerDiscordConfig();
     if (!config) return;

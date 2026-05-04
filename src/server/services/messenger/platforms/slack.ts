@@ -100,18 +100,6 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
   }
 
   /**
-   * Slack delivers events to a webhook URL configured in the Slack App
-   * console — there is no API to register it programmatically. Logged so
-   * operators see the URL the bot expects matches what's configured upstream.
-   */
-  async registerWebhook(params: { webhookUrl: string }): Promise<void> {
-    log(
-      'registerWebhook: slack webhook URL must be set in the Slack App console -> %s',
-      params.webhookUrl,
-    );
-  }
-
-  /**
    * First-touch: post the link prompt as a normal in-history DM with a
    * Block Kit button AND the same URL as a plain inline link below it.
    * Email-style fallback — the button is the primary CTA, the link is the

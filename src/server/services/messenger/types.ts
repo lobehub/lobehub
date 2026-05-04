@@ -89,17 +89,6 @@ export interface MessengerPlatformBinder {
   }) => Promise<void>;
 
   /**
-   * Register the inbound webhook with the IM platform so messages get pushed to
-   * `webhookUrl`. Implementations must be idempotent — this is called on every
-   * server start (and on every cloud cron tick) and should no-op when the
-   * platform already has the same URL configured.
-   *
-   * Throws on misconfiguration so the caller can log; transient/network errors
-   * should be surfaced too — the router decides what to do per platform.
-   */
-  registerWebhook: (params: { webhookUrl: string }) => Promise<void>;
-
-  /**
    * Send an interactive agent picker so the user can switch the active agent
    * without typing a number. Optional — platforms that don't support
    * tap-to-select keyboards (e.g. plain Slack DMs) can leave this unset and

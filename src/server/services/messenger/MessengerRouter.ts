@@ -11,17 +11,12 @@ import {
 import debug from 'debug';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 
-import {
-  getEnabledMessengerPlatforms,
-  getMessengerSlackConfig,
-  type MessengerPlatform,
-} from '@/config/messenger';
+import { getMessengerSlackConfig, type MessengerPlatform } from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import type { MessengerAccountLinkItem } from '@/database/schemas';
 import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
@@ -29,8 +24,6 @@ import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
 import { getInstallationStore } from './installations';
-import { DISCORD_INSTALLATION_KEY } from './installations/discord';
-import { TELEGRAM_INSTALLATION_KEY } from './installations/telegram';
 import type { InstallationCredentials } from './installations/types';
 import { verifySignature as verifySlackSignature } from './oauth/slackOAuth';
 import { MessengerDiscordBinder } from './platforms/discord';
@@ -240,174 +233,6 @@ export class MessengerRouter {
       }
       return handler(reconstructRequest(req, rawBody));
     };
-  }
-
-  /** List platforms with valid DB-backed config (used by UI / TRPC `availablePlatforms`). */
-  static listEnabledPlatforms(): Promise<MessengerPlatform[]> {
-    return getEnabledMessengerPlatforms();
-  }
-
-  /**
-   * Connect every enabled messenger platform so inbound messages reach us.
-   *
-   * - **Telegram**: registers the webhook via `setWebhook` (the binder's
-   *   `registerWebhook`).
-   * - **Slack**: skipped — the webhook URL is configured in the Slack App
-   *   manifest / console, not via API. The router still handles signature
-   *   verification on every inbound request.
-   *
-   * Idempotent — safe to call on every server start.
-   *
-   * Two execution contexts share this method:
-   *   - Self-hosted long-running process (`instrumentation.ts`) calls it with
-   *     no args; gateway-mode platforms use their internal auto-refresh timer.
-   *   - Vercel serverless cron (`/api/agent/gateway`) passes `durationMs` +
-   *     `waitUntil` so the WS connection survives the cron window via
-   *     `after()` and a follow-up cron tick re-fires `ensureConnected` to
-   *     replace the listener.
-   */
-  async ensureConnected(options?: {
-    durationMs?: number;
-    waitUntil?: (task: Promise<any>) => void;
-  }): Promise<void> {
-    const url = appEnv.WEBHOOK_PUBLIC_URL;
-    if (!url) {
-      log('ensureConnected: no WEBHOOK_PUBLIC_URL configured');
-      return;
-    }
-    const trimmedUrl = url.replace(/\/$/, '');
-    const platforms = await getEnabledMessengerPlatforms();
-    if (platforms.length === 0) {
-      log('ensureConnected: no enabled messenger platforms');
-      return;
-    }
-
-    await Promise.all(
-      platforms.map(async (platform) => {
-        // Slack's webhook URL lives in the App manifest — there's no API to
-        // register it. Operators configure Event Subscriptions / Interactivity
-        // URLs manually (see docs/development/messenger/slack-app-setup.md).
-        if (platform === 'slack') {
-          log(
-            'ensureConnected: slack webhook URL must be set in the Slack App manifest -> %s',
-            `${trimmedUrl}/api/agent/messenger/webhooks/slack`,
-          );
-          return;
-        }
-
-        // Discord needs a persistent Gateway WebSocket: regular DM
-        // `MESSAGE_CREATE` events are NOT delivered to the Interactions URL,
-        // only slash commands and component clicks are. There are two
-        // managed-connection paths depending on deployment:
-        //
-        //   - **External MessageGateway** (Cloudflare Worker, the Vercel/Cloud
-        //     mode): register the messenger as a singleton "connection" with
-        //     the gateway, which holds the WS server-side and forwards events
-        //     back to our webhook path. Mirrors how the per-agent gateway sync
-        //     in `GatewayService.syncGatewayConnections` works.
-        //   - **In-process** (self-hosted long-running, or Vercel without
-        //     MessageGateway): open the gateway WS in this process and let
-        //     the adapter forward events to our messenger webhook URL.
-        if (platform === 'discord') {
-          const messengerWebhookPath = '/api/agent/messenger/webhooks/discord';
-          const messengerWebhookUrl = `${trimmedUrl}${messengerWebhookPath}`;
-          log('ensureConnected: discord webhook -> %s', messengerWebhookUrl);
-
-          const store = getInstallationStore('discord');
-          if (!store) return;
-          const creds = await store.resolveByKey(DISCORD_INSTALLATION_KEY);
-          if (!creds) {
-            log('ensureConnected: discord install not resolved, skipping gateway start');
-            return;
-          }
-
-          // External MessageGateway path — when configured, delegate WS
-          // lifetime to the gateway worker and skip the in-process start.
-          const { getMessageGatewayClient } =
-            await import('@/server/services/gateway/MessageGatewayClient');
-          const gatewayHttpClient = getMessageGatewayClient();
-          if (gatewayHttpClient.isEnabled) {
-            try {
-              await gatewayHttpClient.connect({
-                applicationId: creds.applicationId,
-                // Singleton connection id — distinct from per-agent provider
-                // UUIDs to avoid collisions in the gateway's connection table.
-                connectionId: `messenger:${DISCORD_INSTALLATION_KEY}`,
-                connectionMode: 'websocket',
-                credentials: {
-                  botToken: creds.botToken,
-                  publicKey: (creds.metadata?.publicKey as string) ?? '',
-                },
-                platform: 'discord',
-                // Sentinel: messenger has no per-user owner. The gateway uses
-                // `userId` for tenant accounting only; pin it to a stable
-                // synthetic id so re-registers idempotently match the same row.
-                userId: '__messenger__',
-                webhookPath: messengerWebhookPath,
-              });
-              log('ensureConnected: discord registered with MessageGateway');
-            } catch (error) {
-              log('ensureConnected: discord MessageGateway connect failed: %O', error);
-            }
-            return;
-          }
-
-          // In-process path.
-          const bot = await this.getOrCreateBot(creds);
-          if (!bot) {
-            log('ensureConnected: discord bot unavailable, skipping gateway start');
-            return;
-          }
-
-          // `bot.client` is a `DiscordGatewayClient`; cast to access `start`
-          // which the generic `PlatformClient` interface doesn't expose.
-          const gatewayClient = bot.client as unknown as {
-            start?: (options?: {
-              durationMs?: number;
-              waitUntil?: (task: Promise<any>) => void;
-              webhookUrl?: string;
-            }) => Promise<void>;
-          };
-          if (typeof gatewayClient.start === 'function') {
-            try {
-              await gatewayClient.start({
-                durationMs: options?.durationMs,
-                waitUntil: options?.waitUntil,
-                webhookUrl: messengerWebhookUrl,
-              });
-              log('ensureConnected: discord gateway listener started in-process');
-            } catch (error) {
-              log('ensureConnected: discord gateway start failed: %O', error);
-            }
-          }
-          return;
-        }
-
-        const store = getInstallationStore(platform);
-        if (!store) return;
-        const creds = await store.resolveByKey(
-          platform === 'telegram' ? TELEGRAM_INSTALLATION_KEY : '',
-        );
-        if (!creds) {
-          log('ensureConnected: %s install not resolved, skipping', platform);
-          return;
-        }
-
-        const binder = this.createBinder(creds);
-        if (!binder) {
-          log('ensureConnected: %s has no binder, skipping', platform);
-          return;
-        }
-
-        const webhookUrl = `${trimmedUrl}/api/agent/messenger/webhooks/${platform}`;
-        try {
-          await binder.registerWebhook({ webhookUrl });
-          log('ensureConnected: %s registered -> %s', platform, webhookUrl);
-        } catch (error) {
-          log('ensureConnected: %s failed: %O', platform, error);
-        }
-      }),
-    );
   }
 
   // -------------------------------------------------------------------------

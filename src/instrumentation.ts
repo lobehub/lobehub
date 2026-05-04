@@ -22,23 +22,11 @@ export async function register() {
     });
   }
 
-  // Register messenger inbound webhooks (Telegram setWebhook, Discord gateway).
-  // Independent of per-user GatewayManager — credentials live in
-  // `system_bot_providers` (DB, managed from dc-center), registration is
-  // idempotent and cheap, so we run it on every non-Vercel start regardless
-  // of ENABLE_BOT_IN_DEV. On Vercel this happens in the /api/agent/gateway cron.
-  if (
-    process.env.NEXT_RUNTIME === 'nodejs' &&
-    process.env.DATABASE_URL &&
-    !process.env.VERCEL_ENV
-  ) {
-    const { getMessengerRouter } = await import('./server/services/messenger');
-    getMessengerRouter()
-      .ensureConnected()
-      .catch((err) => {
-        console.error('[Instrumentation] Failed to connect messenger platforms:', err);
-      });
-  }
+  // Note: messenger system bot connections (Discord/Telegram) are managed
+  // entirely from dc-center's System Bots admin — save / enable / forceReconnect
+  // mutations call MessageGateway directly. The main app's only role here is
+  // to receive forwarded events at `/api/agent/messenger/webhooks/<platform>`,
+  // which doesn't require any startup work.
 
   if (process.env.NODE_ENV !== 'production' && !process.env.ENABLE_TELEMETRY_IN_DEV) {
     return;

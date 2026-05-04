@@ -5,7 +5,6 @@ import { appEnv } from '@/envs/app';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramClientFactory } from '@/server/services/bot/platforms/telegram/client';
-import { setTelegramWebhook } from '@/server/services/bot/platforms/telegram/helpers';
 
 import { issueLinkToken } from '../linkTokenStore';
 import type {
@@ -68,16 +67,6 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
       },
       { appUrl: appEnv.WEBHOOK_PUBLIC_URL },
     );
-  }
-
-  async registerWebhook(params: { webhookUrl: string }): Promise<void> {
-    const config = await getMessengerTelegramConfig();
-    if (!config) {
-      throw new Error('LOBE_TELEGRAM_BOT_TOKEN is not configured');
-    }
-
-    await setTelegramWebhook(config.botToken, params.webhookUrl, config.webhookSecret);
-    log('registerWebhook: telegram webhook -> %s', params.webhookUrl);
   }
 
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
