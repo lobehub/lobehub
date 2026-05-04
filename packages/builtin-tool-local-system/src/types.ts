@@ -26,7 +26,7 @@ export const LocalSystemApiName = {
   runCommand: 'runCommand',
   searchFiles: 'searchFiles',
   writeFile: 'writeFile',
-};
+} as const;
 
 export interface FileResult {
   contentType?: string;
