@@ -417,7 +417,6 @@ export class StreamingExecutorActionImpl {
     initialContext?: AgentRuntimeContext;
     initialState?: AgentState;
     inPortalThread?: boolean;
-    inSearchWorkflow?: boolean;
     messages: UIChatMessage[];
     operationId?: string;
     parentMessageId: string;

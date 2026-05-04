@@ -346,8 +346,6 @@ export default {
   'pageSelection.reference': 'Selected Text',
   'pin': 'Pin',
   'pinOff': 'Unpin',
-  'prompts.summaryExpert':
-    'As a summary expert, please summarize the following content based on the system prompts above:',
   'rag.referenceChunks': 'Reference Source',
   'rag.userQuery.actions.delete': 'Delete Query Rewrite',
   'rag.userQuery.actions.regenerate': 'Regenerate Query',
