@@ -136,8 +136,9 @@ export class GatewayActionImpl {
     });
 
     // Handle disconnection — only fire session complete if a terminal agent event
-    // was received (agent_runtime_end / error). Auth failures, explicit disconnect(),
-    // and other non-terminal disconnects should NOT trigger onSessionComplete.
+    // was received (agent_runtime_end / error). Explicit disconnect() and other
+    // non-terminal disconnects should NOT trigger onSessionComplete.
+    // (auth_failed is handled separately below — it's also session-terminal.)
     client.on('disconnected', () => {
       this.internal_cleanupGatewayConnection(operationId);
       if (receivedTerminalEvent) {
@@ -145,10 +146,16 @@ export class GatewayActionImpl {
       }
     });
 
-    // Handle auth failures
+    // Handle auth failures — server-side terminal: the op no longer exists on
+    // the server (GC'd, token rejected, etc.), so the local op must be marked
+    // complete. Without this, the local op stays `running` forever and the
+    // input stop button never clears; worse, `topic.metadata.runningOperation`
+    // never gets cleared either, so each revisit re-triggers the same broken
+    // reconnect.
     client.on('auth_failed', (reason) => {
       console.error(`[Gateway] Auth failed for operation ${operationId}: ${reason}`);
       this.internal_cleanupGatewayConnection(operationId);
+      fireSessionComplete();
     });
 
     client.connect();

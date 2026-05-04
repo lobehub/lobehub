@@ -178,6 +178,50 @@ describe('GatewayActionImpl', () => {
       expect(state.gatewayConnections['op-1']).toBeUndefined();
     });
 
+    // Regression: when the server rejects auth (e.g. the op was GC'd or the
+    // refreshed JWT no longer matches), the local op stayed `running` forever
+    // because `auth_failed` only cleaned the connection map and never fired
+    // `onSessionComplete`. The `disconnected` listener that follows can't fix
+    // this either — `receivedTerminalEvent` is false (no agent_event arrived),
+    // so it short-circuits. Net result: input shows the stop button forever
+    // and `topic.metadata.runningOperation` stays set, so every revisit
+    // re-fires the same broken reconnect.
+    it('should fire onSessionComplete on auth_failed so the local op gets completed', () => {
+      const { action, mockClient } = createTestAction();
+      const onSessionComplete = vi.fn();
+
+      action.connectToGateway({
+        gatewayUrl: 'https://gateway.test.com',
+        onSessionComplete,
+        operationId: 'op-1',
+        token: 'test-token',
+      });
+
+      mockClient.emitEvent('auth_failed', 'invalid token');
+      expect(onSessionComplete).toHaveBeenCalledOnce();
+    });
+
+    // Same regression, but for the WS-close that follows `auth_failed`.
+    // The previous behavior fired `disconnected` after `auth_failed`, but
+    // since `receivedTerminalEvent` is false, the disconnected listener also
+    // skipped onSessionComplete. The fix should still only call it once
+    // (through the auth_failed path) — not twice.
+    it('should not fire onSessionComplete twice when auth_failed is followed by disconnected', () => {
+      const { action, mockClient } = createTestAction();
+      const onSessionComplete = vi.fn();
+
+      action.connectToGateway({
+        gatewayUrl: 'https://gateway.test.com',
+        onSessionComplete,
+        operationId: 'op-1',
+        token: 'test-token',
+      });
+
+      mockClient.emitEvent('auth_failed', 'invalid token');
+      mockClient.emitEvent('disconnected');
+      expect(onSessionComplete).toHaveBeenCalledOnce();
+    });
+
     it('should disconnect existing connection before creating new one', () => {
       const { action, state } = createTestAction();
 
