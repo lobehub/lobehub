@@ -12,11 +12,7 @@ export interface XAIModelCard {
 
 // Only these legacy non-reasoning models support presencePenalty/frequencyPenalty/stop.
 // All newer models reject these params, so default to stripping.
-const xaiPenaltySupportedModels = new Set([
-  'grok-3',
-  'grok-4-fast-non-reasoning',
-  'grok-4-1-fast-non-reasoning',
-]);
+const xaiPenaltySupportedModels = new Set(['grok-3', 'grok-4-fast-non-reasoning']);
 
 const pruneUnsupportedReasoningParameters = (payload: ChatStreamPayload) => {
   if (xaiPenaltySupportedModels.has(payload.model)) return payload;
