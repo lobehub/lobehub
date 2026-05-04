@@ -1,11 +1,12 @@
 'use client';
 
-import { ModelTag, ProviderIcon } from '@lobehub/icons';
+import { ModelTag } from '@lobehub/icons';
 import { Flexbox, Tag } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { ProviderIcon } from '@/components/ProviderIcon';
 import { OFFICIAL_URL } from '@/const/url';
 
 import ShareButton from '../../../../features/ShareButton';

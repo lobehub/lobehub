@@ -44,6 +44,7 @@ type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T
 type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
 export const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
+export const DEFAULT_AUTH_METHOD = 'apiKey';
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createClient?: (options: ConstructorOptions<T>) => Anthropic;
@@ -51,6 +52,7 @@ export interface CustomClientOptions<T extends Record<string, any> = any> {
 
 export interface AnthropicCompatibleFactoryOptions<T extends Record<string, any> = any> {
   apiKey?: string;
+  authMethod?: string;
   baseURL?: string;
   chatCompletion?: {
     /**
@@ -96,6 +98,7 @@ export interface AnthropicCompatibleFactoryOptions<T extends Record<string, any>
   ) => Promise<any>;
   models?: (params: {
     apiKey?: string;
+    authMethod?: string;
     baseURL: string;
     client: Anthropic;
   }) => Promise<ChatModelCard[]>;
@@ -339,9 +342,11 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
  */
 export const createDefaultAnthropicModels = async ({
   apiKey,
+  authMethod,
   baseURL,
 }: {
   apiKey?: string;
+  authMethod?: string;
   baseURL: string;
   client?: Anthropic;
 }): Promise<ChatModelCard[]> => {
@@ -349,13 +354,17 @@ export const createDefaultAnthropicModels = async ({
     throw new Error('Missing Anthropic API key for model listing');
   }
 
-  const response = await fetch(`${baseURL}/v1/models`, {
-    headers: {
-      'anthropic-version': '2023-06-01',
-      'x-api-key': `${apiKey}`,
-    },
-    method: 'GET',
-  });
+  const headers: Record<string, string> = {
+    'anthropic-version': '2023-06-01',
+  };
+
+  if (authMethod === 'authToken') {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  } else {
+    headers['x-api-key'] = apiKey;
+  }
+
+  const response = await fetch(`${baseURL}/v1/models`, { headers, method: 'GET' });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch Anthropic models: ${response.status} ${response.statusText}`);
@@ -389,11 +398,13 @@ export const createAnthropicCompatibleParams = <T extends Record<string, any> = 
     customClient,
     generateObject,
     models,
+    authMethod,
     ...rest
   } = options;
 
   return {
     ...rest,
+    authMethod,
     baseURL,
     chatCompletion: {
       getPricingOptions: resolveDefaultAnthropicPricingOptions,
@@ -411,6 +422,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
   provider,
   baseURL: DEFAULT_BASE_URL = DEFAULT_ANTHROPIC_BASE_URL,
   apiKey: DEFAULT_API_KEY,
+  authMethod: DEFAULT_AUTH_METHOD,
   errorType,
   debug: debugParams,
   constructorOptions,
@@ -452,12 +464,21 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
       if (!finalApiKey) throw AgentRuntimeError.createError(ErrorType.invalidAPIKey);
 
-      const initOptions = {
-        apiKey: finalApiKey,
+      const authMethod = (rest as any).authMethod || DEFAULT_AUTH_METHOD;
+      delete (rest as any).authMethod;
+
+      const initOptions: Record<string, any> = {
         baseURL: finalBaseURL,
         ...constructorOptions,
         ...rest,
       };
+
+      if (authMethod === 'authToken') {
+        initOptions.authToken = finalApiKey;
+        initOptions.apiKey = null;
+      } else {
+        initOptions.apiKey = finalApiKey;
+      }
 
       if (customClient?.createClient) {
         this.client = customClient.createClient(initOptions as ConstructorOptions<T>);
@@ -646,6 +667,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
       if (!models) return [];
       return models({
         apiKey: (this._options.apiKey as string) ?? undefined,
+        authMethod: (this._options as any).authMethod as string | undefined,
         baseURL: this.baseURL,
         client: this.client,
       });

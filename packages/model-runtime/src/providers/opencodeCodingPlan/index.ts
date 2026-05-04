@@ -2,6 +2,7 @@ import { ModelProvider } from 'model-bank';
 
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
+import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 const GO_BASE_URL = 'https://opencode.ai/zen/go/v1';
@@ -10,9 +11,26 @@ const GO_BASE_URL = 'https://opencode.ai/zen/go/v1';
 // Endpoint: /go/v1/messages
 const minimaxModels = ['minimax-m2.5', 'minimax-m2.7'];
 
-// Qwen models in Go use @ai-sdk/alibaba which is not in our apiTypes.
-// They fall through to openai-compatible. The Gateway handles format conversion.
-// All other models (GLM, Kimi, MiMo) use @ai-sdk/openai-compatible.
+// Kimi models need reasoning_content normalization for thinking mode.
+// When thinking is enabled, assistant tool call messages must include reasoning_content,
+// otherwise the gateway rejects with: "thinking is enabled but reasoning_content is missing"
+const kimiThinkingModels = ['kimi-k2.5', 'kimi-k2.6', 'kimi-k2-thinking'];
+
+/**
+ * Normalize assistant messages for thinking models.
+ * When thinking is enabled, every assistant message must carry a reasoning_content field,
+ * otherwise Kimi gateway rejects the request.
+ */
+const normalizeMessagesForThinking = (messages: ChatStreamPayload['messages'], thinking: any) => {
+  const isThinkingEnabled = thinking?.type !== 'disabled';
+  if (!isThinkingEnabled) return messages;
+
+  return messages.map((msg: any) => {
+    if (msg.role !== 'assistant') return msg;
+    if (msg.reasoning_content !== undefined) return msg;
+    return { ...msg, reasoning_content: '' };
+  });
+};
 
 // Anthropic SDK auto-appends /v1/messages to baseURL, so we need to strip trailing /v1
 const stripV1 = (url?: string) => url?.replace(/\/v1$/, '');
@@ -47,6 +65,20 @@ export const params = {
         options: {
           ...options,
           baseURL,
+          chatCompletion: {
+            handlePayload: (payload: ChatStreamPayload) => {
+              if (kimiThinkingModels.some((m) => payload.model.includes(m))) {
+                return {
+                  ...payload,
+                  messages: normalizeMessagesForThinking(
+                    payload.messages,
+                    (payload as any).thinking,
+                  ),
+                };
+              }
+              return payload;
+            },
+          },
         },
       },
     ];

@@ -63,6 +63,7 @@ import { default as sensenova } from './sensenova';
 import { default as siliconcloud } from './siliconcloud';
 import { default as spark } from './spark';
 import { default as stepfun } from './stepfun';
+import { default as stepfuncodingplan } from './stepfunCodingPlan';
 import { default as straico } from './straico';
 import { default as streamlake } from './streamlake';
 import { default as taichu } from './taichu';
@@ -165,6 +166,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   siliconcloud,
   spark,
   stepfun,
+  stepfuncodingplan,
   straico,
   streamlake,
   taichu,
@@ -248,6 +250,7 @@ export { default as sensenova } from './sensenova';
 export { default as siliconcloud } from './siliconcloud';
 export { default as spark } from './spark';
 export { default as stepfun } from './stepfun';
+export { default as stepfuncodingplan } from './stepfunCodingPlan';
 export { default as straico } from './straico';
 export { default as streamlake } from './streamlake';
 export { default as taichu } from './taichu';

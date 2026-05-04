@@ -1,10 +1,11 @@
-import { ProviderCombine } from '@lobehub/icons';
 import { Flexbox, Highlighter, Snippet, Tabs } from '@lobehub/ui';
 import { Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { readableColor } from 'polished';
 import React, { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+
+import { ProviderCombine } from '@/components/ProviderIcon';
 
 const prefixCls = 'ant';
 
