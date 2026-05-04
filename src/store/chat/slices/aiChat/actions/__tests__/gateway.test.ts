@@ -61,6 +61,13 @@ function createMockClient(): GatewayConnection['client'] & {
 
 // ─── Test Helpers ───
 
+/**
+ * Default no-op refresher used by tests that don't care about token refresh.
+ * `tokenRefresher` is required on `ConnectGatewayParams` (every real caller
+ * supplies one), so tests need a value to satisfy the type.
+ */
+const noopRefresher = async () => 'test-fresh-token';
+
 function createTestAction() {
   const state: Record<string, any> = { gatewayConnections: {} };
   const set = vi.fn((updater: any) => {
@@ -94,6 +101,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       expect(state.gatewayConnections['op-1']).toBeDefined();
@@ -108,6 +116,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       mockClient.emitEvent('status_changed', 'connected');
@@ -123,6 +132,7 @@ describe('GatewayActionImpl', () => {
         onEvent: (e) => events.push(e),
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       const testEvent: AgentStreamEvent = {
@@ -147,6 +157,7 @@ describe('GatewayActionImpl', () => {
         onSessionComplete: onComplete,
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       mockClient.emitEvent('session_complete');
@@ -161,6 +172,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       mockClient.emitEvent('disconnected');
@@ -174,6 +186,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       mockClient.emitEvent('auth_failed', 'invalid token');
@@ -197,6 +210,7 @@ describe('GatewayActionImpl', () => {
         onSessionComplete,
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       mockClient.emitEvent('auth_failed', 'invalid token');
@@ -217,6 +231,7 @@ describe('GatewayActionImpl', () => {
         onSessionComplete,
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       mockClient.emitEvent('auth_failed', 'invalid token');
@@ -248,27 +263,6 @@ describe('GatewayActionImpl', () => {
         expect(mockClient.reconnect).toHaveBeenCalledOnce();
         // Critical: this is recoverable, so the local op MUST keep running.
         expect(onSessionComplete).not.toHaveBeenCalled();
-      });
-
-      it('should disconnect and fire onSessionComplete (terminal) when no tokenRefresher is provided', () => {
-        const { action, mockClient } = createTestAction();
-        const onSessionComplete = vi.fn();
-
-        action.connectToGateway({
-          gatewayUrl: 'https://gateway.test.com',
-          onSessionComplete,
-          operationId: 'op-1',
-          token: 'test-token',
-        });
-
-        mockClient.emitEvent('auth_expired');
-        // Without a refresher there's no path to recover; must end the session
-        // so the input clears instead of staying stuck.
-        expect(onSessionComplete).toHaveBeenCalledOnce();
-        // Server keeps the ws open after auth_expired (so a refresh-and-retry
-        // can land), so the terminal fallback MUST close it explicitly —
-        // otherwise the heartbeat + autoReconnect loop runs forever.
-        expect(mockClient.disconnect).toHaveBeenCalled();
       });
 
       it('should fire onSessionComplete when token refresh itself throws', async () => {
@@ -308,6 +302,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'token-1',
+        tokenRefresher: noopRefresher,
       });
 
       // Second connection
@@ -317,6 +312,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'token-2',
+        tokenRefresher: noopRefresher,
       });
 
       expect(firstMock.disconnect).toHaveBeenCalled();
@@ -332,6 +328,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       action.disconnectFromGateway('op-1');
@@ -353,6 +350,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       action.interruptGatewayAgent('op-1');
@@ -373,6 +371,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        tokenRefresher: noopRefresher,
       });
 
       expect(action.getGatewayConnectionStatus('op-1')).toBe('connecting');

@@ -64,10 +64,11 @@ export interface ConnectGatewayParams {
    * op is still alive). Should resolve to a freshly-minted token. The client
    * will then `updateToken()` and `reconnect()` automatically.
    *
-   * If omitted, `auth_expired` is treated like `auth_failed` (terminal),
-   * because there's no way to recover without a refresher.
+   * Required: every Gateway op runs against a topic, and refreshes go through
+   * `aiAgentService.refreshGatewayToken(topicId)` — there's no scenario where
+   * a caller legitimately can't supply one.
    */
-  tokenRefresher?: () => Promise<string>;
+  tokenRefresher: () => Promise<string>;
 }
 
 // ─── Action Implementation ───
@@ -188,24 +189,15 @@ export class GatewayActionImpl {
     // there's nothing else we can do, and leaving the op `running` would
     // freeze the input.
     client.on('auth_expired', async () => {
-      if (!tokenRefresher) {
-        console.error(
-          `[Gateway] Auth expired for operation ${operationId} but no tokenRefresher provided`,
-        );
-        // Close the underlying socket too — the server keeps the ws open after
-        // auth_expired so the client can refresh; without an explicit
-        // disconnect here the heartbeat + autoReconnect machinery keeps
-        // running after we've already marked the local op complete.
-        client.disconnect();
-        this.internal_cleanupGatewayConnection(operationId);
-        fireSessionComplete();
-        return;
-      }
       try {
         const fresh = await tokenRefresher();
         client.updateToken(fresh);
         await client.reconnect();
       } catch (error) {
+        // Refresh itself failed (refresh API down, server refused, etc.). The
+        // server keeps the ws open after `auth_expired` so the client can
+        // refresh + retry — without an explicit `disconnect` here, heartbeat
+        // and autoReconnect would keep running past the local op's lifetime.
         console.error(`[Gateway] Token refresh failed for operation ${operationId}:`, error);
         client.disconnect();
         this.internal_cleanupGatewayConnection(operationId);
@@ -390,12 +382,10 @@ export class GatewayActionImpl {
       },
       operationId: result.operationId,
       token: result.token || '',
-      tokenRefresher: result.topicId
-        ? async () => {
-            const refreshed = await aiAgentService.refreshGatewayToken(result.topicId!);
-            return refreshed.token;
-          }
-        : undefined,
+      tokenRefresher: async () => {
+        const refreshed = await aiAgentService.refreshGatewayToken(result.topicId);
+        return refreshed.token;
+      },
     });
 
     return result;
