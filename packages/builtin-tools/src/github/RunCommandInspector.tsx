@@ -18,7 +18,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    margin-inline-start: 6px;
     padding-block: 2px;
     padding-inline: 10px;
     border-radius: 999px;
@@ -58,28 +57,16 @@ const GithubRunCommandInspector = memo<
   const subcommand = getGhSubcommand(command);
 
   const pulse = isArgumentsStreaming || isLoading;
-
-  if (isArgumentsStreaming && !subcommand) {
-    return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>GitHub</span>
-      </div>
-    );
-  }
-
   const isSuccess = pluginState?.success ?? pluginState?.exitCode === 0;
   const hasResult = !pulse && pluginState && pluginState.success !== undefined;
 
   return (
     <div className={cx(inspectorTextStyles.root, pulse && shinyTextStyles.shinyText)}>
-      <span>GitHub:</span>
-      {subcommand && (
-        <span className={styles.chip}>
-          <Github className={styles.icon} size={14} />
-          <span className={styles.ghPrefix}>gh</span>
-          <span className={styles.command}>{subcommand}</span>
-        </span>
-      )}
+      <span className={styles.chip}>
+        <Github className={styles.icon} size={14} />
+        <span className={styles.ghPrefix}>gh</span>
+        {subcommand && <span className={styles.command}>{subcommand}</span>}
+      </span>
       {hasResult ? (
         isSuccess ? (
           <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
