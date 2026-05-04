@@ -29,6 +29,14 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   deepseekV4ReasoningEffort?: 'high' | 'max';
 
   /**
+   * Context compression mode
+   * - 'disabled': No compression
+   * - 'economy': Compress early to save tokens (50% threshold)
+   * - 'full': Use optimal threshold for full context utilization (70% threshold)
+   */
+  contextCompressionMode?: 'disabled' | 'economy' | 'full';
+
+  /**
    * Disable context caching
    */
   disableContextCaching?: boolean;
@@ -46,12 +54,15 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   enableAutoScrollOnStreaming?: boolean;
   /**
    * Enable history message compression threshold
-   * @deprecated Use enableContextCompression instead
+   * @deprecated Legacy field with no runtime effect. Use contextCompressionMode instead.
    */
   enableCompressHistory?: boolean;
   /**
    * Enable context compression
-   * When enabled, old messages will be compressed into summaries when token threshold is reached
+   * @deprecated Use contextCompressionMode instead. Will be removed in a future version.
+   * Migration:
+   * - enableContextCompression: true → contextCompressionMode: 'economy'
+   * - enableContextCompression: false → contextCompressionMode: 'disabled'
    */
   enableContextCompression?: boolean;
   /**
@@ -182,6 +193,7 @@ export const AgentChatConfigSchema = z
     autoCreateTopicThreshold: z.number().default(2),
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
+    contextCompressionMode: z.enum(['disabled', 'economy', 'full']).optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),

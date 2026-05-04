@@ -621,6 +621,13 @@ export class AiAgentService {
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
 
+    // Get model's context window tokens from model-bank
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    const modelInfo = LOBE_DEFAULT_MODEL_LIST.find(
+      (item) => item.id === model && item.providerId === provider,
+    );
+    const contextWindowTokens = modelInfo?.contextWindowTokens;
+
     // 4. Fetch user settings (memory config + timezone)
     // Agent-level memory config takes priority; fallback to user-level setting
     const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
@@ -664,8 +671,6 @@ export class AiAgentService {
     let klavisManifests: LobeToolManifest[] = [];
     let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
 
-    // model-bank is needed both for tool support check and model metadata
-    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
     // Resolve S3 keys in imageList/videoList before visual tool activation checks and context build.
     const fileService = new FileService(this.db, this.userId);
     const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
@@ -1667,7 +1672,7 @@ export class AiAgentService {
         initialMessages: allMessages,
         initialStepCount,
         maxSteps,
-        modelRuntimeConfig: { model, provider },
+        modelRuntimeConfig: { model, provider, contextWindowTokens },
         hooks,
         operationId,
         signal,

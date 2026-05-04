@@ -700,6 +700,12 @@ export default {
   'settingModel.enableContextCompression.desc':
     'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
+  'settingModel.contextCompressionMode.desc':
+    'Economy: compress early to save tokens on long conversations. Full: use more context for better quality.',
+  'settingModel.contextCompressionMode.disabled': 'Disabled',
+  'settingModel.contextCompressionMode.economy': 'Economy',
+  'settingModel.contextCompressionMode.full': 'Full',
+  'settingModel.contextCompressionMode.title': 'Context Compression',
   'settingModel.enableMaxTokens.title': 'Enable Max Tokens Limit',
   'settingModel.enableReasoningEffort.title': 'Enable Reasoning Effort Adjustment',
   'settingModel.frequencyPenalty.desc':
@@ -948,7 +954,9 @@ When I am ___, I need ___
   'tab.advanced.updateChannel.canaryDesc':
     'Triggered on every PR merge, multiple builds per day. Most unstable.',
   'tab.advanced.updateChannel.desc':
-    'By default, get notifications for stable updates. The Canary channel receives pre-release builds that may be unstable for production work.',
+    'By default, get notifications for stable updates. The Canary and Hardy channels receive pre-release builds that may be unstable for production work.',
+  'tab.advanced.updateChannel.hardy': 'Hardy',
+  'tab.advanced.updateChannel.hardyDesc': 'Personal test build, not for production.',
   'tab.advanced.updateChannel.nightly': 'Nightly',
   'tab.advanced.updateChannel.nightlyDesc': 'Automated daily builds with the latest changes.',
   'tab.advanced.updateChannel.stable': 'Stable',

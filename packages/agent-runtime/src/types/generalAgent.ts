@@ -5,6 +5,8 @@ import {
   type MessageToolCall,
 } from '@lobechat/types';
 
+import { type CompressionMode } from '../utils/tokenCounter';
+
 export interface GeneralAgentCallLLMInstructionPayload {
   /** Force create a new assistant message (e.g., after compression) */
   createAssistantMessage?: boolean;
@@ -79,6 +81,8 @@ export interface GeneralAgentConfig {
   compressionConfig?: {
     /** Whether context compression is enabled (default: true) */
     enabled?: boolean;
+    /** Compression mode: 'economy' uses 50% threshold, 'full' uses 70% threshold */
+    mode?: CompressionMode;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
   };
@@ -102,6 +106,8 @@ export interface GeneralAgentConfig {
       model: string;
       provider: string;
     };
+    /** Model's context window tokens */
+    contextWindowTokens?: number;
     model: string;
     provider: string;
   };

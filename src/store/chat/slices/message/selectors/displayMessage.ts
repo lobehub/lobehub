@@ -1,4 +1,5 @@
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
+import { extractMessageContent } from '@lobechat/utils';
 
 import { INBOX_SESSION_ID } from '@/const/session';
 import { useAgentStore } from '@/store/agent';
@@ -123,7 +124,7 @@ const mainAIChatsWithHistoryConfig = (s: ChatStoreState): UIChatMessage[] => {
  */
 const mainAIChatsMessageString = (s: ChatStoreState): string => {
   const chats = mainAIChatsWithHistoryConfig(s);
-  return chats.map((m) => m.content).join('');
+  return chats.map((m) => extractMessageContent(m)).join('');
 };
 
 /**

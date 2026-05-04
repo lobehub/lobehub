@@ -5,6 +5,7 @@ import type {
   RuntimeStepContext,
 } from '@lobechat/types';
 
+import type { CompressionMode } from '../utils/tokenCounter';
 import type { FinishReason } from './event';
 import type { AgentState, ToolRegistry } from './state';
 import type { Cost, CostCalculationContext, Usage } from './usage';

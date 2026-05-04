@@ -78,6 +78,8 @@ export interface AgentState {
   modelRuntimeConfig?: {
     model: string;
     provider: string;
+    /** Model's context window tokens */
+    contextWindowTokens?: number;
     /**
      * Compression model configuration
      * Used for context compression tasks

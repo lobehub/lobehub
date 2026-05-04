@@ -1,4 +1,5 @@
 import { type ThreadItem, type UIChatMessage } from '@lobechat/types';
+import { extractMessageContent } from '@lobechat/utils';
 
 import { useAgentStore } from '@/store/agent';
 import { agentChatConfigSelectors } from '@/store/agent/selectors';
@@ -118,7 +119,7 @@ const portalAIChatsWithHistoryConfig = (s: ChatStoreState) => {
  */
 const portalDisplayChatsString = (s: ChatStoreState) => {
   const messages = portalAIChats(s);
-  return messages.map((m) => m.content).join('');
+  return messages.map((m) => extractMessageContent(m)).join('');
 };
 
 export const threadSelectors = {

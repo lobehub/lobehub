@@ -1,5 +1,5 @@
 import { type FormItemProps } from '@lobehub/ui';
-import { Checkbox, Flexbox, Form, SliderWithInput, Tag } from '@lobehub/ui';
+import { Checkbox, Flexbox, Form, Segmented, SliderWithInput, Tag } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
@@ -346,16 +346,32 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating }) => {
   // Context Compression items
   const contextCompressionItems: FormItemProps[] = [
     {
-      children: <Switch />,
+      children: (
+        <Segmented
+          options={[
+            {
+              label: t('settingModel.contextCompressionMode.disabled'),
+              value: 'disabled',
+            },
+            {
+              label: t('settingModel.contextCompressionMode.economy'),
+              value: 'economy',
+            },
+            {
+              label: t('settingModel.contextCompressionMode.full'),
+              value: 'full',
+            },
+          ]}
+        />
+      ),
       label: (
         <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
-          {t('settingModel.enableContextCompression.title')}
-          <InfoTooltip title={t('settingModel.enableContextCompression.desc')} />
+          {t('settingModel.contextCompressionMode.title')}
+          <InfoTooltip title={t('settingModel.contextCompressionMode.desc')} />
         </Flexbox>
       ),
-      name: ['chatConfig', 'enableContextCompression'],
+      name: ['chatConfig', 'contextCompressionMode'],
       tag: 'compression',
-      valuePropName: 'checked',
     },
   ];
 
