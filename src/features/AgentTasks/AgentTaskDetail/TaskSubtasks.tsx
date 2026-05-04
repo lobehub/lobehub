@@ -193,17 +193,27 @@ const TaskSubtasks = memo(() => {
       const preview = await taskService.previewSubtaskLayers(taskId);
       const plan = preview.data;
 
-      if (plan.totalRunnable === 0) {
+      // No runnable layer AND nothing informative to show → just a toast.
+      // If there are externally-blocked or cycled tasks, still open the modal
+      // so the user understands why "Run all" can't start anything right now.
+      const hasInformativeState =
+        plan.blockedExternally.length > 0 ||
+        plan.blockedByCycle.length > 0 ||
+        plan.cycles.length > 0;
+      if (plan.totalRunnable === 0 && !hasInformativeState) {
         message.info(t('taskDetail.runAll.empty'));
         return;
       }
 
+      const canRun = plan.totalRunnable > 0;
       modal.confirm({
         cancelText: t('taskDetail.runAll.cancel'),
         centered: true,
         content: <RunSubtasksPreview plan={plan} />,
+        okButtonProps: canRun ? undefined : { disabled: true },
         okText: t('taskDetail.runAll.confirm', { count: plan.totalRunnable }),
         onOk: async () => {
+          if (!canRun) return;
           const res = await runReadySubtasks(taskId);
           const kicked = res.data.kickedOff.length;
           const failed = res.data.failed?.length ?? 0;

@@ -636,6 +636,8 @@ export default {
   'taskDetail.runAll.skipped.alreadyDone':
     '{{count}} task(s) already completed or canceled — skipped',
   'taskDetail.runAll.skipped.ineligible': '{{count}} task(s) running or scheduled — skipped',
+  'taskDetail.runAll.skipped.blockedExternally':
+    '{{count}} task(s) waiting on a blocker outside this batch — will run automatically when unblocked',
   'taskDetail.runAll.cycleWarning':
     'Circular dependency detected. Tasks involved in or blocked by the cycle will not run: {{members}}',
   'taskDetail.runAll.empty':

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 interface SubtaskGraphPlan {
   alreadyDone: string[];
   blockedByCycle: string[];
+  blockedExternally: string[];
   cycles: string[];
   ineligible: string[];
   layers: string[][];
@@ -60,7 +61,9 @@ const RunSubtasksPreview = memo<Props>(({ plan }) => {
         })}
       </Flexbox>
 
-      {(plan.alreadyDone.length > 0 || plan.ineligible.length > 0) && (
+      {(plan.alreadyDone.length > 0 ||
+        plan.ineligible.length > 0 ||
+        plan.blockedExternally.length > 0) && (
         <Flexbox gap={4}>
           {plan.alreadyDone.length > 0 && (
             <Text fontSize={12} style={{ color: cssVar.colorTextDescription }}>
@@ -70,6 +73,13 @@ const RunSubtasksPreview = memo<Props>(({ plan }) => {
           {plan.ineligible.length > 0 && (
             <Text fontSize={12} style={{ color: cssVar.colorTextDescription }}>
               {t('taskDetail.runAll.skipped.ineligible', { count: plan.ineligible.length })}
+            </Text>
+          )}
+          {plan.blockedExternally.length > 0 && (
+            <Text fontSize={12} style={{ color: cssVar.colorTextDescription }}>
+              {t('taskDetail.runAll.skipped.blockedExternally', {
+                count: plan.blockedExternally.length,
+              })}
             </Text>
           )}
         </Flexbox>
