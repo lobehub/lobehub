@@ -21,6 +21,24 @@ const vercelConfig = {
 };
 const nextConfig = defineConfig({
   ...(isVercel ? vercelConfig : {}),
+  rewrites: async () => [
+    {
+      destination: '/favicon.ico',
+      source: '/_spa/favicon.ico',
+    },
+    {
+      destination: '/favicon-32x32.ico',
+      source: '/_spa/favicon-32x32.ico',
+    },
+    {
+      destination: '/favicon-dev.ico',
+      source: '/_spa/favicon-dev.ico',
+    },
+    {
+      destination: '/favicon-32x32-dev.ico',
+      source: '/_spa/favicon-32x32-dev.ico',
+    },
+  ],
 });
 
 export default nextConfig;
