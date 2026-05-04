@@ -1222,6 +1222,17 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       responseLanguage: 'en-US',
     },
   },
+
+  [keyOf('github', 'run_command')]: {
+    args: {
+      command: 'gh api /repos/lobehub/lobe-chat/issues?state=open',
+    },
+    pluginState: {
+      command: 'gh api /repos/lobehub/lobe-chat/issues?state=open',
+      exitCode: 0,
+      success: true,
+    },
+  },
 };
 
 export const getToolRenderFixture = (
