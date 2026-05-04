@@ -13,14 +13,12 @@ import {
   CODEX_CLI_INSTALL_DOCS_URL,
   HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
+import { AgentStreamPipeline } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import { CodexFileChangeTracker } from '@/modules/heterogeneousAgent/codexFileChangeTracker';
-import type {
-  HeterogeneousAgentImageAttachment,
-  HeterogeneousAgentParsedOutput,
-} from '@/modules/heterogeneousAgent/types';
+import type { HeterogeneousAgentImageAttachment } from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
 import { createLogger } from '@/utils/logger';
@@ -91,6 +89,12 @@ interface StartSessionResult {
 interface SendPromptParams {
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
   imageList?: HeterogeneousAgentImageAttachment[];
+  /**
+   * Renderer-side operation id stamped onto every emitted `AgentStreamEvent`.
+   * Required: producer-side conversion is the V3 contract — by the time events
+   * reach the renderer they must already carry the operation they belong to.
+   */
+  operationId: string;
   prompt: string;
   sessionId: string;
 }
@@ -148,7 +152,7 @@ interface CliTraceSession {
  * prompt transport, resume semantics, and raw stream shape without turning
  * this controller into a giant `switch`.
  *
- * Lifecycle: startSession → sendPrompt → (heteroAgentRawLine broadcasts) → stopSession
+ * Lifecycle: startSession → sendPrompt → (heteroAgentEvent broadcasts) → stopSession
  */
 export default class HeterogeneousAgentCtr extends ControllerModule {
   static override readonly groupName = 'heterogeneousAgent';
@@ -780,8 +784,9 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   /**
    * Send a prompt to an agent session.
    *
-   * Spawns the CLI process with preset flags. Broadcasts each stdout line
-   * as an `heteroAgentRawLine` event — Renderer side parses and adapts.
+   * Spawns the CLI process with preset flags. Pipes each stdout chunk through
+   * the shared `AgentStreamPipeline` (JSONL → adapter → toStreamEvent) and
+   * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
    */
   @IpcMethod()
   async sendPrompt(params: SendPromptParams): Promise<void> {
@@ -853,42 +858,51 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       }
 
       session.process = proc;
-      const streamProcessor = driver.createStreamProcessor();
+
+      // Producer-side conversion (V3 contract): JSONL framing + adapter +
+      // toStreamEvent all run here, so renderer + future server `heteroIngest`
+      // see the same `AgentStreamEvent` wire shape with no per-consumer adapter.
       const codexFileChangeTracker =
         session.agentType === 'codex' ? new CodexFileChangeTracker() : undefined;
+      const pipeline = new AgentStreamPipeline({
+        agentType: session.agentType,
+        operationId: params.operationId,
+        transformPayload: codexFileChangeTracker
+          ? (raw) => codexFileChangeTracker.track(raw)
+          : undefined,
+      });
       let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
 
-      const broadcastParsedOutputs = (parsedOutputs: HeterogeneousAgentParsedOutput[]) => {
+      const broadcastPipelineBatch = (produce: () => ReturnType<AgentStreamPipeline['push']>) => {
         stdoutBroadcastQueue = stdoutBroadcastQueue
           .then(async () => {
-            for (const parsedOutput of parsedOutputs) {
-              if (parsedOutput.agentSessionId) {
-                session.agentSessionId = parsedOutput.agentSessionId;
-              }
-
-              const line = codexFileChangeTracker
-                ? await codexFileChangeTracker.track(parsedOutput.payload)
-                : parsedOutput.payload;
-
-              this.broadcast('heteroAgentRawLine', {
-                line,
+            const events = await produce();
+            // Adapter-extracted CC/Codex session id powers `--resume` on the
+            // next prompt; surface it through the existing `getSessionInfo`
+            // IPC by mirroring the freshest value onto the session record.
+            if (pipeline.sessionId && pipeline.sessionId !== session.agentSessionId) {
+              session.agentSessionId = pipeline.sessionId;
+            }
+            for (const event of events) {
+              this.broadcast('heteroAgentEvent', {
+                event,
                 sessionId: session.sessionId,
               });
             }
           })
           .catch((error) => {
-            logger.error('Failed to broadcast parsed agent output:', error);
+            logger.error('Failed to broadcast agent stream batch:', error);
           });
       };
 
-      // Stream stdout events as raw provider payloads to Renderer.
+      // Stream stdout events through the producer pipeline.
       const stdout = proc.stdout as Readable;
       stdout.on('data', (chunk: Buffer) => {
         void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
-        broadcastParsedOutputs(streamProcessor.push(chunk));
+        broadcastPipelineBatch(() => pipeline.push(chunk));
       });
       stdout.on('end', () => {
-        broadcastParsedOutputs(streamProcessor.flush());
+        broadcastPipelineBatch(() => pipeline.flush());
       });
 
       // Capture stderr

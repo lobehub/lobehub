@@ -1,4 +1,3 @@
-import { JsonlStreamProcessor } from '../jsonlProcessor';
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
 const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check'] as const;
@@ -40,11 +39,5 @@ export const codexDriver: HeterogeneousAgentDriver = {
         : ['exec', ...optionArgs],
       stdinPayload: prompt,
     };
-  },
-  createStreamProcessor() {
-    return new JsonlStreamProcessor({
-      extractSessionId: (payload) =>
-        payload?.type === 'thread.started' ? payload?.thread_id : undefined,
-    });
   },
 };

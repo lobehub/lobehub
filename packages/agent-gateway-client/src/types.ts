@@ -10,6 +10,12 @@ export type AgentStreamEventType =
   | 'tool_start'
   | 'tool_end'
   | 'tool_execute'
+  /**
+   * Producer-side tool result content (heterogeneous CLI agents emit this
+   * separately from `tool_end`; gateway-driven runs do not). Kept in the
+   * wire union so consumers can pattern-match without casting.
+   */
+  | 'tool_result'
   | 'step_start'
   | 'step_complete'
   | 'error';

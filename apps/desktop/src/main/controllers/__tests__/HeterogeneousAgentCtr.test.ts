@@ -199,7 +199,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId, ...sendPromptOverrides });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -314,7 +314,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId, ...sendPromptOverrides });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -332,9 +332,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Codex CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Codex CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('codex', true);
       expect(spawnCalls).toHaveLength(0);
@@ -352,9 +352,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Claude Code CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('claude', true);
       expect(spawnCalls).toHaveLength(0);
@@ -390,9 +390,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude-alt',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Claude Code CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
@@ -493,6 +493,7 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(
         ctr.sendPrompt({
           imageList,
+          operationId: 'op-test',
           prompt: 'inspect the screenshots',
           sessionId,
         }),
@@ -526,9 +527,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Agent exited with code 1',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Agent exited with code 1');
     });
 
     it('uses codex exec resume syntax when continuing an existing thread', async () => {
