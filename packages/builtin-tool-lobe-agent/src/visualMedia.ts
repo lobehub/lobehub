@@ -22,12 +22,13 @@ export interface VisualSourceMessage {
 const VIDEO_URL_PATTERN = /\.(?:mp4|m4v|mov|webm|mpeg|mpg|avi|mkv)(?:[?#]|$)/i;
 const VISUAL_DATA_URL_PATTERN = /^data:(?:image|video)\//i;
 const ALLOWED_REMOTE_VISUAL_MEDIA_URL_PROTOCOLS = new Set(['http:', 'https:']);
-const ANALYZE_VISUAL_MEDIA_ARGUMENT_KEYS = new Set(['question', 'refs', 'urls']);
+const ANALYZE_VISUAL_MEDIA_ARGUMENT_KEYS = new Set(['gridMode', 'question', 'refs', 'urls']);
 
 export const MAX_VISUAL_MEDIA_URLS = 8;
 export const MAX_VISUAL_MEDIA_URL_LENGTH = 2_000_000;
 
 export interface AnalyzeVisualMediaContentOptions {
+  gridMode?: boolean;
   includeFallbackInstruction?: boolean;
   includeFileSummary?: boolean;
 }
@@ -237,7 +238,7 @@ export const selectVisualFileItems = (items: VisualFileItem[], refs?: string[]) 
   return { availableRefs, invalidRefs, selected };
 };
 
-export const buildAnalyzeVisualMediaContent = (
+const buildStandardPrompt = (
   items: VisualFileItem[],
   question: string,
   options: AnalyzeVisualMediaContentOptions = {},
@@ -258,9 +259,79 @@ export const buildAnalyzeVisualMediaContent = (
 
   textLines.push('', `Question: ${question}`);
 
+  return textLines.join('\n');
+};
+
+const buildGridPrompt = (items: VisualFileItem[], question: string) => {
+  const imageItems = items.filter((item) => item.type === 'image');
+  const videoItems = items.filter((item) => item.type === 'video');
+
+  const lines: string[] = [
+    'Analyze the attached visual media using a 9×9 grid system (81 cells). For each image, mentally divide it into 9 rows and 9 columns, then describe what appears in each cell.',
+    '',
+    'Response format:',
+    '1. For each image, output a text grid with coordinates like this:',
+    '```',
+    '  1   2   3   4   5   6   7   8   9',
+    '1 #   #   #   #   #   #   #   #   #',
+    '2 #   #   #   #   #   #   #   #   #',
+    '3 #   #   #   #   #   #   #   #   #',
+    '4 #   #   #   #   #   #   #   #   #',
+    '5 #   #   #   #   #   #   #   #   #',
+    '6 #   #   #   #   #   #   #   #   #',
+    '7 #   #   #   #   #   #   #   #   #',
+    '8 #   #   #   #   #   #   #   #   #',
+    '9 #   #   #   #   #   #   #   #   #',
+    '```',
+    '',
+    '2. Rules for the grid:',
+    '- Describe each cell with detailed phrases or short sentences. Use " | " (pipe with spaces) to separate distinct objects or features within the same cell.',
+    '- Use "#" for empty or featureless cells',
+    '- Be specific: mention objects, text, colors, people, actions, and their relative positions',
+    '- Include spatial relationships (e.g., "top-left", "center")',
+    '',
+    '3. After all grids, provide a concise overall answer to the question.',
+    '',
+    'Example cell descriptions:',
+    '"blue sky | white clouds"',
+    '"person sitting on bench"',
+    '"#"',
+  ];
+
+  if (imageItems.length > 0) {
+    lines.push(
+      '',
+      'Images to analyze:',
+      ...imageItems.map((img) => `- ${img.ref}: ${img.name}`),
+    );
+  }
+
+  if (videoItems.length > 0) {
+    lines.push(
+      '',
+      'Videos to analyze (provide a general description, grid analysis is optional for videos):',
+      ...videoItems.map((vid) => `- ${vid.ref}: ${vid.name}`),
+    );
+  }
+
+  lines.push('', `Question: ${question}`);
+
+  return lines.join('\n');
+};
+
+export const buildAnalyzeVisualMediaContent = (
+  items: VisualFileItem[],
+  question: string,
+  options: AnalyzeVisualMediaContentOptions = {},
+) => {
+  const useGrid = options.gridMode !== false;
+  const textContent = useGrid
+    ? buildGridPrompt(items, question)
+    : buildStandardPrompt(items, question, options);
+
   return [
     {
-      text: textLines.join('\n'),
+      text: textContent,
       type: 'text' as const,
     },
     ...items.map((file) =>

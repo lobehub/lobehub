@@ -115,7 +115,7 @@ describe('visualMedia', () => {
     ]);
   });
 
-  it('should build shared visual media model content', () => {
+  it('should build shared visual media model content in standard mode', () => {
     const content = buildAnalyzeVisualMediaContent(
       [
         {
@@ -128,12 +128,39 @@ describe('visualMedia', () => {
         },
       ],
       'what is this?',
-      { includeFallbackInstruction: true, includeFileSummary: true },
+      { gridMode: false, includeFallbackInstruction: true, includeFileSummary: true },
     );
 
     expect(content).toEqual([
       expect.objectContaining({
         text: expect.stringContaining('Files:\n- url_1: generated.png (image)'),
+        type: 'text',
+      }),
+      {
+        image_url: { detail: 'auto', url: 'https://example.com/generated.png' },
+        type: 'image_url',
+      },
+    ]);
+  });
+
+  it('should build visual media model content in grid mode by default', () => {
+    const content = buildAnalyzeVisualMediaContent(
+      [
+        {
+          description: 'generated.png',
+          localRef: 'url_1',
+          name: 'generated.png',
+          ref: 'url_1',
+          type: 'image',
+          uri: 'https://example.com/generated.png',
+        },
+      ],
+      'what is this?',
+    );
+
+    expect(content).toEqual([
+      expect.objectContaining({
+        text: expect.stringContaining('9×9 grid system'),
         type: 'text',
       }),
       {
