@@ -35,6 +35,7 @@ import { messageService } from '@/services/message';
 import { getAgentStoreState, useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
+import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { type ChatStore } from '@/store/chat/store';
 import {
@@ -218,6 +219,10 @@ export class ConversationLifecycleActionImpl {
 
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    const runtimeType = selectRuntimeType({
+      heterogeneousProvider,
+      isGatewayMode: this.#get().isGatewayModeEnabled(),
+    });
 
     // ── Command Bus: extract and process built-in commands from editorData ──
     const commandOverrides: CommandSendOverrides = processCommands({
@@ -467,7 +472,7 @@ export class ConversationLifecycleActionImpl {
 
     // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
-    if (isDesktop && heterogeneousProvider) {
+    if (runtimeType === 'hetero' && heterogeneousProvider) {
       // Resolve cwd up-front so the new topic is bound to a project at
       // creation time. Otherwise the row stays NULL until the post-execution
       // metadata write — which never lands on cancel/error and meanwhile
@@ -638,7 +643,7 @@ export class ConversationLifecycleActionImpl {
     }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
-    if (this.#get().isGatewayModeEnabled()) {
+    if (runtimeType === 'gateway') {
       this.#get().completeOperation(operationId);
 
       try {
