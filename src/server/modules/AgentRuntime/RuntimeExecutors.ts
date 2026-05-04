@@ -1253,6 +1253,17 @@ export const createRuntimeExecutors = (
         );
       }
 
+      // Guard against empty summary — finalizing with empty content would destroy
+      // conversation history by replacing all compressed messages with a blank group.
+      if (!summaryContent.trim()) {
+        await messageService.cancelCompression(compressionResult.messageGroupId, {
+          agentId: state.metadata?.agentId,
+          threadId: state.metadata?.threadId,
+          topicId,
+        });
+        throw new Error('Compression summary generation returned empty content');
+      }
+
       const finalCompression = await messageService.finalizeCompression(
         compressionResult.messageGroupId,
         summaryContent,

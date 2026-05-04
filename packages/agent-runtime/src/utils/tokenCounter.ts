@@ -6,7 +6,7 @@ import { estimateTokenCount } from 'tokenx';
 export interface TokenCountOptions {
   /** Model's max context window token count */
   maxWindowToken?: number;
-  /** Threshold ratio for triggering compression, default 0.75 */
+  /** Threshold ratio for triggering compression, default 0.5 */
   thresholdRatio?: number;
 }
 

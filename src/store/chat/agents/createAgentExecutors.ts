@@ -2726,6 +2726,7 @@ export const createAgentExecutors = (context: {
         // 4. Build compression prompt and generate summary with streaming UI updates
         const compressionPayload = chainCompressContext(messagesToSummarize);
         let summaryContent = '';
+        let summaryError: Error | undefined;
 
         // Start generateSummary operation attached to the compressed group message
         const { abortController: summaryAbortController, operationId: summaryOperationId } = context
@@ -2753,6 +2754,7 @@ export const createAgentExecutors = (context: {
           },
           onError: (e) => {
             console.error(e);
+            summaryError = e instanceof Error ? e : new Error(String(e));
             context.get().completeOperation(summaryOperationId, {
               error: { message: String(e), type: 'summary_generation_failed' },
             });
@@ -2760,6 +2762,60 @@ export const createAgentExecutors = (context: {
         });
 
         if (summaryAbortController.signal.aborted) throw createAbortError();
+
+        // Guard against empty summary — finalizing with empty content would destroy
+        // conversation history by replacing all compressed messages with a blank group.
+        if (summaryError || !summaryContent.trim()) {
+          const errorMessage =
+            summaryError?.message || 'Compression summary generation returned empty content';
+
+          log(
+            `${stagePrefix} Summary generation failed or empty, restoring original messages: %s`,
+            errorMessage,
+          );
+
+          context.get().completeOperation(summaryOperationId, {
+            error: { message: errorMessage, type: 'summary_generation_failed' },
+          });
+
+          const rollbackResult = await messageService.cancelCompression({
+            agentId,
+            groupId: messageGroupId,
+            messageGroupId,
+            threadId: opContext.threadId,
+            topicId,
+          });
+
+          const restoredMessages = rollbackResult.messages || messages;
+          context.get().replaceMessages(restoredMessages, { context: opContext });
+          context.get().completeOperation(compressOperationId, {
+            error: { message: errorMessage, type: 'compression_failed' },
+          });
+
+          events.push({
+            error: summaryError || new Error(errorMessage),
+            type: 'compression_error',
+          });
+
+          return {
+            events,
+            newState: { ...state, messages: restoredMessages },
+            nextContext: {
+              payload: {
+                compressedMessages: restoredMessages,
+                groupId: '',
+                skipped: true,
+              } as GeneralAgentCompressionResultPayload,
+              phase: 'compression_result',
+              session: {
+                messageCount: restoredMessages.length,
+                sessionId: state.operationId,
+                status: 'running',
+                stepCount: state.stepCount + 1,
+              },
+            } as AgentRuntimeContext,
+          };
+        }
 
         log(`${stagePrefix} Generated summary: %d chars`, summaryContent.length);
 
@@ -2831,6 +2887,7 @@ export const createAgentExecutors = (context: {
             nextContext: {
               payload: {
                 compressedMessages: messages,
+                groupId: '',
                 skipped: true,
               } as GeneralAgentCompressionResultPayload,
               phase: 'compression_result',
@@ -2863,6 +2920,7 @@ export const createAgentExecutors = (context: {
           nextContext: {
             payload: {
               compressedMessages: messages,
+              groupId: '',
               skipped: true,
             } as GeneralAgentCompressionResultPayload,
             phase: 'compression_result',
