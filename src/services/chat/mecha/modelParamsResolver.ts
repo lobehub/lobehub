@@ -153,6 +153,18 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinking = {
       budget_tokens: chatConfig.reasoningBudgetToken || 1024,
     };
+  } else if (modelExtendParams.includes('reasoningBudgetToken32k')) {
+    // For GLM-5/GLM-4.7 with 32k max budget
+    extendParams.thinking = {
+      budget_tokens: chatConfig.reasoningBudgetToken32k || 1024,
+      type: 'enabled',
+    };
+  } else if (modelExtendParams.includes('reasoningBudgetToken80k')) {
+    // For Qwen3 series with 80k max budget
+    extendParams.thinking = {
+      budget_tokens: chatConfig.reasoningBudgetToken80k || 1024,
+      type: 'enabled',
+    };
   }
 
   // Adaptive thinking (Claude Opus/Sonnet 4.6)

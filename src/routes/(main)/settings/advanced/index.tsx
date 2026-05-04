@@ -17,7 +17,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
 
-type UpdateChannelValue = 'canary' | 'stable';
+type UpdateChannelValue = 'canary' | 'stable' | 'hardy';
 
 const styles = createStaticStyles(({ css }) => ({
   labItem: css`
@@ -88,6 +88,7 @@ const Page = memo(() => {
   const channelOptions = [
     { label: t('tab.advanced.updateChannel.stable'), value: 'stable' as const },
     { label: t('tab.advanced.updateChannel.canary'), value: 'canary' as const },
+    { label: t('tab.advanced.updateChannel.hardy'), value: 'hardy' as const },
   ];
 
   const updateChannelGroup: FormGroupItemType = {

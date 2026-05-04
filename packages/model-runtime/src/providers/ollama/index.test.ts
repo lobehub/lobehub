@@ -79,6 +79,7 @@ describe('LobeOllamaAI', () => {
           top_p: undefined,
         },
         stream: true,
+        think: true,
       });
       expect(response).toBeInstanceOf(Response);
     });
@@ -149,6 +150,7 @@ describe('LobeOllamaAI', () => {
           top_p: undefined,
         },
         stream: true,
+        think: true,
       });
       expect(response).toBeInstanceOf(Response);
     });
@@ -294,6 +296,7 @@ describe('LobeOllamaAI', () => {
           top_p: 0.9,
         },
         stream: true,
+        think: true,
         tools: undefined,
       });
     });

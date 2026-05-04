@@ -146,6 +146,7 @@ export const buildPayloadFromKeyVaults = (
     default: {
       return {
         apiKey: keyVaults.apiKey,
+        authMethod: keyVaults.authMethod,
         baseURL: keyVaults.baseURL,
         runtimeProvider,
       };
@@ -182,8 +183,12 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
 
       const apiKey = apiKeyManager.pick(payload?.apiKey || llmConfig[`${upperProvider}_API_KEY`]);
       const baseURL = payload?.baseURL || process.env[`${upperProvider}_PROXY_URL`];
+      const authMethod = (payload as any)?.authMethod;
 
-      return baseURL ? { apiKey, baseURL } : { apiKey };
+      const result: Record<string, any> = { apiKey };
+      if (baseURL) result.baseURL = baseURL;
+      if (authMethod) result.authMethod = authMethod;
+      return result;
     }
 
     case ModelProvider.Ollama: {

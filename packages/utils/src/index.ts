@@ -11,6 +11,7 @@ export * from './format';
 export * from './imageToBase64';
 export * from './keyboard';
 export * from './merge';
+export * from './messageContent';
 export * from './mimeType';
 export * from './multimodalContent';
 export * from './number';
