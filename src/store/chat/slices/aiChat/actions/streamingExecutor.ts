@@ -52,7 +52,7 @@ import {
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 } from '../../message/selectors/dbMessage';
-import { mergeQueuedMessages } from '../../operation/types';
+import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../operation/types';
 
 const log = debug('lobe-store:streaming-executor');
 
@@ -786,9 +786,16 @@ export class StreamingExecutorActionImpl {
 
         const execContext = { ...context };
         const mergedContent = merged.content;
-        // Convert file id strings — sendMessage only reads f.id from each item
+        // Rebuild UploadFileItem-shaped objects from the queued file previews so
+        // sendMessage can both pass file ids to the server AND construct
+        // imageList/videoList for the optimistic temp message. Falls back to
+        // id-only wrappers if no preview metadata was captured.
         const mergedFiles =
-          merged.files.length > 0 ? merged.files.map((id) => ({ id }) as any) : undefined;
+          merged.filesPreview.length > 0
+            ? reconstructUploadFilesFromQueue(merged.filesPreview)
+            : merged.files.length > 0
+              ? (merged.files.map((id) => ({ id })) as any)
+              : undefined;
 
         setTimeout(() => {
           useChatStore

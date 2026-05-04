@@ -46,7 +46,6 @@ import {
   getCompressionCandidateMessageIds,
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
-import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { type StoreSetter } from '@/store/types';
@@ -55,7 +54,7 @@ import { useUserMemoryStore } from '@/store/userMemory';
 import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { topicMapKey } from '../../../utils/topicMapKey';
-import { AI_RUNTIME_OPERATION_TYPES } from '../../operation/types';
+import { AI_RUNTIME_OPERATION_TYPES, type QueuedFile } from '../../operation/types';
 import type { CommandSendOverrides, SingleAgentMentionDirectRoute } from './commandBus';
 import {
   hasNonActionContent,
@@ -336,6 +335,16 @@ export class ConversationLifecycleActionImpl {
       .find((op) => op && AI_RUNTIME_OPERATION_TYPES.includes(op.type) && op.status === 'running');
 
     if (runningAgentOp) {
+      // Snapshot file previews so the tray can render thumbnails AND the
+      // resumed sendMessage can rebuild imageList/videoList — by the time
+      // we drain, chatUploadFileList has long been cleared.
+      const filesPreview: QueuedFile[] = (files ?? []).map((f) => ({
+        id: f.id,
+        mimeType: f.file?.type ?? '',
+        name: f.file?.name ?? f.id,
+        url: f.fileUrl || f.base64Url || f.previewUrl || '',
+      }));
+
       this.#get().enqueueMessage(
         currentContextKey,
         {
@@ -343,6 +352,7 @@ export class ConversationLifecycleActionImpl {
           content: message,
           editorData: editorData ?? undefined,
           files: fileIdList,
+          filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
           interruptMode: 'soft',
           metadata: userMessageMetadata,
           createdAt: Date.now(),
@@ -392,16 +402,18 @@ export class ConversationLifecycleActionImpl {
       },
     });
 
-    // Construct local media preview for server-mode temporary messages (S3 URL takes priority)
-    const filesInStore = getFileStoreState().chatUploadFileList;
-    const tempImages: ChatImageItem[] = filesInStore
+    // Construct local media preview for server-mode temporary messages (S3 URL takes priority).
+    // Use the captured `files` param (not the global file store) so the optimistic preview
+    // also works on the queue-drain path, where chatUploadFileList has already been cleared.
+    const filesForPreview = files ?? [];
+    const tempImages: ChatImageItem[] = filesForPreview
       .filter((f) => f.file?.type?.startsWith('image'))
       .map((f) => ({
         id: f.id,
         url: f.fileUrl || f.base64Url || f.previewUrl || '',
         alt: f.file?.name || f.id,
       }));
-    const tempVideos: ChatVideoItem[] = filesInStore
+    const tempVideos: ChatVideoItem[] = filesForPreview
       .filter((f) => f.file?.type?.startsWith('video'))
       .map((f) => ({
         id: f.id,
