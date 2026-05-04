@@ -7,10 +7,10 @@ import { agentDocumentService } from '@/services/agentDocument';
 const runtime = new AgentDocumentsExecutionRuntime({
   copyDocument: ({ agentId, id, newTitle }) =>
     agentDocumentService.copyDocument({ agentId, id, newTitle }),
-  createDocument: ({ agentId, content, title }) =>
-    agentDocumentService.createDocument({ agentId, content, title }),
-  createTopicDocument: ({ agentId, content, title, topicId }) =>
-    agentDocumentService.createForTopic({ agentId, content, title, topicId }),
+  createDocument: ({ agentId, content, hintIsSkill, title }) =>
+    agentDocumentService.createDocument({ agentId, content, hintIsSkill, title }),
+  createTopicDocument: ({ agentId, content, hintIsSkill, title, topicId }) =>
+    agentDocumentService.createForTopic({ agentId, content, hintIsSkill, title, topicId }),
   listDocuments: async ({ agentId }) => {
     const docs = await agentDocumentService.listDocuments({ agentId });
     return docs.map((d) => ({

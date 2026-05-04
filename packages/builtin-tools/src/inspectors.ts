@@ -7,6 +7,10 @@ import {
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
 import {
+  AgentDocumentsInspectors,
+  AgentDocumentsManifest,
+} from '@lobechat/builtin-tool-agent-documents/client';
+import {
   AgentManagementInspectors,
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management/client';
@@ -44,6 +48,7 @@ import {
   SkillStoreManifest,
 } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsInspectors, SkillsManifest } from '@lobechat/builtin-tool-skills/client';
+import { TaskInspectors, TaskManifest } from '@lobechat/builtin-tool-task/client';
 import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
@@ -62,6 +67,7 @@ import { CodexInspectors } from './codex';
  */
 const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
+  [AgentDocumentsManifest.identifier]: AgentDocumentsInspectors as Record<string, BuiltinInspector>,
   [AgentManagementManifest.identifier]: AgentManagementInspectors as Record<
     string,
     BuiltinInspector
@@ -88,6 +94,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   ['lobe-tools']: LobeActivatorInspectors as Record<string, BuiltinInspector>,
   [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
+  [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
   codex: {
     ...CodexInspectors,

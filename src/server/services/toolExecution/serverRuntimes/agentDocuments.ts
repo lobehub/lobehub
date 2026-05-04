@@ -24,8 +24,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
     const { taskId } = context;
     const emitDocumentOutcome = async (input: {
       agentId?: string;
+      agentDocumentId?: string;
       apiName: string;
-      documentId?: string;
       errorReason?: string;
       relation?: string;
       status: 'failed' | 'succeeded';
@@ -49,8 +49,14 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         messageId: context.messageId,
         operationId: context.operationId,
         policyStateStore: redisPolicyStateStore,
-        relatedObjects: input.documentId
-          ? [{ objectId: input.documentId, objectType: 'document', relation: input.relation }]
+        relatedObjects: input.agentDocumentId
+          ? [
+              {
+                objectId: input.agentDocumentId,
+                objectType: 'agent-document',
+                relation: input.relation,
+              },
+            ]
           : undefined,
         scope,
         scopeKey,
@@ -65,7 +71,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
     const withDocumentOutcome = async <T>(
       input: {
         agentId?: string;
-        getDocumentId?: (result: T) => string | undefined;
+        getAgentDocumentId?: (result: T) => string | undefined;
         apiName: string;
         relation: string;
         summary: string;
@@ -77,8 +83,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         const result = await operation();
         await emitDocumentOutcome({
           agentId: input.agentId,
+          agentDocumentId: input.getAgentDocumentId?.(result),
           apiName: input.apiName,
-          documentId: input.getDocumentId?.(result),
           relation: input.relation,
           status: 'succeeded',
           summary: input.summary,
@@ -113,7 +119,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             {
               agentId,
               apiName: 'copyDocument',
-              getDocumentId: (result) => result?.documentId,
+              getAgentDocumentId: (result) => result?.id,
               relation: 'created',
               summary: 'Agent documents copied a document.',
               toolAction: 'copy',
@@ -121,32 +127,32 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
             () => service.copyDocumentById(id, newTitle, agentId),
           ),
         ),
-      createDocument: async ({ agentId, content, title }) =>
+      createDocument: async ({ agentId, content, hintIsSkill, title }) =>
         pinToTask(
           await withDocumentOutcome(
             {
               agentId,
               apiName: 'createDocument',
-              getDocumentId: (result) => result?.documentId,
+              getAgentDocumentId: (result) => result?.id,
               relation: 'created',
               summary: 'Agent documents created a document.',
               toolAction: 'create',
             },
-            () => service.createDocument(agentId, title, content),
+            () => service.createDocument(agentId, title, content, { hintIsSkill }),
           ),
         ),
-      createTopicDocument: async ({ agentId, content, title, topicId }) =>
+      createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) =>
         pinToTask(
           await withDocumentOutcome(
             {
               agentId,
               apiName: 'createTopicDocument',
-              getDocumentId: (result) => result?.documentId,
+              getAgentDocumentId: (result) => result?.id,
               relation: 'created',
               summary: 'Agent documents created a topic document.',
               toolAction: 'create',
             },
-            () => service.createForTopic(agentId, title, content, topicId),
+            () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
           ),
         ),
       listDocuments: async ({ agentId }) => {
@@ -172,7 +178,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           {
             agentId,
             apiName: 'modifyNodes',
-            getDocumentId: () => id,
+            getAgentDocumentId: () => id,
             relation: 'updated',
             summary: 'Agent documents modified document nodes.',
             toolAction: 'edit',
@@ -185,7 +191,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           {
             agentId,
             apiName: 'removeDocument',
-            getDocumentId: () => id,
+            getAgentDocumentId: () => id,
             relation: 'removed',
             summary: 'Agent documents removed a document.',
             toolAction: 'remove',
@@ -197,7 +203,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           {
             agentId,
             apiName: 'renameDocument',
-            getDocumentId: () => id,
+            getAgentDocumentId: () => id,
             relation: 'updated',
             summary: 'Agent documents renamed a document.',
             toolAction: 'rename',
@@ -209,7 +215,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           {
             agentId,
             apiName: 'replaceDocumentContent',
-            getDocumentId: () => id,
+            getAgentDocumentId: () => id,
             relation: 'updated',
             summary: 'Agent documents replaced document content.',
             toolAction: 'replace',
@@ -221,7 +227,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           {
             agentId,
             apiName: 'updateLoadRule',
-            getDocumentId: () => id,
+            getAgentDocumentId: () => id,
             relation: 'updated',
             summary: 'Agent documents updated a load rule.',
             toolAction: 'update',

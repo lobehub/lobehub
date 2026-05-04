@@ -15,6 +15,12 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             description: 'Document content in markdown or plain text.',
             type: 'string',
           },
+          hintIsSkill: {
+            default: false,
+            description:
+              'Set true only when the document captures reusable procedural knowledge or durable agent behavior.',
+            type: 'boolean',
+          },
           target: {
             default: 'agent',
             description:

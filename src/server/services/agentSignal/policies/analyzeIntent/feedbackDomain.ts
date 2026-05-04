@@ -4,19 +4,24 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { classifyDomain, transitionToSignals } from '../../processors';
 import { defineSignalHandler } from '../../runtime/middleware';
-import type { ClassifierDiagnosticsService, DomainClassifierService } from '../../services';
+import type {
+  ClassifierDiagnosticsService,
+  DomainClassifierService,
+  SkillIntentClassifierService,
+} from '../../services';
 import { AGENT_SIGNAL_POLICY_SIGNAL_TYPES, type SignalFeedbackSatisfaction } from '../types';
 import {
   type FeedbackDomainJudgeAgentModelConfig,
   type FeedbackDomainJudgeAgentResult,
   FeedbackDomainJudgeAgentService,
 } from './feedbackDomainAgent';
+import { classifySkillIntent, SkillIntentClassifierAgentService } from './skillIntent';
 
 interface FeedbackDomainJudgeResolverInput {
   chain: SignalFeedbackSatisfaction['chain'];
   feedback: Pick<
     SignalFeedbackSatisfaction['payload'],
-    'confidence' | 'evidence' | 'message' | 'messageId' | 'reason' | 'result'
+    'confidence' | 'evidence' | 'message' | 'messageId' | 'reason' | 'result' | 'serializedContext'
   >;
   source: SignalFeedbackSatisfaction['source'];
   sourceHints: SignalFeedbackSatisfaction['payload']['sourceHints'];
@@ -32,6 +37,8 @@ export interface CreateFeedbackDomainJudgeSignalHandlerOptions {
   resolveDomains?: (
     input: FeedbackDomainJudgeResolverInput,
   ) => Promise<FeedbackDomainJudgeAgentResult['targets']>;
+  /** Optional skill-intent classifier used after skill-domain routing. */
+  skillIntentClassifier?: SkillIntentClassifierService;
 }
 
 /**
@@ -39,6 +46,10 @@ export interface CreateFeedbackDomainJudgeSignalHandlerOptions {
  */
 export interface CreateFeedbackDomainJudgePolicyOptions {
   feedbackDomainJudge?: Partial<FeedbackDomainJudgeAgentModelConfig> & {
+    db: LobeChatDatabase;
+    userId: string;
+  };
+  skillIntentClassifier?: Partial<FeedbackDomainJudgeAgentModelConfig> & {
     db: LobeChatDatabase;
     userId: string;
   };
@@ -64,9 +75,20 @@ const createDomainResolver = (
         message: signal.feedback.message,
         reason: signal.feedback.reason,
         result: signal.feedback.result,
+        serializedContext: signal.feedback.serializedContext,
       })
     ).targets;
   };
+};
+
+export const createSkillIntentClassifier = (
+  options: CreateFeedbackDomainJudgePolicyOptions = {},
+): SkillIntentClassifierService | undefined => {
+  const runtimeDeps = options.skillIntentClassifier;
+
+  if (!runtimeDeps) return undefined;
+
+  return new SkillIntentClassifierAgentService(runtimeDeps.db, runtimeDeps.userId, runtimeDeps);
 };
 
 /**
@@ -91,11 +113,44 @@ export const createFeedbackDomainJudgeSignalHandler = (
   options: CreateFeedbackDomainJudgeSignalHandlerOptions = {},
 ) => {
   const resolveDomains = options.resolveDomains;
+  const skillIntentClassifier = options.skillIntentClassifier;
 
   return defineSignalHandler(
     AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction,
     'signal.feedback-domain-judge',
     async (signal, ctx): Promise<RuntimeProcessorResult | void> => {
+      const enrichSkillTargets = async (
+        targets: FeedbackDomainJudgeAgentResult['targets'],
+      ): Promise<FeedbackDomainJudgeAgentResult['targets']> => {
+        return Promise.all(
+          targets.map(async (target) => {
+            if (target.target !== 'skill') return target;
+
+            const classification = await classifySkillIntent(
+              {
+                message: signal.payload.message,
+                serializedContext: signal.payload.serializedContext,
+              },
+              {
+                diagnostics: options.classifierDiagnostics,
+                fallback: skillIntentClassifier,
+                scopeKey: ctx.scopeKey,
+                sourceId: signal.source?.sourceId,
+              },
+            );
+
+            return {
+              ...target,
+              skillActionIntent: classification.actionIntent,
+              skillIntentError: classification.classifierError,
+              skillIntentConfidence: classification.confidence,
+              skillIntentExplicitness: classification.explicitness,
+              skillIntentReason: classification.reason,
+              skillRoute: classification.route,
+            };
+          }),
+        );
+      };
       const classifier: DomainClassifierService | undefined = resolveDomains
         ? {
             async classify(input) {
@@ -108,13 +163,14 @@ export const createFeedbackDomainJudgeSignalHandler = (
                   messageId: input.payload.messageId,
                   reason: input.payload.reason,
                   result: input.payload.result,
+                  serializedContext: input.payload.serializedContext,
                 },
                 source: input.source,
                 sourceHints: input.payload.sourceHints,
                 topicId: input.payload.topicId,
               });
 
-              return targets;
+              return enrichSkillTargets(targets);
             },
           }
         : undefined;

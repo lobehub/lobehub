@@ -52,29 +52,23 @@ describe('Agent skill VFS providers', () => {
   });
 
   describe('ProviderSkillsAgentDocument agent namespace', () => {
-    it('lists only tree-backed agent skill folders at the namespace root', async () => {
+    it('lists only bundle-backed agent skills at the namespace root', async () => {
       agentDocumentModel.findByAgent.mockResolvedValue([
         createAgentDocument({
-          documentId: 'root-1',
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'agent-doc-root',
-          templateId: 'agent-skill',
-        }),
-        createAgentDocument({
-          documentId: 'folder-1',
-          fileType: 'custom/folder',
+          documentId: 'bundle-1',
+          fileType: 'skills/bundle',
           filename: 'agent-skill',
-          id: 'agent-doc-folder',
+          id: 'agent-doc-bundle',
           templateId: 'agent-skill',
-          parentId: 'root-1',
+          parentId: null,
         }),
         createAgentDocument({
           documentId: 'file-1',
+          fileType: 'skills/index',
           filename: 'SKILL.md',
           id: 'agent-doc-file',
           templateId: 'agent-skill',
-          parentId: 'folder-1',
+          parentId: 'bundle-1',
         }),
         createAgentDocument({
           documentId: 'plain-folder',
@@ -107,37 +101,27 @@ describe('Agent skill VFS providers', () => {
       ]);
     });
 
-    it('creates a tree-backed agent skill with namespace root, folder, and SKILL.md', async () => {
+    it('creates a bundle-backed agent skill with SKILL.md', async () => {
       agentDocumentModel.findByAgent.mockResolvedValue([]);
       agentDocumentModel.create
         .mockResolvedValueOnce({
-          documentId: 'root-1',
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'agent-doc-root',
+          documentId: 'bundle-1',
+          fileType: 'skills/bundle',
+          filename: 'writer',
+          id: 'agent-doc-bundle',
           metadata: null,
           parentId: null,
-          templateId: 'agent-skill',
-          title: 'skills',
-        })
-        .mockResolvedValueOnce({
-          documentId: 'folder-1',
-          fileType: 'custom/folder',
-          filename: 'writer',
-          id: 'agent-doc-folder',
-          metadata: null,
-          parentId: 'root-1',
           templateId: 'agent-skill',
           title: 'writer',
         })
         .mockResolvedValueOnce({
           content: '# Skill',
           documentId: 'file-1',
-          fileType: 'skill/index',
+          fileType: 'skills/index',
           filename: 'SKILL.md',
           id: 'agent-doc-file',
           metadata: null,
-          parentId: 'folder-1',
+          parentId: 'bundle-1',
           templateId: 'agent-skill',
           title: 'SKILL.md',
         });
@@ -154,30 +138,29 @@ describe('Agent skill VFS providers', () => {
         targetNamespace: 'agent',
       });
 
-      expect(agentDocumentModel.create).toHaveBeenNthCalledWith(1, 'agent-1', 'skills', '', {
+      expect(agentDocumentModel.create).toHaveBeenNthCalledWith(1, 'agent-1', 'writer', '', {
         editorData: { root: { children: [], type: 'root' } },
-        fileType: 'custom/folder',
+        fileType: 'skills/bundle',
+        metadata: { skill: { vfs: true } },
         policyLoad: 'disabled',
-        templateId: 'agent-skill',
-        title: 'skills',
-      });
-      expect(agentDocumentModel.create).toHaveBeenNthCalledWith(2, 'agent-1', 'writer', '', {
-        editorData: { root: { children: [], type: 'root' } },
-        fileType: 'custom/folder',
-        parentId: 'root-1',
-        policyLoad: 'disabled',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
         templateId: 'agent-skill',
         title: 'writer',
       });
       expect(agentDocumentModel.create).toHaveBeenNthCalledWith(
-        3,
+        2,
         'agent-1',
         'SKILL.md',
         '# Skill',
         {
           editorData: { markdown: '# Skill' },
-          fileType: 'skill/index',
-          parentId: 'folder-1',
+          fileType: 'skills/index',
+          metadata: { skill: { vfs: true } },
+          parentId: 'bundle-1',
+          policyLoad: 'disabled',
+          source: 'agent-signal:skill-management',
+          sourceType: 'agent-signal',
           templateId: 'agent-skill',
           title: 'SKILL.md',
         },
@@ -189,28 +172,20 @@ describe('Agent skill VFS providers', () => {
 
     /**
      * @example
-     * A partially-created skill folder reserves the package name and blocks duplicate creation.
+     * A partially-created skill bundle reserves the package name and blocks duplicate creation.
      */
-    it('rejects creating a skill when the managed skill folder already exists without SKILL.md', async () => {
+    it('rejects creating a skill when the managed skill bundle already exists without SKILL.md', async () => {
       const provider = new ProviderSkillsAgentDocument('agent', {
         agentDocumentModel,
         documentService,
       });
       agentDocumentModel.findByAgent.mockResolvedValue([
         {
-          documentId: 'root-doc',
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'root-binding',
-          parentId: null,
-          templateId: 'agent-skill',
-        },
-        {
-          documentId: 'folder-doc',
-          fileType: 'custom/folder',
+          documentId: 'bundle-doc',
+          fileType: 'skills/bundle',
           filename: 'writer',
-          id: 'folder-binding',
-          parentId: 'root-doc',
+          id: 'bundle-binding',
+          parentId: null,
           templateId: 'agent-skill',
         },
       ] as never);
@@ -237,27 +212,20 @@ describe('Agent skill VFS providers', () => {
     it('updates an agent skill through the document model and saves history when content changes', async () => {
       agentDocumentModel.findByAgent.mockResolvedValue([
         createAgentDocument({
-          documentId: 'root-1',
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'agent-doc-root',
-          parentId: null,
-          templateId: 'agent-skill',
-        }),
-        createAgentDocument({
-          documentId: 'folder-1',
-          fileType: 'custom/folder',
+          documentId: 'bundle-1',
+          fileType: 'skills/bundle',
           filename: 'skill-a',
-          id: 'agent-doc-folder',
-          parentId: 'root-1',
+          id: 'agent-doc-bundle',
+          parentId: null,
           templateId: 'agent-skill',
         }),
         createAgentDocument({
           content: 'old content',
           documentId: 'file-1',
+          fileType: 'skills/index',
           filename: 'SKILL.md',
           id: 'agent-doc-file',
-          parentId: 'folder-1',
+          parentId: 'bundle-1',
           templateId: 'agent-skill',
         }),
       ]);
@@ -287,26 +255,19 @@ describe('Agent skill VFS providers', () => {
     it('soft-deletes the folder subtree for an agent skill', async () => {
       agentDocumentModel.findByAgent.mockResolvedValue([
         createAgentDocument({
-          documentId: 'root-1',
-          fileType: 'custom/folder',
-          filename: 'skills',
-          id: 'agent-doc-root',
+          documentId: 'bundle-1',
+          fileType: 'skills/bundle',
+          filename: 'skill-a',
+          id: 'agent-doc-bundle',
           parentId: null,
           templateId: 'agent-skill',
         }),
         createAgentDocument({
-          documentId: 'folder-1',
-          fileType: 'custom/folder',
-          filename: 'skill-a',
-          id: 'agent-doc-folder',
-          parentId: 'root-1',
-          templateId: 'agent-skill',
-        }),
-        createAgentDocument({
           documentId: 'file-1',
+          fileType: 'skills/index',
           filename: 'SKILL.md',
           id: 'agent-doc-file',
-          parentId: 'folder-1',
+          parentId: 'bundle-1',
           templateId: 'agent-skill',
         }),
       ]);
@@ -323,7 +284,7 @@ describe('Agent skill VFS providers', () => {
 
       expect(agentDocumentModel.deleteSubtreeByDocumentId).toHaveBeenCalledWith(
         'agent-1',
-        'folder-1',
+        'bundle-1',
         'skill-delete',
       );
       expect(documentService.deleteDocument).not.toHaveBeenCalled();

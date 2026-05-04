@@ -13,6 +13,7 @@ import type { CreateFeedbackDomainJudgePolicyOptions } from './feedbackDomain';
 import {
   createFeedbackDomainJudgeSignalHandler,
   createFeedbackDomainResolver,
+  createSkillIntentClassifier,
 } from './feedbackDomain';
 import type { CreateFeedbackSatisfactionJudgePolicyOptions } from './feedbackSatisfaction';
 import { createFeedbackSatisfactionJudgeProcessor } from './feedbackSatisfaction';
@@ -45,6 +46,8 @@ export interface CreateAnalyzeIntentPolicyOptions {
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
   /** Optional procedure dependencies shared by tool-outcome projection and action planning. */
   procedure?: AnalyzeIntentProcedureOptions;
+  /** Optional skill intent classifier dependencies used after skill-domain routing. */
+  skillIntentClassifier?: CreateFeedbackDomainJudgePolicyOptions['skillIntentClassifier'];
   /** Optional skill-management action handler dependencies. */
   skillManagement?: SkillManagementActionHandlerOptions;
   /** Optional user-memory action handler dependencies. */
@@ -54,6 +57,9 @@ export interface CreateAnalyzeIntentPolicyOptions {
 export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOptions = {}) => {
   const feedbackDomainResolver = createFeedbackDomainResolver({
     feedbackDomainJudge: options.feedbackDomainJudge,
+  });
+  const skillIntentClassifier = createSkillIntentClassifier({
+    skillIntentClassifier: options.skillIntentClassifier,
   });
 
   return defineAgentSignalHandlers([
@@ -66,6 +72,7 @@ export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOpti
     createFeedbackDomainJudgeSignalHandler({
       classifierDiagnostics: options.classifierDiagnostics,
       resolveDomains: feedbackDomainResolver,
+      skillIntentClassifier,
     }),
     createFeedbackActionPlannerSignalHandler({
       markerReader: options.procedure?.markerReader,

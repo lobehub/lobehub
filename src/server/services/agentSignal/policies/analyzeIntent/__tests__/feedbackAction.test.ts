@@ -51,6 +51,15 @@ type DomainSignalInput<TTarget extends SupportedTask4DomainTarget> = {
   message: string;
   messageId: string;
   satisfactionResult?: 'not_satisfied' | 'neutral' | 'satisfied';
+  skillActionIntent?: 'consolidate' | 'create' | 'maintain' | 'noop' | 'refine';
+  skillIntentConfidence?: number;
+  skillIntentExplicitness?:
+    | 'explicit_action'
+    | 'implicit_strong_learning'
+    | 'non_skill_preference'
+    | 'weak_positive';
+  skillIntentReason?: string;
+  skillRoute?: 'accumulate' | 'direct_decision' | 'non_skill';
   signalId: string;
   sourceId: string;
   target: TTarget;
@@ -154,6 +163,11 @@ function createDomainSignal(
           messageId: input.messageId,
           reason: 'test-domain-signal',
           satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
+          skillActionIntent: input.skillActionIntent,
+          skillIntentConfidence: input.skillIntentConfidence,
+          skillIntentExplicitness: input.skillIntentExplicitness,
+          skillIntentReason: input.skillIntentReason,
+          skillRoute: input.skillRoute,
           target: 'skill',
         },
         signalId: input.signalId,
@@ -350,6 +364,125 @@ describe('feedbackActionPlanner', () => {
         satisfactionResult: 'satisfied',
         signalId: 'sig_skill_positive',
         sourceId: 'source_skill_positive',
+        target: 'skill',
+      }),
+      context,
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  /**
+   * @example
+   * satisfied explicit skill intent bypasses accumulator and dispatches skill management.
+   */
+  it('plans direct skill-management actions for satisfied explicit skill intent', async () => {
+    const handler = createFeedbackActionPlannerSignalHandler();
+    const result = await handler.handle(
+      createDomainSignal({
+        message:
+          'The SKILL.md draft from the chat agent is usable. Convert it into a real skills/bundle.',
+        messageId: 'msg_skill_convert',
+        satisfactionResult: 'satisfied',
+        signalId: 'sig_skill_convert',
+        skillActionIntent: 'create',
+        skillIntentExplicitness: 'explicit_action',
+        skillRoute: 'direct_decision',
+        sourceId: 'source_skill_convert',
+        target: 'skill',
+      }),
+      context,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        actions: [
+          expect.objectContaining({
+            actionType: 'action.skill-management.handle',
+            payload: expect.objectContaining({
+              feedbackHint: 'satisfied',
+              idempotencyKey: 'source_skill_convert:skill:msg_skill_convert',
+            }),
+          }),
+        ],
+        status: 'dispatch',
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * implicit strong learning also bypasses weak-positive accumulation.
+   */
+  it('plans direct skill-management actions for implicit strong learning intent', async () => {
+    const handler = createFeedbackActionPlannerSignalHandler();
+    const result = await handler.handle(
+      createDomainSignal({
+        message: 'For future database migration reviews, follow the checklist from earlier.',
+        messageId: 'msg_skill_implicit',
+        satisfactionResult: 'satisfied',
+        signalId: 'sig_skill_implicit',
+        skillActionIntent: 'create',
+        skillIntentExplicitness: 'implicit_strong_learning',
+        skillRoute: 'direct_decision',
+        sourceId: 'source_skill_implicit',
+        target: 'skill',
+      }),
+      context,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        actions: [
+          expect.objectContaining({
+            actionType: 'action.skill-management.handle',
+          }),
+        ],
+        status: 'dispatch',
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * weak positive skill intent remains accumulator-only.
+   */
+  it('keeps weak positive skill intent in accumulation', async () => {
+    const handler = createFeedbackActionPlannerSignalHandler();
+    const result = await handler.handle(
+      createDomainSignal({
+        message: 'This explanation was helpful.',
+        messageId: 'msg_skill_weak_positive',
+        satisfactionResult: 'satisfied',
+        signalId: 'sig_skill_weak_positive',
+        skillActionIntent: 'maintain',
+        skillIntentExplicitness: 'weak_positive',
+        skillRoute: 'accumulate',
+        sourceId: 'source_skill_weak_positive',
+        target: 'skill',
+      }),
+      context,
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  /**
+   * @example
+   * non-skill preference routed through skill domain does not dispatch skill action.
+   */
+  it('does not plan skill actions for non-skill preference route', async () => {
+    const handler = createFeedbackActionPlannerSignalHandler();
+    const result = await handler.handle(
+      createDomainSignal({
+        message: 'This approach is not suitable. Please do not do this again.',
+        messageId: 'msg_skill_non_skill',
+        satisfactionResult: 'satisfied',
+        signalId: 'sig_skill_non_skill',
+        skillActionIntent: 'noop',
+        skillIntentExplicitness: 'non_skill_preference',
+        skillRoute: 'non_skill',
+        sourceId: 'source_skill_non_skill',
         target: 'skill',
       }),
       context,
@@ -665,7 +798,7 @@ describe('procedure marker suppression', () => {
       markerReader: { shouldSuppress },
     });
     const signal = createDomainSignal({
-      message: '记住我喜欢简洁回答',
+      message: 'Remember that I prefer concise replies.',
       messageId: 'msg_1',
       signalId: 'sig_procedure_1',
       sourceId: 'source_procedure_1',
@@ -702,7 +835,7 @@ describe('procedure marker suppression', () => {
       markerReader: { shouldSuppress: vi.fn(async () => false) },
     });
     const signal = createDomainSignal({
-      message: '记住我喜欢简洁回答',
+      message: 'Remember that I prefer concise replies.',
       messageId: 'msg_1',
       signalId: 'sig_procedure_2',
       sourceId: 'source_procedure_2',

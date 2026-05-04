@@ -179,6 +179,30 @@ describe('AgentDocumentsService', () => {
         title: 'My Title',
       });
     });
+
+    it('persists agent signal skill hints in document metadata', async () => {
+      mockModel.findByFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Reusable Procedure' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'Reusable Procedure', 'content', {
+        hintIsSkill: true,
+      });
+
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        expect.any(String),
+        'content',
+        expect.objectContaining({
+          metadata: {
+            agentSignal: {
+              hintedByTool: 'lobe-agent-documents.createDocument',
+              hintIsSkill: true,
+            },
+          },
+        }),
+      );
+    });
   });
 
   describe('createForTopic', () => {

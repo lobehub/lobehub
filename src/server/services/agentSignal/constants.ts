@@ -7,6 +7,10 @@ export const AGENT_SIGNAL_KEYS = {
   lock: (scopeKey: string) => `${AGENT_SIGNAL_PREFIX}lock:${scopeKey}`,
   policy: (policyId: string, scopeKey: string) =>
     `${AGENT_SIGNAL_PREFIX}policy:${policyId}:${scopeKey}`,
+  receipt: (receiptId: string) => `${AGENT_SIGNAL_PREFIX}receipt:${receiptId}`,
+  receiptDedupe: (receiptId: string) => `${AGENT_SIGNAL_PREFIX}receipt-dedupe:${receiptId}`,
+  receiptIndex: (input: { agentId: string; topicId: string; userId: string }) =>
+    `${AGENT_SIGNAL_PREFIX}receipts:user:${input.userId}:agent:${input.agentId}:topic:${input.topicId}`,
   waypoint: (scopeKey: string) => `${AGENT_SIGNAL_PREFIX}waypoint:${scopeKey}`,
   waypointEvents: (scopeKey: string) => `${AGENT_SIGNAL_PREFIX}waypoint:${scopeKey}:events`,
   window: (scopeKey: string) => `${AGENT_SIGNAL_PREFIX}window:${scopeKey}`,
@@ -15,6 +19,7 @@ export const AGENT_SIGNAL_KEYS = {
 /** Server-owned timing defaults for AgentSignal storage and generation. */
 export const AGENT_SIGNAL_DEFAULTS = {
   generationLockTtlSeconds: 5,
+  receiptTtlSeconds: 3 * 24 * 60 * 60,
   runtimeGuardTtlSeconds: 3600,
   runtimeWaypointTtlSeconds: 3600,
   signalDedupeTtlSeconds: 300,

@@ -76,10 +76,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface AgentItemProps {
   className?: string;
   item: SidebarAgentItem;
+  onNavigate?: () => void;
   style?: CSSProperties;
 }
 
-const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
+const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) => {
   const { id, avatar, backgroundColor, title, pinned, heterogeneousType } = item;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
@@ -204,7 +205,13 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   });
 
   return (
-    <Link aria-label={displayTitle} ref={setAnchor} to={agentUrl} onMouseEnter={handleMouseEnter}>
+    <Link
+      aria-label={displayTitle}
+      ref={setAnchor}
+      to={agentUrl}
+      onClick={onNavigate}
+      onMouseEnter={handleMouseEnter}
+    >
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
         className={className}
