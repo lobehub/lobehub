@@ -1,15 +1,33 @@
 'use client';
 
 import type { GitFileDiffStatus } from '@lobechat/electron-client-ipc';
-import { PatchDiff } from '@lobehub/ui';
+import { ActionIcon, copyToClipboard, PatchDiff } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import { CopyIcon } from 'lucide-react';
 import path from 'path-browserify-esm';
-import { memo } from 'react';
+import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { message } from '@/components/AntdStaticMethods';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   additions: css`
     color: ${cssVar.colorSuccess};
+  `,
+  // Copy button stays hidden until the row is hovered so it doesn't add
+  // visual noise to the long file list. Mirrors GitHub's "Files changed".
+  copy: css`
+    flex: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+
+    &:focus-visible {
+      opacity: 1;
+    }
+
+    .ant-collapse-header:hover & {
+      opacity: 1;
+    }
   `,
   deletions: css`
     color: ${cssVar.colorError};
@@ -21,7 +39,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     display: flex;
-    gap: 12px;
+    gap: 8px;
     align-items: center;
 
     width: 100%;
@@ -62,6 +80,18 @@ interface FileItemHeaderProps {
 }
 
 export const FileItemHeader = memo<FileItemHeaderProps>(({ filePath, additions, deletions }) => {
+  const { t } = useTranslation('chat');
+
+  const handleCopy = useCallback(
+    async (event: MouseEvent<HTMLDivElement>) => {
+      // Stop propagation so the row doesn't toggle expand on copy click.
+      event.stopPropagation();
+      await copyToClipboard(filePath);
+      message.success(t('workingPanel.review.copied'));
+    },
+    [filePath, t],
+  );
+
   return (
     <span className={styles.header}>
       <span className={styles.path} title={filePath}>
@@ -69,6 +99,13 @@ export const FileItemHeader = memo<FileItemHeaderProps>(({ filePath, additions, 
             direction: rtl for head-side truncation. */}
         <bdi dir={'ltr'}>{filePath}</bdi>
       </span>
+      <ActionIcon
+        className={styles.copy}
+        icon={CopyIcon}
+        size={'small'}
+        title={t('workingPanel.review.copyPath')}
+        onClick={handleCopy}
+      />
       <span className={styles.stats}>
         {additions > 0 && <span className={styles.additions}>+{additions}</span>}
         {additions > 0 && deletions > 0 && ' '}

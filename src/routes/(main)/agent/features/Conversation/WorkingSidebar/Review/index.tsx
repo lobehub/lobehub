@@ -81,6 +81,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       content-visibility: auto;
       contain-intrinsic-size: auto 56px;
     }
+
+    /* antd's header is a flex row whose children don't get min-width:0 by
+       default — long file paths inside our header would push the stats and
+       expand-icon off-screen instead of triggering text-overflow ellipsis. */
+    & :where(.ant-collapse-header) {
+      overflow: hidden;
+    }
+
+    & :where(.ant-collapse-header-text) {
+      min-width: 0;
+    }
   `,
   scopeChip: css`
     display: inline-flex;

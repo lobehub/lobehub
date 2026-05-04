@@ -841,6 +841,8 @@
   "workingPanel.resources.viewMode.tree": "树状视图",
   "workingPanel.review.binary": "二进制文件，无法展示 diff",
   "workingPanel.review.collapseAll": "全部折叠",
+  "workingPanel.review.copied": "路径已复制",
+  "workingPanel.review.copyPath": "复制文件路径",
   "workingPanel.review.empty": "工作区没有未提交的变更",
   "workingPanel.review.error": "无法加载该文件的 diff",
   "workingPanel.review.expandAll": "全部展开",

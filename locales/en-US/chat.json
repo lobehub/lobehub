@@ -836,6 +836,8 @@
   "workingPanel.resources.viewMode.tree": "Tree view",
   "workingPanel.review.binary": "Binary file — diff not shown",
   "workingPanel.review.collapseAll": "Collapse all",
+  "workingPanel.review.copied": "Path copied",
+  "workingPanel.review.copyPath": "Copy file path",
   "workingPanel.review.empty": "No working tree changes",
   "workingPanel.review.error": "Couldn't load this file's diff",
   "workingPanel.review.expandAll": "Expand all",
