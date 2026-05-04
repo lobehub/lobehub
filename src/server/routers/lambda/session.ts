@@ -138,7 +138,7 @@ export const sessionRouter = router({
     .input(
       z.object({
         current: z.number().optional(),
-        pageSize: z.number().optional(),
+        pageSize: z.number().optional().max(100),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -147,7 +147,7 @@ export const sessionRouter = router({
       return ctx.sessionModel.query({ current, pageSize });
     }),
 
-  rankSessions: sessionProcedure.input(z.number().optional()).query(async ({ ctx, input }) => {
+  rankSessions: sessionProcedure.input(z.number().optional().max(50)).query(async ({ ctx, input }) => {
     return ctx.sessionModel.rank(input);
   }),
 
