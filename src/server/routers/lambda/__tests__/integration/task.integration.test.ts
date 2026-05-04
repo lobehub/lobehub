@@ -532,4 +532,119 @@ describe('Task Router Integration', () => {
       expect(found.data.error).toBeNull();
     });
   });
+
+  describe('subtask layers + batch run', () => {
+    it('previewSubtaskLayers groups subtasks by dependency level', async () => {
+      const parent = await caller.create({ instruction: 'Book' });
+      const ch1 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 1',
+        parentTaskId: parent.data.id,
+      });
+      const ch2 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 2',
+        parentTaskId: parent.data.id,
+      });
+      const ch3 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 3',
+        parentTaskId: parent.data.id,
+      });
+      // ch3 depends on ch1 and ch2
+      await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch3.data.id });
+      await caller.addDependency({ dependsOnId: ch2.data.id, taskId: ch3.data.id });
+
+      const result = await caller.previewSubtaskLayers({ id: parent.data.id });
+      expect(result.data.layers).toHaveLength(2);
+      expect(result.data.layers[0].sort()).toEqual([ch1.data.identifier, ch2.data.identifier]);
+      expect(result.data.layers[1]).toEqual([ch3.data.identifier]);
+      expect(result.data.totalRunnable).toBe(3);
+      expect(result.data.cycles).toEqual([]);
+    });
+
+    it('previewSubtaskLayers reports cycles instead of layering them', async () => {
+      const parent = await caller.create({ instruction: 'Cyclic' });
+      const a = await caller.create({
+        instruction: 'A',
+        parentTaskId: parent.data.id,
+      });
+      const b = await caller.create({
+        instruction: 'B',
+        parentTaskId: parent.data.id,
+      });
+      await caller.addDependency({ dependsOnId: a.data.id, taskId: b.data.id });
+      await caller.addDependency({ dependsOnId: b.data.id, taskId: a.data.id });
+
+      const result = await caller.previewSubtaskLayers({ id: parent.data.id });
+      expect(result.data.layers).toEqual([]);
+      expect(result.data.cycles.sort()).toEqual([a.data.identifier, b.data.identifier]);
+    });
+
+    it('runReadySubtasks kicks off the first layer only', async () => {
+      const parent = await caller.create({ instruction: 'Book' });
+      const ch1 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 1',
+        parentTaskId: parent.data.id,
+      });
+      const ch2 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 2',
+        parentTaskId: parent.data.id,
+      });
+      const ch3 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 3',
+        parentTaskId: parent.data.id,
+      });
+      await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch3.data.id });
+      await caller.addDependency({ dependsOnId: ch2.data.id, taskId: ch3.data.id });
+
+      const result = await caller.runReadySubtasks({ id: parent.data.id });
+      expect(result.success).toBe(true);
+      expect(result.data.kickedOff?.sort()).toEqual([ch1.data.identifier, ch2.data.identifier]);
+      // ch3 stays in backlog because layer 2 only fires after layer 1 completes
+      const ch3After = await caller.find({ id: ch3.data.id });
+      expect(ch3After.data.status).toBe('backlog');
+      // The kicked-off tasks should now be running
+      const ch1After = await caller.find({ id: ch1.data.id });
+      expect(ch1After.data.status).toBe('running');
+    });
+
+    it('runReadySubtasks returns noop when nothing is runnable', async () => {
+      const parent = await caller.create({ instruction: 'Empty' });
+      const result = await caller.runReadySubtasks({ id: parent.data.id });
+      expect(result.success).toBe(true);
+      expect(result.data.kickedOff).toEqual([]);
+      expect(result.data.skipped).toEqual({ reason: 'nothing-runnable' });
+    });
+
+    it('updateStatus(completed) triggers cascade kickoff for unlocked downstream', async () => {
+      const parent = await caller.create({ instruction: 'Cascade' });
+      const ch1 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 1',
+        parentTaskId: parent.data.id,
+      });
+      const ch2 = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Chapter 2',
+        parentTaskId: parent.data.id,
+      });
+      await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch2.data.id });
+
+      // Kick off layer 1 (just ch1)
+      await caller.run({ id: ch1.data.id });
+
+      // Mark ch1 completed → ch2 should auto-run (status 'running' + topic created)
+      const completed = await caller.updateStatus({ id: ch1.data.id, status: 'completed' });
+      expect(completed.unlocked).toEqual([ch2.data.identifier]);
+
+      const ch2After = await caller.find({ id: ch2.data.id });
+      expect(ch2After.data.status).toBe('running');
+      // Verify the runner was actually invoked, not just the status flipped
+      expect(mockExecAgent).toHaveBeenCalled();
+    });
+  });
 });
