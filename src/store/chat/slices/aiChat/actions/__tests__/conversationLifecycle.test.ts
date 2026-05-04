@@ -67,7 +67,7 @@ beforeEach(() => {
     useChatStore.setState({
       refreshMessages: vi.fn(),
       refreshTopic: vi.fn(),
-      internal_execAgentRuntime: vi.fn(),
+      executeClientAgent: vi.fn(),
       mainInputEditor: null,
     });
   });
@@ -99,7 +99,7 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(result.current.internal_execAgentRuntime).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
       });
 
       it('should not send when message is empty and no files are provided', async () => {
@@ -112,7 +112,7 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(result.current.internal_execAgentRuntime).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
       });
 
       it('should not send when message is empty with empty files array', async () => {
@@ -126,7 +126,7 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(result.current.internal_execAgentRuntime).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
       });
     });
 
@@ -246,7 +246,7 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(result.current.internal_execAgentRuntime).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
       });
 
       it('should restore the pre-send editor snapshot when server send fails', async () => {
@@ -320,7 +320,7 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+        expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
       it('should persist selected slash skills into user message content before sending', async () => {
@@ -418,7 +418,7 @@ describe('ConversationLifecycle actions', () => {
             }),
           ]),
         );
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+        expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
       it('should work when sending from home page (activeAgentId is empty but context.agentId exists)', async () => {
@@ -463,7 +463,7 @@ describe('ConversationLifecycle actions', () => {
           }),
           expect.any(AbortController),
         );
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+        expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
       it('should persist selected tool tags into user message content before runtime execution', async () => {
@@ -520,7 +520,7 @@ describe('ConversationLifecycle actions', () => {
         expect(requestPayload?.newUserMessage.content).toContain('name="Notebook"');
         expect(requestPayload?.newUserMessage.content).toContain('identifier="lobe-artifacts"');
         expect(requestPayload?.newUserMessage.content).toContain('name="Artifacts"');
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+        expect(result.current.executeClientAgent).toHaveBeenCalled();
       });
 
       it('should preserve editorData when enqueueing a queued message', async () => {
@@ -984,8 +984,7 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        const runtimePayload = vi.mocked(result.current.internal_execAgentRuntime).mock
-          .calls[0]?.[0];
+        const runtimePayload = vi.mocked(result.current.executeClientAgent).mock.calls[0]?.[0];
         const runtimeUserMessage = runtimePayload?.messages.find(
           (message) => message.id === TEST_IDS.USER_MESSAGE_ID,
         );
@@ -1120,7 +1119,7 @@ describe('ConversationLifecycle actions', () => {
         );
 
         // But runtime should receive mentionedAgents in initialContext
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
+        expect(result.current.executeClientAgent).toHaveBeenCalledWith(
           expect.objectContaining({
             initialContext: expect.objectContaining({
               initialContext: expect.objectContaining({
@@ -1234,7 +1233,7 @@ describe('ConversationLifecycle actions', () => {
           }),
         );
 
-        const execCall = (result.current.internal_execAgentRuntime as any).mock.calls[0]?.[0];
+        const execCall = (result.current.executeClientAgent as any).mock.calls[0]?.[0];
         expect(execCall).toEqual(
           expect.objectContaining({
             context: expect.objectContaining({
@@ -1304,7 +1303,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(agentService.getAgentConfigById).not.toHaveBeenCalledWith('agent-a');
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
+        expect(result.current.executeClientAgent).toHaveBeenCalledWith(
           expect.objectContaining({
             initialContext: expect.objectContaining({
               initialContext: expect.objectContaining({
@@ -1375,7 +1374,7 @@ describe('ConversationLifecycle actions', () => {
         });
 
         // Runtime should NOT receive mentionedAgents in group context
-        const execCall = (result.current.internal_execAgentRuntime as any).mock.calls[0]?.[0];
+        const execCall = (result.current.executeClientAgent as any).mock.calls[0]?.[0];
         const initialCtx = execCall?.initialContext?.initialContext;
         expect(initialCtx?.mentionedAgents).toBeUndefined();
       });

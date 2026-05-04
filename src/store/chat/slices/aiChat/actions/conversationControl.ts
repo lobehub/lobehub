@@ -36,7 +36,7 @@ export class ConversationControlActionImpl {
   /**
    * Decide whether approve/reject/reject_continue should go through the
    * Gateway resume path (new op carrying `resumeApproval`) instead of the
-   * local `internal_execAgentRuntime` path. Mirrors the "interrupt + new op"
+   * local `executeClientAgent` path. Mirrors the "interrupt + new op"
    * pattern from LOBE-7142.
    *
    * Routes via `selectRuntimeType` so approve/reject align with how the
@@ -182,7 +182,7 @@ export class ConversationControlActionImpl {
     _assistantGroupId: string,
     context?: ConversationContext,
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
@@ -289,7 +289,7 @@ export class ConversationControlActionImpl {
 
     // 7. Execute agent runtime from tool message position
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: toolMessageId, // Start from tool message
@@ -317,7 +317,7 @@ export class ConversationControlActionImpl {
     context?: ConversationContext,
     options?: { createUserMessage?: boolean; toolResultContent?: string },
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -392,7 +392,7 @@ export class ConversationControlActionImpl {
       };
 
       try {
-        await internal_execAgentRuntime({
+        await executeClientAgent({
           context: effectiveContext,
           messages: currentMessages,
           parentMessageId: toolMessageId,
@@ -449,7 +449,7 @@ export class ConversationControlActionImpl {
     });
 
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: userMsg.id,
@@ -474,7 +474,7 @@ export class ConversationControlActionImpl {
     reason?: string,
     context?: ConversationContext,
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -552,7 +552,7 @@ export class ConversationControlActionImpl {
     });
 
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: userMsg.id,
@@ -718,7 +718,7 @@ export class ConversationControlActionImpl {
     const toolMessage = dbMessageSelectors.getDbMessageById(messageId)(this.#get());
     if (!toolMessage) return;
 
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
@@ -835,7 +835,7 @@ export class ConversationControlActionImpl {
 
     // Execute agent runtime from rejected tool message position to continue
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: messageId,

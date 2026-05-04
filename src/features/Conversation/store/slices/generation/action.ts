@@ -241,7 +241,7 @@ export const generationSlice: StateCreator<
 
     try {
       // Execute agent runtime with full context from ConversationStore
-      await chatStore.internal_execAgentRuntime({
+      await chatStore.executeClientAgent({
         context,
         messages: displayMessages,
         parentMessageId: dbMessageId,
@@ -413,7 +413,7 @@ export const generationSlice: StateCreator<
       // sendMessage's hetero branch.
 
       // Execute agent runtime with full context from ConversationStore
-      await chatStore.internal_execAgentRuntime({
+      await chatStore.executeClientAgent({
         context,
         initialContext,
         messages: contextMessages,

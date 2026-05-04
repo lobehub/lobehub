@@ -192,7 +192,7 @@ export class ConversationLifecycleActionImpl {
     onTopicCreated,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     let editorData = inputEditorData;
-    const { internal_execAgentRuntime, mainInputEditor } = this.#get();
+    const { executeClientAgent, mainInputEditor } = this.#get();
     const { agentId } = context;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
@@ -1002,7 +1002,7 @@ export class ConversationLifecycleActionImpl {
             agentRuntimeInitialContext,
           );
 
-          await internal_execAgentRuntime({
+          await executeClientAgent({
             context: execContext,
             initialContext: mergedAgentRuntimeInitialContext,
             messages: displayMessages,
@@ -1171,7 +1171,7 @@ export class ConversationLifecycleActionImpl {
         );
       }
 
-      await this.#get().internal_execAgentRuntime({
+      await this.#get().executeClientAgent({
         context: { ...context, scope: 'sub_agent', subAgentId: targetAgentId },
         inPortalThread,
         messages: messagesWithInstruction,

@@ -220,7 +220,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         const conversationContext: ConversationContext = {
           agentId: ctx.agentId || '',
           topicId: ctx.topicId || null,
-          // subAgentId will be set when calling internal_execAgentRuntime
+          // subAgentId will be set when calling executeClientAgent
         };
 
         // Get current messages
@@ -270,14 +270,14 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         }
 
         try {
-          await get().internal_execAgentRuntime({
+          await get().executeClientAgent({
             context: { ...conversationContext, subAgentId: agentId, scope: 'sub_agent' },
             messages: messagesWithInstruction,
             parentMessageId: ctx.messageId,
             parentMessageType: 'tool',
           });
         } catch (error) {
-          console.error('[callAgent] internal_execAgentRuntime failed:', error);
+          console.error('[callAgent] executeClientAgent failed:', error);
           throw error;
         }
       });
