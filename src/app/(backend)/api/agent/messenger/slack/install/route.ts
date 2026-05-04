@@ -67,7 +67,7 @@ export const GET = async (req: Request): Promise<Response> => {
   }
 
   // 2. Env precondition — give a clear 503 instead of letting Slack reject us.
-  const config = getMessengerSlackConfig();
+  const config = await getMessengerSlackConfig();
   if (!config) {
     log('install: Slack messenger env not configured');
     return new Response(

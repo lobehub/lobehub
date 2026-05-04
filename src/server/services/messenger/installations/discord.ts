@@ -13,8 +13,8 @@ const log = debug('lobe-server:messenger:install-store:discord');
  */
 export const DISCORD_INSTALLATION_KEY = 'discord:singleton';
 
-const buildCreds = (): InstallationCredentials | null => {
-  const config = getMessengerDiscordConfig();
+const buildCreds = async (): Promise<InstallationCredentials | null> => {
+  const config = await getMessengerDiscordConfig();
   if (!config) return null;
   return {
     accountId: config.applicationId,
@@ -32,8 +32,8 @@ const buildCreds = (): InstallationCredentials | null => {
 
 export class DiscordInstallationStore implements MessengerInstallationStore {
   async resolveByPayload(): Promise<InstallationCredentials | null> {
-    const creds = buildCreds();
-    if (!creds) log('resolveByPayload: discord env not configured');
+    const creds = await buildCreds();
+    if (!creds) log('resolveByPayload: discord credentials not configured in DB');
     return creds;
   }
 

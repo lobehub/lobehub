@@ -54,7 +54,7 @@ const buildRequest = (qs: string): Request =>
   new Request(`https://app.example.com/api/agent/messenger/slack/oauth/callback?${qs}`);
 
 beforeEach(() => {
-  vi.mocked(getMessengerSlackConfig).mockReturnValue(VALID_CONFIG);
+  vi.mocked(getMessengerSlackConfig).mockResolvedValue(VALID_CONFIG);
   vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue({} as any);
   vi.mocked(consumeOAuthState).mockResolvedValue({ lobeUserId: 'lobe-user-1', ts: Date.now() });
   vi.mocked(exchangeCode).mockResolvedValue({
@@ -94,7 +94,7 @@ describe('GET /api/agent/messenger/slack/oauth/callback', () => {
     });
 
     it('returns 503 when Slack messenger env is not configured', async () => {
-      vi.mocked(getMessengerSlackConfig).mockReturnValue(null);
+      vi.mocked(getMessengerSlackConfig).mockResolvedValue(null);
       const res = await GET(buildRequest('code=c&state=s'));
       expect(res.status).toBe(503);
     });

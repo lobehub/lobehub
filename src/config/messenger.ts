@@ -1,56 +1,42 @@
 import { createEnv } from '@t3-oss/env-nextjs';
+import debug from 'debug';
 import { z } from 'zod';
 
+import { getServerDB } from '@/database/core/db-adaptor';
+import {
+  type DecryptedSystemBotProvider,
+  SystemBotProviderModel,
+} from '@/database/models/systemBotProvider';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+
+const log = debug('lobe-server:messenger:config');
+
 /**
- * Shared Messenger bot configuration.
+ * Messenger bot configuration — DB-backed.
  *
- * Two distribution models live in this file:
+ * Replaces the env-only path. Credentials live in `system_bot_providers` and
+ * are managed from develop-center. The only env knob left is the link-token
+ * TTL (no secrets, just a tunable).
+ *
+ * Two distribution models still apply downstream:
  *
  * - **Global-token platforms (Telegram, Discord)**: a single LobeHub-owned
- *   bot serves every user. Telegram registers the webhook via `setWebhook`;
- *   Discord configures the Interactions Endpoint URL in the Developer Portal.
+ *   bot serves every user. The full credential bundle for the bot lives in
+ *   the row.
  *
- * - **Per-tenant OAuth platforms (Slack)**: env holds App-level credentials
- *   only (`CLIENT_ID` / `CLIENT_SECRET` / `SIGNING_SECRET` / `APP_ID`); each
- *   workspace bot token is acquired via OAuth on install and stored in
- *   `messenger_installations`. Self-hosters register their own Slack App;
- *   Cloud uses the LobeHub-published one.
- *
- * Discord intentionally lives in the global-token bucket: the bot token is
- * a single App-level credential that works across every guild the bot is
- * installed into — Discord's "Add to Server" flow authorizes the bot but
- * never issues a per-guild token.
+ * - **Per-tenant OAuth platforms (Slack)**: the row carries App-level
+ *   credentials (`appId` / `clientId` / `clientSecret` / `signingSecret`);
+ *   each workspace bot token is acquired via OAuth on install and stored
+ *   in `messenger_installations`.
  */
 export const getMessengerConfig = () => {
   return createEnv({
     client: {},
     runtimeEnv: {
-      LOBE_DISCORD_APPLICATION_ID: process.env.LOBE_DISCORD_APPLICATION_ID,
-      LOBE_DISCORD_BOT_TOKEN: process.env.LOBE_DISCORD_BOT_TOKEN,
-      LOBE_DISCORD_BOT_USERNAME: process.env.LOBE_DISCORD_BOT_USERNAME,
-      LOBE_DISCORD_PUBLIC_KEY: process.env.LOBE_DISCORD_PUBLIC_KEY,
       LOBE_LINK_TOKEN_TTL_SECONDS: process.env.LOBE_LINK_TOKEN_TTL_SECONDS,
-      LOBE_SLACK_APP_ID: process.env.LOBE_SLACK_APP_ID,
-      LOBE_SLACK_CLIENT_ID: process.env.LOBE_SLACK_CLIENT_ID,
-      LOBE_SLACK_CLIENT_SECRET: process.env.LOBE_SLACK_CLIENT_SECRET,
-      LOBE_SLACK_SIGNING_SECRET: process.env.LOBE_SLACK_SIGNING_SECRET,
-      LOBE_TELEGRAM_BOT_TOKEN: process.env.LOBE_TELEGRAM_BOT_TOKEN,
-      LOBE_TELEGRAM_BOT_USERNAME: process.env.LOBE_TELEGRAM_BOT_USERNAME,
-      LOBE_TELEGRAM_WEBHOOK_SECRET: process.env.LOBE_TELEGRAM_WEBHOOK_SECRET,
     },
     server: {
-      LOBE_DISCORD_APPLICATION_ID: z.string().optional(),
-      LOBE_DISCORD_BOT_TOKEN: z.string().optional(),
-      LOBE_DISCORD_BOT_USERNAME: z.string().optional(),
-      LOBE_DISCORD_PUBLIC_KEY: z.string().optional(),
       LOBE_LINK_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(1800),
-      LOBE_SLACK_APP_ID: z.string().optional(),
-      LOBE_SLACK_CLIENT_ID: z.string().optional(),
-      LOBE_SLACK_CLIENT_SECRET: z.string().optional(),
-      LOBE_SLACK_SIGNING_SECRET: z.string().optional(),
-      LOBE_TELEGRAM_BOT_TOKEN: z.string().optional(),
-      LOBE_TELEGRAM_BOT_USERNAME: z.string().optional(),
-      LOBE_TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
     },
   });
 };
@@ -79,66 +65,105 @@ export interface MessengerDiscordConfig {
   publicKey: string;
 }
 
-export const getMessengerTelegramConfig = (): MessengerTelegramConfig | null => {
-  const token = messengerEnv.LOBE_TELEGRAM_BOT_TOKEN;
-  if (!token) return null;
-  return {
-    botToken: token,
-    botUsername: messengerEnv.LOBE_TELEGRAM_BOT_USERNAME,
-    webhookSecret: messengerEnv.LOBE_TELEGRAM_WEBHOOK_SECRET,
-  };
+// ---------------------------------------------------------------------------
+// In-process cache.
+//
+// Webhooks fire frequently — every Discord MESSAGE_CREATE, every Slack event,
+// every Telegram update would otherwise hit the DB to read the App config.
+// 30s TTL keeps the round-trip out of the hot path while letting credential
+// rotations from dc-center take effect within ~30s without a deploy.
+// ---------------------------------------------------------------------------
+
+const CACHE_TTL_MS = 30_000;
+
+interface CacheEntry<T> {
+  expiresAt: number;
+  value: T | null;
+}
+
+const platformCache = new Map<MessengerPlatform, CacheEntry<unknown>>();
+
+/** Drop the cached config for a platform (or all). Called by mutations after
+ *  the dc-center admin saves new credentials. Best-effort: cross-process
+ *  invalidation is not guaranteed (Vercel functions don't share memory), so
+ *  the 30s TTL is the real backstop. */
+export const invalidateMessengerConfigCache = (platform?: MessengerPlatform): void => {
+  if (platform) {
+    platformCache.delete(platform);
+  } else {
+    platformCache.clear();
+  }
 };
 
-/**
- * App-level OAuth credentials for the Slack messenger. Per-workspace bot
- * tokens are NOT here — they live in `messenger_installations` after OAuth.
- *
- * Returns null when any of the four required vars is missing — the install /
- * webhook routes will then report 503/404 instead of letting the OAuth dance
- * fail mid-flow.
- */
-export const getMessengerSlackConfig = (): MessengerSlackConfig | null => {
-  const clientId = messengerEnv.LOBE_SLACK_CLIENT_ID;
-  const clientSecret = messengerEnv.LOBE_SLACK_CLIENT_SECRET;
-  const signingSecret = messengerEnv.LOBE_SLACK_SIGNING_SECRET;
-  const appId = messengerEnv.LOBE_SLACK_APP_ID;
-  if (!clientId || !clientSecret || !signingSecret || !appId) return null;
-  return { appId, clientId, clientSecret, signingSecret };
+const fetchAndCache = async <T>(
+  platform: MessengerPlatform,
+  decode: (decrypted: DecryptedSystemBotProvider) => T | null,
+): Promise<T | null> => {
+  const cached = platformCache.get(platform) as CacheEntry<T> | undefined;
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  let value: T | null = null;
+  try {
+    const db = await getServerDB();
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+    const row = await SystemBotProviderModel.findEnabledByPlatform(db, platform, gateKeeper);
+    if (row) value = decode(row);
+  } catch (error) {
+    log('fetchAndCache: lookup failed for platform=%s: %O', platform, error);
+  }
+
+  platformCache.set(platform, { expiresAt: Date.now() + CACHE_TTL_MS, value });
+  return value;
 };
 
-/**
- * App-level credentials for the Discord messenger. Discord's bot token is
- * global — same token works in every guild — so unlike Slack there is no
- * per-tenant credential exchange.
- *
- * `applicationId` doubles as the bot user id (Discord App IDs are the bot
- * user id for bot accounts). `publicKey` is required for Ed25519 webhook
- * signature verification, which `@chat-adapter/discord` performs internally
- * when handling the inbound interaction request.
- */
-export const getMessengerDiscordConfig = (): MessengerDiscordConfig | null => {
-  const botToken = messengerEnv.LOBE_DISCORD_BOT_TOKEN;
-  const publicKey = messengerEnv.LOBE_DISCORD_PUBLIC_KEY;
-  const applicationId = messengerEnv.LOBE_DISCORD_APPLICATION_ID;
-  if (!botToken || !publicKey || !applicationId) return null;
-  return {
-    applicationId,
-    botToken,
-    botUsername: messengerEnv.LOBE_DISCORD_BOT_USERNAME,
-    publicKey,
-  };
+export const getMessengerTelegramConfig = async (): Promise<MessengerTelegramConfig | null> => {
+  return fetchAndCache<MessengerTelegramConfig>('telegram', (row) => {
+    const c = row.credentials as Partial<MessengerTelegramConfig>;
+    if (!c.botToken) return null;
+    return {
+      botToken: c.botToken,
+      botUsername: c.botUsername,
+      webhookSecret: c.webhookSecret,
+    };
+  });
 };
 
-export const isMessengerPlatformEnabled = (platform: MessengerPlatform): boolean => {
+export const getMessengerSlackConfig = async (): Promise<MessengerSlackConfig | null> => {
+  return fetchAndCache<MessengerSlackConfig>('slack', (row) => {
+    const c = row.credentials as Partial<MessengerSlackConfig>;
+    if (!c.appId || !c.clientId || !c.clientSecret || !c.signingSecret) return null;
+    return {
+      appId: c.appId,
+      clientId: c.clientId,
+      clientSecret: c.clientSecret,
+      signingSecret: c.signingSecret,
+    };
+  });
+};
+
+export const getMessengerDiscordConfig = async (): Promise<MessengerDiscordConfig | null> => {
+  return fetchAndCache<MessengerDiscordConfig>('discord', (row) => {
+    const c = row.credentials as Partial<MessengerDiscordConfig>;
+    if (!c.applicationId || !c.botToken || !c.publicKey) return null;
+    return {
+      applicationId: c.applicationId,
+      botToken: c.botToken,
+      botUsername: c.botUsername,
+      publicKey: c.publicKey,
+    };
+  });
+};
+
+export const isMessengerPlatformEnabled = async (platform: MessengerPlatform): Promise<boolean> => {
   switch (platform) {
     case 'telegram': {
-      return !!messengerEnv.LOBE_TELEGRAM_BOT_TOKEN;
+      return !!(await getMessengerTelegramConfig());
     }
     case 'slack': {
-      return !!getMessengerSlackConfig();
+      return !!(await getMessengerSlackConfig());
     }
     case 'discord': {
-      return !!getMessengerDiscordConfig();
+      return !!(await getMessengerDiscordConfig());
     }
     default: {
       return false;
@@ -146,8 +171,12 @@ export const isMessengerPlatformEnabled = (platform: MessengerPlatform): boolean
   }
 };
 
-export const getEnabledMessengerPlatforms = (): MessengerPlatform[] => {
-  return (['telegram', 'slack', 'discord'] as const).filter((p) => isMessengerPlatformEnabled(p));
+export const getEnabledMessengerPlatforms = async (): Promise<MessengerPlatform[]> => {
+  const platforms = ['telegram', 'slack', 'discord'] as const;
+  const checks = await Promise.all(
+    platforms.map(async (p) => ((await isMessengerPlatformEnabled(p)) ? p : null)),
+  );
+  return checks.filter((p): p is MessengerPlatform => p !== null);
 };
 
 export const getMessengerLinkTokenTtl = (): number => messengerEnv.LOBE_LINK_TOKEN_TTL_SECONDS;

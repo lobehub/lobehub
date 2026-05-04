@@ -43,7 +43,7 @@ beforeEach(() => {
     session: {} as any,
     user: { id: 'lobe-user-1' } as any,
   });
-  vi.mocked(getMessengerSlackConfig).mockReturnValue(VALID_CONFIG);
+  vi.mocked(getMessengerSlackConfig).mockResolvedValue(VALID_CONFIG);
   vi.mocked(issueOAuthState).mockResolvedValue('state-nonce-1');
 });
 
@@ -64,7 +64,7 @@ describe('GET /api/agent/messenger/slack/install', () => {
   });
 
   it('returns 503 when Slack OAuth env is not configured', async () => {
-    vi.mocked(getMessengerSlackConfig).mockReturnValue(null);
+    vi.mocked(getMessengerSlackConfig).mockResolvedValue(null);
 
     const res = await GET(buildRequest());
     expect(res.status).toBe(503);

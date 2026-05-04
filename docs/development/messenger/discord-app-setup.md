@@ -10,13 +10,14 @@ One Discord App per environment:
 - **Cloud staging / dev** — internal, points at the dev domain.
 - **Self-hosted** — your own App ID, points at your domain.
 
-Each App stores its own credentials (`LOBE_DISCORD_APPLICATION_ID` / `LOBE_DISCORD_BOT_TOKEN` / `LOBE_DISCORD_PUBLIC_KEY` / `LOBE_DISCORD_BOT_USERNAME`). Unlike Slack, Discord does **not** issue per-guild bot tokens — the same App-level Bot Token works in every guild the bot is invited to, so there is no OAuth callback or per-tenant install row.
+Each App's credentials are stored in the `system_bot_providers` DB table and managed from dc-center (see [managed-by-dc-center.md](./managed-by-dc-center.md)). Unlike Slack, Discord does **not** issue per-guild bot tokens — the same App-level Bot Token works in every guild the bot is invited to, so there is no OAuth callback or per-tenant install row.
 
 ## Prerequisites
 
 - A LobeHub deployment reachable on a stable HTTPS URL (`APP_URL`). For local dev use a tunnel — `cloudflared tunnel --url http://localhost:3010`, `ngrok http 3010`, etc. — and set both `APP_URL` and `WEBHOOK_PUBLIC_URL` to the tunnel URL.
 - A Discord account that can create applications at <https://discord.com/developers/applications>.
 - A Discord server (guild) where you have **Manage Server** permission, to invite the bot for testing.
+- Access to the dc-center admin UI (where credentials are stored) and a `KEY_VAULTS_SECRET` env value shared between lobehub-dev and dc-center.
 
 > **Local dev tip**: tunnel hostnames change per restart. Discord's Interactions Endpoint URL must be updated every time, and Discord re-runs its PING signature check the moment you save — if the URL is stale or the public key is wrong, the save button rejects with `Validation failed`. A stable named tunnel avoids this churn.
 
@@ -25,15 +26,21 @@ Each App stores its own credentials (`LOBE_DISCORD_APPLICATION_ID` / `LOBE_DISCO
 1. **Create the App** — Discord Developer Portal → **New Application**, give it a name, accept the developer ToS.
 2. **Add a Bot user** — left sidebar → **Bot**. Discord auto-creates a bot user matching the Application name. Optionally rename it (this is what users see).
 3. **Enable required Privileged Gateway Intent** — same Bot page → **Privileged Gateway Intents** → toggle **MESSAGE CONTENT INTENT** on. The messenger reads the user's DM text (verify-im triggers, `parseCommand` for `/agents`, etc.) and Discord blocks `content` field access without this opt-in. (`PRESENCE` and `SERVER MEMBERS` intents are NOT needed for v1.)
-4. **Copy credentials**:
-   - **General Information** page → **Application ID** → `LOBE_DISCORD_APPLICATION_ID` (this also doubles as the bot user ID)
-   - **General Information** page → **Public Key** → `LOBE_DISCORD_PUBLIC_KEY`
-   - **Bot** page → **Reset Token** → copy the new token → `LOBE_DISCORD_BOT_TOKEN` (the old token is invalidated immediately, so do this when you're ready to wire the env)
-   - Optional: bot username → `LOBE_DISCORD_BOT_USERNAME` (used in UI strings only)
-5. **Set env vars** in your LobeHub deployment (Cloud secrets manager, `.env`, etc.).
-6. **Restart** LobeHub so the new env is picked up. On startup `MessengerRouter.ensureConnected` opens a persistent Gateway WebSocket and registers it to forward every event (messages, slash commands, button clicks) to `${APP_URL}/api/agent/messenger/webhooks/discord`. Look for `discord gateway listener started` and `DiscordBot appId=… started` in the server log.
-7. **Invite the bot to a guild** — sign into LobeHub web → Messenger settings → click **Discord** → **Add to Discord server**. The OAuth2 install URL (`bot` + `applications.commands` scope, permission bitfield `309237763136`) is built by `buildDiscordInviteUrl()`; it opens Discord's "Add to Server" picker.
-8. **Smoke test** — DM the bot in Discord (its profile is reachable from any shared guild's member list, or from the **Open in Discord** link in LobeHub's LinkModal). You should get the link prompt; click the verify-im URL, finish account binding, then send `/agents` as plain text in the DM — the bot replies with your agent list.
+4. **Copy credentials** — keep these handy for step 5:
+   - **General Information** page → **Application ID** (this also doubles as the bot user ID)
+   - **General Information** page → **Public Key**
+   - **Bot** page → **Reset Token** → copy the new token (the old token is invalidated immediately, so do this when you're ready to paste into dc-center)
+   - Optional: bot username (used in UI strings only)
+5. **Save credentials in dc-center** — open dc-center → **Agent → System Bots** → click **Add Bot** → select platform `Discord` → fill the form:
+   | Form field | Discord console field |
+   | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+   | Application ID | General Information → Application ID |
+   | Bot Token | Bot → Token (after Reset) |
+   | Public Key | General Information → Public Key |
+   | Bot Username (optional) | Bot → Username |
+   | Leave **Connection Mode** as `WebSocket` and **Enabled** ON. Save. The row appears in the table; live status will flip to `connecting` then `connected` within a minute (cron-driven sync). | |
+6. **Invite the bot to a guild** — sign into LobeHub web → Messenger settings → click **Discord** → **Add to Discord server**. The OAuth2 install URL (`bot` + `applications.commands` scope, permission bitfield `309237763136`) is built by `buildDiscordInviteUrl()`; it opens Discord's "Add to Server" picker.
+7. **Smoke test** — DM the bot in Discord (its profile is reachable from any shared guild's member list, or from the **Open in Discord** link in LobeHub's LinkModal). You should get the link prompt; click the verify-im URL, finish account binding, then send `/agents` as plain text in the DM — the bot replies with your agent list.
 
 > **Do NOT set the Interactions Endpoint URL** in the Developer Portal. Discord's two interaction-delivery paths are mutually exclusive: configuring an Interactions Endpoint URL **opts the bot out** of receiving interactions over the Gateway. Since we already have a persistent Gateway connection (required for DMs anyway — Discord never delivers `MESSAGE_CREATE` to the Interactions URL), the Gateway path covers slash commands and button clicks too. Leaving the field blank keeps everything on one channel and avoids a second PING handshake to verify the URL.
 
@@ -42,8 +49,8 @@ Each App stores its own credentials (`LOBE_DISCORD_APPLICATION_ID` / `LOBE_DISCO
 Discord stores App config server-side, so editing this doc doesn't propagate. To roll out a change:
 
 - Settings (intents, scopes, redirect URLs) → edit in the Developer Portal directly.
-- Bot token rotation → **Reset Token**, update env, restart LobeHub.
-- Public key (only changes if Discord rotates it for you, very rare) → update env, restart.
+- Bot token rotation → **Reset Token** in the portal, then dc-center → System Bots → edit the Discord row → paste new token → save. The service auto-disconnects the running gateway connection so the next sync re-registers with the new token; click **Force Reconnect** to skip the wait.
+- Public key (only changes if Discord rotates it for you, very rare) → same flow as token rotation.
 
 > **Re-invite required when scopes change.** If you later add `applications.commands` (e.g. for slash commands; see LOBE-8489) to an App that was originally invited with only `bot`, existing guilds need to re-run the invite URL to grant the new scope. The bot token itself stays valid.
 
@@ -109,9 +116,10 @@ If a self-hoster's users keep missing the success DM, the typical cause is: bot 
 
 ## Troubleshooting
 
-- **Bot is invited but DMs do nothing**: check the server log for `discord gateway listener started`. If absent, `MessengerRouter.ensureConnected` didn't pick Discord up — most likely `LOBE_DISCORD_*` env wasn't loaded before the server started, or the deployment is on Vercel (where the persistent WS path isn't supported). Restart with the env set, or move to a long-running runtime.
+- **Bot is invited but DMs do nothing**: check dc-center → System Bots → Discord row → live status. `disconnected` / `error` → click **Force Reconnect**. `not registered` → cron hasn't synced yet (wait \~10min on Vercel) or row is `enabled=false`. Then check the lobehub-dev log for `discord gateway listener started` (in-process path) or `discord registered with MessageGateway` (Worker path).
+- **`messenger:config: lookup failed for platform=discord`** in lobehub-dev logs: row exists but credentials can't be decrypted. Most likely `KEY_VAULTS_SECRET` differs between dc-center (which encrypted) and lobehub-dev (which is reading). Make them match and restart lobehub-dev to clear the 30s config cache.
 - **Gateway connects but slash commands return "interaction failed"**: the bot was invited with `applications.commands` scope but you also configured an Interactions Endpoint URL in the Developer Portal — Discord then routes interactions to that URL instead of the Gateway, bypassing our handlers. **Clear the Interactions Endpoint URL** field and reload the bot.
 - **`Cannot send messages to this user` from `notifyLinkSuccess`**: the user has DMs disabled, doesn't share a guild with the bot, or has blocked the bot. Re-invite the bot to a shared server and ask the user to send any message to the bot first.
 - **Slash commands don't show up in Discord autocomplete**: expected in v1 — see [Slash commands](#slash-commands). LOBE-8489 ships native registration.
 - **`MESSAGE CONTENT INTENT` toggle is missing on the Bot page**: Discord hides the toggle once your App reaches 100+ guild installs and requires intent verification. Until then, any developer can flip it freely. For the Cloud-distributed App, intent verification is handled by the LobeHub team.
-- **`messenger.discord.connectModal.notConfigured` shown in the UI**: one of `LOBE_DISCORD_APPLICATION_ID` / `LOBE_DISCORD_BOT_TOKEN` / `LOBE_DISCORD_PUBLIC_KEY` is missing in the running deployment — the TRPC `availablePlatforms` query strips the `appId` and the LinkModal falls into the not-configured branch.
+- **`messenger.discord.connectModal.notConfigured` shown in the UI**: the Discord row in dc-center is missing or has `enabled=false`; or the credentials JSON in DB lacks `applicationId` / `botToken` / `publicKey`. Open dc-center → System Bots → fix the row → wait \~30s for lobehub-dev's config cache to refresh.

@@ -69,18 +69,18 @@ const openDM = async (api: DiscordApi, recipientId: string): Promise<string | nu
  * Discord messenger binder.
  *
  * Single global bot — there is no per-guild token exchange — so the binder
- * reads credentials from env on every call (mirrors Telegram's binder), with
- * no `creds` parameter to thread through. The router still creates one
- * binder instance per `installationKey`, but that key is the singleton
- * `discord:singleton` in this case.
+ * reads credentials from `system_bot_providers` on every call (mirrors
+ * Telegram). The 30s in-memory cache in `getMessengerDiscordConfig` keeps
+ * the DB out of the hot webhook path.
  *
- * MVP scope is DM-only: agent picker / interactive components are not
- * implemented here, so the router falls back to the text-based
- * `/agents <n>` flow.
+ * MVP scope is DM-only: agent picker / interactive components ARE wired up
+ * (see `sendAgentPicker` / `updateAgentPicker`), but the router defaults to
+ * the text-based `/agents <n>` flow until LOBE-8489 lands native slash
+ * registration.
  */
 export class MessengerDiscordBinder implements MessengerPlatformBinder {
-  createClient(): PlatformClient | null {
-    const config = getMessengerDiscordConfig();
+  async createClient(): Promise<PlatformClient | null> {
+    const config = await getMessengerDiscordConfig();
     if (!config) return null;
 
     return new DiscordClientFactory().createClient(
@@ -110,7 +110,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
   }
 
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
-    const config = getMessengerDiscordConfig();
+    const config = await getMessengerDiscordConfig();
     if (!config) return;
 
     const appUrl = appEnv.APP_URL;
@@ -174,7 +174,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     /** Ignored — Discord is a global-token bot, no tenant scoping needed. */
     tenantId?: string;
   }): Promise<void> {
-    const config = getMessengerDiscordConfig();
+    const config = await getMessengerDiscordConfig();
     if (!config) return;
 
     const api = new DiscordApi(config.botToken);
@@ -194,7 +194,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
   }
 
   async sendDmText(chatId: string, text: string): Promise<void> {
-    const config = getMessengerDiscordConfig();
+    const config = await getMessengerDiscordConfig();
     if (!config) return;
     try {
       await new DiscordApi(config.botToken).createMessage(chatId, text);
@@ -215,7 +215,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     chatId: string,
     params: { entries: AgentPickerEntry[]; text: string },
   ): Promise<void> {
-    const config = getMessengerDiscordConfig();
+    const config = await getMessengerDiscordConfig();
     if (!config) {
       log('sendAgentPicker: no config, skipping');
       return;
@@ -243,7 +243,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     messageId: string,
     params: { entries: AgentPickerEntry[]; text: string },
   ): Promise<void> {
-    const config = getMessengerDiscordConfig();
+    const config = await getMessengerDiscordConfig();
     if (!config) return;
     try {
       const api = new DiscordApi(config.botToken);

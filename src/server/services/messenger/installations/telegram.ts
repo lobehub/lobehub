@@ -13,8 +13,8 @@ const log = debug('lobe-server:messenger:install-store:telegram');
  */
 export const TELEGRAM_INSTALLATION_KEY = 'telegram:singleton';
 
-const buildCreds = (): InstallationCredentials | null => {
-  const config = getMessengerTelegramConfig();
+const buildCreds = async (): Promise<InstallationCredentials | null> => {
+  const config = await getMessengerTelegramConfig();
   if (!config) return null;
   return {
     accountId: undefined,
@@ -34,8 +34,8 @@ const buildCreds = (): InstallationCredentials | null => {
 
 export class TelegramInstallationStore implements MessengerInstallationStore {
   async resolveByPayload(): Promise<InstallationCredentials | null> {
-    const creds = buildCreds();
-    if (!creds) log('resolveByPayload: telegram env not configured');
+    const creds = await buildCreds();
+    if (!creds) log('resolveByPayload: telegram credentials not configured in DB');
     return creds;
   }
 

@@ -22,11 +22,11 @@ export async function register() {
     });
   }
 
-  // Register messenger inbound webhooks (Telegram setWebhook, etc.). Independent
-  // of per-user GatewayManager — credentials live in env, registration is
-  // idempotent and cheap (one HTTP call per platform), so we run it on every
-  // non-Vercel start regardless of ENABLE_BOT_IN_DEV. On Vercel this happens in
-  // the /api/agent/gateway cron.
+  // Register messenger inbound webhooks (Telegram setWebhook, Discord gateway).
+  // Independent of per-user GatewayManager — credentials live in
+  // `system_bot_providers` (DB, managed from dc-center), registration is
+  // idempotent and cheap, so we run it on every non-Vercel start regardless
+  // of ENABLE_BOT_IN_DEV. On Vercel this happens in the /api/agent/gateway cron.
   if (
     process.env.NEXT_RUNTIME === 'nodejs' &&
     process.env.DATABASE_URL &&

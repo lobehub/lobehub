@@ -52,8 +52,8 @@ const escapeHtml = (s: string): string =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 export class MessengerTelegramBinder implements MessengerPlatformBinder {
-  createClient(): PlatformClient | null {
-    const config = getMessengerTelegramConfig();
+  async createClient(): Promise<PlatformClient | null> {
+    const config = await getMessengerTelegramConfig();
     if (!config) return null;
 
     return new TelegramClientFactory().createClient(
@@ -71,7 +71,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
   }
 
   async registerWebhook(params: { webhookUrl: string }): Promise<void> {
-    const config = getMessengerTelegramConfig();
+    const config = await getMessengerTelegramConfig();
     if (!config) {
       throw new Error('LOBE_TELEGRAM_BOT_TOKEN is not configured');
     }
@@ -81,7 +81,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
   }
 
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
-    const config = getMessengerTelegramConfig();
+    const config = await getMessengerTelegramConfig();
     if (!config) return;
 
     // The verify-im button takes the user back into LobeHub for the auth /
@@ -133,7 +133,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     /** Ignored — Telegram is a global-token bot, no tenant scoping needed. */
     tenantId?: string;
   }): Promise<void> {
-    const config = getMessengerTelegramConfig();
+    const config = await getMessengerTelegramConfig();
     if (!config) return;
 
     const api = new TelegramApi(config.botToken);
@@ -150,7 +150,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
   }
 
   async sendDmText(chatId: string, text: string): Promise<void> {
-    const config = getMessengerTelegramConfig();
+    const config = await getMessengerTelegramConfig();
     if (!config) return;
     try {
       // TelegramApi.sendMessage uses parse_mode='HTML' under the hood.
@@ -167,7 +167,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     chatId: string,
     params: { entries: AgentPickerEntry[]; text: string },
   ): Promise<void> {
-    const config = getMessengerTelegramConfig();
+    const config = await getMessengerTelegramConfig();
     if (!config) return;
     try {
       const api = new TelegramApi(config.botToken);
@@ -214,7 +214,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
     action: InboundCallbackAction,
     ack: CallbackAcknowledgement,
   ): Promise<void> {
-    const config = getMessengerTelegramConfig();
+    const config = await getMessengerTelegramConfig();
     if (!config) return;
     const api = new TelegramApi(config.botToken);
 

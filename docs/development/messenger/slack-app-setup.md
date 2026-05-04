@@ -10,7 +10,7 @@ One Slack App per environment:
 - **Cloud staging / dev** — internal, points at the dev domain.
 - **Self-hosted** — your own App ID, points at your domain.
 
-Each App stores its own client credentials (`LOBE_SLACK_CLIENT_ID` / `LOBE_SLACK_CLIENT_SECRET` / `LOBE_SLACK_SIGNING_SECRET` / `LOBE_SLACK_APP_ID`); the manifest encodes everything else (scopes, event subscriptions, redirect URLs, App Home toggles).
+Each App's client credentials (`appId` / `clientId` / `clientSecret` / `signingSecret`) are stored in the `system_bot_providers` DB table and managed from dc-center (see [managed-by-dc-center.md](./managed-by-dc-center.md)). The manifest encodes everything else (scopes, event subscriptions, redirect URLs, App Home toggles). Per-tenant Slack workspace tokens (acquired via OAuth on install) still live in `messenger_installations` — that table is unchanged.
 
 ## Prerequisites
 
@@ -23,15 +23,17 @@ Each App stores its own client credentials (`LOBE_SLACK_CLIENT_ID` / `LOBE_SLACK
 
 1. **Edit the manifest** — open `slack-app-manifest.yaml` and replace every occurrence of `https://app.lobehub.com` with your environment's `APP_URL`. There are six URLs (one OAuth redirect, one event subscription, one interactivity, three slash commands) — they must all point at the same domain.
 2. **Create the App** — go to <https://api.slack.com/apps>, click **Create New App → From an app manifest**, pick the workspace, paste the YAML, click through.
-3. **Copy credentials** — on the App's "Basic Information" page grab:
-   - `App ID` → `LOBE_SLACK_APP_ID`
-   - `Client ID` → `LOBE_SLACK_CLIENT_ID`
-   - `Client Secret` → `LOBE_SLACK_CLIENT_SECRET`
-   - `Signing Secret` → `LOBE_SLACK_SIGNING_SECRET`
-4. **Set env vars** in your LobeHub deployment (Cloud secrets manager, `.env`, etc.).
-5. **Restart** LobeHub so the new env is picked up.
-6. **Install to your workspace** — App console → **Install App** → authorize.
-7. **Smoke test** — sign into LobeHub web → Messenger settings → click **Connect Slack** → install into a workspace → confirm the OAuth flow lands on `slack.com/app/open`. Then DM `@LobeHub` in Slack: you should get the link prompt, finish account binding, and `/agents` should list your agents.
+3. **Copy credentials** — on the App's "Basic Information" page grab `App ID`, `Client ID`, `Client Secret`, `Signing Secret`.
+4. **Save credentials in dc-center** — open dc-center → **Agent → System Bots** → **Add Bot** → select platform `Slack` → fill the form:
+   | Form field | Slack console field |
+   | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+   | App ID | Basic Information → App ID |
+   | Client ID | Basic Information → Client ID |
+   | Client Secret | Basic Information → Client Secret |
+   | Signing Secret | Basic Information → Signing Secret |
+   | Leave **Connection Mode** as `Webhook` (Slack uses signed HTTPS, not WebSocket) and **Enabled** ON. Save. | |
+5. **Install to your workspace** — App console → **Install App** → authorize.
+6. **Smoke test** — sign into LobeHub web → Messenger settings → click **Connect Slack** → install into a workspace → confirm the OAuth flow lands on `slack.com/app/open`. Then DM `@LobeHub` in Slack: you should get the link prompt, finish account binding, and `/agents` should list your agents.
 
 ## Updating the manifest
 
@@ -96,7 +98,7 @@ Slash commands invoked from a non-DM channel reply ephemerally so the output sta
 
 ## Troubleshooting
 
-- **"url_verification" challenge fails on first save**: your webhook URL isn't reachable from Slack, or `LOBE_SLACK_SIGNING_SECRET` doesn't match. Check the LobeHub server logs.
+- **"url_verification" challenge fails on first save**: your webhook URL isn't reachable from Slack, or the `signingSecret` saved in dc-center doesn't match the App's signing secret. Check the LobeHub server logs and re-paste the secret from the App's Basic Information page into dc-center.
 - **OAuth callback 400 "invalid state"**: the install state expired (10-min TTL) or Redis lost it. Restart the install from the LobeHub modal.
 - **App installs but DMs do nothing**: check `messenger_installations` has a row for the `team_id`. If yes, the bot token might not have been saved with the right credentials JSON shape — see the OAuth callback logs. Also confirm the **Event Subscriptions** Request URL is set (manifest field, not auto-set if you only created the App via console-create-without-manifest).
 - **Slash commands don't show up in Slack autocomplete**: the `commands` OAuth scope is missing. Slack silently ignores the manifest's `slash_commands` block without it. Add `commands` under `oauth_config.scopes.bot`, re-import the manifest, and reinstall the App to the workspace.

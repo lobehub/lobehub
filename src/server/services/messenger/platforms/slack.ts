@@ -78,7 +78,7 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     this.creds = creds;
   }
 
-  createClient(): PlatformClient | null {
+  async createClient(): Promise<PlatformClient | null> {
     if (!this.creds) {
       log('createClient: no InstallationCredentials supplied');
       return null;

@@ -168,7 +168,7 @@ export class MessengerRouter {
 
       // ----- Slack-specific gate ------------------------------------------
       if (platform === 'slack') {
-        const config = getMessengerSlackConfig();
+        const config = await getMessengerSlackConfig();
         if (!config) {
           return new Response('Slack messenger not configured', { status: 404 });
         }
@@ -242,8 +242,8 @@ export class MessengerRouter {
     };
   }
 
-  /** List platforms with valid env config (used by UI / TRPC `availablePlatforms`). */
-  static listEnabledPlatforms(): MessengerPlatform[] {
+  /** List platforms with valid DB-backed config (used by UI / TRPC `availablePlatforms`). */
+  static listEnabledPlatforms(): Promise<MessengerPlatform[]> {
     return getEnabledMessengerPlatforms();
   }
 
@@ -276,7 +276,7 @@ export class MessengerRouter {
       return;
     }
     const trimmedUrl = url.replace(/\/$/, '');
-    const platforms = getEnabledMessengerPlatforms();
+    const platforms = await getEnabledMessengerPlatforms();
     if (platforms.length === 0) {
       log('ensureConnected: no enabled messenger platforms');
       return;
@@ -439,7 +439,7 @@ export class MessengerRouter {
       return null;
     }
 
-    const client = binder.createClient();
+    const client = await binder.createClient();
     if (!client) {
       log('loadBot: binder %s returned no client', creds.installationKey);
       return null;

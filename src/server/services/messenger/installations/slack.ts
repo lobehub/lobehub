@@ -162,7 +162,7 @@ export class SlackInstallationStore implements MessengerInstallationStore {
     const tenantId = parseInstallationKey(key);
     if (!tenantId) return;
 
-    const config = getMessengerSlackConfig();
+    const config = await getMessengerSlackConfig();
     const serverDB = await getServerDB();
     const gateKeeper = await this.getGateKeeper();
     const row = await MessengerInstallationModel.findByTenant(
@@ -186,7 +186,7 @@ export class SlackInstallationStore implements MessengerInstallationStore {
     tenantId: string,
     applicationId?: string,
   ): Promise<InstallationCredentials | null> {
-    const config = getMessengerSlackConfig();
+    const config = await getMessengerSlackConfig();
     if (!config) {
       log('lookup: Slack OAuth env not configured');
       return null;
@@ -234,7 +234,7 @@ export class SlackInstallationStore implements MessengerInstallationStore {
   private async runRefresh(
     row: DecryptedMessengerInstallation,
   ): Promise<DecryptedMessengerInstallation | null> {
-    const config = getMessengerSlackConfig();
+    const config = await getMessengerSlackConfig();
     if (!config) return null;
 
     const blob = row.credentials as SlackCredentialsBlob;

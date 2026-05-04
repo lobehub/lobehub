@@ -99,7 +99,7 @@ const buildReq = (contentType: string): Request =>
   });
 
 beforeEach(() => {
-  vi.mocked(getMessengerSlackConfig).mockReturnValue(VALID_CONFIG);
+  vi.mocked(getMessengerSlackConfig).mockResolvedValue(VALID_CONFIG);
 });
 
 afterEach(() => {
@@ -191,7 +191,7 @@ describe('SlackInstallationStore.resolveByPayload', () => {
   });
 
   it('returns null when env not configured', async () => {
-    vi.mocked(getMessengerSlackConfig).mockReturnValue(null);
+    vi.mocked(getMessengerSlackConfig).mockResolvedValue(null);
     const store = new SlackInstallationStore();
     const result = await store.resolveByPayload(
       buildReq('application/json'),

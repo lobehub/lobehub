@@ -5,8 +5,10 @@ import { z } from 'zod';
 
 import {
   getEnabledMessengerPlatforms,
+  getMessengerDiscordConfig,
+  getMessengerSlackConfig,
+  getMessengerTelegramConfig,
   isMessengerPlatformEnabled,
-  messengerEnv,
   type MessengerPlatform,
 } from '@/config/messenger';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
@@ -40,24 +42,30 @@ const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
 
 export const messengerRouter = router({
   /** Surface available platforms + bot deep-link metadata to the UI. */
-  availablePlatforms: publicProcedure.query(() => {
-    const platforms = getEnabledMessengerPlatforms();
+  availablePlatforms: publicProcedure.query(async () => {
+    const platforms = await getEnabledMessengerPlatforms();
+    // Pull each platform's deep-link metadata from its DB-backed config.
+    // Slack App ID is used by the verify-im success state to build a
+    // `slack://app?team=…&id=…` deep link straight into the bot DM. Discord
+    // Application ID doubles as the bot user id and feeds the LinkModal's
+    // OAuth2 install URL.
+    const [discordConfig, slackConfig, telegramConfig] = await Promise.all([
+      platforms.includes('discord') ? getMessengerDiscordConfig() : Promise.resolve(null),
+      platforms.includes('slack') ? getMessengerSlackConfig() : Promise.resolve(null),
+      platforms.includes('telegram') ? getMessengerTelegramConfig() : Promise.resolve(null),
+    ]);
     return platforms.map((platform) => ({
-      // Slack App ID — used by the verify-im success state to build a
-      // `slack://app?team=…&id=…` deep link straight into the bot DM.
-      // Discord Application ID — same role; doubles as the bot user id and
-      // is used by the LinkModal to build the OAuth2 install URL.
       appId:
         platform === 'slack'
-          ? messengerEnv.LOBE_SLACK_APP_ID
+          ? slackConfig?.appId
           : platform === 'discord'
-            ? messengerEnv.LOBE_DISCORD_APPLICATION_ID
+            ? discordConfig?.applicationId
             : undefined,
       botUsername:
         platform === 'telegram'
-          ? messengerEnv.LOBE_TELEGRAM_BOT_USERNAME
+          ? telegramConfig?.botUsername
           : platform === 'discord'
-            ? messengerEnv.LOBE_DISCORD_BOT_USERNAME
+            ? discordConfig?.botUsername
             : undefined,
       enabled: true,
       platform,
@@ -250,7 +258,7 @@ export const messengerRouter = router({
   unlink: messengerProcedure
     .input(z.object({ platform: platformEnum, tenantId: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
-      if (!isMessengerPlatformEnabled(input.platform)) {
+      if (!(await isMessengerPlatformEnabled(input.platform))) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `Messenger ${input.platform} bot is not configured`,

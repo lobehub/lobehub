@@ -11,7 +11,7 @@ vi.mock('@/envs/app', () => ({
 }));
 
 vi.mock('@/config/messenger', () => ({
-  getMessengerDiscordConfig: vi.fn(() => ({
+  getMessengerDiscordConfig: vi.fn(async () => ({
     applicationId: 'discord-app-id',
     botToken: 'discord-bot-token',
     botUsername: 'lobehub-bot',

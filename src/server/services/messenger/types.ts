@@ -56,8 +56,9 @@ export interface MessengerPlatformBinder {
     ack: CallbackAcknowledgement,
   ) => Promise<void>;
 
-  /** Construct the underlying platform client. Returns null if env config is missing. */
-  createClient: () => PlatformClient | null;
+  /** Construct the underlying platform client. Returns null if config is missing.
+   *  Async because the credential lookup (`SystemBotProviderModel`) hits the DB. */
+  createClient: () => Promise<PlatformClient | null>;
 
   /**
    * Try to extract a tap-action from a raw webhook request. Returns null when

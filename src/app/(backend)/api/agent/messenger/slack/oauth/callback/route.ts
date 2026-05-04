@@ -45,7 +45,7 @@ export const GET = async (req: Request): Promise<Response> => {
     return redirectToSettings(url.origin, 'slack_error=missing_code_or_state');
   }
 
-  const config = getMessengerSlackConfig();
+  const config = await getMessengerSlackConfig();
   if (!config) {
     log('callback: Slack messenger env not configured');
     return new Response('Slack messenger is not configured on this LobeHub deployment.', {
