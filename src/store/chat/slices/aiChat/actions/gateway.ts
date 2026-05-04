@@ -192,6 +192,11 @@ export class GatewayActionImpl {
         console.error(
           `[Gateway] Auth expired for operation ${operationId} but no tokenRefresher provided`,
         );
+        // Close the underlying socket too — the server keeps the ws open after
+        // auth_expired so the client can refresh; without an explicit
+        // disconnect here the heartbeat + autoReconnect machinery keeps
+        // running after we've already marked the local op complete.
+        client.disconnect();
         this.internal_cleanupGatewayConnection(operationId);
         fireSessionComplete();
         return;

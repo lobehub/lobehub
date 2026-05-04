@@ -250,7 +250,7 @@ describe('GatewayActionImpl', () => {
         expect(onSessionComplete).not.toHaveBeenCalled();
       });
 
-      it('should fire onSessionComplete (terminal) when no tokenRefresher is provided', () => {
+      it('should disconnect and fire onSessionComplete (terminal) when no tokenRefresher is provided', () => {
         const { action, mockClient } = createTestAction();
         const onSessionComplete = vi.fn();
 
@@ -265,6 +265,10 @@ describe('GatewayActionImpl', () => {
         // Without a refresher there's no path to recover; must end the session
         // so the input clears instead of staying stuck.
         expect(onSessionComplete).toHaveBeenCalledOnce();
+        // Server keeps the ws open after auth_expired (so a refresh-and-retry
+        // can land), so the terminal fallback MUST close it explicitly —
+        // otherwise the heartbeat + autoReconnect loop runs forever.
+        expect(mockClient.disconnect).toHaveBeenCalled();
       });
 
       it('should fire onSessionComplete when token refresh itself throws', async () => {
