@@ -57,6 +57,7 @@ import { createRunCommandInspector } from '@lobechat/shared-tool-ui/inspectors';
 import { type BuiltinInspector } from '@lobechat/types';
 
 import { CodexInspectors } from './codex';
+import { GithubIdentifier, GithubInspectors } from './github';
 
 /**
  * Builtin tools inspector registry
@@ -100,6 +101,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     ...CodexInspectors,
     command_execution: createRunCommandInspector('Run') as BuiltinInspector,
   },
+  [GithubIdentifier]: GithubInspectors,
 };
 
 export interface BuiltinInspectorRegistryEntry {

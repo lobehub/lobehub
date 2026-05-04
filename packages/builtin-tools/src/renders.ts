@@ -38,6 +38,7 @@ import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
 import { type BuiltinRender } from '@lobechat/types';
 
 import { CodexRenders } from './codex';
+import { GithubIdentifier, GithubRenders } from './github';
 
 export interface BuiltinRenderRegistryEntry {
   apiName: string;
@@ -74,6 +75,7 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
     ...CodexRenders,
     command_execution: RunCommandRender as BuiltinRender,
   },
+  [GithubIdentifier]: GithubRenders,
 };
 
 export const listBuiltinRenderEntries = (): BuiltinRenderRegistryEntry[] =>
