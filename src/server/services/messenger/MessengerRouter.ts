@@ -29,6 +29,7 @@ import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
 import { getInstallationStore } from './installations';
+import { DISCORD_INSTALLATION_KEY } from './installations/discord';
 import { TELEGRAM_INSTALLATION_KEY } from './installations/telegram';
 import type { InstallationCredentials } from './installations/types';
 import { verifySignature as verifySlackSignature } from './oauth/slackOAuth';
@@ -256,8 +257,19 @@ export class MessengerRouter {
    *   verification on every inbound request.
    *
    * Idempotent — safe to call on every server start.
+   *
+   * Two execution contexts share this method:
+   *   - Self-hosted long-running process (`instrumentation.ts`) calls it with
+   *     no args; gateway-mode platforms use their internal auto-refresh timer.
+   *   - Vercel serverless cron (`/api/agent/gateway`) passes `durationMs` +
+   *     `waitUntil` so the WS connection survives the cron window via
+   *     `after()` and a follow-up cron tick re-fires `ensureConnected` to
+   *     replace the listener.
    */
-  async ensureConnected(): Promise<void> {
+  async ensureConnected(options?: {
+    durationMs?: number;
+    waitUntil?: (task: Promise<any>) => void;
+  }): Promise<void> {
     const url = appEnv.WEBHOOK_PUBLIC_URL;
     if (!url) {
       log('ensureConnected: no WEBHOOK_PUBLIC_URL configured');
@@ -283,13 +295,91 @@ export class MessengerRouter {
           return;
         }
 
-        // Discord's Interactions Endpoint URL is configured in the
-        // Developer Portal — same story as Slack, no programmatic register.
+        // Discord needs a persistent Gateway WebSocket: regular DM
+        // `MESSAGE_CREATE` events are NOT delivered to the Interactions URL,
+        // only slash commands and component clicks are. There are two
+        // managed-connection paths depending on deployment:
+        //
+        //   - **External MessageGateway** (Cloudflare Worker, the Vercel/Cloud
+        //     mode): register the messenger as a singleton "connection" with
+        //     the gateway, which holds the WS server-side and forwards events
+        //     back to our webhook path. Mirrors how the per-agent gateway sync
+        //     in `GatewayService.syncGatewayConnections` works.
+        //   - **In-process** (self-hosted long-running, or Vercel without
+        //     MessageGateway): open the gateway WS in this process and let
+        //     the adapter forward events to our messenger webhook URL.
         if (platform === 'discord') {
-          log(
-            'ensureConnected: discord interactions URL must be set in the Developer Portal -> %s',
-            `${trimmedUrl}/api/agent/messenger/webhooks/discord`,
-          );
+          const messengerWebhookPath = '/api/agent/messenger/webhooks/discord';
+          const messengerWebhookUrl = `${trimmedUrl}${messengerWebhookPath}`;
+          log('ensureConnected: discord webhook -> %s', messengerWebhookUrl);
+
+          const store = getInstallationStore('discord');
+          if (!store) return;
+          const creds = await store.resolveByKey(DISCORD_INSTALLATION_KEY);
+          if (!creds) {
+            log('ensureConnected: discord install not resolved, skipping gateway start');
+            return;
+          }
+
+          // External MessageGateway path — when configured, delegate WS
+          // lifetime to the gateway worker and skip the in-process start.
+          const { getMessageGatewayClient } =
+            await import('@/server/services/gateway/MessageGatewayClient');
+          const gatewayHttpClient = getMessageGatewayClient();
+          if (gatewayHttpClient.isEnabled) {
+            try {
+              await gatewayHttpClient.connect({
+                applicationId: creds.applicationId,
+                // Singleton connection id — distinct from per-agent provider
+                // UUIDs to avoid collisions in the gateway's connection table.
+                connectionId: `messenger:${DISCORD_INSTALLATION_KEY}`,
+                connectionMode: 'websocket',
+                credentials: {
+                  botToken: creds.botToken,
+                  publicKey: (creds.metadata?.publicKey as string) ?? '',
+                },
+                platform: 'discord',
+                // Sentinel: messenger has no per-user owner. The gateway uses
+                // `userId` for tenant accounting only; pin it to a stable
+                // synthetic id so re-registers idempotently match the same row.
+                userId: '__messenger__',
+                webhookPath: messengerWebhookPath,
+              });
+              log('ensureConnected: discord registered with MessageGateway');
+            } catch (error) {
+              log('ensureConnected: discord MessageGateway connect failed: %O', error);
+            }
+            return;
+          }
+
+          // In-process path.
+          const bot = await this.getOrCreateBot(creds);
+          if (!bot) {
+            log('ensureConnected: discord bot unavailable, skipping gateway start');
+            return;
+          }
+
+          // `bot.client` is a `DiscordGatewayClient`; cast to access `start`
+          // which the generic `PlatformClient` interface doesn't expose.
+          const gatewayClient = bot.client as unknown as {
+            start?: (options?: {
+              durationMs?: number;
+              waitUntil?: (task: Promise<any>) => void;
+              webhookUrl?: string;
+            }) => Promise<void>;
+          };
+          if (typeof gatewayClient.start === 'function') {
+            try {
+              await gatewayClient.start({
+                durationMs: options?.durationMs,
+                waitUntil: options?.waitUntil,
+                webhookUrl: messengerWebhookUrl,
+              });
+              log('ensureConnected: discord gateway listener started in-process');
+            } catch (error) {
+              log('ensureConnected: discord gateway start failed: %O', error);
+            }
+          }
           return;
         }
 
@@ -357,6 +447,11 @@ export class MessengerRouter {
 
     const adapters = client.createAdapter();
     const chatBot = this.createChatBot(adapters, creds);
+
+    // Apply platform-specific chat-sdk patches (Discord forwarded interaction
+    // ack, Discord thread recovery, etc.) so the messenger Chat handles
+    // gateway-forwarded events the same way the per-agent BotMessageRouter does.
+    client.applyChatPatches?.(chatBot);
 
     const serverDB = await getServerDB();
     this.registerHandlers(chatBot, serverDB, client, binder, creds);

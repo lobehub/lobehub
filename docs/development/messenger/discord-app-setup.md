@@ -30,15 +30,12 @@ Each App stores its own credentials (`LOBE_DISCORD_APPLICATION_ID` / `LOBE_DISCO
    - **General Information** page → **Public Key** → `LOBE_DISCORD_PUBLIC_KEY`
    - **Bot** page → **Reset Token** → copy the new token → `LOBE_DISCORD_BOT_TOKEN` (the old token is invalidated immediately, so do this when you're ready to wire the env)
    - Optional: bot username → `LOBE_DISCORD_BOT_USERNAME` (used in UI strings only)
-5. **Set the Interactions Endpoint URL** — General Information → **Interactions Endpoint URL**:
-   ```
-   <APP_URL>/api/agent/messenger/webhooks/discord
-   ```
-   On save, Discord immediately POSTs a `type: 1` PING signed with your public key. `@chat-adapter/discord` verifies the Ed25519 signature and replies `type: 1` PONG; if the save button stays red, see [Troubleshooting](#troubleshooting).
-6. **Set env vars** in your LobeHub deployment (Cloud secrets manager, `.env`, etc.).
-7. **Restart** LobeHub so the new env is picked up.
-8. **Invite the bot to a guild** — sign into LobeHub web → Messenger settings → click **Discord** → **Add to Discord server**. The OAuth2 install URL (`bot` + `applications.commands` scope, permission bitfield `274877942784`) is built by `buildDiscordInviteUrl()`; it opens Discord's "Add to Server" picker.
-9. **Smoke test** — DM the bot in Discord (its profile is reachable from any shared guild's member list, or from the **Open in Discord** link in LobeHub's LinkModal). You should get the link prompt; click the verify-im URL, finish account binding, then send `/agents` as plain text in the DM — the bot replies with your agent list.
+5. **Set env vars** in your LobeHub deployment (Cloud secrets manager, `.env`, etc.).
+6. **Restart** LobeHub so the new env is picked up. On startup `MessengerRouter.ensureConnected` opens a persistent Gateway WebSocket and registers it to forward every event (messages, slash commands, button clicks) to `${APP_URL}/api/agent/messenger/webhooks/discord`. Look for `discord gateway listener started` and `DiscordBot appId=… started` in the server log.
+7. **Invite the bot to a guild** — sign into LobeHub web → Messenger settings → click **Discord** → **Add to Discord server**. The OAuth2 install URL (`bot` + `applications.commands` scope, permission bitfield `309237763136`) is built by `buildDiscordInviteUrl()`; it opens Discord's "Add to Server" picker.
+8. **Smoke test** — DM the bot in Discord (its profile is reachable from any shared guild's member list, or from the **Open in Discord** link in LobeHub's LinkModal). You should get the link prompt; click the verify-im URL, finish account binding, then send `/agents` as plain text in the DM — the bot replies with your agent list.
+
+> **Do NOT set the Interactions Endpoint URL** in the Developer Portal. Discord's two interaction-delivery paths are mutually exclusive: configuring an Interactions Endpoint URL **opts the bot out** of receiving interactions over the Gateway. Since we already have a persistent Gateway connection (required for DMs anyway — Discord never delivers `MESSAGE_CREATE` to the Interactions URL), the Gateway path covers slash commands and button clicks too. Leaving the field blank keeps everything on one channel and avoids a second PING handshake to verify the URL.
 
 ## Updating the App
 
@@ -52,31 +49,36 @@ Discord stores App config server-side, so editing this doc doesn't propagate. To
 
 ## Discord URL surfaces
 
-Compared to Slack's six surfaces, Discord has just one — Discord routes everything (PING, slash commands, message components, modal submits) to a single Interactions Endpoint URL:
+Compared to Slack's six explicitly-configured surfaces, Discord has **zero** that the operator configures in the Developer Portal — everything flows over the Gateway WebSocket and gets forwarded to one local endpoint:
 
-| Surface        | Console location                                            | Where it lives in this repo             |
-| -------------- | ----------------------------------------------------------- | --------------------------------------- |
-| Interactions   | General Information → Interactions Endpoint URL             | `/api/agent/messenger/webhooks/discord` |
-| OAuth2 install | OAuth2 → URL Generator (built dynamically by the LinkModal) | (no callback handler, see below)        |
+| Surface           | How it reaches the server                                                               | Where it lives in this repo             |
+| ----------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
+| Gateway forwarder | `DiscordAdapter.startGatewayListener` opens a WS → POSTs every event to the webhook URL | `/api/agent/messenger/webhooks/discord` |
+| OAuth2 install    | URL Generator (built dynamically by the LinkModal, no callback)                         | (no callback handler, see below)        |
+| Interactions URL  | **Intentionally left blank**                                                            | n/a                                     |
 
 There is no equivalent of Slack's OAuth redirect: the "Add to Server" flow ends inside Discord's UI and never bounces back to LobeHub. The user manually opens the bot DM after the invite — no callback to write.
 
 ## Bot permissions rationale
 
-The OAuth2 install URL requests `bot + applications.commands` scopes, plus permissions bitfield `274877942784`. Decoded:
+The OAuth2 install URL requests `bot + applications.commands` scopes, plus permissions bitfield `309237763136`. Decoded:
 
-| Bit                                         | Why                                                                                                 |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `View Channel` (`1024`)                     | Required for the bot to receive any channel-scoped events (forward-looking; v1 is DM-only)          |
-| `Send Messages` (`2048`)                    | Reply in DMs and any future channel surface                                                         |
-| `Send Messages in Threads` (`274877906944`) | DM-bot replies inside Discord-side threads (auto-created when a user @-mentions the bot in a guild) |
+| Bit                                         | Why                                                                                           |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `Add Reactions` (`64`)                      | Inline feedback emoji on the user's message (👀 "processing" → ✅ done) — same UX as Slack    |
+| `View Channels` (`1024`)                    | Required for the bot to receive any channel-scoped event                                      |
+| `Send Messages` (`2048`)                    | Reply in DMs and channels                                                                     |
+| `Embed Links` (`16384`)                     | URL previews and embeds in bot replies                                                        |
+| `Attach Files` (`32768`)                    | Send file/image attachments back (e.g. when a vision/image-gen agent produces an output file) |
+| `Read Message History` (`65536`)            | Read prior messages in a channel/thread for context when replying to an @-mention             |
+| `Create Public Threads` (`34359738368`)     | Spawn a thread to keep an agent's reply chain off the parent channel                          |
+| `Send Messages in Threads` (`274877906944`) | Replies inside Discord-side threads (auto-created when a user @-mentions the bot in a guild)  |
 
-> **Why narrower than the channel-bot docs at `docs/usage/channels/discord.zh-CN.mdx`?** The two products are different. The channel docs cover a per-agent bot a user installs themselves and may use for channel @mentions, reactions, polls — needs the full set. The messenger app is the LobeHub-distributed App, DM-only in v1, so we ask for the minimum that delivers the feature.
+Sum check: `64 + 1024 + 2048 + 16384 + 32768 + 65536 + 34359738368 + 274877906944 = 309237763136`.
 
-Future scope additions (track separately):
+> **Aligned with the per-agent Discord channel docs** (`docs/usage/channels/discord.zh-CN.mdx`). Both products request the same Discord-side surface so users see one consent dialog regardless of which path they came from, and so we can ship channel / @-mention support later without re-prompting consent.
 
-- **Channel support** (parallel to Slack PR3): no new OAuth scopes needed, but bot permissions bitfield grows to include `Read Message History`, `Add Reactions`, `Use External Emojis`.
-- **Slash commands UX** (LOBE-8489): the `applications.commands` scope is **already requested at install time** so this is a no-op once handlers land — slash commands appear automatically once registered via `DiscordApi.registerCommands`.
+Slash commands UX (LOBE-8489 follow-up): the `applications.commands` scope is **already requested at install time** so it's a no-op once handlers land — slash commands appear automatically once registered via `DiscordApi.registerCommands`.
 
 ## Slash commands
 
@@ -107,10 +109,9 @@ If a self-hoster's users keep missing the success DM, the typical cause is: bot 
 
 ## Troubleshooting
 
-- **PING validation fails on save (`Validation failed: interactions endpoint URL ...`)**: the most common causes are (a) `LOBE_DISCORD_PUBLIC_KEY` doesn't match the App's Public Key (typo / wrong env), (b) the URL isn't reachable from Discord's edge (tunnel down, firewall), (c) the LobeHub server is up but `MessengerRouter.getWebhookHandler('discord')` returns 404 because env isn't loaded yet (restart after setting env). Check the server logs for the Ed25519 verification error from `@chat-adapter/discord`.
-- **Bot is invited but DMs do nothing**: confirm `LOBE_DISCORD_BOT_TOKEN` is set and matches the App. The interactions endpoint must also be configured — without it, Discord drops every interaction silently and you'll only see the message in the Discord UI without any bot response.
+- **Bot is invited but DMs do nothing**: check the server log for `discord gateway listener started`. If absent, `MessengerRouter.ensureConnected` didn't pick Discord up — most likely `LOBE_DISCORD_*` env wasn't loaded before the server started, or the deployment is on Vercel (where the persistent WS path isn't supported). Restart with the env set, or move to a long-running runtime.
+- **Gateway connects but slash commands return "interaction failed"**: the bot was invited with `applications.commands` scope but you also configured an Interactions Endpoint URL in the Developer Portal — Discord then routes interactions to that URL instead of the Gateway, bypassing our handlers. **Clear the Interactions Endpoint URL** field and reload the bot.
 - **`Cannot send messages to this user` from `notifyLinkSuccess`**: the user has DMs disabled, doesn't share a guild with the bot, or has blocked the bot. Re-invite the bot to a shared server and ask the user to send any message to the bot first.
 - **Slash commands don't show up in Discord autocomplete**: expected in v1 — see [Slash commands](#slash-commands). LOBE-8489 ships native registration.
 - **`MESSAGE CONTENT INTENT` toggle is missing on the Bot page**: Discord hides the toggle once your App reaches 100+ guild installs and requires intent verification. Until then, any developer can flip it freely. For the Cloud-distributed App, intent verification is handled by the LobeHub team.
-- **After tunnel restart, the Interactions Endpoint URL save button refuses to turn green**: the new tunnel hostname is likely correct but Discord cached the old PING failure for \~30s. Wait, then re-save with the new URL.
-- **`messenger.discord.connectModal.notConfigured` shown in the UI**: `LOBE_DISCORD_APPLICATION_ID` (or one of the other three required vars) is missing in the running deployment — the TRPC `availablePlatforms` query strips the `appId` and the LinkModal falls into the not-configured branch.
+- **`messenger.discord.connectModal.notConfigured` shown in the UI**: one of `LOBE_DISCORD_APPLICATION_ID` / `LOBE_DISCORD_BOT_TOKEN` / `LOBE_DISCORD_PUBLIC_KEY` is missing in the running deployment — the TRPC `availablePlatforms` query strips the `appId` and the LinkModal falls into the not-configured branch.
