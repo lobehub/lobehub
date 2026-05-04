@@ -60,15 +60,11 @@ export interface ConnectGatewayParams {
    */
   token: string;
   /**
-   * Called when the server signals `auth_expired` (JWT past `exp` while the
-   * op is still alive). Should resolve to a freshly-minted token. The client
-   * will then `updateToken()` and `reconnect()` automatically.
-   *
-   * Required: every Gateway op runs against a topic, and refreshes go through
-   * `aiAgentService.refreshGatewayToken(topicId)` — there's no scenario where
-   * a caller legitimately can't supply one.
+   * Topic this op runs against. Used to refresh the Gateway JWT via
+   * `aiAgentService.refreshGatewayToken(topicId)` when the server signals
+   * `auth_expired`. Every Gateway op has a topic, so this is required.
    */
-  tokenRefresher: () => Promise<string>;
+  topicId: string;
 }
 
 // ─── Action Implementation ───
@@ -92,15 +88,8 @@ export class GatewayActionImpl {
    * Creates an AgentStreamClient, manages its lifecycle, and wires up event callbacks.
    */
   connectToGateway = (params: ConnectGatewayParams): void => {
-    const {
-      operationId,
-      gatewayUrl,
-      token,
-      onEvent,
-      onSessionComplete,
-      resumeOnConnect,
-      tokenRefresher,
-    } = params;
+    const { operationId, gatewayUrl, token, topicId, onEvent, onSessionComplete, resumeOnConnect } =
+      params;
 
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
@@ -190,7 +179,7 @@ export class GatewayActionImpl {
     // freeze the input.
     client.on('auth_expired', async () => {
       try {
-        const fresh = await tokenRefresher();
+        const { token: fresh } = await aiAgentService.refreshGatewayToken(topicId);
         client.updateToken(fresh);
         await client.reconnect();
       } catch (error) {
@@ -382,10 +371,7 @@ export class GatewayActionImpl {
       },
       operationId: result.operationId,
       token: result.token || '',
-      tokenRefresher: async () => {
-        const refreshed = await aiAgentService.refreshGatewayToken(result.topicId);
-        return refreshed.token;
-      },
+      topicId: result.topicId,
     });
 
     return result;
@@ -458,10 +444,7 @@ export class GatewayActionImpl {
       operationId,
       resumeOnConnect: true,
       token,
-      tokenRefresher: async () => {
-        const refreshed = await aiAgentService.refreshGatewayToken(topicId);
-        return refreshed.token;
-      },
+      topicId,
     });
   };
 
