@@ -1,4 +1,3 @@
-import { ProviderIcon } from '@lobehub/icons';
 import { type FormItemProps } from '@lobehub/ui';
 import { Flexbox, FormModal, Icon, Input, InputPassword, Select, TextArea } from '@lobehub/ui';
 import { App } from 'antd';
@@ -7,6 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { ProviderIcon } from '@/components/ProviderIcon';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 import { type CreateAiProviderParams } from '@/types/aiProvider';
 

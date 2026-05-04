@@ -1,7 +1,6 @@
 'use client';
 
 import { CheckCircleFilled } from '@ant-design/icons';
-import { ProviderIcon } from '@lobehub/icons';
 import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
 import { App, Avatar, Button, Typography } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -10,6 +9,7 @@ import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProviderIcon } from '@/components/ProviderIcon';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import { useOAuthDeviceFlow } from './useOAuthDeviceFlow';

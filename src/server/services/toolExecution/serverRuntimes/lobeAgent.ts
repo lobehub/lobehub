@@ -231,7 +231,9 @@ class LobeAgentExecutionRuntime {
     const payload = {
       messages: [
         {
-          content: buildAnalyzeVisualMediaContent(selectedItems, params.question),
+          content: buildAnalyzeVisualMediaContent(selectedItems, params.question, {
+            gridMode: params.gridMode,
+          }),
           role: 'user' as const,
         },
       ],

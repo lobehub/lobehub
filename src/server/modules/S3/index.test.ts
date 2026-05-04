@@ -371,10 +371,25 @@ describe('FileS3', () => {
       expect(PutObjectCommand).toHaveBeenCalledWith({
         ACL: 'public-read',
         Bucket: 'test-bucket',
+        ContentType: undefined,
         Key: 'upload-file.txt',
       });
       expect(mockGetSignedUrl).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
         expiresIn: 3600,
+      });
+      expect(result).toBe('https://presigned-url.example.com');
+    });
+
+    it('should create presigned URL with Content-Type when specified', async () => {
+      const s3 = new FileS3();
+
+      const result = await s3.createPreSignedUrl('upload-file.txt', 'text/plain');
+
+      expect(PutObjectCommand).toHaveBeenCalledWith({
+        ACL: 'public-read',
+        Bucket: 'test-bucket',
+        ContentType: 'text/plain',
+        Key: 'upload-file.txt',
       });
       expect(result).toBe('https://presigned-url.example.com');
     });

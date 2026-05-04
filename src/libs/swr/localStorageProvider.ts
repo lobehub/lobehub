@@ -158,7 +158,18 @@ export function createLocalStorageProvider(options: LocalStorageCacheOptions = {
         }
       } catch (error) {
         if ((error as DOMException).name === 'QuotaExceededError') {
-          // Quota exceeded, clear cache
+          // Trim in-memory cache to prevent infinite re-save loop
+          if (cacheMapInstance) {
+            const whitelistedKeys = Array.from(cacheMapInstance.keys()).filter((key) =>
+              matchesCacheablePattern(key, cacheablePatterns),
+            );
+            const toDelete = whitelistedKeys.slice(
+              0,
+              Math.ceil(whitelistedKeys.length / 2),
+            );
+            toDelete.forEach((key) => cacheMapInstance!.delete(key));
+          }
+
           try {
             localStorage.removeItem(cacheKey);
           } catch {

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import fs from 'fs-extra';
 
-type ReleaseChannel = 'stable' | 'beta' | 'nightly' | 'canary';
+type ReleaseChannel = 'stable' | 'beta' | 'nightly' | 'canary' | 'hardy';
 
 const rootDir = path.resolve(__dirname, '../..');
 const desktopDir = path.join(rootDir, 'apps/desktop');
@@ -74,7 +74,11 @@ const restoreFile = async (filePath: string, content?: Buffer) => {
 };
 
 const validateChannel = (channel: string): channel is ReleaseChannel =>
-  channel === 'stable' || channel === 'beta' || channel === 'nightly' || channel === 'canary';
+  channel === 'stable' ||
+  channel === 'beta' ||
+  channel === 'nightly' ||
+  channel === 'canary' ||
+  channel === 'hardy';
 
 const runCommand = (command: string, env?: Record<string, string | undefined>) => {
   execSync(command, {

@@ -64,6 +64,7 @@ export interface ExecuteCodeParams {
 export interface RunCommandParams {
   background?: boolean;
   command: string;
+  description?: string;
   timeout?: number;
 }
 

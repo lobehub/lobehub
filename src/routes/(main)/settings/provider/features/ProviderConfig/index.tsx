@@ -2,7 +2,6 @@
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE } from '@lobechat/const';
-import { ProviderCombine } from '@lobehub/icons';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
 import {
   Avatar,
@@ -10,6 +9,7 @@ import {
   Flexbox,
   Form,
   Icon,
+  Select,
   Skeleton,
   stopPropagation,
   Tooltip,
@@ -25,6 +25,7 @@ import urlJoin from 'url-join';
 import { z } from 'zod';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
+import { ProviderCombine } from '@/components/ProviderIcon';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -137,6 +138,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       authType,
       proxyUrl,
       showApiKey = true,
+      sdkType,
       defaultShowBrowserRequest,
       disableBrowserRequest,
       showChecker = true,
@@ -378,8 +380,36 @@ const ProviderConfig = memo<ProviderConfigProps>(
         }
       : undefined;
 
+    const authMethodItem: FormItemProps | undefined =
+      sdkType === 'anthropic'
+        ? {
+            children: isLoading ? (
+              <SkeletonInput />
+            ) : (
+              <Select
+                allowClear={false}
+                options={[
+                  {
+                    label: t('providerModels.config.authMethod.options.apiKey'),
+                    value: 'apiKey',
+                  },
+                  {
+                    label: t('providerModels.config.authMethod.options.authToken'),
+                    value: 'authToken',
+                  },
+                ]}
+                placeholder={t('providerModels.config.authMethod.placeholder')}
+              />
+            ),
+            desc: t('providerModels.config.authMethod.desc'),
+            label: t('providerModels.config.authMethod.title'),
+            name: [KeyVaultsConfigKey, 'authMethod'],
+          }
+        : undefined;
+
     const configItems = [
       ...apiKeyItem,
+      authMethodItem,
       endpointItem,
       supportResponsesApi
         ? {

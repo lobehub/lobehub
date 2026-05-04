@@ -132,10 +132,17 @@ export class S3 {
     };
   }
 
-  public async createPreSignedUrl(key: string): Promise<string> {
+  /**
+   * Create pre-signed URL for file upload
+   * @param key - The S3 key for the file
+   * @param contentType - Optional Content-Type to lock in the signature
+   *                      When specified, the uploader MUST use the same Content-Type header
+   */
+  public async createPreSignedUrl(key: string, contentType?: string): Promise<string> {
     const command = new PutObjectCommand({
       ACL: this.setAcl ? 'public-read' : undefined,
       Bucket: this.bucket,
+      ContentType: contentType,
       Key: key,
     });
 

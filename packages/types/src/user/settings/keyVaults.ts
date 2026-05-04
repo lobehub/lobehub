@@ -1,6 +1,13 @@
 export interface OpenAICompatibleKeyVault {
   apiKey?: string;
   baseURL?: string;
+  /**
+   * Authentication method for Anthropic-compatible providers.
+   * - 'apiKey': sends API key as x-api-key header (Anthropic default)
+   * - 'authToken': sends API key as Authorization: Bearer header
+   * @default 'apiKey'
+   */
+  authMethod?: 'apiKey' | 'authToken';
 }
 
 export interface FalKeyVault {

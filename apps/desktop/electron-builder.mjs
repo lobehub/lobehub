@@ -37,7 +37,7 @@ const isCanary = channel === 'canary';
 
 // Strip trailing channel path from URL for re-appending the correct channel
 // Handles both base URL (https://cdn.example.com) and legacy URL with channel (https://cdn.example.com/stable)
-const stripChannelSuffix = (url) => url.replace(/\/(stable|nightly|canary|beta)\/?$/, '');
+const stripChannelSuffix = (url) => url.replace(/\/(stable|nightly|canary|beta|hardy)\/?$/, '');
 
 // 根据 channel 配置 publish provider
 // - 所有渠道 + UPDATE_SERVER_URL: 使用 generic (S3)

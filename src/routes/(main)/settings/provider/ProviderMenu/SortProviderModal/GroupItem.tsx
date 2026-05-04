@@ -1,7 +1,7 @@
-import { ProviderIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, SortableList } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { ProviderIcon } from '@/components/ProviderIcon';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 const GroupItem = memo<AiProviderListItem>(({ id, name, source, logo }) => {

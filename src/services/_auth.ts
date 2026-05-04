@@ -90,7 +90,11 @@ export const getProviderAuthPayload = (
     }
 
     default: {
-      return { apiKey: clientApiKeyManager.pick(keyVaults?.apiKey), baseURL: keyVaults?.baseURL };
+      return {
+        apiKey: clientApiKeyManager.pick(keyVaults?.apiKey),
+        authMethod: keyVaults?.authMethod,
+        baseURL: keyVaults?.baseURL,
+      };
     }
   }
 };

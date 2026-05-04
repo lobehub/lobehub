@@ -28,6 +28,7 @@ export interface SkillImportServiceResult {
 }
 
 export interface ExportFileResult {
+  error?: { message: string };
   fileId?: string;
   filename: string;
   mimeType?: string;
