@@ -30,19 +30,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
   `,
   path: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
     /* Head-truncate so the filename (the meaningful part) stays visible
        and only leading directory segments collapse into "…". Paths are
        strongly-LTR so RTL container direction is safe here. */
     direction: rtl;
-    text-align: left;
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    color: ${cssVar.colorText};
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   stats: css`
     flex: none;
@@ -108,16 +108,16 @@ const FileItemBody = memo<FileItemBodyProps>(
 
     return (
       <PatchDiff
-        diffOptions={{
-          lineDiffType: textDiff ? 'word-alt' : 'none',
-          overflow: wordWrap ? 'wrap' : 'scroll',
-        }}
         fileName={fileName}
         language={ext || undefined}
         patch={patch}
         showHeader={false}
         variant={'borderless'}
         viewMode={viewMode}
+        diffOptions={{
+          lineDiffType: textDiff ? 'word-alt' : 'none',
+          overflow: wordWrap ? 'wrap' : 'scroll',
+        }}
       />
     );
   },

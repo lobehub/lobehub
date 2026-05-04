@@ -223,8 +223,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
       onClick: () => setTextDiff((v) => !v),
     },
     {
-      icon:
-        viewMode === 'unified' ? <Columns2Icon size={14} /> : <Rows2Icon size={14} />,
+      icon: viewMode === 'unified' ? <Columns2Icon size={14} /> : <Rows2Icon size={14} />,
       key: 'viewMode',
       label:
         viewMode === 'unified'
