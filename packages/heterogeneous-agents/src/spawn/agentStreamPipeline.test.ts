@@ -48,22 +48,14 @@ describe('AgentStreamPipeline', () => {
     expect(pipeline.sessionId).toBe('cc-99');
   });
 
-  it('routes parsed payloads through transformPayload before the adapter', async () => {
-    const seen: unknown[] = [];
-    const pipeline = new AgentStreamPipeline({
-      agentType: 'claude-code',
-      operationId: 'op-1',
-      transformPayload: (payload) => {
-        seen.push(payload);
-        return payload;
-      },
-    });
+  it('auto-wires the Codex file-change tracker for codex agents only', async () => {
+    // claude-code → no codex tracker, file_change payloads pass through untouched
+    const claude = new AgentStreamPipeline({ agentType: 'claude-code', operationId: 'op-1' });
+    expect((claude as any).codexTracker).toBeUndefined();
 
-    await pipeline.push(init() + ccText('msg_01', 'hi'));
-
-    expect(seen.length).toBe(2);
-    expect((seen[0] as any).type).toBe('system');
-    expect((seen[1] as any).type).toBe('assistant');
+    // codex → tracker is instantiated automatically; consumers stay agent-agnostic
+    const codex = new AgentStreamPipeline({ agentType: 'codex', operationId: 'op-1' });
+    expect((codex as any).codexTracker).toBeDefined();
   });
 
   it('drops non-JSON noise lines instead of throwing', async () => {

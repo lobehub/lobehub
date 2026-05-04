@@ -17,7 +17,6 @@ import { AgentStreamPipeline } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
-import { CodexFileChangeTracker } from '@/modules/heterogeneousAgent/codexFileChangeTracker';
 import type { HeterogeneousAgentImageAttachment } from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
@@ -860,16 +859,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       session.process = proc;
 
       // Producer-side conversion (V3 contract): JSONL framing + adapter +
-      // toStreamEvent all run here, so renderer + future server `heteroIngest`
-      // see the same `AgentStreamEvent` wire shape with no per-consumer adapter.
-      const codexFileChangeTracker =
-        session.agentType === 'codex' ? new CodexFileChangeTracker() : undefined;
+      // toStreamEvent all run inside the shared pipeline, so renderer + future
+      // server `heteroIngest` see the same `AgentStreamEvent` wire shape with
+      // no per-consumer adapter. The pipeline auto-wires the Codex
+      // file-change line-stat tracker when `agentType === 'codex'`, so this
+      // controller stays agent-agnostic.
       const pipeline = new AgentStreamPipeline({
         agentType: session.agentType,
         operationId: params.operationId,
-        transformPayload: codexFileChangeTracker
-          ? (raw) => codexFileChangeTracker.track(raw)
-          : undefined,
       });
       let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
 

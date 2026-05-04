@@ -15,7 +15,8 @@
   "dependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/builtin-tool-claude-code": "workspace:*",
-    "@lobehub/icons": "^5.4.0"
+    "@lobehub/icons": "^5.4.0",
+    "diff": "^8.0.4"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

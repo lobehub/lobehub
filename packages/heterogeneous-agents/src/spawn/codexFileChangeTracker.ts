@@ -23,6 +23,10 @@ interface CodexFileChangePayload {
   type?: string;
 }
 
+type CodexFileChangePayloadWithId = CodexFileChangePayload & {
+  item: CodexFileChangeItem & { id: string };
+};
+
 interface CodexFileChangeLineStats {
   linesAdded: number;
   linesDeleted: number;
@@ -36,7 +40,7 @@ interface CodexTrackedFileChangeItem extends CodexFileChangeItem, CodexFileChang
 
 const isCodexFileChangePayload = (
   payload: CodexFileChangePayload,
-): payload is Required<CodexFileChangePayload> =>
+): payload is CodexFileChangePayloadWithId =>
   payload?.item?.type === 'file_change' && !!payload.item.id;
 
 const readTextFileSnapshot = async (filePath: string): Promise<CodexFileChangeSnapshot> => {
