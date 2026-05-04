@@ -32,10 +32,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   path: css`
     overflow: hidden;
     flex: 1;
+    min-width: 0;
 
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    /* Head-truncate so the filename (the meaningful part) stays visible
+       and only leading directory segments collapse into "…". Paths are
+       strongly-LTR so RTL container direction is safe here. */
+    direction: rtl;
+    text-align: left;
   `,
   stats: css`
     flex: none;
@@ -58,7 +65,9 @@ export const FileItemHeader = memo<FileItemHeaderProps>(({ filePath, additions, 
   return (
     <span className={styles.header}>
       <span className={styles.path} title={filePath}>
-        {filePath}
+        {/* bdi keeps the path's visual order LTR while the container is
+            direction: rtl for head-side truncation. */}
+        <bdi dir={'ltr'}>{filePath}</bdi>
       </span>
       <span className={styles.stats}>
         {additions > 0 && <span className={styles.additions}>+{additions}</span>}
@@ -77,12 +86,15 @@ interface FileItemBodyProps {
   filePath: string;
   isBinary: boolean;
   patch: string;
+  /** Inline word-level diff highlighting; off → plain line-level. */
+  textDiff: boolean;
   truncated: boolean;
   viewMode: 'unified' | 'split';
+  wordWrap: boolean;
 }
 
 const FileItemBody = memo<FileItemBodyProps>(
-  ({ filePath, patch, isBinary, truncated, expanded, viewMode }) => {
+  ({ filePath, patch, isBinary, truncated, expanded, viewMode, wordWrap, textDiff }) => {
     const { t } = useTranslation('chat');
 
     if (!expanded) return null;
@@ -96,6 +108,10 @@ const FileItemBody = memo<FileItemBodyProps>(
 
     return (
       <PatchDiff
+        diffOptions={{
+          lineDiffType: textDiff ? 'word-alt' : 'none',
+          overflow: wordWrap ? 'wrap' : 'scroll',
+        }}
         fileName={fileName}
         language={ext || undefined}
         patch={patch}
