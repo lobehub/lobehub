@@ -37,13 +37,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   ghPrefix: css`
     flex-shrink: 0;
+
+    margin-inline-end: 6px;
+
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
   `,
   icon: css`
     flex-shrink: 0;
-    margin-inline: 6px;
+    margin-inline-end: 6px;
     color: ${cssVar.colorTextDescription};
   `,
   statusIcon: css`
@@ -63,8 +66,8 @@ const GithubRunCommandInspector = memo<
 
   return (
     <div className={cx(inspectorTextStyles.root, pulse && shinyTextStyles.shinyText)}>
-      <span className={styles.ghPrefix}>gh</span>
       <Github className={styles.icon} size={14} />
+      <span className={styles.ghPrefix}>gh</span>
       {subcommand && (
         <span className={styles.chip}>
           <span className={styles.command}>{subcommand}</span>
