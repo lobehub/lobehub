@@ -2,12 +2,10 @@ import { PLUGIN_SCHEMA_API_MD5_PREFIX, PLUGIN_SCHEMA_SEPARATOR } from '@lobechat
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
-import i18n from 'i18next';
 import { type Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
-import { chatSelectors } from '@/store/chat/selectors';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useToolStore } from '@/store/tool';
@@ -31,161 +29,6 @@ afterEach(() => {
 });
 
 describe('ChatPluginAction', () => {
-  describe('summaryPluginContent', () => {
-    it('should summarize plugin content', async () => {
-      const messageId = 'message-id';
-      const toolMessage = {
-        id: messageId,
-        role: 'tool',
-        content: 'Tool content to summarize',
-      } as UIChatMessage;
-
-      const internal_execAgentRuntimeMock = vi.fn();
-
-      act(() => {
-        useChatStore.setState({
-          activeAgentId: 'session-id',
-          messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [toolMessage] },
-          internal_execAgentRuntime: internal_execAgentRuntimeMock,
-        });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.summaryPluginContent(messageId);
-      });
-
-      expect(internal_execAgentRuntimeMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            agentId: 'session-id',
-          }),
-          messages: [
-            {
-              role: 'assistant',
-              content: i18n.t('prompts.summaryExpert', { ns: 'chat' }),
-            },
-            expect.objectContaining({
-              id: toolMessage.id,
-              content: toolMessage.content,
-              role: 'assistant',
-            }),
-          ],
-          parentMessageId: messageId,
-          parentMessageType: 'assistant',
-        }),
-      );
-    });
-
-    it('should not summarize non-tool messages', async () => {
-      const messageId = 'message-id';
-      const nonToolMessage = {
-        id: messageId,
-        role: 'user',
-        content: 'User message',
-      } as UIChatMessage;
-
-      const internal_execAgentRuntimeMock = vi.fn();
-
-      act(() => {
-        useChatStore.setState({
-          activeAgentId: 'session-id',
-          messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [nonToolMessage] },
-          internal_execAgentRuntime: internal_execAgentRuntimeMock,
-        });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.summaryPluginContent(messageId);
-      });
-
-      expect(internal_execAgentRuntimeMock).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('fillPluginMessageContent', () => {
-    it('should update message content and trigger the ai message', async () => {
-      // 设置模拟函数的返回值
-      const mockCurrentChats: any[] = [];
-      vi.spyOn(chatSelectors, 'activeBaseChats').mockReturnValue(mockCurrentChats);
-
-      // 设置初始状态
-      const initialState = {
-        messages: [],
-        internal_execAgentRuntime: vi.fn(),
-        refreshMessages: vi.fn(),
-        optimisticUpdateMessageContent: vi.fn(),
-      };
-      useChatStore.setState(initialState);
-
-      const { result } = renderHook(() => useChatStore());
-
-      const messageId = 'message-id';
-      const newContent = 'Updated content';
-
-      await act(async () => {
-        await result.current.fillPluginMessageContent(messageId, newContent, true);
-      });
-
-      // 验证 optimisticUpdateMessageContent 是否被正确调用
-      // The function now takes 4 args: (id, content, extra?, context?)
-      expect(result.current.optimisticUpdateMessageContent).toHaveBeenCalledWith(
-        messageId,
-        newContent,
-        undefined,
-        undefined,
-      );
-
-      // 验证 coreProcessMessage 是否被正确调用
-      expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: mockCurrentChats,
-          parentMessageId: messageId,
-          parentMessageType: 'user',
-        }),
-      );
-    });
-    it('should update message content and not trigger ai message', async () => {
-      // 设置模拟函数的返回值
-      const mockCurrentChats: any[] = [];
-      vi.spyOn(chatSelectors, 'activeBaseChats').mockReturnValue(mockCurrentChats);
-
-      // 设置初始状态
-      const initialState = {
-        messages: [],
-        coreProcessMessage: vi.fn(),
-        internal_execAgentRuntime: vi.fn(),
-        refreshMessages: vi.fn(),
-        optimisticUpdateMessageContent: vi.fn(),
-      };
-      useChatStore.setState(initialState);
-
-      const { result } = renderHook(() => useChatStore());
-
-      const messageId = 'message-id';
-      const newContent = 'Updated content';
-
-      await act(async () => {
-        await result.current.fillPluginMessageContent(messageId, newContent);
-      });
-
-      // 验证 optimisticUpdateMessageContent 是否被正确调用
-      // The function now takes 4 args: (id, content, extra?, context?)
-      expect(result.current.optimisticUpdateMessageContent).toHaveBeenCalledWith(
-        messageId,
-        newContent,
-        undefined,
-        undefined,
-      );
-
-      // 验证 coreProcessMessage 没有被正确调用
-      expect(result.current.internal_execAgentRuntime).not.toHaveBeenCalled();
-    });
-  });
-
   describe('updatePluginState', () => {
     it('should update the plugin state for a message', async () => {
       const messageId = 'message-id';

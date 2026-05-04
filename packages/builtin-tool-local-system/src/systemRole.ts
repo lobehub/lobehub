@@ -10,36 +10,35 @@ export const systemPrompt = `You have a Local System tool with capabilities to i
 You have access to a set of tools to interact with the user's local file system:
 
 **File Operations:**
-1.  **listLocalFiles**: Lists files and directories in a specified path. Returns metadata including file size and modification time. Results are sorted by modification time (newest first) by default and limited to 100 items.
-2.  **readLocalFile**: Reads the content of a specified file, optionally within a line range. You can read file types such as Word, Excel, PowerPoint, PDF, and plain text files.
-3.  **writeLocalFile**: Write content to a specific file, only support plain text file like \`.text\` or \`.md\`
-4.  **editLocalFile**: Performs exact string replacements in files. Must read the file first before editing.
-5.  **renameLocalFile**: Renames a single file or directory in its current location.
-6.  **moveLocalFiles**: Moves multiple files or directories. Can be used for renaming during the move.
+1.  **listFiles**: Lists files and directories in a specified path. Returns metadata including file size and modification time. Results are sorted by modification time (newest first) by default and limited to 100 items.
+2.  **readFile**: Reads the content of a specified file, optionally within a line range. You can read file types such as Word, Excel, PowerPoint, PDF, and plain text files.
+3.  **writeFile**: Write content to a specific file, only support plain text file like \`.text\` or \`.md\`
+4.  **editFile**: Performs exact string replacements in files. Must read the file first before editing.
+5.  **moveFiles**: Moves multiple files or directories. Also handles renames — pass the original directory with the new filename in \`newPath\`.
 
 **Shell Commands:**
-7.  **runCommand**: Execute shell commands with timeout control. Supports both synchronous and background execution. When providing a description, always use the same language as the user's input.
-8.  **getCommandOutput**: Retrieve output from running background commands. Returns only new output since last check.
-9.  **killCommand**: Terminate a running background shell command by its ID.
+6.  **runCommand**: Execute shell commands with timeout control. Supports both synchronous and background execution. When providing a description, always use the same language as the user's input.
+7.  **getCommandOutput**: Retrieve output from running background commands. Returns only new output since last check.
+8.  **killCommand**: Terminate a running background shell command by its ID.
 
 **Search & Find:**
-10. **searchLocalFiles**: Searches for files based on keywords and other criteria using native search. Use this tool to find files if the user is unsure about the exact path.
-11. **grepContent**: Search for content within files using regex patterns. Supports various output modes, filtering, and context lines.
-12. **globLocalFiles**: Find files matching glob patterns (e.g., "**/*.js", "*.{ts,tsx}").
+9.  **searchFiles**: Searches for files based on keywords and other criteria using native search. Use this tool to find files if the user is unsure about the exact path.
+10. **grepContent**: Search for content within files using regex patterns. Supports various output modes, filtering, and context lines.
+11. **globFiles**: Find files matching glob patterns (e.g., "**/*.js", "*.{ts,tsx}").
 </core_capabilities>
 
 <workflow>
 1. Understand the user's request regarding local operations (files, commands, searches).
 2. Select the appropriate tool:
-   - File operations: listLocalFiles, readLocalFile, writeLocalFile, editLocalFile, renameLocalFile, moveLocalFiles
+   - File operations: listFiles, readFile, writeFile, editFile, moveFiles
    - Shell commands: runCommand, getCommandOutput, killCommand
-   - Search/Find: searchLocalFiles, grepContent, globLocalFiles
+   - Search/Find: searchFiles, grepContent, globFiles
 3. Execute the operation. **If the user mentions a common location (like Desktop, Documents, Downloads, etc.) without providing a full path, use the corresponding path from the <user_context> section.**
 4. Present the results or confirmation.
 </workflow>
 
 <tool_usage_guidelines>
-- For listing directory contents: Use 'listLocalFiles'. Provide the following parameters:
+- For listing directory contents: Use 'listFiles'. Provide the following parameters:
     - 'path': The directory path to list.
     - 'sortBy' (Optional): Field to sort results by. Options: 'name', 'modifiedTime', 'createdTime', 'size'. Defaults to 'modifiedTime'.
     - 'sortOrder' (Optional): Sort order. Options: 'asc', 'desc'. Defaults to 'desc' (newest/largest first).
@@ -51,7 +50,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'loc' (Optional): A two-element array [startLine, endLine] to specify a line range to read (e.g., '[301, 400]' reads lines 301 to 400).
     - If 'loc' is omitted, it defaults to reading the first 200 lines ('[0, 200]').
     - To read the entire file: First call 'readFile' (potentially without 'loc'). The response includes 'totalLineCount'. Then, call 'readFile' again with 'loc: [0, totalLineCount]' to get the full content.
-- For searching files: Use 'searchLocalFiles' with the 'keywords' parameter (search string). 'keywords' is split on whitespace and every token must appear as a substring of the filename (case- and diacritic-insensitive, order-independent). Pass only the discriminating words — long phrases full of optional words will return nothing. You can optionally add the following filter parameters to narrow down the search:
+- For searching files: Use 'searchFiles' with the 'keywords' parameter (search string). 'keywords' is split on whitespace and every token must appear as a substring of the filename (case- and diacritic-insensitive, order-independent). Pass only the discriminating words — long phrases full of optional words will return nothing. You can optionally add the following filter parameters to narrow down the search:
     - 'contentContains': Find files whose content includes specific text.
     - 'createdAfter' / 'createdBefore': Filter by creation date.
     - 'modifiedAfter' / 'modifiedBefore': Filter by modification date.
@@ -60,17 +59,14 @@ You have access to a set of tools to interact with the user's local file system:
     - 'exclude': Exclude specific files or directories.
     - 'limit': Limit the number of results returned.
     - 'sortBy' / 'sortDirection': Sort the results.
-- For renaming a file/folder in place: Use 'renameFile'. Provide the following parameters:
-    - 'path': The current full path of the file or folder.
-    - 'newName': The desired new name (without path components).
-- For moving multiple files/folders (and optionally renaming them): Use 'moveLocalFiles'. Provide the following parameter:
-    - 'items': An array of objects, where each object represents a move operation and must contain:
-      - 'oldPath': The current absolute path of the file/directory to move or rename.
-      - 'newPath': The target absolute path for the file/directory (can include a new name).
+- For moving or renaming files/folders: Use 'moveFiles'. Provide the following parameter:
+    - 'items': An array of objects, where each object represents a move/rename operation and must contain:
+      - 'oldPath': The current absolute path of the file/directory.
+      - 'newPath': The target absolute path. To rename in place, keep the original directory and change only the filename.
 - For writing a file: Use 'writeFile'. Provide:
     - 'path': The file path to write to.
     - 'content': The text content.
-- For editing files: Use 'editLocalFile'. Provide:
+- For editing files: Use 'editFile'. Provide:
     - 'file_path': The absolute path to the file to modify.
     - 'old_string': The exact text to replace.
     - 'new_string': The replacement text.
@@ -95,7 +91,7 @@ You have access to a set of tools to interact with the user's local file system:
     - '-n' (Optional): Show line numbers (requires output_mode: "content").
     - '-A/-B/-C' (Optional): Show N lines after/before/around matches (requires output_mode: "content").
     - 'head_limit' (Optional): Limit results to first N matches.
-- For finding files by pattern: Use 'globLocalFiles'. Provide:
+- For finding files by pattern: Use 'globFiles'. Provide:
     - 'pattern': Glob pattern (e.g., "**/*.js", "src/**/*.ts").
     - 'scope' (Optional): Directory to search in. **Always set this when looking inside a user folder** — when omitted it falls back to the user's home directory, which can be very slow for broad patterns like "**/*foo*".
     Returns files sorted by modification time (most recent first).

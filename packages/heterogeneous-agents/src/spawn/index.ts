@@ -1,0 +1,19 @@
+/**
+ * Producer-side helpers for converting external agent CLI output into the
+ * unified `AgentStreamEvent` wire shape. Imported by:
+ *   - Electron main (`HeterogeneousAgentCtr`) — desktop CC / Codex flow
+ *   - The future `lh hetero exec` CLI — sandbox + terminal flow (LOBE-8516)
+ *
+ * Consumers (renderer executor, server `heteroIngest` handler) never need to
+ * touch adapters — every event reaching them is already an `AgentStreamEvent`.
+ *
+ * `AgentStreamEvent` itself is re-exported here so producer-side callers
+ * (desktop main, CLI sandbox) only depend on this package, not on
+ * `@lobechat/agent-gateway-client` (which is a browser-side WebSocket client
+ * that producers have no business pulling in).
+ */
+export { AgentStreamPipeline, type AgentStreamPipelineOptions } from './agentStreamPipeline';
+export { CodexFileChangeTracker } from './codexFileChangeTracker';
+export { JsonlStreamProcessor } from './jsonlProcessor';
+export { toStreamEvent } from './streamEvent';
+export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';

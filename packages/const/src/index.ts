@@ -4,6 +4,7 @@ export * from './desktop';
 export * from './desktopGlobalShortcuts';
 export * from './discover';
 export * from './editor';
+export * from './fetch';
 export * from './file';
 export * from './klavis';
 export * from './layoutTokens';

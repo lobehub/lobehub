@@ -11,8 +11,12 @@ import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
 
+const { mockGetAllWindows } = vi.hoisted(() => ({
+  mockGetAllWindows: vi.fn<() => any[]>(() => []),
+}));
+
 vi.mock('electron', () => ({
-  BrowserWindow: { getAllWindows: () => [] },
+  BrowserWindow: { getAllWindows: () => mockGetAllWindows() },
   app: {
     getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
     isPackaged: false,
@@ -199,7 +203,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId, ...sendPromptOverrides });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -314,7 +318,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId, ...sendPromptOverrides });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -332,9 +336,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Codex CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Codex CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('codex', true);
       expect(spawnCalls).toHaveLength(0);
@@ -352,9 +356,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Claude Code CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).toHaveBeenCalledWith('claude', true);
       expect(spawnCalls).toHaveLength(0);
@@ -390,9 +394,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'claude-alt',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Claude Code CLI was not found',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Claude Code CLI was not found');
 
       expect(detect).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
@@ -493,6 +497,7 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(
         ctr.sendPrompt({
           imageList,
+          operationId: 'op-test',
           prompt: 'inspect the screenshots',
           sessionId,
         }),
@@ -526,9 +531,9 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
       });
 
-      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
-        'Agent exited with code 1',
-      );
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Agent exited with code 1');
     });
 
     it('uses codex exec resume syntax when continuing an existing thread', async () => {
@@ -670,6 +675,110 @@ describe('HeterogeneousAgentCtr', () => {
         stderr:
           'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
       });
+    });
+  });
+
+  /**
+   * Node may emit `proc.on('exit')` BEFORE stdout fully drains (documented in
+   * child_process docs as "stdio streams might still be open"). The phase 0
+   * refactor moved adapter ownership to main, so renderer no longer flushes
+   * its own adapter on session-complete — meaning trailing events from
+   * `pipeline.flush()` (e.g. Codex's synthesized `tool_end` for unfinished
+   * tool calls) would race against — and lose to — the
+   * `heteroAgentSessionComplete` broadcast without an explicit gate.
+   *
+   * The fix in `proc.on('exit')` is to await stdout `'end'/'close'` (so the
+   * `stdout.on('end')` handler can schedule `pipeline.flush()` onto the
+   * broadcast queue), then drain the queue, then broadcast complete.
+   */
+  describe('exit-before-end ordering (LOBE-8516 phase 0 race)', () => {
+    let broadcasts: Array<{ channel: string; data: any }>;
+
+    beforeEach(() => {
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+      broadcasts = [];
+      mockGetAllWindows.mockImplementation(() => [
+        {
+          isDestroyed: () => false,
+          webContents: {
+            send: (channel: string, data: any) => broadcasts.push({ channel, data }),
+          },
+        },
+      ]);
+    });
+
+    afterEach(() => {
+      mockGetAllWindows.mockReset();
+      mockGetAllWindows.mockReturnValue([]);
+    });
+
+    it('delivers pipeline.flush() events BEFORE heteroAgentSessionComplete even when proc exit precedes stdout end', async () => {
+      // Codex `item.started` for a tool — adapter buffers it as a pending
+      // tool call. On flush, adapter synthesizes a trailing `tool_end`. This
+      // is exactly the kind of event the race would lose against complete.
+      const itemStarted = `${JSON.stringify({
+        item: {
+          aggregated_output: '',
+          command: 'echo hi',
+          id: 'cmd-1',
+          status: 'in_progress',
+          type: 'command_execution',
+        },
+        type: 'item.started',
+      })}\n`;
+      const threadStarted = `${JSON.stringify({ thread_id: 't1', type: 'thread.started' })}\n`;
+
+      const proc = new EventEmitter() as any;
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      proc.stdout = stdout;
+      proc.stderr = stderr;
+      proc.stdin = {
+        end: vi.fn(),
+        write: vi.fn((_chunk: any, cb?: () => void) => {
+          cb?.();
+          return true;
+        }),
+      };
+      proc.kill = vi.fn();
+      proc.killed = false;
+      proc.__start = () => {
+        setImmediate(() => {
+          stdout.write(threadStarted);
+          stdout.write(itemStarted);
+          stderr.end();
+          // ⚠️ Reproduce the documented Node race: emit exit BEFORE stdout
+          // ends. Without the streamFinished gate in the controller, the
+          // broadcast queue settles immediately (no flush queued yet) and
+          // complete fires before the trailing tool_end ever broadcasts.
+          proc.emit('exit', 0);
+          setImmediate(() => stdout.end());
+        });
+      };
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      const events = broadcasts.filter((b) => b.channel === 'heteroAgentEvent');
+      const completeIdx = broadcasts.findIndex((b) => b.channel === 'heteroAgentSessionComplete');
+      const lastEventIdx = broadcasts.findLastIndex((b) => b.channel === 'heteroAgentEvent');
+
+      expect(completeIdx).toBeGreaterThan(-1);
+      expect(events.length).toBeGreaterThan(0);
+      // Every stream event must land before complete — no trailing events
+      // sneak in after the renderer has been told the session is done.
+      expect(lastEventIdx).toBeLessThan(completeIdx);
+
+      // Specifically: the synthesized tool_end for the pending command
+      // execution (emitted only by adapter.flush()) is in the broadcast.
+      const toolEnds = events.filter((b) => (b.data as any)?.event?.type === 'tool_end');
+      expect(toolEnds.length).toBeGreaterThan(0);
     });
   });
 });

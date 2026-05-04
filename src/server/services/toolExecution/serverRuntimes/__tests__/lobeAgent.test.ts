@@ -1,5 +1,5 @@
 import { LobeAgentIdentifier, MAX_VISUAL_MEDIA_URLS } from '@lobechat/builtin-tool-lobe-agent';
-import { createVisualFileRef } from '@lobechat/types';
+import { createVisualFileRef, RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolExecutionContext } from '../../types';
@@ -190,7 +190,11 @@ describe('lobeAgentRuntime', () => {
           }),
         ],
       }),
-      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          trigger: RequestTrigger.VisualAnalysis,
+        }),
+      }),
     );
   });
 

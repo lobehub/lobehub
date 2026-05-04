@@ -9,7 +9,6 @@ import type {
   LocalReadFilesParams,
   LocalSearchFilesParams,
   MoveLocalFilesParams,
-  RenameLocalFileParams,
   RunCommandParams,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
@@ -23,19 +22,18 @@ import { LocalSystemIdentifier } from '../types';
 import { resolveArgsWithScope } from '../utils/path';
 
 const LocalSystemApiEnum = {
-  editLocalFile: 'editLocalFile' as const,
+  editFile: 'editFile' as const,
   getCommandOutput: 'getCommandOutput' as const,
-  globLocalFiles: 'globLocalFiles' as const,
+  globFiles: 'globFiles' as const,
   grepContent: 'grepContent' as const,
   killCommand: 'killCommand' as const,
-  listLocalFiles: 'listLocalFiles' as const,
-  moveLocalFiles: 'moveLocalFiles' as const,
-  readLocalFile: 'readLocalFile' as const,
-  readLocalFiles: 'readLocalFiles' as const,
-  renameLocalFile: 'renameLocalFile' as const,
+  listFiles: 'listFiles' as const,
+  moveFiles: 'moveFiles' as const,
+  readFile: 'readFile' as const,
+  readFiles: 'readFiles' as const,
   runCommand: 'runCommand' as const,
-  searchLocalFiles: 'searchLocalFiles' as const,
-  writeLocalFile: 'writeLocalFile' as const,
+  searchFiles: 'searchFiles' as const,
+  writeFile: 'writeFile' as const,
 };
 
 /**
@@ -56,7 +54,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
    * Single funnel for every executor return — keep it strict:
    * - never propagate an undefined `content` (would collapse downstream into
    *   `''` and leave the Debug "Response" pane blank while pluginState was
-   *   still saved — see globLocalFiles regression);
+   *   still saved — see globFiles regression);
    * - always preserve `state` when the runtime produced one, regardless of
    *   `success`, so renderers can keep displaying partial outputs on failure.
    */
@@ -85,7 +83,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   // ==================== File Operations ====================
 
-  listLocalFiles = async (params: ListLocalFileParams): Promise<BuiltinToolResult> => {
+  listFiles = async (params: ListLocalFileParams): Promise<BuiltinToolResult> => {
     try {
       const result = await this.runtime.listFiles({
         directoryPath: params.path,
@@ -98,7 +96,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     }
   };
 
-  readLocalFile = async (params: LocalReadFileParams): Promise<BuiltinToolResult> => {
+  readFile = async (params: LocalReadFileParams): Promise<BuiltinToolResult> => {
     try {
       const result = await this.runtime.readFile({
         endLine: params.loc?.[1],
@@ -111,7 +109,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     }
   };
 
-  readLocalFiles = async (params: LocalReadFilesParams): Promise<BuiltinToolResult> => {
+  readFiles = async (params: LocalReadFilesParams): Promise<BuiltinToolResult> => {
     try {
       const result = await this.runtime.readFiles(params);
       return this.toResult(result);
@@ -120,7 +118,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     }
   };
 
-  searchLocalFiles = async (params: LocalSearchFilesParams): Promise<BuiltinToolResult> => {
+  searchFiles = async (params: LocalSearchFilesParams): Promise<BuiltinToolResult> => {
     try {
       const resolvedParams = resolveArgsWithScope(params, 'directory');
       const result = await this.runtime.searchFiles({
@@ -133,7 +131,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     }
   };
 
-  moveLocalFiles = async (params: MoveLocalFilesParams): Promise<BuiltinToolResult> => {
+  moveFiles = async (params: MoveLocalFilesParams): Promise<BuiltinToolResult> => {
     try {
       const result = await this.runtime.moveFiles({
         operations: params.items.map((item) => ({
@@ -147,19 +145,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     }
   };
 
-  renameLocalFile = async (params: RenameLocalFileParams): Promise<BuiltinToolResult> => {
-    try {
-      const result = await this.runtime.renameFile({
-        newName: params.newName,
-        oldPath: params.path,
-      });
-      return this.toResult(result);
-    } catch (error) {
-      return this.errorResult(error);
-    }
-  };
-
-  writeLocalFile = async (params: WriteLocalFileParams): Promise<BuiltinToolResult> => {
+  writeFile = async (params: WriteLocalFileParams): Promise<BuiltinToolResult> => {
     try {
       const result = await this.runtime.writeFile(params);
       return this.toResult(result);
@@ -168,7 +154,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     }
   };
 
-  editLocalFile = async (params: EditLocalFileParams): Promise<BuiltinToolResult> => {
+  editFile = async (params: EditLocalFileParams): Promise<BuiltinToolResult> => {
     try {
       const result = await this.runtime.editFile({
         all: params.replace_all,
@@ -230,7 +216,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     }
   };
 
-  globLocalFiles = async (params: GlobFilesParams): Promise<BuiltinToolResult> => {
+  globFiles = async (params: GlobFilesParams): Promise<BuiltinToolResult> => {
     try {
       const result = await this.runtime.globFiles({
         directory: params.scope,

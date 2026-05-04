@@ -4,7 +4,7 @@ import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
 const LocalSystemToolSnapshotSchema = z.object({
-  apiName: z.enum(['readLocalFile', 'listLocalFiles']),
+  apiName: z.enum(['readFile', 'listFiles', 'readLocalFile', 'listLocalFiles']),
   arguments: z.record(z.string(), z.unknown()),
   capturedAt: z.string(),
   content: z.string().nullable(),
@@ -18,7 +18,7 @@ const LocalSystemToolSnapshotSchema = z.object({
 });
 
 export interface LocalSystemToolSnapshot {
-  apiName: 'readLocalFile' | 'listLocalFiles';
+  apiName: 'readFile' | 'listFiles' | 'readLocalFile' | 'listLocalFiles';
   arguments: Record<string, unknown>;
   capturedAt: string;
   content: string | null;

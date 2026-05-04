@@ -12,16 +12,29 @@ import { WriteLocalFileInspector } from './WriteLocalFile';
 
 /**
  * Local System Inspector Components Registry
+ *
+ * Register each component under both the new short API name and the legacy
+ * long name so old DB messages keep rendering after the rename.
  */
 export const LocalSystemInspectors = {
-  [LocalSystemApiName.editLocalFile]: EditLocalFileInspector,
-  [LocalSystemApiName.globLocalFiles]: GlobLocalFilesInspector,
+  [LocalSystemApiName.editFile]: EditLocalFileInspector,
+  [LocalSystemApiName.globFiles]: GlobLocalFilesInspector,
   [LocalSystemApiName.grepContent]: GrepContentInspector,
-  [LocalSystemApiName.listLocalFiles]: ListLocalFilesInspector,
-  [LocalSystemApiName.moveLocalFiles]: MoveLocalFilesInspector,
-  [LocalSystemApiName.readLocalFile]: ReadLocalFileInspector,
-  [LocalSystemApiName.renameLocalFile]: RenameLocalFileInspector,
+  [LocalSystemApiName.listFiles]: ListLocalFilesInspector,
+  [LocalSystemApiName.moveFiles]: MoveLocalFilesInspector,
+  [LocalSystemApiName.readFile]: ReadLocalFileInspector,
   [LocalSystemApiName.runCommand]: RunCommandInspector,
-  [LocalSystemApiName.searchLocalFiles]: SearchLocalFilesInspector,
-  [LocalSystemApiName.writeLocalFile]: WriteLocalFileInspector,
+  [LocalSystemApiName.searchFiles]: SearchLocalFilesInspector,
+  [LocalSystemApiName.writeFile]: WriteLocalFileInspector,
+  // Legacy aliases — keep these so historical messages keep rendering.
+  // `renameLocalFile` is kept here even though the new tool surface no longer
+  // exposes a rename API (rename is now done via `moveFiles`).
+  editLocalFile: EditLocalFileInspector,
+  globLocalFiles: GlobLocalFilesInspector,
+  listLocalFiles: ListLocalFilesInspector,
+  moveLocalFiles: MoveLocalFilesInspector,
+  readLocalFile: ReadLocalFileInspector,
+  renameLocalFile: RenameLocalFileInspector,
+  searchLocalFiles: SearchLocalFilesInspector,
+  writeLocalFile: WriteLocalFileInspector,
 };

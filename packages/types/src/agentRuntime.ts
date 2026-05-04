@@ -11,6 +11,7 @@ export enum RequestTrigger {
   SemanticSearch = 'semantic_search',
   Topic = 'topic',
   Video = 'video',
+  VisualAnalysis = 'visual_analysis',
 }
 
 // ******* Runtime Biz Error ******* //

@@ -14,6 +14,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 
 import { MessageModel } from '@/database/models/message';
@@ -248,7 +249,7 @@ class LobeAgentExecutionRuntime {
         },
       },
       metadata: {
-        trigger: 'lobe-agent.analyzeVisualMedia',
+        trigger: RequestTrigger.VisualAnalysis,
       },
     });
 
@@ -260,7 +261,7 @@ class LobeAgentExecutionRuntime {
         files: selectedItems.map(({ ref, id, type, name }) => ({ id, name, ref, type })),
         model,
         provider,
-        trigger: 'lobe-agent.analyzeVisualMedia',
+        trigger: RequestTrigger.VisualAnalysis,
         usage,
       },
       success: true,
