@@ -158,10 +158,24 @@ export class AgentStreamClient extends TypedEmitter {
   }
 
   /**
-   * Update the auth token (e.g. after JWT refresh). Call connect() or wait for auto-reconnect.
+   * Update the auth token used for (re)connections.
+   * Call this after refreshing an expired JWT, then call `reconnect()`.
    */
   updateToken(token: string): void {
     this.token = token;
+  }
+
+  /**
+   * Force a reconnect cycle: tear down the current WebSocket and establish a
+   * fresh connection (which will re-authenticate with the latest token).
+   * Use this after `updateToken()` to recover from `auth_expired`.
+   */
+  async reconnect(): Promise<void> {
+    this.cleanup();
+    this.intentionalDisconnect = false;
+    this.sessionEnded = false;
+    this.reconnectDelay = INITIAL_RECONNECT_DELAY;
+    this.doConnect();
   }
 
   // ─── Connection Logic ───
@@ -246,6 +260,13 @@ export class AgentStreamClient extends TypedEmitter {
         case 'auth_failed': {
           this.emit('auth_failed', message.reason);
           this.disconnect();
+          break;
+        }
+
+        case 'auth_expired': {
+          // Token expired but the server kept the socket open. Don't disconnect —
+          // the listener will refresh the token and call `reconnect()`.
+          this.emit('auth_expired');
           break;
         }
 

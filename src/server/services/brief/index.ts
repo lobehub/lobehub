@@ -22,9 +22,13 @@ export type BriefWithAgents = BriefItem & {
 export class BriefService {
   private agentModel: AgentModel;
   private briefModel: BriefModel;
+  private db: LobeChatDatabase;
   private taskModel: TaskModel;
+  private userId: string;
 
   constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
+    this.userId = userId;
     this.agentModel = new AgentModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
     this.taskModel = new TaskModel(db, userId);
@@ -107,6 +111,14 @@ export class BriefService {
       const task = await this.taskModel.findById(brief.taskId);
       if (task && task.status !== 'scheduled') {
         await this.taskModel.updateStatus(brief.taskId, 'completed', { error: null });
+        // Cascade to downstream tasks whose dependencies are now satisfied.
+        // Without this, dependents stay in `backlog` until the user manually
+        // triggers them — defeating the point of the dependency edge.
+        // Lazy-loaded to avoid pulling ModelRuntime into BriefService's
+        // import graph (TaskRunner → TaskLifecycle → ModelRuntime).
+        const { TaskRunnerService } = await import('@/server/services/taskRunner');
+        const runner = new TaskRunnerService(this.db, this.userId);
+        await runner.cascadeOnCompletion(brief.taskId);
       }
     }
 

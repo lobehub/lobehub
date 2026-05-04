@@ -25,7 +25,7 @@ For where files live and how registries work, see [architecture.md](architecture
 
 - **`lobe-` prefix is mandatory** — many switches in the codebase key off it.
 - Pick a **domain noun**, not a verb (`lobe-task`, not `lobe-task-manager`).
-- The identifier is **persisted in message history** — renaming after release means the `@deprecated` alias trick (see `packages/builtin-tools/src/inspectors.ts:88-89` for how `lobe-tools` aliases `lobe-activator`). Get it right the first time.
+- The identifier is **persisted in message history** — renaming after release means the `@deprecated` alias trick (register the legacy identifier as a second key in `inspectors.ts` / `renders.ts` pointing at the new module). Get it right the first time.
 
 ### ApiName rules
 
@@ -473,6 +473,6 @@ This entry is what `packages/builtin-tools/src/index.ts` and `identifiers.ts` im
 | Debug "Response" pane blank but `pluginState` populated | Returning `content: ''` or letting `output.content` be undefined — use the `toResult` funnel            |
 | Partial result vanishes on failure                      | `toResult` discarded `state` when `success: false`; preserve it                                         |
 | Tool shows up but doesn't run on desktop                | `executors` in manifest doesn't include `'client'` (or vice versa for server-only)                      |
-| Same tool registered twice / "lobe-tools" ghost         | Identifier collision; check `@deprecated` aliases in `inspectors.ts`/`renders.ts`                       |
+| Same tool registered twice / legacy identifier ghost    | Identifier collision; check `@deprecated` aliases in `inspectors.ts`/`renders.ts`                       |
 | Manifest test fails after adding API                    | Forgot to add the corresponding i18n `apiName.<api>` key                                                |
 | TypeScript error on `BaseExecutor<typeof X>`            | `X` declared with `enum` instead of `as const` object — must be the const-object form                   |

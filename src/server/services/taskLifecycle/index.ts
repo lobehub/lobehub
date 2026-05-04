@@ -552,6 +552,7 @@ export class TaskLifecycleService {
           type: 'result',
         });
         await this.taskModel.updateStatus(taskId, 'completed', { error: null });
+        await this.cascadeAfterAutoComplete(taskId);
         return true;
       }
 
@@ -585,6 +586,22 @@ export class TaskLifecycleService {
     } catch (e) {
       console.warn('[TaskLifecycle] auto-review failed:', e);
       return false;
+    }
+  }
+
+  /**
+   * Trigger downstream task kickoff after this task auto-completes via judge.
+   *
+   * Lazy-imports `TaskRunnerService` to break the runner ↔ lifecycle import
+   * cycle (the runner already constructs a lifecycle for its own hooks).
+   */
+  private async cascadeAfterAutoComplete(completedTaskId: string): Promise<void> {
+    try {
+      const { TaskRunnerService } = await import('@/server/services/taskRunner');
+      const runner = new TaskRunnerService(this.db, this.userId);
+      await runner.cascadeOnCompletion(completedTaskId);
+    } catch (e) {
+      console.warn('[TaskLifecycle] dependency cascade failed:', e);
     }
   }
 }

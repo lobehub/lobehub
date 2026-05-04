@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 
-import type { NotebookDocument } from '../../../types';
+import type { NotebookDocument } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

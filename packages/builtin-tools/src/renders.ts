@@ -26,7 +26,6 @@ import {
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryManifest, MemoryRenders } from '@lobechat/builtin-tool-memory/client';
 import { MessageManifest, MessageRenders } from '@lobechat/builtin-tool-message/client';
-import { NotebookManifest, NotebookRenders } from '@lobechat/builtin-tool-notebook/client';
 import { SkillStoreManifest, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsManifest, SkillsRenders } from '@lobechat/builtin-tool-skills/client';
 import { TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
@@ -38,6 +37,8 @@ import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
 import { type BuiltinRender } from '@lobechat/types';
 
 import { CodexRenders } from './codex';
+import { GithubIdentifier, GithubRenders } from './github';
+import { NotebookIdentifier, NotebookRenders } from './notebook';
 
 export interface BuiltinRenderRegistryEntry {
   apiName: string;
@@ -62,18 +63,17 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
   [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
   [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
-  [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
+  [NotebookIdentifier]: NotebookRenders,
   [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
   [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
   [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
   [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
-  // @deprecated backward compat: old messages stored 'lobe-tools' as identifier
-  ['lobe-tools']: LobeActivatorRenders as Record<string, BuiltinRender>,
   [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
   codex: {
     ...CodexRenders,
     command_execution: RunCommandRender as BuiltinRender,
   },
+  [GithubIdentifier]: GithubRenders,
 };
 
 export const listBuiltinRenderEntries = (): BuiltinRenderRegistryEntry[] =>

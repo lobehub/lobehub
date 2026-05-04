@@ -93,13 +93,6 @@ const customToolsets: Record<
       title: 'Page Agent',
     },
   },
-  'lobe-tools': {
-    api: [{ description: 'Activate a builtin tool (legacy alias).', name: 'activateSkill' }],
-    meta: {
-      description: 'Deprecated alias of Tools Activator kept for legacy messages.',
-      title: 'Lobe Tools (legacy)',
-    },
-  },
   'lobe-user-interaction': {
     api: [
       { description: 'Render an inline question card with form fields.', name: 'askUserQuestion' },
@@ -1171,15 +1164,6 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     pluginState: { replacements: 2 },
   },
 
-  [keyOf('lobe-tools', 'activateSkill')]: {
-    args: { skill: 'lobe-image-generator' },
-    content: 'Activated skill: lobe-image-generator (legacy alias path).',
-    pluginState: {
-      activatedTools: ['lobe-image-generator'],
-      notFound: [],
-    },
-  },
-
   [keyOf('lobe-user-interaction', 'askUserQuestion')]: {
     args: {
       question: {
@@ -1220,6 +1204,17 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       fullName: 'Arvin',
       interests: ['observability', 'dev-tools', 'agent-runtime'],
       responseLanguage: 'en-US',
+    },
+  },
+
+  [keyOf('github', 'run_command')]: {
+    args: {
+      command: 'gh api /repos/lobehub/lobe-chat/issues?state=open',
+    },
+    pluginState: {
+      command: 'gh api /repos/lobehub/lobe-chat/issues?state=open',
+      exitCode: 0,
+      success: true,
     },
   },
 };

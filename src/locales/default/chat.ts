@@ -626,6 +626,27 @@ export default {
   'taskDetail.subtasks': 'Subtasks',
   'taskDetail.addSubtask': 'Add sub-task',
   'taskDetail.subtaskInstructionPlaceholder': 'Describe the sub-task...',
+  'taskDetail.runAll': 'Run all',
+  'taskDetail.runAll.title': 'Run subtasks in dependency order',
+  'taskDetail.runAll.description':
+    'Subtasks will run layer by layer. Each layer waits for the previous one to finish. Tasks with no dependencies run in layer 1.',
+  'taskDetail.runAll.layer': 'Layer {{index}}',
+  'taskDetail.runAll.layerHint.first': 'Starts immediately',
+  'taskDetail.runAll.layerHint.next': 'Waits for layer {{prev}} to finish',
+  'taskDetail.runAll.skipped.alreadyDone':
+    '{{count}} task(s) already completed or canceled — skipped',
+  'taskDetail.runAll.skipped.ineligible': '{{count}} task(s) running or scheduled — skipped',
+  'taskDetail.runAll.skipped.blockedExternally':
+    '{{count}} task(s) waiting on a blocker outside this batch — will run automatically when unblocked',
+  'taskDetail.runAll.cycleWarning':
+    'Circular dependency detected. Tasks involved in or blocked by the cycle will not run: {{members}}',
+  'taskDetail.runAll.empty':
+    'Nothing to run — every subtask is already completed, in flight, or stuck in a cycle.',
+  'taskDetail.runAll.confirm': 'Run {{count}} subtask(s)',
+  'taskDetail.runAll.cancel': 'Cancel',
+  'taskDetail.runAll.kickedOff': 'Started {{count}} subtask(s); downstream layers will follow.',
+  'taskDetail.runAll.partialFailure': 'Started {{ok}} of {{total}} subtask(s); {{failed}} failed.',
+  'taskDetail.runAll.loading': 'Loading subtask plan...',
   'taskDetail.reassignDisabled': 'Cannot reassign agent while task is running',
   'taskDetail.titlePlaceholder': 'Enter task title...',
   'taskDetail.topicDrawer.untitled': 'Untitled',
