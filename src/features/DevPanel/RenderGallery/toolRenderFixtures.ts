@@ -93,13 +93,6 @@ const customToolsets: Record<
       title: 'Page Agent',
     },
   },
-  'lobe-tools': {
-    api: [{ description: 'Activate a builtin tool (legacy alias).', name: 'activateSkill' }],
-    meta: {
-      description: 'Deprecated alias of Tools Activator kept for legacy messages.',
-      title: 'Lobe Tools (legacy)',
-    },
-  },
   'lobe-user-interaction': {
     api: [
       { description: 'Render an inline question card with form fields.', name: 'askUserQuestion' },
@@ -870,20 +863,35 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     },
   },
   [keyOf('lobe-local-system', 'searchLocalFiles')]: {
-    args: { directory: '/workspace/src', keyword: 'devtools' },
+    args: { keywords: 'quarterly report sample' },
     pluginState: {
       results: [
         {
           isDirectory: false,
-          name: 'index.tsx',
-          path: '/workspace/src/routes/(main)/devtools/index.tsx',
+          name: 'sample-quarterly-report-q1.xlsx',
+          path: '/Users/sample-user/Downloads/sample-quarterly-report-q1.xlsx',
+          size: 9_400,
         },
         {
           isDirectory: false,
-          name: 'desktopRouter.config.tsx',
-          path: '/workspace/src/spa/router/desktopRouter.config.tsx',
+          name: 'sample_quarterly_report_q2_draft.xlsx',
+          path: '/Users/sample-user/Downloads/sample_quarterly_report_q2_draft.xlsx',
+          size: 35_600,
+        },
+        {
+          isDirectory: false,
+          name: 'sample-quarterly-report-q3.xlsx',
+          path: '/Users/sample-user/Documents/reports/sample-quarterly-report-q3.xlsx',
+          size: 8_300,
+        },
+        {
+          isDirectory: false,
+          name: 'sample-quarterly-report-archived.xlsx',
+          path: '/Users/sample-user/Documents/archive/2024/sample-quarterly-report-archived.xlsx',
+          size: 16_200,
         },
       ],
+      totalCount: 4,
     },
   },
   [keyOf('lobe-local-system', 'writeLocalFile')]: {
@@ -1156,15 +1164,6 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     pluginState: { replacements: 2 },
   },
 
-  [keyOf('lobe-tools', 'activateSkill')]: {
-    args: { skill: 'lobe-image-generator' },
-    content: 'Activated skill: lobe-image-generator (legacy alias path).',
-    pluginState: {
-      activatedTools: ['lobe-image-generator'],
-      notFound: [],
-    },
-  },
-
   [keyOf('lobe-user-interaction', 'askUserQuestion')]: {
     args: {
       question: {
@@ -1205,6 +1204,17 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       fullName: 'Arvin',
       interests: ['observability', 'dev-tools', 'agent-runtime'],
       responseLanguage: 'en-US',
+    },
+  },
+
+  [keyOf('github', 'run_command')]: {
+    args: {
+      command: 'gh api /repos/lobehub/lobe-chat/issues?state=open',
+    },
+    pluginState: {
+      command: 'gh api /repos/lobehub/lobe-chat/issues?state=open',
+      exitCode: 0,
+      success: true,
     },
   },
 };

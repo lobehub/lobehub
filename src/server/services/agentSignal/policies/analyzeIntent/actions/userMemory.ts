@@ -7,6 +7,7 @@ import type {
 } from '@lobechat/agent-signal';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
+import { RequestTrigger } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { PluginModel } from '@/database/models/plugin';
@@ -59,6 +60,11 @@ Choose the correct memory API based on the feedback:
 - addContextMemory for ongoing situations, environments, or projects
 - addExperienceMemory for reusable lessons from outcomes or workflows
 - addActivityMemory for notable concrete events worth remembering
+
+Do not use memory tools for requests to create, update, refine, merge, consolidate, or store reusable skills, procedures, workflows, playbooks, checklists, agent capabilities, agent prompts, or agent documents.
+If the feedback asks for a "reusable skill", "future workflow", "PR review checklist skill", "agent capability", or similar operational artifact, skip memory and leave it to the skill/document management path.
+Apply the same boundary to Chinese feedback such as "复用 skill", "可复用流程", "review 流程", "检查清单", "下次参考这个流程", "保留这个流程", or "合并/更新清单".
+Do not summarize skill-management requests as preferences.
 
 If the feedback should not become durable memory, do not call any tools and end briefly.
 Do not invent your own JSON schema. Use the built-in tool exactly as exposed.`;
@@ -294,7 +300,7 @@ const runMemoryActionAgent = async (
       agentId: input.agentId,
       scope: 'chat',
       topicId: input.topicId ?? null,
-      trigger: 'agent-signal',
+      trigger: RequestTrigger.AgentSignal,
     },
     autoStart: false,
     initialContext,

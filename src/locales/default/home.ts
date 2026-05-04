@@ -6,8 +6,9 @@ export default {
   'brief.addFeedback': 'Share feedback',
   'brief.action.acknowledge': 'Acknowledge',
   'brief.action.approve': 'Approve',
-  'brief.action.feedback': 'Feedback',
+  'brief.action.confirm': 'Confirm',
   'brief.action.confirmDone': 'Confirm complete',
+  'brief.action.feedback': 'Feedback',
   'brief.action.retry': 'Retry',
   'brief.collapse': 'Show less',
   'brief.commentPlaceholder': 'Share your feedback...',
@@ -22,6 +23,7 @@ export default {
   'brief.resolved': 'Marked as resolved',
   'brief.title': 'Daily brief',
   'brief.viewAllTasks': 'View all tasks',
+  'brief.viewRun': 'View run',
   'project.create': 'New project',
   'project.deleteConfirm':
     "This project will be deleted and can't be recovered. Confirm to continue.",

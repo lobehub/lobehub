@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -24,6 +24,9 @@ import {
   type PickFileResult,
   type PrepareSkillDirectoryParams,
   type PrepareSkillDirectoryResult,
+  type ProjectFileIndexEntry,
+  type ProjectFileIndexParams,
+  type ProjectFileIndexResult,
   type RenameLocalFileResult,
   type ResolveSkillResourcePathParams,
   type ResolveSkillResourcePathResult,
@@ -35,6 +38,7 @@ import {
 } from '@lobechat/electron-client-ipc';
 import {
   editLocalFile,
+  expandTilde,
   listLocalFiles,
   moveLocalFiles,
   readLocalFile,
@@ -42,6 +46,7 @@ import {
   writeLocalFile,
 } from '@lobechat/local-file-shell';
 import { dialog, shell } from 'electron';
+import { execa } from 'execa';
 import { unzipSync } from 'fflate';
 
 import { type FileResult, type SearchOptions } from '@/modules/fileSearch';
@@ -78,6 +83,50 @@ const resolveNearestExistingRealPath = async (targetPath: string): Promise<strin
       if (parentPath === currentPath) return undefined;
       currentPath = parentPath;
     }
+  }
+};
+
+const toPosixRelativePath = (filePath: string) => filePath.split(path.sep).join('/');
+
+const createProjectFileEntry = (
+  root: string,
+  absolutePath: string,
+  isDirectory: boolean,
+): ProjectFileIndexEntry => {
+  const relativePath = toPosixRelativePath(path.relative(root, absolutePath));
+
+  return {
+    isDirectory,
+    name: path.basename(absolutePath),
+    path: absolutePath,
+    relativePath: isDirectory ? `${relativePath}/` : relativePath,
+  };
+};
+
+const collectProjectDirectories = (files: string[], root: string): ProjectFileIndexEntry[] => {
+  const directories = new Set<string>();
+
+  for (const filePath of files) {
+    let current = path.dirname(filePath);
+    while (current && current !== root && current.startsWith(`${root}${path.sep}`)) {
+      if (directories.has(current)) break;
+      directories.add(current);
+      current = path.dirname(current);
+    }
+  }
+
+  return [...directories].map((directory) => createProjectFileEntry(root, directory, true));
+};
+
+const createDetectedProjectFileEntry = async (
+  root: string,
+  absolutePath: string,
+): Promise<ProjectFileIndexEntry> => {
+  try {
+    const stats = await stat(absolutePath);
+    return createProjectFileEntry(root, absolutePath, stats.isDirectory());
+  } catch {
+    return createProjectFileEntry(root, absolutePath, false);
   }
 };
 
@@ -413,14 +462,127 @@ export default class LocalFileCtr extends ControllerModule {
 
   // ==================== Search & Find ====================
 
+  @IpcMethod()
+  async getProjectFileIndex(params: ProjectFileIndexParams = {}): Promise<ProjectFileIndexResult> {
+    const requestedScope = params.scope || process.cwd();
+    const startedAt = Date.now();
+
+    try {
+      const rootResult = await execa(
+        'git',
+        ['-C', requestedScope, 'rev-parse', '--show-toplevel'],
+        {
+          reject: false,
+          timeout: 5000,
+        },
+      );
+      const root = rootResult.exitCode === 0 ? rootResult.stdout.trim() : requestedScope;
+
+      if (rootResult.exitCode === 0) {
+        const [trackedResult, untrackedResult] = await Promise.all([
+          execa(
+            'git',
+            ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
+            {
+              reject: false,
+              timeout: 10_000,
+            },
+          ),
+          execa(
+            'git',
+            [
+              '-C',
+              root,
+              '-c',
+              'core.quotepath=false',
+              'ls-files',
+              '--others',
+              '--exclude-standard',
+            ],
+            { reject: false, timeout: 10_000 },
+          ),
+        ]);
+
+        if (trackedResult.exitCode !== 0) {
+          throw new Error(trackedResult.stderr || 'git ls-files failed');
+        }
+
+        const files = [
+          ...trackedResult.stdout.split('\n'),
+          ...(untrackedResult.exitCode === 0 ? untrackedResult.stdout.split('\n') : []),
+        ]
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .map((relativePath) => path.resolve(root, relativePath));
+
+        const seen = new Set<string>();
+        const fileEntries = files
+          .filter((filePath) => {
+            if (seen.has(filePath)) return false;
+            seen.add(filePath);
+            return true;
+          })
+          .map((filePath) => createProjectFileEntry(root, filePath, false));
+
+        const entries = [...collectProjectDirectories(files, root), ...fileEntries];
+        logger.debug('Project file index built from git', {
+          duration: Date.now() - startedAt,
+          entries: entries.length,
+          files: fileEntries.length,
+          requestedScope,
+          root,
+        });
+
+        return {
+          entries,
+          indexedAt: new Date().toISOString(),
+          root,
+          source: 'git',
+          totalCount: entries.length,
+        };
+      }
+    } catch (error) {
+      logger.debug('Git project file index failed, falling back to glob', {
+        error,
+        requestedScope,
+      });
+    }
+
+    const fallback = await this.searchService.glob({ pattern: '**/*', scope: requestedScope });
+    const files = fallback.files.map((filePath) => path.resolve(filePath));
+    const entries = await Promise.all(
+      files.map((filePath) => createDetectedProjectFileEntry(requestedScope, filePath)),
+    );
+
+    logger.debug('Project file index built from glob', {
+      duration: Date.now() - startedAt,
+      entries: entries.length,
+      engine: fallback.engine,
+      requestedScope,
+    });
+
+    return {
+      entries,
+      indexedAt: new Date().toISOString(),
+      root: requestedScope,
+      source: 'glob',
+      totalCount: entries.length,
+    };
+  }
+
   /**
    * Handle IPC event for local file search
    */
   @IpcMethod()
   async handleLocalFilesSearch(params: LocalSearchFilesParams): Promise<FileResult[]> {
+    const effectiveDirectory = expandTilde(params.directory ?? params.scope);
+
     logger.debug('Received file search request:', {
       directory: params.directory,
+      effectiveDirectory,
+      limit: params.limit,
       keywords: params.keywords,
+      scope: params.scope,
     });
 
     // Build search options from params, mapping directory to onlyIn
@@ -436,7 +598,7 @@ export default class LocalFileCtr extends ControllerModule {
       liveUpdate: params.liveUpdate,
       modifiedAfter: params.modifiedAfter ? new Date(params.modifiedAfter) : undefined,
       modifiedBefore: params.modifiedBefore ? new Date(params.modifiedBefore) : undefined,
-      onlyIn: params.directory, // Map directory param to onlyIn option
+      onlyIn: effectiveDirectory,
       sortBy: params.sortBy,
       sortDirection: params.sortDirection,
     };
@@ -446,6 +608,14 @@ export default class LocalFileCtr extends ControllerModule {
       logger.debug('File search completed', {
         count: results.length,
         directory: params.directory,
+        effectiveDirectory,
+        results: results.slice(0, 5).map((result) => ({
+          engine: result.engine,
+          isDirectory: result.isDirectory,
+          name: result.name,
+          path: result.path,
+        })),
+        scope: params.scope,
       });
       return results;
     } catch (error) {

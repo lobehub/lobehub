@@ -24,8 +24,10 @@ export const AGENT_SIGNAL_POLICY_SIGNAL_TYPES = {
   feedbackSatisfaction: 'signal.feedback.satisfaction',
   nudgeMemoryConditionMatched: 'signal.nudge.memory.condition-matched',
   nudgeMemoryConditionMismatched: 'signal.nudge.memory.condition-mismatched',
+  procedureBucketScored: 'signal.procedure.bucket.scored',
   selfReflectionNeeded: 'signal.self-reflection-analysis.reflect-needed',
   selfReflectionSkipped: 'signal.self-reflection-analysis.reflect-skipped',
+  toolOutcome: 'signal.tool.outcome',
 } as const;
 
 /** Server-owned built-in AgentSignal action type identifiers. */
@@ -50,6 +52,49 @@ export type AgentSignalFeedbackDomainTarget = 'memory' | 'none' | 'prompt' | 'sk
 
 export type AgentSignalFeedbackPhase1DomainTarget = 'memory' | 'prompt' | 'skill';
 
+export type AgentSignalSkillIntentExplicitness =
+  | 'explicit_action'
+  | 'implicit_strong_learning'
+  | 'non_skill_preference'
+  | 'weak_positive';
+
+export type AgentSignalSkillActionIntent =
+  | 'consolidate'
+  | 'create'
+  | 'maintain'
+  | 'noop'
+  | 'refine';
+
+export type AgentSignalSkillIntentRoute = 'accumulate' | 'direct_decision' | 'non_skill';
+
+/** Sanitized classifier error details safe enough for traces and eval diagnostics. */
+export interface AgentSignalClassifierErrorSummary {
+  /** Sanitized one-hop cause summary when the runtime attached `error.cause`. */
+  cause?: string;
+  /** Error message with likely secrets redacted and length bounded. */
+  message: string;
+  /** Error class or runtime-provided error type. */
+  name?: string;
+}
+
+/**
+ * Compact routing decision for one skill-domain feedback signal.
+ */
+export interface AgentSignalSkillIntentClassification {
+  /** Durable skill-management action hint selected before the decision agent runs. */
+  actionIntent?: AgentSignalSkillActionIntent;
+  /** Sanitized classifier failure details when fallback classification failed. */
+  classifierError?: AgentSignalClassifierErrorSummary;
+  /** Confidence of the rule or model classifier, from 0 to 1. */
+  confidence: number;
+  /** Whether the feedback is explicit, implicit strong learning, weak positive, or non-skill preference. */
+  explicitness: AgentSignalSkillIntentExplicitness;
+  /** Short private-safe reason suitable for traces and eval assertions. */
+  reason: string;
+  /** Runtime route used by action planning. */
+  route: AgentSignalSkillIntentRoute;
+}
+
 export interface AgentSignalFeedbackEvidence {
   cue: string;
   excerpt: string;
@@ -65,11 +110,17 @@ export interface AgentSignalFeedbackSatisfactionStagePayload {
 
 /** Future-facing slim payload for one domain stage result. */
 export interface AgentSignalFeedbackDomainStagePayload<
-  TTarget extends AgentSignalFeedbackPhase1DomainTarget,
+  TTarget extends AgentSignalFeedbackDomainTarget,
 > {
   confidence: number;
   evidence: AgentSignalFeedbackEvidence[];
   reason: string;
+  skillActionIntent?: AgentSignalSkillActionIntent;
+  skillIntentConfidence?: number;
+  skillIntentError?: AgentSignalClassifierErrorSummary;
+  skillIntentExplicitness?: AgentSignalSkillIntentExplicitness;
+  skillIntentReason?: string;
+  skillRoute?: AgentSignalSkillIntentRoute;
   target: TTarget;
 }
 
@@ -78,7 +129,7 @@ export interface AgentSignalFeedbackDomainStagePayload<
  */
 export interface AgentSignalFeedbackSourceHints {
   documentPayload?: Record<string, unknown>;
-  intents?: Array<'document' | 'memory' | 'persona' | 'prompt'>;
+  intents?: Array<'document' | 'memory' | 'persona' | 'prompt' | 'skill'>;
   memoryPayload?: Record<string, unknown>;
 }
 
@@ -142,6 +193,12 @@ export interface AgentSignalPolicySignalPayloadMap {
     reason: string;
     satisfactionResult: AgentSignalFeedbackSatisfactionResult;
     serializedContext?: string;
+    skillActionIntent?: AgentSignalSkillActionIntent;
+    skillIntentError?: AgentSignalClassifierErrorSummary;
+    skillIntentConfidence?: number;
+    skillIntentExplicitness?: AgentSignalSkillIntentExplicitness;
+    skillIntentReason?: string;
+    skillRoute?: AgentSignalSkillIntentRoute;
     sourceHints?: AgentSignalFeedbackSourceHints;
     target: 'skill';
     topicId?: string;
@@ -173,6 +230,20 @@ export interface AgentSignalPolicySignalPayloadMap {
     serializedContext?: string;
     topicId?: string;
   };
+  [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.procedureBucketScored]: {
+    aggregateScore: number;
+    bucketKey: string;
+    confidence: number;
+    domain: string;
+    itemScores: Array<{
+      reasons: string[];
+      recordId: string;
+      score: number;
+      suggestedAction?: 'handle' | 'ignore' | 'maintain' | 'review' | 'summarize';
+    }>;
+    recordIds: string[];
+    suggestedActions: string[];
+  };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.selfReflectionNeeded]: {
     agentId?: string;
     operationId: string;
@@ -191,6 +262,24 @@ export interface AgentSignalPolicySignalPayloadMap {
     outcome: 'failed' | 'resolved' | 'succeeded';
     reason: 'cooldown-active' | 'insufficient-context' | 'no-learning-value' | 'policy-filtered';
     serializedContext?: string;
+    topicId?: string;
+  };
+  [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.toolOutcome]: {
+    agentId?: string;
+    domainKey?: string;
+    intentClass?: string;
+    messageId?: string;
+    operationId?: string;
+    outcome: {
+      action?: string;
+      errorReason?: string;
+      status: 'failed' | 'skipped' | 'succeeded';
+      summary?: string;
+    };
+    relatedObjects?: Array<{ objectId: string; objectType: string; relation?: string }>;
+    taskId?: string;
+    tool: { apiName?: string; identifier: string };
+    toolCallId?: string;
     topicId?: string;
   };
 }
@@ -220,6 +309,7 @@ export interface AgentSignalPolicyActionPayloadMap {
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
     idempotencyKey: string;
     message: string;
+    messageId?: string;
     reason?: string;
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
@@ -232,6 +322,7 @@ export interface AgentSignalPolicyActionPayloadMap {
     feedbackHint?: Exclude<AgentSignalFeedbackSatisfactionResult, 'neutral'>;
     idempotencyKey: string;
     message: string;
+    messageId?: string;
     reason?: string;
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;

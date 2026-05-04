@@ -1,10 +1,12 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
+import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
+import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
 import { useChatStore } from '../../../../store';
@@ -18,8 +20,19 @@ import {
 } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
+const serverConfigMock = vi.hoisted(() => ({ enableVisualUnderstanding: false }));
+
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
+vi.mock('@/store/serverConfig', () => ({
+  getServerConfigStoreState: () => ({
+    serverConfig: { enableVisualUnderstanding: serverConfigMock.enableVisualUnderstanding },
+  }),
+  serverConfigSelectors: {
+    enableVisualUnderstanding: (state: { serverConfig: { enableVisualUnderstanding?: boolean } }) =>
+      !!state.serverConfig.enableVisualUnderstanding,
+  },
+}));
 
 const realExecAgentRuntime = useChatStore.getState().internal_execAgentRuntime;
 
@@ -27,6 +40,7 @@ beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
   spyOnMessageService();
+  serverConfigMock.enableVisualUnderstanding = false;
 
   act(() => {
     useChatStore.setState({
@@ -37,6 +51,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  useAiInfraStore.setState({ enabledAiModels: [] });
   vi.restoreAllMocks();
 });
 
@@ -705,7 +720,7 @@ describe('StreamingExecutor actions', () => {
       expect(capturedInitialContexts.length).toBeGreaterThanOrEqual(1);
 
       // All captured initialContexts should be the same (preserved through steps)
-      capturedInitialContexts.forEach((ctx, index) => {
+      capturedInitialContexts.forEach((ctx) => {
         expect(ctx).toEqual(mockInitialContext);
       });
 
@@ -955,6 +970,127 @@ describe('StreamingExecutor actions', () => {
         expect.objectContaining({
           skipDefaultTools: undefined,
           toolIds: ['lobe-artifacts', 'lobe-notebook'],
+        }),
+      );
+    });
+
+    it('should enable visual understanding when a previous user message has visual media', () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      serverConfigMock.enableVisualUnderstanding = true;
+
+      const { result } = renderHook(() => useChatStore());
+      const previousVisualMessage = {
+        id: 'msg_with_image',
+        role: 'user',
+        content: 'Please inspect this image',
+        imageList: [{ id: 'image-file', url: 'https://example.com/image.png' }],
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+      const currentTextMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: 'Does the person in the first image wear glasses?',
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      const generateToolsDetailed = vi.fn().mockReturnValue({
+        enabledManifests: [],
+        enabledToolIds: ['lobe-agent'],
+        tools: [],
+      });
+
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig({ model: 'text-only-model', provider: 'openai' }),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
+      });
+      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
+        generateToolsDetailed,
+      } as any);
+
+      result.current.internal_createAgentState({
+        messages: [previousVisualMessage, currentTextMessage],
+        parentMessageId: currentTextMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+
+      expect(generateToolsDetailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolIds: ['lobe-agent'],
+        }),
+      );
+    });
+
+    it('should not enable visual understanding when the active LobeHub model supports visual media natively', () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      serverConfigMock.enableVisualUnderstanding = true;
+      useAiInfraStore.setState({
+        enabledAiModels: [
+          {
+            abilities: { functionCall: true, video: true, vision: true },
+            id: 'gemini-3.1-flash-lite-preview',
+            providerId: ModelProvider.Google,
+            type: 'chat',
+          } as EnabledAiModel,
+        ],
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const previousVisualMessage = {
+        id: 'msg_with_video',
+        role: 'user',
+        content: 'Please inspect this video',
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        videoList: [{ id: 'video-file', url: 'https://example.com/video.mp4' }],
+      } as UIChatMessage;
+      const currentTextMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: 'Summarize the previous video',
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      const generateToolsDetailed = vi.fn().mockReturnValue({
+        enabledManifests: [],
+        enabledToolIds: [],
+        tools: [],
+      });
+
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig({
+          model: 'gemini-3.1-flash-lite-preview',
+          provider: ModelProvider.LobeHub,
+        }),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
+      });
+      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
+        generateToolsDetailed,
+      } as any);
+
+      result.current.internal_createAgentState({
+        messages: [previousVisualMessage, currentTextMessage],
+        parentMessageId: currentTextMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+
+      expect(generateToolsDetailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolIds: undefined,
         }),
       );
     });

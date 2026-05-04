@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
 
 const log = debug('lobe-server:agent-signal:router');
 
@@ -40,6 +41,24 @@ export const agentSignalRouter = router({
 
       return enqueueAgentSignalSourceEvent(input as unknown as ClientSourceEventInput, {
         agentId: typeof input.payload.agentId === 'string' ? input.payload.agentId : undefined,
+        userId: ctx.userId,
+      });
+    }),
+  listReceipts: agentSignalProcedure
+    .input(
+      z.object({
+        agentId: z.string().min(1),
+        cursor: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+        topicId: z.string().min(1),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return listAgentSignalReceipts({
+        agentId: input.agentId,
+        cursor: input.cursor,
+        limit: input.limit,
+        topicId: input.topicId,
         userId: ctx.userId,
       });
     }),

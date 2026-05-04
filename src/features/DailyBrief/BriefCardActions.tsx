@@ -1,12 +1,13 @@
-import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, SquarePen } from 'lucide-react';
+import { Check, SquarePen, Workflow } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import { useBriefStore } from '@/store/brief';
+import { useTaskStore } from '@/store/task';
 
 import CommentInput from './CommentInput';
 import { styles } from './style';
@@ -22,6 +23,10 @@ export interface BriefCardActionsProps {
   onAfterResolve?: () => void | Promise<void>;
   resolvedAction?: string | null;
   taskId?: string | null;
+  /** Parent task's runtime status — `scheduled` flips the result action to a plain "Confirm" since approving must NOT terminate a task parked between automated runs. */
+  taskStatus?: TaskStatus | null;
+  /** When set together with taskId, renders a "View run" shortcut to the topic drawer. */
+  topicId?: string | null;
 }
 
 type CommentMode = { type: 'feedback' } | { key: string; type: 'comment' };
@@ -42,6 +47,8 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     onAfterResolve,
     resolvedAction,
     taskId,
+    taskStatus,
+    topicId,
   }) => {
     const { t } = useTranslation('home');
     const [commentMode, setCommentMode] = useState<CommentMode | null>(null);
@@ -50,21 +57,55 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       (s) => ({ resolveBrief: s.resolveBrief, submitFeedback: s.submitFeedback }),
       shallow,
     );
+    const { setActiveTaskId, openTopicDrawer } = useTaskStore(
+      (s) => ({ openTopicDrawer: s.openTopicDrawer, setActiveTaskId: s.setActiveTaskId }),
+      shallow,
+    );
+
+    const showViewRun = !!taskId && !!topicId;
+    const handleViewRun = useCallback(() => {
+      if (!taskId || !topicId) return;
+      // setActiveTaskId hydrates `activeTaskId` so the drawer can resolve the
+      // task's agentId / activity metadata (and clears any prior drawer topic
+      // when switching tasks). openTopicDrawer must come after — setActiveTaskId
+      // resets activeTopicDrawerTopicId on task changes.
+      setActiveTaskId(taskId);
+      openTopicDrawer(topicId);
+    }, [openTopicDrawer, setActiveTaskId, taskId, topicId]);
+    const viewRunButton = showViewRun ? (
+      <Button
+        className={'brief-view-run-btn'}
+        icon={Workflow}
+        size={'small'}
+        style={{ color: cssVar.colorTextSecondary }}
+        type={'text'}
+        onClick={handleViewRun}
+      >
+        {t('brief.viewRun')}
+      </Button>
+    ) : null;
 
     const isResult = briefType === 'result';
+    // A result brief on a task parked at status='scheduled' is one occurrence
+    // of a recurring run — approving must NOT mark the task as completed
+    // (server-side guard mirrors this). Use a plain "Confirm" so the label
+    // reflects the dismiss-only behavior; otherwise "Confirm complete" signals
+    // the terminal transition.
+    const resultLabelKey =
+      taskStatus === 'scheduled' ? 'brief.action.confirm' : 'brief.action.confirmDone';
 
     const actions: BriefAction[] = isResult
-      ? [{ key: 'approve', label: t('brief.action.confirmDone'), type: 'resolve' }]
+      ? [{ key: 'approve', label: t(resultLabelKey), type: 'resolve' }]
       : (actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? []);
 
     const getActionLabel = useCallback(
       (action: BriefAction) => {
-        if (isResult && action.key === 'approve') return t('brief.action.confirmDone');
+        if (isResult && action.key === 'approve') return t(resultLabelKey);
         const i18nKey = `brief.action.${action.key}`;
         const translated = t(i18nKey, { defaultValue: '' });
         return !translated || translated === i18nKey ? action.label : translated;
       },
-      [isResult, t],
+      [isResult, resultLabelKey, t],
     );
 
     const handleResolve = useCallback(
@@ -114,7 +155,15 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       ],
     );
 
-    if (resolvedAction) return <SuccessTag label={t('brief.resolved')} />;
+    if (resolvedAction) {
+      if (!showViewRun) return <SuccessTag label={t('brief.resolved')} />;
+      return (
+        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+          {viewRunButton}
+          <SuccessTag label={t('brief.resolved')} />
+        </Flexbox>
+      );
+    }
     if (commentMode) {
       return <CommentInput onCancel={() => setCommentMode(null)} onSubmit={handleCommentSubmit} />;
     }
@@ -133,7 +182,8 @@ const BriefCardActions = memo<BriefCardActionsProps>(
         : t('brief.addFeedback');
 
     return (
-      <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
+      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
+        {viewRunButton ?? <span />}
         <Flexbox horizontal align={'center'} gap={8}>
           {showEditButton && (
             <Tooltip title={editTooltip}>

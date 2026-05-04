@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Ungültige Ollama-Konfiguration. Bitte prüfen Sie die Einstellungen.",
   "response.InvalidProviderAPIKey": "{{provider}} API-Schlüssel ist ungültig oder leer. Bitte prüfen Sie den Schlüssel.",
   "response.InvalidVertexCredentials": "Vertex-Authentifizierung fehlgeschlagen. Bitte Zugangsdaten prüfen.",
+  "response.LobeHubModelDeprecated": "Das Modell \"{{model}}\" ist nicht mehr verfügbar. Bitte wählen Sie ein aktuelles Modell aus dem Modellwähler aus.",
   "response.LocationNotSupportError": "Ihr aktueller Standort unterstützt diesen Dienst nicht. Bitte Standort prüfen.",
   "response.ModelNotFound": "Das angeforderte Modell wurde nicht gefunden oder Sie haben keinen Zugriff.",
   "response.NoOpenAIAPIKey": "OpenAI API-Schlüssel fehlt. Bitte fügen Sie einen benutzerdefinierten Schlüssel hinzu.",

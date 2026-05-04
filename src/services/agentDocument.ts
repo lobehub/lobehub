@@ -75,7 +75,12 @@ class AgentDocumentService {
     return result;
   };
 
-  createDocument = async (params: { agentId: string; content: string; title: string }) => {
+  createDocument = async (params: {
+    agentId: string;
+    content: string;
+    hintIsSkill?: boolean;
+    title: string;
+  }) => {
     const result = await lambdaClient.agentDocument.createDocument.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: getAgentDocumentId(result),
@@ -90,6 +95,7 @@ class AgentDocumentService {
   createForTopic = async (params: {
     agentId: string;
     content: string;
+    hintIsSkill?: boolean;
     title: string;
     topicId: string;
   }) => {

@@ -15,6 +15,7 @@ import type {
   ChatToolPayload,
   ChatVideoItem,
   ConversationContext,
+  MessageMetadata,
   SendMessageParams,
   SendMessageServerResponse,
   UIChatMessage,
@@ -59,12 +60,15 @@ import type { CommandSendOverrides, SingleAgentMentionDirectRoute } from './comm
 import {
   hasNonActionContent,
   injectReferTopicNode,
+  mergeLocalFileReferences,
+  parseLocalFileReferencesFromEditorData,
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from './commandBus';
+import { materializeLocalSystemToolSnapshots } from './localSystemToolSnapshots';
 /**
  * Extended params for sendMessage with context
  */
@@ -118,6 +122,30 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
 
+const attachSendTimeMetadataToUserMessage = (
+  messages: UIChatMessage[],
+  userMessageId: string,
+  metadata: MessageMetadata | undefined,
+): UIChatMessage[] => {
+  if (!metadata) return messages;
+
+  let changed = false;
+  const nextMessages = messages.map((message) => {
+    if (message.id !== userMessageId) return message;
+
+    changed = true;
+    return {
+      ...message,
+      metadata: {
+        ...(message.metadata ?? undefined),
+        ...metadata,
+      },
+    };
+  });
+
+  return changed ? nextMessages : messages;
+};
+
 export class ConversationLifecycleActionImpl {
   readonly #get: () => ChatStore;
 
@@ -155,6 +183,7 @@ export class ConversationLifecycleActionImpl {
     message,
     editorData: inputEditorData,
     files,
+    metadata,
     onlyAddUserMessage,
     context,
     messages: inputMessages,
@@ -164,12 +193,16 @@ export class ConversationLifecycleActionImpl {
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     let editorData = inputEditorData;
     const { internal_execAgentRuntime, mainInputEditor } = this.#get();
+    const { agentId } = context;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
     const mentionedAgents = parseMentionedAgentsFromEditorData(editorData);
 
+    const localFileReferences = mergeLocalFileReferences(
+      parseLocalFileReferencesFromEditorData(editorData),
+    );
+
     // Use context from params (required)
-    const { agentId } = context;
     // If creating new thread (isNew + scope='thread'), threadId will be created by server
     const isCreatingNewThread = context.isNew && context.scope === 'thread';
     // Build newThread params for server from new context format
@@ -183,6 +216,9 @@ export class ConversationLifecycleActionImpl {
         : undefined;
 
     if (!agentId) return;
+
+    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
 
     // ── Command Bus: extract and process built-in commands from editorData ──
     const commandOverrides: CommandSendOverrides = processCommands({
@@ -254,6 +290,22 @@ export class ConversationLifecycleActionImpl {
     };
 
     const fileIdList = files?.map((f) => f.id);
+    const canMaterializeLocalFiles =
+      isDesktop &&
+      localFileReferences.length > 0 &&
+      !metadata?.localSystemToolSnapshots?.length &&
+      (!!heterogeneousProvider || !!agentConfig?.plugins?.includes('lobe-local-system'));
+    const localSystemToolSnapshots = canMaterializeLocalFiles
+      ? await materializeLocalSystemToolSnapshots(localFileReferences)
+      : [];
+    const userMessageMetadata =
+      metadata || pageSelections?.length || localSystemToolSnapshots.length
+        ? {
+            ...metadata,
+            ...(pageSelections?.length ? { pageSelections } : undefined),
+            ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
+          }
+        : undefined;
 
     // Enrich selected skills/tools with preloaded content, injected directly
     // via SelectedSkillInjector/SelectedToolInjector — no fake tool-call preload messages
@@ -292,6 +344,7 @@ export class ConversationLifecycleActionImpl {
           editorData: editorData ?? undefined,
           files: fileIdList,
           interruptMode: 'soft',
+          metadata: userMessageMetadata,
           createdAt: Date.now(),
         },
         runningAgentOp.id,
@@ -370,8 +423,8 @@ export class ConversationLifecycleActionImpl {
         threadId: operationContext.threadId ?? undefined,
         imageList: tempImages.length > 0 ? tempImages : undefined,
         videoList: tempVideos.length > 0 ? tempVideos : undefined,
-        // Pass pageSelections metadata for immediate display
-        metadata: pageSelections?.length ? { pageSelections } : undefined,
+        // Pass metadata for immediate display
+        metadata: userMessageMetadata,
       },
       { operationId, tempMessageId: tempId },
     );
@@ -402,8 +455,6 @@ export class ConversationLifecycleActionImpl {
 
     // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
-    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
     if (isDesktop && heterogeneousProvider) {
       // Resolve cwd up-front so the new topic is bound to a project at
       // creation time. Otherwise the row stays NULL until the post-execution
@@ -444,6 +495,7 @@ export class ConversationLifecycleActionImpl {
               content: message,
               editorData,
               files: fileIdList,
+              metadata: userMessageMetadata,
               pageSelections,
               parentId,
             },
@@ -637,6 +689,7 @@ export class ConversationLifecycleActionImpl {
             content: persistedContent,
             editorData,
             files: fileIdList,
+            metadata: userMessageMetadata,
             pageSelections,
             parentId,
           },
@@ -720,6 +773,15 @@ export class ConversationLifecycleActionImpl {
 
       // Create final context with updated topicId/threadId from server response
       const finalContext = { ...operationContext, topicId: finalTopicId, threadId: finalThreadId };
+      data = {
+        ...data,
+        messages: attachSendTimeMetadataToUserMessage(
+          data.messages,
+          data.userMessageId,
+          userMessageMetadata,
+        ),
+      };
+
       this.#get().replaceMessages(data.messages, {
         context: finalContext,
         action: 'sendMessage/serverResponse',

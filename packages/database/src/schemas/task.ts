@@ -1,3 +1,4 @@
+import type { BriefArtifacts } from '@lobechat/types';
 import {
   foreignKey,
   index,
@@ -241,7 +242,7 @@ export const briefs = pgTable(
     priority: text('priority').default('info'), // 'urgent' | 'normal' | 'info'
     title: text('title').notNull(),
     summary: text('summary').notNull(),
-    artifacts: jsonb('artifacts'), // document ids
+    artifacts: jsonb('artifacts').$type<BriefArtifacts>(), // programmatically collected at synthesis
     actions: jsonb('actions'), // BriefAction[]
 
     // Resolution
@@ -249,6 +250,9 @@ export const briefs = pgTable(
     resolvedComment: text('resolved_comment'),
     readAt: timestamptz('read_at'),
     resolvedAt: timestamptz('resolved_at'),
+
+    trigger: varchar255('trigger'), // field for which module triggered the brief, e.g. task, agent, signal, etc.
+    metadata: jsonb('metadata'), // freeform field for business and states.
 
     createdAt: createdAt(),
   },
@@ -260,6 +264,7 @@ export const briefs = pgTable(
     index('briefs_type_idx').on(t.type),
     index('briefs_priority_idx').on(t.priority),
     index('briefs_unresolved_idx').on(t.userId, t.resolvedAt),
+    index('briefs_trigger_idx').on(t.trigger),
   ],
 );
 

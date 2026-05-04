@@ -1359,7 +1359,7 @@ describe('TopicModel - Query', () => {
     it('should include topics from inbox agent (slug=inbox)', async () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(agents).values([
-          { id: 'inbox-agent', userId, title: 'LobeAI', slug: 'inbox', virtual: true },
+          { id: 'inbox-agent', userId, title: 'Lobe AI', slug: 'inbox', virtual: true },
           { id: 'other-virtual', userId, title: 'Other Virtual', virtual: true },
         ]);
         await tx.insert(topics).values([
@@ -1415,7 +1415,7 @@ describe('TopicModel - Query', () => {
         await tx.insert(chatGroups).values([{ id: 'mixed-group', title: 'Mixed Group', userId }]);
         await tx.insert(agents).values([
           { id: 'normal-agent', userId, title: 'Normal Agent', virtual: false },
-          { id: 'inbox-agent', userId, title: 'LobeAI', slug: 'inbox', virtual: true },
+          { id: 'inbox-agent', userId, title: 'Lobe AI', slug: 'inbox', virtual: true },
           { id: 'virtual-agent', userId, title: 'Virtual Agent', virtual: true },
         ]);
         await tx.insert(topics).values([

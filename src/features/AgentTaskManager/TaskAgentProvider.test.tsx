@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
   };
 
   const chatState = {
+    activeAgentId: undefined as string | undefined,
     activeTopicId: null as string | null | undefined,
     dbMessagesMap: {} as Record<string, unknown[]>,
     replaceMessages: vi.fn(),
@@ -92,6 +93,7 @@ describe('TaskAgentProvider', () => {
   beforeEach(() => {
     mocks.agentState.activeAgentId = undefined;
     mocks.agentState.setActiveAgentId.mockClear();
+    mocks.chatState.activeAgentId = undefined;
     mocks.chatState.activeTopicId = null;
     mocks.chatState.dbMessagesMap = {};
     mocks.chatState.replaceMessages.mockClear();
@@ -160,5 +162,25 @@ describe('TaskAgentProvider', () => {
       expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
     });
     expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
+  });
+
+  it('resets transient state on scoped agent sync even without an active topic', async () => {
+    mocks.agentState.activeAgentId = 'agt_task';
+    mocks.chatState.activeAgentId = 'agt_previous';
+    mocks.chatState.activeTopicId = null;
+
+    render(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.chatState.switchTopic).toHaveBeenCalledWith(null, {
+        scope: 'task',
+        skipRefreshMessage: true,
+      });
+    });
+    expect(mocks.chatState.activeAgentId).toBe('agt_task');
   });
 });

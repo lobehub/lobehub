@@ -32,7 +32,9 @@ describe('runAgentSignalWorkflow', () => {
     const topicId = `topic_${uuid()}`;
     const parentMessageId = `msg_${uuid()}`;
     const baseTimestamp = new Date('2026-01-01T00:00:00.000Z').getTime();
-    let capturedSourceEvent: AgentSignalSourceEvent | undefined;
+    let capturedSourceEvent:
+      | AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage>
+      | undefined;
 
     await db.insert(users).values({ id: userId });
 
@@ -177,7 +179,9 @@ describe('runAgentSignalWorkflow', () => {
     const now = Date.now();
     const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
       async (sourceEvent) => {
-        capturedSourceEvent = sourceEvent as AgentSignalSourceEvent;
+        capturedSourceEvent = sourceEvent as AgentSignalSourceEvent<
+          typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage
+        >;
         return undefined;
       },
     );

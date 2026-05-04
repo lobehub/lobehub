@@ -53,6 +53,20 @@ const isInboxAgent = (s: AgentStoreState) => {
   return !!id && s.activeAgentId === id;
 };
 
+/**
+ * Get web onboarding agent id (convenience selector)
+ */
+const webOnboardingAgentId = (s: AgentStoreState) =>
+  s.builtinAgentIdMap[BUILTIN_AGENT_SLUGS.webOnboarding];
+
+/**
+ * Check if current active agent is the web onboarding agent
+ */
+const isOnboardingAgent = (s: AgentStoreState) => {
+  const id = webOnboardingAgentId(s);
+  return !!id && s.activeAgentId === id;
+};
+
 export const builtinAgentSelectors = {
   agentBuilderId,
   getBuiltinAgentId,
@@ -61,6 +75,8 @@ export const builtinAgentSelectors = {
   isBuiltinAgentInit,
   isInboxAgent,
   isInboxAgentConfigInit,
+  isOnboardingAgent,
   pageAgentId,
   taskAgentId,
+  webOnboardingAgentId,
 };

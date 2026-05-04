@@ -212,6 +212,45 @@ describe('createRouterRuntime', () => {
       expect(result).toEqual(['model-1', 'model-2']);
       expect(mockModels).toHaveBeenCalled();
     });
+
+    it('should use the baseURL-matched runtime client for functional model discovery', async () => {
+      class OpenAIRuntime implements LobeRuntimeAI {
+        client = { provider: 'openai-compatible' };
+        models = vi.fn();
+      }
+
+      class AnthropicRuntime implements LobeRuntimeAI {
+        client = { provider: 'anthropic-compatible' };
+        models = vi.fn();
+      }
+
+      const models = vi.fn().mockResolvedValue([]);
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        models,
+        routers: [
+          {
+            apiType: 'openai',
+            baseURLPattern: /\/v1$/,
+            options: {},
+            runtime: OpenAIRuntime as any,
+          },
+          {
+            apiType: 'anthropic',
+            baseURLPattern: /\/anthropic$/,
+            options: {},
+            runtime: AnthropicRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime({ baseURL: 'https://api.example.com/v1' });
+      await runtime.models();
+
+      expect(models).toHaveBeenCalledWith({
+        client: { provider: 'openai-compatible' },
+      });
+    });
   });
 
   describe('embeddings method', () => {
@@ -465,6 +504,79 @@ describe('createRouterRuntime', () => {
       expect(mockChatSuccess).not.toHaveBeenCalled();
     });
 
+    it('should not retry when the upstream rejects the request payload', async () => {
+      const invalidRequestError = {
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        error: {
+          body: { httpStatusCode: 400 },
+          message: 'This model maximum input length is 128000 tokens. Please reduce your input.',
+          type: 'invalid_request_error',
+        },
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(invalidRequestError);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(invalidRequestError);
+
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not retry when the response_format schema is invalid', async () => {
+      const invalidSchemaError = {
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        error: {
+          message:
+            "Invalid schema for response_format 'json_schema': schema must be a JSON Schema.",
+        },
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(invalidSchemaError);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(invalidSchemaError);
+
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+    });
+
     it('should not retry when shouldStopFallback returns true', async () => {
       const moderationError = {
         errorType: AgentRuntimeErrorType.ProviderBizError,
@@ -547,6 +659,40 @@ describe('createRouterRuntime', () => {
       ).rejects.toEqual(bizError);
 
       // Both channels should be tried
+      expect(mockChatFail).toHaveBeenCalledTimes(2);
+    });
+
+    it('should still retry on channel-specific auth errors even when status is 400', async () => {
+      const invalidKeyError = {
+        errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+        error: { message: 'Unauthorized: invalid API key' },
+        provider: 'test',
+        status: 400,
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(invalidKeyError);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(invalidKeyError);
+
       expect(mockChatFail).toHaveBeenCalledTimes(2);
     });
 

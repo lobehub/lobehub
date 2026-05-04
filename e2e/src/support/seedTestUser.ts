@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import bcrypt from 'bcryptjs';
 
 // Test user credentials - these are used for e2e testing only
@@ -87,6 +89,39 @@ export async function seedTestUser(): Promise<void> {
   } catch (error) {
     console.error('❌ Failed to seed test user:', error);
     throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+export async function createTestSession(): Promise<string | null> {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (!databaseUrl) {
+    console.log('⚠️ DATABASE_URL not set, cannot create test session');
+    return null;
+  }
+
+  await seedTestUser();
+
+  const { default: pg } = await import('pg');
+  const client = new pg.Client({ connectionString: databaseUrl });
+
+  try {
+    await client.connect();
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const sessionId = randomBytes(9).toString('base64url');
+    const sessionToken = randomBytes(24).toString('base64url');
+
+    await client.query(
+      `INSERT INTO auth_sessions (id, token, user_id, expires_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $5)`,
+      [sessionId, sessionToken, TEST_USER.id, expiresAt.toISOString(), now.toISOString()],
+    );
+
+    return sessionToken;
   } finally {
     await client.end();
   }

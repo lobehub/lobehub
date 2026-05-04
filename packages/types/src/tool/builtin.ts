@@ -335,8 +335,8 @@ export interface BuiltinInterventionProps<Arguments = any> {
   onInteractionAction?: (
     action:
       | { type: 'submit'; payload: Record<string, unknown> }
-      | { type: 'skip'; reason?: string }
-      | { type: 'cancel' },
+      | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
+      | { type: 'cancel'; payload?: Record<string, unknown> },
   ) => Promise<void>;
   /**
    * Register a callback to be called before approval
@@ -461,6 +461,11 @@ export interface BuiltinToolContext {
    * AbortSignal for cancellation detection
    */
   signal?: AbortSignal;
+
+  /**
+   * The source user message ID for tools that need to inspect the current turn.
+   */
+  sourceMessageId?: string;
 
   /**
    * Step context computed at the beginning of each step

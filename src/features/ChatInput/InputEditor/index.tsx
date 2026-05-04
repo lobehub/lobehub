@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { chainInputCompletion } from '@lobechat/prompts';
+import { chainInputCompletion, escapeXmlAttr } from '@lobechat/prompts';
 import { isCommandPressed, merge } from '@lobechat/utils';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
@@ -37,6 +37,7 @@ import type { MentionMenuState } from './MentionMenu/types';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
+import { useLocalFileMention } from './useLocalFileMention';
 import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(css`
@@ -50,15 +51,25 @@ const InputEditor = memo<{
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
 }>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
-  const [editor, slashMenuRef, send, updateMarkdownContent, expand, slashPlacement] =
-    useChatInputStore((s) => [
-      s.editor,
-      s.slashMenuRef,
-      s.handleSendButton,
-      s.updateMarkdownContent,
-      s.expand,
-      s.slashPlacement ?? 'top',
-    ]);
+  const [
+    editor,
+    slashMenuRef,
+    send,
+    updateMarkdownContent,
+    expand,
+    slashPlacement,
+    disableMention,
+    disableSlash,
+  ] = useChatInputStore((s) => [
+    s.editor,
+    s.slashMenuRef,
+    s.handleSendButton,
+    s.updateMarkdownContent,
+    s.expand,
+    s.slashPlacement ?? 'top',
+    s.disableMention,
+    s.disableSlash,
+  ]);
 
   const storeApi = useStoreApi();
   const state = useEditorState(editor);
@@ -74,6 +85,16 @@ const InputEditor = memo<{
   const stateRef = useRef<MentionMenuState>({ isSearch: false, matchingString: '' });
   const categoriesRef = useRef(categories);
   categoriesRef.current = categories;
+
+  // Get agent's model info for vision support check and handle paste upload
+  const agentId = useAgentId();
+  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
+  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const heterogeneousType = useAgentStore(
+    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
+  );
+
+  const { enableLocalFileMention, searchLocalFiles } = useLocalFileMention();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
 
@@ -92,31 +113,28 @@ const InputEditor = memo<{
     ) => {
       if (search?.matchingString) {
         stateRef.current = { isSearch: true, matchingString: search.matchingString };
-        return fuse.search(search.matchingString).map((r) => r.item);
+        const [localFileItems, mentionItems] = await Promise.all([
+          searchLocalFiles(search.matchingString),
+          Promise.resolve(fuse.search(search.matchingString).map((r) => r.item)),
+        ]);
+
+        return [...localFileItems, ...mentionItems];
       }
       stateRef.current = { isSearch: false, matchingString: '' };
       return [...allMentionItems];
     },
-    [allMentionItems, fuse],
+    [allMentionItems, fuse, searchLocalFiles],
   );
 
   const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
 
-  const enableMention = allMentionItems.length > 0;
-
-  // Get agent's model info for vision support check and handle paste upload
-  const agentId = useAgentId();
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
-  const heterogeneousType = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
-  );
+  const enableMention = !disableMention && (allMentionItems.length > 0 || enableLocalFileMention);
   const heterogeneousName = heterogeneousType
     ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
     : undefined;
   // Heterogeneous agents (e.g. Claude Code) don't yet support @-assigning to other agents
   const showAgentAssignmentHint =
-    !heterogeneousName && categories.some((category) => category.id === 'agent');
+    !disableMention && !heterogeneousName && categories.some((category) => category.id === 'agent');
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   // Listen to editor's paste event for file uploads
@@ -231,6 +249,13 @@ const InputEditor = memo<{
     if (mention.metadata?.type === 'topic') {
       return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
     }
+    if (mention.metadata?.type === 'localFile') {
+      const name = escapeXmlAttr(String(mention.metadata.name ?? mention.label));
+      const path = escapeXmlAttr(String(mention.metadata.path ?? ''));
+      const isDirectory = mention.metadata.isDirectory ? ' isDirectory' : '';
+
+      return `<localFile name="${name}" path="${path}"${isDirectory} />`;
+    }
     return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
   }, []);
 
@@ -269,7 +294,10 @@ const InputEditor = memo<{
     [enableMention, mentionItemsFn, mentionMarkdownWriter, mentionOnSelect, MentionMenuComp],
   );
 
-  const slashOption = useMemo(() => ({ items: slashItems }), [slashItems]);
+  const slashOption = useMemo(
+    () => (disableSlash ? undefined : { items: slashItems }),
+    [disableSlash, slashItems],
+  );
 
   const richRenderProps = useMemo(() => {
     const basePlugins = !enableRichRender

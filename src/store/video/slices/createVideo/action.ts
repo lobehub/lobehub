@@ -2,6 +2,7 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { t } from 'i18next';
 
 import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
+import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { message } from '@/components/AntdStaticMethods';
 import { videoService } from '@/services/video';
@@ -120,6 +121,7 @@ export class CreateVideoActionImpl {
       );
     } catch (error) {
       handleGenerationPromptModerationError(error);
+      handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {
       // 7. Reset all creating states
@@ -160,6 +162,7 @@ export class CreateVideoActionImpl {
       await store.refreshGenerationBatches();
     } catch (error) {
       handleGenerationPromptModerationError(error);
+      handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {
       this.#set({ isCreating: false }, false, 'recreateVideo/end');

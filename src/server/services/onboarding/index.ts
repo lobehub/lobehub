@@ -350,6 +350,10 @@ export class OnboardingService {
       version: CURRENT_ONBOARDING_VERSION,
     };
 
+    if (existing?.agentMarketplacePick) {
+      snapshot.agentMarketplacePick = existing.agentMarketplacePick;
+    }
+
     if (!snapshot.agentIdentityCompletedAt && phase !== 'agent_identity') {
       snapshot.agentIdentityCompletedAt = now;
     }

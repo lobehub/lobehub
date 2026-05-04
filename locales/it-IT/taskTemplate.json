@@ -1,5 +1,7 @@
 {
   "action.connect.button": "Connetti {{provider}}",
+  "action.connect.error": "Connessione fallita, per favore riprova.",
+  "action.connect.popupBlocked": "Popup di connessione bloccato. Consenti i popup nel tuo browser per continuare.",
   "action.create.error": "Impossibile creare l'attività. Riprova.",
   "action.create.success": "Attività programmata aggiunta. Trovala in Lobe AI.",
   "action.createButton": "Aggiungi come attività programmata",

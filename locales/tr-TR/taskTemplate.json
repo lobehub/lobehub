@@ -1,5 +1,7 @@
 {
   "action.connect.button": "{{provider}} bağla",
+  "action.connect.error": "Bağlantı başarısız oldu, lütfen tekrar deneyin.",
+  "action.connect.popupBlocked": "Bağlantı açılır penceresi engellendi. Devam etmek için tarayıcınızda açılır pencerelere izin verin.",
   "action.create.error": "Görev oluşturulamadı. Lütfen tekrar deneyin.",
   "action.create.success": "Zamanlanmış görev eklendi. Lobe AI’de bulabilirsiniz.",
   "action.createButton": "Zamanlanmış görev olarak ekle",

@@ -3,6 +3,7 @@ import { memo, useEffect } from 'react';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
+import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -12,7 +13,6 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
-import PageModal from './PageModal';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
@@ -35,7 +35,6 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId }) => {
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const isLoading = useTaskStore(taskDetailSelectors.isTaskDetailLoading);
   const saveStatus = useTaskStore(taskDetailSelectors.taskSaveStatus);
-
   const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
     systemStatusSelectors.showTaskAgentPanel(s),
     s.toggleTaskAgentPanel,
@@ -103,7 +102,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId }) => {
         </WideScreenContainer>
       </Flexbox>
       <TopicChatDrawer />
-      <PageModal />
+      <DocumentPreviewModal />
     </Flexbox>
   );
 });

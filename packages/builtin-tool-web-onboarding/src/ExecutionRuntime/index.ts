@@ -5,23 +5,13 @@ import {
 } from '@lobechat/markdown-patch';
 import type { BuiltinServerRuntimeOutput, SaveUserQuestionInput } from '@lobechat/types';
 
-import {
-  createDocumentReadResult,
-  createWebOnboardingToolResult,
-  formatWebOnboardingStateMessage,
-} from './utils';
+import { createDocumentReadResult, createWebOnboardingToolResult } from './utils';
 
 export interface WebOnboardingRuntimeService {
   finishOnboarding: () => Promise<{
     content: string;
     finishedAt?: string;
     success: boolean;
-  }>;
-  getOnboardingState: () => Promise<{
-    finished: boolean;
-    missingStructuredFields: string[];
-    phase: string;
-    remainingDiscoveryExchanges?: number;
   }>;
   readDocument: (type: 'soul' | 'persona') => Promise<{
     content: string | null;
@@ -44,16 +34,6 @@ export interface WebOnboardingRuntimeService {
 
 export class WebOnboardingExecutionRuntime {
   constructor(private service: WebOnboardingRuntimeService) {}
-
-  async getOnboardingState(): Promise<BuiltinServerRuntimeOutput> {
-    const result = await this.service.getOnboardingState();
-
-    return {
-      content: formatWebOnboardingStateMessage(result),
-      state: result,
-      success: true,
-    };
-  }
 
   async saveUserQuestion(params: SaveUserQuestionInput): Promise<BuiltinServerRuntimeOutput> {
     const result = await this.service.saveUserQuestion(params);

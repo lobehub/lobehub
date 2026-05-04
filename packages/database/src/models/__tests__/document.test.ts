@@ -179,6 +179,29 @@ describe('DocumentModel', () => {
       expect(result.total).toBe(2);
     });
 
+    it('should exclude agent-owned documents unless sourceTypes explicitly requests them', async () => {
+      await createTestDocument(documentModel, fileModel, 'Visible document');
+      await documentModel.create({
+        content: 'Agent document',
+        fileType: 'agent/document',
+        filename: 'agent-document',
+        source: 'agent-document://agent-1/agent-document',
+        sourceType: 'agent',
+        totalCharCount: 14,
+        totalLineCount: 1,
+      });
+
+      const defaultResult = await documentModel.query();
+
+      expect(defaultResult.items).toHaveLength(1);
+      expect(defaultResult.items[0].sourceType).not.toBe('agent');
+
+      const agentResult = await documentModel.query({ sourceTypes: ['agent'] });
+
+      expect(agentResult.items).toHaveLength(1);
+      expect(agentResult.items[0].sourceType).toBe('agent');
+    });
+
     it('should only return documents for the current user', async () => {
       await createTestDocument(documentModel, fileModel, 'User 1 document');
       await createTestDocument(documentModel2, fileModel2, 'User 2 document');

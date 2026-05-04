@@ -7,6 +7,7 @@ import { isRtlLang } from 'rtl-detect';
 import chat from '@/../locales/en-US/chat.json';
 import common from '@/../locales/en-US/common.json';
 import error from '@/../locales/en-US/error.json';
+import home from '@/../locales/en-US/home.json';
 import { DEFAULT_LANG } from '@/const/locale';
 import { getDebugConfig } from '@/envs/debug';
 // Sync load bundled fallback resources without Suspense on first render.
@@ -16,6 +17,7 @@ import { getDebugConfig } from '@/envs/debug';
 import defaultChat from '@/locales/default/chat';
 import defaultCommon from '@/locales/default/common';
 import defaultError from '@/locales/default/error';
+import defaultHome from '@/locales/default/home';
 import { normalizeLocale } from '@/locales/resources';
 import { isOnServerSide } from '@/utils/env';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
@@ -34,6 +36,7 @@ const createBundledResources = () => ({
   chat: mergeNamespace(defaultChat, chat),
   common: mergeNamespace(defaultCommon, common),
   error: mergeNamespace(defaultError, error),
+  home: mergeNamespace(defaultHome, home),
 });
 
 const defaultResources = createBundledResources();

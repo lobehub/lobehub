@@ -12,6 +12,7 @@ export default {
   'table.columns.spend': 'Credits',
   'table.columns.startTime': 'Created At',
   'table.columns.totalTokens': 'Token Usage',
+  'table.columns.trigger.enums.agent_signal': 'Agent Signal',
   'table.columns.trigger.enums.api': 'API Call',
   'table.columns.trigger.enums.bot': 'Bot Message',
   'table.columns.trigger.enums.chat': 'Chat Message',

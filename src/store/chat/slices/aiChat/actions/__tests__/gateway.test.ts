@@ -10,6 +10,7 @@ vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
     execAgentTask: vi.fn(),
     interruptTask: vi.fn(),
+    refreshGatewayToken: vi.fn(),
   },
 }));
 
@@ -52,12 +53,16 @@ function createMockClient(): GatewayConnection['client'] & {
       }
       set.add(listener);
     }),
+    reconnect: vi.fn(async () => {}),
     sendInterrupt: vi.fn(),
     sendToolResult: vi.fn(() => true),
+    updateToken: vi.fn(),
   };
 }
 
 // ─── Test Helpers ───
+
+const TEST_TOPIC_ID = 'topic-test';
 
 function createTestAction() {
   const state: Record<string, any> = { gatewayConnections: {} };
@@ -92,6 +97,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       expect(state.gatewayConnections['op-1']).toBeDefined();
@@ -106,6 +112,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       mockClient.emitEvent('status_changed', 'connected');
@@ -121,6 +128,7 @@ describe('GatewayActionImpl', () => {
         onEvent: (e) => events.push(e),
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       const testEvent: AgentStreamEvent = {
@@ -145,6 +153,7 @@ describe('GatewayActionImpl', () => {
         onSessionComplete: onComplete,
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       mockClient.emitEvent('session_complete');
@@ -159,6 +168,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       mockClient.emitEvent('disconnected');
@@ -172,10 +182,112 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       mockClient.emitEvent('auth_failed', 'invalid token');
       expect(state.gatewayConnections['op-1']).toBeUndefined();
+    });
+
+    // Regression: when the server rejects auth (e.g. the op was GC'd or the
+    // refreshed JWT no longer matches), the local op stayed `running` forever
+    // because `auth_failed` only cleaned the connection map and never fired
+    // `onSessionComplete`. The `disconnected` listener that follows can't fix
+    // this either — `receivedTerminalEvent` is false (no agent_event arrived),
+    // so it short-circuits. Net result: input shows the stop button forever
+    // and `topic.metadata.runningOperation` stays set, so every revisit
+    // re-fires the same broken reconnect.
+    it('should fire onSessionComplete on auth_failed so the local op gets completed', () => {
+      const { action, mockClient } = createTestAction();
+      const onSessionComplete = vi.fn();
+
+      action.connectToGateway({
+        gatewayUrl: 'https://gateway.test.com',
+        onSessionComplete,
+        operationId: 'op-1',
+        token: 'test-token',
+        topicId: TEST_TOPIC_ID,
+      });
+
+      mockClient.emitEvent('auth_failed', 'invalid token');
+      expect(onSessionComplete).toHaveBeenCalledOnce();
+    });
+
+    // Same regression, but for the WS-close that follows `auth_failed`.
+    // The previous behavior fired `disconnected` after `auth_failed`, but
+    // since `receivedTerminalEvent` is false, the disconnected listener also
+    // skipped onSessionComplete. The fix should still only call it once
+    // (through the auth_failed path) — not twice.
+    it('should not fire onSessionComplete twice when auth_failed is followed by disconnected', () => {
+      const { action, mockClient } = createTestAction();
+      const onSessionComplete = vi.fn();
+
+      action.connectToGateway({
+        gatewayUrl: 'https://gateway.test.com',
+        onSessionComplete,
+        operationId: 'op-1',
+        token: 'test-token',
+        topicId: TEST_TOPIC_ID,
+      });
+
+      mockClient.emitEvent('auth_failed', 'invalid token');
+      mockClient.emitEvent('disconnected');
+      expect(onSessionComplete).toHaveBeenCalledOnce();
+    });
+
+    describe('auth_expired (recoverable)', () => {
+      it('should refresh token, reconnect, and NOT fire onSessionComplete', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSessionComplete = vi.fn();
+        vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValueOnce({
+          token: 'fresh-token',
+        });
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete,
+          operationId: 'op-1',
+          token: 'old-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('auth_expired');
+        // The handler is async — let the promise chain settle.
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledWith(TEST_TOPIC_ID);
+        expect(mockClient.updateToken).toHaveBeenCalledWith('fresh-token');
+        expect(mockClient.reconnect).toHaveBeenCalledOnce();
+        // Critical: this is recoverable, so the local op MUST keep running.
+        expect(onSessionComplete).not.toHaveBeenCalled();
+      });
+
+      it('should fire onSessionComplete when token refresh itself throws', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSessionComplete = vi.fn();
+        vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce(
+          new Error('refresh API down'),
+        );
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete,
+          operationId: 'op-1',
+          token: 'old-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('auth_expired');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledWith(TEST_TOPIC_ID);
+        // No reconnect attempted — refresh failed, give up cleanly.
+        expect(mockClient.reconnect).not.toHaveBeenCalled();
+        expect(mockClient.disconnect).toHaveBeenCalled();
+        expect(onSessionComplete).toHaveBeenCalledOnce();
+      });
     });
 
     it('should disconnect existing connection before creating new one', () => {
@@ -188,6 +300,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'token-1',
+        topicId: TEST_TOPIC_ID,
       });
 
       // Second connection
@@ -197,6 +310,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'token-2',
+        topicId: TEST_TOPIC_ID,
       });
 
       expect(firstMock.disconnect).toHaveBeenCalled();
@@ -212,6 +326,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       action.disconnectFromGateway('op-1');
@@ -233,6 +348,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       action.interruptGatewayAgent('op-1');
@@ -253,6 +369,7 @@ describe('GatewayActionImpl', () => {
         gatewayUrl: 'https://gateway.test.com',
         operationId: 'op-1',
         token: 'test-token',
+        topicId: TEST_TOPIC_ID,
       });
 
       expect(action.getGatewayConnectionStatus('op-1')).toBe('connecting');

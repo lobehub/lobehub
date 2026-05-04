@@ -43,6 +43,9 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
     }
 
     const chatState = useChatStore.getState();
+    const shouldResetTopic =
+      chatState.activeAgentId !== selectedAgentId || !!chatState.activeTopicId;
+
     if (chatState.activeAgentId !== selectedAgentId) {
       useChatStore.setState({ activeAgentId: selectedAgentId });
     }
@@ -50,7 +53,7 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
     if (syncedAgentIdRef.current === selectedAgentId) return;
     syncedAgentIdRef.current = selectedAgentId;
 
-    if (chatState.activeTopicId) {
+    if (shouldResetTopic) {
       void chatState.switchTopic(null, { scope: 'task', skipRefreshMessage: true });
     }
   }, [selectedAgentId, setActiveAgentId]);

@@ -113,22 +113,6 @@ describe('urlRules', () => {
       expect(arxivRule?.impls).toEqual(['jina']);
     });
 
-    it('should match Zhihu Zhuanlan links', () => {
-      const zhihuZhuanlanRule = crawUrlRules.find(
-        (rule) => rule.urlPattern === 'https://zhuanlan.zhihu.com(.*)',
-      );
-
-      expect(zhihuZhuanlanRule).toBeDefined();
-      expect(zhihuZhuanlanRule?.impls).toEqual(['jina']);
-    });
-
-    it('should match Zhihu links', () => {
-      const zhihuRule = crawUrlRules.find((rule) => rule.urlPattern === 'https://zhihu.com(.*)');
-
-      expect(zhihuRule).toBeDefined();
-      expect(zhihuRule?.impls).toEqual(['jina']);
-    });
-
     it('should match Medium links with URL transformation', () => {
       const mediumRule = crawUrlRules.find((rule) => rule.urlPattern === 'https://medium.com/(.*)');
 
@@ -267,7 +251,6 @@ describe('urlRules', () => {
 
       // Check for Chinese platforms
       expect(patterns.some((p) => p.includes('weixin.sogou.com'))).toBe(true);
-      expect(patterns.some((p) => p.includes('zhihu.com'))).toBe(true);
       expect(patterns.some((p) => p.includes('xiaohongshu.com'))).toBe(true);
       expect(patterns.some((p) => p.includes('feishu.cn'))).toBe(true);
     });

@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Configurazione Ollama non valida. Controlla le impostazioni e riprova.",
   "response.InvalidProviderAPIKey": "La chiave API di {{provider}} è errata o vuota. Verifica e riprova.",
   "response.InvalidVertexCredentials": "Autenticazione Vertex fallita. Verifica le credenziali e riprova.",
+  "response.LobeHubModelDeprecated": "Il modello \"{{model}}\" non è più disponibile. Si prega di scegliere un modello attuale dal selettore di modelli.",
   "response.LocationNotSupportError": "Spiacenti, il tuo paese non supporta questo servizio. Potrebbero esserci restrizioni regionali. Verifica la disponibilità o prova da un'altra posizione.",
   "response.ModelNotFound": "Spiacenti, il modello richiesto non è stato trovato. Potrebbe non esistere o mancare l'autorizzazione. Prova a cambiare API Key o i permessi.",
   "response.NoOpenAIAPIKey": "Chiave API OpenAI mancante. Aggiungi una chiave personalizzata.",

@@ -86,6 +86,28 @@ vi.mock('antd', () => ({
     }),
   },
   Progress: () => <div data-testid="workspace-progress-bar" />,
+  Segmented: ({
+    options,
+    value,
+    onChange,
+  }: {
+    onChange?: (value: string) => void;
+    options?: Array<{ label?: ReactNode; value: string }>;
+    value?: string;
+  }) => (
+    <div data-testid="working-sidebar-tabs">
+      {options?.map((opt) => (
+        <button
+          data-active={String(opt.value === value)}
+          key={opt.value}
+          type="button"
+          onClick={() => onChange?.(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  ),
   Spin: () => <div data-testid="spin" />,
 }));
 
@@ -94,8 +116,8 @@ vi.mock('react-i18next', () => ({
     t: (key: string) =>
       (
         ({
-          'workingPanel.resources': 'Resources',
           'workingPanel.resources.empty': 'No agent documents yet',
+          'workingPanel.space': 'Space',
         }) as Record<string, string>
       )[key] || key,
   }),
@@ -122,6 +144,9 @@ vi.mock('@/store/chat', () => ({
 vi.mock('@/store/chat/selectors', () => ({
   chatPortalSelectors: {
     portalDocumentId: () => null,
+  },
+  topicSelectors: {
+    currentTopicWorkingDirectory: () => undefined,
   },
 }));
 
@@ -153,8 +178,8 @@ describe('AgentWorkingSidebar', () => {
   it('renders panel header title and resources empty state', () => {
     render(<AgentWorkingSidebar />);
 
-    // Panel-level title
-    expect(screen.getAllByText('Resources').length).toBeGreaterThan(0);
+    // Panel-level title (Space tab when no working directory)
+    expect(screen.getAllByText('Space').length).toBeGreaterThan(0);
 
     const resources = screen.getByTestId('workspace-resources');
     expect(resources).toHaveTextContent('No agent documents yet');

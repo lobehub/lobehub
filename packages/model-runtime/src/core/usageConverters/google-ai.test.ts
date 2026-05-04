@@ -14,10 +14,15 @@ describe('convertGoogleAIUsage', () => {
         { modality: MediaModality.TEXT, tokenCount: 30 },
         { modality: MediaModality.IMAGE, tokenCount: 10 },
       ],
+      cacheTokensDetails: [
+        { modality: MediaModality.TEXT, tokenCount: 4 },
+        { modality: MediaModality.VIDEO, tokenCount: 2 },
+      ],
       promptTokenCount: 70,
       promptTokensDetails: [
         { modality: MediaModality.TEXT, tokenCount: 60 },
         { modality: MediaModality.IMAGE, tokenCount: 5 },
+        { modality: MediaModality.VIDEO, tokenCount: 4 },
       ],
       thoughtsTokenCount: 12,
       totalTokenCount: 122,
@@ -27,10 +32,15 @@ describe('convertGoogleAIUsage', () => {
 
     expect(result).toEqual({
       inputAudioTokens: undefined,
+      inputCachedAudioTokens: undefined,
+      inputCachedImageTokens: undefined,
+      inputCachedTextTokens: 4,
       inputCacheMissTokens: 64,
       inputCachedTokens: 6,
+      inputCachedVideoTokens: 2,
       inputImageTokens: 5,
       inputTextTokens: 60,
+      inputVideoTokens: 4,
       outputImageTokens: 10,
       outputReasoningTokens: 12,
       outputTextTokens: 30,
@@ -55,10 +65,15 @@ describe('convertGoogleAIUsage', () => {
 
     expect(result).toEqual({
       inputAudioTokens: undefined,
+      inputCachedAudioTokens: undefined,
+      inputCachedImageTokens: undefined,
+      inputCachedTextTokens: undefined,
       inputCacheMissTokens: undefined,
       inputCachedTokens: undefined,
+      inputCachedVideoTokens: undefined,
       inputImageTokens: 3,
       inputTextTokens: undefined,
+      inputVideoTokens: undefined,
       outputImageTokens: 15,
       outputReasoningTokens: 5,
       outputTextTokens: 40,
@@ -99,15 +114,20 @@ describe('convertGoogleAIUsage', () => {
 
     expect(result).toEqual({
       inputAudioTokens: undefined,
+      inputCachedAudioTokens: undefined,
+      inputCachedImageTokens: undefined,
+      inputCachedTextTokens: undefined,
       inputCacheMissTokens: undefined,
       inputCachedTokens: undefined,
+      inputCachedVideoTokens: undefined,
       inputImageTokens: undefined,
       inputTextTokens: undefined,
       inputToolTokens: 7596,
+      inputVideoTokens: undefined,
       outputImageTokens: 0,
       outputReasoningTokens: undefined,
       outputTextTokens: 367,
-      totalInputTokens: 7646,  // promptTokenCount (50) + toolUsePromptTokenCount (7596)
+      totalInputTokens: 7646, // promptTokenCount (50) + toolUsePromptTokenCount (7596)
       totalOutputTokens: 367,
       totalTokens: 8013,
     });

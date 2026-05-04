@@ -872,8 +872,9 @@ export class AgentManagerRuntime {
     }
 
     // Need OAuth authorization
+    // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
     const redirectUri =
-      typeof window !== 'undefined'
+      typeof window !== 'undefined' && window.location.protocol.startsWith('http')
         ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`
         : undefined;
     const authInfo = await getToolStoreState().getLobehubSkillAuthorizeUrl(identifier, {

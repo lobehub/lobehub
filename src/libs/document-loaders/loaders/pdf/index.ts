@@ -1,4 +1,6 @@
+import { splitPdf } from '../../splitter';
 import { type DocumentChunk } from '../../types';
+import { loaderConfig } from '../config';
 
 export const PdfLoader = async (fileBlob: Blob): Promise<DocumentChunk[]> => {
   const pdfParse = (await import('pdf-parse')).default;
@@ -6,15 +8,7 @@ export const PdfLoader = async (fileBlob: Blob): Promise<DocumentChunk[]> => {
   const buffer = Buffer.from(await fileBlob.arrayBuffer());
   const data = await pdfParse(buffer);
 
-  // Split by pages using form feed character, or treat as single page
-  const pages: string[] = data.text
-    ? data.text.split(/\f/).filter((page: string) => page.trim().length > 0)
-    : [];
-
-  return pages.map((pageContent: string, index: number) => ({
-    metadata: {
-      loc: { pageNumber: index + 1 },
-    },
-    pageContent: pageContent.trim(),
-  }));
+  // Split into physical pages using form feed (\f),
+  // then recursively chunk each page's text while preserving page numbers.
+  return splitPdf(data.text, loaderConfig);
 };

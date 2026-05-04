@@ -4,7 +4,6 @@ import {
   LocalSystemListFilesPlaceholder,
   LocalSystemSearchFilesPlaceholder,
 } from '@lobechat/builtin-tool-local-system/client';
-import { NotebookIdentifier, NotebookPlaceholders } from '@lobechat/builtin-tool-notebook/client';
 import {
   WebBrowsingManifest,
   WebBrowsingPlaceholders,
@@ -20,7 +19,6 @@ export const BuiltinToolPlaceholders: Record<string, Record<string, any>> = {
     [LocalSystemApiName.searchLocalFiles]: LocalSystemSearchFilesPlaceholder,
     [LocalSystemApiName.listLocalFiles]: LocalSystemListFilesPlaceholder,
   },
-  [NotebookIdentifier]: NotebookPlaceholders as Record<string, any>,
   [WebBrowsingManifest.identifier]: WebBrowsingPlaceholders as Record<string, any>,
 };
 

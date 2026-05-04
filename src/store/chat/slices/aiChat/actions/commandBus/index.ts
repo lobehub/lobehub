@@ -9,7 +9,9 @@ export { injectReferTopicNode } from './editorDataHelpers';
 export type { SingleAgentMentionDirectRoute } from './parseCommands';
 export {
   hasNonActionContent,
+  mergeLocalFileReferences,
   parseCommandsFromEditorData,
+  parseLocalFileReferencesFromEditorData,
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,

@@ -51,12 +51,12 @@ You have access to a set of tools to interact with the user's local file system:
     - 'loc' (Optional): A two-element array [startLine, endLine] to specify a line range to read (e.g., '[301, 400]' reads lines 301 to 400).
     - If 'loc' is omitted, it defaults to reading the first 200 lines ('[0, 200]').
     - To read the entire file: First call 'readFile' (potentially without 'loc'). The response includes 'totalLineCount'. Then, call 'readFile' again with 'loc: [0, totalLineCount]' to get the full content.
-- For searching files: Use 'searchFiles' with the 'query' parameter (search string). You can optionally add the following filter parameters to narrow down the search:
+- For searching files: Use 'searchLocalFiles' with the 'keywords' parameter (search string). 'keywords' is split on whitespace and every token must appear as a substring of the filename (case- and diacritic-insensitive, order-independent). Pass only the discriminating words — long phrases full of optional words will return nothing. You can optionally add the following filter parameters to narrow down the search:
     - 'contentContains': Find files whose content includes specific text.
     - 'createdAfter' / 'createdBefore': Filter by creation date.
     - 'modifiedAfter' / 'modifiedBefore': Filter by modification date.
     - 'fileTypes': Filter by file type (e.g., "public.image", "txt").
-    - 'onlyIn': Limit the search to a specific directory.
+    - 'scope': Limit the search to a specific directory. Without 'scope' the search spans the entire Spotlight index and is much slower.
     - 'exclude': Exclude specific files or directories.
     - 'limit': Limit the number of results returned.
     - 'sortBy' / 'sortDirection': Sort the results.
@@ -88,7 +88,7 @@ You have access to a set of tools to interact with the user's local file system:
 - For killing background commands: Use 'killCommand' with 'shell_id'.
 - For searching content in files: Use 'grepContent'. Provide:
     - 'pattern': The regex pattern to search for.
-    - 'path' (Optional): File or directory to search.
+    - 'scope' (Optional): Directory to search in. Defaults to the working directory if omitted.
     - 'output_mode' (Optional): "content" (matching lines), "files_with_matches" (file paths, default), "count" (match counts).
     - 'glob' (Optional): Glob pattern to filter files (e.g., "*.js", "*.{ts,tsx}").
     - '-i' (Optional): Case insensitive search.
@@ -97,7 +97,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'head_limit' (Optional): Limit results to first N matches.
 - For finding files by pattern: Use 'globLocalFiles'. Provide:
     - 'pattern': Glob pattern (e.g., "**/*.js", "src/**/*.ts").
-    - 'path' (Optional): Directory to search in.
+    - 'scope' (Optional): Directory to search in. **Always set this when looking inside a user folder** — when omitted it falls back to the user's home directory, which can be very slow for broad patterns like "**/*foo*".
     Returns files sorted by modification time (most recent first).
 </tool_usage_guidelines>
 `;
