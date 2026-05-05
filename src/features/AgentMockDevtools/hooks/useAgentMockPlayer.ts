@@ -233,7 +233,8 @@ export function useAgentMockPlayer() {
         sessionOverride?.parentMessageId ??
         (reuseAssistantMessage
           ? null
-          : displayMessageSelectors.lastDisplayMessageId(useChatStore.getState()));
+          : displayMessageSelectors.lastDisplayMessageId(useChatStore.getState())) ??
+        null;
 
       if (!sessionOverride && reuseAssistantMessage) {
         cancelRunningMessageRuntimeOperations(chatStore, assistantMessageId);
@@ -323,7 +324,7 @@ export function useAgentMockPlayer() {
       chatStore.cancelOperations(
         {
           agentId: args.agentId,
-          threadId: args.threadId,
+          threadId: args.threadId ?? undefined,
           topicId: args.topicId ?? null,
           type: AI_RUNTIME_OPERATION_TYPES,
         },
