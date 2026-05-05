@@ -130,10 +130,10 @@ export const getMessengerTelegramConfig = async (): Promise<MessengerTelegramCon
 
 export const getMessengerSlackConfig = async (): Promise<MessengerSlackConfig | null> => {
   return fetchAndCache<MessengerSlackConfig>('slack', (row) => {
-    const c = row.credentials as Partial<MessengerSlackConfig>;
-    if (!c.appId || !c.clientId || !c.clientSecret || !c.signingSecret) return null;
+    const c = row.credentials as Partial<Omit<MessengerSlackConfig, 'appId'>>;
+    if (!row.applicationId || !c.clientId || !c.clientSecret || !c.signingSecret) return null;
     return {
-      appId: c.appId,
+      appId: row.applicationId,
       clientId: c.clientId,
       clientSecret: c.clientSecret,
       signingSecret: c.signingSecret,
@@ -143,10 +143,10 @@ export const getMessengerSlackConfig = async (): Promise<MessengerSlackConfig | 
 
 export const getMessengerDiscordConfig = async (): Promise<MessengerDiscordConfig | null> => {
   return fetchAndCache<MessengerDiscordConfig>('discord', (row) => {
-    const c = row.credentials as Partial<MessengerDiscordConfig>;
-    if (!c.applicationId || !c.botToken || !c.publicKey) return null;
+    const c = row.credentials as Partial<Omit<MessengerDiscordConfig, 'applicationId'>>;
+    if (!row.applicationId || !c.botToken || !c.publicKey) return null;
     return {
-      applicationId: c.applicationId,
+      applicationId: row.applicationId,
       botToken: c.botToken,
       botUsername: c.botUsername,
       publicKey: c.publicKey,

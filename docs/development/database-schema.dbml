@@ -1444,7 +1444,8 @@ table system_bot_providers {
   platform varchar(50) [not null]
   enabled boolean [not null, default: true]
   credentials text [not null]
-  metadata jsonb [not null, default: `{}`]
+  application_id varchar(255)
+  settings jsonb [not null, default: `{}`]
   connection_mode varchar(20)
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
