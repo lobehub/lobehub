@@ -33,6 +33,7 @@ import { CompletionLifecycle } from './CompletionLifecycle';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
+import { buildStepPresentation, formatTokenCount } from './stepPresentation';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -43,7 +44,6 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
-  type StepPresentationData,
 } from './types';
 
 if (process.env.VERCEL) {
@@ -661,166 +661,25 @@ export class AgentRuntimeService {
       });
 
       // Build enhanced step completion log & presentation data
-      const { usage, cost } = stepResult.newState;
-      const phase = stepResult.nextContext?.phase;
-      const isToolPhase = phase === 'tool_result' || phase === 'tools_batch_result';
+      const { presentation: stepPresentationData, summary: stepSummary } = buildStepPresentation(
+        stepResult,
+        Date.now() - startAt,
+      );
 
-      // --- Extract presentation fields from step result ---
-      let content: string | undefined;
-      let reasoning: string | undefined;
-      let toolsCalling:
-        | Array<{ apiName: string; arguments?: string; identifier: string }>
-        | undefined;
-      let toolsResult:
-        | Array<{ apiName: string; identifier: string; isSuccess?: boolean; output?: string }>
-        | undefined;
-      let stepSummary: string;
-
-      if (phase === 'tool_result') {
-        const toolPayload = stepResult.nextContext?.payload as any;
-        const toolCall = toolPayload?.toolCall;
-        const identifier = toolCall?.identifier || 'unknown';
-        const apiName = toolCall?.apiName || 'unknown';
-        const output = toolPayload?.data;
-        toolsResult = [
-          {
-            apiName,
-            identifier,
-            isSuccess: toolPayload?.isSuccess !== false,
-            output:
-              typeof output === 'string'
-                ? output
-                : output != null
-                  ? JSON.stringify(output)
-                  : undefined,
-          },
-        ];
-        stepSummary = `[tool] ${identifier}/${apiName}`;
-      } else if (phase === 'tools_batch_result') {
-        const nextPayload = stepResult.nextContext?.payload as any;
-        const toolCount = nextPayload?.toolCount || 0;
-        const rawToolResults = nextPayload?.toolResults || [];
-        const mappedResults: Array<{
-          apiName: string;
-          identifier: string;
-          isSuccess?: boolean;
-          output?: string;
-        }> = rawToolResults.map((r: any) => {
-          const tc = r.toolCall;
-          const output = r.data;
-          return {
-            apiName: tc?.apiName || 'unknown',
-            identifier: tc?.identifier || 'unknown',
-            isSuccess: r?.isSuccess !== false,
-            output:
-              typeof output === 'string'
-                ? output
-                : output != null
-                  ? JSON.stringify(output)
-                  : undefined,
-          };
-        });
-        toolsResult = mappedResults;
-        const toolNames = mappedResults.map((r) => `${r.identifier}/${r.apiName}`);
-        stepSummary = `[tools×${toolCount}] ${toolNames.join(', ')}`;
-      } else {
-        // Check for done event first (finish step with no next context)
-        const doneEvent = stepResult.events?.find((e) => e.type === 'done') as
-          | { reason?: string; reasonDetail?: string; type: 'done' }
-          | undefined;
-
-        if (doneEvent) {
-          stepSummary = `[done] reason=${doneEvent.reason ?? 'unknown'}`;
-        } else {
-          // LLM result
-          const llmEvent = stepResult.events?.find((e) => e.type === 'llm_result');
-          content = (llmEvent as any)?.result?.content || undefined;
-          reasoning = (llmEvent as any)?.result?.reasoning || undefined;
-
-          // Use parsed ChatToolPayload from payload (has identifier + apiName)
-          const payloadToolsCalling = (stepResult.nextContext?.payload as any)?.toolsCalling as
-            | Array<{ apiName: string; arguments: string; identifier: string }>
-            | undefined;
-          const hasToolCalls = Array.isArray(payloadToolsCalling) && payloadToolsCalling.length > 0;
-
-          if (hasToolCalls) {
-            toolsCalling = payloadToolsCalling.map((tc) => ({
-              apiName: tc.apiName,
-              arguments: tc.arguments,
-              identifier: tc.identifier,
-            }));
-          }
-
-          const parts: string[] = [];
-          if (reasoning) {
-            const thinkPreview = reasoning.length > 30 ? reasoning.slice(0, 30) + '...' : reasoning;
-            parts.push(`💭 "${thinkPreview}"`);
-          }
-          if (!content && hasToolCalls) {
-            parts.push(
-              `→ call tools: ${toolsCalling!.map((tc) => `${tc.identifier}|${tc.apiName}`).join(', ')}`,
-            );
-          } else if (content) {
-            const preview = content.length > 20 ? content.slice(0, 20) + '...' : content;
-            parts.push(`"${preview}"`);
-          }
-          if (parts.length > 0) {
-            stepSummary = `[llm] ${parts.join(' | ')}`;
-          } else {
-            stepSummary = `[llm] (empty) phase=${stepResult.nextContext?.phase ?? 'none'} events=${stepResult.events?.length ?? 0}`;
-          }
-        }
-      }
-
-      // --- Step-level usage from nextContext.stepUsage ---
-      const stepUsage = stepResult.nextContext?.stepUsage as Record<string, number> | undefined;
-
-      // --- Cumulative usage ---
-      const tokens = usage?.llm?.tokens;
-      const totalInputTokens = tokens?.input ?? 0;
-      const totalOutputTokens = tokens?.output ?? 0;
-      const totalTokensNum = tokens?.total ?? 0;
-      const totalCostNum = cost?.total ?? 0;
-
-      const totalTokensStr =
-        totalTokensNum >= 1_000_000
-          ? `${(totalTokensNum / 1_000_000).toFixed(1)}m`
-          : totalTokensNum >= 1000
-            ? `${(totalTokensNum / 1000).toFixed(1)}k`
-            : String(totalTokensNum);
-      const llmCalls = usage?.llm?.apiCalls ?? 0;
-      const toolCallCount = usage?.tools?.totalCalls ?? 0;
-
+      const { usage } = stepResult.newState;
       log(
         '[%s][%d] completed %s | total: %s tokens / $%s | llm×%d | tools×%d',
         operationId,
         stepIndex,
         stepSummary,
-        totalTokensStr,
-        totalCostNum.toFixed(4),
-        llmCalls,
-        toolCallCount,
+        formatTokenCount(stepPresentationData.totalTokens),
+        stepPresentationData.totalCost.toFixed(4),
+        usage?.llm?.apiCalls ?? 0,
+        usage?.tools?.totalCalls ?? 0,
       );
 
-      // Build presentation data object for callbacks and webhooks
-      const stepPresentationData: StepPresentationData = {
-        content,
-        executionTimeMs: Date.now() - startAt,
-        reasoning,
-        stepCost: stepUsage?.cost ?? undefined,
-        stepInputTokens: stepUsage?.totalInputTokens ?? undefined,
-        stepOutputTokens: stepUsage?.totalOutputTokens ?? undefined,
-        stepTotalTokens: stepUsage?.totalTokens ?? undefined,
-        stepType: isToolPhase ? ('call_tool' as const) : ('call_llm' as const),
-        thinking: !isToolPhase,
-        toolsCalling,
-        toolsResult,
-        totalCost: totalCostNum,
-        totalInputTokens,
-        totalOutputTokens,
-        totalSteps: stepResult.newState.stepCount ?? 0,
-        totalTokens: totalTokensNum,
-      };
+      const toolsCalling = stepPresentationData.toolsCalling;
+      const content = stepPresentationData.content;
 
       let afterStepSignalEvents: Array<{ [key: string]: unknown; type: string }> = [];
 
