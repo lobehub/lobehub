@@ -3,6 +3,9 @@ import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import { type ConversationContext } from '@lobechat/types';
 
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
@@ -33,11 +36,12 @@ export class ConversationControlActionImpl {
   /**
    * Decide whether approve/reject/reject_continue should go through the
    * Gateway resume path (new op carrying `resumeApproval`) instead of the
-   * local `internal_execAgentRuntime` path. Mirrors the "interrupt + new op"
+   * local `executeClientAgent` path. Mirrors the "interrupt + new op"
    * pattern from LOBE-7142.
    *
-   * Uses the same `isGatewayModeEnabled()` lab flag that routes the initial
-   * send, so approve/reject align with how the conversation was dispatched.
+   * Routes via `selectRuntimeType` so approve/reject align with how the
+   * conversation was dispatched at sendMessage time. Hetero resume is not yet
+   * implemented and falls through to client local resume — see LOBE-8519.
    *
    * We deliberately do **not** look for a living `execServerAgentRuntime`
    * op here. The server's `waiting_for_human` → `agent_runtime_end` signal
@@ -47,8 +51,16 @@ export class ConversationControlActionImpl {
    * scanning for it would flip us back into client-mode against a live
    * Gateway backend.
    */
-  #shouldUseGatewayResume = (): boolean => {
-    return this.#get().isGatewayModeEnabled();
+  #shouldUseGatewayResume = (context: ConversationContext): boolean => {
+    const agentConfig = context.agentId
+      ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
+      : undefined;
+    return (
+      selectRuntimeType({
+        heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
+        isGatewayMode: this.#get().isGatewayModeEnabled(),
+      }) === 'gateway'
+    );
   };
 
   /**
@@ -170,7 +182,7 @@ export class ConversationControlActionImpl {
     _assistantGroupId: string,
     context?: ConversationContext,
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
@@ -212,7 +224,7 @@ export class ConversationControlActionImpl {
     // message, persists `intervention=approved`, dispatches the approved
     // tool, and streams results back on the new op. No in-place resume of
     // the paused op — simpler state + avoids stepIndex races.
-    if (this.#shouldUseGatewayResume()) {
+    if (this.#shouldUseGatewayResume(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -277,7 +289,7 @@ export class ConversationControlActionImpl {
 
     // 7. Execute agent runtime from tool message position
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: toolMessageId, // Start from tool message
@@ -305,7 +317,7 @@ export class ConversationControlActionImpl {
     context?: ConversationContext,
     options?: { createUserMessage?: boolean; toolResultContent?: string },
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -380,7 +392,7 @@ export class ConversationControlActionImpl {
       };
 
       try {
-        await internal_execAgentRuntime({
+        await executeClientAgent({
           context: effectiveContext,
           messages: currentMessages,
           parentMessageId: toolMessageId,
@@ -437,7 +449,7 @@ export class ConversationControlActionImpl {
     });
 
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: userMsg.id,
@@ -462,7 +474,7 @@ export class ConversationControlActionImpl {
     reason?: string,
     context?: ConversationContext,
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -540,7 +552,7 @@ export class ConversationControlActionImpl {
     });
 
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: userMsg.id,
@@ -667,7 +679,7 @@ export class ConversationControlActionImpl {
     // `rejected_continue` share the same code path (both surface the
     // rejection to the LLM as user feedback), so a separate `rejected`
     // decision adds complexity without behavioural difference.
-    if (this.#shouldUseGatewayResume()) {
+    if (this.#shouldUseGatewayResume(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -706,7 +718,7 @@ export class ConversationControlActionImpl {
     const toolMessage = dbMessageSelectors.getDbMessageById(messageId)(this.#get());
     if (!toolMessage) return;
 
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
@@ -722,7 +734,7 @@ export class ConversationControlActionImpl {
     // the LLM loop with the rejection content surfaced as user feedback.
     // Skip the client-mode `rejectToolCalling` chain below — that would fire
     // a duplicate halting `reject` before this continue signal.
-    if (this.#shouldUseGatewayResume()) {
+    if (this.#shouldUseGatewayResume(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -823,7 +835,7 @@ export class ConversationControlActionImpl {
 
     // Execute agent runtime from rejected tool message position to continue
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: messageId,

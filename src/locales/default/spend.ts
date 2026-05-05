@@ -23,6 +23,7 @@ export default {
   'table.columns.trigger.enums.memory': 'Memory Extraction',
   'table.columns.trigger.enums.semantic_search': 'Knowledge Search',
   'table.columns.trigger.enums.topic': 'Topic Summary',
+  'table.columns.trigger.enums.visual_analysis': 'Visual Analysis',
   'table.columns.trigger.enums.video': 'Video Generation',
   'table.columns.trigger.title': 'Trigger',
   'table.columns.type.enums.chat': 'Text Generation',

@@ -17,7 +17,7 @@ describe('LocalSystemExecutor', () => {
     vi.clearAllMocks();
   });
 
-  describe('globLocalFiles', () => {
+  describe('globFiles', () => {
     it('should preserve scope and relative pattern when delegating glob search', async () => {
       globFilesMock.mockResolvedValue({
         files: ['/tmp/images/a.png'],
@@ -25,7 +25,7 @@ describe('LocalSystemExecutor', () => {
         total_files: 1,
       });
 
-      await localSystemExecutor.globLocalFiles({
+      await localSystemExecutor.globFiles({
         pattern: '**/*.{png,jpg,jpeg,gif,webp}',
         scope: '/tmp/images',
       });
@@ -44,7 +44,7 @@ describe('LocalSystemExecutor', () => {
         total_files: 2,
       });
 
-      const result = await localSystemExecutor.globLocalFiles({
+      const result = await localSystemExecutor.globFiles({
         pattern: '**/*.pdf',
         scope: '/Users/me/Downloads',
       });
@@ -71,7 +71,7 @@ describe('LocalSystemExecutor', () => {
         total_files: 0,
       });
 
-      const result = await localSystemExecutor.globLocalFiles({
+      const result = await localSystemExecutor.globFiles({
         pattern: '**/*never-matches*',
       });
 
@@ -100,7 +100,7 @@ describe('LocalSystemExecutor', () => {
         total_files: 0,
       });
 
-      const result = await localSystemExecutor.globLocalFiles({
+      const result = await localSystemExecutor.globFiles({
         pattern: '**/*Financial*Statement*',
       });
 

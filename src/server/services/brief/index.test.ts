@@ -20,6 +20,13 @@ vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(),
 }));
 
+// Avoid pulling the real TaskRunnerService (which drags ModelRuntime) into the
+// dynamic import the brief service performs after auto-completing a task.
+const cascadeOnCompletion = vi.fn().mockResolvedValue({ failed: [], paused: [], started: [] });
+vi.mock('@/server/services/taskRunner', () => ({
+  TaskRunnerService: vi.fn().mockImplementation(() => ({ cascadeOnCompletion })),
+}));
+
 describe('BriefService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
@@ -38,6 +45,7 @@ describe('BriefService', () => {
     findById: vi.fn(),
     findByIds: vi.fn(),
     getTreeAgentIdsForTaskIds: vi.fn(),
+    getUnlockedTasks: vi.fn(),
     updateStatus: vi.fn(),
   };
 
@@ -46,6 +54,8 @@ describe('BriefService', () => {
     (AgentModel as any).mockImplementation(() => mockAgentModel);
     (BriefModel as any).mockImplementation(() => mockBriefModel);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
+    // Default: no downstream tasks unlocked. Specific tests can override.
+    mockTaskModel.getUnlockedTasks.mockResolvedValue([]);
   });
 
   describe('enrichBriefsWithAgents', () => {
@@ -201,6 +211,9 @@ describe('BriefService', () => {
       expect(mockTaskModel.updateStatus).toHaveBeenCalledWith('task-1', 'completed', {
         error: null,
       });
+      // Brief approval must trigger downstream kickoff via the runner so
+      // dependents don't sit in `backlog` waiting for a manual nudge.
+      expect(cascadeOnCompletion).toHaveBeenCalledWith('task-1');
     });
 
     it('should NOT complete the task when approving a decision brief (mid-execution checkpoint)', async () => {

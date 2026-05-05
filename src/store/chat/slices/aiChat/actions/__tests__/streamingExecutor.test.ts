@@ -34,7 +34,7 @@ vi.mock('@/store/serverConfig', () => ({
   },
 }));
 
-const realExecAgentRuntime = useChatStore.getState().internal_execAgentRuntime;
+const realExecAgentRuntime = useChatStore.getState().executeClientAgent;
 
 beforeEach(() => {
   resetTestEnvironment();
@@ -45,7 +45,7 @@ beforeEach(() => {
   act(() => {
     useChatStore.setState({
       refreshMessages: vi.fn(),
-      internal_execAgentRuntime: vi.fn(),
+      executeClientAgent: vi.fn(),
     });
   });
 });
@@ -56,10 +56,10 @@ afterEach(() => {
 });
 
 describe('StreamingExecutor actions', () => {
-  describe('internal_execAgentRuntime', () => {
+  describe('executeClientAgent', () => {
     it('should handle the core AI message processing', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -79,7 +79,7 @@ describe('StreamingExecutor actions', () => {
         });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
           messages,
           parentMessageId: userMessage.id,
@@ -100,7 +100,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should stop agent runtime loop when operation is cancelled before step execution', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -139,7 +139,7 @@ describe('StreamingExecutor actions', () => {
         });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
           messages: [userMessage],
           parentMessageId: userMessage.id,
@@ -157,7 +157,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should stop agent runtime loop when operation is cancelled after step completion', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -200,7 +200,7 @@ describe('StreamingExecutor actions', () => {
         });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
           messages: [userMessage],
           parentMessageId: userMessage.id,
@@ -228,7 +228,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should resolve aborted tools when cancelled after LLM returns tool calls', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -279,7 +279,7 @@ describe('StreamingExecutor actions', () => {
         });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
           messages: [userMessage],
           parentMessageId: userMessage.id,
@@ -305,7 +305,7 @@ describe('StreamingExecutor actions', () => {
     it('should use provided context for trace parameters', async () => {
       act(() => {
         useChatStore.setState({
-          internal_execAgentRuntime: realExecAgentRuntime,
+          executeClientAgent: realExecAgentRuntime,
           activeAgentId: 'active-session',
           activeTopicId: 'active-topic',
         });
@@ -325,7 +325,7 @@ describe('StreamingExecutor actions', () => {
       const streamSpy = vi.spyOn(chatService, 'createAssistantMessageStream');
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: contextSessionId, topicId: contextTopicId },
           messages: [userMessage],
           parentMessageId: userMessage.id,
@@ -351,10 +351,10 @@ describe('StreamingExecutor actions', () => {
     it('should execute afterCompletion callbacks after runtime completes', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      // Restore real internal_execAgentRuntime for this test
+      // Restore real executeClientAgent for this test
       act(() => {
         useChatStore.setState({
-          internal_execAgentRuntime: realExecAgentRuntime,
+          executeClientAgent: realExecAgentRuntime,
         });
       });
 
@@ -431,9 +431,9 @@ describe('StreamingExecutor actions', () => {
         agentConfig: createMockResolvedAgentConfig(),
       });
 
-      // Execute internal_execAgentRuntime with the pre-created operationId
+      // Execute executeClientAgent with the pre-created operationId
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: {
             agentId: TEST_IDS.SESSION_ID,
             topicId: TEST_IDS.TOPIC_ID,
@@ -453,10 +453,10 @@ describe('StreamingExecutor actions', () => {
     it('should continue execution even if a callback throws an error', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      // Restore real internal_execAgentRuntime for this test
+      // Restore real executeClientAgent for this test
       act(() => {
         useChatStore.setState({
-          internal_execAgentRuntime: realExecAgentRuntime,
+          executeClientAgent: realExecAgentRuntime,
         });
       });
 
@@ -531,7 +531,7 @@ describe('StreamingExecutor actions', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: {
             agentId: TEST_IDS.SESSION_ID,
             topicId: TEST_IDS.TOPIC_ID,
@@ -549,7 +549,7 @@ describe('StreamingExecutor actions', () => {
 
       // Error should have been logged
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[internal_execAgentRuntime] afterCompletion callback error:',
+        '[executeClientAgent] afterCompletion callback error:',
         expect.any(Error),
       );
 
@@ -559,10 +559,10 @@ describe('StreamingExecutor actions', () => {
     it('should not fail when no afterCompletion callbacks are registered', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      // Restore real internal_execAgentRuntime for this test
+      // Restore real executeClientAgent for this test
       act(() => {
         useChatStore.setState({
-          internal_execAgentRuntime: realExecAgentRuntime,
+          executeClientAgent: realExecAgentRuntime,
         });
       });
 
@@ -630,7 +630,7 @@ describe('StreamingExecutor actions', () => {
 
       // Should not throw
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: {
             agentId: TEST_IDS.SESSION_ID,
             topicId: TEST_IDS.TOPIC_ID,
@@ -650,7 +650,7 @@ describe('StreamingExecutor actions', () => {
   describe('initialContext preservation', () => {
     it('should preserve initialContext through multiple steps in agent runtime loop', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -707,7 +707,7 @@ describe('StreamingExecutor actions', () => {
       });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
           messages: [userMessage],
           parentMessageId: userMessage.id,
@@ -729,7 +729,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should preserve initialContext when result.nextContext does not include it', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -788,7 +788,7 @@ describe('StreamingExecutor actions', () => {
       });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
           messages: [userMessage],
           parentMessageId: userMessage.id,
@@ -808,7 +808,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should merge provided initialContext with runtime page editor context', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -876,7 +876,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should not inject page editor context outside page scope', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -925,7 +925,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should merge selectedTools into generated tools when provided', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -976,7 +976,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should enable visual understanding when a previous user message has visual media', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       serverConfigMock.enableVisualUnderstanding = true;
@@ -1030,7 +1030,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should not enable visual understanding when the active LobeHub model supports visual media natively', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       serverConfigMock.enableVisualUnderstanding = true;
@@ -1097,7 +1097,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should use excludeDefaultToolIds (not skipDefaultTools) in manual mode for builtin agents', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1144,7 +1144,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should use excludeDefaultToolIds in manual mode for regular agents', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1189,7 +1189,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should not set excludeDefaultToolIds in auto mode', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1235,7 +1235,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should preserve default model/provider payload when initialContext is provided', () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1288,7 +1288,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should pass merged resolvedAgentConfig to chatService when selectedTools are provided', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1344,7 +1344,7 @@ describe('StreamingExecutor actions', () => {
         });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
           initialContext: {
             phase: 'init',
@@ -1365,7 +1365,7 @@ describe('StreamingExecutor actions', () => {
   describe('internal_createAgentState with disableTools', () => {
     it('should return empty toolManifestMap when disableTools is true', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1392,7 +1392,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should return empty tools in agentConfig when disableTools is true', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1421,7 +1421,7 @@ describe('StreamingExecutor actions', () => {
 
     it('should include tools in toolManifestMap when disableTools is false or undefined', async () => {
       act(() => {
-        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
       const { result } = renderHook(() => useChatStore());
@@ -1473,10 +1473,10 @@ describe('StreamingExecutor actions', () => {
     it('should complete operation when state is waiting_for_human', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      // Restore real internal_execAgentRuntime for this test
+      // Restore real executeClientAgent for this test
       act(() => {
         useChatStore.setState({
-          internal_execAgentRuntime: realExecAgentRuntime,
+          executeClientAgent: realExecAgentRuntime,
         });
       });
 
@@ -1546,7 +1546,7 @@ describe('StreamingExecutor actions', () => {
       });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: {
             agentId: TEST_IDS.SESSION_ID,
             topicId: TEST_IDS.TOPIC_ID,
@@ -1568,10 +1568,10 @@ describe('StreamingExecutor actions', () => {
     it('should fail operation when state is error', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      // Restore real internal_execAgentRuntime for this test
+      // Restore real executeClientAgent for this test
       act(() => {
         useChatStore.setState({
-          internal_execAgentRuntime: realExecAgentRuntime,
+          executeClientAgent: realExecAgentRuntime,
         });
       });
 
@@ -1641,7 +1641,7 @@ describe('StreamingExecutor actions', () => {
       });
 
       await act(async () => {
-        await result.current.internal_execAgentRuntime({
+        await result.current.executeClientAgent({
           context: {
             agentId: TEST_IDS.SESSION_ID,
             topicId: TEST_IDS.TOPIC_ID,

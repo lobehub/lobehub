@@ -1,12 +1,8 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import {
-  ChatErrorType,
-  type ChatStreamPayload,
-  createVisualFileRef,
-  type LobeTool,
-  type UIChatMessage,
-} from '@lobechat/types';
+import { REQUEST_TRIGGER_HEADER } from '@lobechat/const';
+import type { ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
+import { ChatErrorType, createVisualFileRef, RequestTrigger } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,6 +42,10 @@ vi.hoisted(() => {
     },
   });
 });
+
+const mockCreateHeaderWithAuth = vi.hoisted(() =>
+  vi.fn(async ({ headers }: { headers: Record<string, string> }) => headers),
+);
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
@@ -152,7 +152,7 @@ beforeEach(async () => {
 
 // mock auth
 vi.mock('../_auth', () => ({
-  createHeaderWithAuth: vi.fn().mockResolvedValue({}),
+  createHeaderWithAuth: mockCreateHeaderWithAuth,
 }));
 
 // Mock isCanUseFC to control function calling behavior in tests
@@ -1606,6 +1606,7 @@ describe('ChatService', () => {
       const { fetchSSE } = await import('@lobechat/fetch-sse');
       mockFetchSSE = vi.fn().mockResolvedValue(new Response('mock response'));
       vi.mocked(fetchSSE).mockImplementation(mockFetchSSE);
+      mockCreateHeaderWithAuth.mockClear();
     });
 
     it('should make a POST request with the correct payload', async () => {
@@ -1632,6 +1633,29 @@ describe('ChatService', () => {
           method: 'POST',
         }),
       );
+    });
+
+    it('should send request trigger as a header without adding it to the model payload', async () => {
+      const params: Partial<ChatStreamPayload> = {
+        messages: [],
+        model: 'test-model',
+      };
+
+      await chatService.getChatCompletion(params, {
+        requestTrigger: RequestTrigger.VisualAnalysis,
+      });
+
+      expect(mockFetchSSE).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            [REQUEST_TRIGGER_HEADER]: RequestTrigger.VisualAnalysis,
+          }),
+        }),
+      );
+
+      const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
+      expect(payload).not.toHaveProperty('requestTrigger');
     });
 
     it('should make a POST request with chatCompletion apiMode in non-openai provider payload', async () => {

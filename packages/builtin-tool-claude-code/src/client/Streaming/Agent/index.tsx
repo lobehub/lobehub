@@ -98,9 +98,7 @@ const AgentStreaming = memo<BuiltinStreamingProps<AgentArgs>>(({ args, toolCallI
             )}
           </Flexbox>
           <Flexbox className={styles.promptBox}>
-            <Markdown style={{ maxHeight: 240, overflow: 'auto' }} variant={'chat'}>
-              {prompt}
-            </Markdown>
+            <Markdown variant={'chat'}>{prompt}</Markdown>
           </Flexbox>
         </Flexbox>
       )}

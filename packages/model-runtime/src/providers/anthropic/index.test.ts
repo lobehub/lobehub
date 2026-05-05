@@ -824,6 +824,25 @@ describe('LobeAnthropicAI', () => {
         });
       });
 
+      it('should drop assistant prefill for Claude Opus 4.7', async () => {
+        const payload: ChatStreamPayload = {
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: 'Partial assistant draft', role: 'assistant' },
+          ],
+          model: 'claude-opus-4-7',
+        };
+
+        const result = await buildDefaultAnthropicPayload(payload);
+
+        expect(result.messages).toEqual([
+          {
+            content: 'Continue this answer',
+            role: 'user',
+          },
+        ]);
+      });
+
       it('should respect max_tokens in thinking mode when provided', async () => {
         const payload: ChatStreamPayload = {
           max_tokens: 1000,

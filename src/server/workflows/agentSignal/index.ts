@@ -1,9 +1,12 @@
-import type { AgentSignalSourceEvent, AgentSignalSourceType } from '@lobechat/agent-signal/source';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { workflowClient } from '@/libs/qstash';
+
+import type { AgentSignalWorkflowRunPayload } from './types';
+
+export type { AgentSignalWorkflowRunPayload, AgentSignalWorkflowSourceEventInput } from './types';
 
 const log = debug('lobe-server:workflows:agent-signal');
 
@@ -14,20 +17,6 @@ const WORKFLOW_PATHS = {
 const normalizeFlowControlKeySegment = (value: string) => {
   return value.replaceAll(/[^\w.-]/g, '_');
 };
-
-type AgentSignalWorkflowSourceType = AgentSignalSourceType;
-
-/** One normalized Agent Signal source event handed to the workflow worker. */
-export interface AgentSignalWorkflowSourceEventInput<
-  TSourceType extends AgentSignalWorkflowSourceType = AgentSignalWorkflowSourceType,
-> extends AgentSignalSourceEvent<TSourceType> {}
-
-/** One Upstash workflow payload for Agent Signal execution. */
-export interface AgentSignalWorkflowRunPayload {
-  agentId?: string;
-  sourceEvent: AgentSignalWorkflowSourceEventInput;
-  userId: string;
-}
 
 const getWorkflowUrl = (path: string): string => {
   const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;

@@ -7,6 +7,7 @@ import {
 import { cloudModelIdMapping } from '@lobechat/business-const';
 import { ModelProvider } from 'model-bank';
 
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
@@ -204,8 +205,10 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
 
-    // Claude 4.6 models do not support assistant turn prefill
-    if (model.includes('-4-6') && postMessages.at(-1)?.role === 'assistant') {
+    if (
+      shouldDropUnsupportedClaudeAssistantPrefill(model) &&
+      postMessages.at(-1)?.role === 'assistant'
+    ) {
       postMessages.pop();
     }
 

@@ -28,68 +28,21 @@ describe('LobeXAI - custom features', () => {
     vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(new ReadableStream() as any);
   });
 
-  describe('chatCompletion.handlePayload', () => {
-    it('should remove unsupported penalty parameters for reasoning models', async () => {
+  describe('responses.handlePayload', () => {
+    it('should remove unsupported penalty parameters via Responses API', async () => {
       await instance.chat({
-        apiMode: 'chatCompletion',
+        apiMode: 'responses',
         frequency_penalty: 0.4,
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-4',
+        model: 'grok-4.3',
         presence_penalty: 0.6,
       } as any);
 
-      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
 
       expect(createCall.frequency_penalty).toBeUndefined();
       expect(createCall.presence_penalty).toBeUndefined();
       expect(createCall.stream).toBe(true);
-    });
-
-    it('should remove unsupported penalty parameters for grok-4.1 reasoning variants', async () => {
-      await instance.chat({
-        apiMode: 'chatCompletion',
-        frequency_penalty: 0.4,
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-4-1-fast-reasoning',
-        presence_penalty: 0.6,
-      } as any);
-
-      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
-
-      expect(createCall.frequency_penalty).toBeUndefined();
-      expect(createCall.presence_penalty).toBeUndefined();
-      expect(createCall.stream).toBe(true);
-    });
-
-    it('should remove unsupported penalty parameters for grok-4.20 non-reasoning variants', async () => {
-      await instance.chat({
-        apiMode: 'chatCompletion',
-        frequency_penalty: 0.4,
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-4.20-beta-0309-non-reasoning',
-        presence_penalty: 0.6,
-      } as any);
-
-      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
-
-      expect(createCall.frequency_penalty).toBeUndefined();
-      expect(createCall.presence_penalty).toBeUndefined();
-      expect(createCall.stream).toBe(true);
-    });
-
-    it('should preserve penalty parameters for non-reasoning models', async () => {
-      await instance.chat({
-        apiMode: 'chatCompletion',
-        frequency_penalty: 0.4,
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'grok-4-fast-non-reasoning',
-        presence_penalty: 0.6,
-      } as any);
-
-      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
-
-      expect(createCall.frequency_penalty).toBe(0.4);
-      expect(createCall.presence_penalty).toBe(0.6);
     });
   });
 

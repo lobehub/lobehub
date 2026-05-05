@@ -1,5 +1,5 @@
 import type { BuiltinToolContext, BuiltinToolResult, ChatStreamPayload } from '@lobechat/types';
-import { BaseExecutor } from '@lobechat/types';
+import { BaseExecutor, RequestTrigger } from '@lobechat/types';
 
 import { LobeAgentManifest } from '../manifest';
 import type { AnalyzeVisualMediaParams } from '../types';
@@ -210,6 +210,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       onMessageHandle: (chunk) => {
         if (chunk.type === 'text') content += chunk.text || '';
       },
+      requestTrigger: RequestTrigger.VisualAnalysis,
       signal: abortController.signal,
     });
 
@@ -234,7 +235,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
         files: selectedItems,
         model: config.model,
         provider: config.provider,
-        trigger: 'lobe-agent.analyzeVisualMedia',
+        trigger: RequestTrigger.VisualAnalysis,
         usage,
       },
       success: true,

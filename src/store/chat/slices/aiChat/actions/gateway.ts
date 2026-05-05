@@ -23,7 +23,13 @@ type Setter = StoreSetter<ChatStore>;
 export interface GatewayConnection {
   client: Pick<
     AgentStreamClient,
-    'connect' | 'disconnect' | 'on' | 'sendInterrupt' | 'sendToolResult'
+    | 'connect'
+    | 'disconnect'
+    | 'on'
+    | 'reconnect'
+    | 'sendInterrupt'
+    | 'sendToolResult'
+    | 'updateToken'
   >;
   status: ConnectionStatus;
 }
@@ -53,6 +59,12 @@ export interface ConnectGatewayParams {
    * Auth token for the Gateway
    */
   token: string;
+  /**
+   * Topic this op runs against. Used to refresh the Gateway JWT via
+   * `aiAgentService.refreshGatewayToken(topicId)` when the server signals
+   * `auth_expired`. Every Gateway op has a topic, so this is required.
+   */
+  topicId: string;
 }
 
 // ─── Action Implementation ───
@@ -76,7 +88,8 @@ export class GatewayActionImpl {
    * Creates an AgentStreamClient, manages its lifecycle, and wires up event callbacks.
    */
   connectToGateway = (params: ConnectGatewayParams): void => {
-    const { operationId, gatewayUrl, token, onEvent, onSessionComplete, resumeOnConnect } = params;
+    const { operationId, gatewayUrl, token, topicId, onEvent, onSessionComplete, resumeOnConnect } =
+      params;
 
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
@@ -136,8 +149,9 @@ export class GatewayActionImpl {
     });
 
     // Handle disconnection — only fire session complete if a terminal agent event
-    // was received (agent_runtime_end / error). Auth failures, explicit disconnect(),
-    // and other non-terminal disconnects should NOT trigger onSessionComplete.
+    // was received (agent_runtime_end / error). Explicit disconnect() and other
+    // non-terminal disconnects should NOT trigger onSessionComplete.
+    // (auth_failed is handled separately below — it's also session-terminal.)
     client.on('disconnected', () => {
       this.internal_cleanupGatewayConnection(operationId);
       if (receivedTerminalEvent) {
@@ -145,10 +159,37 @@ export class GatewayActionImpl {
       }
     });
 
-    // Handle auth failures
+    // Handle auth failures — server-side terminal: the op no longer exists on
+    // the server (GC'd, token rejected, etc.), so the local op must be marked
+    // complete. Without this, the local op stays `running` forever and the
+    // input stop button never clears; worse, `topic.metadata.runningOperation`
+    // never gets cleared either, so each revisit re-triggers the same broken
+    // reconnect.
     client.on('auth_failed', (reason) => {
       console.error(`[Gateway] Auth failed for operation ${operationId}: ${reason}`);
       this.internal_cleanupGatewayConnection(operationId);
+      fireSessionComplete();
+    });
+
+    // Handle expired-but-recoverable auth: the JWT is past `exp` but the op
+    // is still alive on the server. Refresh the token, hand it to the client,
+    // and reconnect. If the refresh itself fails (refresh API down, server
+    // refused refresh, etc.), fall back to terminal — leaving the op
+    // `running` would freeze the input. The server keeps the ws open after
+    // `auth_expired` to give the client a chance to recover, so we must
+    // explicitly `disconnect()` before completing — otherwise heartbeat and
+    // autoReconnect would keep running past the local op's lifetime.
+    client.on('auth_expired', async () => {
+      try {
+        const { token: fresh } = await aiAgentService.refreshGatewayToken(topicId);
+        client.updateToken(fresh);
+        await client.reconnect();
+      } catch (error) {
+        console.error(`[Gateway] Token refresh failed for operation ${operationId}:`, error);
+        client.disconnect();
+        this.internal_cleanupGatewayConnection(operationId);
+        fireSessionComplete();
+      }
     });
 
     client.connect();
@@ -328,6 +369,7 @@ export class GatewayActionImpl {
       },
       operationId: result.operationId,
       token: result.token || '',
+      topicId: result.topicId,
     });
 
     return result;
@@ -400,6 +442,7 @@ export class GatewayActionImpl {
       operationId,
       resumeOnConnect: true,
       token,
+      topicId,
     });
   };
 

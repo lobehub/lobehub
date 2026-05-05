@@ -1,6 +1,6 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
-import type { ExecAgentResult } from '@lobechat/types';
+import type { ExecAgentResult, TaskItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -226,4 +226,73 @@ export class TaskRunnerService {
       throw error;
     }
   }
+
+  /**
+   * Result of cascading kickoff after a task transitions to `completed`.
+   * Mirrors the legacy unlock-only response so callers can keep their
+   * payload shape unchanged.
+   */
+  static cascadeEmpty(): CascadeResult {
+    return { failed: [], paused: [], started: [] };
+  }
+
+  /**
+   * After a task transitions to `completed`, find downstream tasks whose
+   * dependencies are now fully met and *actually run them*.
+   *
+   * Why this matters: the legacy code path flipped unlocked tasks to `running`
+   * in the DB but never created a topic — so they appeared running while no
+   * agent execution was in flight. This method bridges the gap.
+   *
+   * - Honors parent `beforeIds` checkpoints by leaving such tasks `paused`.
+   * - If `runTask` throws (e.g. no assignee), the task is left in `paused`
+   *   with the error recorded — the same fallback used by the runner itself.
+   */
+  async cascadeOnCompletion(completedTaskId: string): Promise<CascadeResult> {
+    const unlocked = await this.taskModel.getUnlockedTasks(completedTaskId);
+    if (unlocked.length === 0) return TaskRunnerService.cascadeEmpty();
+
+    const result: CascadeResult = { failed: [], paused: [], started: [] };
+
+    for (const task of unlocked) {
+      if (await this.shouldHoldForCheckpoint(task)) {
+        await this.taskModel.updateStatus(task.id, 'paused');
+        result.paused.push(task.identifier);
+        continue;
+      }
+
+      try {
+        await this.runTask({ taskId: task.id });
+        result.started.push(task.identifier);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to start task';
+        log('cascadeOnCompletion: runTask failed for %s: %s', task.identifier, message);
+        // Best-effort: mark as paused so the user can see why it didn't run.
+        try {
+          await this.taskModel.updateStatus(task.id, 'paused', { error: message });
+        } catch {
+          /* ignore — surfaced via failed list */
+        }
+        result.failed.push({ error: message, identifier: task.identifier });
+      }
+    }
+
+    return result;
+  }
+
+  private async shouldHoldForCheckpoint(task: TaskItem): Promise<boolean> {
+    if (!task.parentTaskId) return false;
+    const parent = await this.taskModel.findById(task.parentTaskId);
+    if (!parent) return false;
+    return this.taskModel.shouldPauseBeforeStart(parent, task.identifier);
+  }
+}
+
+export interface CascadeResult {
+  /** Tasks where kickoff threw and were marked paused with an error. */
+  failed: { error: string; identifier: string }[];
+  /** Tasks held back by a parent's `beforeIds` checkpoint. */
+  paused: string[];
+  /** Tasks that were successfully kicked off (topic created). */
+  started: string[];
 }
