@@ -280,7 +280,7 @@ export const messengerRouter = router({
       applicationId: row.applicationId,
       enterpriseId: (row.metadata as Record<string, unknown> | null)?.enterpriseId ?? null,
       id: row.id,
-      installedAt: row.installedAt,
+      installedAt: row.createdAt,
       isEnterpriseInstall:
         (row.metadata as Record<string, unknown> | null)?.isEnterpriseInstall === true,
       platform: row.platform,

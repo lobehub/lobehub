@@ -6,7 +6,6 @@ CREATE TABLE "messenger_account_links" (
 	"platform_user_id" varchar(255) NOT NULL,
 	"platform_username" text,
 	"active_agent_id" text,
-	"linked_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -23,7 +22,6 @@ CREATE TABLE "messenger_installations" (
 	"token_expires_at" timestamp with time zone,
 	"installed_by_user_id" text,
 	"installed_by_platform_user_id" varchar(255),
-	"installed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"revoked_at" timestamp with time zone,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

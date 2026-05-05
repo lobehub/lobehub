@@ -876,7 +876,6 @@ table messenger_account_links {
   platform_user_id varchar(255) [not null]
   platform_username text
   active_agent_id text
-  linked_at "timestamp with time zone" [not null, default: `now()`]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -899,7 +898,6 @@ table messenger_installations {
   token_expires_at "timestamp with time zone"
   installed_by_user_id text
   installed_by_platform_user_id varchar(255)
-  installed_at "timestamp with time zone" [not null, default: `now()`]
   revoked_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]

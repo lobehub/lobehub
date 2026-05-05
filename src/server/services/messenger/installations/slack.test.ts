@@ -48,7 +48,6 @@ const buildRow = (overrides: Partial<any> = {}) => ({
   createdAt: new Date(),
   credentials: { botToken: 'xoxb-real', refreshToken: 'r-current' },
   id: 'install-id-1',
-  installedAt: new Date(),
   installedByPlatformUserId: null,
   installedByUserId: 'lobe-user-1',
   metadata: { tenantName: 'Acme' },
