@@ -19,9 +19,11 @@ vi.mock('../utils/logger', () => ({
 }));
 
 /**
- * Build a fake `SpawnAgentHandle`. The async iterable yields `events`
- * synchronously and ends, so the command's `for await (const event of ...)`
- * loop terminates without hanging the test.
+ * Build a Promise resolving to a fake `SpawnAgentHandle`. `spawnAgent` itself
+ * is async, so test mocks return the handle wrapped — same iterable contract,
+ * just behind one microtask. The async iterable yields `events` synchronously
+ * and ends, so the command's `for await (const event of ...)` loop terminates
+ * without hanging the test.
  */
 const createFakeHandle = ({
   events = [] as any[],
@@ -52,13 +54,13 @@ const createFakeHandle = ({
     },
   };
 
-  return {
+  return Promise.resolve({
     events: eventsIter,
     exit: Promise.resolve({ code: exitCode, signal }),
     kill: vi.fn(),
     pid: 12_345,
     stderr,
-  };
+  });
 };
 
 describe('hetero exec command', () => {
@@ -213,5 +215,130 @@ describe('hetero exec command', () => {
 
     await runCmd(['hetero', 'exec', '--type', 'claude-code', '--prompt', 'hi']);
     expect(exitSpy).toHaveBeenCalledWith(130);
+  });
+
+  it('combines --prompt + --image into mixed content blocks', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'describe',
+      '--image',
+      './fixture-a.png',
+      '--image',
+      'https://cdn.example/fixture-b.png',
+    ]);
+
+    const call = mockSpawnAgent.mock.calls[0][0];
+    expect(Array.isArray(call.prompt)).toBe(true);
+    expect(call.prompt).toEqual([
+      { text: 'describe', type: 'text' },
+      // Path is resolved against process.cwd() — match by suffix to be CI-portable.
+      {
+        source: expect.objectContaining({ type: 'path' }),
+        type: 'image',
+      },
+      {
+        source: { type: 'url', url: 'https://cdn.example/fixture-b.png' },
+        type: 'image',
+      },
+    ]);
+    expect(call.prompt[1].source.path).toMatch(/fixture-a\.png$/);
+  });
+
+  it('parses a data: URL --image into a base64 source', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    const dataUrl = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')}`;
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'see',
+      '--image',
+      dataUrl,
+    ]);
+
+    const call = mockSpawnAgent.mock.calls[0][0];
+    expect(call.prompt[1]).toEqual({
+      source: {
+        data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64'),
+        mediaType: 'image/png',
+        type: 'base64',
+      },
+      type: 'image',
+    });
+  });
+
+  it('reads multimodal content from --input-json <file>', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const path = await import('node:path');
+    const dir = await mkdtemp(`${tmpdir()}/hetero-input-json-`);
+    const file = path.join(dir, 'input.json');
+    await writeFile(
+      file,
+      JSON.stringify([
+        { text: 'analyze', type: 'text' },
+        { source: { type: 'url', url: 'https://x/y.png' }, type: 'image' },
+      ]),
+    );
+
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+    try {
+      await runCmd(['hetero', 'exec', '--type', 'claude-code', '--input-json', file]);
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+
+    const call = mockSpawnAgent.mock.calls[0][0];
+    expect(call.prompt).toEqual([
+      { text: 'analyze', type: 'text' },
+      { source: { type: 'url', url: 'https://x/y.png' }, type: 'image' },
+    ]);
+  });
+
+  it('reports spawnAgent rejections (e.g. missing --image path) as a clean error + exit(1)', async () => {
+    // spawnAgent is now async and can reject during image normalization —
+    // missing local --image paths, fetch failures, etc. The CLI must catch
+    // these and exit with a friendly message instead of crashing on an
+    // unhandled rejection.
+    mockSpawnAgent.mockReturnValue(
+      Promise.reject(new Error('ENOENT: no such file or directory, open /missing.png')),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'see',
+      '--image',
+      '/missing.png',
+    ]);
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('rejects --prompt + --input-json (mutually exclusive)', async () => {
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--input-json',
+      '/tmp/bogus.json',
+    ]);
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
   });
 });

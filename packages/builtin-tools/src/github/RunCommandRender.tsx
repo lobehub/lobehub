@@ -62,8 +62,10 @@ const GithubRunCommandRender = memo<
   BuiltinRenderProps<GithubRunCommandArgs, GithubRunCommandState>
 >(({ args, content, pluginState }) => {
   const rawCommand = args?.command || '';
+  const description = args?.description || '';
   const normalized = normalizeGhCommand(rawCommand);
   const subcommand = getGhSubcommand(rawCommand);
+  const headerLabel = description || subcommand || normalized || 'command';
 
   const output = getGithubOutput(pluginState, content);
   const stderr = pluginState?.stderr || '';
@@ -87,7 +89,7 @@ const GithubRunCommandRender = memo<
       header={
         <Flexbox horizontal align={'center'} className={styles.headerRow} wrap={'wrap'}>
           <span className={styles.ghPrefix}>gh</span>
-          <span className={styles.headerCommand}>{subcommand || normalized || 'command'}</span>
+          <span className={styles.headerCommand}>{headerLabel}</span>
           {success !== undefined && (
             <span
               className={`${styles.exitCode} ${

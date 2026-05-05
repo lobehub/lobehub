@@ -14,6 +14,20 @@
  */
 export { AgentStreamPipeline, type AgentStreamPipelineOptions } from './agentStreamPipeline';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
+export {
+  type AgentContentBlock,
+  type AgentImageBlock,
+  type AgentImageSource,
+  type AgentInputPlan,
+  type AgentPromptInput,
+  type AgentTextBlock,
+  buildAgentInput,
+  type BuildAgentInputOptions,
+  materializeImageToPath,
+  type NormalizedImage,
+  normalizeImage,
+  type NormalizeImageOptions,
+} from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
 export { spawnAgent, type SpawnAgentHandle, type SpawnAgentOptions } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';

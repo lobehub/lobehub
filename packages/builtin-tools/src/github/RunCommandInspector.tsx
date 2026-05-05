@@ -58,7 +58,9 @@ const GithubRunCommandInspector = memo<
   BuiltinInspectorProps<GithubRunCommandArgs, GithubRunCommandState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const command = args?.command || partialArgs?.command || '';
+  const description = args?.description || partialArgs?.description || '';
   const subcommand = getGhSubcommand(command);
+  const label = description || subcommand;
 
   const pulse = isArgumentsStreaming || isLoading;
   const isSuccess = pluginState?.success ?? pluginState?.exitCode === 0;
@@ -68,9 +70,9 @@ const GithubRunCommandInspector = memo<
     <div className={cx(inspectorTextStyles.root, pulse && shinyTextStyles.shinyText)}>
       <Github className={styles.icon} size={14} />
       <span className={styles.ghPrefix}>gh</span>
-      {subcommand && (
+      {label && (
         <span className={styles.chip}>
-          <span className={styles.command}>{subcommand}</span>
+          <span className={styles.command}>{label}</span>
         </span>
       )}
       {hasResult ? (

@@ -2,6 +2,7 @@
 
 export interface GithubRunCommandArgs {
   command?: string;
+  description?: string;
 }
 
 export interface GithubRunCommandState {
