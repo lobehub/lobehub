@@ -16,6 +16,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
       'DeepSeek-V4-Flash is a preview of the DeepSeek-V4 series, a Mixture-of-Experts model with 284B total parameters and 13B activated, built for efficient reasoning across a 1M-token context window.',
     displayName: 'DeepSeek V4 Flash',
     enabled: true,
+    
     id: 'deepseek-v4-flash',
     releasedAt: '2026-04-24',
     settings: {
@@ -39,6 +40,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
       'DeepSeek-V4-Pro is a frontier Mixture-of-Experts model with a 1M-token context window and three reasoning modes.',
     displayName: 'DeepSeek V4 Pro',
     enabled: true,
+    
     id: 'deepseek-v4-pro',
     releasedAt: '2026-04-24',
     settings: {
@@ -61,7 +63,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'DeepSeek V3.2 is a next-generation reasoning model with improved complex reasoning and chain-of-thought.',
     displayName: 'DeepSeek V3.2',
-    enabled: true,
+
     id: 'deepseek-v3.2',
     settings: {
       extendParams: ['enableReasoning', 'reasoningEffort'],
@@ -93,7 +95,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'Gemma 3 4B is a lightweight multimodal model from Google, optimized for efficient vision and language tasks.',
     displayName: 'Gemma 3 4B',
-    enabled: true,
+
     id: 'gemma3:4b',
     releasedAt: '2025-03-12',
     type: 'chat',
@@ -107,7 +109,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'Gemma 3 12B is a multimodal model from Google with strong vision and language capabilities.',
     displayName: 'Gemma 3 12B',
-    enabled: true,
+
     id: 'gemma3:12b',
     releasedAt: '2025-03-12',
     type: 'chat',
@@ -121,7 +123,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'Gemma 3 27B is the largest Gemma 3 model, delivering frontier-level multimodal performance.',
     displayName: 'Gemma 3 27B',
-    enabled: true,
+
     id: 'gemma3:27b',
     releasedAt: '2025-03-12',
     type: 'chat',
@@ -138,6 +140,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
       'Gemma 4 31B is a dense multimodal model with 256K context, vision, and thinking modes for workstation deployment.',
     displayName: 'Gemma 4 31B',
     enabled: true,
+    
     id: 'gemma4:31b',
     releasedAt: '2026-04-02',
     settings: {
@@ -155,7 +158,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
     displayName: 'GLM-5',
-    enabled: true,
+
     id: 'glm-5',
     settings: {
       extendParams: ['enableReasoning', 'reasoningEffort'],
@@ -172,6 +175,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
       "GLM-5.1 is Zhipu's next-generation flagship model for agentic engineering, with significantly stronger coding capabilities than its predecessor. It achieves state-of-the-art performance on SWE-Bench Pro.",
     displayName: 'GLM-5.1',
     enabled: true,
+    
     id: 'glm-5.1',
     releasedAt: '2026-04-07',
     settings: {
@@ -221,6 +225,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
       'Kimi K2.6 is an open-source, native multimodal agentic model that advances practical capabilities in long-horizon coding, coding-driven design, proactive autonomous execution, and swarm-based task orchestration.',
     displayName: 'Kimi K2.6',
     enabled: true,
+    
     id: 'kimi-k2.6',
     releasedAt: '2026-03-31',
     settings: {
@@ -253,7 +258,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'K2 long thinking model supports 256k contexts, supports multi-step tool calling and thinking, and is good at solving more complex problems.',
     displayName: 'Kimi K2 Thinking',
-    enabled: true,
+
     id: 'kimi-k2-thinking',
     releasedAt: '2025-11-06',
     settings: {
@@ -386,7 +391,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       "MiniMax's M2.7-series model for coding, agentic workflows, and professional productivity.",
     displayName: 'MiniMax M2.7',
-    enabled: true,
+
     id: 'minimax-m2.7',
     settings: {
       extendParams: ['enableReasoning', 'reasoningEffort'],
