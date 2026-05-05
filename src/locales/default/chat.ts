@@ -909,6 +909,7 @@ export default {
   'workingPanel.resources.renameEmpty': 'Title cannot be empty',
   'workingPanel.resources.renameError': 'Failed to rename document',
   'workingPanel.resources.renameSuccess': 'Document renamed',
+  'workingPanel.resources.updatedAt': 'Updated {{time}}',
   'workingPanel.resources.viewMode.list': 'List view',
   'workingPanel.resources.viewMode.tree': 'Tree view',
   'workingPanel.review.binary': 'Binary file — diff not shown',

@@ -314,7 +314,7 @@ export const messagesReducer = (
     }
 
     default: {
-      throw new Error('未实现的 dispatch type，请检查 reducer');
+      throw new Error('Unimplemented dispatch type, check reducer');
     }
   }
 };

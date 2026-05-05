@@ -203,8 +203,8 @@ const createClassification = (
  * Classifies obvious skill intent with conservative deterministic rules.
  *
  * Before:
- * - "把 SKILL.md 草稿转成真正的 skills/bundle。"
- * - "这个解释挺有帮助的。"
+ * - "Convert the SKILL.md draft into a real skills/bundle."
+ * - "This explanation is quite helpful."
  *
  * After:
  * - `{ explicitness: "explicit_action", route: "direct_decision" }`
