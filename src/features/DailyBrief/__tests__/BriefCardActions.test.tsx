@@ -119,7 +119,7 @@ describe('BriefCardActions', () => {
   it('should fallback to DEFAULT_BRIEF_ACTIONS when actions prop is null', () => {
     renderWithRouter(<BriefCardActions actions={null} briefId="brief-2" briefType="decision" />);
 
-    expect(screen.getByText('✅ 确认')).toBeInTheDocument();
+    expect(screen.getByText('✅ Confirm')).toBeInTheDocument();
   });
 
   it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
