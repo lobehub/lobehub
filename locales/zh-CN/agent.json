@@ -108,7 +108,7 @@
   "channel.line.channelSecretHint": "Basic settings 选项卡中的密钥。必填 —— 用于校验每条入站 Webhook 的 X-Line-Signature。",
   "channel.line.description": "通过 LINE Messaging API 将助手接入 LINE，支持私聊和群组对话。",
   "channel.line.destinationUserId": "Destination User ID",
-  "channel.line.destinationUserIdHint": "机器人的 Destination User ID（以 U 开头，共 33 位）。LINE Developers Console 界面不展示此值。请先在下方填写 Channel Access Token，然后点击「从 LINE 获取」按钮自动填入。注意：Basic settings 中的 \"Your user ID\" 是你账号自己的 LINE user ID，不是 bot 的。",
+  "channel.line.destinationUserIdHint": "Bot 自身的 user ID（U 开头共 33 位）—— 点击下方「从 LINE 获取」自动填入。不是 Basic settings 里的「Your user ID」（那是你的个人账号）。",
   "channel.line.destinationUserIdPlaceholder": "例如 U1234567890abcdef1234567890abcdef",
   "channel.line.fetchBotInfo": "从 LINE 获取",
   "channel.line.fetchBotInfoFailed": "获取 Bot 信息失败",
