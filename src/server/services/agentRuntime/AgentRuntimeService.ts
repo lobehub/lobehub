@@ -31,6 +31,7 @@ import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 import { isAbortError, throwIfAborted } from './abort';
 import { CompletionLifecycle } from './CompletionLifecycle';
 import { hookDispatcher } from './hooks';
+import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import {
   type AgentExecutionParams,
@@ -154,6 +155,7 @@ export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
+  private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
   private traceRecorder: OperationTraceRecorder;
@@ -187,6 +189,7 @@ export class AgentRuntimeService {
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
     this.completionLifecycle = new CompletionLifecycle(db, userId, this.messageModel);
+    this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 
     // Initialize ToolExecutionService with dependencies
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
@@ -591,7 +594,7 @@ export class AgentRuntimeService {
       let currentState = agentState;
 
       if (humanInput || approvedToolCall || rejectionReason) {
-        const interventionResult = await this.handleHumanIntervention(runtime, currentState, {
+        const interventionResult = await this.humanIntervention.process(currentState, {
           approvedToolCall,
           humanInput,
           rejectAndContinue,
@@ -1551,202 +1554,6 @@ export class AgentRuntimeService {
     } catch (error) {
       log('computeDeviceContext error: %O', error);
     }
-
-    return undefined;
-  }
-
-  /**
-   * Handle human intervention logic.
-   *
-   * Mirrors the client-side flow in `conversationControl.ts`:
-   * - `approveToolCalling` → write intervention=approved, resume via
-   *   `phase: 'human_approved_tool'` so the runtime short-circuits into
-   *   `call_tool` with `skipCreateToolMessage: true`.
-   * - `rejectToolCalling` → write intervention=rejected and halt
-   *   (`status='interrupted'`, `interruption.reason='human_rejected'`).
-   * - `rejectAndContinueToolCalling` → write intervention=rejected and
-   *   resume via `phase: 'user_input'` so the next LLM call treats the
-   *   rejection content as user feedback.
-   */
-  private async handleHumanIntervention(
-    runtime: AgentRuntime,
-    state: any,
-    intervention: {
-      approvedToolCall?: any;
-      humanInput?: any;
-      rejectAndContinue?: boolean;
-      rejectionReason?: string;
-      toolMessageId?: string;
-    },
-  ) {
-    const { humanInput, approvedToolCall, rejectAndContinue, rejectionReason, toolMessageId } =
-      intervention;
-
-    // ---- A. approve ----
-    if (approvedToolCall && state.status === 'waiting_for_human') {
-      if (!toolMessageId) {
-        log('[handleHumanIntervention] approve requires toolMessageId, got undefined');
-        return { newState: state, nextContext: undefined };
-      }
-
-      await this.messageModel.updateMessagePlugin(toolMessageId, {
-        intervention: { status: 'approved' },
-      });
-
-      const newState = structuredClone(state);
-      newState.lastModified = new Date().toISOString();
-      newState.pendingToolsCalling = (state.pendingToolsCalling ?? []).filter(
-        (t: any) => t.id !== approvedToolCall.id,
-      );
-      // Keep waiting_for_human while other tools remain pending; resume to
-      // running when this was the last one.
-      newState.status = newState.pendingToolsCalling.length > 0 ? 'waiting_for_human' : 'running';
-
-      // Dispatch afterHumanIntervention hook (approved)
-      hookDispatcher
-        .dispatch(
-          state.metadata?.operationId ?? '',
-          'afterHumanIntervention',
-          {
-            action: 'approve',
-            operationId: state.metadata?.operationId ?? '',
-            toolCallId: approvedToolCall.id,
-            userId: state.metadata?.userId,
-          },
-          state.metadata?._hooks,
-        )
-        .catch(() => {});
-
-      const nextContext: AgentRuntimeContext = {
-        payload: {
-          approvedToolCall,
-          parentMessageId: toolMessageId,
-          skipCreateToolMessage: true,
-        },
-        phase: 'human_approved_tool',
-      };
-
-      return { newState, nextContext };
-    }
-
-    // ---- B / C. reject ----
-    if (rejectionReason && state.status === 'waiting_for_human') {
-      if (!toolMessageId) {
-        log('[handleHumanIntervention] reject requires toolMessageId, got undefined');
-        return { newState: state, nextContext: undefined };
-      }
-
-      const rejectionContent = rejectionReason
-        ? `User reject this tool calling with reason: ${rejectionReason}`
-        : 'User reject this tool calling without reason';
-
-      await this.messageModel.updateToolMessage(toolMessageId, { content: rejectionContent });
-      await this.messageModel.updateMessagePlugin(toolMessageId, {
-        intervention: { rejectedReason: rejectionReason, status: 'rejected' },
-      });
-
-      // Find the tool_call_id for this tool message so we can drop it from
-      // pendingToolsCalling. pendingToolsCalling holds ChatToolPayload[] whose
-      // id === tool_call_id; the mapping lives in messagePlugins (plugin id
-      // === message id, toolCallId is a separate column).
-      let rejectedToolCallId: string | undefined;
-      try {
-        const plugin = await this.serverDB.query.messagePlugins.findFirst({
-          where: (mp: any, { eq }: any) => eq(mp.id, toolMessageId),
-        });
-        rejectedToolCallId = (plugin as any)?.toolCallId ?? undefined;
-      } catch (error) {
-        log('[handleHumanIntervention] failed to look up tool plugin: %O', error);
-      }
-
-      const newState = structuredClone(state);
-      newState.lastModified = new Date().toISOString();
-      newState.pendingToolsCalling = rejectedToolCallId
-        ? (state.pendingToolsCalling ?? []).filter((t: any) => t.id !== rejectedToolCallId)
-        : (state.pendingToolsCalling ?? []);
-
-      if (rejectAndContinue) {
-        // C: persist the rejection, then either (a) wait for the remaining
-        // pending tools to be resolved or (b) resume LLM once this is the
-        // last one. Returning a `phase: 'user_input'` nextContext while
-        // pendingToolsCalling is non-empty would cause executeStep to run
-        // runtime.step immediately, resuming the LLM with an unresolved
-        // batch — see LOBE-7151 review P1.
-
-        // Dispatch afterHumanIntervention hook (rejectAndContinue)
-        hookDispatcher
-          .dispatch(
-            state.metadata?.operationId ?? '',
-            'afterHumanIntervention',
-            {
-              action: 'rejectAndContinue',
-              operationId: state.metadata?.operationId ?? '',
-              rejectionReason,
-              toolCallId: rejectedToolCallId,
-              userId: state.metadata?.userId,
-            },
-            state.metadata?._hooks,
-          )
-          .catch(() => {});
-
-        if (newState.pendingToolsCalling.length > 0) {
-          newState.status = 'waiting_for_human';
-          return { newState, nextContext: undefined };
-        }
-        newState.status = 'running';
-        const nextContext: AgentRuntimeContext = { phase: 'user_input' };
-        return { newState, nextContext };
-      }
-
-      // B: halt. Use interrupted + reason='human_rejected' to reuse the
-      // existing terminal-state plumbing (early-exit, completion hooks, etc).
-
-      // Dispatch onStopByHumanIntervention hook
-      hookDispatcher
-        .dispatch(
-          state.metadata?.operationId ?? '',
-          'onStopByHumanIntervention',
-          {
-            operationId: state.metadata?.operationId ?? '',
-            rejectionReason,
-            toolCallId: rejectedToolCallId,
-            userId: state.metadata?.userId,
-          },
-          state.metadata?._hooks,
-        )
-        .catch(() => {});
-
-      newState.status = 'interrupted';
-      newState.interruption = {
-        canResume: false,
-        interruptedAt: new Date().toISOString(),
-        reason: 'human_rejected',
-      };
-      return { newState, nextContext: undefined };
-    }
-
-    // ---- human_prompt / human_select (submitToolInteraction) — out of scope
-    //      for this change; wire up in a follow-up issue.
-    if (humanInput) {
-      return { newState: state, nextContext: undefined };
-    }
-
-    return { newState: state, nextContext: undefined };
-  }
-
-  /**
-   * Extract a stable error code (e.g. `NoAvailableProvider`,
-   * `InvalidProviderAPIKey`) from the agent state error object. Used by
-   * downstream consumers (bot reply rendering, observability) to dispatch on
-   * the error kind without pattern-matching free-form messages.
-   */
-  private extractErrorType(error: any): string | undefined {
-    if (!error) return undefined;
-
-    // ChatCompletionErrorPayload / ChatMessageError both expose the code as
-    // `errorType` or `type` at the top level.
-    const errorType = error.errorType || error.type;
-    if (errorType) return String(errorType);
 
     return undefined;
   }
