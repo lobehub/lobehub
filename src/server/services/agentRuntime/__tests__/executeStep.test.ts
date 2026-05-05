@@ -739,4 +739,162 @@ describe('AgentRuntimeService.executeStep - error-path snapshot finalize (LOBE-8
 
     dispatchSpy.mockRestore();
   });
+
+  it('reports totalSteps from the finalized step array, not stepCount, on the error path', async () => {
+    // Partial has step 0 from a prior successful step. The catch path will
+    // synthesize step 1 for the failure. After finalize, partial.steps.length
+    // is 2 — but Redis-loaded stepCount is still 1 (last completed step
+    // before failure). The snapshot must report 2.
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn().mockResolvedValue({
+        startedAt: 1_777_960_000_000,
+        steps: [
+          {
+            stepIndex: 0,
+            stepType: 'call_llm',
+            startedAt: 1_777_960_000_000,
+            completedAt: 1_777_960_001_000,
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 100,
+          },
+        ],
+      }),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      status: 'running',
+      stepCount: 1,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(new Error('boom')) },
+    });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'tool_use' } as any,
+        operationId: 'op-totalsteps',
+        stepIndex: 1,
+      }),
+    ).rejects.toThrow();
+
+    expect(snapshotStore.save).toHaveBeenCalledTimes(1);
+    const saved = snapshotStore.save.mock.calls[0][0];
+    expect(saved.steps).toHaveLength(2);
+    expect(saved.totalSteps).toBe(2);
+
+    dispatchSpy.mockRestore();
+  });
+
+  it('does not duplicate a step when the failing index was already appended to the partial', async () => {
+    // Simulates: success-path append wrote stepIndex=1 to the partial during
+    // a prior attempt, then a later failure (e.g. queue scheduling threw)
+    // sent the operation into a retry whose catch path synthesizes the same
+    // stepIndex. The error event must be merged into the existing record
+    // instead of pushing a duplicate that corrupts ordering and metrics.
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn().mockResolvedValue({
+        startedAt: 1_777_960_000_000,
+        steps: [
+          {
+            stepIndex: 0,
+            stepType: 'call_llm',
+            startedAt: 1_777_960_000_000,
+            completedAt: 1_777_960_001_000,
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 100,
+          },
+          {
+            stepIndex: 1,
+            stepType: 'call_tool',
+            startedAt: 1_777_960_002_000,
+            completedAt: 1_777_960_003_000,
+            events: [{ type: 'done' }],
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 50,
+          },
+        ],
+      }),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    // stepCount=1 so the layer-2 early-exit guard (stepCount > stepIndex) does
+    // not skip this attempt — we want the catch path to run.
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      status: 'running',
+      stepCount: 1,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(new Error('queue down')) },
+    });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'tool_use' } as any,
+        operationId: 'op-dedup',
+        stepIndex: 1,
+      }),
+    ).rejects.toThrow();
+
+    expect(snapshotStore.save).toHaveBeenCalledTimes(1);
+    const saved = snapshotStore.save.mock.calls[0][0];
+
+    // Exactly one step per index — no duplicates from the synthetic append.
+    expect(saved.steps).toHaveLength(2);
+    expect(saved.steps.map((s: any) => s.stepIndex)).toEqual([0, 1]);
+
+    // The original stepIndex=1 record is preserved, with the error event
+    // appended after the existing 'done' event.
+    const merged = saved.steps.find((s: any) => s.stepIndex === 1);
+    expect(merged.events).toHaveLength(2);
+    expect(merged.events[0]).toMatchObject({ type: 'done' });
+    expect(merged.events[1]).toMatchObject({ type: 'error' });
+
+    dispatchSpy.mockRestore();
+  });
 });

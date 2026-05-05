@@ -1987,9 +1987,13 @@ export class AgentRuntimeService {
    * partial sits orphaned at `_partial/<op>.json` and the canonical
    * `agent-traces/<agentId>/<topicId>/<op>.json` returns 404 — see LOBE-8533.
    *
-   * `failedStep` is for the error path: the failing step never reached
-   * `appendStepToPartial`, so callers from `catch` should pass it to keep step
-   * counts aligned with the assistant message that triggered the call.
+   * `failedStep` is for the error path: when the failing step never reached
+   * `appendStepToPartial`, callers from `catch` pass it to keep step counts
+   * aligned with the assistant message that triggered the call. If the
+   * partial already contains a step with the same `stepIndex` (the
+   * success-path append landed before a later persist/queue failure), the
+   * error event is merged into the existing record instead of duplicating
+   * the step.
    */
   private async finalizeSnapshotForOperation(
     operationId: string,
@@ -2025,25 +2029,38 @@ export class AgentRuntimeService {
 
       if (params.failedStep) {
         if (!partial.steps) partial.steps = [];
-        const now = Date.now();
-        partial.steps.push({
-          completedAt: now,
-          events: params.error ? [{ error: params.error, type: 'error' }] : undefined,
-          executionTimeMs: now - params.failedStep.startedAt,
-          startedAt: params.failedStep.startedAt,
-          stepIndex: params.failedStep.stepIndex,
-          // StepSnapshot.stepType is strictly 'call_llm' | 'call_tool';
-          // persist-fatal originates in the tool path, so 'call_tool' is the
-          // truthful label. LLM-side failures still map to 'call_tool' here —
-          // the surrounding `events: [{type: 'error'}]` is the discriminant
-          // consumers should read.
-          stepType: 'call_tool',
-          totalCost: params.state?.cost?.total ?? 0,
-          totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
-        });
+        // The success path may have already appended this step to the partial
+        // before a later failure (e.g. saveAgentState or queue scheduling
+        // throwing post-append). In that case attach the error event to the
+        // existing record instead of pushing a duplicate stepIndex — duplicates
+        // corrupt ordering and per-step metrics in trace reconstruction.
+        const existing = partial.steps.find((s) => s.stepIndex === params.failedStep!.stepIndex);
+        if (existing) {
+          if (params.error) {
+            existing.events = [...(existing.events ?? []), { error: params.error, type: 'error' }];
+          }
+        } else {
+          const now = Date.now();
+          partial.steps.push({
+            completedAt: now,
+            events: params.error ? [{ error: params.error, type: 'error' }] : undefined,
+            executionTimeMs: now - params.failedStep.startedAt,
+            startedAt: params.failedStep.startedAt,
+            stepIndex: params.failedStep.stepIndex,
+            // StepSnapshot.stepType is strictly 'call_llm' | 'call_tool';
+            // persist-fatal originates in the tool path, so 'call_tool' is the
+            // truthful label. LLM-side failures still map to 'call_tool' here —
+            // the surrounding `events: [{type: 'error'}]` is the discriminant
+            // consumers should read.
+            stepType: 'call_tool',
+            totalCost: params.state?.cost?.total ?? 0,
+            totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
+          });
+        }
       }
 
       const metadata = (params.state?.metadata ?? {}) as any;
+      const finalizedSteps = (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex);
       const snapshot = {
         agentId: metadata?.agentId,
         completedAt: Date.now(),
@@ -2059,10 +2076,13 @@ export class AgentRuntimeService {
         retryDelayExpression:
           typeof metadata?.queueRetryDelay === 'string' ? metadata.queueRetryDelay : undefined,
         startedAt: partial.startedAt ?? Date.now(),
-        steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
+        steps: finalizedSteps,
         topicId: metadata?.topicId,
         totalCost: params.state?.cost?.total ?? 0,
-        totalSteps: params.state?.stepCount ?? partial.steps?.length ?? 0,
+        // Trust the finalized step array over `state.stepCount`: on the error
+        // path stepCount comes from Redis and reflects the last completed step,
+        // so it lags behind the synthetic failed step we just appended.
+        totalSteps: finalizedSteps.length || (params.state?.stepCount ?? 0),
         totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
         traceId: operationId,
         userId: metadata?.userId,
