@@ -26,6 +26,46 @@ const generateThreadId = () => `thd_${createNanoId(16)()}`;
  */
 const eventKey = (event: AgentStreamEvent) => `${event.stepIndex}:${event.type}:${event.timestamp}`;
 
+const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
+
+/**
+ * CC sometimes streams the error string into `content` BEFORE emitting the
+ * structured error event (e.g. AuthRequired echoes the stderr line). Mirrors
+ * the renderer's `shouldSuppressTerminalErrorEcho` (lines 113–130 of
+ * heterogeneousAgentExecutor.ts): only suppress when the body is explicitly
+ * marked or matches the AuthRequired code, AND the trimmed strings are
+ * equal. Anything else stays — accidental partial overlaps are not echo.
+ */
+const shouldSuppressTerminalErrorEcho = (
+  content: string,
+  error: ChatMessageError | undefined,
+): boolean => {
+  if (!error) return false;
+  const errorBody = error.body as
+    | {
+        clearEchoedContent?: boolean;
+        code?: string;
+        message?: string;
+        stderr?: string;
+      }
+    | undefined;
+  // The renderer guards on either an explicit flag or AuthRequired (the most
+  // common echo source). Other error codes might echo too, but we err on the
+  // side of preserving content unless the producer asks for the cleanup.
+  const ECHO_TRIGGER_CODES = new Set(['AuthRequired']);
+  if (
+    !errorBody?.clearEchoedContent &&
+    (!errorBody?.code || !ECHO_TRIGGER_CODES.has(errorBody.code))
+  ) {
+    return false;
+  }
+  const normalizedContent = normalizeErrorText(content);
+  const normalizedError = normalizeErrorText(
+    errorBody?.stderr || errorBody?.message || error.message,
+  );
+  return !!normalizedContent && !!normalizedError && normalizedContent === normalizedError;
+};
+
 interface ToolCallPayload extends ChatToolPayload {}
 
 /** Per-assistant-message tool persistence state (main or sub-agent scope). */
@@ -158,22 +198,45 @@ export class HeterogeneousPersistenceHandler {
   }
 
   /**
-   * Flush trailing accumulators and drop the per-operation state. Called from
-   * `heteroFinish` so subsequent ingests for the same operationId start fresh
-   * (e.g. retry of a finished run with a stale CLI cache).
+   * Flush trailing accumulators, persist the CLI's native session id (when
+   * present) for next-turn resume, and drop the per-operation state.
+   *
+   * Resume id source: CC's `--resume <sessionId>` token comes from the
+   * adapter's cached `system:init.session_id`. The CLI surfaces it here as a
+   * `heteroFinish` argument; we write it to `topic.metadata.heteroSessionId`
+   * (the same field the desktop renderer uses), so the next CLI spawn for
+   * this topic can include `--resume <id>`.
    */
   async finish(params: {
     error?: { message: string; type: string };
     operationId: string;
     result: 'success' | 'error' | 'cancelled';
+    sessionId?: string;
   }): Promise<void> {
     const state = operationStates.get(params.operationId);
     if (!state) return;
 
     try {
       await this.flushFinalState(state, params.error, params.result);
+      if (params.sessionId) {
+        await this.persistSessionId(state.topicId, params.sessionId);
+      }
     } finally {
       operationStates.delete(params.operationId);
+    }
+  }
+
+  /**
+   * Persist the CLI's native session id onto `topic.metadata.heteroSessionId`.
+   * `TopicModel.updateMetadata` merges into existing JSONB so this does NOT
+   * clobber `runningOperation` / `workingDirectory` / other peer fields.
+   */
+  private async persistSessionId(topicId: string, sessionId: string): Promise<void> {
+    try {
+      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: sessionId });
+      log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
+    } catch (err) {
+      log('persistSessionId failed topic=%s err=%O', topicId, err);
     }
   }
 
@@ -404,9 +467,18 @@ export class HeterogeneousPersistenceHandler {
   private async handleTerminal(state: OperationState, event: AgentStreamEvent) {
     const isError = event.type === 'error';
     const messageError = isError ? this.toChatMessageError(event.data) : undefined;
+    const suppressEcho =
+      !!messageError && shouldSuppressTerminalErrorEcho(state.accumulatedContent, messageError);
 
     const updateValue: Record<string, any> = {};
-    if (state.accumulatedContent) updateValue.content = state.accumulatedContent;
+    if (suppressEcho) {
+      // CC sometimes streams the error string into `content` BEFORE emitting
+      // the structured error event. When the two payloads echo each other,
+      // surface only the structured error and clear the duplicate text.
+      updateValue.content = '';
+    } else if (state.accumulatedContent) {
+      updateValue.content = state.accumulatedContent;
+    }
     if (state.accumulatedReasoning) updateValue.reasoning = { content: state.accumulatedReasoning };
     if (state.lastModel) updateValue.model = state.lastModel;
     if (state.lastProvider) updateValue.provider = state.lastProvider;

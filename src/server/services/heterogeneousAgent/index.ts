@@ -42,6 +42,8 @@ export interface HeterogeneousAgentServiceOptions {
   persistenceHandler?: HeterogeneousPersistenceHandler;
   /** Inject a pre-built manager (used by tests). */
   streamEventManager?: IStreamEventManager;
+  /** Inject a pre-built TopicModel (used by tests for the resume helper). */
+  topicModel?: TopicModel;
 }
 
 /**
@@ -59,6 +61,7 @@ export class HeterogeneousAgentService {
   private readonly db: LobeChatDatabase;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly streamEventManager: IStreamEventManager;
+  private readonly topicModel: TopicModel;
   private readonly userId: string;
 
   constructor(
@@ -69,12 +72,13 @@ export class HeterogeneousAgentService {
     this.db = db;
     this.userId = userId;
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
+    this.topicModel = options.topicModel ?? new TopicModel(db, userId);
     this.persistenceHandler =
       options.persistenceHandler ??
       new HeterogeneousPersistenceHandler({
         messageModel: new MessageModel(db, userId),
         threadModel: new ThreadModel(db, userId),
-        topicModel: new TopicModel(db, userId),
+        topicModel: this.topicModel,
       });
   }
 
@@ -127,9 +131,9 @@ export class HeterogeneousAgentService {
 
     // Drain any pending state in the persistence handler — flushes trailing
     // accumulated content / reasoning that the in-stream `agent_runtime_end`
-    // already wrote (no-op when state is clean) and frees the per-operation
-    // memory.
-    await this.persistenceHandler.finish({ error, operationId, result });
+    // already wrote (no-op when state is clean), persists the CLI's native
+    // session id for next-turn resume, and frees the per-operation memory.
+    await this.persistenceHandler.finish({ error, operationId, result, sessionId });
 
     // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
     // down even if the CLI stream missed it (process killed mid-flight,
@@ -146,9 +150,20 @@ export class HeterogeneousAgentService {
       stepIndex: 0,
       type: 'agent_runtime_end',
     });
+  }
 
-    // TODO(phase 2c): persist sessionId on topic.metadata.heterogeneousSessions
-    // — held back until ChatTopicMetadata extension lands.
+  /**
+   * Look up the persisted CLI session id for a topic so the orchestrator
+   * (phase 3 cloud sandbox) can pass `--resume <sessionId>` to the next
+   * `lh hetero exec` spawn. Returns undefined when no prior run completed
+   * on this topic — caller should spawn fresh.
+   *
+   * Reads the same `topic.metadata.heteroSessionId` the desktop renderer
+   * writes, so resume state is shared between desktop and cloud paths.
+   */
+  async getHeterogeneousResumeSessionId(topicId: string): Promise<string | undefined> {
+    const topic = await this.topicModel.findById(topicId);
+    return topic?.metadata?.heteroSessionId;
   }
 }
 
