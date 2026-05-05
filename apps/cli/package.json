@@ -30,6 +30,7 @@
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@trpc/client": "^11.8.1",
     "@types/node": "^22.13.5",

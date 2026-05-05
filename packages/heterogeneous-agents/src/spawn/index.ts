@@ -15,5 +15,6 @@
 export { AgentStreamPipeline, type AgentStreamPipelineOptions } from './agentStreamPipeline';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export { JsonlStreamProcessor } from './jsonlProcessor';
+export { spawnAgent, type SpawnAgentHandle, type SpawnAgentOptions } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';
 export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';
