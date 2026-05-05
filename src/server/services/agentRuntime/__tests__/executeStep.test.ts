@@ -596,3 +596,147 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
     dispatchSpy.mockRestore();
   });
 });
+
+describe('AgentRuntimeService.executeStep - error-path snapshot finalize (LOBE-8533)', () => {
+  it('finalizes a snapshot with completionReason=error and a synthetic failed step when the executor throws', async () => {
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      // A partial WITH steps already recorded — simulates a tool dispatch
+      // that succeeded for several prior steps before persist-fatal hit.
+      loadPartial: vi.fn().mockResolvedValue({
+        startedAt: 1_777_960_000_000,
+        steps: [
+          {
+            stepIndex: 0,
+            stepType: 'call_llm',
+            startedAt: 1_777_960_000_000,
+            completedAt: 1_777_960_001_000,
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 100,
+          },
+        ],
+      }),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+
+    // First load returns a running state to enter step execution; second
+    // load (in the catch) returns the same so finalStateWithError carries
+    // metadata.
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      status: 'running',
+      stepCount: 1,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    // Force the runtime.step path to throw — simulates markPersistFatal
+    // bubbling up from RuntimeExecutors.
+    const persistFatal = new Error('parent message missing');
+    (persistFatal as any).errorType = 'ConversationParentMissing';
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(persistFatal) },
+    });
+
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'tool_use' } as any,
+        operationId: 'op-fatal-1',
+        stepIndex: 1,
+      }),
+    ).rejects.toThrow();
+
+    // The op MUST land in the canonical S3 path with completionReason=error
+    expect(snapshotStore.save).toHaveBeenCalledTimes(1);
+    const saved = snapshotStore.save.mock.calls[0][0];
+    expect(saved).toMatchObject({
+      agentId: 'agt-1',
+      completionReason: 'error',
+      operationId: 'op-fatal-1',
+      topicId: 'tpc-1',
+      userId: 'user-1',
+    });
+    expect(saved.error).toMatchObject({ type: 'ConversationParentMissing' });
+
+    // The failing step must be appended so the snapshot's step count tracks
+    // the assistant message that triggered the failed call (otherwise the
+    // partial would lag by one and the dangling tool_use would still look
+    // unattributed).
+    const failedStep = saved.steps.find((s: any) => s.stepIndex === 1);
+    expect(failedStep).toBeDefined();
+    expect(failedStep.events?.[0]).toMatchObject({ type: 'error' });
+
+    expect(snapshotStore.removePartial).toHaveBeenCalledWith('op-fatal-1');
+
+    dispatchSpy.mockRestore();
+  });
+
+  it('skips finalize when there is no partial (op never recorded a step)', async () => {
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn().mockResolvedValue(null),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: {},
+      status: 'running',
+      stepCount: 0,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(new Error('boom')) },
+    });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: 'op-no-partial',
+        stepIndex: 0,
+      }),
+    ).rejects.toThrow();
+
+    // No partial -> nothing to finalize. Don't write an empty snapshot.
+    expect(snapshotStore.save).not.toHaveBeenCalled();
+    expect(snapshotStore.removePartial).not.toHaveBeenCalled();
+
+    dispatchSpy.mockRestore();
+  });
+});
