@@ -27,7 +27,7 @@ import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal/orc
 import { assembleFeedbackContext } from '@/server/services/agentSignal/policies/analyzeIntent/context/feedbackContextAssembler';
 import { createRedisRuntimeGuardBackend } from '@/server/services/agentSignal/runtime/backend/redisGuard';
 
-import type { AgentSignalWorkflowRunPayload } from './index';
+import type { AgentSignalWorkflowRunPayload } from './types';
 
 const log = debug('lobe-server:workflows:agent-signal:run');
 
