@@ -1,5 +1,4 @@
 import type { TaskDetailActivity } from '@lobechat/types';
-import { formatActivityTime } from '@lobechat/utils/time';
 import {
   ActionIcon,
   Avatar,
@@ -16,6 +15,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
@@ -36,7 +36,6 @@ interface TopicCardProps {
 
 const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
-  const { t: tDiscover } = useTranslation('discover');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const isRunning = activity.status === 'running';
 
@@ -69,10 +68,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
   }, [activity.operationId]);
 
-  const { text: startedAt, title: startedAtTitle } = formatActivityTime(activity.time, {
-    formatOtherYear: tDiscover('time.formatOtherYear'),
-    formatThisYear: tDiscover('time.formatThisYear'),
-  });
+  const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
     ? formatDuration(elapsed)
     : finalDuration != null && finalDuration >= 0
