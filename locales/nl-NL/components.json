@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "Invoer (cache schrijven)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "Uitvoer",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "Videogeneratie",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "Video-ingang",
   "ModelSwitchPanel.detail.releasedAt": "Uitgebracht op {{date}}",
   "ModelSwitchPanel.emptyModel": "Geen ingeschakeld model. Ga naar instellingen om er een in te schakelen.",
   "ModelSwitchPanel.emptyProvider": "Geen ingeschakelde providers. Ga naar instellingen om er een in te schakelen.",

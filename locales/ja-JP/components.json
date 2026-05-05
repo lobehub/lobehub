@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "入力（キャッシュ書き込み）",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "出力",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "ビデオ生成",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "ビデオ入力",
   "ModelSwitchPanel.detail.releasedAt": "{{date}} にリリース",
   "ModelSwitchPanel.emptyModel": "有効なモデルがありません。設定に移動して有効にしてください。",
   "ModelSwitchPanel.emptyProvider": "有効なサービスプロバイダーがありません。設定に移動して有効にしてください。",
