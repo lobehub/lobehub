@@ -74,7 +74,9 @@ export const documents = pgTable(
     pages: jsonb('pages').$type<LobeDocumentPage[]>(),
 
     // Source type
-    sourceType: text('source_type', { enum: ['file', 'web', 'api', 'topic'] }).notNull(),
+    sourceType: text('source_type', {
+      enum: ['file', 'web', 'api', 'topic', 'agent', 'agent-signal'],
+    }).notNull(),
     source: text('source').notNull(), // File path or web URL
 
     // Associated file (optional)

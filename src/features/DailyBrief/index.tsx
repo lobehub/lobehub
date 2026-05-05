@@ -4,6 +4,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
+import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -12,6 +14,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import BriefCard from './BriefCard';
+import BriefCardSkeleton from './BriefCardSkeleton';
 
 const DailyBrief = memo(() => {
   const { t } = useTranslation('home');
@@ -24,7 +27,20 @@ const DailyBrief = memo(() => {
   const briefs = useBriefStore(briefListSelectors.briefs);
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
 
-  if (!enableAgentTask || !isInit || briefs.length === 0) return null;
+  if (!enableAgentTask || !isLogin) return null;
+
+  if (!isInit) {
+    return (
+      <GroupBlock icon={Newspaper} title={t('brief.title')}>
+        <Flexbox gap={12}>
+          <BriefCardSkeleton />
+          <BriefCardSkeleton />
+        </Flexbox>
+      </GroupBlock>
+    );
+  }
+
+  if (briefs.length === 0) return null;
 
   return (
     <GroupBlock
@@ -42,6 +58,8 @@ const DailyBrief = memo(() => {
           <BriefCard brief={brief} key={brief.id} />
         ))}
       </Flexbox>
+      <DocumentPreviewModal />
+      <TopicChatDrawer />
     </GroupBlock>
   );
 });

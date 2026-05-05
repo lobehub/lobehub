@@ -658,11 +658,14 @@ export const agentDocumentRouter = router({
       z.object({
         agentId: z.string(),
         content: z.string(),
+        hintIsSkill: z.boolean().optional(),
         title: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.createDocument(input.agentId, input.title, input.content);
+      return ctx.agentDocumentService.createDocument(input.agentId, input.title, input.content, {
+        hintIsSkill: input.hintIsSkill,
+      });
     }),
 
   /**
@@ -674,6 +677,7 @@ export const agentDocumentRouter = router({
       z.object({
         agentId: z.string(),
         content: z.string(),
+        hintIsSkill: z.boolean().optional(),
         title: z.string(),
         topicId: z.string(),
       }),
@@ -686,6 +690,7 @@ export const agentDocumentRouter = router({
         title,
         input.content,
         input.topicId,
+        { hintIsSkill: input.hintIsSkill },
       );
 
       return doc;

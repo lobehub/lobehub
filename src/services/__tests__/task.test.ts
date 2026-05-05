@@ -30,9 +30,11 @@ vi.mock('@/libs/trpc/client', () => ({
       groupList: { query: vi.fn() },
       list: { query: vi.fn() },
       pinDocument: { mutate: vi.fn() },
+      previewSubtaskLayers: { query: vi.fn() },
       removeDependency: { mutate: vi.fn() },
       reorderSubtasks: { mutate: vi.fn() },
       run: { mutate: vi.fn() },
+      runReadySubtasks: { mutate: vi.fn() },
       runReview: { mutate: vi.fn() },
       unpinDocument: { mutate: vi.fn() },
       update: { mutate: vi.fn() },
@@ -144,6 +146,16 @@ describe('TaskService', () => {
     it('cancelTopic should call task.cancelTopic.mutate', async () => {
       await taskService.cancelTopic('tpc_1');
       expect(lambdaClient.task.cancelTopic.mutate).toHaveBeenCalledWith({ topicId: 'tpc_1' });
+    });
+
+    it('previewSubtaskLayers should call task.previewSubtaskLayers.query', async () => {
+      await taskService.previewSubtaskLayers('T-1');
+      expect(lambdaClient.task.previewSubtaskLayers.query).toHaveBeenCalledWith({ id: 'T-1' });
+    });
+
+    it('runReadySubtasks should call task.runReadySubtasks.mutate', async () => {
+      await taskService.runReadySubtasks('T-1');
+      expect(lambdaClient.task.runReadySubtasks.mutate).toHaveBeenCalledWith({ id: 'T-1' });
     });
 
     it('pinDocument should pass all params', async () => {

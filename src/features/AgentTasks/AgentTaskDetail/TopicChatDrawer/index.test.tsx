@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     activeTaskId: 'T-1',
     activeTopicDrawerTopicId: 'topic-1',
     closeTopicDrawer: vi.fn(),
+    useFetchTaskDetail: vi.fn(),
     taskDetailMap: {
       'T-1': {
         activities: [
@@ -128,6 +129,10 @@ vi.mock('@/store/chat/utils/messageMapKey', () => ({
 
 vi.mock('../TopicStatusIcon', () => ({
   default: () => <span data-testid="topic-status-icon" />,
+}));
+
+vi.mock('./FeedbackInput', () => ({
+  default: () => <div data-testid="feedback-input" />,
 }));
 
 describe('TopicChatDrawer', () => {

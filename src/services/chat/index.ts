@@ -1,15 +1,19 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import {
+  KLAVIS_SERVER_TYPES,
+  LOBEHUB_SKILL_PROVIDERS,
+  REQUEST_TRIGGER_HEADER,
+} from '@lobechat/const';
 import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AgentRuntimeError, responsesAPIModels } from '@lobechat/model-runtime';
-import {
-  type RuntimeInitialContext,
-  type RuntimeStepContext,
-  type TracePayload,
-  type UIChatMessage,
+import type {
+  RuntimeInitialContext,
+  RuntimeStepContext,
+  TracePayload,
+  UIChatMessage,
 } from '@lobechat/types';
 import { ChatErrorType, TraceTagMap } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
@@ -345,7 +349,7 @@ class ChatService {
   };
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, requestTrigger, signal, responseAnimation, topicId } = options ?? {};
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
 
@@ -442,6 +446,7 @@ class ChatService {
         'Content-Type': 'application/json',
         ...traceHeader,
         ...(agentId && { 'x-agent-id': agentId }),
+        ...(requestTrigger && { [REQUEST_TRIGGER_HEADER]: requestTrigger }),
         ...(topicId && { 'x-topic-id': topicId }),
       },
       provider,

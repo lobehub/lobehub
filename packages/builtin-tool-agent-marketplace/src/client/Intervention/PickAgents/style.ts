@@ -62,18 +62,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorText};
   `,
   container: css`
-    overflow: hidden;
     display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     flex: 1;
-    gap: 16px;
+    gap: 12px;
 
     min-height: 0;
-
-    @media (width <= 720px) {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto minmax(0, 1fr);
-    }
   `,
   content: css`
     overflow-y: auto;
@@ -86,17 +80,16 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   categoryItem: css`
     cursor: pointer;
 
-    display: block;
+    flex: none;
 
-    width: 100%;
-    padding-block: 8px;
+    padding-block: 6px;
     padding-inline: 12px;
     border: none;
     border-radius: ${cssVar.borderRadius};
 
     font-size: 13px;
     color: ${cssVar.colorTextSecondary};
-    text-align: start;
+    white-space: nowrap;
 
     background: transparent;
 
@@ -112,11 +105,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     &:focus-visible {
       outline: 2px solid ${cssVar.colorPrimary};
       outline-offset: 2px;
-    }
-
-    @media (width <= 720px) {
-      width: auto;
-      white-space: nowrap;
     }
   `,
   categoryItemActive: css`
@@ -175,22 +163,17 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgElevated};
     box-shadow: 0 16px 48px color-mix(in srgb, #000 16%, transparent);
   `,
-  sidebar: css`
-    overflow-y: auto;
+  tabBar: css`
+    overflow: auto hidden;
     overscroll-behavior: contain;
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    flex-flow: row nowrap;
+    gap: 6px;
 
-    min-height: 0;
-    padding-inline-end: 4px;
-
-    @media (width <= 720px) {
-      overflow: auto hidden;
-      flex-flow: row nowrap;
-      padding-block-end: 4px;
-      padding-inline-end: 0;
-    }
+    margin-inline: -12px;
+    padding-block-end: 8px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   skeletonAvatar: css`
     flex: none;
@@ -220,9 +203,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillTertiary};
     animation: ${pulse} 1.5s ease-in-out infinite;
   `,
-  skeletonSidebarItem: css`
-    width: 100%;
-    height: 36px;
+  skeletonTabBarItem: css`
+    flex: none;
+
+    width: 88px;
+    height: 32px;
     border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorFillTertiary};

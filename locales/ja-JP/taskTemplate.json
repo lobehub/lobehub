@@ -1,5 +1,7 @@
 {
   "action.connect.button": "{{provider}}に接続",
+  "action.connect.error": "接続に失敗しました。もう一度お試しください。",
+  "action.connect.popupBlocked": "接続ポップアップがブロックされました。続行するには、ブラウザでポップアップを許可してください。",
   "action.create.error": "タスクの作成に失敗しました。もう一度お試しください。",
   "action.create.success": "スケジュールされたタスクが追加されました。Lobe AIで確認してください。",
   "action.createButton": "スケジュールされたタスクとして追加",

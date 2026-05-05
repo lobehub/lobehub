@@ -14,6 +14,29 @@ import { UnixFileSearch } from './unix';
 const logger = createLogger('module:FileSearch:macOS');
 
 /**
+ * Build the kMDItemFSName expression for a free-form keyword string.
+ *
+ * Splits on whitespace and ANDs each token as a case/diacritic-insensitive
+ * substring match, so "Foo Bar" matches both `Bar_Foo.pdf` and `Foo Bar.pdf`
+ * — instead of requiring the literal phrase "Foo Bar" to appear.
+ *
+ * Returns an empty string when the keywords contain no usable token.
+ */
+export const buildFilenameKeywordExpression = (keywords: string): string => {
+  const tokens = keywords
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => token.replaceAll('"', '\\"'));
+
+  if (tokens.length === 0) return '';
+
+  const term = (token: string) => `kMDItemFSName == "*${token}*"cd`;
+  if (tokens.length === 1) return term(tokens[0]);
+  return `(${tokens.map(term).join(' && ')})`;
+};
+
+/**
  * Fallback tool type for macOS file search
  * Priority: mdfind > fd > find > fast-glob
  */
@@ -95,7 +118,16 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
    * Search using Spotlight (mdfind)
    */
   private async searchWithSpotlight(options: SearchOptions): Promise<FileResult[]> {
-    const { cmd, args, commandString } = this.buildSearchCommand(options);
+    const { cmd, args, commandString, hasQuery } = this.buildSearchCommand(options);
+
+    // Spotlight (mdfind) requires a query expression; running it with only flags
+    // (e.g. -onlyin) makes mdfind print its usage to stdout and we'd treat each
+    // line as a fake file. Short-circuit to an empty result instead.
+    if (!hasQuery) {
+      logger.warn('Skipping mdfind: no keywords/contentContains/fileTypes/date filter provided');
+      return [];
+    }
+
     logger.debug(`Executing command: ${commandString}`);
 
     try {
@@ -176,6 +208,7 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     args: string[];
     cmd: string;
     commandString: string;
+    hasQuery: boolean;
   } {
     const cmd = 'mdfind';
     const args: string[] = [];
@@ -204,7 +237,7 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
 
     if (options.keywords) {
       if (!options.keywords.includes('kMDItem')) {
-        queryExpression = `kMDItemFSName == "*${options.keywords.replaceAll('"', '\\"')}*"cd`;
+        queryExpression = buildFilenameKeywordExpression(options.keywords);
       } else {
         queryExpression = options.keywords;
       }
@@ -271,13 +304,15 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
       }
     }
 
-    if (queryExpression) {
+    const hasQuery = Boolean(queryExpression);
+
+    if (hasQuery) {
       args.push(queryExpression);
     }
 
     const commandString = `${cmd} ${args.map((arg) => (arg.includes(' ') || arg.includes('*') ? `"${arg}"` : arg)).join(' ')}`;
 
-    return { args, cmd, commandString };
+    return { args, cmd, commandString, hasQuery };
   }
 
   /**
@@ -288,7 +323,7 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
     options: SearchOptions,
     engine?: string,
   ): Promise<FileResult[]> {
-    const resultPromises = filePaths.map(async (filePath) => {
+    const resultPromises = filePaths.map(async (filePath): Promise<FileResult | null> => {
       try {
         const stats = await stat(filePath);
 
@@ -313,23 +348,15 @@ export class MacOSSearchServiceImpl extends UnixFileSearch {
 
         return result;
       } catch (error) {
-        logger.warn(`Error processing file stats for ${filePath}: ${(error as Error).message}`);
-        return {
-          contentType: 'unknown',
-          createdTime: new Date(),
-          engine,
-          isDirectory: false,
-          lastAccessTime: new Date(),
-          modifiedTime: new Date(),
-          name: path.basename(filePath),
-          path: filePath,
-          size: 0,
-          type: path.extname(filePath).toLowerCase().replace('.', ''),
-        };
+        // Drop the row instead of fabricating a 0-byte placeholder. mdfind
+        // occasionally returns non-path lines (e.g. usage text when the query
+        // is malformed) which would otherwise render as phantom files.
+        logger.warn(`Dropping unstattable search hit ${filePath}: ${(error as Error).message}`);
+        return null;
       }
     });
 
-    let results = await Promise.all(resultPromises);
+    let results = (await Promise.all(resultPromises)).filter((r): r is FileResult => r !== null);
 
     if (options.sortBy) {
       results = this.sortResults(results, options.sortBy, options.sortDirection);

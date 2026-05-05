@@ -34,12 +34,6 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
-import {
-  ClaudeCodeApiName,
-  type ClaudeCodeTodoItem,
-  type TodoWriteArgs,
-} from '@lobechat/builtin-tool-claude-code';
-
 import type {
   AgentCLIPreset,
   AgentEventAdapter,
@@ -52,6 +46,35 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+
+/**
+ * The CC tool_use `name` we synthesize `pluginState.todos` for. Inlined here
+ * (rather than imported from `@lobechat/builtin-tool-claude-code`) to keep
+ * the adapter package free of UI-tool-package coupling — the canonical
+ * `ClaudeCodeApiName` enum still lives in `@lobechat/builtin-tool-claude-code`
+ * for renderer / inspector / streaming consumers, but those packages are
+ * downstream of the adapter, not upstream.
+ *
+ * The string is upstream wire data emitted by `claude` itself, so a change
+ * would require both sides (adapter + downstream renderers) to update
+ * regardless of whether they share a constant.
+ */
+const CC_TODO_WRITE_TOOL_NAME = 'TodoWrite';
+
+/** Status of a single todo item in CC's `TodoWrite` tool_use. */
+type ClaudeCodeTodoStatus = 'pending' | 'in_progress' | 'completed';
+
+interface ClaudeCodeTodoItem {
+  /** Present-continuous form, shown while the item is in progress. */
+  activeForm: string;
+  /** Imperative description, shown in pending & completed states. */
+  content: string;
+  status: ClaudeCodeTodoStatus;
+}
+
+interface TodoWriteArgs {
+  todos: ClaudeCodeTodoItem[];
+}
 
 const CLAUDE_CODE_CLI_INSTALL_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
 
@@ -405,7 +428,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // used (`Task`, `Agent`, etc.). Non-spawn tools occupy a tiny
           // amount of memory and get pruned naturally when the run ends.
           if (block.input) this.mainToolInputsById.set(block.id, block.input);
-          if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
+          if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
           break;
@@ -492,7 +515,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
             type: 'default',
           });
           this.pendingToolCalls.add(block.id);
-          if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
+          if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
           break;

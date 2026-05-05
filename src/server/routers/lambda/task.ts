@@ -12,6 +12,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { TaskService } from '@/server/services/task';
+import { TaskGraphService } from '@/server/services/taskGraph';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskReviewService } from '@/server/services/taskReview';
 import { TaskRunnerService } from '@/server/services/taskRunner';
@@ -983,6 +984,85 @@ export const taskRouter = router({
       }
     }),
 
+  previewSubtaskLayers: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
+    try {
+      const parent = await resolveOrThrow(ctx.taskModel, input.id);
+      const graph = new TaskGraphService(ctx.serverDB, ctx.userId);
+      const { plan } = await graph.planForParent(parent.id);
+      return { data: plan, success: true };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:previewSubtaskLayers]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to plan subtask layers',
+      });
+    }
+  }),
+
+  runReadySubtasks: taskProcedure.input(idInput).mutation(async ({ input, ctx }) => {
+    try {
+      const parent = await resolveOrThrow(ctx.taskModel, input.id);
+      const graph = new TaskGraphService(ctx.serverDB, ctx.userId);
+      const { descendants, plan } = await graph.planForParent(parent.id);
+
+      if (plan.layers.length === 0) {
+        return {
+          data: {
+            kickedOff: [],
+            plan,
+            skipped: { reason: 'nothing-runnable' as const },
+          },
+          success: true,
+        };
+      }
+
+      // Layer 0 is the only wave we kick off here. Subsequent layers fire
+      // automatically through `TaskRunnerService.cascadeOnCompletion` as
+      // each upstream finishes.
+      const firstLayer = plan.layers[0];
+      const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
+      const runner = new TaskRunnerService(ctx.serverDB, ctx.userId);
+
+      const kickedOff: string[] = [];
+      const failed: { error: string; identifier: string }[] = [];
+
+      const settled = await Promise.allSettled(
+        firstLayer.map(async (identifier) => {
+          const id = identifierToId.get(identifier);
+          if (!id) throw new Error(`Subtask ${identifier} not found`);
+          await runner.runTask({ taskId: id });
+          return identifier;
+        }),
+      );
+
+      for (const [index, result] of settled.entries()) {
+        const identifier = firstLayer[index];
+        if (result.status === 'fulfilled') {
+          kickedOff.push(identifier);
+        } else {
+          const message =
+            result.reason instanceof Error ? result.reason.message : 'Failed to start task';
+          failed.push({ error: message, identifier });
+        }
+      }
+
+      return {
+        data: { failed, kickedOff, plan },
+        success: failed.length === 0,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:runReadySubtasks]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to run subtasks',
+      });
+    }
+  }),
+
   updateStatus: taskProcedure
     .input(
       z.object({
@@ -1058,26 +1138,13 @@ export const taskRouter = router({
             allSubtasksDone = await model.areAllSubtasksCompleted(task.parentTaskId);
           }
 
-          // 3. Unlock tasks blocked by this one
-          const unlockedTasks = await model.getUnlockedTasks(task.id);
-          for (const ut of unlockedTasks) {
-            // Check beforeIds checkpoint on parent before starting
-            let shouldPause = false;
-            if (ut.parentTaskId) {
-              const parentTask = await model.findById(ut.parentTaskId);
-              if (parentTask && model.shouldPauseBeforeStart(parentTask, ut.identifier)) {
-                shouldPause = true;
-              }
-            }
-
-            if (shouldPause) {
-              await model.updateStatus(ut.id, 'paused');
-              paused.push(ut.identifier);
-            } else {
-              await model.updateStatus(ut.id, 'running', { startedAt: new Date() });
-              unlocked.push(ut.identifier);
-            }
-          }
+          // 3. Unlock tasks blocked by this one and actually kick them off.
+          // The runner creates a topic + enqueues to QStash; status transitions
+          // happen inside `runTask`, so callers don't need to flip it manually.
+          const runner = new TaskRunnerService(ctx.serverDB, ctx.userId);
+          const cascade = await runner.cascadeOnCompletion(task.id);
+          unlocked.push(...cascade.started);
+          paused.push(...cascade.paused);
         }
 
         return {

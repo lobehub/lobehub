@@ -4,8 +4,7 @@ import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 
-import { dbMessageSelectors, displayMessageSelectors } from '../../message/selectors';
-import { threadSelectors } from '../../thread/selectors';
+import { dbMessageSelectors } from '../../message/selectors';
 
 /**
  * Workflow orchestration actions
@@ -41,37 +40,6 @@ export class PluginWorkflowActionImpl {
     const result = await messageService.createMessage(newMessage);
     this.#get().replaceMessages(result.messages, {
       context: { agentId: newMessage.agentId, topicId: newMessage.topicId },
-    });
-  };
-
-  triggerAIMessage = async ({
-    parentId,
-    threadId,
-    inPortalThread,
-    inSearchWorkflow,
-  }: {
-    parentId?: string;
-    threadId?: string;
-    inPortalThread?: boolean;
-    inSearchWorkflow?: boolean;
-  } = {}): Promise<void> => {
-    const { internal_execAgentRuntime, activeAgentId, activeTopicId } = this.#get();
-
-    const chats = inPortalThread
-      ? threadSelectors.portalAIChatsWithHistoryConfig(this.#get())
-      : displayMessageSelectors.mainAIChatsWithHistoryConfig(this.#get());
-
-    await internal_execAgentRuntime({
-      context: {
-        agentId: activeAgentId,
-        topicId: activeTopicId,
-        threadId,
-      },
-      messages: chats,
-      parentMessageId: parentId ?? chats.at(-1)!.id,
-      parentMessageType: 'user',
-      inPortalThread,
-      inSearchWorkflow,
     });
   };
 }

@@ -47,6 +47,10 @@ interface UpsertDocumentParams {
   updatedAt?: Date;
 }
 
+interface CreateAgentDocumentOptions {
+  hintIsSkill?: boolean;
+}
+
 type AgentDocumentWithLiteXML = AgentDocument & { litexml?: string };
 
 /**
@@ -132,7 +136,7 @@ export class AgentDocumentsService {
     params?: {
       loadPosition?: DocumentLoadPosition;
       loadRules?: DocumentLoadRules;
-      metadata?: Record<string, any>;
+      metadata?: Record<string, unknown>;
       policy?: AgentDocumentPolicy;
       templateId?: string;
     },
@@ -304,14 +308,39 @@ export class AgentDocumentsService {
     return this.agentDocumentModel.associate({ agentId, documentId });
   }
 
-  async createDocument(agentId: string, title: string, content: string) {
+  async createDocument(
+    agentId: string,
+    title: string,
+    content: string,
+    options: CreateAgentDocumentOptions = {},
+  ) {
     const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
     const finalTitle = extractedTitle || title;
-    return this.createWithUniqueFilename(agentId, finalTitle, strippedContent);
+    const metadata = options.hintIsSkill
+      ? {
+          agentSignal: {
+            hintedByTool: 'lobe-agent-documents.createDocument',
+            hintIsSkill: true,
+          },
+        }
+      : undefined;
+
+    return this.createWithUniqueFilename(
+      agentId,
+      finalTitle,
+      strippedContent,
+      metadata ? { metadata } : undefined,
+    );
   }
 
-  async createForTopic(agentId: string, title: string, content: string, topicId: string) {
-    const doc = await this.createDocument(agentId, title, content);
+  async createForTopic(
+    agentId: string,
+    title: string,
+    content: string,
+    topicId: string,
+    options: CreateAgentDocumentOptions = {},
+  ) {
+    const doc = await this.createDocument(agentId, title, content, options);
 
     await this.topicDocumentModel.associate({
       documentId: doc.documentId,
@@ -447,6 +476,7 @@ export class AgentDocumentsService {
       filename: d.filename,
       id: d.id,
       loadPosition: d.policy?.context?.position,
+      parentId: d.parentId,
       title: d.title,
     }));
   }
@@ -466,6 +496,7 @@ export class AgentDocumentsService {
         filename: doc.filename,
         id: doc.id,
         loadPosition: doc.policy?.context?.position,
+        parentId: doc.parentId,
         title: doc.title,
       }));
   }

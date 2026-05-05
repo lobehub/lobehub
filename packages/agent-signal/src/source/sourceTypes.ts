@@ -65,6 +65,7 @@ export interface AgentSignalSourcePayloadMap {
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayError]: {
     agentId?: string;
+    assistantMessageId?: string;
     errorMessage?: string;
     operationId: string;
     serializedContext?: string;
@@ -72,12 +73,14 @@ export interface AgentSignalSourcePayloadMap {
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayRuntimeEnd]: {
     agentId?: string;
+    assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
     topicId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStepComplete]: {
     agentId?: string;
+    assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
     stepIndex: number;
@@ -85,6 +88,7 @@ export interface AgentSignalSourcePayloadMap {
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStreamStart]: {
     agentId?: string;
+    assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
     stepIndex: number;

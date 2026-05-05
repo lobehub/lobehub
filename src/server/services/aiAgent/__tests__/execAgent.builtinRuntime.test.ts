@@ -6,14 +6,28 @@ import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 
 import { AiAgentService } from '../index';
 
-const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate, mockResolveTask } = vi.hoisted(
-  () => ({
-    mockCreateOperation: vi.fn(),
-    mockGetAgentConfig: vi.fn(),
-    mockMessageCreate: vi.fn(),
-    mockResolveTask: vi.fn(),
-  }),
-);
+const {
+  mockCreateOperation,
+  mockGetAgentConfig,
+  mockMessageCreate,
+  mockMessageQuery,
+  mockResolveTask,
+  mockToolsEnv,
+} = vi.hoisted(() => ({
+  mockCreateOperation: vi.fn(),
+  mockGetAgentConfig: vi.fn(),
+  mockMessageCreate: vi.fn(),
+  mockMessageQuery: vi.fn(),
+  mockResolveTask: vi.fn(),
+  mockToolsEnv: {
+    VISUAL_UNDERSTANDING_MODEL: undefined as string | undefined,
+    VISUAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
+  },
+}));
+
+vi.mock('@/envs/tools', () => ({
+  toolsEnv: mockToolsEnv,
+}));
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -24,7 +38,7 @@ vi.mock('@/libs/trusted-client', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
-    query: vi.fn().mockResolvedValue([]),
+    query: mockMessageQuery,
     update: vi.fn().mockResolvedValue({}),
   })),
 }));
@@ -88,6 +102,7 @@ vi.mock('@/server/services/klavis', () => ({
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({
+    getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
     uploadFromUrl: vi.fn(),
   })),
 }));
@@ -117,6 +132,16 @@ vi.mock('model-bank', async (importOriginal) => {
         id: 'gpt-4',
         providerId: 'openai',
       },
+      {
+        abilities: { functionCall: true, video: false, vision: false },
+        id: 'text-only',
+        providerId: 'openai',
+      },
+      {
+        abilities: { functionCall: true, video: true, vision: true },
+        id: 'gemini-3.1-flash-lite-preview',
+        providerId: 'google',
+      },
     ],
   };
 });
@@ -129,7 +154,10 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockMessageQuery.mockResolvedValue([]);
     mockResolveTask.mockResolvedValue(null);
+    mockToolsEnv.VISUAL_UNDERSTANDING_MODEL = 'vision-model';
+    mockToolsEnv.VISUAL_UNDERSTANDING_PROVIDER = 'test-provider';
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -299,5 +327,65 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     expect(callArgs.initialContext.initialContext.taskManager.contextPrompt).toContain(
       'Default Lobe AI agent id: agt_inbox',
     );
+  });
+
+  it('should inject lobe-agent when history has visual media and model lacks vision', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-custom',
+      model: 'text-only',
+      plugins: [],
+      provider: 'openai',
+      systemRole: '',
+    });
+    mockMessageQuery.mockResolvedValue([
+      {
+        id: 'history-image',
+        imageList: [{ alt: 'image.png', id: 'file-image', url: 'https://example.com/image.png' }],
+        role: 'user',
+      },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'What is in the previous image?',
+    });
+
+    expect(createServerAgentToolsEngine).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        agentConfig: expect.objectContaining({
+          plugins: expect.arrayContaining(['lobe-agent']),
+        }),
+      }),
+    );
+  });
+
+  it('should not inject lobe-agent when the LobeHub routed model supports visual media natively', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-custom',
+      model: 'gemini-3.1-flash-lite-preview',
+      plugins: [],
+      provider: 'lobehub',
+      systemRole: '',
+    });
+    mockMessageQuery.mockResolvedValue([
+      {
+        id: 'history-video',
+        role: 'user',
+        videoList: [{ id: 'file-video', url: 'https://example.com/video.mp4' }],
+      },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'What is in the previous video?',
+    });
+
+    const callArgs = vi.mocked(createServerAgentToolsEngine).mock.calls[0][1];
+    expect(callArgs.agentConfig.plugins).not.toContain('lobe-agent');
   });
 });

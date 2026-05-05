@@ -1,6 +1,4 @@
-import type { CrawlUniformResult } from '@lobechat/web-crawler';
-
-import type { CrawlMultiPagesQuery } from '../crawler';
+import type { CrawlMultiPagesQuery, CrawlUniformResult } from '../crawler';
 
 export interface SearchParams {
   searchCategories?: string[];

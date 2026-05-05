@@ -183,6 +183,21 @@ export function splitLatex(text: string, config: SplitterConfig): DocumentChunk[
   return createDocuments(text, LATEX_SEPARATORS, config);
 }
 
+export function splitPdf(text: string, config: SplitterConfig): DocumentChunk[] {
+  const pages: string[] = text
+    ? text.split(/\f/).filter((page: string) => page.trim().length > 0)
+    : [];
+  return pages.flatMap((pageContent: string, index: number) => {
+    const stringChunks = splitTextWithSeparators(pageContent, DEFAULT_SEPARATORS, config);
+    return stringChunks.map((chunkContent: string) => ({
+      metadata: {
+        loc: { pageNumber: index + 1 },
+      },
+      pageContent: chunkContent.trim(),
+    }));
+  });
+}
+
 export function splitCode(
   text: string,
   language: SupportedLanguage,

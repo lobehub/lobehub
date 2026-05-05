@@ -52,7 +52,7 @@ vi.mock('@/libs/swr', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) =>
+    t: (key: string, options?: { time?: string }) =>
       (
         ({
           'workingPanel.resources.empty': 'No agent documents yet',
@@ -60,6 +60,7 @@ vi.mock('react-i18next', () => ({
           'workingPanel.resources.filter.all': 'All',
           'workingPanel.resources.filter.documents': 'Documents',
           'workingPanel.resources.filter.web': 'Web',
+          'workingPanel.resources.updatedAt': `Updated ${options?.time}`,
         }) as Record<string, string>
       )[key] || key,
   }),
@@ -129,6 +130,7 @@ describe('AgentDocumentsGroup', () => {
               sourceType: 'file',
               templateId: 'claw',
               title: 'Brief',
+              updatedAt: new Date(),
             },
           ],
           error: undefined,
@@ -142,9 +144,10 @@ describe('AgentDocumentsGroup', () => {
 
     render(<AgentDocumentsGroup />);
 
-    const item = await screen.findByText('Brief');
+    const item = screen.getByText('Brief');
     expect(item).toBeInTheDocument();
     expect(screen.getByText('A short brief')).toBeInTheDocument();
+    expect(screen.getByText('Updated a few seconds ago')).toBeInTheDocument();
 
     fireEvent.click(item);
     expect(openDocument).toHaveBeenCalledWith('doc-content-1');
@@ -162,6 +165,7 @@ describe('AgentDocumentsGroup', () => {
           sourceType: 'file',
           templateId: 'claw',
           title: 'Brief',
+          updatedAt: new Date(),
         },
         {
           createdAt: new Date('2026-04-16T00:00:00Z'),
@@ -172,6 +176,7 @@ describe('AgentDocumentsGroup', () => {
           sourceType: 'web',
           templateId: null,
           title: 'Example',
+          updatedAt: new Date(),
         },
       ],
       error: undefined,
@@ -211,6 +216,7 @@ describe('AgentDocumentsGroup', () => {
           sourceType: 'file',
           templateId: 'claw',
           title: 'Brief',
+          updatedAt: new Date(),
         },
       ],
       error: undefined,

@@ -10,15 +10,18 @@ import { aiAgentRouter } from '../lambda/aiAgent';
 import { aiChatRouter } from '../lambda/aiChat';
 import { aiModelRouter } from '../lambda/aiModel';
 import { aiProviderRouter } from '../lambda/aiProvider';
+import { briefRouter } from '../lambda/brief';
 import { chunkRouter } from '../lambda/chunk';
 import { configRouter } from '../lambda/config';
 import { documentRouter } from '../lambda/document';
 import { fileRouter } from '../lambda/file';
+import { homeRouter } from '../lambda/home';
 import { knowledgeBaseRouter } from '../lambda/knowledgeBase';
 import { marketRouter } from '../lambda/market';
 import { messageRouter } from '../lambda/message';
 import { sessionRouter } from '../lambda/session';
 import { sessionGroupRouter } from '../lambda/sessionGroup';
+import { taskRouter } from '../lambda/task';
 import { topicRouter } from '../lambda/topic';
 import { uploadRouter } from '../lambda/upload';
 import { userRouter } from '../lambda/user';
@@ -27,6 +30,7 @@ export const mobileRouter = router({
   agent: agentRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
+  brief: briefRouter,
   aiModel: aiModelRouter,
   aiProvider: aiProviderRouter,
   chunk: chunkRouter,
@@ -34,12 +38,14 @@ export const mobileRouter = router({
   document: documentRouter,
   file: fileRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
+  home: homeRouter,
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
   subscription: mobileSubscriptionRouter,
+  task: taskRouter,
   topic: topicRouter,
   upload: uploadRouter,
   user: userRouter,

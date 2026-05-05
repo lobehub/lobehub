@@ -15,6 +15,8 @@ import { FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Time from '@/routes/(main)/home/features/components/Time';
+import { useDocumentStore } from '@/store/document';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -29,7 +31,7 @@ const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspace
 const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const { t } = useTranslation('chat');
   const { modal } = App.useApp();
-  const openPageModal = useTaskStore((s) => s.openPageModal);
+  const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
   const unpinDocument = useTaskStore((s) => s.unpinDocument);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const title = node.title || 'Untitled';
@@ -72,7 +74,7 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
       paddingBlock={8}
       paddingInline={12}
       variant="outlined"
-      onClick={() => openPageModal(node.documentId)}
+      onClick={() => openDocumentPreview(node.documentId)}
     >
       <Icon
         color={cssVar.colorTextSecondary}
@@ -93,6 +95,7 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
           {node.sourceTaskIdentifier}
         </Tag>
       )}
+      {node.createdAt && <Time date={node.createdAt} />}
       <DropdownMenu items={menuItems}>
         <ActionIcon
           icon={MoreHorizontal}
@@ -111,7 +114,15 @@ const TaskArtifacts = memo(() => {
   const workspace = useTaskStore(taskDetailSelectors.activeTaskWorkspace);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const items = useMemo(() => flattenWorkspace(workspace), [workspace]);
+  const items = useMemo(
+    () =>
+      [...flattenWorkspace(workspace)].sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      }),
+    [workspace],
+  );
 
   if (items.length === 0) return null;
 

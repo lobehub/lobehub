@@ -1,17 +1,8 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import {
-  type KeyboardEvent,
-  memo,
-  type ReactNode,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -51,6 +42,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
 }));
+
+const triggerStyle: CSSProperties = {
+  alignItems: 'center',
+  display: 'inline-flex',
+  justifyContent: 'center',
+  lineHeight: 1,
+};
 
 const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
   ({ children, currentAgentId, disabled, onChange, taskIdentifier }) => {
@@ -152,12 +150,17 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
 
     const trigger = disabled ? (
       <Tooltip title={t('taskDetail.reassignDisabled', { ns: 'chat' })}>
-        <div style={{ cursor: 'not-allowed', opacity: 0.5 }} onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{ ...triggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <span style={{ pointerEvents: 'none' }}>{children}</span>
         </div>
       </Tooltip>
     ) : (
-      <div onClick={(e) => e.stopPropagation()}>{children}</div>
+      <div style={triggerStyle} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
     );
 
     return (

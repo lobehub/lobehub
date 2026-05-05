@@ -187,6 +187,42 @@ describe('AgentStreamClient', () => {
     });
   });
 
+  describe('auth_expired', () => {
+    it('should emit auth_expired without disconnecting (recoverable)', async () => {
+      const client = createClient();
+      const onAuthExpired = vi.fn();
+      const onDisconnected = vi.fn();
+      client.on('auth_expired', onAuthExpired);
+      client.on('disconnected', onDisconnected);
+
+      const ws = await connectAndAuth(client);
+      ws.simulateMessage({ type: 'auth_expired' });
+
+      expect(onAuthExpired).toHaveBeenCalledOnce();
+      // Critical: socket stays connected so the listener can refresh + re-auth.
+      expect(onDisconnected).not.toHaveBeenCalled();
+      expect(client.connectionStatus).toBe('connected');
+    });
+
+    it('reconnect() tears down current ws and dials a new one with the latest token', async () => {
+      const client = createClient();
+      await connectAndAuth(client);
+
+      const wsCountBefore = mockWsInstances.length;
+
+      // Simulate the "got auth_expired → refresh → reconnect" flow
+      client.updateToken('new-token');
+      await client.reconnect();
+      // Let the new MockWebSocket auto-open
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(mockWsInstances.length).toBe(wsCountBefore + 1);
+      const newWs = getLatestWs();
+      // First message on the new socket is auth with the refreshed token
+      expect(JSON.parse(newWs.sent[0])).toEqual({ token: 'new-token', type: 'auth' });
+    });
+  });
+
   describe('agent events', () => {
     it('should emit agent_event for incoming events', async () => {
       const client = createClient();

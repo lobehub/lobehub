@@ -17,7 +17,7 @@ import { wrapRender } from './wrapRender';
  *
  * Rendered while a CC tool is still executing (args parsed, no tool_result
  * yet). Without an entry here, the tool detail falls back to the generic
- * `参数列表` argument table.
+ * `Arguments` argument table.
  *
  * - `Agent` has its own bespoke streaming view (drops the result block,
  *   surfaces the subagent thread toggle).

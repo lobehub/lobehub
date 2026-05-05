@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Cấu hình Ollama không hợp lệ, vui lòng kiểm tra và thử lại.",
   "response.InvalidProviderAPIKey": "API Key của {{provider}} không hợp lệ hoặc để trống, vui lòng kiểm tra và thử lại.",
   "response.InvalidVertexCredentials": "Xác thực Vertex thất bại. Vui lòng kiểm tra thông tin xác thực và thử lại.",
+  "response.LobeHubModelDeprecated": "Mô hình \"{{model}}\" không còn khả dụng. Vui lòng chọn một mô hình hiện tại từ bộ chọn mô hình.",
   "response.LocationNotSupportError": "Xin lỗi, vị trí hiện tại của bạn không hỗ trợ dịch vụ mô hình này. Có thể do hạn chế khu vực hoặc dịch vụ chưa khả dụng. Vui lòng kiểm tra hoặc thử từ vị trí khác.",
   "response.ModelNotFound": "Xin lỗi, không tìm thấy mô hình yêu cầu. Có thể mô hình không tồn tại hoặc bạn không có quyền truy cập. Vui lòng thử lại với API Key khác hoặc điều chỉnh quyền truy cập.",
   "response.NoOpenAIAPIKey": "OpenAI API Key đang để trống, vui lòng thêm API Key tùy chỉnh",

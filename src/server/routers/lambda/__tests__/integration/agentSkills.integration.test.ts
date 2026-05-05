@@ -5,6 +5,12 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentDocumentModel } from '@/database/models/agentDocuments';
+import {
+  AGENT_SKILL_TEMPLATE_ID,
+  SKILL_BUNDLE_FILE_TYPE,
+  SKILL_INDEX_FILE_TYPE,
+  SKILL_INDEX_FILENAME,
+} from '@/server/services/skillManagement';
 
 import { agentDocumentRouter } from '../../agentDocument';
 import { agentSkillsRouter } from '../../agentSkills';
@@ -108,25 +114,19 @@ describe('Skill Router Integration Tests', () => {
     skillName: string;
   }) => {
     const documents = await agentDocumentModel.findByAgent(agentId);
-    const root = documents.find(
+    const bundle = documents.find(
       (item) =>
-        item.fileType === 'custom/folder' &&
-        item.filename === 'skills' &&
-        item.parentId === null &&
-        item.templateId === 'agent-skill',
-    );
-    const folder = documents.find(
-      (item) =>
-        item.fileType === 'custom/folder' &&
+        item.fileType === SKILL_BUNDLE_FILE_TYPE &&
         item.filename === skillName &&
-        item.parentId === root?.documentId &&
-        item.templateId === 'agent-skill',
+        item.parentId === null &&
+        item.templateId === AGENT_SKILL_TEMPLATE_ID,
     );
     const document = documents.find(
       (item) =>
-        item.filename === 'SKILL.md' &&
-        item.parentId === folder?.documentId &&
-        item.templateId === 'agent-skill',
+        item.fileType === SKILL_INDEX_FILE_TYPE &&
+        item.filename === SKILL_INDEX_FILENAME &&
+        item.parentId === bundle?.documentId &&
+        item.templateId === AGENT_SKILL_TEMPLATE_ID,
     );
 
     if (!document) {

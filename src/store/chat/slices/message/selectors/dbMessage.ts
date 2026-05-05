@@ -172,8 +172,7 @@ export const selectActivatedToolIdsFromMessages = (
   for (const msg of messages) {
     if (
       msg.role === 'tool' &&
-      (msg.plugin?.identifier === LobeActivatorIdentifier ||
-        msg.plugin?.identifier === 'lobe-tools') &&
+      msg.plugin?.identifier === LobeActivatorIdentifier &&
       msg.pluginState?.activatedTools
     ) {
       const activatedTools = msg.pluginState.activatedTools as Array<{ identifier?: string }>;
@@ -211,8 +210,7 @@ export const selectActivatedSkillsFromMessages = (
       msg.role !== 'tool' ||
       !(
         msg.plugin?.identifier === SkillsIdentifier ||
-        msg.plugin?.identifier === LobeActivatorIdentifier ||
-        msg.plugin?.identifier === 'lobe-tools'
+        msg.plugin?.identifier === LobeActivatorIdentifier
       )
     )
       continue;

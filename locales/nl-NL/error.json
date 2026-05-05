@@ -91,6 +91,7 @@
   "response.InvalidOllamaArgs": "Ongeldige Ollama-configuratie. Controleer de instellingen en probeer opnieuw.",
   "response.InvalidProviderAPIKey": "{{provider}} API-sleutel is onjuist of leeg. Controleer je {{provider}} API-sleutel en probeer opnieuw.",
   "response.InvalidVertexCredentials": "Vertex-authenticatie mislukt. Controleer je inloggegevens en probeer opnieuw.",
+  "response.LobeHubModelDeprecated": "Het model \"{{model}}\" is niet langer beschikbaar. Kies alstublieft een actueel model uit de modelkiezer.",
   "response.LocationNotSupportError": "Sorry, je huidige locatie ondersteunt deze modelservice niet. Dit kan komen door regionale beperkingen. Controleer of je locatie wordt ondersteund of probeer een andere locatie.",
   "response.ModelNotFound": "Sorry, het gevraagde model is niet gevonden. Het bestaat mogelijk niet of je hebt geen toegang. Probeer opnieuw met een andere API-sleutel of pas je rechten aan.",
   "response.NoOpenAIAPIKey": "OpenAI API-sleutel is leeg. Voeg een aangepaste OpenAI API-sleutel toe.",

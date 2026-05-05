@@ -1,5 +1,7 @@
 {
   "action.connect.button": "Connecter {{provider}}",
+  "action.connect.error": "Échec de la connexion, veuillez réessayer.",
+  "action.connect.popupBlocked": "Fenêtre contextuelle de connexion bloquée. Autorisez les fenêtres contextuelles dans votre navigateur pour continuer.",
   "action.create.error": "Échec de la création de la tâche. Veuillez réessayer.",
   "action.create.success": "Tâche planifiée ajoutée. Retrouvez-la dans Lobe AI.",
   "action.createButton": "Ajouter comme tâche planifiée",

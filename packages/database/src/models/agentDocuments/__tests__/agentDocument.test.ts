@@ -159,6 +159,65 @@ describe('AgentDocumentModel', () => {
   });
 
   describe('create', () => {
+    it('creates ordinary agent documents with agent source attribution by default', async () => {
+      const created = await agentDocumentModel.create(agentId, 'brief', 'content');
+
+      expect(created.sourceType).toBe('agent');
+      expect(created.source).toBe(`agent-document://${agentId}/brief`);
+    });
+
+    it('allows trusted callers to set document source attribution', async () => {
+      const created = await agentDocumentModel.create(agentId, 'skill-a', 'content', {
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+      });
+
+      expect(created.sourceType).toBe('agent-signal');
+      expect(created.source).toBe('agent-signal:skill-management');
+    });
+
+    /**
+     * @example
+     * Higher-level services can compose multiple agent document writes in one transaction.
+     */
+    it('rolls back createWithTx when the caller transaction fails', async () => {
+      let createdAgentDocumentId: string | undefined;
+      let createdDocumentId: string | undefined;
+
+      await expect(
+        serverDB.transaction(async (trx) => {
+          const created = await agentDocumentModel.createWithTx(
+            trx,
+            agentId,
+            'rollback-note',
+            'content',
+          );
+          createdAgentDocumentId = created.id;
+          createdDocumentId = created.documentId;
+
+          throw new Error('Intentional rollback');
+        }),
+      ).rejects.toThrow('Intentional rollback');
+
+      if (createdAgentDocumentId) {
+        const [binding] = await serverDB
+          .select()
+          .from(agentDocuments)
+          .where(eq(agentDocuments.id, createdAgentDocumentId));
+
+        expect(binding).toBeUndefined();
+      }
+
+      if (createdDocumentId) {
+        const [doc] = await serverDB
+          .select()
+          .from(documents)
+          .where(eq(documents.id, createdDocumentId));
+
+        expect(doc).toBeUndefined();
+      }
+    });
+
     it('should create an agent document with normalized policy and linked document row', async () => {
       const result = await agentDocumentModel.create(agentId, 'identity.md', 'line1\nline2', {
         loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
@@ -466,6 +525,152 @@ describe('AgentDocumentModel', () => {
       const copied = await agentDocumentModel.copy(created.id, 'Always Copy');
 
       expect(copied?.policyLoad).toBe(PolicyLoad.ALWAYS);
+    });
+  });
+
+  describe('convertAgentDocumentToSkillIndex and updateDocumentIdentity', () => {
+    it('converts an ordinary agent document binding into a skill index while preserving ids', async () => {
+      const source = await agentDocumentModel.create(agentId, 'workflow-note', '# Workflow', {
+        metadata: { agentSignal: { hintIsSkill: true } },
+      });
+      const bundle = await agentDocumentModel.create(agentId, 'workflow-note', '', {
+        fileType: 'skills/bundle',
+        policyLoad: PolicyLoad.DISABLED,
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+      });
+
+      const converted = await agentDocumentModel.convertAgentDocumentToSkillIndex({
+        agentDocumentId: source.id,
+        content: '---\nname: workflow-note\ndescription: Workflow note\n---\n# Workflow',
+        editorData: { root: { children: [], type: 'root' } },
+        filename: 'workflow-note',
+        metadata: {
+          agentSignal: { hintIsSkill: true },
+          skill: { frontmatter: { description: 'Workflow note', name: 'workflow-note' } },
+        },
+        parentId: bundle.documentId,
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'Workflow Note',
+      });
+
+      expect(converted?.id).toBe(source.id);
+      expect(converted?.documentId).toBe(source.documentId);
+      expect(converted?.fileType).toBe('skills/index');
+      expect(converted?.filename).toBe('workflow-note');
+      expect(converted?.parentId).toBe(bundle.documentId);
+      expect(converted?.policyLoad).toBe(PolicyLoad.DISABLED);
+      expect(converted?.sourceType).toBe('agent-signal');
+      expect(converted?.source).toBe('agent-signal:skill-management');
+      expect(converted?.templateId).toBe('agent-skill');
+      expect(converted?.title).toBe('Workflow Note');
+      expect(converted?.metadata).toMatchObject({
+        agentSignal: { hintIsSkill: true },
+        skill: { frontmatter: { description: 'Workflow note', name: 'workflow-note' } },
+      });
+
+      const [doc] = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.id, source.documentId));
+
+      expect(doc?.description).toBe('Workflow note');
+      expect(doc?.totalCharCount).toBe(
+        '---\nname: workflow-note\ndescription: Workflow note\n---\n# Workflow'.length,
+      );
+      expect(doc?.totalLineCount).toBe(5);
+    });
+
+    /**
+     * @example
+     * Skill creation can convert an existing source document and still roll back as one aggregate.
+     */
+    it('rolls back convertAgentDocumentToSkillIndexWithTx when the caller transaction fails', async () => {
+      const source = await agentDocumentModel.create(agentId, 'workflow-note', '# Workflow', {
+        metadata: { agentSignal: { hintIsSkill: true } },
+      });
+      const bundle = await agentDocumentModel.create(agentId, 'workflow-note', '', {
+        fileType: 'skills/bundle',
+        policyLoad: PolicyLoad.DISABLED,
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+      });
+
+      await expect(
+        serverDB.transaction(async (trx) => {
+          await agentDocumentModel.convertAgentDocumentToSkillIndexWithTx(trx, {
+            agentDocumentId: source.id,
+            content: '---\nname: workflow-note\ndescription: Workflow note\n---\n# Workflow',
+            filename: 'SKILL.md',
+            metadata: {
+              agentSignal: { hintIsSkill: true },
+              skill: { frontmatter: { description: 'Workflow note', name: 'workflow-note' } },
+            },
+            parentId: bundle.documentId,
+            source: 'agent-signal:skill-management',
+            sourceType: 'agent-signal',
+            title: 'SKILL.md',
+          });
+
+          throw new Error('Intentional rollback');
+        }),
+      ).rejects.toThrow('Intentional rollback');
+
+      const unchanged = await agentDocumentModel.findById(source.id);
+
+      expect(unchanged).toMatchObject({
+        documentId: source.documentId,
+        fileType: 'agent/document',
+        filename: 'workflow-note',
+        parentId: null,
+        policyLoad: PolicyLoad.PROGRESSIVE,
+        sourceType: 'agent',
+      });
+    });
+
+    it('updates backing document identity fields without changing the agent document binding', async () => {
+      const folder = await agentDocumentModel.create(agentId, 'skills', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        title: 'skills',
+      });
+      const created = await agentDocumentModel.create(agentId, 'old-name', 'content');
+
+      const updated = await agentDocumentModel.updateDocumentIdentity(created.id, {
+        filename: 'new-name',
+        metadata: { skill: { frontmatter: { description: 'New', name: 'new-name' } } },
+        parentId: folder.documentId,
+        title: 'New Name',
+      });
+
+      expect(updated?.id).toBe(created.id);
+      expect(updated?.documentId).toBe(created.documentId);
+      expect(updated?.filename).toBe('new-name');
+      expect(updated?.parentId).toBe(folder.documentId);
+      expect(updated?.title).toBe('New Name');
+      expect(updated?.metadata).toMatchObject({
+        skill: { frontmatter: { description: 'New', name: 'new-name' } },
+      });
+
+      const [doc] = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.id, created.documentId));
+
+      expect(doc?.description).toBe('New');
+    });
+
+    it('returns the existing binding when document identity update has no fields', async () => {
+      const created = await agentDocumentModel.create(agentId, 'unchanged', 'content');
+
+      const updated = await agentDocumentModel.updateDocumentIdentity(created.id, {});
+
+      expect(updated).toMatchObject({
+        documentId: created.documentId,
+        filename: 'unchanged',
+        id: created.id,
+        title: 'unchanged',
+      });
     });
   });
 
