@@ -244,7 +244,7 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('idempotency', () => {
-    it('drops events with a previously-seen (stepIndex, type, timestamp) key', async () => {
+    it('drops events with the same (stepIndex, type, timestamp, dataFingerprint) key', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
         operationId: 'op-1',
@@ -272,6 +272,79 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       // Same event re-ingested → idempotency skips it; no extra tool-message create
       expect(h.messageModel.create.mock.calls.length).toBe(createCallsAfterFirst);
+    });
+
+    it('does NOT collide bursty events sharing (stepIndex, type, timestamp) when their data differs', async () => {
+      // Producer-side reality: CC adapters stamp every event with `Date.now()`,
+      // so multiple `stream_chunk` events within the same step burst through
+      // a single millisecond. Without a content fingerprint in the dedupe
+      // key, all but the first would be dropped → truncated assistant text.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const sameTimestamp = 1_700_000_000_000;
+      const events: AgentStreamEvent[] = [
+        {
+          ...buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'one ' }),
+          timestamp: sameTimestamp,
+        },
+        {
+          ...buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'two ' }),
+          timestamp: sameTimestamp,
+        },
+        {
+          ...buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'three' }),
+          timestamp: sameTimestamp,
+        },
+        buildEvent('agent_runtime_end', 0, { reason: 'success' }),
+      ];
+
+      await h.handler.ingest({ events, operationId: 'op-1', topicId: 'topic-1' });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.content).toBe('one two three');
+    });
+
+    it('mark-processed-AFTER-success contract: a thrown handler leaves the event un-marked so retry replays it', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // First call to messageModel.update on asst-1 throws once.
+      let updateAttempts = 0;
+      const realUpdate = h.messageModel.update.getMockImplementation()!;
+      h.messageModel.update.mockImplementation(async (id: string, patch: any) => {
+        if (id === 'asst-1' && patch.metadata?.usage) {
+          updateAttempts += 1;
+          if (updateAttempts === 1) {
+            throw new Error('flaky');
+          }
+        }
+        return realUpdate(id, patch);
+      });
+
+      const evt = buildEvent('step_complete', 0, {
+        phase: 'turn_metadata',
+        usage: { inputTokens: 1 },
+      });
+
+      // First attempt: handler throws.
+      await expect(
+        h.handler.ingest({ events: [evt], operationId: 'op-1', topicId: 'topic-1' }),
+      ).rejects.toThrow('flaky');
+
+      // Retry SAME event — the handler now succeeds because the flake is gone.
+      // Critical: the dedupe map didn't pre-mark the failed event, so this
+      // re-runs instead of skipping silently.
+      await h.handler.ingest({ events: [evt], operationId: 'op-1', topicId: 'topic-1' });
+
+      const asst = h.messages.get('asst-1')!;
+      expect(asst.metadata).toEqual({ usage: { inputTokens: 1 } });
     });
   });
 

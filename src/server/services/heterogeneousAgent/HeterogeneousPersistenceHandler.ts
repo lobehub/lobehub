@@ -18,13 +18,54 @@ const log = debug('lobe-server:hetero-agent:persistence');
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
 
 /**
- * Per-event idempotency key. CLI BatchIngester retries on transient failures,
- * so the same event may arrive twice. The key combines `(stepIndex, type,
- * timestamp)` — the producer guarantees `timestamp` is the monotonic clock at
- * adapter time, so this triple is stable across retries of the same physical
- * event but unique enough across distinct events sharing a stepIndex.
+ * Stable 32-bit FNV-1a hash of a string. Cheap to compute, collision odds are
+ * negligible at this scope (a few thousand events per operation), and the
+ * output is short enough to keep the per-operation `processedKeys` set small.
  */
-const eventKey = (event: AgentStreamEvent) => `${event.stepIndex}:${event.type}:${event.timestamp}`;
+const fnv1a = (input: string): string => {
+  let hash = 0x81_1c_9d_c5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    // FNV prime 0x01000193, applied via bit shifts to stay in 32-bit math.
+    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+  }
+  return hash.toString(36);
+};
+
+/**
+ * Per-event idempotency key. CLI BatchIngester retries the SAME event objects
+ * on transient failures, so the same `(stepIndex, type, data)` triple is
+ * stable across retries — and distinct between back-to-back events even when
+ * they share a millisecond timestamp.
+ *
+ * Why not just `(stepIndex, type, timestamp)`: producers stamp events with
+ * `Date.now()` (see `claudeCode.ts` / `codex.ts` adapters), and CC bursts
+ * multiple `stream_chunk` events through the same step within a single
+ * millisecond. Without a content fingerprint, later chunks would collide with
+ * earlier ones, get treated as duplicates, and be dropped — silently
+ * truncating assistant output.
+ *
+ * Why not hash full `data`: tools_calling payloads can carry large argument
+ * strings; a stable JSON.stringify on every event is cheap enough but the
+ * resulting key would balloon the `processedKeys` set. Hashing keeps the key
+ * bounded.
+ */
+const eventKey = (event: AgentStreamEvent): string => {
+  // Fingerprint the data via stable JSON. Order is irrelevant — adapters
+  // produce events with consistent key order, and even if they didn't, the
+  // important property is "same event input → same output", which holds.
+  const dataJson = (() => {
+    try {
+      return JSON.stringify(event.data ?? null);
+    } catch {
+      // Cyclic / unstringifiable payload: fall back to a coarse fingerprint.
+      // Real wire data is always JSON-serializable, so this branch only fires
+      // on bad test inputs.
+      return String(typeof event.data);
+    }
+  })();
+  return `${event.stepIndex}:${event.type}:${event.timestamp}:${fnv1a(dataJson)}`;
+};
 
 const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
 
@@ -157,10 +198,22 @@ export interface HeterogeneousPersistenceHandlerDeps {
  *   4. Per-turn metadata persistence (`step_complete` w/ `phase=turn_metadata`)
  *   5. Final content / reasoning flush on `agent_runtime_end` / `error`
  *
- * Out of scope (held for follow-up):
+ * Failure semantics (differs from the renderer's optimistic UI posture):
  *
- *   - CC native session id persistence on `topic.metadata` (phase 2c)
- *   - Multi-replica state coherence (sticky routing assumed)
+ *   - DB writes propagate exceptions instead of swallowing them. A throw
+ *     bubbles to `ingest`, leaving the offending event un-marked in
+ *     `processedKeys` so the BatchIngester's outer retry replays it.
+ *     Idempotent state updates (per-tool `persistedIds`, payload de-dup,
+ *     `ThreadModel.onConflictDoNothing`) make replays safe.
+ *   - Renderer-only "log + continue" no longer applies — the server is
+ *     authoritative for cloud runs, so silent partial writes would diverge
+ *     DB from what the WS subscribers see.
+ *
+ * Multi-replica caveat: state is per-Node-process. Cloud sandbox routing
+ * must be sticky to a single replica per operationId, otherwise turn
+ * boundaries on the second replica would lose the chain-parent and
+ * pre-existing tool map. (Phase 3 sandbox owns the endpoint per-instance,
+ * so this is not a problem in practice.)
  */
 export class HeterogeneousPersistenceHandler {
   private readonly deps: HeterogeneousPersistenceHandlerDeps;
@@ -169,7 +222,16 @@ export class HeterogeneousPersistenceHandler {
     this.deps = deps;
   }
 
-  /** Process a batch of events for an operation. Sequential within the batch. */
+  /**
+   * Process a batch of events for an operation. Sequential within the batch.
+   *
+   * Idempotency contract: an event is marked `processed` ONLY after its
+   * handler resolves cleanly. If a handler throws, the event stays unmarked
+   * so a follow-up retry processes it again, and the throw bubbles to
+   * `heteroIngest` → tRPC → BatchIngester so the producer re-sends. Events
+   * that already succeeded earlier in the batch are skipped on retry via
+   * the dedupe map, so the retry only re-runs the failed event onward.
+   */
   async ingest(params: {
     events: AgentStreamEvent[];
     operationId: string;
@@ -183,17 +245,13 @@ export class HeterogeneousPersistenceHandler {
         log('skip duplicate event %s op=%s', key, state.operationId);
         continue;
       }
-      state.processedKeys.add(key);
 
-      try {
-        await this.handleEvent(state, event);
-      } catch (err) {
-        // Per-event errors don't poison the whole batch; the renderer mirrors
-        // the same posture (every persist call has a try/catch). The producer
-        // retries the batch on top-level failure; idempotency dedupes events
-        // that already landed.
-        log('event handler failed: type=%s op=%s err=%O', event.type, state.operationId, err);
-      }
+      // NOTE: do NOT mark `processed` before the handler runs. Marking up
+      // front would silently swallow event-level failures — the BatchIngester
+      // would ack OK while DB state diverges from the renderer's view. Mark
+      // only on success so a retry can complete the lost write.
+      await this.handleEvent(state, event);
+      state.processedKeys.add(key);
     }
   }
 
@@ -336,16 +394,9 @@ export class HeterogeneousPersistenceHandler {
     if (provider) state.lastProvider = provider;
     if (!usage) return;
 
-    await this.deps.messageModel
-      .update(state.currentAssistantMessageId, { metadata: { usage } })
-      .catch((err) =>
-        log(
-          'turn_metadata update failed op=%s msg=%s err=%O',
-          state.operationId,
-          state.currentAssistantMessageId,
-          err,
-        ),
-      );
+    await this.deps.messageModel.update(state.currentAssistantMessageId, {
+      metadata: { usage },
+    });
   }
 
   /**
@@ -367,9 +418,7 @@ export class HeterogeneousPersistenceHandler {
     if (state.lastProvider) prevUpdate.provider = state.lastProvider;
 
     if (Object.keys(prevUpdate).length > 0) {
-      await this.deps.messageModel
-        .update(state.currentAssistantMessageId, prevUpdate)
-        .catch((err) => log('flush prior step failed op=%s err=%O', state.operationId, err));
+      await this.deps.messageModel.update(state.currentAssistantMessageId, prevUpdate);
     }
 
     const lastToolMsgId = [...state.toolState.payloads]
@@ -377,20 +426,16 @@ export class HeterogeneousPersistenceHandler {
       .find((p) => !!p.result_msg_id)?.result_msg_id;
     const stepParentId = lastToolMsgId || state.currentAssistantMessageId;
 
-    try {
-      const newMsg = await this.deps.messageModel.create({
-        agentId: state.agentId ?? undefined,
-        content: '',
-        model: state.lastModel,
-        parentId: stepParentId,
-        provider: state.lastProvider,
-        role: 'assistant',
-        topicId: state.topicId,
-      });
-      state.currentAssistantMessageId = newMsg.id;
-    } catch (err) {
-      log('step start create assistant failed op=%s err=%O', state.operationId, err);
-    }
+    const newMsg = await this.deps.messageModel.create({
+      agentId: state.agentId ?? undefined,
+      content: '',
+      model: state.lastModel,
+      parentId: stepParentId,
+      provider: state.lastProvider,
+      role: 'assistant',
+      topicId: state.topicId,
+    });
+    state.currentAssistantMessageId = newMsg.id;
 
     state.accumulatedContent = '';
     state.accumulatedReasoning = '';
@@ -442,16 +487,15 @@ export class HeterogeneousPersistenceHandler {
 
     const toolMsgId = state.toolMsgIdByCallId.get(toolCallId);
     if (toolMsgId) {
-      await this.deps.messageModel
-        .updateToolMessage(toolMsgId, {
-          content,
-          pluginError: isError ? { message: content } : undefined,
-          pluginState,
-        })
-        .catch((err) =>
-          log('updateToolMessage failed callId=%s msg=%s err=%O', toolCallId, toolMsgId, err),
-        );
+      await this.deps.messageModel.updateToolMessage(toolMsgId, {
+        content,
+        pluginError: isError ? { message: content } : undefined,
+        pluginState,
+      });
     } else {
+      // Late-arriving result for a call we never saw the tool_use for is
+      // recoverable on a follow-up batch (out-of-order delivery); log and
+      // move on so the rest of the batch lands.
       log('tool_result for unknown toolCallId=%s op=%s', toolCallId, state.operationId);
     }
 
@@ -485,9 +529,7 @@ export class HeterogeneousPersistenceHandler {
     if (messageError) updateValue.error = messageError;
 
     if (Object.keys(updateValue).length > 0) {
-      await this.deps.messageModel
-        .update(state.currentAssistantMessageId, updateValue)
-        .catch((err) => log('terminal flush failed op=%s err=%O', state.operationId, err));
+      await this.deps.messageModel.update(state.currentAssistantMessageId, updateValue);
     }
 
     // Drain any subagent runs that never saw their parent tool_result (CLI
@@ -531,9 +573,7 @@ export class HeterogeneousPersistenceHandler {
     }
 
     if (Object.keys(updateValue).length > 0) {
-      await this.deps.messageModel
-        .update(state.currentAssistantMessageId, updateValue)
-        .catch((err) => log('finish flush failed op=%s err=%O', state.operationId, err));
+      await this.deps.messageModel.update(state.currentAssistantMessageId, updateValue);
     }
   }
 
@@ -581,10 +621,14 @@ export class HeterogeneousPersistenceHandler {
     snapshot: { content: string; reasoning: string },
     threadId?: string,
   ): Promise<{ newToolMsgIds: string[] }> {
-    const freshTools = incoming.filter((t) => !persistState.persistedIds.has(t.id));
-    if (freshTools.length === 0) return { newToolMsgIds: [] };
-
-    for (const tool of freshTools) persistState.persistedIds.add(tool.id);
+    // Merge incoming tools into the payloads array, de-duped by id. On a
+    // retry of the same event, payloads already has these entries — skip the
+    // re-push to keep phase 1/3 writes idempotent.
+    for (const tool of incoming) {
+      if (!persistState.payloads.some((p) => p.id === tool.id)) {
+        persistState.payloads.push({ ...tool });
+      }
+    }
 
     const buildUpdate = (): Record<string, any> => {
       const update: Record<string, any> = { tools: persistState.payloads };
@@ -594,43 +638,46 @@ export class HeterogeneousPersistenceHandler {
     };
 
     // ─── Phase 1: pre-register tools[] on the assistant ───
-    for (const tool of freshTools) persistState.payloads.push({ ...tool });
-    await this.deps.messageModel
-      .update(assistantMessageId, buildUpdate())
-      .catch((err) => log('phase1 pre-register failed asst=%s err=%O', assistantMessageId, err));
+    // Idempotent re-write of the tools[] JSONB column. Throws propagate so
+    // the outer ingest loop leaves the event un-marked → retry replays.
+    await this.deps.messageModel.update(assistantMessageId, buildUpdate());
 
     // ─── Phase 2: create tool messages, capture ids ───
+    // Only create rows for tools that haven't been persisted yet. On retry
+    // after a phase 2 mid-batch failure, this skips the ones that already
+    // landed (their ids are in `persistedIds`) and re-tries the rest.
     const newToolMsgIds: string[] = [];
-    for (const tool of freshTools) {
-      try {
-        const result = await this.deps.messageModel.create({
-          agentId: state.agentId ?? undefined,
-          content: '',
-          parentId: assistantMessageId,
-          plugin: {
-            apiName: tool.apiName,
-            arguments: tool.arguments,
-            identifier: tool.identifier,
-            type: tool.type,
-          },
-          role: 'tool',
-          threadId: threadId ?? null,
-          tool_call_id: tool.id,
-          topicId: state.topicId,
-        });
-        state.toolMsgIdByCallId.set(tool.id, result.id);
-        newToolMsgIds.push(result.id);
-        const entry = persistState.payloads.find((p) => p.id === tool.id);
-        if (entry) entry.result_msg_id = result.id;
-      } catch (err) {
-        log('phase2 create tool message failed callId=%s err=%O', tool.id, err);
-      }
+    const freshForCreate = incoming.filter((t) => !persistState.persistedIds.has(t.id));
+    for (const tool of freshForCreate) {
+      const result = await this.deps.messageModel.create({
+        agentId: state.agentId ?? undefined,
+        content: '',
+        parentId: assistantMessageId,
+        plugin: {
+          apiName: tool.apiName,
+          arguments: tool.arguments,
+          identifier: tool.identifier,
+          type: tool.type,
+        },
+        role: 'tool',
+        threadId: threadId ?? null,
+        tool_call_id: tool.id,
+        topicId: state.topicId,
+      });
+      // Mark persisted ONLY after the create resolves cleanly — a thrown
+      // create leaves the id absent so retries re-attempt this tool.
+      state.toolMsgIdByCallId.set(tool.id, result.id);
+      persistState.persistedIds.add(tool.id);
+      newToolMsgIds.push(result.id);
+      const entry = persistState.payloads.find((p) => p.id === tool.id);
+      if (entry) entry.result_msg_id = result.id;
     }
 
     // ─── Phase 3: backfill result_msg_id on assistant.tools[] ───
-    await this.deps.messageModel
-      .update(assistantMessageId, buildUpdate())
-      .catch((err) => log('phase3 backfill failed asst=%s err=%O', assistantMessageId, err));
+    // Always runs: even if every tool was already persisted in a prior call,
+    // a phase 3 retry after a partial-failure replay needs to land the
+    // up-to-date payloads. The write is idempotent (same JSONB).
+    await this.deps.messageModel.update(assistantMessageId, buildUpdate());
 
     return { newToolMsgIds };
   }
@@ -657,63 +704,49 @@ export class HeterogeneousPersistenceHandler {
       const title =
         spawnMetadata?.description?.slice(0, 80) || spawnMetadata?.subagentType || 'Subagent';
 
-      try {
-        await this.deps.threadModel.create({
-          id: threadId,
-          metadata: {
-            sourceToolCallId: subagentCtx.parentToolCallId,
-            startedAt: new Date().toISOString(),
-            subagentType: spawnMetadata?.subagentType,
-          },
-          sourceMessageId: state.currentAssistantMessageId,
-          status: ThreadStatus.Processing,
-          title,
-          topicId: state.topicId,
-          type: ThreadType.Isolation,
-        } as any);
-      } catch (err) {
-        log('create subagent thread failed op=%s err=%O', state.operationId, err);
-        return undefined;
-      }
+      // Failures here propagate so a retry replays the lazy-create. The
+      // run isn't registered in `subagentRuns` until all three rows land,
+      // so a partial-failure retry re-attempts the whole sequence; the
+      // ThreadModel.create uses `onConflictDoNothing` on id so re-running
+      // with the same generated id is safe.
+      await this.deps.threadModel.create({
+        id: threadId,
+        metadata: {
+          sourceToolCallId: subagentCtx.parentToolCallId,
+          startedAt: new Date().toISOString(),
+          subagentType: spawnMetadata?.subagentType,
+        },
+        sourceMessageId: state.currentAssistantMessageId,
+        status: ThreadStatus.Processing,
+        title,
+        topicId: state.topicId,
+        type: ThreadType.Isolation,
+      } as any);
 
-      let userMsgId: string;
-      try {
-        const userMsg = await this.deps.messageModel.create({
-          agentId: state.agentId ?? undefined,
-          content: spawnMetadata?.prompt ?? '',
-          parentId: state.currentAssistantMessageId,
-          role: 'user',
-          threadId,
-          topicId: state.topicId,
-        });
-        userMsgId = userMsg.id;
-      } catch (err) {
-        log('create subagent user msg failed op=%s err=%O', state.operationId, err);
-        return undefined;
-      }
+      const userMsg = await this.deps.messageModel.create({
+        agentId: state.agentId ?? undefined,
+        content: spawnMetadata?.prompt ?? '',
+        parentId: state.currentAssistantMessageId,
+        role: 'user',
+        threadId,
+        topicId: state.topicId,
+      });
 
-      let firstAssistantId: string;
-      try {
-        const firstAssistant = await this.deps.messageModel.create({
-          agentId: state.agentId ?? undefined,
-          content: '',
-          parentId: userMsgId,
-          role: 'assistant',
-          threadId,
-          topicId: state.topicId,
-        });
-        firstAssistantId = firstAssistant.id;
-      } catch (err) {
-        log('create subagent assistant msg failed op=%s err=%O', state.operationId, err);
-        return undefined;
-      }
+      const firstAssistant = await this.deps.messageModel.create({
+        agentId: state.agentId ?? undefined,
+        content: '',
+        parentId: userMsg.id,
+        role: 'assistant',
+        threadId,
+        topicId: state.topicId,
+      });
 
       run = {
         accumulatedContent: '',
         accumulatedReasoning: '',
-        currentAssistantMsgId: firstAssistantId,
+        currentAssistantMsgId: firstAssistant.id,
         currentSubagentMessageId: subagentCtx.subagentMessageId ?? '',
-        lastChainParentId: firstAssistantId,
+        lastChainParentId: firstAssistant.id,
         lifetimeToolCallIds: new Set(),
         state: { payloads: [], persistedIds: new Set() },
         threadId,
@@ -731,32 +764,23 @@ export class HeterogeneousPersistenceHandler {
         const update: Record<string, any> = {};
         if (run.accumulatedContent) update.content = run.accumulatedContent;
         if (run.accumulatedReasoning) update.reasoning = { content: run.accumulatedReasoning };
-        await this.deps.messageModel
-          .update(run.currentAssistantMsgId, update)
-          .catch((err) =>
-            log('flush subagent turn failed asst=%s err=%O', run.currentAssistantMsgId, err),
-          );
+        await this.deps.messageModel.update(run.currentAssistantMsgId, update);
       }
 
-      try {
-        const nextAssistant = await this.deps.messageModel.create({
-          agentId: state.agentId ?? undefined,
-          content: '',
-          parentId: run.lastChainParentId,
-          role: 'assistant',
-          threadId: run.threadId,
-          topicId: state.topicId,
-        });
-        run.currentAssistantMsgId = nextAssistant.id;
-        run.currentSubagentMessageId = subagentCtx.subagentMessageId;
-        run.lastChainParentId = nextAssistant.id;
-        run.state = { payloads: [], persistedIds: new Set() };
-        run.accumulatedContent = '';
-        run.accumulatedReasoning = '';
-      } catch (err) {
-        log('create subagent next assistant failed op=%s err=%O', state.operationId, err);
-        return undefined;
-      }
+      const nextAssistant = await this.deps.messageModel.create({
+        agentId: state.agentId ?? undefined,
+        content: '',
+        parentId: run.lastChainParentId,
+        role: 'assistant',
+        threadId: run.threadId,
+        topicId: state.topicId,
+      });
+      run.currentAssistantMsgId = nextAssistant.id;
+      run.currentSubagentMessageId = subagentCtx.subagentMessageId;
+      run.lastChainParentId = nextAssistant.id;
+      run.state = { payloads: [], persistedIds: new Set() };
+      run.accumulatedContent = '';
+      run.accumulatedReasoning = '';
     }
 
     return run;
@@ -821,42 +845,27 @@ export class HeterogeneousPersistenceHandler {
       const update: Record<string, any> = {};
       if (run.accumulatedContent) update.content = run.accumulatedContent;
       if (run.accumulatedReasoning) update.reasoning = { content: run.accumulatedReasoning };
-      await this.deps.messageModel
-        .update(run.currentAssistantMsgId, update)
-        .catch((err) =>
-          log(
-            'finalize flush failed run=%s asst=%s err=%O',
-            run.threadId,
-            run.currentAssistantMsgId,
-            err,
-          ),
-        );
+      await this.deps.messageModel.update(run.currentAssistantMsgId, update);
       run.accumulatedContent = '';
       run.accumulatedReasoning = '';
     }
 
     if (resultContent) {
-      try {
-        const terminal = await this.deps.messageModel.create({
-          agentId: state.agentId ?? undefined,
-          content: resultContent,
-          parentId: run.lastChainParentId,
-          role: 'assistant',
-          threadId: run.threadId,
-          topicId: state.topicId,
-        });
-        run.currentAssistantMsgId = terminal.id;
-        run.lastChainParentId = terminal.id;
-      } catch (err) {
-        log('finalize terminal create failed run=%s err=%O', run.threadId, err);
-      }
+      const terminal = await this.deps.messageModel.create({
+        agentId: state.agentId ?? undefined,
+        content: resultContent,
+        parentId: run.lastChainParentId,
+        role: 'assistant',
+        threadId: run.threadId,
+        topicId: state.topicId,
+      });
+      run.currentAssistantMsgId = terminal.id;
+      run.lastChainParentId = terminal.id;
     }
 
-    // Best-effort: mark the thread completed. Idempotent on the renderer side
-    // (status changes drive UI badges only).
-    await this.deps.threadModel
-      .update(run.threadId, { status: ThreadStatus.Active })
-      .catch((err) => log('thread status update failed run=%s err=%O', run.threadId, err));
+    // Mark the thread completed. Idempotent — re-running on a retry just
+    // re-writes the same status; downstream UI badges are derived state.
+    await this.deps.threadModel.update(run.threadId, { status: ThreadStatus.Active });
 
     state.subagentRuns.delete(parentToolCallId);
   }

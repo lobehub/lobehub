@@ -1,7 +1,4 @@
 // @vitest-environment node
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,55 +8,133 @@ import {
 } from '../HeterogeneousPersistenceHandler';
 
 /**
- * `.heerogeneous-tracing/cc-streaming.json` is a captured run of `lh hetero
- * exec --type claude-code` against this repo. Each top-level entry pairs
- * raw CC JSONL output with the adapter-converted events. We replay the
- * adapter events through the persistence handler to validate that a real
- * CC stream produces a coherent message tree on the server side.
+ * Synthetic fixture mirroring the shape of a real CC run captured under
+ * `.heerogeneous-tracing/cc-streaming.json` (gitignored, not available in
+ * CI). Rather than read a real trace, we generate a stream that exercises
+ * the same characteristics:
+ *
+ *   - Multiple text chunks bursting within the same millisecond (verifies
+ *     the data-fingerprint dedupe key, not just timestamps)
+ *   - 30 tool_use → tool_result pairs across multiple steps
+ *   - Step boundaries (`stream_start { newStep: true }`) cutting new
+ *     assistants chained off the last tool message
+ *   - Per-turn metadata events (`step_complete` phase=turn_metadata) with
+ *     usage payloads
+ *   - Terminal `agent_runtime_end`
+ *
+ * If the real trace shape changes (new event variants, new chunk types),
+ * regenerate the fixture below to match. The aim is "deterministic stand-in
+ * for the broad real-trace flow", not "byte-equal capture".
  */
-const FIXTURE_PATH = join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  '..',
-  '..',
-  '.heerogeneous-tracing',
-  'cc-streaming.json',
-);
 
-interface FixtureEntry {
-  adaptedEvents?: Array<{ data: any; type: AgentStreamEvent['type'] }>;
+const TOOLS_PER_STEP = 10;
+const STEP_COUNT = 3;
+const TEXT_CHUNKS_PER_STEP = 5;
+
+interface FakeMessage {
+  agentId: string | null;
+  content: string;
+  error?: any;
+  id: string;
+  metadata?: any;
+  model?: string;
+  parentId?: string | null;
+  plugin?: any;
+  pluginError?: any;
+  pluginState?: any;
+  provider?: string;
+  reasoning?: any;
+  role: 'user' | 'assistant' | 'tool' | 'task' | 'system';
+  threadId?: string | null;
+  tool_call_id?: string;
+  tools?: any[];
+  topicId: string | null;
 }
 
-const loadFixture = async (): Promise<AgentStreamEvent[]> => {
-  const raw = await readFile(FIXTURE_PATH, 'utf8');
-  const entries = JSON.parse(raw) as FixtureEntry[];
+const buildSyntheticStream = (): AgentStreamEvent[] => {
   const events: AgentStreamEvent[] = [];
+  // Use a single anchor timestamp shared across many bursty chunks to verify
+  // that the dedupe key fingerprints `data` (not just timestamp+stepIndex).
+  const burstyTimestamp = 1_700_000_000_000;
+  let sequence = 0;
   let stepIndex = 0;
-  let timestamp = 1_700_000_000_000;
-  for (const entry of entries) {
-    for (const ev of entry.adaptedEvents ?? []) {
-      events.push({
-        data: ev.data,
-        operationId: 'op-fixture',
-        stepIndex,
-        timestamp,
-        type: ev.type,
-      });
-      timestamp += 1;
+
+  const push = (
+    type: AgentStreamEvent['type'],
+    data: Record<string, unknown>,
+    overrides: { stepIndex?: number; timestamp?: number } = {},
+  ) => {
+    sequence += 1;
+    events.push({
+      data,
+      operationId: 'op-fixture',
+      stepIndex: overrides.stepIndex ?? stepIndex,
+      // Default each event to a unique timestamp; bursty chunks override.
+      timestamp: overrides.timestamp ?? burstyTimestamp + sequence,
+      type,
+    });
+  };
+
+  for (let step = 0; step < STEP_COUNT; step += 1) {
+    if (step > 0) {
+      // Cut a new step — the renderer parity test asserts the new assistant
+      // chains off the last tool of the previous step.
+      push('stream_start', { newStep: true });
     }
-    if (entry.adaptedEvents?.some((e) => e.type === 'step_complete')) stepIndex += 1;
+
+    // Burst N text chunks all sharing the same timestamp. With the old
+    // (stepIndex, type, timestamp) key, all but the first would dedupe. The
+    // fingerprinted key keeps each chunk distinct via its `content`.
+    for (let t = 0; t < TEXT_CHUNKS_PER_STEP; t += 1) {
+      push(
+        'stream_chunk',
+        { chunkType: 'text', content: `step-${step}-chunk-${t} ` },
+        { timestamp: burstyTimestamp + step * 1000 },
+      );
+    }
+
+    // Tool calls in this step.
+    const stepTools = Array.from({ length: TOOLS_PER_STEP }, (_, i) => ({
+      apiName: 'Bash',
+      arguments: JSON.stringify({ cmd: `cmd-${step}-${i}` }),
+      id: `tc-${step}-${i}`,
+      identifier: 'bash',
+      type: 'default' as const,
+    }));
+
+    push('stream_chunk', {
+      chunkType: 'tools_calling',
+      toolsCalling: stepTools,
+    });
+
+    // Tool results — one per tool, with content varying by id.
+    for (const tool of stepTools) {
+      push('tool_result', {
+        content: `result of ${tool.id}`,
+        toolCallId: tool.id,
+      });
+    }
+
+    // Per-turn usage.
+    push('step_complete', {
+      model: 'claude-opus-4-7',
+      phase: 'turn_metadata',
+      provider: 'claude-code',
+      usage: { inputTokens: 100 + step, outputTokens: 50 + step },
+    });
+
+    stepIndex += 1;
   }
+
+  push('agent_runtime_end', { reason: 'success' });
   return events;
 };
 
 const createHarness = () => {
   let nextSeq = 0;
-  const messages = new Map<string, any>();
+  const messages = new Map<string, FakeMessage>();
   const threads = new Map<string, any>();
 
-  // Pre-seed initial assistant
   messages.set('asst-fixture', {
     agentId: null,
     content: '',
@@ -69,10 +144,10 @@ const createHarness = () => {
   });
 
   const messageModel = {
-    create: vi.fn(async (input: any, id?: string) => {
+    create: vi.fn(async (input: Partial<FakeMessage>, id?: string) => {
       nextSeq += 1;
       const msgId = id ?? `msg_${nextSeq}`;
-      const msg = {
+      const msg: FakeMessage = {
         agentId: input.agentId ?? null,
         content: input.content ?? '',
         id: msgId,
@@ -81,7 +156,7 @@ const createHarness = () => {
         parentId: input.parentId ?? null,
         plugin: input.plugin,
         provider: input.provider,
-        role: input.role,
+        role: input.role!,
         threadId: input.threadId ?? null,
         tool_call_id: input.tool_call_id,
         topicId: input.topicId ?? null,
@@ -89,7 +164,7 @@ const createHarness = () => {
       messages.set(msgId, msg);
       return msg;
     }),
-    update: vi.fn(async (id: string, patch: any) => {
+    update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {
       const existing = messages.get(id);
       if (!existing) return { success: false };
       messages.set(id, { ...existing, ...patch });
@@ -124,10 +199,7 @@ const createHarness = () => {
       agentId: null,
       id: 'topic-fixture',
       metadata: {
-        runningOperation: {
-          assistantMessageId: 'asst-fixture',
-          operationId: 'op-fixture',
-        },
+        runningOperation: { assistantMessageId: 'asst-fixture', operationId: 'op-fixture' },
       },
     })),
   };
@@ -141,106 +213,117 @@ const createHarness = () => {
   return { handler, messageModel, messages, threadModel, threads, topicModel };
 };
 
-describe('HeterogeneousPersistenceHandler — real CC trace fixture', () => {
+const ingest = async (
+  h: ReturnType<typeof createHarness>,
+  events: AgentStreamEvent[],
+  batchSize = 50,
+) => {
+  for (let i = 0; i < events.length; i += batchSize) {
+    await h.handler.ingest({
+      events: events.slice(i, i + batchSize),
+      operationId: 'op-fixture',
+      topicId: 'topic-fixture',
+    });
+  }
+};
+
+describe('HeterogeneousPersistenceHandler — synthetic CC trace fixture', () => {
   beforeEach(() => __resetOperationStatesForTesting());
   afterEach(() => __resetOperationStatesForTesting());
 
-  it('replays a 200+ event CC run end-to-end without DB layer regressions', async () => {
-    const events = await loadFixture();
-    expect(events.length).toBeGreaterThan(200);
+  it('replays a multi-step CC-shaped run end-to-end with correct counts and chain shape', async () => {
+    const events = buildSyntheticStream();
+    expect(events.length).toBeGreaterThan(50);
 
     const h = createHarness();
-
-    // Replay in batches of 50 events to mirror BatchIngester's flush cadence.
-    const BATCH = 50;
-    for (let i = 0; i < events.length; i += BATCH) {
-      await h.handler.ingest({
-        events: events.slice(i, i + BATCH),
-        operationId: 'op-fixture',
-        topicId: 'topic-fixture',
-      });
-    }
+    await ingest(h, events);
     await h.handler.finish({ operationId: 'op-fixture', result: 'success' });
 
-    // ─── Counting invariants ───
-    const allMessages = [...h.messages.values()];
-    const toolMessages = allMessages.filter((m) => m.role === 'tool');
-    const assistantMessages = allMessages.filter((m) => m.role === 'assistant');
-
-    // Fixture has 71 tool uses + 71 tool_results — every tool_use should
-    // produce exactly one tool message (deduped by tool_call_id).
+    // ─── Tool message invariants ───
+    const toolMessages = [...h.messages.values()].filter((m) => m.role === 'tool');
+    const expectedTools = TOOLS_PER_STEP * STEP_COUNT;
     const uniqueToolCallIds = new Set(toolMessages.map((m) => m.tool_call_id).filter(Boolean));
-    expect(uniqueToolCallIds.size).toBe(71);
-    expect(toolMessages.length).toBe(71);
+    expect(uniqueToolCallIds.size).toBe(expectedTools);
+    expect(toolMessages.length).toBe(expectedTools);
 
-    // tool_result phase should populate content on every tool message.
-    const filledToolResults = toolMessages.filter((m) => m.content && m.content.length > 0);
-    expect(filledToolResults.length).toBe(71);
+    // Every tool message has the result_msg content from `tool_result`.
+    expect(toolMessages.every((m) => m.content.startsWith('result of '))).toBe(true);
 
-    // At least one assistant message exists (the seeded one + any
-    // step-boundary new assistants). Real CC trace has 60 stream_starts
-    // — most without `newStep`, so step boundary count varies.
-    expect(assistantMessages.length).toBeGreaterThanOrEqual(1);
+    // ─── Step-boundary chain shape ───
+    const allAssistants = [...h.messages.values()]
+      .filter((m) => m.role === 'assistant' && m.threadId == null)
+      .sort((a, b) => (a.id === 'asst-fixture' ? -1 : 1));
 
-    // ─── Idempotency: re-ingest the LAST batch ───
-    const beforeReingestCreates = h.messageModel.create.mock.calls.length;
-    await h.handler.ingest({
-      events: events.slice(-BATCH),
-      operationId: 'op-fixture',
-      topicId: 'topic-fixture',
-    });
-    // Note: finish() drops state so the re-ingest restarts from scratch.
-    // The restart re-creates state but events with already-persisted tool_use
-    // ids in the new state hit the persistedIds dedupe within the batch.
-    // What we really want to assert is that no duplicate tool messages
-    // landed even after replay.
-    const afterReingestToolMessages = [...h.messages.values()].filter((m) => m.role === 'tool');
-    // After finish() + re-ingest, state is fresh so previously-persisted
-    // tool_use ids would re-enter persistedIds = empty — we expect duplicate
-    // tool messages here UNLESS the test asserts at the (operationId,
-    // stepIndex, type, timestamp) layer. Since finish() cleared the state,
-    // those keys are also forgotten. So this branch documents: re-ingest
-    // AFTER finish creates duplicates (post-finalize state IS expected to
-    // start over). The CLI ingester only retries within the same operation
-    // before finish, where idempotency is in scope.
-    expect(afterReingestToolMessages.length).toBeGreaterThanOrEqual(toolMessages.length);
-    // Sanity: at least the original 71 tool messages remain.
-    const stillHaveOriginal = toolMessages.every((tm) => h.messages.has(tm.id));
-    expect(stillHaveOriginal).toBe(true);
-    void beforeReingestCreates; // referenced for future tightening
-  }, 30_000);
+    // STEP_COUNT-1 new assistants from `stream_start { newStep }` events.
+    expect(allAssistants.length).toBe(STEP_COUNT);
 
-  it('idempotency: replaying the SAME batch within an operation produces no duplicates', async () => {
-    const events = await loadFixture();
-    const firstFiveTools: AgentStreamEvent[] = [];
-    for (const e of events) {
-      if (
-        e.type === 'stream_chunk' &&
-        e.data?.chunkType === 'tools_calling' &&
-        e.data.toolsCalling?.length
-      ) {
-        firstFiveTools.push(e);
-      }
-      if (firstFiveTools.length === 5) break;
+    // Each new assistant chains off the LAST tool message of the prior step
+    // (renderer parity: "the wire becomes asst → tool → asst → tool → ...").
+    for (let i = 1; i < allAssistants.length; i += 1) {
+      const parent = h.messages.get(allAssistants[i].parentId!);
+      expect(parent?.role).toBe('tool');
     }
 
+    // ─── Bursty-text dedupe key correctness ───
+    // The fixture deliberately emits TEXT_CHUNKS_PER_STEP text chunks with
+    // identical (stepIndex, type, timestamp) keys but distinct `content`.
+    // With the legacy 3-tuple key this would dedupe → truncated content;
+    // the fingerprint key keeps each chunk distinct.
+    const finalAssistantContent = allAssistants.at(-1)?.content ?? '';
+    const lastStep = STEP_COUNT - 1;
+    for (let t = 0; t < TEXT_CHUNKS_PER_STEP; t += 1) {
+      expect(finalAssistantContent).toContain(`step-${lastStep}-chunk-${t}`);
+    }
+  });
+
+  it('idempotent under whole-batch retry — no duplicates when the same events are re-ingested', async () => {
+    const events = buildSyntheticStream();
     const h = createHarness();
 
-    await h.handler.ingest({
-      events: firstFiveTools,
-      operationId: 'op-fixture',
-      topicId: 'topic-fixture',
-    });
-    const after1st = [...h.messages.values()].filter((m) => m.role === 'tool').length;
+    await ingest(h, events);
+    const baselineToolCount = [...h.messages.values()].filter((m) => m.role === 'tool').length;
+    const baselineCreateCalls = h.messageModel.create.mock.calls.length;
 
-    // Replay SAME batch — every event has the same (stepIndex, type, timestamp)
-    await h.handler.ingest({
-      events: firstFiveTools,
-      operationId: 'op-fixture',
-      topicId: 'topic-fixture',
-    });
-    const after2nd = [...h.messages.values()].filter((m) => m.role === 'tool').length;
+    // Re-ingest the SAME events without `finish()`. Every event keeps the
+    // same fingerprint, so the dedupe map skips them all → no new writes.
+    await ingest(h, events);
+    const afterReplayToolCount = [...h.messages.values()].filter((m) => m.role === 'tool').length;
+    const afterReplayCreateCalls = h.messageModel.create.mock.calls.length;
 
-    expect(after2nd).toBe(after1st);
+    expect(afterReplayToolCount).toBe(baselineToolCount);
+    expect(afterReplayCreateCalls).toBe(baselineCreateCalls);
+  });
+
+  it('partial-batch retry resumes from the failed event without re-creating succeeded ones', async () => {
+    const events = buildSyntheticStream();
+    const h = createHarness();
+
+    // Make the 7th `messageModel.create` (a tool message creation, mid-batch)
+    // throw on its first attempt only.
+    let toolCreateAttempts = 0;
+    const realCreate = h.messageModel.create.getMockImplementation()!;
+    h.messageModel.create.mockImplementation(async (input: any, id?: string) => {
+      if (input.role === 'tool') {
+        toolCreateAttempts += 1;
+        if (toolCreateAttempts === 7) {
+          throw new Error('transient db error');
+        }
+      }
+      return realCreate(input, id);
+    });
+
+    // First attempt should throw because the 7th tool create fails.
+    await expect(ingest(h, events)).rejects.toThrow('transient db error');
+
+    // Retry the SAME batch — the failing tool create is no longer flaky.
+    // Succeeded tools are skipped via persistedIds; the failed one + all
+    // subsequent events get processed.
+    await ingest(h, events);
+
+    // Same final tool count as a clean run: TOOLS_PER_STEP * STEP_COUNT.
+    const expected = TOOLS_PER_STEP * STEP_COUNT;
+    const toolMessages = [...h.messages.values()].filter((m) => m.role === 'tool');
+    expect(new Set(toolMessages.map((m) => m.tool_call_id)).size).toBe(expected);
+    expect(toolMessages.length).toBe(expected);
   });
 });
