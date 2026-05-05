@@ -74,6 +74,12 @@ export const CHAT_MODELS_BLOCK_LIST = [
 ];
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
+type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
+type ResponseCreateParamsWithPromptCacheKey = (
+  | OpenAI.Responses.ResponseCreateParamsStreaming
+  | OpenAI.Responses.ResponseCreateParams
+) &
+  OpenAIExtraParams;
 export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
@@ -353,7 +359,13 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return `lobe:${user}:${model}`;
     }
 
-    private resolvePromptCacheKeyParams(model?: string, user?: string) {
+    private resolvePromptCacheKeyParams(
+      model?: string,
+      user?: string,
+      existingPromptCacheKey?: string,
+    ) {
+      if (existingPromptCacheKey !== undefined) return {};
+
       const promptCacheKey = this.resolvePromptCacheKey(model, user);
 
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
@@ -497,7 +509,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             ...cleanedPayload,
             messages,
             ...(chatCompletion?.noUserId ? {} : { user: options?.user }),
-            ...this.resolvePromptCacheKeyParams(cleanedPayload.model, options?.user),
+            ...this.resolvePromptCacheKeyParams(
+              cleanedPayload.model,
+              options?.user,
+              cleanedPayload.prompt_cache_key,
+            ),
             stream_options:
               postPayload.stream && !chatCompletion?.excludeUsage
                 ? { include_usage: true }
@@ -1126,7 +1142,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         store: false,
         stream: isStreaming || undefined,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
-        ...this.resolvePromptCacheKeyParams(res.model, options?.user),
+        ...this.resolvePromptCacheKeyParams(
+          res.model,
+          options?.user,
+          (res as OpenAIExtraParams).prompt_cache_key,
+        ),
         // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
         safety_identifier: options?.user,
         // Sanitize sampling params for Responses API path
@@ -1134,9 +1154,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           normalizeTemperature: false,
           preferTemperature: true,
         }),
-      } as unknown as
-        | OpenAI.Responses.ResponseCreateParamsStreaming
-        | OpenAI.Responses.ResponseCreateParams;
+      } as ResponseCreateParamsWithPromptCacheKey;
 
       if (debugParams?.responses?.()) {
         // eslint-disable-next-line no-console

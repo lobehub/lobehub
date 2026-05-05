@@ -561,6 +561,42 @@ describe('LobeOpenAICompatibleFactory', () => {
           expect.anything(),
         );
       });
+
+      it('should not override custom prompt_cache_key from handlePayload', async () => {
+        const LobeOpenAIProvider = createOpenAICompatibleRuntime({
+          baseURL: 'https://api.openai.com/v1',
+          chatCompletion: {
+            handlePayload: (payload) =>
+              ({
+                ...payload,
+                prompt_cache_key: 'custom-cache-key',
+                stream: true,
+              }) as OpenAI.ChatCompletionCreateParamsStreaming,
+          },
+          provider: ModelProvider.OpenAI,
+        });
+
+        const instance = new LobeOpenAIProvider({ apiKey: 'test' });
+        const mockCreateMethod = vi
+          .spyOn(instance['client'].chat.completions, 'create')
+          .mockResolvedValue(new ReadableStream() as any);
+
+        await instance.chat(
+          {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4o',
+            temperature: 0,
+          },
+          { user: 'testUser' },
+        );
+
+        expect(mockCreateMethod).toHaveBeenCalledWith(
+          expect.objectContaining({
+            prompt_cache_key: 'custom-cache-key',
+          }),
+          expect.anything(),
+        );
+      });
     });
 
     describe('noUserId option', () => {
