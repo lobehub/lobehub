@@ -215,6 +215,8 @@ export default {
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':
     'Open your app on the Feishu / Lark Open Platform → Permissions, then look up your Open ID.',
+  'channel.userIdHint.line':
+    'Open the LINE Developers Console → your channel → Basic settings tab, and copy "Your user ID" (starts with U, 33 chars).',
   'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':
