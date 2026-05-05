@@ -169,6 +169,7 @@
   "channel.userIdHint": "شناسه کاربری شما در این پلتفرم. هوش مصنوعی می‌تواند از آن برای ارسال پیام‌های مستقیم به شما استفاده کند.",
   "channel.userIdHint.discord": "حالت توسعه‌دهنده را فعال کنید (Settings → Advanced)، سپس روی تصویر پروفایل خود راست‌کلیک کنید → Copy User ID.",
   "channel.userIdHint.feishu": "در پلتفرم توسعه Feishu / Lark برنامه خود را باز کنید → Permissions، سپس Open ID خود را پیدا کنید.",
+  "channel.userIdHint.line": "کنسول توسعه‌دهندگان LINE را باز کنید → کانال خود → تب تنظیمات پایه، و \"شناسه کاربری شما\" (شروع با U، 33 کاراکتر) را کپی کنید.",
   "channel.userIdHint.qq": "شماره QQ شما، که در صفحه پروفایل QQ نمایش داده می‌شود.",
   "channel.userIdHint.slack": "پروفایل Slack خود را باز کنید → ⋮ More → Copy member ID (با U آغاز می‌شود).",
   "channel.userIdHint.telegram": "در تلگرام هر پیامی به @userinfobot ارسال کنید — شناسه عددی کاربری شما را برمی‌گرداند.",

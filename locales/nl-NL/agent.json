@@ -169,6 +169,7 @@
   "channel.userIdHint": "Je gebruikers-ID op dit platform. De AI kan dit gebruiken om je directe berichten te sturen.",
   "channel.userIdHint.discord": "Schakel Ontwikkelaarsmodus in (Instellingen → Geavanceerd) en klik met rechts op je avatar → Gebruikers-ID kopiëren.",
   "channel.userIdHint.feishu": "Open je app op het Feishu / Lark Open Platform → Machtigingen en zoek daar je Open ID op.",
+  "channel.userIdHint.line": "Open de LINE Developers Console → jouw kanaal → Tabblad Basisinstellingen, en kopieer \"Jouw gebruikers-ID\" (begint met U, 33 tekens).",
   "channel.userIdHint.qq": "Je QQ-nummer, weergegeven op je QQ-profielpagina.",
   "channel.userIdHint.slack": "Open je Slack-profiel → ⋮ Meer → Lid-ID kopiëren (begint met U).",
   "channel.userIdHint.telegram": "Stuur een bericht naar @userinfobot in Telegram — die antwoordt met je numerieke gebruikers-ID.",

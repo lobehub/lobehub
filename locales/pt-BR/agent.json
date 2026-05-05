@@ -169,6 +169,7 @@
   "channel.userIdHint": "Seu ID de usuário nesta plataforma. A IA pode usá-lo para enviar mensagens diretas para você.",
   "channel.userIdHint.discord": "Ative o Modo Desenvolvedor (Configurações → Avançado), depois clique com o botão direito no seu avatar → Copiar ID do Usuário.",
   "channel.userIdHint.feishu": "Abra seu app na Plataforma Open Feishu / Lark → Permissões, depois procure seu Open ID.",
+  "channel.userIdHint.line": "Abra o Console de Desenvolvedores do LINE → seu canal → aba de Configurações Básicas, e copie \"Seu ID de usuário\" (começa com U, 33 caracteres).",
   "channel.userIdHint.qq": "Seu número QQ, exibido na página do seu perfil.",
   "channel.userIdHint.slack": "Abra seu perfil no Slack → ⋮ Mais → Copiar ID de membro (começa com U).",
   "channel.userIdHint.telegram": "Envie qualquer mensagem para @userinfobot no Telegram — ele responderá com seu ID numérico de usuário.",
