@@ -10,6 +10,68 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Flash is a DeepSeek-V4 series MoE language model with 284B total parameters and 13B active parameters, supporting over 1 million tokens for extensive context understanding.',
+    displayName: 'DeepSeek V4 Flash',
+    id: 'deepseek-ai/DeepSeek-V4-Flash',
+    organization: 'DeepSeek',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Qwen3.6-27B is an open-source small-to-medium parameter model in the Qwen3.6 series, specifically focused on high-quality code generation and agent workflows.',
+    displayName: 'Qwen3.6 27B',
+    id: 'Qwen/Qwen3.6-27B',
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.131072]': 0.6,
+              '[0.131072, infinity]': 1.8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.131072]': 4.8,
+              '[0.131072, infinity]': 14.4,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
