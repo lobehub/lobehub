@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { AgentStreamPipeline } from './agentStreamPipeline';
+import type { AgentPromptInput, BuildAgentInputOptions } from './input';
+import { buildAgentInput } from './input';
 
 export interface SpawnAgentOptions {
   /** Agent type key (`'claude-code'` | `'codex'`). */
@@ -21,14 +23,24 @@ export interface SpawnAgentOptions {
   /** Extra CLI arguments appended after the agent's preset flags. */
   extraArgs?: string[];
   /**
+   * Image normalization options (URL fetch + on-disk cache + path
+   * materialization). Forwarded to `buildAgentInput`. When `prompt` is a
+   * plain string this is unused.
+   */
+  inputOptions?: BuildAgentInputOptions;
+  /**
    * Operation id stamped onto every emitted `AgentStreamEvent`. For ingest-
    * connected runs this is the server-allocated op id; for standalone runs
    * (no `--topic` / `--operation-id`) the CLI generates a fresh uuid so
    * events still carry the conventional shape.
    */
   operationId: string;
-  /** User prompt text. Always passed via stdin (CC: stream-json; Codex: raw). */
-  prompt: string;
+  /**
+   * User prompt. A plain string is sugar for a single text block; the array
+   * form supports mixed text + image content blocks (URL / path / base64).
+   * Translated to per-agent stdin + CLI flags via `buildAgentInput`.
+   */
+  prompt: AgentPromptInput;
   /** Resume an existing agent session by its native session id (CC) / thread id (Codex). */
   resumeSessionId?: string;
 }
@@ -77,45 +89,43 @@ const CLAUDE_CODE_BASE_ARGS = [
 
 const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check', '--full-auto'] as const;
 
-const buildClaudeCodeArgs = (resumeSessionId: string | undefined, extraArgs: string[]) => [
+const buildClaudeCodeArgs = (
+  resumeSessionId: string | undefined,
+  inputArgs: string[],
+  extraArgs: string[],
+) => [
   ...CLAUDE_CODE_BASE_ARGS,
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+  ...inputArgs,
   ...extraArgs,
 ];
 
-const buildCodexArgs = (resumeSessionId: string | undefined, extraArgs: string[]) =>
+const buildCodexArgs = (
+  resumeSessionId: string | undefined,
+  inputArgs: string[],
+  extraArgs: string[],
+) =>
   resumeSessionId
-    ? ['exec', 'resume', ...CODEX_REQUIRED_ARGS, ...extraArgs, resumeSessionId, '-']
-    : ['exec', ...CODEX_REQUIRED_ARGS, ...extraArgs];
+    ? ['exec', 'resume', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs, resumeSessionId, '-']
+    : ['exec', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs];
 
 const buildSpawnArgs = (
   agentType: string,
   resumeSessionId: string | undefined,
+  inputArgs: string[],
   extraArgs: string[],
 ): string[] => {
   switch (agentType) {
     case 'claude-code': {
-      return buildClaudeCodeArgs(resumeSessionId, extraArgs);
+      return buildClaudeCodeArgs(resumeSessionId, inputArgs, extraArgs);
     }
     case 'codex': {
-      return buildCodexArgs(resumeSessionId, extraArgs);
+      return buildCodexArgs(resumeSessionId, inputArgs, extraArgs);
     }
     default: {
       throw new Error(`spawnAgent: unsupported agent type "${agentType}"`);
     }
   }
-};
-
-const buildStdinPayload = (agentType: string, prompt: string): string => {
-  if (agentType === 'claude-code') {
-    return `${JSON.stringify({
-      message: { content: [{ text: prompt, type: 'text' }], role: 'user' },
-      type: 'user',
-    })}\n`;
-  }
-  // Codex reads the prompt as plain text from stdin (the `-` positional in
-  // resume mode also reads from stdin).
-  return prompt;
 };
 
 const defaultCommand = (agentType: string): string => (agentType === 'codex' ? 'codex' : 'claude');
@@ -152,17 +162,24 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
  * unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
- * Stays minimal on purpose — no image attachment, no on-disk tracing, no
- * proxy env composition, no CLI-not-found classification. Those host
- * concerns live in the desktop main controller, which does NOT use this
- * function (it instantiates `AgentStreamPipeline` directly with its own
- * spawn logic). The CLI sandbox is a smaller environment where the minimal
- * surface is correct.
+ * Stays minimal on purpose — no on-disk tracing, no proxy env composition,
+ * no CLI-not-found classification. Those host concerns live in the desktop
+ * main controller, which has its own spawn logic on top. The CLI sandbox is
+ * a smaller environment where the minimal surface is correct.
+ *
+ * Returns a Promise because image normalization (URL fetch / file read) is
+ * async; the spawn itself happens after the input plan is resolved so a
+ * failed image fetch surfaces before the child starts.
  */
-export const spawnAgent = (options: SpawnAgentOptions): SpawnAgentHandle => {
+export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   const command = options.command || defaultCommand(options.agentType);
-  const args = buildSpawnArgs(options.agentType, options.resumeSessionId, options.extraArgs ?? []);
-  const stdinPayload = buildStdinPayload(options.agentType, options.prompt);
+  const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
+  const args = buildSpawnArgs(
+    options.agentType,
+    options.resumeSessionId,
+    inputPlan.args,
+    options.extraArgs ?? [],
+  );
   const cwd = options.cwd || process.cwd();
 
   const proc = spawn(command, args, {
@@ -173,7 +190,7 @@ export const spawnAgent = (options: SpawnAgentOptions): SpawnAgentHandle => {
   });
 
   if (proc.stdin) {
-    proc.stdin.write(stdinPayload, () => {
+    proc.stdin.write(inputPlan.stdin, () => {
       proc.stdin?.end();
     });
   }

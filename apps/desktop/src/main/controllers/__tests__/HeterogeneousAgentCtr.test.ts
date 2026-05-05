@@ -118,13 +118,24 @@ describe('HeterogeneousAgentCtr', () => {
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
-  describe('resolveImage', () => {
+  describe('image cache (delegates to shared `normalizeImage`)', () => {
+    // Image fetch + cache moved to `@lobechat/heterogeneous-agents/spawn`'s
+    // `normalizeImage`. The desktop controller passes its own cacheDir so the
+    // path-traversal invariant — id segments like `../../foo` MUST be hashed,
+    // never used as path segments — is enforced by the shared helper. Verify
+    // that invariant against the same cacheDir the controller would use.
+    const fixtureCacheDir = (storage: string) => path.join(storage, 'heteroAgent/files');
+    const importNormalize = async () => {
+      const { mkdir } = await import('node:fs/promises');
+      const mod = await import('@lobechat/heterogeneous-agents/spawn');
+      return { mkdir, normalizeImage: mod.normalizeImage };
+    };
+
     it('stores traversal-looking ids inside the cache root via a stable hash key', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const cacheDir = path.join(appStoragePath, 'heteroAgent/files');
+      const { mkdir, normalizeImage } = await importNormalize();
+      const cacheDir = fixtureCacheDir(appStoragePath);
+      await mkdir(cacheDir, { recursive: true });
+
       const escapedTargetName = `${path.basename(appStoragePath)}-outside-storage`;
       const escapePath = path.join(cacheDir, `../../../${escapedTargetName}`);
 
@@ -134,10 +145,14 @@ describe('HeterogeneousAgentCtr', () => {
         // best-effort cleanup
       }
 
-      await (ctr as any).resolveImage({
-        id: `../../../${escapedTargetName}`,
-        url: 'data:text/plain;base64,T1VUU0lERQ==',
-      });
+      await normalizeImage(
+        {
+          id: `../../../${escapedTargetName}`,
+          type: 'url',
+          url: 'data:text/plain;base64,T1VUU0lERQ==',
+        },
+        { cacheDir, fetcher: (async () => new Response('OUTSIDE', { status: 200 })) as any },
+      );
 
       const cacheEntries = await readdir(cacheDir);
 
@@ -153,11 +168,10 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('does not trust pre-seeded out-of-root traversal cache files as cache hits', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const cacheDir = path.join(appStoragePath, 'heteroAgent/files');
+      const { mkdir, normalizeImage } = await importNormalize();
+      const cacheDir = fixtureCacheDir(appStoragePath);
+      await mkdir(cacheDir, { recursive: true });
+
       const traversalId = '../../preexisting-secret';
       const outOfRootDataPath = path.join(cacheDir, traversalId);
       const outOfRootMetaPath = path.join(cacheDir, `${traversalId}.meta`);
@@ -168,13 +182,20 @@ describe('HeterogeneousAgentCtr', () => {
         JSON.stringify({ id: traversalId, mimeType: 'text/plain' }),
       );
 
-      const result = await (ctr as any).resolveImage({
-        id: traversalId,
-        url: 'data:text/plain;base64,SUdOT1JFRA==',
-      });
+      const result = await normalizeImage(
+        { id: traversalId, type: 'url', url: 'data:text/plain;base64,SUdOT1JFRA==' },
+        {
+          cacheDir,
+          fetcher: (async () =>
+            new Response('IGNORED', {
+              headers: { 'content-type': 'text/plain' },
+              status: 200,
+            })) as any,
+        },
+      );
 
       expect(Buffer.from(result.buffer).toString('utf8')).toBe('IGNORED');
-      expect(result.mimeType).toBe('text/plain');
+      expect(result.mediaType).toBe('text/plain');
       await expect(readFile(outOfRootDataPath, 'utf8')).resolves.toBe('SECRET');
     });
   });
