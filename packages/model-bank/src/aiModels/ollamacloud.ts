@@ -87,30 +87,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Gemma 3 270M is the smallest text-only model in the Gemma 3 family, optimized for edge devices.',
-    displayName: 'Gemma 3 270M',
-    id: 'gemma3:270m',
-    releasedAt: '2025-03-12',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Gemma 3 1B is a compact text-only model from Google, designed for edge deployment.',
-    displayName: 'Gemma 3 1B',
-    id: 'gemma3:1b',
-    releasedAt: '2025-03-12',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -151,59 +127,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     type: 'chat',
   },
   // Gemma 4 Series
-  {
-    abilities: {
-      audio: true,
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Gemma 4 E2B is an edge model with 128K context, vision, audio, and thinking modes for mobile and edge devices.',
-    displayName: 'Gemma 4 E2B',
-    id: 'gemma4:e2b',
-    releasedAt: '2026-04-02',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningEffort'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      audio: true,
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Gemma 4 E4B is an edge model with 128K context, vision, audio, and thinking modes for efficient local deployment.',
-    displayName: 'Gemma 4 E4B',
-    id: 'gemma4:e4b',
-    releasedAt: '2026-04-02',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningEffort'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Gemma 4 26B is a Mixture-of-Experts model with 256K context, vision, and thinking modes for high-throughput inference.',
-    displayName: 'Gemma 4 26B-A4B',
-    id: 'gemma4:26b',
-    releasedAt: '2026-04-02',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningEffort'],
-    },
-    type: 'chat',
-  },
   {
     abilities: {
       functionCall: true,
