@@ -16,11 +16,7 @@ interface XAIChatStreamPayload extends ChatStreamPayload {
   stop?: string | string[];
 }
 
-const xaiChatCompletionPenaltySupportedModels = new Set([
-  'grok-3',
-  'grok-4-fast-non-reasoning',
-  'grok-4-1-fast-non-reasoning',
-]);
+const supportsChatCompletionPenaltyParameters = (model: string) => model.startsWith('grok-3');
 
 const stripUnsupportedPenaltyParameters = (payload: ChatStreamPayload) => {
   const {
@@ -38,7 +34,7 @@ const stripUnsupportedPenaltyParameters = (payload: ChatStreamPayload) => {
 };
 
 const pruneUnsupportedChatCompletionParameters = (payload: ChatStreamPayload) => {
-  if (xaiChatCompletionPenaltySupportedModels.has(payload.model)) return payload;
+  if (supportsChatCompletionPenaltyParameters(payload.model)) return payload;
 
   return stripUnsupportedPenaltyParameters(payload);
 };
