@@ -180,13 +180,41 @@ export class LobeOllamaAI implements LobeRuntimeAI {
     }
   };
 
+  private buildToolCallNameMap(messages: OpenAIChatMessage[]): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const message of messages) {
+      if (message.role === 'assistant' && message.tool_calls) {
+        for (const tc of message.tool_calls) {
+          if (tc.type === 'function' && tc.id) {
+            map.set(tc.id, tc.function.name);
+          }
+        }
+      }
+    }
+    return map;
+  }
+
   private async buildOllamaMessages(messages: OpenAIChatMessage[]) {
-    return Promise.all(messages.map((message) => this.convertContentToOllamaMessage(message)));
+    const toolCallNameMap = this.buildToolCallNameMap(messages);
+    return Promise.all(
+      messages.map((message) => this.convertContentToOllamaMessage(message, toolCallNameMap)),
+    );
   }
 
   private convertContentToOllamaMessage = async (
     message: OpenAIChatMessage,
+    toolCallNameMap?: Map<string, string>,
   ): Promise<OllamaMessage> => {
+    // Handle tool messages: set tool_name for Ollama Cloud to forward to Google API
+    if (message.role === 'tool' && message.tool_call_id && toolCallNameMap) {
+      const toolName = toolCallNameMap.get(message.tool_call_id);
+      return {
+        content: typeof message.content === 'string' ? message.content : '',
+        role: message.role,
+        tool_name: toolName,
+      };
+    }
+
     if (typeof message.content === 'string') {
       return { content: message.content, role: message.role };
     }
