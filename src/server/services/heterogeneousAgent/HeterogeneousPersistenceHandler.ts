@@ -1,8 +1,8 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type {
+import {
   AgentRuntimeErrorType,
   type ChatMessageError,
-  ChatToolPayload,
+  type ChatToolPayload,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
