@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { template } from 'es-toolkit/compat';
+import matter from 'gray-matter';
 import semver from 'semver';
 import urlJoin from 'url-join';
 
@@ -24,43 +25,6 @@ export interface ChangelogConfig {
   urlTemplate: string;
   user: string;
 }
-
-/**
- * Parse YAML frontmatter from MDX/Markdown text without relying on gray-matter
- * (gray-matter uses Node.js Buffer which is not available in the browser).
- */
-const parseFrontmatter = (text: string): { content: string; data: Record<string, any> } => {
-  const fmRegex = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
-  const match = fmRegex.exec(text);
-
-  if (!match) return { content: text};
-
-  const yamlStr = match[1];
-  const content = text.slice(match[0].length);
-  const data: Record<string, any> = {};
-
-  for (const line of yamlStr.split('\n')) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    let value: any = line.slice(colonIdx + 1).trim();
-    if (!key) continue;
-    // Strip surrounding quotes
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    // Coerce booleans / numbers
-    if (value === 'true') value = true;
-    else if (value === 'false') value = false;
-    else if (value !== '' && !Number.isNaN(Number(value))) value = Number(value);
-    data[key] = value;
-  }
-
-  return { content, data };
-};
 
 export class ChangelogService {
   cdnUrls: {
@@ -130,8 +94,7 @@ export class ChangelogService {
       });
 
       const text = await response.text();
-      // Use browser-compatible frontmatter parser instead of gray-matter
-      const { data, content } = parseFrontmatter(text);
+      const { data, content } = matter(text);
 
       const regex = /^#\s(.+)/;
       const match = regex.exec(content.trim());
@@ -253,7 +216,7 @@ export class ChangelogService {
   }
 
   private replaceCdnUrl(url: string) {
-    if (url?.startsWith('/blog')) return urlJoin('https://hub-apic-1.lobeobjects.space/', url);
+    if (url?.startsWith('/blog')) return urlJoin('https://hub-apac-1.lobeobjects.space/', url);
     return url;
   }
 }
