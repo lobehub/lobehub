@@ -5,7 +5,6 @@ CREATE TABLE "system_bot_providers" (
 	"credentials" text NOT NULL,
 	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"connection_mode" varchar(20),
-	"notes" text,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL

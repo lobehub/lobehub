@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "9209ea38-6048-4174-9ea0-906e3e748bcc",
+  "id": "b20d84cc-98af-4e19-a125-7e64e539515f",
   "policies": {},
   "prevId": "c86b7616-2bfd-4514-ac17-546ca60152fa",
   "roles": {},
@@ -10857,12 +10857,6 @@
         "connection_mode": {
           "name": "connection_mode",
           "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

@@ -1446,7 +1446,6 @@ table system_bot_providers {
   credentials text [not null]
   metadata jsonb [not null, default: `{}`]
   connection_mode varchar(20)
-  notes text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
