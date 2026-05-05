@@ -139,22 +139,9 @@ const loadEditorState = (
 };
 
 const createHeadlessEditorWithNodes = async () => {
-  const [{ createHeadlessEditor }, { LinkNode, AutoLinkNode }] = await Promise.all([
-    import('@lobehub/editor/headless'),
-    import('@lexical/link'),
-  ]);
+  const { createHeadlessEditor } = await import('@lobehub/editor/headless');
 
-  return createHeadlessEditor({
-    additionalPlugins: [
-      class LinkNodePlugin {
-        static pluginName = 'LinkNodePlugin';
-        constructor(kernel: any) {
-          kernel.registerNodes([LinkNode, AutoLinkNode]);
-        }
-        destroy() {}
-      },
-    ],
-  });
+  return createHeadlessEditor();
 };
 
 export const createMarkdownEditorSnapshot = async (
