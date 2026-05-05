@@ -106,6 +106,7 @@
   "localFiles.grepContent.glob": "Dateifilter",
   "localFiles.grepContent.pattern": "Suchmuster",
   "localFiles.grepContent.type": "Dateityp",
+  "localFiles.listFiles.emptyDirectory": "Dieses Verzeichnis ist leer",
   "localFiles.moveFiles.itemsMoved": "{{count}} Element(e) verschoben:",
   "localFiles.moveFiles.itemsMoved_one": "{{count}} Element verschoben:",
   "localFiles.moveFiles.itemsMoved_other": "{{count}} Elemente verschoben:",

@@ -4,7 +4,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { SignalFeedbackDomainMemory, SignalFeedbackDomainSkill } from '../../policies/types';
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../policies/types';
 import {
-  type NonSatisfiedSkillFeedbackDomainSignal,
+  type DirectSkillFeedbackDomainSignal,
   planSkillManagement,
   planUserMemory,
 } from '../actions';
@@ -116,7 +116,7 @@ const createSkillSignal = (
 
 const createNonSatisfiedSkillSignal = (
   input: Parameters<typeof createSkillSignal>[0] = {},
-): NonSatisfiedSkillFeedbackDomainSignal => {
+): DirectSkillFeedbackDomainSignal => {
   const signal = createSkillSignal({
     ...input,
     satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
@@ -261,15 +261,15 @@ describe('action planning processors', () => {
 
   /**
    * @example
-   * Satisfied skill feedback cannot be passed to planSkillManagement.
+   * Skill action planning accepts skill-domain signals after handler-level route narrowing.
    */
-  it('narrows skill action planning to non-satisfied skill feedback signals', () => {
+  it('narrows skill action planning to direct skill-domain signals', () => {
     const satisfiedSignal = createSatisfiedSkillSignal();
 
     expectTypeOf<
       Parameters<typeof planSkillManagement>[0]
-    >().toMatchTypeOf<NonSatisfiedSkillFeedbackDomainSignal>();
-    expectTypeOf<typeof satisfiedSignal>().not.toMatchTypeOf<
+    >().toMatchTypeOf<DirectSkillFeedbackDomainSignal>();
+    expectTypeOf<typeof satisfiedSignal>().toMatchTypeOf<
       Parameters<typeof planSkillManagement>[0]
     >();
     expect(satisfiedSignal.payload.satisfactionResult).toBe('satisfied');

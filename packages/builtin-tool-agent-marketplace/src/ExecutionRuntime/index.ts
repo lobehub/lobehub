@@ -2,13 +2,10 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { z } from 'zod';
 
 import {
-  type CancelAgentPickArgs,
-  type GetPickStateArgs,
   MARKETPLACE_CATEGORY_VALUES,
   type MarketplaceCategory,
   type PickState,
   type ShowAgentMarketplaceArgs,
-  type SkipAgentPickArgs,
   type SubmitAgentPickArgs,
 } from '../types';
 
@@ -63,7 +60,7 @@ export class AgentMarketplaceExecutionRuntime {
       const existing = [...this.picks.values()].find((p) => p.topicId === scope.topicId);
       if (existing) {
         return {
-          content: `Marketplace picker has already been opened in this conversation (requestId=${existing.requestId}, status=${existing.status}). Do NOT call showAgentMarketplace again. The picker resolves directly through the UI — when the user picks or skips, the runtime will start a new turn with the resolution as the tool result. Proceed straight to acknowledging the picks, persisting any persona update, and calling finishOnboarding.`,
+          content: `A marketplace picker is already open in this conversation (status=${existing.status}). Do NOT call showAgentMarketplace again. End this turn now and wait — when the user submits, the original tool result will be rewritten in place with the user's selection (\`selectedTemplateIds\`, \`installedAgentIds\`) and your runtime will resume from there with the full wrap-up checklist.`,
           state: existing,
           success: false,
         };
@@ -89,9 +86,9 @@ export class AgentMarketplaceExecutionRuntime {
 
     return {
       content: [
-        `Marketplace picker is now visible to the user (requestId=${requestId}).`,
-        'STOP your current turn here. Do not call any further tools this turn (no finishOnboarding, no askUserQuestion, no other tools), and do not write a wrap-up message yet.',
-        'The picker resolves directly through the UI — when the user picks or skips, the runtime will start a NEW assistant turn whose tool result describes the picks (`installedAgentIds`, `selectedTemplateIds`, or skip/cancel status). Acknowledge the picks, persist a short persona update, and call finishOnboarding on that next turn.',
+        'Marketplace picker is now visible to the user.',
+        'End this turn now: do NOT call any further tools (no finishOnboarding, no askUserQuestion, no other tools) and do NOT write any wrap-up text. The user has not picked yet — anything you say here is premature.',
+        'When the user submits in the picker UI, this very tool result will be rewritten in place with the user’s selection (`selectedTemplateIds`, `installedAgentIds`) and your runtime will resume reading the updated content. The rewritten result carries the full wrap-up checklist (acknowledge → updateDocument(persona) → finishOnboarding); follow it then.',
       ].join(' '),
       state,
       success: true,
@@ -138,54 +135,5 @@ export class AgentMarketplaceExecutionRuntime {
       state,
       success: true,
     };
-  }
-
-  async skipAgentPick(args: SkipAgentPickArgs): Promise<BuiltinServerRuntimeOutput> {
-    const { requestId, reason } = args;
-    const state = this.picks.get(requestId);
-    if (!state) return { content: `Pick request not found: ${requestId}`, success: false };
-
-    if (state.status !== 'pending') {
-      return {
-        content: `Pick request ${requestId} is already ${state.status}, cannot skip.`,
-        success: false,
-      };
-    }
-
-    state.status = 'skipped';
-    state.skipReason = reason;
-    this.picks.set(requestId, state);
-
-    return {
-      content: `Pick request ${requestId} skipped.${reason ? ` Reason: ${reason}` : ''}`,
-      state,
-      success: true,
-    };
-  }
-
-  async cancelAgentPick(args: CancelAgentPickArgs): Promise<BuiltinServerRuntimeOutput> {
-    const { requestId } = args;
-    const state = this.picks.get(requestId);
-    if (!state) return { content: `Pick request not found: ${requestId}`, success: false };
-
-    if (state.status !== 'pending') {
-      return {
-        content: `Pick request ${requestId} is already ${state.status}, cannot cancel.`,
-        success: false,
-      };
-    }
-
-    state.status = 'cancelled';
-    this.picks.set(requestId, state);
-
-    return { content: `Pick request ${requestId} cancelled.`, state, success: true };
-  }
-
-  async getPickState(args: GetPickStateArgs): Promise<BuiltinServerRuntimeOutput> {
-    const { requestId } = args;
-    const state = this.picks.get(requestId);
-    if (!state) return { content: `Pick request not found: ${requestId}`, success: false };
-
-    return { content: `Pick request ${requestId} is ${state.status}.`, state, success: true };
   }
 }

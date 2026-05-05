@@ -228,7 +228,7 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: `Created document "${created.title || args.title}" (${created.id}).`,
-      state: { documentId: created.documentId },
+      state: { agentDocumentId: created.id, documentId: created.documentId },
       success: true,
     };
   }

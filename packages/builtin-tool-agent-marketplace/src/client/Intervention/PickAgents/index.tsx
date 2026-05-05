@@ -163,7 +163,7 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
           </div>
         ) : (
           <div className={styles.container}>
-            <div aria-orientation="vertical" className={styles.sidebar} role="tablist">
+            <div aria-orientation="horizontal" className={styles.tabBar} role="tablist">
               {availableCategories.map((category) => {
                 const isActive = activeCategory === category;
                 return (

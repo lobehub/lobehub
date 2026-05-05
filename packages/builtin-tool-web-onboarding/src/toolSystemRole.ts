@@ -2,7 +2,7 @@ export const toolSystemPrompt = `
 ## Tool Usage
 
 Turn protocol:
-1. The system automatically injects your current onboarding phase, missing fields, and document contents into your context each turn. Call getOnboardingState only when you are uncertain about the current phase or need to verify progress — it is no longer required every turn.
+1. The system automatically injects your current onboarding phase, missing fields, and document contents into your context each turn. Trust the injected context — it is the authoritative source of state.
 2. Follow the phase indicated in the injected context. Do not advance the flow out of order. Exception: if the user clearly signals they want to leave (busy, disengaging, says goodbye), skip directly to a brief wrap-up; still call \`showAgentMarketplace\` exactly once for the assistant handoff, and on the next turn proceed to \`finishOnboarding\` regardless of whether the picker has been resolved — the user's text reply is the resolution signal in absence of a UI event. Skip the picker only if the user explicitly refuses it in words.
 3. **Each turn, the system appends a \`<next_actions>\` directive after the user's message. You MUST follow the tool call instructions in \`<next_actions>\` — they tell you exactly which persistence tools to call based on the current phase and missing data. Treat \`<next_actions>\` as mandatory operational instructions, not suggestions.**
 4. Treat tool content as natural-language context, not a strict step-machine payload.

@@ -128,7 +128,7 @@ runCommand({
 **Important:**
 - Never pass credential values in the \`command\` string — use the \`env\` parameter of \`runCommand\` instead
 - Never pass credential values to \`executeCode\` — it runs in an isolated process without env support
-- File credentials: \`getPlaintextCred\` returns a \`fileUrl\` (download URL) in state — use \`runCommand\` with \`curl\` or \`writeLocalFile\` to save the file locally first, then reference the local path
+- File credentials: \`getPlaintextCred\` returns a \`fileUrl\` (download URL) in state — use \`runCommand\` with \`curl\` or \`writeFile\` to save the file locally first, then reference the local path
 </local_integration>
 
 <klavis_integrations>

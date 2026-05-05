@@ -9,6 +9,7 @@ const mockPush = vi.hoisted(() => vi.fn());
 const mockSearchParamsGet = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const mockMessageError = vi.hoisted(() => vi.fn());
 const mockSignUpEmail = vi.hoisted(() => vi.fn());
+const mockGetCaptchaTokenOnError = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -31,6 +32,7 @@ vi.mock('@lobechat/business-const', () => ({
 vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
   useBusinessSignup: () => ({
     businessElement: null,
+    getCaptchaTokenOnError: mockGetCaptchaTokenOnError,
     getFetchOptions: async () => undefined,
     preSocialSignupCheck: async () => true,
   }),
@@ -53,6 +55,7 @@ describe('useSignUp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSearchParamsGet.mockReturnValue(null);
+    mockGetCaptchaTokenOnError.mockResolvedValue(undefined);
     mockEnableEmailVerification = false;
   });
 
@@ -196,6 +199,47 @@ describe('useSignUp', () => {
       });
 
       expect(mockMessageError).toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('should retry sign up with captcha token when captcha is required', async () => {
+      mockGetCaptchaTokenOnError.mockResolvedValue('captcha-token');
+      mockSignUpEmail
+        .mockResolvedValueOnce({
+          error: { code: 'CAPTCHA_REQUIRED', message: 'Missing CAPTCHA response' },
+        })
+        .mockResolvedValueOnce({ error: null });
+
+      const { result } = renderHook(() => useSignUp());
+
+      await act(async () => {
+        await result.current.onSubmit(validValues);
+      });
+
+      expect(mockSignUpEmail).toHaveBeenCalledTimes(2);
+      expect(mockSignUpEmail).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          fetchOptions: { headers: { 'x-captcha-response': 'captcha-token' } },
+        }),
+      );
+      expect(mockMessageError).not.toHaveBeenCalled();
+      expect(mockPush).toHaveBeenCalledWith('/');
+    });
+
+    it('should stop sign up when captcha modal is cancelled', async () => {
+      mockGetCaptchaTokenOnError.mockResolvedValue(null);
+      mockSignUpEmail.mockResolvedValue({
+        error: { code: 'CAPTCHA_REQUIRED', message: 'Missing CAPTCHA response' },
+      });
+
+      const { result } = renderHook(() => useSignUp());
+
+      await act(async () => {
+        await result.current.onSubmit(validValues);
+      });
+
+      expect(mockSignUpEmail).toHaveBeenCalledTimes(1);
+      expect(mockMessageError).not.toHaveBeenCalled();
       expect(mockPush).not.toHaveBeenCalled();
     });
 

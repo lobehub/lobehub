@@ -240,7 +240,7 @@ export const topicRouter = router({
         groupId: z.string().nullable().optional(),
         includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
-        pageSize: z.number().optional(),
+        pageSize: z.number().max(100).optional(),
         sessionId: z.string().nullable().optional(),
         triggers: z.array(z.string()).optional(),
       }),
@@ -340,12 +340,12 @@ export const topicRouter = router({
       return result;
     }),
 
-  rankTopics: topicProcedure.input(z.number().optional()).query(async ({ ctx, input }) => {
+  rankTopics: topicProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
     return ctx.topicModel.rank(input);
   }),
 
   recentTopics: topicProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }): Promise<RecentTopic[]> => {
       const recentTopics = await ctx.topicModel.queryRecent(input?.limit ?? 12);
 

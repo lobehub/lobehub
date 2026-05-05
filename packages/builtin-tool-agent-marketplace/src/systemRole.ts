@@ -20,16 +20,8 @@ finance-legal, creator-economy, personal-life
 <framework_lifecycle>
 Framework-managed lifecycle:
 1. showAgentMarketplace opens the picker in the UI.
-2. submitAgentPick, skipAgentPick, and cancelAgentPick represent lifecycle outcomes.
-3. In normal product flows these lifecycle APIs are handled by the client after the user acts. Do not call them proactively.
+2. submitAgentPick records the user's selection and is handled by the client after the user submits. Do not call it proactively.
 </framework_lifecycle>
-
-<recovery_usage>
-Recovery and inspection:
-1. Use getPickState only when you need to inspect the status of a known request.
-2. Do not poll repeatedly.
-3. If the status is already resolved, continue from that result rather than reopening the picker.
-</recovery_usage>
 
 <boundaries>
 - Do NOT attempt to create, update, delete, or duplicate agents yourself. That capability has been removed on purpose — the Marketplace picker is the ONLY way to add agents in this flow.

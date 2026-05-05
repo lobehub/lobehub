@@ -1,3 +1,4 @@
+import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import type { ListLocalFilesResult, LocalReadFileResult } from '@lobechat/electron-client-ipc';
 import { formatFileContent, formatFileList } from '@lobechat/prompts';
 import type { LocalSystemToolSnapshot } from '@lobechat/types';
@@ -7,9 +8,6 @@ import { localFileService } from '@/services/electron/localFileService';
 
 import type { ParsedLocalFileReference } from './commandBus/parseCommands';
 
-const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
-const READ_LOCAL_FILE = 'readLocalFile';
-const LIST_LOCAL_FILES = 'listLocalFiles';
 const DEFAULT_DIRECTORY_LIMIT = 100;
 
 const createSnapshotId = () => `local-system-snapshot-${nanoid()}`;
@@ -52,11 +50,11 @@ const createReadSnapshot = async (
     };
 
     return {
-      apiName: READ_LOCAL_FILE,
+      apiName: LocalSystemApiName.readFile,
       arguments: args,
       capturedAt,
       content,
-      identifier: LOCAL_SYSTEM_IDENTIFIER,
+      identifier: LocalSystemIdentifier,
       result: normalizeReadResult(result),
       snapshotId,
       state,
@@ -67,12 +65,12 @@ const createReadSnapshot = async (
     const message = error instanceof Error ? error.message : String(error);
 
     return {
-      apiName: READ_LOCAL_FILE,
+      apiName: LocalSystemApiName.readFile,
       arguments: args,
       capturedAt,
       content: message,
       error: { message, type: 'LocalFileReadError' },
-      identifier: LOCAL_SYSTEM_IDENTIFIER,
+      identifier: LocalSystemIdentifier,
       snapshotId,
       success: false,
       toolCallId: createToolCallId(snapshotId),
@@ -104,11 +102,11 @@ const createListSnapshot = async (
     });
 
     return {
-      apiName: LIST_LOCAL_FILES,
+      apiName: LocalSystemApiName.listFiles,
       arguments: args,
       capturedAt,
       content,
-      identifier: LOCAL_SYSTEM_IDENTIFIER,
+      identifier: LocalSystemIdentifier,
       result: normalizeListResult(result),
       snapshotId,
       state: normalizeListResult(result),
@@ -119,12 +117,12 @@ const createListSnapshot = async (
     const message = error instanceof Error ? error.message : String(error);
 
     return {
-      apiName: LIST_LOCAL_FILES,
+      apiName: LocalSystemApiName.listFiles,
       arguments: args,
       capturedAt,
       content: message,
       error: { message, type: 'LocalDirectoryListError' },
-      identifier: LOCAL_SYSTEM_IDENTIFIER,
+      identifier: LocalSystemIdentifier,
       snapshotId,
       success: false,
       toolCallId: createToolCallId(snapshotId),

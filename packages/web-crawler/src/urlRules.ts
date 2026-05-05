@@ -53,15 +53,6 @@ export const crawUrlRules: CrawlUrlRule[] = [
     impls: ['jina'],
     urlPattern: 'https://arxiv.org/pdf/(.*)',
   },
-  // Zhihu has crawler protection, use jina
-  {
-    impls: ['jina'],
-    urlPattern: 'https://zhuanlan.zhihu.com(.*)',
-  },
-  {
-    impls: ['jina'],
-    urlPattern: 'https://zhihu.com(.*)',
-  },
   {
     // Convert Medium articles to Scribe.rip
     urlPattern: 'https://medium.com/(.*)',

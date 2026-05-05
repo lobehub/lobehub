@@ -22,6 +22,8 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 <tool_selection_guidelines>
 - By default, if the user does not explicitly specify otherwise, and the relevant Agent Documents tool is available for the task, prefer Agent Documents over Cloud Sandbox because it is easier for collaboration and multi-agent coordination.
 - **createDocument**: create a new document with title + content. Use target="currentTopic" only when the user asks to create a document in the current topic; otherwise omit target for an agent-scoped document.
+- Set hintIsSkill=true only when creating a document that contains reusable procedural knowledge, workflow instructions, tool usage guidance, or durable agent behavior. Leave ordinary notes unhinted.
+- Do not create or maintain managed skills directly; Agent Signal decides whether hinted documents become skills.
 - **listDocuments**: list agent documents. Use target="currentTopic" when the user asks about documents in the current topic. Use this to resolve a filename to a document ID before reading.
 - **readDocument**: retrieve current content by document ID. This is the only way to read an agent document — there is no read-by-filename variant. Prefer format="xml" when you may edit content, because XML includes stable node IDs. If the response contains empty content, the document is genuinely empty; do not retry with a different format or filename.
 - **modifyNodes**: preferred content-edit API. Use LiteXML insert/modify/remove operations after reading XML. For modify operations, include the existing node ID in the LiteXML.

@@ -1,9 +1,10 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { type ChatStreamPayload, type LobeTool, type UIChatMessage } from '@lobechat/types';
-import { ChatErrorType } from '@lobechat/types';
+import { REQUEST_TRIGGER_HEADER } from '@lobechat/const';
+import type { ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
+import { ChatErrorType, createVisualFileRef, RequestTrigger } from '@lobechat/types';
 import { act } from '@testing-library/react';
-import { ModelProvider } from 'model-bank';
+import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
@@ -19,6 +20,32 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { chatService } from './index';
 import * as mechaModule from './mecha';
 import { type ResolvedAgentConfig } from './mecha';
+
+vi.hoisted(() => {
+  const storage = new Map<string, string>();
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      key: (index: number) => Array.from(storage.keys())[index] ?? null,
+      get length() {
+        return storage.size;
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+    },
+  });
+});
+
+const mockCreateHeaderWithAuth = vi.hoisted(() =>
+  vi.fn(async ({ headers }: { headers: Record<string, string> }) => headers),
+);
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
@@ -125,7 +152,7 @@ beforeEach(async () => {
 
 // mock auth
 vi.mock('../_auth', () => ({
-  createHeaderWithAuth: vi.fn().mockResolvedValue({}),
+  createHeaderWithAuth: mockCreateHeaderWithAuth,
 }));
 
 // Mock isCanUseFC to control function calling behavior in tests
@@ -620,7 +647,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="abc.png" url="http://example.com/image.jpg"></image>
+<image ref="image_1" name="abc.png"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -672,6 +699,19 @@ describe('ChatService', () => {
     });
 
     describe('local image URL conversion', () => {
+      beforeEach(() => {
+        useAiInfraStore.setState({
+          enabledAiModels: [
+            {
+              abilities: { vision: true },
+              id: 'gpt-4-vision-preview',
+              providerId: ModelProvider.OpenAI,
+              type: 'chat',
+            } as EnabledAiModel,
+          ],
+        });
+      });
+
       it('should convert local image URLs to base64 and call processImageList', async () => {
         const { imageUrlToBase64 } = await import('@lobechat/utils/imageToBase64');
         const { parseDataUri } = await import('@lobechat/utils/uriParser');
@@ -684,9 +724,6 @@ describe('ChatService', () => {
           base64: 'converted-base64-content',
           mimeType: 'image/png',
         });
-
-        // Mock aiModelSelectors to return true for vision support
-        vi.spyOn(aiModelSelectors, 'isModelSupportVision').mockReturnValue(() => true);
 
         const messages = [
           {
@@ -712,6 +749,7 @@ describe('ChatService', () => {
         await chatService.createAssistantMessage({
           messages,
           model: 'gpt-4-vision-preview',
+          provider: ModelProvider.OpenAI,
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
           }),
@@ -723,6 +761,12 @@ describe('ChatService', () => {
           'http://127.0.0.1:3000/uploads/image.png',
         );
         expect(imageUrlToBase64).toHaveBeenCalledWith('http://127.0.0.1:3000/uploads/image.png');
+
+        const visualRef = createVisualFileRef({
+          index: 0,
+          messageId: 'test-id',
+          type: 'image',
+        });
 
         // Verify the final result contains base64 converted URL
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -746,7 +790,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="local-image.png" url="http://127.0.0.1:3000/uploads/image.png"></image>
+<image ref="${visualRef}" name="local-image.png"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -764,6 +808,7 @@ describe('ChatService', () => {
               },
             ],
             model: 'gpt-4-vision-preview',
+            provider: ModelProvider.OpenAI,
             stream: true,
             enabledSearch: undefined,
             tools: undefined,
@@ -781,9 +826,6 @@ describe('ChatService', () => {
         vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
         vi.mocked(isDesktopLocalStaticServerUrl).mockReturnValue(false); // This is NOT a local URL
         vi.mocked(imageUrlToBase64).mockClear(); // Clear to ensure it's not called
-
-        // Mock aiModelSelectors to return true for vision support
-        vi.spyOn(aiModelSelectors, 'isModelSupportVision').mockReturnValue(() => true);
 
         const messages = [
           {
@@ -808,6 +850,7 @@ describe('ChatService', () => {
         await chatService.createAssistantMessage({
           messages,
           model: 'gpt-4-vision-preview',
+          provider: ModelProvider.OpenAI,
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
           }),
@@ -819,6 +862,12 @@ describe('ChatService', () => {
           'https://example.com/remote-image.jpg',
         );
         expect(imageUrlToBase64).not.toHaveBeenCalled(); // Should NOT be called for remote URLs
+
+        const visualRef = createVisualFileRef({
+          index: 0,
+          messageId: 'test-id-2',
+          type: 'image',
+        });
 
         // Verify the final result preserves original URL
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -842,7 +891,7 @@ describe('ChatService', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="remote-image.jpg" url="https://example.com/remote-image.jpg"></image>
+<image ref="${visualRef}" name="remote-image.jpg"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -857,6 +906,7 @@ describe('ChatService', () => {
               },
             ],
             model: 'gpt-4-vision-preview',
+            provider: ModelProvider.OpenAI,
             stream: true,
             enabledSearch: undefined,
             tools: undefined,
@@ -883,9 +933,6 @@ describe('ChatService', () => {
           base64: 'local-file-base64',
           mimeType: 'image/jpeg',
         });
-
-        // Mock aiModelSelectors to return true for vision support
-        vi.spyOn(aiModelSelectors, 'isModelSupportVision').mockReturnValue(() => true);
 
         const messages = [
           {
@@ -919,6 +966,7 @@ describe('ChatService', () => {
         await chatService.createAssistantMessage({
           messages,
           model: 'gpt-4-vision-preview',
+          provider: ModelProvider.OpenAI,
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
           }),
@@ -1621,6 +1669,7 @@ describe('ChatService', () => {
       const { fetchSSE } = await import('@lobechat/fetch-sse');
       mockFetchSSE = vi.fn().mockResolvedValue(new Response('mock response'));
       vi.mocked(fetchSSE).mockImplementation(mockFetchSSE);
+      mockCreateHeaderWithAuth.mockClear();
     });
 
     it('should make a POST request with the correct payload', async () => {
@@ -1647,6 +1696,29 @@ describe('ChatService', () => {
           method: 'POST',
         }),
       );
+    });
+
+    it('should send request trigger as a header without adding it to the model payload', async () => {
+      const params: Partial<ChatStreamPayload> = {
+        messages: [],
+        model: 'test-model',
+      };
+
+      await chatService.getChatCompletion(params, {
+        requestTrigger: RequestTrigger.VisualAnalysis,
+      });
+
+      expect(mockFetchSSE).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            [REQUEST_TRIGGER_HEADER]: RequestTrigger.VisualAnalysis,
+          }),
+        }),
+      );
+
+      const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
+      expect(payload).not.toHaveProperty('requestTrigger');
     });
 
     it('should make a POST request with chatCompletion apiMode in non-openai provider payload', async () => {
@@ -1770,23 +1842,21 @@ describe('ChatService', () => {
 
     it('should handle successful chat completion response', async () => {
       // Mock getChatCompletion to simulate successful completion
-      const getChatCompletionSpy = vi
-        .spyOn(chatService, 'getChatCompletion')
-        .mockImplementation(async (params, options) => {
-          // Simulate successful response
-          if (options?.onFinish) {
-            options.onFinish('AI response', {
-              type: 'done',
-              observationId: null,
-              toolCalls: undefined,
-              traceId: null,
-            });
-          }
-          if (options?.onMessageHandle) {
-            options.onMessageHandle({ type: 'text', text: 'AI response' });
-          }
-          return new Response('');
-        });
+      vi.spyOn(chatService, 'getChatCompletion').mockImplementation(async (params, options) => {
+        // Simulate successful response
+        if (options?.onFinish) {
+          options.onFinish('AI response', {
+            type: 'done',
+            observationId: null,
+            toolCalls: undefined,
+            traceId: null,
+          });
+        }
+        if (options?.onMessageHandle) {
+          options.onMessageHandle({ type: 'text', text: 'AI response' });
+        }
+        return new Response('');
+      });
 
       const params = {
         messages: [{ content: 'Hello', role: 'user' as const }],
@@ -1825,15 +1895,13 @@ describe('ChatService', () => {
 
     it('should handle error in chat completion', async () => {
       // Mock getChatCompletion to simulate error
-      const getChatCompletionSpy = vi
-        .spyOn(chatService, 'getChatCompletion')
-        .mockImplementation(async (params, options) => {
-          // Simulate error response
-          if (options?.onErrorHandle) {
-            options.onErrorHandle({ message: 'translated_response.404', type: 404 });
-          }
-          return new Response('');
-        });
+      vi.spyOn(chatService, 'getChatCompletion').mockImplementation(async (params, options) => {
+        // Simulate error response
+        if (options?.onErrorHandle) {
+          options.onErrorHandle({ message: 'translated_response.404', type: 404 });
+        }
+        return new Response('');
+      });
 
       const params = {
         messages: [{ content: 'Hello', role: 'user' as const }],

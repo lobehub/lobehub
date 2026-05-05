@@ -43,6 +43,11 @@ vi.mock('model-bank', () => ({
       id: 'no-tools-model',
       providerId: 'test-provider',
     },
+    {
+      abilities: { functionCall: true, video: true, vision: true },
+      id: 'gemini-3.1-flash-lite-preview',
+      providerId: 'google',
+    },
   ],
 }));
 
@@ -1181,8 +1186,11 @@ describe('RuntimeExecutors', () => {
         expect(callArgs.capabilities.isCanUseVideo('unknown', 'unknown')).toBe(false);
 
         // Aggregator (e.g. lobehub) routes a known model id under a different
-        // provider — vision flag falls back to the upstream model card.
+        // provider — visual capability flags fall back to the upstream model card.
         expect(callArgs.capabilities.isCanUseVision('gpt-4', 'lobehub')).toBe(true);
+        expect(
+          callArgs.capabilities.isCanUseVideo('gemini-3.1-flash-lite-preview', 'lobehub'),
+        ).toBe(true);
         expect(callArgs.capabilities.isCanUseVision('no-tools-model', 'lobehub')).toBe(false);
       });
 

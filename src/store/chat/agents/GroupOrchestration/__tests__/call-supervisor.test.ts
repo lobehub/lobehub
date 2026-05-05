@@ -24,7 +24,7 @@ const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore => {
 
   return {
     dbMessagesMap: {},
-    internal_execAgentRuntime: vi.fn().mockResolvedValue(undefined),
+    executeClientAgent: vi.fn().mockResolvedValue(undefined),
     messagesMap: {},
     operations,
     startOperation: vi.fn().mockImplementation((config) => {
@@ -80,7 +80,7 @@ const createInitialState = (overrides: Partial<AgentState> = {}): AgentState => 
 
 describe('createGroupOrchestrationExecutors', () => {
   describe('call_supervisor executor', () => {
-    it('should NOT pass operationId to internal_execAgentRuntime (creates new child operation)', async () => {
+    it('should NOT pass operationId to executeClientAgent (creates new child operation)', async () => {
       const mockStore = createMockStore({
         dbMessagesMap: {
           [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
@@ -116,12 +116,12 @@ describe('createGroupOrchestrationExecutors', () => {
         createInitialState(),
       );
 
-      // Verify internal_execAgentRuntime was called
-      expect(mockStore.internal_execAgentRuntime).toHaveBeenCalledTimes(1);
+      // Verify executeClientAgent was called
+      expect(mockStore.executeClientAgent).toHaveBeenCalledTimes(1);
 
       // Verify operationId is NOT passed (should be undefined)
       // This ensures a new child operation is created
-      const callArgs = (mockStore.internal_execAgentRuntime as any).mock.calls[0][0];
+      const callArgs = (mockStore.executeClientAgent as any).mock.calls[0][0];
       expect(callArgs.operationId).toBeUndefined();
 
       // Verify parentOperationId is passed correctly
@@ -170,7 +170,7 @@ describe('createGroupOrchestrationExecutors', () => {
         createInitialState(),
       );
 
-      const callArgs = (mockStore.internal_execAgentRuntime as any).mock.calls[0][0];
+      const callArgs = (mockStore.executeClientAgent as any).mock.calls[0][0];
 
       // The key assertion: isSupervisor must be true
       // This is used by createAgentExecutors to set metadata.isSupervisor on assistant messages
@@ -184,7 +184,7 @@ describe('createGroupOrchestrationExecutors', () => {
   });
 
   describe('call_agent executor', () => {
-    it('should NOT pass operationId to internal_execAgentRuntime (creates new child operation)', async () => {
+    it('should NOT pass operationId to executeClientAgent (creates new child operation)', async () => {
       const mockStore = createMockStore({
         dbMessagesMap: {
           [`group_${TEST_IDS.GROUP_ID}_${TEST_IDS.TOPIC_ID}`]: [
@@ -221,11 +221,11 @@ describe('createGroupOrchestrationExecutors', () => {
         createInitialState(),
       );
 
-      // Verify internal_execAgentRuntime was called
-      expect(mockStore.internal_execAgentRuntime).toHaveBeenCalledTimes(1);
+      // Verify executeClientAgent was called
+      expect(mockStore.executeClientAgent).toHaveBeenCalledTimes(1);
 
       // Verify operationId is NOT passed (should be undefined)
-      const callArgs = (mockStore.internal_execAgentRuntime as any).mock.calls[0][0];
+      const callArgs = (mockStore.executeClientAgent as any).mock.calls[0][0];
       expect(callArgs.operationId).toBeUndefined();
 
       // Verify parentOperationId is passed correctly
@@ -283,11 +283,11 @@ describe('createGroupOrchestrationExecutors', () => {
       );
 
       // Verify both were called
-      expect(mockStore.internal_execAgentRuntime).toHaveBeenCalledTimes(2);
+      expect(mockStore.executeClientAgent).toHaveBeenCalledTimes(2);
 
       // Get both call arguments
-      const supervisorCallArgs = (mockStore.internal_execAgentRuntime as any).mock.calls[0][0];
-      const agentCallArgs = (mockStore.internal_execAgentRuntime as any).mock.calls[1][0];
+      const supervisorCallArgs = (mockStore.executeClientAgent as any).mock.calls[0][0];
+      const agentCallArgs = (mockStore.executeClientAgent as any).mock.calls[1][0];
 
       // Both should NOT have operationId (create new child operations)
       expect(supervisorCallArgs.operationId).toBeUndefined();

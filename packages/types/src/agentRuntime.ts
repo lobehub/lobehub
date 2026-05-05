@@ -1,4 +1,5 @@
 export enum RequestTrigger {
+  AgentSignal = 'agent_signal',
   Api = 'api',
   Bot = 'bot',
   Chat = 'chat',
@@ -10,6 +11,7 @@ export enum RequestTrigger {
   SemanticSearch = 'semantic_search',
   Topic = 'topic',
   Video = 'video',
+  VisualAnalysis = 'visual_analysis',
 }
 
 // ******* Runtime Biz Error ******* //

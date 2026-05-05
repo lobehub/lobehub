@@ -4,6 +4,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 
 import type { SearchFilesParams, SearchFilesResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function searchLocalFiles({
   keywords,
@@ -12,7 +13,7 @@ export async function searchLocalFiles({
   limit = 30,
 }: SearchFilesParams): Promise<SearchFilesResult[]> {
   try {
-    const cwd = directory || process.cwd();
+    const cwd = expandTilde(directory) || process.cwd();
     const files = await fg(`**/*${keywords}*`, {
       cwd,
       dot: false,

@@ -18,8 +18,6 @@ export const webOnboardingRuntime: ServerRuntimeRegistration = {
     return new WebOnboardingExecutionRuntime({
       finishOnboarding: () => onboardingService.finishOnboarding(),
 
-      getOnboardingState: () => onboardingService.getState(),
-
       readDocument: async (type) => {
         if (type === 'soul') {
           const inboxAgentId = await onboardingService.getInboxAgentId();

@@ -21,6 +21,7 @@ export interface CreateDefaultAgentSignalPoliciesOptions extends CreateFeedbackD
   classifierDiagnostics?: CreateAnalyzeIntentPolicyOptions['classifierDiagnostics'];
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
   procedure?: CreateAnalyzeIntentPolicyOptions['procedure'];
+  skillIntentClassifier?: CreateAnalyzeIntentPolicyOptions['skillIntentClassifier'];
   skillManagement?: SkillManagementActionHandlerOptions;
   userMemory?: UserMemoryActionHandlerOptions;
 }

@@ -10,9 +10,17 @@ export interface ShouldEmitTopicBriefInput {
   task: Pick<TaskItem, 'automationMode'> | null;
 }
 
+/**
+ * Three-state result so the caller can tell "rule has a definite answer" from
+ * "rule is not equipped to decide — defer to the LLM judge".
+ *
+ * - `'yes'` / `'no'` — deterministic; persist as-is with `source: 'rule'`.
+ * - `'unknown'` — pure rules can't tell; caller invokes `chainJudgeBriefEmit`
+ *   and records the LLM's verdict with `source: 'llm-judge'`.
+ */
 export interface ShouldEmitTopicBriefResult {
-  emit: boolean;
-  reason?: string;
+  emit: 'no' | 'unknown' | 'yes';
+  reason: string;
 }
 
 /**
@@ -21,22 +29,42 @@ export interface ShouldEmitTopicBriefResult {
  * Pure function — caller wires inputs from `task` / `reason` / etc. Keeping
  * the rule pure makes it easy to unit-test and to reason about.
  *
- * The error and judge paths build their own briefs upstream; we skip them here
- * to avoid duplicates. Heartbeat/schedule ticks default to "no brief" because
- * each tick is just a status nudge, not a delivery moment — that policy can be
- * revisited later if we want periodic insight briefs.
+ * Conclusive branches:
+ * - `'yes'` — scheduled tick (contractually owes the user a brief every
+ *   run); execution error (the user must be told the run failed). Note:
+ *   today the error branch in `onTopicComplete` builds its own urgent
+ *   error brief inline, so this rule only fires once that path is folded
+ *   into `synthesizeTopicBrief`. The verdict is correct ahead of time.
+ * - `'no'` — review-judge already produced a brief upstream, review is
+ *   configured (judge owns the next run), or trivial content on a manual
+ *   tick. Heartbeat used to be `'no'` here too, but is now deferred to the
+ *   judge: most heartbeat ticks are mid-loop noise, but the occasional one
+ *   surfaces something the user would want to see, and that judgment
+ *   requires reading the content.
+ *
+ * Non-conclusive branch:
+ * - `'unknown'` — heartbeat tick, OR non-trivial content on a manual /
+ *   non-scheduled task with no review configured. Caller defers to
+ *   `chainJudgeBriefEmit`.
  */
 export const shouldEmitTopicBrief = (
   input: ShouldEmitTopicBriefInput,
 ): ShouldEmitTopicBriefResult => {
-  if (input.reason === 'error') return { emit: false, reason: 'error-branch-handled' };
-  if (input.reviewTerminated) return { emit: false, reason: 'judge-handled' };
+  if (input.reason === 'error') return { emit: 'yes', reason: 'execution-error' };
+  if (input.reviewTerminated) return { emit: 'no', reason: 'judge-handled' };
   // The judge path may not have terminated (e.g. review disabled or threw),
   // but if review is configured we still defer to it on subsequent runs.
-  if (input.hasReviewConfigEnabled) return { emit: false, reason: 'review-config-enabled' };
-  if (input.task?.automationMode) return { emit: false, reason: 'automation-tick' };
-  if (input.isTrivialContent) return { emit: false, reason: 'trivial-content' };
-  return { emit: true };
+  if (input.hasReviewConfigEnabled) return { emit: 'no', reason: 'review-config-enabled' };
+  if (input.task?.automationMode === 'heartbeat') {
+    return { emit: 'unknown', reason: 'heartbeat-needs-judge' };
+  }
+  if (input.task?.automationMode === 'schedule') {
+    return { emit: 'yes', reason: 'scheduled-tick' };
+  }
+  if (input.isTrivialContent) {
+    return { emit: 'no', reason: 'trivial-content' };
+  }
+  return { emit: 'unknown', reason: 'needs-llm-judge' };
 };
 
 /** Heuristic for "this content isn't a real delivery". */

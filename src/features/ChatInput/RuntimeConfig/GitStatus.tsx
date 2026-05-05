@@ -1,4 +1,4 @@
-import { Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -8,12 +8,12 @@ import { message } from '@/components/AntdStaticMethods';
 import RingLoadingIcon from '@/components/RingLoading';
 import { electronGitService } from '@/services/electron/git';
 import { electronSystemService } from '@/services/electron/system';
+import { useGlobalStore } from '@/store/global';
 
 import BranchSwitcher from './BranchSwitcher';
 import { useGitAheadBehind } from './useGitAheadBehind';
 import { useGitInfo } from './useGitInfo';
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
-import WorkingTreeFilesContent from './WorkingTreeFilesContent';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -145,15 +145,21 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
   const { data: aheadBehind, mutate: mutateAheadBehind } = useGitAheadBehind(path);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [filesOpen, setFilesOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
+  const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
 
   const handleOpenPr = useCallback(() => {
     if (data?.pullRequest?.url) {
       void electronSystemService.openExternalLink(data.pullRequest.url);
     }
   }, [data?.pullRequest?.url]);
+
+  const handleOpenReview = useCallback(() => {
+    setWorkingSidebarTab('review');
+    toggleRightPanel(true);
+  }, [setWorkingSidebarTab, toggleRightPanel]);
 
   const refreshAfterSync = useCallback(async () => {
     await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
@@ -316,7 +322,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const diffNode = (() => {
     if (!hasChanges || !workingStatus) return null;
     const diffButton = (
-      <div className={styles.trigger} role="button">
+      <div className={styles.trigger} role="button" onClick={handleOpenReview}>
         <span className={styles.diffStat}>
           {workingStatus.added > 0 && (
             <span className={styles.diffStatAdded}>+{workingStatus.added}</span>
@@ -330,21 +336,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
         </span>
       </div>
     );
-    return (
-      <Popover
-        arrow={false}
-        content={<WorkingTreeFilesContent enabled={filesOpen} path={path} />}
-        open={filesOpen}
-        placement="bottomLeft"
-        styles={{ content: { padding: 0 } }}
-        trigger="click"
-        onOpenChange={setFilesOpen}
-      >
-        <div>
-          {filesOpen ? diffButton : <Tooltip title={diffStatTooltip}>{diffButton}</Tooltip>}
-        </div>
-      </Popover>
-    );
+    return <Tooltip title={diffStatTooltip}>{diffButton}</Tooltip>;
   })();
 
   return (

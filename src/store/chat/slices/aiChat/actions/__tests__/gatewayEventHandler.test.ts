@@ -2,6 +2,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
@@ -14,6 +15,9 @@ vi.mock('@/services/message', () => ({
 }));
 vi.mock('@/store/chat/utils/desktopNotification', () => ({
   notifyDesktopHumanApprovalRequired: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/store/chat/slices/aiChat/actions/agentSignalBridge', () => ({
+  emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── Test Helpers ───
@@ -74,6 +78,15 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
       expect(store.replaceMessages).toHaveBeenCalled();
+      expect(emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            assistantMessageId: 'msg-step2',
+            operationId: 'op-1',
+          }),
+          sourceType: 'client.gateway.stream_start',
+        }),
+      );
     });
 
     it('should keep current ID if event data has no assistantMessage', async () => {
@@ -348,6 +361,25 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
       expect(store.replaceMessages).toHaveBeenCalled();
+    });
+
+    it('should emit runtime end signal with the current assistant message id', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
+      handler(makeEvent('agent_runtime_end'));
+      await flush();
+
+      expect(emitClientAgentSignalSourceEvent).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            assistantMessageId: 'msg-step2',
+            operationId: 'op-1',
+          }),
+          sourceType: 'client.gateway.runtime_end',
+        }),
+      );
     });
   });
 

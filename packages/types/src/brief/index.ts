@@ -23,14 +23,14 @@ export interface BriefAction {
  */
 export const DEFAULT_BRIEF_ACTIONS: Record<string, BriefAction[]> = {
   decision: [
-    { key: 'approve', label: '✅ 确认', type: 'resolve' },
-    { key: 'feedback', label: '💬 修改意见', type: 'comment' },
+    { key: 'approve', label: '✅ Confirm', type: 'resolve' },
+    { key: 'feedback', label: '💬 Request changes', type: 'comment' },
   ],
   error: [
-    { key: 'retry', label: '🔄 重试', type: 'resolve' },
-    { key: 'feedback', label: '💬 反馈', type: 'comment' },
+    { key: 'retry', label: '🔄 Retry', type: 'resolve' },
+    { key: 'feedback', label: '💬 Feedback', type: 'comment' },
   ],
-  insight: [{ key: 'acknowledge', label: '👍 知悉', type: 'resolve' }],
+  insight: [{ key: 'acknowledge', label: '👍 Acknowledged', type: 'resolve' }],
 };
 
 /** Brief type — must match DEFAULT_BRIEF_ACTIONS keys and DB schema comment */

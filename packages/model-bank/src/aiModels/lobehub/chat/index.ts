@@ -10,10 +10,10 @@ import { xiaomimimoChatModels } from './xiaomimimo';
 import { zhipuChatModels } from './zhipu';
 
 export const lobehubChatModels: AIChatModelCard[] = [
+  ...deepseekChatModels,
   ...anthropicChatModels,
   ...googleChatModels,
   ...openaiChatModels,
-  ...deepseekChatModels,
   ...xaiChatModels,
   ...moonshotChatModels,
   ...minimaxChatModels,

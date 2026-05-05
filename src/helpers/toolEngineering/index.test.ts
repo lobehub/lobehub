@@ -59,6 +59,40 @@ vi.mock('@/store/tool', () => ({
         } as unknown as ToolManifest,
         type: 'builtin' as const,
       },
+      {
+        identifier: 'lobe-agent',
+        manifest: {
+          api: [
+            {
+              description: 'Analyze visual media',
+              name: 'analyzeVisualMedia',
+              parameters: {
+                anyOf: [{ required: ['refs'] }, { required: ['urls'] }],
+                properties: {
+                  question: { type: 'string' },
+                  refs: {
+                    items: { type: 'string' },
+                    type: 'array',
+                  },
+                  urls: {
+                    items: { type: 'string' },
+                    type: 'array',
+                  },
+                },
+                required: ['question'],
+                type: 'object',
+              },
+            },
+          ],
+          identifier: 'lobe-agent',
+          meta: {
+            title: 'Lobe Agent',
+            avatar: 'V',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
     ],
   }),
 }));
@@ -217,6 +251,35 @@ describe('toolEngineering', () => {
 
       expect(result.enabledToolIds).toEqual(['search', 'lobe-web-browsing']);
       expect(result.enabledToolIds).toHaveLength(2);
+    });
+
+    it('should enable visual understanding when it is injected into runtime plugin ids', () => {
+      const toolsEngine = createAgentToolsEngine({ model: 'deepseek-chat', provider: 'deepseek' }, [
+        'lobe-agent',
+      ]);
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-agent');
+    });
+
+    it('should not enable visual understanding by default', () => {
+      const toolsEngine = createAgentToolsEngine({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-agent');
     });
   });
 

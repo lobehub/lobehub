@@ -7,11 +7,18 @@ import WriteFile from './WriteFile';
 
 /**
  * Cloud Sandbox Intervention Components Registry
+ *
+ * Each component is also registered under the legacy long API name so old DB
+ * messages with apiName like 'editLocalFile' still resolve after the rename.
  */
 export const CloudSandboxInterventions = {
-  [CloudSandboxApiName.editLocalFile]: EditLocalFile,
+  [CloudSandboxApiName.editFile]: EditLocalFile,
   [CloudSandboxApiName.executeCode]: ExecuteCode,
-  [CloudSandboxApiName.moveLocalFiles]: MoveLocalFiles,
+  [CloudSandboxApiName.moveFiles]: MoveLocalFiles,
   [CloudSandboxApiName.runCommand]: RunCommand,
-  [CloudSandboxApiName.writeLocalFile]: WriteFile,
+  [CloudSandboxApiName.writeFile]: WriteFile,
+  // Legacy aliases — keep these so historical messages keep rendering
+  editLocalFile: EditLocalFile,
+  moveLocalFiles: MoveLocalFiles,
+  writeLocalFile: WriteFile,
 };

@@ -109,6 +109,7 @@ export default {
   'localFiles.grepContent.glob': 'File filter',
   'localFiles.grepContent.pattern': 'Search pattern',
   'localFiles.grepContent.type': 'File type',
+  'localFiles.listFiles.emptyDirectory': 'This directory is empty',
   'localFiles.moveFiles.itemsMoved': '{{count}} item(s) moved:',
   'localFiles.moveFiles.itemsMoved_one': '{{count}} item moved:',
   'localFiles.moveFiles.itemsMoved_other': '{{count}} items moved:',
@@ -163,7 +164,6 @@ export default {
   'localFiles.writeFile.characters': 'characters',
   'localFiles.writeFile.preview': 'Content Preview',
   'localFiles.writeFile.truncated': 'truncated',
-  'search.createNewSearch': 'Create a new search record',
   'search.emptyResult': 'No results found, please modify your keywords and try again',
   'search.genAiMessage': 'Create Agent Message',
   'search.includedTooltip':
@@ -197,7 +197,6 @@ export default {
   'search.searchTimeRange.value.week': 'Within a week',
   'search.searchTimeRange.value.year': 'Within a year',
   'search.summary': 'Summary',
-  'search.summaryTooltip': 'Summarize the current content',
   'search.viewMoreResults': 'View {{results}} more results',
   'updateArgs.duplicateKeyError': 'Field key must be unique',
   'updateArgs.form.add': 'Add an Item',

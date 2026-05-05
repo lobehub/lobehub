@@ -131,6 +131,12 @@ export interface JudgeFeedbackDomainsParams {
   message: string;
   reason: string;
   result: AgentSignalFeedbackSatisfactionResult;
+  /**
+   * Recent thread context assembled by the workflow.
+   *
+   * @default undefined
+   */
+  serializedContext?: string;
 }
 
 /**
@@ -194,7 +200,7 @@ export class FeedbackDomainJudgeAgentService {
         model: this.modelConfig.model,
         schema: FeedbackDomainGenerateObjectSchema,
       },
-      { metadata: { trigger: RequestTrigger.Memory } },
+      { metadata: { trigger: RequestTrigger.AgentSignal } },
     );
 
     return FeedbackDomainJudgeAgentResultSchema.parse({
