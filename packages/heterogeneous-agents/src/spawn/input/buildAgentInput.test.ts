@@ -80,6 +80,62 @@ describe('buildAgentInput', () => {
       });
     });
 
+    it('falls back to byte sniffing when the URL response Content-Type is generic (octet-stream)', async () => {
+      // CDNs / object stores commonly default to application/octet-stream when
+      // they strip the original Content-Type. Trusting that header verbatim
+      // would serialize `media_type: "application/octet-stream"` into stream-
+      // json, which Claude API rejects — sniff the bytes instead.
+      const fetcher = vi.fn(
+        async () =>
+          new Response(PNG_BYTES, {
+            headers: { 'content-type': 'application/octet-stream' },
+            status: 200,
+          }),
+      ) as unknown as typeof fetch;
+
+      const plan = await buildAgentInput(
+        'claude-code',
+        [{ source: { type: 'url', url: 'https://x/y' }, type: 'image' }],
+        { fetcher },
+      );
+      const msg = JSON.parse(plan.stdin.trim());
+      expect(msg.message.content[0].source.media_type).toBe('image/png');
+    });
+
+    it('upgrades a base64 source declared as octet-stream to its sniffed image type', async () => {
+      const plan = await buildAgentInput('claude-code', [
+        {
+          source: {
+            data: PNG_BYTES.toString('base64'),
+            mediaType: 'application/octet-stream',
+            type: 'base64',
+          },
+          type: 'image',
+        },
+      ]);
+      const msg = JSON.parse(plan.stdin.trim());
+      expect(msg.message.content[0].source.media_type).toBe('image/png');
+    });
+
+    it('prefers the URL extension hint over a generic Content-Type header', async () => {
+      const fetcher = vi.fn(
+        async () =>
+          // No content-type at all + bytes are unrecognized — but URL has .jpg.
+          new Response(Buffer.from('garbage'), {
+            headers: { 'content-type': 'application/octet-stream' },
+            status: 200,
+          }),
+      ) as unknown as typeof fetch;
+
+      const plan = await buildAgentInput(
+        'claude-code',
+        [{ source: { type: 'url', url: 'https://x/photo.jpg' }, type: 'image' }],
+        { fetcher },
+      );
+      const msg = JSON.parse(plan.stdin.trim());
+      expect(msg.message.content[0].source.media_type).toBe('image/jpeg');
+    });
+
     it('fetches a URL via the injected fetcher and caches the bytes when cacheDir is set', async () => {
       const fetcher = vi.fn(
         async () =>

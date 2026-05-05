@@ -304,6 +304,29 @@ describe('hetero exec command', () => {
     ]);
   });
 
+  it('reports spawnAgent rejections (e.g. missing --image path) as a clean error + exit(1)', async () => {
+    // spawnAgent is now async and can reject during image normalization —
+    // missing local --image paths, fetch failures, etc. The CLI must catch
+    // these and exit with a friendly message instead of crashing on an
+    // unhandled rejection.
+    mockSpawnAgent.mockReturnValue(
+      Promise.reject(new Error('ENOENT: no such file or directory, open /missing.png')),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'see',
+      '--image',
+      '/missing.png',
+    ]);
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('rejects --prompt + --input-json (mutually exclusive)', async () => {
     await runCmd([
       'hetero',

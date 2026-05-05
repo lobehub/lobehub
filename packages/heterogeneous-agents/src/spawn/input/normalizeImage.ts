@@ -85,6 +85,43 @@ const guessMediaTypeFromUrl = (url: string): string | undefined => {
 const cacheKeyForUrl = (source: { id?: string; url: string }): string =>
   sha256Hex(source.id || source.url);
 
+const isRecognizedImageMediaType = (mediaType: string): boolean =>
+  Boolean(EXT_BY_MEDIA_TYPE[mediaType]);
+
+/**
+ * Choose the most trustworthy image media type given the available signals.
+ *
+ * Generic / non-image header values (`application/octet-stream`, `text/plain`,
+ * empty) are common from CDNs that strip extensions and fall back to a default
+ * Content-Type — we'd rather sniff the URL extension or PNG/JPEG/GIF/WebP byte
+ * signatures than serialize an unrecognized type into a `media_type` field
+ * that downstream agents (Claude API) will reject.
+ *
+ * Resolution order:
+ *   1. Header type, only if it's a recognized image/* we know how to extension-map
+ *   2. URL extension hint
+ *   3. Byte-signature sniff
+ *   4. Raw header value as a last resort (preserves whatever the server claimed
+ *      so the caller at least sees the original signal)
+ *   5. `image/png` fallback
+ */
+const pickImageMediaType = (
+  rawHeaderType: string | undefined | null,
+  url: string | undefined,
+  buffer: Buffer,
+): string => {
+  const headerType = normalizeMediaType(rawHeaderType);
+  if (headerType && isRecognizedImageMediaType(headerType)) return headerType;
+
+  const urlType = url ? guessMediaTypeFromUrl(url) : undefined;
+  if (urlType) return urlType;
+
+  const sniffed = guessMediaTypeFromBuffer(buffer);
+  if (sniffed) return sniffed;
+
+  return headerType || 'image/png';
+};
+
 const fetchUrlImage = async (
   source: { id?: string; url: string },
   options: NormalizeImageOptions,
@@ -99,8 +136,7 @@ const fetchUrlImage = async (
     try {
       const meta = JSON.parse(await readFile(metaPath, 'utf8')) as { mediaType?: string };
       const buffer = await readFile(dataPath);
-      const mediaType =
-        normalizeMediaType(meta.mediaType) || guessMediaTypeFromBuffer(buffer) || 'image/png';
+      const mediaType = pickImageMediaType(meta.mediaType, source.url, buffer);
       return { buffer, mediaType };
     } catch {
       // cache miss — fall through to fetch
@@ -114,11 +150,7 @@ const fetchUrlImage = async (
     );
   }
   const buffer = Buffer.from(await res.arrayBuffer());
-  const mediaType =
-    normalizeMediaType(res.headers.get('content-type')) ||
-    guessMediaTypeFromUrl(source.url) ||
-    guessMediaTypeFromBuffer(buffer) ||
-    'image/png';
+  const mediaType = pickImageMediaType(res.headers.get('content-type'), source.url, buffer);
 
   if (cacheDir) {
     const key = cacheKeyForUrl(source);
@@ -143,7 +175,11 @@ const readPathImage = async (filePath: string): Promise<NormalizedImage> => {
 
 const decodeBase64Image = (data: string, mediaType: string): NormalizedImage => {
   const buffer = Buffer.from(data, 'base64');
-  const resolved = normalizeMediaType(mediaType) || guessMediaTypeFromBuffer(buffer) || 'image/png';
+  // The caller's declared mediaType wins only when it's a recognized image
+  // type — base64 sources commonly default to `application/octet-stream` from
+  // upstream encoders, which would otherwise serialize into a `media_type`
+  // that downstream agents (Claude API) reject.
+  const resolved = pickImageMediaType(mediaType, undefined, buffer);
   return { buffer, mediaType: resolved };
 };
 

@@ -177,14 +177,24 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // server-allocated id.
   const operationId = options.operationId || randomUUID();
 
-  const handle = await spawnAgent({
-    agentType: options.type,
-    command: options.command,
-    cwd: options.cwd || process.cwd(),
-    operationId,
-    prompt: resolved.prompt,
-    resumeSessionId: options.resume,
-  });
+  // `spawnAgent` is async and can reject DURING image normalization — fetch
+  // failures, missing local --image paths, decode errors. Surface those as a
+  // clean error + exit code instead of an unhandled promise rejection / stack
+  // trace, mirroring the validation try/catch above.
+  let handle: Awaited<ReturnType<typeof spawnAgent>>;
+  try {
+    handle = await spawnAgent({
+      agentType: options.type,
+      command: options.command,
+      cwd: options.cwd || process.cwd(),
+      operationId,
+      prompt: resolved.prompt,
+      resumeSessionId: options.resume,
+    });
+  } catch (err) {
+    log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
 
   // Forward the child's stderr to ours so users see CLI errors / warnings
   // (auth prompts, missing-binary errors, etc.) in the terminal.
