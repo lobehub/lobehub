@@ -217,6 +217,114 @@ describe('spawnAgent', () => {
     expect(exit.code).toBe(0);
   });
 
+  /**
+   * Regression for the "out-of-order events when push() is async" bug.
+   * `AgentStreamPipeline.push` is async (Codex tracker awaits FS), so
+   * back-to-back stdout chunks would otherwise have their `then` handlers
+   * race. Spy on `push` to make chunk #1 resolve AFTER chunk #2 — the spawn
+   * helper must serialize the work so events still come out in source order.
+   */
+  it('preserves event ordering across async pipeline.push() calls (Codex tracker race)', async () => {
+    vi.resetModules();
+
+    const { AgentStreamPipeline: RealPipeline } = await import('./agentStreamPipeline');
+    const pipelineSpy = vi.spyOn(RealPipeline.prototype, 'push').mockImplementation(function (
+      this: any,
+      chunk: Buffer | string,
+    ) {
+      const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+      const tag = text.trim();
+      // Earlier-arriving chunk gets a longer delay than later-arriving one,
+      // so without the queue chain the later chunk's `then` handler fires
+      // first and the events come out reversed.
+      const delay = tag === 'A' ? 30 : 0;
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve([
+            {
+              data: { tag },
+              operationId: this.operationId,
+              stepIndex: 0,
+              timestamp: 0,
+              type: 'stream_chunk' as const,
+            },
+          ]);
+        }, delay);
+      });
+    });
+    vi.spyOn(RealPipeline.prototype, 'flush').mockResolvedValue([]);
+
+    const fake = createFakeProc();
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = spawnAgent({ agentType: 'claude-code', operationId: 'op-1', prompt: 'go' });
+
+    // Fire two chunks back-to-back BEFORE 'end'. Both `pipeline.push()` calls
+    // are now in flight; without serialization, B's events would queue first.
+    setImmediate(() => {
+      (fake.proc.stdout as PassThrough).write('A');
+      (fake.proc.stdout as PassThrough).write('B');
+      // Give the queue chain time to drain before ending.
+      setTimeout(() => {
+        (fake.proc.stdout as PassThrough).end();
+        fake.proc.emit('exit', 0, null);
+      }, 60);
+    });
+
+    const collected: any[] = [];
+    for await (const event of handle.events) collected.push(event.data.tag);
+
+    expect(collected).toEqual(['A', 'B']);
+    pipelineSpy.mockRestore();
+  });
+
+  /**
+   * Regression for the "iterator returns done before late push events queue"
+   * bug. Force `push()` to be slow + `end` to fire while it's still pending.
+   * Without the queue chain, `flush()` would set `streamEnded = true` before
+   * the slow push's events landed in the queue.
+   */
+  it('iterator drains slow in-flight pushes before flushing the stream', async () => {
+    vi.resetModules();
+
+    const { AgentStreamPipeline: RealPipeline } = await import('./agentStreamPipeline');
+    vi.spyOn(RealPipeline.prototype, 'push').mockImplementation(function (this: any) {
+      // 40ms delay simulates the codex tracker's FS reads.
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve([
+            {
+              data: {},
+              operationId: this.operationId,
+              stepIndex: 0,
+              timestamp: 0,
+              type: 'stream_chunk' as const,
+            },
+          ]);
+        }, 40);
+      });
+    });
+    vi.spyOn(RealPipeline.prototype, 'flush').mockResolvedValue([]);
+
+    const fake = createFakeProc();
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = spawnAgent({ agentType: 'claude-code', operationId: 'op-1', prompt: 'go' });
+
+    // 'end' fires immediately after the chunk write — pipeline.push() is still
+    // pending. The fix must keep the iterator open until that push resolves.
+    setImmediate(() => {
+      (fake.proc.stdout as PassThrough).write('chunk');
+      (fake.proc.stdout as PassThrough).end();
+      fake.proc.emit('exit', 0, null);
+    });
+
+    const collected: any[] = [];
+    for await (const event of handle.events) collected.push(event);
+
+    expect(collected).toHaveLength(1);
+  });
+
   it('events iterator surfaces a stream error instead of hanging', async () => {
     const fake = createFakeProc();
     nextFakeProc = fake.proc;

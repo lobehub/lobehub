@@ -202,39 +202,56 @@ export const spawnAgent = (options: SpawnAgentOptions): SpawnAgentHandle => {
     }
   };
 
-  stdout.on('data', (chunk: Buffer) => {
-    pipeline
-      .push(chunk)
-      .then((events) => {
+  // ALL pipeline work — push / flush — runs through this single chain so:
+  //   1. multiple `'data'` chunks process in arrival order, even when an
+  //      earlier `pipeline.push()` is still awaiting the Codex tracker's FS
+  //      reads (without the chain, push #2 can resolve before push #1 and
+  //      events come out of order)
+  //   2. `'end'`'s flush always runs AFTER every queued push has drained, so
+  //      `streamEnded` is never flipped while earlier chunks still have events
+  //      to deliver — otherwise the async iterator could return `done: true`
+  //      before late events were queued (event loss).
+  let pipelineQueue: Promise<void> = Promise.resolve();
+
+  const enqueuePush = (chunk: Buffer) => {
+    pipelineQueue = pipelineQueue.then(async () => {
+      try {
+        const events = await pipeline.push(chunk);
         for (const event of events) queue.push(event);
         wake();
-      })
-      .catch((err: unknown) => {
+      } catch (err) {
         streamError = err instanceof Error ? err : new Error(String(err));
         streamEnded = true;
         wake();
-      });
-  });
+      }
+    });
+  };
 
-  stdout.on('end', () => {
-    pipeline
-      .flush()
-      .then((events) => {
+  const enqueueFlush = () => {
+    pipelineQueue = pipelineQueue.then(async () => {
+      try {
+        const events = await pipeline.flush();
         for (const event of events) queue.push(event);
-      })
-      .catch((err: unknown) => {
+      } catch (err) {
         streamError = err instanceof Error ? err : new Error(String(err));
-      })
-      .finally(() => {
+      } finally {
         streamEnded = true;
         wake();
-      });
-  });
+      }
+    });
+  };
 
+  stdout.on('data', enqueuePush);
+  stdout.on('end', enqueueFlush);
   stdout.on('error', (err) => {
-    streamError = err;
-    streamEnded = true;
-    wake();
+    // Append onto the same chain so the error is surfaced strictly after any
+    // in-flight push finishes — late events still get a chance to land before
+    // the iterator throws.
+    pipelineQueue = pipelineQueue.then(() => {
+      streamError = err;
+      streamEnded = true;
+      wake();
+    });
   });
 
   const events: AsyncIterable<AgentStreamEvent> = {
