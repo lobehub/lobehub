@@ -8,6 +8,7 @@ import { lazy, memo, type PropsWithChildren, Suspense, useLayoutEffect } from 'r
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
 import { isDesktop } from '@/const/version';
+import AgentMockDevtools from '@/features/AgentMockDevtools';
 import AuthProvider from '@/layout/AuthProvider';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
 import DynamicFavicon from '@/layout/GlobalProvider/DynamicFavicon';
@@ -31,7 +32,6 @@ const ToastHost = lazy(() => import('@lobehub/ui/base-ui').then((m) => ({ defaul
 const ContextMenuHost = lazy(() =>
   import('@lobehub/ui').then((m) => ({ default: m.ContextMenuHost })),
 );
-const AgentMockDevtools = lazy(() => import('@/features/AgentMockDevtools'));
 
 const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
   useLayoutEffect(() => {
