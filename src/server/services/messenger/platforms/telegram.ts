@@ -65,7 +65,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
         platform: 'telegram',
         settings: {},
       },
-      { appUrl: appEnv.WEBHOOK_PUBLIC_URL },
+      { appUrl: appEnv.APP_URL },
     );
   }
 

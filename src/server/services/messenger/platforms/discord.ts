@@ -93,7 +93,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
         platform: 'discord',
         settings: {},
       },
-      { appUrl: appEnv.WEBHOOK_PUBLIC_URL },
+      { appUrl: appEnv.APP_URL },
     );
   }
 

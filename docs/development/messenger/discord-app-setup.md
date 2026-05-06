@@ -14,7 +14,7 @@ Each App's credentials are stored in the `system_bot_providers` DB table and man
 
 ## Prerequisites
 
-- A LobeHub deployment reachable on a stable HTTPS URL (`APP_URL`). For local dev use a tunnel — `cloudflared tunnel --url http://localhost:3010`, `ngrok http 3010`, etc. — and set both `APP_URL` and `WEBHOOK_PUBLIC_URL` to the tunnel URL.
+- A LobeHub deployment reachable on a stable HTTPS URL (`APP_URL`). For local dev use a tunnel — `cloudflared tunnel --url http://localhost:3010`, `ngrok http 3010`, etc. — and set `APP_URL` to the tunnel URL.
 - A Discord account that can create applications at <https://discord.com/developers/applications>.
 - A Discord server (guild) where you have **Manage Server** permission, to invite the bot for testing.
 - Access to the dc-center admin UI (where credentials are stored) and a `KEY_VAULTS_SECRET` env value shared between lobehub-dev and dc-center.

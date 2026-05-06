@@ -66,14 +66,14 @@ export const GET = async (req: Request): Promise<Response> => {
     return Response.redirect(new URL(`/signin?callbackUrl=${callbackUrl}`, url.origin), 302);
   }
 
-  // 2. Env precondition — give a clear 503 instead of letting Slack reject us.
+  // 2. Config precondition — give a clear 503 instead of letting Slack reject us.
   const config = await getMessengerSlackConfig();
   if (!config) {
-    log('install: Slack messenger env not configured');
+    log('install: Slack messenger not configured');
     return new Response(
       'Slack messenger is not configured on this LobeHub deployment. ' +
-        'Ask the operator to set LOBE_SLACK_CLIENT_ID / LOBE_SLACK_CLIENT_SECRET / ' +
-        'LOBE_SLACK_SIGNING_SECRET / LOBE_SLACK_APP_ID and restart.',
+        'Ask the operator to add a Slack bot in dc-center → Agent → System Bots ' +
+        '(appId / clientId / clientSecret / signingSecret) and enable it.',
       { status: 503 },
     );
   }

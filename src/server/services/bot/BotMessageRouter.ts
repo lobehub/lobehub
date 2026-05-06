@@ -297,7 +297,7 @@ export class BotMessageRouter {
     );
 
     const runtimeContext: BotPlatformRuntimeContext = {
-      appUrl: appEnv.WEBHOOK_PUBLIC_URL,
+      appUrl: appEnv.APP_URL,
       redisClient: getAgentRuntimeRedisClient() as any,
     };
 

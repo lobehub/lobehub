@@ -51,12 +51,11 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
 }));
 
-// Stub appEnv so accessing `appEnv.WEBHOOK_PUBLIC_URL` in vitest doesn't trip
+// Stub appEnv so accessing `appEnv.APP_URL` in vitest doesn't trip
 // `@t3-oss/env-nextjs`'s client-side access guard.
 vi.mock('@/envs/app', () => ({
   appEnv: {
     APP_URL: 'http://localhost:3010',
-    WEBHOOK_PUBLIC_URL: 'http://localhost:3010',
   },
 }));
 

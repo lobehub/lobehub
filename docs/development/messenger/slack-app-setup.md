@@ -14,7 +14,7 @@ Each App's client credentials (`appId` / `clientId` / `clientSecret` / `signingS
 
 ## Prerequisites
 
-- A LobeHub deployment reachable on a stable HTTPS URL (`APP_URL`). For local dev use a tunnel — `cloudflared tunnel --url http://localhost:3010`, `ngrok http 3010`, etc. — and set both `APP_URL` and `WEBHOOK_PUBLIC_URL` to the tunnel URL.
+- A LobeHub deployment reachable on a stable HTTPS URL (`APP_URL`). For local dev use a tunnel — `cloudflared tunnel --url http://localhost:3010`, `ngrok http 3010`, etc. — and set `APP_URL` to the tunnel URL.
 - A Slack workspace where you have admin rights (to create / install Apps).
 
 > **Local dev tip**: cloudflared / ngrok hand out a different hostname every restart. When the tunnel URL changes you must update every URL field in the Slack App console (see [Slack URL surfaces](#slack-url-surfaces) below) — Slack does NOT auto-discover them from the manifest file. A long-lived `cloudflared tunnel` (named tunnel with a stable subdomain) avoids this churn.

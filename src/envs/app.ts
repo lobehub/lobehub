@@ -29,15 +29,6 @@ const APP_URL = process.env.APP_URL
 // Falls back to APP_URL if not set
 const INTERNAL_APP_URL = process.env.INTERNAL_APP_URL || APP_URL;
 
-// WEBHOOK_PUBLIC_URL is the URL external services (Telegram, Slack, Feishu …)
-// use to call back into us. Falls back to APP_URL.
-//
-// Primary use case is local dev with a tunnel (ngrok / cloudflared): set
-// APP_URL=http://localhost:3010 (so auth/redirects keep working locally) and
-// WEBHOOK_PUBLIC_URL=https://xxx.ngrok-free.app — all per-user bots and the
-// shared messenger bot will then register their webhooks against the tunnel URL.
-const WEBHOOK_PUBLIC_URL = process.env.WEBHOOK_PUBLIC_URL || APP_URL;
-
 const ASSISTANT_INDEX_URL = 'https://registry.npmmirror.com/@lobehub/agents-index/v1/files/public';
 
 const PLUGINS_INDEX_URL = 'https://registry.npmmirror.com/@lobehub/plugins-index/v1/files/public';
@@ -59,7 +50,6 @@ export const getAppConfig = () => {
 
       APP_URL: z.string(),
       INTERNAL_APP_URL: z.string().optional(),
-      WEBHOOK_PUBLIC_URL: z.string().optional(),
       VERCEL_EDGE_CONFIG: z.string().optional(),
       MIDDLEWARE_REWRITE_THROUGH_LOCAL: z.boolean().optional(),
 
@@ -117,7 +107,6 @@ export const getAppConfig = () => {
 
       APP_URL,
       INTERNAL_APP_URL,
-      WEBHOOK_PUBLIC_URL,
       MIDDLEWARE_REWRITE_THROUGH_LOCAL: process.env.MIDDLEWARE_REWRITE_THROUGH_LOCAL === '1',
 
       CUSTOM_FONT_FAMILY: process.env.CUSTOM_FONT_FAMILY,

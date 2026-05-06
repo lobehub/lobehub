@@ -95,7 +95,7 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
         platform: 'slack',
         settings: {},
       },
-      { appUrl: appEnv.WEBHOOK_PUBLIC_URL },
+      { appUrl: appEnv.APP_URL },
     );
   }
 

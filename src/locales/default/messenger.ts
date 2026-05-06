@@ -16,17 +16,16 @@ export default {
   'messenger.linkModal.instructions':
     'Open the bot, send /start, then tap "Link Account" to connect your LobeHub account.',
   'messenger.linkModal.notConfigured':
-    'Bot username is not configured. Set LOBE_TELEGRAM_BOT_USERNAME (without "@") in your environment to enable the deep link.',
+    "This connection isn't available right now. Please try again later.",
   'messenger.linkModal.openCta': 'Open in {{platform}}',
   'messenger.linkModal.scanHint': 'Or scan with your phone to open {{platform}}.',
   'messenger.linkModal.title': 'Connect Messenger',
-  'messenger.noPlatformsConfigured':
-    'No messenger platforms are configured. Set bot tokens (e.g. LOBE_TELEGRAM_BOT_TOKEN) in your environment to enable.',
+  'messenger.noPlatformsConfigured': 'No platforms are available yet. Check back soon.',
   'messenger.slack.connectModal.continueButton': 'Continue in Slack',
   'messenger.slack.connectModal.description':
     'You will be redirected to Slack to authorize the LobeHub workspace install.',
   'messenger.slack.connectModal.notConfigured':
-    'Slack OAuth is not configured. Set LOBE_SLACK_CLIENT_ID, LOBE_SLACK_CLIENT_SECRET, LOBE_SLACK_SIGNING_SECRET and LOBE_SLACK_APP_ID.',
+    "Slack isn't available right now. Please try again later.",
   'messenger.slack.connectModal.title': 'Continue setup in Slack',
   'messenger.slack.connections.disconnectConfirm':
     'Disconnect the LobeHub bot from this Slack workspace? Existing user links will pause until you re-install.',
@@ -49,7 +48,7 @@ export default {
     'Add the bot to a Discord server you own (so it can DM you), then open the bot in Discord and send any message to start linking.',
   'messenger.discord.connectModal.inviteButton': 'Add to Discord server',
   'messenger.discord.connectModal.notConfigured':
-    'Discord is not configured. Set LOBE_DISCORD_BOT_TOKEN, LOBE_DISCORD_PUBLIC_KEY and LOBE_DISCORD_APPLICATION_ID.',
+    "Discord isn't available right now. Please try again later.",
   'messenger.discord.connectModal.title': 'Continue setup in Discord',
   'messenger.list.discord.description':
     'Chat with your LobeHub agents from any Discord server via DM with the LobeHub bot.',
