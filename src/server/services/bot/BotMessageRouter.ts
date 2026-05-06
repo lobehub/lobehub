@@ -882,9 +882,14 @@ export class BotMessageRouter {
           replyLocale,
         });
       } catch (error) {
-        log('onNewMention: unhandled error from handleMention: %O', error);
+        const operationId = AgentBridgeService.getActiveOperationId(thread.id);
+        log(
+          'onNewMention: unhandled error from handleMention: operationId=%s, %O',
+          operationId,
+          error,
+        );
         try {
-          await thread.post({ markdown: renderError(undefined, replyLocale) });
+          await thread.post({ markdown: renderError(operationId, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -991,9 +996,14 @@ export class BotMessageRouter {
           replyLocale,
         });
       } catch (error) {
-        log('onSubscribedMessage: unhandled error from handleSubscribedMessage: %O', error);
+        const operationId = AgentBridgeService.getActiveOperationId(thread.id);
+        log(
+          'onSubscribedMessage: unhandled error from handleSubscribedMessage: operationId=%s, %O',
+          operationId,
+          error,
+        );
         try {
-          await thread.post({ markdown: renderError(undefined, replyLocale) });
+          await thread.post({ markdown: renderError(operationId, replyLocale) });
         } catch {
           // best-effort notification
         }

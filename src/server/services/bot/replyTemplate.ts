@@ -229,7 +229,7 @@ type SystemStrings = {
   errorNoAvailableProvider: string;
   errorPermissionDenied: string;
   errorQuotaLimitReached: string;
-  errorWithDetails: (details: string) => string;
+  errorWithDetails: (details: string, operationId?: string) => string;
   errorWithId: (operationId: string) => string;
   groupRejectedAllowlist: string;
   groupRejectedDisabled: string;
@@ -284,8 +284,10 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "**Permission denied by the model provider.**\nThe API key doesn't have access to the requested model or operation. Please check the key's permissions, or switch to a model your account is authorized to use.",
     errorQuotaLimitReached:
       "**Provider quota exhausted.**\nThe configured model provider is out of quota or rate-limited. Please wait a moment and try again, top up the account, or switch to a different provider in the agent's settings.",
-    errorWithDetails: (details) =>
-      `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
+    errorWithDetails: (details, operationId) =>
+      operationId
+        ? `**Agent Execution Failed**\nOperation ID: \`${operationId}\`\nDetails:\n\`\`\`\n${details}\n\`\`\``
+        : `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent Execution Failed**\nOperation ID: \`${operationId}\``,
     groupRejectedAllowlist:
       "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
@@ -331,7 +333,10 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**模型 Provider 拒绝访问**\nAPI Key 没有访问该模型或操作的权限。请检查 Key 的权限范围，或在 Agent 设置中切换到当前账户已授权的模型。',
     errorQuotaLimitReached:
       '**Provider 配额已用尽**\n所配置的模型 Provider 已达到配额上限或被限流。请稍后重试、为账户充值，或在 Agent 设置中切换到其他 Provider。',
-    errorWithDetails: (details) => `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
+    errorWithDetails: (details, operationId) =>
+      operationId
+        ? `**Agent 执行失败**\nOperation ID: \`${operationId}\`\n详细信息：\n\`\`\`\n${details}\n\`\`\``
+        : `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
     groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
     groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
@@ -391,7 +396,12 @@ export function renderAgentError(
   const stringKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
   if (stringKey) {
     const value = strings[stringKey];
-    if (typeof value === 'string') return value;
+    if (typeof value === 'string') {
+      // Append the operationId as a traceable footer so operators can still
+      // grep logs for the failure even when the user-facing copy is a
+      // friendly, actionable message rather than the raw "Operation ID" line.
+      return operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
+    }
   }
 
   return operationId ? strings.errorWithId(operationId) : strings.error;
@@ -406,8 +416,12 @@ export function renderStopped(message?: string, lng?: BotReplyLocale): string {
  * message verbatim (typically for stale-topic or FK violations where the raw
  * detail helps the operator diagnose the failure).
  */
-export function renderErrorWithDetails(details: string, lng?: BotReplyLocale): string {
-  return getSystemStrings(lng).errorWithDetails(details);
+export function renderErrorWithDetails(
+  details: string,
+  lng?: BotReplyLocale,
+  operationId?: string,
+): string {
+  return getSystemStrings(lng).errorWithDetails(details, operationId);
 }
 
 /**

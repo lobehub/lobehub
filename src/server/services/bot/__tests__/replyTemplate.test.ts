@@ -359,17 +359,24 @@ describe('replyTemplate', () => {
   // ==================== renderAgentError ====================
 
   describe('renderAgentError', () => {
-    it('returns the friendly NoAvailableProvider copy and ignores the operation id', () => {
+    it('returns the friendly NoAvailableProvider copy and appends the operation id footer', () => {
       const out = renderAgentError('NoAvailableProvider', 'op-abc');
       expect(out).toContain('No model provider configured');
-      // The friendly message guides the user — the op id is irrelevant noise.
-      expect(out).not.toContain('op-abc');
+      // The friendly message guides the user; the op id is appended as a
+      // traceable footer so operators can still find the failure in logs.
+      expect(out).toContain('op-abc');
     });
 
-    it('renders Chinese NoAvailableProvider copy when locale is zh-CN', () => {
+    it('renders Chinese NoAvailableProvider copy with operation id footer when locale is zh-CN', () => {
       const out = renderAgentError('NoAvailableProvider', 'op-abc', 'zh-CN');
       expect(out).toContain('未配置可用的模型 Provider');
-      expect(out).not.toContain('op-abc');
+      expect(out).toContain('op-abc');
+    });
+
+    it('omits the operation id footer when none is provided', () => {
+      const out = renderAgentError('NoAvailableProvider', undefined);
+      expect(out).toContain('No model provider configured');
+      expect(out).not.toContain('Operation ID');
     });
 
     it('returns the friendly InvalidProviderAPIKey copy', () => {
@@ -494,6 +501,16 @@ describe('replyTemplate', () => {
       expect(out).toContain('Agent 执行失败');
       expect(out).toContain('详细信息');
       expect(out).toContain('stack trace');
+    });
+
+    it('includes the Operation ID footer when an operationId is provided', () => {
+      const en = renderErrorWithDetails('stack trace', undefined, 'op-xyz');
+      expect(en).toContain('Operation ID: `op-xyz`');
+      expect(en).toContain('stack trace');
+
+      const zh = renderErrorWithDetails('stack trace', 'zh-CN', 'op-xyz');
+      expect(zh).toContain('Operation ID: `op-xyz`');
+      expect(zh).toContain('stack trace');
     });
   });
 

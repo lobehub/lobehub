@@ -464,9 +464,10 @@ export class AgentBridgeService {
           log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
         }
       } catch (error) {
-        log('handleMention error: %O', error);
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleMention error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post({ markdown: renderError(undefined, replyLocale) });
+          await thread.post({ markdown: renderError(operationId, replyLocale) });
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -604,9 +605,12 @@ export class AgentBridgeService {
           return this.handleMention(thread, message, opts);
         }
 
-        log('handleSubscribedMessage error: %O', error);
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleSubscribedMessage error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post({ markdown: renderErrorWithDetails(errMsg, replyLocale) });
+          await thread.post({
+            markdown: renderErrorWithDetails(errMsg, replyLocale, operationId),
+          });
         } catch (postError) {
           log('handleSubscribedMessage: failed to post error message: %O', postError);
         }
@@ -1331,9 +1335,17 @@ export class AgentBridgeService {
             return;
           }
 
+          // If execAgent rejected after the operation was registered (e.g. an
+          // error inside the resolved-then path), the operationId may already
+          // have been stashed in activeOperations — surface it so the failure
+          // is traceable instead of opaque.
+          const fallbackOperationId = AgentBridgeService.activeOperations.get(thread.id);
+
           if (progressMessage) {
             try {
-              await progressMessage.edit({ markdown: renderError(undefined, replyLocale) });
+              await progressMessage.edit({
+                markdown: renderError(fallbackOperationId, replyLocale),
+              });
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);
             }
