@@ -75,6 +75,44 @@ describe('LobeXAI - custom features', () => {
       expect(createCall.frequency_penalty).toBeUndefined();
       expect(createCall.presence_penalty).toBeUndefined();
     });
+
+    it('should map chat response_format to Responses API text.format', async () => {
+      await instance.chat({
+        apiMode: 'chatCompletion',
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-4',
+        response_format: {
+          json_schema: {
+            name: 'answer',
+            schema: {
+              additionalProperties: false,
+              properties: { answer: { type: 'string' } },
+              required: ['answer'],
+              type: 'object',
+            },
+            strict: true,
+          },
+          type: 'json_schema',
+        },
+      } as any);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+      expect(createCall.response_format).toBeUndefined();
+      expect(createCall.text).toEqual({
+        format: {
+          name: 'answer',
+          schema: {
+            additionalProperties: false,
+            properties: { answer: { type: 'string' } },
+            required: ['answer'],
+            type: 'object',
+          },
+          strict: true,
+          type: 'json_schema',
+        },
+      });
+    });
   });
 
   describe('responses.handlePayload', () => {

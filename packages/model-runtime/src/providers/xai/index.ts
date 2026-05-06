@@ -1,7 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import type { ChatStreamPayload } from '../../types';
+import type { ChatResponseFormat, ChatStreamPayload } from '../../types';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createXAIImage } from './createImage';
 import { createXAIVideo } from './createVideo';
@@ -39,6 +39,29 @@ const pruneUnsupportedChatCompletionParameters = (payload: ChatStreamPayload) =>
   return stripUnsupportedPenaltyParameters(payload);
 };
 
+/**
+ * xAI Responses API accepts structured output constraints under `text.format`,
+ * while callers still send OpenAI Chat Completions compatible `response_format`.
+ */
+const mapResponseFormatToResponsesText = (
+  responseFormat?: ChatResponseFormat,
+  text?: ChatStreamPayload['text'],
+) => {
+  if (!responseFormat) return text;
+
+  if (responseFormat.type === 'json_schema') {
+    return {
+      ...text,
+      format: { type: 'json_schema', ...responseFormat.json_schema },
+    };
+  }
+
+  return {
+    ...text,
+    format: { type: responseFormat.type },
+  };
+};
+
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
   chatCompletion: {
@@ -72,7 +95,8 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.XAI,
   responses: {
     handlePayload: (payload) => {
-      const { enabledSearch, tools, ...rest } = stripUnsupportedPenaltyParameters(payload);
+      const { enabledSearch, response_format, text, tools, ...rest } =
+        stripUnsupportedPenaltyParameters(payload);
 
       const xaiTools = enabledSearch
         ? [...(tools || []), { type: 'web_search' }, { type: 'x_search' }]
@@ -81,6 +105,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
       return {
         ...rest,
         tools: xaiTools,
+        text: mapResponseFormatToResponsesText(response_format, text),
         include: ['reasoning.encrypted_content'],
       } as any;
     },
