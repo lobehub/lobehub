@@ -36,6 +36,13 @@ export const stabilizeReferences = <T>(prev: T, next: T): T => {
     return (allSame ? prev : (result as unknown)) as T;
   }
 
+  if (
+    Object.getPrototypeOf(prev) !== Object.prototype ||
+    Object.getPrototypeOf(next) !== Object.prototype
+  ) {
+    return next;
+  }
+
   const prevObj = prev as Record<string, unknown>;
   const nextObj = next as Record<string, unknown>;
   const prevKeys = Object.keys(prevObj);

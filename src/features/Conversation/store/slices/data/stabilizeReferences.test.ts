@@ -53,6 +53,13 @@ describe('stabilizeReferences', () => {
     expect(stabilizeReferences(prev, next)).toBe(next);
   });
 
+  it('returns next for changed non-plain objects', () => {
+    const prev = new Date('2026-01-01T00:00:00.000Z');
+    const next = new Date('2026-01-02T00:00:00.000Z');
+
+    expect(stabilizeReferences(prev, next)).toBe(next);
+  });
+
   it('handles null and undefined safely', () => {
     expect(stabilizeReferences(null, null)).toBe(null);
     expect(stabilizeReferences(undefined, undefined)).toBe(undefined);
