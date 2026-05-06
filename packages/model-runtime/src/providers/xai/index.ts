@@ -45,6 +45,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
     handlePayload: (payload) =>
       ({
         ...pruneUnsupportedChatCompletionParameters(payload),
+        apiMode: 'responses',
         stream: payload.stream ?? true,
       }) as any,
     useResponse: true,
