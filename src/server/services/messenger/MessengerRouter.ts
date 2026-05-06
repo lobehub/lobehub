@@ -1,7 +1,6 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
-  type ActionEvent,
   Chat,
   ConsoleLogger,
   type Message,
@@ -26,12 +25,7 @@ import { renderInlineError } from '@/server/services/bot/replyTemplate';
 import { getInstallationStore } from './installations';
 import type { InstallationCredentials } from './installations/types';
 import { messengerPlatformRegistry } from './platforms';
-import type {
-  AgentPickerEntry,
-  CallbackAcknowledgement,
-  InboundCallbackAction,
-  MessengerPlatformBinder,
-} from './types';
+import type { AgentPickerEntry, InboundCallbackAction, MessengerPlatformBinder } from './types';
 
 const log = debug('lobe-server:messenger:router');
 
@@ -52,6 +46,51 @@ interface AgentSummary {
   id: string;
   title: string;
 }
+
+/**
+ * Per-message context passed to every command handler. Mirrors
+ * `BotMessageRouter`'s `CommandContext`: handlers stay platform-agnostic and
+ * read whatever they need (`thread`, `link`, `binder`, …) off the context
+ * rather than threading parameters through every entry point.
+ *
+ * `source` discriminates the dispatch path: `'text'` carries a chat-sdk
+ * `thread` + `message` (commands like `/new` and `/stop` use these to drive
+ * the runtime); `'slash'` is a native slash-command event without a thread.
+ */
+interface MessengerCommandContext {
+  args: string;
+  authorUserId: string;
+  authorUserName?: string;
+  binder: MessengerPlatformBinder;
+  /** Conversation id for outbound replies. For slash invocations from a
+   *  public channel this is the slash-invocation channel; for text it's the
+   *  DM thread. */
+  chatId: string;
+  link: MessengerAccountLinkItem | undefined;
+  message?: Message;
+  platform: MessengerPlatform;
+  /** Platform-aware reply: ephemeral on Slack slash, DM on Discord slash,
+   *  `binder.sendDmText` on text dispatch. */
+  reply: (text: string) => Promise<void>;
+  serverDB: LobeChatDatabase;
+  source: 'text' | 'slash';
+  tenantId: string;
+  thread?: any;
+}
+
+interface MessengerCommand {
+  description: string;
+  handler: (ctx: MessengerCommandContext) => Promise<void>;
+  name: string;
+}
+
+const HELP_TEXT = [
+  'Commands:',
+  '• /start — bind (or rebind) your LobeHub account',
+  '• /agents — list your agents and switch the active one',
+  '• /new — start a new conversation',
+  '• /stop — stop the current execution',
+].join('\n');
 
 /** Parse a leading `/cmd` (with optional args) out of a message. Returns null
  *  when the message isn't a command. Strips a trailing `@BotName` so commands
@@ -91,10 +130,23 @@ const reconstructRequest = (req: Request, rawBody: string): Request =>
  * Account model: each `(LobeHub user, platform, tenant_id)` triple has at
  * most one row in `messenger_account_links`, so a single LobeHub user can
  * link into multiple Slack workspaces simultaneously without collisions.
+ *
+ * **Platform abstraction**: command logic and tap-action handling live in a
+ * single platform-agnostic registry. Per-platform differences (private
+ * interaction reply mechanism, webhook-time vs chat-sdk-delivered actions)
+ * are hidden behind optional `MessengerPlatformBinder` fields
+ * (`replyPrivately`, `extractActionFromEvent`, `acknowledgeCallback`).
+ * Adding a new platform is a binder-only change — the router does not
+ * branch on `platform === 'foo'`.
  */
 export class MessengerRouter {
   private bots = new Map<string, RegisteredMessengerBot>();
   private loadingPromises = new Map<string, Promise<RegisteredMessengerBot | null>>();
+
+  /** Static command registry — reused across every install since command
+   *  logic is platform-agnostic. Handlers reach platform-specific reply
+   *  surfaces through `ctx.reply` and `ctx.binder`. */
+  private readonly commands: MessengerCommand[] = this.buildCommands();
 
   /**
    * Webhook handler for `/api/agent/messenger/webhooks/[platform]`. The flow:
@@ -152,7 +204,7 @@ export class MessengerRouter {
         try {
           const action = await bot.binder.extractCallbackAction(reconstructRequest(req, rawBody));
           if (action) {
-            await this.handleCallbackAction(bot, definition.id, creds, action);
+            await this.handleCallbackAction(bot.binder, creds, action);
             return new Response('OK', { status: 200 });
           }
         } catch (error) {
@@ -192,7 +244,7 @@ export class MessengerRouter {
   }
 
   private async loadBot(creds: InstallationCredentials): Promise<RegisteredMessengerBot | null> {
-    const binder = this.createBinder(creds);
+    const binder = messengerPlatformRegistry.createBinder(creds);
     if (!binder) {
       log('loadBot: no binder available for %s', creds.installationKey);
       return null;
@@ -219,13 +271,9 @@ export class MessengerRouter {
 
     if (client.registerBotCommands) {
       client
-        .registerBotCommands([
-          { command: 'start', description: 'Bind your account to LobeHub' },
-          { command: 'agents', description: 'List agents and switch the active one' },
-          { command: 'new', description: 'Start a new conversation' },
-          { command: 'stop', description: 'Stop the current execution' },
-          { command: 'help', description: 'Show usage' },
-        ])
+        .registerBotCommands(
+          this.commands.map((cmd) => ({ command: cmd.name, description: cmd.description })),
+        )
         .catch((error) =>
           log('registerBotCommands failed for %s: %O', creds.installationKey, error),
         );
@@ -236,10 +284,6 @@ export class MessengerRouter {
 
     log('loadBot: registered messenger %s bot', creds.installationKey);
     return registered;
-  }
-
-  private createBinder(creds: InstallationCredentials): MessengerPlatformBinder | null {
-    return messengerPlatformRegistry.createBinder(creds);
   }
 
   private createChatBot(adapters: Record<string, any>, creds: InstallationCredentials): Chat<any> {
@@ -292,22 +336,29 @@ export class MessengerRouter {
       );
 
       try {
-        const command = parseCommand(message.text);
-        if (command) {
-          const handled = await this.handleCommand({
-            authorUserId: senderId,
-            authorUserName: message.author.userName,
-            binder,
-            chatId,
-            command,
-            link,
-            message,
-            platform,
-            serverDB,
-            tenantId,
-            thread,
-          });
-          if (handled) return;
+        const parsed = parseCommand(message.text);
+        if (parsed) {
+          const command = this.commands.find((c) => c.name === parsed.name);
+          if (command) {
+            await command.handler({
+              args: parsed.args,
+              authorUserId: senderId,
+              authorUserName: message.author.userName,
+              binder,
+              chatId,
+              link,
+              message,
+              platform,
+              reply: (text) => binder.sendDmText(chatId, text),
+              serverDB,
+              source: 'text',
+              tenantId,
+              thread,
+            });
+            return;
+          }
+          // Unknown slash text — pass through to the agent so legitimate
+          // "/foo" prompts the user typed still reach them.
         }
 
         // Unbound sender → trigger link flow
@@ -359,195 +410,226 @@ export class MessengerRouter {
       await handle(thread, message);
     });
 
-    // Slack slash commands — `/agents`, `/new`, `/stop`. Telegram routes
-    // commands via message text (parsed by `parseCommand` above), so we only
-    // wire this for Slack. `/start` isn't registered: Slack apps bind via
-    // OAuth and the per-user link flow auto-fires on first DM, so a manual
-    // /start would be redundant. `bot` is a per-install Chat SDK instance, so
-    // the registration is scoped correctly.
-    if (platform === 'slack') {
-      bot.onSlashCommand(['/agents', '/new', '/stop'], async (event) => {
-        await this.handleSlackSlashCommand({ binder, client, event, serverDB, tenantId });
+    // Native slash commands — wired only for platforms that opt in by
+    // exposing `replyPrivately` (Slack, Discord). The full set of command
+    // names comes from the shared registry so every native-slash platform
+    // surfaces the same menu.
+    if (binder.replyPrivately) {
+      const slashPaths = this.commands.map((cmd) => `/${cmd.name}`);
+      bot.onSlashCommand(slashPaths, async (event) => {
+        await this.handleSlashCommand({ binder, client, creds, event, serverDB });
       });
     }
 
-    // Discord slash commands — `/agents`, `/new`, `/stop`, `/help`. Discord
-    // DMs have no ephemeral concept (the user IS the only other party), so
-    // replies are just regular DM posts.
-    //
-    // `/start` is intentionally NOT wired to the slash path: it's still
-    // registered as a Discord global command (so it shows up in autocomplete)
-    // but invoking it goes through the unlinked-message text path inside the
-    // DM — `handleUnlinkedMessage` needs a real chat-sdk `Message` instance
-    // that the slash event doesn't surface, and stub-message workarounds were
-    // ugly. Users who type `/start` as plain text in the DM still hit the
-    // full link flow via `parseCommand`.
-    if (platform === 'discord') {
-      bot.onSlashCommand(['/agents', '/new', '/stop', '/help'], async (event) => {
-        await this.handleDiscordSlashCommand({ binder, client, event, serverDB, tenantId });
-      });
-
-      // Discord interactive picker buttons. Slack/Telegram both peek the raw
-      // webhook bytes via `binder.extractCallbackAction` and short-circuit to
-      // a `200 OK` ack — that doesn't work for Discord because Discord
-      // interactions need a JSON `{type: 6}` ack body. So instead we let
-      // `@chat-adapter/discord` handle the inbound interaction (it ack's with
-      // `DeferredUpdateMessage` on its own), then drive the actual state
-      // update from `bot.onAction`.
+    // Tap-action callbacks delivered via chat-sdk (Discord). Slack and
+    // Telegram peek at the raw webhook body via `binder.extractCallbackAction`
+    // in `getWebhookHandler` instead because their wire formats let us
+    // short-circuit to a `200 OK` ack outside chat-sdk's request lifecycle.
+    if (binder.extractActionFromEvent) {
       bot.onAction(async (event) => {
-        await this.handleDiscordButtonAction({ binder, client, creds, event, serverDB });
+        try {
+          const action = binder.extractActionFromEvent!(event, client);
+          if (!action) return;
+          await this.handleCallbackAction(binder, creds, action);
+        } catch (error) {
+          log('onAction handler error: %O', error);
+        }
       });
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Command registry
+  // -------------------------------------------------------------------------
+
   /**
-   * One handler for every Slack slash command we register. Replies ephemerally
-   * so output is private regardless of where the slash was invoked. `/new` and
-   * `/stop` need a live chat-sdk `thread` instance the slash command path
-   * doesn't surface, so we ack with a hint to type them inside the bot DM
-   * where `parseCommand` still picks them up.
+   * Build the platform-agnostic command registry. Each entry is a single
+   * function that handles every dispatch path (DM text, native slash, future
+   * surfaces) — the `MessengerCommandContext` carries enough state for the
+   * handler to make platform decisions on its own.
+   *
+   * To add a new command: append an entry here. It's automatically wired on
+   * every platform whose binder declares it in `slashCommands.names` (or via
+   * the text path on platforms without native slash support).
    */
-  private async handleSlackSlashCommand(params: {
-    binder: MessengerPlatformBinder;
-    client: PlatformClient;
-    event: SlashCommandEvent;
-    serverDB: LobeChatDatabase;
-    tenantId: string;
-  }): Promise<void> {
-    const { binder, client, event, serverDB, tenantId } = params;
-    const senderId = event.user.userId;
-    if (!senderId) {
-      log('handleSlackSlashCommand: missing user id, dropping');
-      return;
-    }
-
-    // `event.command` is the literal "/foo" Slack sent.
-    const cmd = event.command.replace(/^\//, '').toLowerCase();
-    // chat-sdk wraps the raw channel id as `slack:<channel>` — strip the
-    // prefix so direct Slack API calls (postMessage / postEphemeral) get the
-    // bare channel id Slack expects.
-    const chatId = client.extractChatId((event.channel as any).id as string);
-
-    const replyEphemeral = async (text: string): Promise<void> => {
-      try {
-        await event.channel.postEphemeral(event.user, text, { fallbackToDM: true });
-      } catch (error) {
-        log('handleSlackSlashCommand: postEphemeral failed: %O', error);
-      }
-    };
-
-    const link = await MessengerAccountLinkModel.findByPlatformUser(
-      serverDB,
-      'slack',
-      senderId,
-      tenantId,
-    );
-
-    try {
-      switch (cmd) {
-        case 'agents': {
-          await this.handleAgentsCommand({
-            binder,
-            chatId,
-            command: { args: event.text.trim(), name: 'agents' },
-            link,
-            serverDB,
-            tenantId,
+  private buildCommands(): MessengerCommand[] {
+    return [
+      {
+        description: 'Bind your account to LobeHub',
+        handler: async (ctx) => {
+          // For slash invocations the slash may have come from a public
+          // channel — route the link button privately to the user's DM so
+          // the one-shot link token isn't leaked. Slack accepts a user id
+          // as the `chatId` (`chat.postMessage` auto-opens the IM with
+          // `im:write` scope), so we pass `authorUserId`. Text invocations
+          // already arrive in a DM thread, so we use the inbound `chatId`.
+          const linkChatId = ctx.source === 'slash' ? ctx.authorUserId : ctx.chatId;
+          await ctx.binder.handleUnlinkedMessage({
+            authorUserId: ctx.authorUserId,
+            authorUserName: ctx.authorUserName,
+            chatId: linkChatId,
+            message: ctx.message,
           });
-          return;
-        }
-        case 'new':
-        case 'stop': {
-          await replyEphemeral(
-            `Open your direct message with the LobeHub bot and send \`/${cmd}\` there.`,
-          );
-          return;
-        }
-        default: {
-          await replyEphemeral(`Unknown command: /${cmd}`);
-        }
-      }
-    } catch (error) {
-      log('handleSlackSlashCommand: handler error: %O', error);
-      await replyEphemeral('Something went wrong.');
-    }
+          if (ctx.source === 'slash') {
+            await ctx.reply('Check your DM with LobeHub for the link button.');
+          }
+        },
+        name: 'start',
+      },
+      {
+        description: 'List agents and switch the active one',
+        handler: async (ctx) => {
+          await this.runAgentsCommand(ctx);
+        },
+        name: 'agents',
+      },
+      {
+        description: 'Start a new conversation',
+        handler: async (ctx) => {
+          if (!ctx.link) {
+            await ctx.reply('You need to /start to bind your account first.');
+            return;
+          }
+          if (!ctx.thread) {
+            // Slash dispatch has no chat-sdk Thread; setState lives on the
+            // thread instance, so direct the user back to the DM where the
+            // text path can pick the command up.
+            await ctx.reply('Open your direct message with the LobeHub bot and send `/new` there.');
+            return;
+          }
+          // Drop the cached topicId so the next message starts a fresh topic.
+          // Mirrors `/new` in the bot router (BotMessageRouter.buildCommands).
+          try {
+            await ctx.thread.setState({ topicId: undefined }, { replace: true });
+          } catch (error) {
+            log('command /new: setState failed: %O', error);
+          }
+          await ctx.reply('Started a new conversation. Your next message begins a fresh topic.');
+        },
+        name: 'new',
+      },
+      {
+        description: 'Stop the current execution',
+        handler: async (ctx) => {
+          if (!ctx.link) {
+            await ctx.reply('You need to /start to bind your account first.');
+            return;
+          }
+          if (!ctx.thread) {
+            await ctx.reply(
+              'Open your direct message with the LobeHub bot and send `/stop` there.',
+            );
+            return;
+          }
+          const isActive = AgentBridgeService.isThreadActive(ctx.thread.id);
+          if (!isActive) {
+            await ctx.reply('No active execution to stop.');
+            return;
+          }
+          const operationId = AgentBridgeService.getActiveOperationId(ctx.thread.id);
+          if (operationId) {
+            try {
+              const aiAgentService = new AiAgentService(ctx.serverDB, ctx.link.userId);
+              const result = await aiAgentService.interruptTask({ operationId });
+              if (!result.success) {
+                log('command /stop: runtime interrupt rejected for op=%s', operationId);
+                await ctx.reply('Unable to stop the current execution.');
+                return;
+              }
+              AgentBridgeService.clearActiveThread(ctx.thread.id);
+              log('command /stop: interrupted op=%s', operationId);
+            } catch (error) {
+              log('command /stop: interruptTask failed: %O', error);
+              await ctx.reply('Unable to stop the current execution.');
+              return;
+            }
+          } else {
+            // execAgent hasn't returned an operationId yet — queue the stop so
+            // it fires the moment startup completes.
+            AgentBridgeService.requestStop(ctx.thread.id);
+            log('command /stop: queued deferred stop for thread=%s', ctx.thread.id);
+          }
+          await ctx.reply('Stop requested.');
+        },
+        name: 'stop',
+      },
+      {
+        description: 'Show usage',
+        handler: async (ctx) => {
+          await ctx.reply(HELP_TEXT);
+        },
+        name: 'help',
+      },
+    ];
   }
 
   /**
-   * Discord slash command dispatcher. Mirrors `handleSlackSlashCommand` but
-   * without ephemeral plumbing — Discord DMs are private by definition, so
-   * regular `binder.sendDmText` is the right reply mechanism.
-   *
-   * `/new` and `/stop` need a chat-sdk `thread` instance the slash command
-   * path doesn't surface (same constraint as Slack), so we ack with a hint
-   * to send them as plain text in the DM where `parseCommand` reaches the
-   * full command handler with thread access.
+   * Native slash command dispatcher. Delegates to the shared command registry
+   * after wrapping the chat-sdk slash event in a `MessengerCommandContext`.
+   * Each binder supplies its own `reply` mechanism (ephemeral on Slack,
+   * regular DM message on Discord) so the handler stays platform-agnostic.
    */
-  private async handleDiscordSlashCommand(params: {
+  private async handleSlashCommand(params: {
     binder: MessengerPlatformBinder;
     client: PlatformClient;
+    creds: InstallationCredentials;
     event: SlashCommandEvent;
     serverDB: LobeChatDatabase;
-    tenantId: string;
   }): Promise<void> {
-    const { binder, client, event, serverDB, tenantId } = params;
+    const { binder, client, creds, event, serverDB } = params;
     const senderId = event.user.userId;
     if (!senderId) {
-      log('handleDiscordSlashCommand: missing user id, dropping');
+      log('handleSlashCommand: missing user id, dropping');
       return;
     }
 
-    const cmd = event.command.replace(/^\//, '').toLowerCase();
-    // chat-sdk wraps the raw channel id as `discord:guildId:channelId[:threadId]`;
-    // strip back to the bare channel id Discord's REST API expects.
+    const replyPrivately = binder.replyPrivately;
+    if (!replyPrivately) {
+      log('handleSlashCommand: binder for %s has no replyPrivately', creds.platform);
+      return;
+    }
+
+    // `event.command` is the literal `/foo` the platform sent.
+    const cmdName = event.command.replace(/^\//, '').toLowerCase();
+    // chat-sdk wraps the raw channel id with the platform prefix
+    // (e.g. `slack:<channel>`, `discord:guild:channel:thread`); strip back to
+    // the bare id so direct platform API calls see what they expect.
     const chatId = client.extractChatId((event.channel as any).id as string);
+    const args = event.text?.trim() ?? '';
+
+    const reply = (text: string) => replyPrivately.call(binder, event.channel, event.user, text);
+
+    const command = this.commands.find((c) => c.name === cmdName);
+    if (!command) {
+      await reply(`Unknown command: /${cmdName}`);
+      return;
+    }
 
     const link = await MessengerAccountLinkModel.findByPlatformUser(
       serverDB,
-      'discord',
+      creds.platform,
       senderId,
-      tenantId,
+      creds.tenantId,
     );
 
     try {
-      switch (cmd) {
-        case 'agents': {
-          await this.handleAgentsCommand({
-            binder,
-            chatId,
-            command: { args: event.text.trim(), name: 'agents' },
-            link,
-            serverDB,
-            tenantId,
-          });
-          return;
-        }
-        case 'new':
-        case 'stop': {
-          await binder.sendDmText(chatId, `Send \`/${cmd}\` as a regular message in this DM.`);
-          return;
-        }
-        case 'help': {
-          await binder.sendDmText(
-            chatId,
-            [
-              'Commands:',
-              '• /agents — list your agents and switch the active one',
-              '• /new — start a new conversation',
-              '• /stop — stop the current execution',
-              '• /start — bind a different LobeHub account',
-            ].join('\n'),
-          );
-          return;
-        }
-        default: {
-          await binder.sendDmText(chatId, `Unknown command: /${cmd}`);
-        }
-      }
+      await command.handler({
+        args,
+        authorUserId: senderId,
+        authorUserName: event.user.userName,
+        binder,
+        chatId,
+        link,
+        platform: creds.platform,
+        reply,
+        serverDB,
+        source: 'slash',
+        tenantId: creds.tenantId,
+      });
     } catch (error) {
-      log('handleDiscordSlashCommand: handler error: %O', error);
+      log('handleSlashCommand: handler error for /%s: %O', cmdName, error);
       try {
-        await binder.sendDmText(chatId, 'Something went wrong.');
+        await reply('Something went wrong.');
       } catch {
         /* ignore */
       }
@@ -555,257 +637,41 @@ export class MessengerRouter {
   }
 
   /**
-   * Discord interactive picker button handler. Fires after `@chat-adapter/discord`
-   * has already ack'd the interaction with `DeferredUpdateMessage` (`type: 6`),
-   * so we have the full ~15-minute follow-up window to update state and
-   * re-render the picker — no 3-second pressure.
-   *
-   * Mirrors `handleCallbackAction` (the Slack/Telegram path) but goes direct
-   * to `binder.updateAgentPicker` + `binder.sendDmText` since Discord's flow
-   * doesn't go through `binder.acknowledgeCallback`.
-   */
-  private async handleDiscordButtonAction(params: {
-    binder: MessengerPlatformBinder;
-    client: PlatformClient;
-    creds: InstallationCredentials;
-    event: ActionEvent;
-    serverDB: LobeChatDatabase;
-  }): Promise<void> {
-    const { binder, client, creds, event, serverDB } = params;
-
-    const actionId = event.actionId ?? '';
-    const switchMatch = actionId.match(/^messenger:switch:(.+)$/);
-    if (!switchMatch) {
-      // Not our button — could be a future picker, an unrelated chat-sdk
-      // action, etc. Ignore quietly so we don't spam logs.
-      return;
-    }
-
-    const targetAgentId = switchMatch[1];
-    const senderId = event.user?.userId;
-    if (!senderId) {
-      log('handleDiscordButtonAction: missing user id, dropping');
-      return;
-    }
-
-    const chatId = client.extractChatId(event.threadId);
-    const messageId = event.messageId;
-
-    const link = await MessengerAccountLinkModel.findByPlatformUser(
-      serverDB,
-      'discord',
-      senderId,
-      creds.tenantId,
-    );
-    if (!link) {
-      await binder.sendDmText(chatId, 'Not linked. Send /start first.');
-      return;
-    }
-
-    const userAgents = await this.fetchUserAgents(serverDB, link.userId);
-    const target = userAgents.find((agent) => agent.id === targetAgentId);
-    if (!target) {
-      await binder.sendDmText(chatId, 'Agent not found.');
-      return;
-    }
-
-    if (link.activeAgentId === targetAgentId) {
-      await binder.sendDmText(chatId, `${target.title} is already active.`);
-      return;
-    }
-
-    await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, targetAgentId);
-
-    const updateAgentPicker = (binder as any).updateAgentPicker as
-      | ((
-          chatId: string,
-          messageId: string,
-          params: { entries: AgentPickerEntry[]; text: string },
-        ) => Promise<void>)
-      | undefined;
-    if (updateAgentPicker && messageId) {
-      await updateAgentPicker.call(binder, chatId, messageId, {
-        entries: this.toPickerEntries(userAgents, targetAgentId),
-        text: 'Pick an agent to receive your messages:',
-      });
-    }
-
-    await binder.sendDmText(chatId, `Switched to ${target.title}.`);
-  }
-
-  /**
-   * Returns true when the inbound message was a recognized messenger command and
-   * the router replied (so the caller skips agent dispatch).
-   */
-  private async handleCommand(params: {
-    authorUserId: string;
-    authorUserName?: string;
-    binder: MessengerPlatformBinder;
-    chatId: string;
-    command: CommandMatch;
-    link: MessengerAccountLinkItem | undefined;
-    message: Message;
-    platform: MessengerPlatform;
-    serverDB: LobeChatDatabase;
-    tenantId: string;
-    thread: any;
-  }): Promise<boolean> {
-    const {
-      authorUserId,
-      authorUserName,
-      binder,
-      chatId,
-      command,
-      link,
-      message,
-      serverDB,
-      tenantId,
-      thread,
-    } = params;
-
-    switch (command.name) {
-      case 'start': {
-        // /start always offers a fresh link button — covers both first-time
-        // bind and "I want to switch the IM account this LobeHub user is
-        // bound to".
-        await binder.handleUnlinkedMessage({
-          authorUserId,
-          authorUserName,
-          chatId,
-          message,
-        });
-        return true;
-      }
-      case 'agents': {
-        await this.handleAgentsCommand({ binder, chatId, command, link, serverDB, tenantId });
-        return true;
-      }
-      case 'new': {
-        if (!link) {
-          await binder.sendDmText(chatId, 'You need to /start to bind your account first.');
-          return true;
-        }
-        // Drop the cached topicId so the next message starts a fresh topic.
-        // Mirrors `/new` in the bot router (BotMessageRouter.buildCommands).
-        try {
-          await thread.setState({ topicId: undefined }, { replace: true });
-        } catch (error) {
-          log('handleCommand[/new]: setState failed: %O', error);
-        }
-        await binder.sendDmText(
-          chatId,
-          'Started a new conversation. Your next message begins a fresh topic.',
-        );
-        return true;
-      }
-      case 'stop': {
-        if (!link) {
-          await binder.sendDmText(chatId, 'You need to /start to bind your account first.');
-          return true;
-        }
-        const isActive = AgentBridgeService.isThreadActive(thread.id);
-        if (!isActive) {
-          await binder.sendDmText(chatId, 'No active execution to stop.');
-          return true;
-        }
-        const operationId = AgentBridgeService.getActiveOperationId(thread.id);
-        if (operationId) {
-          try {
-            const aiAgentService = new AiAgentService(serverDB, link.userId);
-            const result = await aiAgentService.interruptTask({ operationId });
-            if (!result.success) {
-              log('handleCommand[/stop]: runtime interrupt rejected for op=%s', operationId);
-              await binder.sendDmText(chatId, 'Unable to stop the current execution.');
-              return true;
-            }
-            AgentBridgeService.clearActiveThread(thread.id);
-            log('handleCommand[/stop]: interrupted op=%s', operationId);
-          } catch (error) {
-            log('handleCommand[/stop]: interruptTask failed: %O', error);
-            await binder.sendDmText(chatId, 'Unable to stop the current execution.');
-            return true;
-          }
-        } else {
-          // execAgent hasn't returned an operationId yet — queue the stop so it
-          // fires the moment startup completes.
-          AgentBridgeService.requestStop(thread.id);
-          log('handleCommand[/stop]: queued deferred stop for thread=%s', thread.id);
-        }
-        await binder.sendDmText(chatId, 'Stop requested.');
-        return true;
-      }
-      case 'help': {
-        await binder.sendDmText(
-          chatId,
-          [
-            'Commands:',
-            '• /agents — list your agents and tap to switch the active one',
-            '• /new — start a new conversation',
-            '• /stop — stop the current execution',
-            '• /start — bind a different LobeHub account',
-          ].join('\n'),
-        );
-        return true;
-      }
-      default: {
-        // Unknown slash commands pass through to the agent so legitimate
-        // "/foo" prompts the user typed still reach them.
-        return false;
-      }
-    }
-  }
-
-  /**
    * `/agents` is the single command for both listing agents and switching the
-   * active one — on Telegram (and any platform that implements
-   * `sendAgentPicker`) the bot replies with a tap-to-switch inline keyboard.
-   * Platforms without keyboard support fall back to a numbered text list +
-   * `/agents <n>` syntax for switching.
+   * active one — on platforms that implement `sendAgentPicker` the bot replies
+   * with a tap-to-switch keyboard. Platforms without keyboard support fall
+   * back to a numbered text list + `/agents <n>` syntax for switching.
    */
-  private async handleAgentsCommand(params: {
-    binder: MessengerPlatformBinder;
-    chatId: string;
-    command?: CommandMatch;
-    link: MessengerAccountLinkItem | undefined;
-    serverDB: LobeChatDatabase;
-    tenantId: string;
-  }): Promise<void> {
-    const { binder, chatId, command, link, serverDB } = params;
+  private async runAgentsCommand(ctx: MessengerCommandContext): Promise<void> {
+    const { binder, chatId, link, serverDB } = ctx;
 
     if (!link) {
-      await binder.sendDmText(chatId, 'You need to /start to bind your account first.');
+      await ctx.reply('You need to /start to bind your account first.');
       return;
     }
 
     const userAgents = await this.fetchUserAgents(serverDB, link.userId);
     if (userAgents.length === 0) {
-      await binder.sendDmText(
-        chatId,
-        'You have no agents yet. Create one in LobeHub, then come back to /agents.',
-      );
+      await ctx.reply('You have no agents yet. Create one in LobeHub, then come back to /agents.');
       return;
     }
 
     // Text-fallback path: `/agents 2` switches without needing the keyboard,
     // for platforms (or clients) where tap-buttons aren't available.
-    const args = command?.args?.trim() ?? '';
+    const args = ctx.args.trim();
     if (args && !binder.sendAgentPicker) {
       const index = Number.parseInt(args, 10);
       if (!Number.isInteger(index) || index < 1 || index > userAgents.length) {
-        await binder.sendDmText(
-          chatId,
-          `Usage: /agents <n>, where n is between 1 and ${userAgents.length}.`,
-        );
+        await ctx.reply(`Usage: /agents <n>, where n is between 1 and ${userAgents.length}.`);
         return;
       }
       const target = userAgents[index - 1];
       if (link.activeAgentId === target.id) {
-        await binder.sendDmText(chatId, `${target.title} is already the active agent.`);
+        await ctx.reply(`${target.title} is already the active agent.`);
         return;
       }
       await MessengerAccountLinkModel.setActiveAgentById(serverDB, link.id, target.id);
-      await binder.sendDmText(
-        chatId,
+      await ctx.reply(
         `Switched active agent to: ${target.title}. Your next message will go there.`,
       );
       return;
@@ -824,8 +690,7 @@ export class MessengerRouter {
       const marker = link.activeAgentId === agent.id ? ' (active)' : '';
       return `${i + 1}. ${agent.title}${marker}`;
     });
-    await binder.sendDmText(
-      chatId,
+    await ctx.reply(
       `Your agents:\n${lines.join('\n')}\n\nReply with /agents <n> to switch the active agent.`,
     );
   }
@@ -842,20 +707,21 @@ export class MessengerRouter {
   }
 
   /**
-   * Run a tap-action surfaced by `binder.extractCallbackAction`. Today only
-   * `messenger:switch:<agentId>` is recognized; new actions can be added by
-   * extending the switch.
+   * Run a tap-action surfaced by either the binder's webhook-time peek
+   * (Slack/Telegram) or chat-sdk's `onAction` event (Discord). Both paths
+   * normalize to the same `InboundCallbackAction` shape and delegate the
+   * outbound ack (toast + picker re-render) to `binder.acknowledgeCallback`.
+   * Today only `messenger:switch:<agentId>` is recognized; new actions can
+   * be added by extending the dispatch below.
    */
   private async handleCallbackAction(
-    bot: RegisteredMessengerBot,
-    platform: MessengerPlatform,
+    binder: MessengerPlatformBinder,
     creds: InstallationCredentials,
     action: InboundCallbackAction,
   ): Promise<void> {
-    const { binder } = bot;
     if (!binder.acknowledgeCallback) return;
 
-    const ack = (params: CallbackAcknowledgement) => binder.acknowledgeCallback!(action, params);
+    const ack = binder.acknowledgeCallback.bind(binder, action);
 
     const switchMatch = action.data.match(/^messenger:switch:(.+)$/);
     if (!switchMatch) {
@@ -867,7 +733,7 @@ export class MessengerRouter {
     const serverDB = await getServerDB();
     const link = await MessengerAccountLinkModel.findByPlatformUser(
       serverDB,
-      platform,
+      creds.platform,
       action.fromUserId,
       creds.tenantId,
     );

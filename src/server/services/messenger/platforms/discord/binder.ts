@@ -1,3 +1,4 @@
+import type { ActionEvent } from 'chat';
 import debug from 'debug';
 
 import { getMessengerDiscordConfig } from '@/config/messenger';
@@ -9,6 +10,8 @@ import { DiscordClientFactory } from '@/server/services/bot/platforms/discord/cl
 import { issueLinkToken } from '../../linkTokenStore';
 import type {
   AgentPickerEntry,
+  CallbackAcknowledgement,
+  InboundCallbackAction,
   MessengerPlatformBinder,
   UnlinkedMessageContext,
 } from '../../types';
@@ -111,6 +114,19 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
       return;
     }
 
+    // Always resolve the user's DM channel via openDM(authorUserId): the
+    // link prompt carries a one-shot token and must land privately, but
+    // `chatId` may be a public slash-invocation channel when /start fires
+    // outside a DM. createDMChannel is idempotent (returns the existing DM
+    // if open), so the text path gets the same channel it would have
+    // received via `chatId` at the cost of one extra round-trip.
+    const api = new DiscordApi(config.botToken);
+    const dmChannelId = await openDM(api, ctx.authorUserId);
+    if (!dmChannelId) {
+      log('handleUnlinkedMessage: failed to open DM for user=%s', ctx.authorUserId);
+      return;
+    }
+
     let randomId: string;
     try {
       randomId = await issueLinkToken({
@@ -120,10 +136,9 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
       });
     } catch (error) {
       log('handleUnlinkedMessage: failed to issue link token: %O', error);
-      const api = new DiscordApi(config.botToken);
       try {
         await api.createMessage(
-          ctx.chatId,
+          dmChannelId,
           'LobeHub is temporarily unavailable. Please try again in a moment.',
         );
       } catch (err) {
@@ -152,9 +167,8 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
       `Or copy this link: ${verifyUrl}`,
     ].join('\n');
 
-    const api = new DiscordApi(config.botToken);
     try {
-      await api.createMessage(ctx.chatId, text);
+      await api.createMessage(dmChannelId, text);
     } catch (error) {
       log('handleUnlinkedMessage: createMessage failed: %O', error);
     }
@@ -247,6 +261,62 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
       );
     } catch (error) {
       log('updateAgentPicker: failed for chat=%s msg=%s: %O', chatId, messageId, error);
+    }
+  }
+
+  /**
+   * Discord ack: chat-adapter-discord already replied to the interaction
+   * with `DeferredUpdateMessage` (`type: 6`) by the time we run, so we have
+   * the full ~15-minute follow-up window. There's no native toast on Discord —
+   * we surface `toast` text as a regular DM message and re-render the picker
+   * in place.
+   */
+  async acknowledgeCallback(
+    action: InboundCallbackAction,
+    ack: CallbackAcknowledgement,
+  ): Promise<void> {
+    if (ack.updatedPicker && action.messageId !== undefined) {
+      await this.updateAgentPicker(action.chatId, String(action.messageId), ack.updatedPicker);
+    }
+    if (ack.toast) {
+      await this.sendDmText(action.chatId, ack.toast);
+    }
+  }
+
+  /**
+   * Map a chat-sdk `onAction` event to an `InboundCallbackAction` for the
+   * router's shared callback path. Returns null when the actionId isn't one
+   * of our `messenger:*` button ids so unrelated chat-sdk actions pass
+   * through quietly.
+   */
+  extractActionFromEvent(event: ActionEvent, client: PlatformClient): InboundCallbackAction | null {
+    const actionId = event.actionId ?? '';
+    if (!actionId.startsWith(DISCORD_ACTION_PREFIX)) return null;
+    const fromUserId = event.user?.userId;
+    if (!fromUserId) return null;
+    return {
+      // Discord doesn't separate ack id from the interaction; chat-adapter
+      // handles the initial 3-second ack on its own. The follow-up flow uses
+      // the channel id from `threadId`.
+      callbackId: '',
+      chatId: client.extractChatId(event.threadId),
+      data: actionId,
+      fromUserId,
+      messageId: event.messageId,
+    };
+  }
+
+  /**
+   * Discord DMs are private by definition — replies just go to the same
+   * channel the interaction was invoked from. (Public channel invocations
+   * stay public until chat-adapter-discord surfaces the `flags: 64`
+   * EPHEMERAL flag for interaction responses.)
+   */
+  async replyPrivately(channel: any, _user: any, text: string): Promise<void> {
+    try {
+      await channel.post(text);
+    } catch (error) {
+      log('replyPrivately: channel.post failed: %O', error);
     }
   }
 }

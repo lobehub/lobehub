@@ -1,4 +1,4 @@
-import type { Message } from 'chat';
+import type { ActionEvent, Message, SlashCommandEvent } from 'chat';
 
 import type { PlatformClient } from '@/server/services/bot/platforms';
 
@@ -6,7 +6,9 @@ export interface UnlinkedMessageContext {
   authorUserId: string;
   authorUserName?: string;
   chatId: string;
-  message: Message;
+  /** Original inbound chat-sdk message. Absent on slash-command paths
+   *  (Slack `/start`) where there is no underlying Message instance. */
+  message?: Message;
 }
 
 export interface AgentPickerEntry {
@@ -61,6 +63,20 @@ export interface MessengerPlatformBinder {
   createClient: () => Promise<PlatformClient | null>;
 
   /**
+   * Map a chat-sdk `onAction` event to an `InboundCallbackAction`. Used by
+   * platforms that deliver tap actions through chat-sdk rather than as a
+   * peek of the raw webhook body — Discord today (chat-adapter-discord acks
+   * the interaction with `DeferredUpdateMessage` before calling the
+   * router). Returns null when the event isn't one of our buttons. Slack /
+   * Telegram leave this unset because they handle actions at webhook time
+   * via `extractCallbackAction` instead.
+   */
+  extractActionFromEvent?: (
+    event: ActionEvent,
+    client: PlatformClient,
+  ) => InboundCallbackAction | null;
+
+  /**
    * Try to extract a tap-action from a raw webhook request. Returns null when
    * the update is a regular message (in which case the caller hands it off to
    * chat-sdk). Platforms without tap callbacks return null unconditionally.
@@ -87,6 +103,27 @@ export interface MessengerPlatformBinder {
     platformUserId: string;
     tenantId?: string;
   }) => Promise<void>;
+
+  /**
+   * Send a private response back to the invoker of a chat-sdk interaction
+   * (slash command today; modal submit / action follow-up tomorrow). The
+   * binder picks the most-private channel the platform offers — Slack uses
+   * `chat.postEphemeral` (slash menu can fire from a public channel and we
+   * don't want to leak system text); Discord posts via the channel object
+   * (DMs are private by definition, public channels stay public until
+   * chat-adapter-discord exposes the interaction ephemeral flag).
+   *
+   * Defining this also opts the platform into native slash command wiring
+   * — the router registers every name from its shared command registry so
+   * the slash menu stays symmetric across platforms. Telegram leaves this
+   * unset because `/cmd` arrives as plain message text and is dispatched
+   * by `parseCommand` instead.
+   */
+  replyPrivately?: (
+    channel: SlashCommandEvent['channel'],
+    user: SlashCommandEvent['user'],
+    text: string,
+  ) => Promise<void>;
 
   /**
    * Send an interactive agent picker so the user can switch the active agent

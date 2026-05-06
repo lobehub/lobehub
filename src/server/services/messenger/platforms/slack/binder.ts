@@ -332,4 +332,21 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
       }
     }
   }
+
+  /**
+   * Slash commands and other Slack interactions can fire from any channel —
+   * reply ephemerally so the response is private to the invoker regardless
+   * of where the trigger originated. `/start` in particular MUST be wired
+   * (Slack's input bar treats `/start` as a slash command and never
+   * delivers it to the regular DM message path; without a registered
+   * handler chat-sdk fails to ack within 3s and Slack surfaces
+   * `operation_timeout` to the user).
+   */
+  async replyPrivately(channel: any, user: any, text: string): Promise<void> {
+    try {
+      await channel.postEphemeral(user, text, { fallbackToDM: true });
+    } catch (error) {
+      log('replyPrivately: postEphemeral failed: %O', error);
+    }
+  }
 }

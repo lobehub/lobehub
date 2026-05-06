@@ -74,15 +74,18 @@ describe('buildDiscordSwitchButtons', () => {
 
 describe('MessengerDiscordBinder', () => {
   describe('handleUnlinkedMessage', () => {
-    it('posts the verify-im markdown link to the DM channel', async () => {
+    it('opens the user DM via authorUserId and posts the verify-im markdown link there', async () => {
       const binder = new MessengerDiscordBinder();
       await binder.handleUnlinkedMessage({
         authorUserId: 'discord_user_42',
         authorUserName: 'tester',
-        chatId: 'dm_channel_xyz',
+        // Inbound chatId may be a public slash-invocation channel; the
+        // binder must ignore it and resolve a private DM via openDM.
+        chatId: 'public_channel_xyz',
         message: undefined as any,
       });
 
+      expect(createDMChannel).toHaveBeenCalledWith('discord_user_42');
       expect(issueLinkToken).toHaveBeenCalledWith({
         platform: 'discord',
         platformUserId: 'discord_user_42',
@@ -90,7 +93,7 @@ describe('MessengerDiscordBinder', () => {
       });
       expect(createMessage).toHaveBeenCalledTimes(1);
       const [channel, body] = createMessage.mock.calls[0];
-      expect(channel).toBe('dm_channel_xyz');
+      expect(channel).toBe('dm_channel_1');
       expect(body).toContain('https://app.example.com/verify-im');
       expect(body).toContain('im_type=discord');
       expect(body).toContain('random_id=rand_token');
