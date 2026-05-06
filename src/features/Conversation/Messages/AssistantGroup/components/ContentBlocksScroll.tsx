@@ -16,16 +16,6 @@ const styles = createStaticStyles(({ css }) => ({
   scrollWorkflow: css`
     max-height: min(40vh, 320px);
   `,
-  // Skip layout/paint for off-screen workflow items. Each item stays
-  // mounted so React state is preserved, but the browser short-circuits
-  // rendering until it scrolls near the viewport. The intrinsic-size
-  // placeholder prevents scroll-bar jitter when items are skipped.
-  virtualizedList: css`
-    & > * {
-      content-visibility: auto;
-      contain-intrinsic-size: auto 48px;
-    }
-  `,
 }));
 
 interface ContentBlocksScrollBaseProps {
@@ -73,7 +63,7 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
   }, [assistantIdFromProps, blocksFromProps, messagesList]);
 
   const list = (
-    <Flexbox className={variant === 'workflow' ? styles.virtualizedList : undefined} gap={8}>
+    <Flexbox>
       {blocks.map((block) => (
         <ContentBlock
           key={block.renderKey ?? block.id}
