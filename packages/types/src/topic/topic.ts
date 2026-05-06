@@ -73,11 +73,20 @@ export interface ChatTopicMetadata {
    */
   cronJobId?: string;
   /**
-   * Persistent session id for a heterogeneous agent (desktop only).
+   * Persistent session id for a heterogeneous agent.
    * Saved after each turn so the next message in the same topic can resume
    * the conversation (e.g. Claude Code CLI uses `--resume <sessionId>`).
-   * CC CLI stores sessions per-cwd under `~/.claude/projects/<encoded-cwd>/`,
-   * so resume requires the current cwd to equal `workingDirectory`.
+   *
+   * Two write paths share this field:
+   *
+   *   - **Desktop renderer** writes from `executeHeterogeneousAgent` after
+   *     the local CLI process finishes. Resume is gated on `workingDirectory`
+   *     equality because CC stores sessions per-cwd under
+   *     `~/.claude/projects/<encoded-cwd>/`.
+   *   - **Cloud server** writes from `aiAgent.heteroFinish` (and from in-stream
+   *     terminal events) when the sandbox CLI run completes. The sandbox
+   *     mounts a stable cwd, so server-side resume does not check
+   *     `workingDirectory`.
    */
   heteroSessionId?: string;
   model?: string;
