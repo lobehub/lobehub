@@ -58,6 +58,7 @@
   "agent.welcome.sentence.1": "So nice to meet you! Let’s get to know each other.",
   "agent.welcome.sentence.2": "What kind of partner do you want me to be?",
   "agent.welcome.sentence.3": "First, give me a name :)",
+  "agent.welcome.suggestion.avatarHint": "Use {{emoji}} as the avatar.",
   "agent.welcome.suggestion.switch": "Try another set",
   "agent.welcome.suggestion.title": "Need a starting point? Pick one and we can refine it later.",
   "agent.wrapUp.action": "I think we're good",

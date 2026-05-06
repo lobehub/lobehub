@@ -58,6 +58,7 @@
   "agent.welcome.sentence.1": "很高兴认识你！让我们互相了解一下吧。",
   "agent.welcome.sentence.2": "你希望我成为怎样的伙伴？",
   "agent.welcome.sentence.3": "先给我起个名字吧 :)",
+  "agent.welcome.suggestion.avatarHint": "头像用 {{emoji}}。",
   "agent.welcome.suggestion.switch": "换一组",
   "agent.welcome.suggestion.title": "一下子没灵感？先挑一个吧",
   "agent.wrapUp.action": "先这样吧",

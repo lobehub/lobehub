@@ -28,6 +28,7 @@ const sampleSuggestions = (count: number, excludeIds: string[] = []): NameSugges
 const NameSuggestions = memo(() => {
   const { t, i18n } = useTranslation('onboarding');
   const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
+  const editor = useConversationStore((s) => s.editor);
   const [items, setItems] = useState<NameSuggestionItem[]>(() =>
     sampleSuggestions(SUGGESTIONS_PER_GROUP),
   );
@@ -44,9 +45,13 @@ const NameSuggestions = memo(() => {
 
   const handleSelect = useCallback(
     (prompt: string, emoji: string) => {
-      updateInputMessage(`${prompt} ${emoji}`);
+      const avatarHint = t('agent.welcome.suggestion.avatarHint', { emoji });
+      const message = `${prompt} ${avatarHint}`;
+      updateInputMessage(message);
+      editor?.setDocument('text', message);
+      editor?.focus();
     },
-    [updateInputMessage],
+    [t, updateInputMessage, editor],
   );
 
   return (

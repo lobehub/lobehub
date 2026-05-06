@@ -55,6 +55,7 @@ export default {
   'agent.welcome.guide.knowYou.title': 'Get to Know You',
   'agent.welcome.guide.name.desc': 'Give me a name so this feels more personal from the start.',
   'agent.welcome.guide.name.title': 'Name Me',
+  'agent.welcome.suggestion.avatarHint': 'Use {{emoji}} as the avatar.',
   'agent.welcome.suggestion.switch': 'Try another set',
   'agent.welcome.suggestion.title': 'Need a starting point? Pick one and we can refine it later.',
   'agent.welcome.sentence.1': 'So nice to meet you! Let’s get to know each other.',

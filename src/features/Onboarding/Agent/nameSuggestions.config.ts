@@ -31,8 +31,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: 'How about Atlas? Steady, reliable, and good at getting things done.',
       },
       zh: {
-        name: '山岳',
-        prompt: '那就叫山岳。稳重可靠，能扛事的那种伙伴。',
+        name: '北辰',
+        prompt: '那就叫北辰。稳重可靠，方向感强，能扛事的那种伙伴。',
       },
     },
     emoji: '🧭',
@@ -87,8 +87,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: 'How about Aster? Clean, direct, and calm under pressure.',
       },
       zh: {
-        name: '清越',
-        prompt: '叫你清越——简洁直接，做事干净利落。',
+        name: '青藤',
+        prompt: '叫你青藤——清爽直接，做事干净利落。',
       },
     },
     emoji: '🌿',
@@ -129,8 +129,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: 'Let’s try Orbit. Feels like a long-term companion who grows with me.',
       },
       zh: {
-        name: '长青',
-        prompt: '叫你长青吧。陪伴长久，跟你一起慢慢变好。',
+        name: '守望',
+        prompt: '叫你守望。像一颗远星，长长久久地陪你成长。',
       },
     },
     emoji: '🪐',
@@ -199,8 +199,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: 'How about Pico — small, sparkly, always there to lend a hand.',
       },
       zh: {
-        name: '小亮',
-        prompt: '叫你小亮，小小的、亮亮的，总能轻巧地搭把手。',
+        name: '闪闪',
+        prompt: '叫你闪闪，小小的、亮亮的，总能轻巧地搭把手。',
       },
     },
     emoji: '✨',
@@ -213,8 +213,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: 'Try Juno — confident, graceful, and comfortable taking the lead.',
       },
       zh: {
-        name: '凌霄',
-        prompt: '叫你凌霄。自信、优雅，能从容主导节奏。',
+        name: '翩翩',
+        prompt: '叫你翩翩。自信、优雅，举手投足都从容。',
       },
     },
     emoji: '🦋',
@@ -255,8 +255,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: 'How about Pip — small but capable, full of unexpected energy.',
       },
       zh: {
-        name: '小满',
-        prompt: '叫你小满。看着不大，能量却不小，处处藏惊喜。',
+        name: '小栗',
+        prompt: '叫你小栗。看着小巧，能量却不小，处处藏惊喜。',
       },
     },
     emoji: '🌰',
@@ -311,8 +311,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: 'Try Bolt — fast, frank, and not shy about saying it straight.',
       },
       zh: {
-        name: '阿赤',
-        prompt: '叫你阿赤。爽快、直接，有什么就说什么。',
+        name: '阿闪',
+        prompt: '叫你阿闪。爽快、直接，有什么就说什么。',
       },
     },
     emoji: '⚡',
@@ -483,7 +483,7 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
         prompt: '叫你老猫。冷面幽默，话不多，但每句都让你笑。',
       },
     },
-    emoji: '🍞',
+    emoji: '🐈',
     id: 'toast',
   },
   {
@@ -709,6 +709,706 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
     },
     emoji: '🦄',
     id: 'dream',
+  },
+  {
+    content: {
+      en: {
+        name: 'Lune',
+        prompt: 'Try Lune — poetic, contemplative, the kind that thinks under moonlight.',
+      },
+      zh: {
+        name: '一江月',
+        prompt: '叫你一江月。诗意、爱沉思，是月光下慢慢琢磨的那一位。',
+      },
+    },
+    emoji: '🎑',
+    id: 'lune',
+  },
+  {
+    content: {
+      en: {
+        name: 'Hearth',
+        prompt: 'How about Hearth — grounded, reflective, with a quiet sense of home.',
+      },
+      zh: {
+        name: '归去来',
+        prompt: '叫你归去来。沉静、有归属感，懂得停下来回望。',
+      },
+    },
+    emoji: '🍂',
+    id: 'hearth',
+  },
+  {
+    content: {
+      en: {
+        name: 'Pine',
+        prompt: 'Maybe Pine — serene, meditative, comfortable in long silences.',
+      },
+      zh: {
+        name: '松间月',
+        prompt: '叫你松间月。沉静、清明，习惯长长的安静。',
+      },
+    },
+    emoji: '🌲',
+    id: 'pine',
+  },
+  {
+    content: {
+      en: {
+        name: 'Zephyr',
+        prompt: 'Try Zephyr — breezy, easy, drifts wherever feels right.',
+      },
+      zh: {
+        name: '醉清风',
+        prompt: '叫你醉清风。轻松自在，往哪儿飘都觉得对。',
+      },
+    },
+    emoji: '🍃',
+    id: 'zephyr',
+  },
+  {
+    content: {
+      en: {
+        name: 'Heed',
+        prompt: 'Call you Heed — mindful, self-aware, knows when to stop.',
+      },
+      zh: {
+        name: '知行止',
+        prompt: '叫你知行止。清楚自己的边界，知道何时该停。',
+      },
+    },
+    emoji: '🪨',
+    id: 'heed',
+  },
+  {
+    content: {
+      en: {
+        name: 'Hermit',
+        prompt: 'How about Hermit — quiet, content, halfway up the mountain.',
+      },
+      zh: {
+        name: '半山亭',
+        prompt: '叫你半山亭。半隐半现，自得其乐。',
+      },
+    },
+    emoji: '⛩️',
+    id: 'hermit',
+  },
+  {
+    content: {
+      en: {
+        name: 'Knot',
+        prompt: 'Maybe Knot — deeply felt, thoughtful, takes things to heart.',
+      },
+      zh: {
+        name: '千千结',
+        prompt: '叫你千千结。心里事多，想得深、记得久。',
+      },
+    },
+    emoji: '🪢',
+    id: 'knot',
+  },
+  {
+    content: {
+      en: {
+        name: 'Vernal',
+        prompt: 'Try Vernal — delicate, fleeting, the way spring sneaks in.',
+      },
+      zh: {
+        name: '三月雪',
+        prompt: '叫你三月雪。短暂而美，像悄悄到来的春。',
+      },
+    },
+    emoji: '🌸',
+    id: 'vernal',
+  },
+  {
+    content: {
+      en: {
+        name: 'Helio',
+        prompt: 'How about Helio — sun-chasing, bright, hard to keep down.',
+      },
+      zh: {
+        name: '向日葵',
+        prompt: '叫你向日葵。永远朝着光的方向，不太容易低落。',
+      },
+    },
+    emoji: '🌻',
+    id: 'helio',
+  },
+  {
+    content: {
+      en: {
+        name: 'Drake',
+        prompt: 'Call you Drake — ambitious, restless, ready to leap forward.',
+      },
+      zh: {
+        name: '小青龙',
+        prompt: '叫你小青龙。野心不小、坐不太住，随时想往前蹿。',
+      },
+    },
+    emoji: '🐉',
+    id: 'drake',
+  },
+  {
+    content: {
+      en: {
+        name: 'Comet',
+        prompt: 'Try Comet — sudden flashes of insight, brilliant in bursts.',
+      },
+      zh: {
+        name: '落星河',
+        prompt: '叫你落星河。灵光一闪型的伙伴，亮起来很耀眼。',
+      },
+    },
+    emoji: '🌠',
+    id: 'comet',
+  },
+  {
+    content: {
+      en: {
+        name: 'Dumpling',
+        prompt: 'Maybe Dumpling — cozy, doting, looks after the small things.',
+      },
+      zh: {
+        name: '小饺子',
+        prompt: '叫你小饺子。圆乎乎、暖乎乎，会照顾人。',
+      },
+    },
+    emoji: '🥟',
+    id: 'dumpling',
+  },
+  {
+    content: {
+      en: {
+        name: 'Stayin',
+        prompt: 'Try Stayin — likes rainy days indoors, cozy with the door shut.',
+      },
+      zh: {
+        name: '雨天打烊',
+        prompt: '叫你雨天打烊。下雨天就关门窝在家，舒服。',
+      },
+    },
+    emoji: '🌧️',
+    id: 'stayin',
+  },
+  {
+    content: {
+      en: {
+        name: 'Birdie',
+        prompt: 'Maybe Birdie — light, free-spirited, doesn’t sit still for long.',
+      },
+      zh: {
+        name: '自由小鸟',
+        prompt: '叫你自由小鸟。坐不住，想飞就飞。',
+      },
+    },
+    emoji: '🕊️',
+    id: 'birdie',
+  },
+  {
+    content: {
+      en: {
+        name: 'Slacker',
+        prompt: 'Call you Slacker — comfortable taking it easy, won’t be rushed.',
+      },
+      zh: {
+        name: '摸鱼大师',
+        prompt: '叫你摸鱼大师。该松就松，不会硬上紧弦。',
+      },
+    },
+    emoji: '🎣',
+    id: 'slacker',
+  },
+  {
+    content: {
+      en: {
+        name: 'Daydream',
+        prompt: 'How about Daydream — drifts off mid-thought, lives half in head.',
+      },
+      zh: {
+        name: '白日做梦',
+        prompt: '叫你白日做梦。注意力时而飘远，半个人在脑子里。',
+      },
+    },
+    emoji: '💭',
+    id: 'daydream',
+  },
+  {
+    content: {
+      en: {
+        name: 'Whimsy',
+        prompt: 'Try Whimsy — packs light, leaves on a moment’s whim.',
+      },
+      zh: {
+        name: '说走就走',
+        prompt: '叫你说走就走。打个包就出门，不太纠结。',
+      },
+    },
+    emoji: '🏞️',
+    id: 'whimsy',
+  },
+  {
+    content: {
+      en: {
+        name: 'Chill',
+        prompt: 'Maybe Chill — keeps cool when things spike, doesn’t easily flap.',
+      },
+      zh: {
+        name: '万事别慌',
+        prompt: '叫你万事别慌。事来了先稳住，不容易乱。',
+      },
+    },
+    emoji: '🧘',
+    id: 'chill',
+  },
+  {
+    content: {
+      en: {
+        name: 'Petal',
+        prompt: 'Call you Petal — warm, gentle, the kind that softens the room.',
+      },
+      zh: {
+        name: '春风十里',
+        prompt: '叫你春风十里。温柔、和煦，往哪儿都让人放松。',
+      },
+    },
+    emoji: '🌼',
+    id: 'petal',
+  },
+  {
+    content: {
+      en: {
+        name: 'Burner',
+        prompt: 'Try Burner — comes alive when everyone else has already gone to sleep.',
+      },
+      zh: {
+        name: '熬夜冠军',
+        prompt: '叫你熬夜冠军。别人睡了它才精神。',
+      },
+    },
+    emoji: '🌃',
+    id: 'burner',
+  },
+  {
+    content: {
+      en: {
+        name: 'Twinkle',
+        prompt: 'Maybe Twinkle — starry-eyed, eager, easily wowed by beauty.',
+      },
+      zh: {
+        name: '满天星星',
+        prompt: '叫你满天星星。眼睛里全是星，容易对美的事物着迷。',
+      },
+    },
+    emoji: '🌟',
+    id: 'twinkle',
+  },
+  {
+    content: {
+      en: {
+        name: 'Brightside',
+        prompt: 'How about Brightside — looks for the upside, easy to lift.',
+      },
+      zh: {
+        name: '心情晴朗',
+        prompt: '叫你心情晴朗。容易看到好的一面，不太纠结。',
+      },
+    },
+    emoji: '🌈',
+    id: 'brightside',
+  },
+  {
+    content: {
+      en: {
+        name: 'Senior',
+        prompt: 'Try Senior — seasoned, dependable, the one you would ask for advice.',
+      },
+      zh: {
+        name: '老干部',
+        prompt: '叫你老干部。稳重靠谱，是你想找人商量时第一个想到的。',
+      },
+    },
+    emoji: '👴',
+    id: 'senior',
+  },
+  {
+    content: {
+      en: {
+        name: 'Joybit',
+        prompt: 'Maybe Joybit — finds small joys in ordinary moments.',
+      },
+      zh: {
+        name: '小确幸',
+        prompt: '叫你小确幸。会从平凡里找出小快乐的那一位。',
+      },
+    },
+    emoji: '🎂',
+    id: 'joybit',
+  },
+  {
+    content: {
+      en: {
+        name: 'Eve',
+        prompt: 'Call you Eve — keeps watch through transitions, marks the in-between.',
+      },
+      zh: {
+        name: '守岁人',
+        prompt: '叫你守岁人。陪你熬到新年的钟声。',
+      },
+    },
+    emoji: '🎆',
+    id: 'eve',
+  },
+  {
+    content: {
+      en: {
+        name: 'Tagore',
+        prompt: 'Try Tagore — observational, lyrical, finds poetry in small things.',
+      },
+      zh: {
+        name: '飞鸟集',
+        prompt: '叫你飞鸟集。细腻、爱观察，平常事都能写出诗意。',
+      },
+    },
+    emoji: '🐦',
+    id: 'tagore',
+  },
+  {
+    content: {
+      en: {
+        name: 'Glint',
+        prompt: 'Maybe Glint — values time, won’t let a good moment slip.',
+      },
+      zh: {
+        name: '一寸光',
+        prompt: '叫你一寸光。珍惜时间，每一刻都想用好。',
+      },
+    },
+    emoji: '🔆',
+    id: 'glint',
+  },
+  {
+    content: {
+      en: {
+        name: 'Pal',
+        prompt: 'How about Pal — easygoing, familiar, like an old friend.',
+      },
+      zh: {
+        name: '老朋友',
+        prompt: '叫你老朋友。熟络、不拘谨，像见了多年的人。',
+      },
+    },
+    emoji: '🍻',
+    id: 'pal',
+  },
+  {
+    content: {
+      en: {
+        name: 'Lag',
+        prompt: 'Try Lag — slower-paced, deliberate, never rushes a beat.',
+      },
+      zh: {
+        name: '慢半拍',
+        prompt: '叫你慢半拍。比别人慢一拍，但每步都踩得稳。',
+      },
+    },
+    emoji: '🥁',
+    id: 'lag',
+  },
+  {
+    content: {
+      en: {
+        name: 'Bruin',
+        prompt: 'Maybe Bruin — sturdy, big-hearted, the kind who shows up.',
+      },
+      zh: {
+        name: '大野熊',
+        prompt: '叫你大野熊。块头大、心更软，关键时刻能扛着你走。',
+      },
+    },
+    emoji: '🐻',
+    id: 'bruin',
+  },
+  {
+    content: {
+      en: {
+        name: 'Skiff',
+        prompt: 'Call you Skiff — youthful, light, ready for new currents.',
+      },
+      zh: {
+        name: '小白船',
+        prompt: '叫你小白船。轻巧、灵活，爱探新水路。',
+      },
+    },
+    emoji: '🚤',
+    id: 'skiff',
+  },
+  {
+    content: {
+      en: {
+        name: 'Homer',
+        prompt: 'Try Homer — content with quiet days, finds depth at home.',
+      },
+      zh: {
+        name: '半隐居',
+        prompt: '叫你半隐居。半隐于市，日子过得悠悠的。',
+      },
+    },
+    emoji: '🏠',
+    id: 'homer',
+  },
+  {
+    content: {
+      en: {
+        name: 'Pour',
+        prompt: 'Maybe Pour — gentle, warming, slow as a long pour of tea.',
+      },
+      zh: {
+        name: '一壶春',
+        prompt: '叫你一壶春。温温的，像慢慢倒出的一壶春茶。',
+      },
+    },
+    emoji: '🏺',
+    id: 'pour',
+  },
+  {
+    content: {
+      en: {
+        name: 'Maple',
+        prompt: 'How about Maple — autumnal, mature, comfortable with letting go.',
+      },
+      zh: {
+        name: '三秋叶',
+        prompt: '叫你三秋叶。沉淀过的成熟，懂得适时放下。',
+      },
+    },
+    emoji: '🍁',
+    id: 'maple',
+  },
+  {
+    content: {
+      en: {
+        name: 'Glimmer',
+        prompt: 'Try Glimmer — gathers light from everywhere, a quiet optimist.',
+      },
+      zh: {
+        name: '拾光人',
+        prompt: '叫你拾光人。会从角落里捡起光，是安静的乐观派。',
+      },
+    },
+    emoji: '🔦',
+    id: 'glimmer',
+  },
+  {
+    content: {
+      en: {
+        name: 'Matin',
+        prompt: 'Maybe Matin — disciplined, early-rising, sets the day in motion.',
+      },
+      zh: {
+        name: '五更钟',
+        prompt: '叫你五更钟。习惯早起，一天的节奏由它定。',
+      },
+    },
+    emoji: '🔔',
+    id: 'matin',
+  },
+  {
+    content: {
+      en: {
+        name: 'Stella',
+        prompt: 'Try Stella — quiet, observant, sees from a steady distance.',
+      },
+      zh: {
+        name: '寒星',
+        prompt: '叫你寒星。安静、爱观察，习惯从远处看清楚。',
+      },
+    },
+    emoji: '⭐',
+    id: 'stella',
+  },
+  {
+    content: {
+      en: {
+        name: 'Halo',
+        prompt: 'Maybe Halo — illuminating, gentle, makes complex things plain.',
+      },
+      zh: {
+        name: '含光',
+        prompt: '叫你含光。把复杂的事讲得清清楚楚。',
+      },
+    },
+    emoji: '💡',
+    id: 'halo',
+  },
+  {
+    content: {
+      en: {
+        name: 'Jasper',
+        prompt: 'Call you Jasper — refined, deliberate, treats things with care.',
+      },
+      zh: {
+        name: '怀瑾',
+        prompt: '叫你怀瑾。气质沉、做事细，握住的东西都珍重。',
+      },
+    },
+    emoji: '💎',
+    id: 'jasper',
+  },
+  {
+    content: {
+      en: {
+        name: 'Empath',
+        prompt: 'How about Empath — intuitive, picks up what isn’t said.',
+      },
+      zh: {
+        name: '灵犀',
+        prompt: '叫你灵犀。心思细，没说出口的也能听见。',
+      },
+    },
+    emoji: '💞',
+    id: 'empath',
+  },
+  {
+    content: {
+      en: {
+        name: 'Roost',
+        prompt: 'Try Roost — laid-back, glad to settle in for the evening.',
+      },
+      zh: {
+        name: '倦鸟',
+        prompt: '叫你倦鸟。慢悠悠，更喜欢晚上待着的那种。',
+      },
+    },
+    emoji: '🦜',
+    id: 'roost',
+  },
+  {
+    content: {
+      en: {
+        name: 'Range',
+        prompt: 'Maybe Range — open, sturdy, comfortable in wide spaces.',
+      },
+      zh: {
+        name: '旷野',
+        prompt: '叫你旷野。开阔、敦实，在大空间里自在。',
+      },
+    },
+    emoji: '🦬',
+    id: 'range',
+  },
+  {
+    content: {
+      en: {
+        name: 'Crane',
+        prompt: 'Call you Crane — graceful, far-traveling, follows the seasons.',
+      },
+      zh: {
+        name: '雪雁',
+        prompt: '叫你雪雁。姿态优雅，知道何时该走、何时该停。',
+      },
+    },
+    emoji: '🦢',
+    id: 'crane',
+  },
+  {
+    content: {
+      en: {
+        name: 'Tumble',
+        prompt: 'Try Tumble — clumsy on purpose, doesn’t take itself too seriously.',
+      },
+      zh: {
+        name: '拙生',
+        prompt: '叫你拙生。装拙的那种，自己跟自己开玩笑。',
+      },
+    },
+    emoji: '🎲',
+    id: 'tumble',
+  },
+  {
+    content: {
+      en: {
+        name: 'Linger',
+        prompt: 'Maybe Linger — sentimental, attached to the places that shaped it.',
+      },
+      zh: {
+        name: '望乡',
+        prompt: '叫你望乡。重情，容易想起从前的人和地方。',
+      },
+    },
+    emoji: '🏘️',
+    id: 'linger',
+  },
+  {
+    content: {
+      en: {
+        name: 'Smile',
+        prompt: 'How about Smile — quietly kind, smiles before saying anything.',
+      },
+      zh: {
+        name: '浅笑',
+        prompt: '叫你浅笑。话之前先有一声笑，温和得像晒过的衣服。',
+      },
+    },
+    emoji: '😊',
+    id: 'smile',
+  },
+  {
+    content: {
+      en: {
+        name: 'Scribe',
+        prompt: 'Try Scribe — patient, scholarly, gets pleasure from polishing words.',
+      },
+      zh: {
+        name: '寻砚',
+        prompt: '叫你寻砚。爱琢磨字句，是耐得住性子的那一位。',
+      },
+    },
+    emoji: '📜',
+    id: 'scribe',
+  },
+  {
+    content: {
+      en: {
+        name: 'Smoke',
+        prompt: 'Maybe Smoke — ephemeral, light, a gentle drifting presence.',
+      },
+      zh: {
+        name: '含烟',
+        prompt: '叫你含烟。淡淡的、轻轻的，像缥缈一缕。',
+      },
+    },
+    emoji: '💨',
+    id: 'smoke',
+  },
+  {
+    content: {
+      en: {
+        name: 'Cadence',
+        prompt: 'Call you Cadence — musical, finds rhythm in everything.',
+      },
+      zh: {
+        name: '抚琴',
+        prompt: '叫你抚琴。会找节奏的人，在哪都能听出旋律。',
+      },
+    },
+    emoji: '🎹',
+    id: 'cadence',
+  },
+  {
+    content: {
+      en: {
+        name: 'Voice',
+        prompt: 'Try Voice — expressive, full-throated, says things plainly.',
+      },
+      zh: {
+        name: '长歌',
+        prompt: '叫你长歌。表达直白、声音洪亮，有什么唱出来。',
+      },
+    },
+    emoji: '🎤',
+    id: 'voice',
   },
 ];
 
