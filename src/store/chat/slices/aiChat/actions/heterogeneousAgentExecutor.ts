@@ -20,11 +20,14 @@ import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
 import { message as antdMessage } from '@/components/AntdStaticMethods';
+import { CLAUDE_CODE_API_BILLING_ENV } from '@/config/heterogeneousAgent';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotification';
+import { settingsSelectors } from '@/store/user/selectors';
+import { getUserStoreState } from '@/store/user/store';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../utils/messageMapKey';
@@ -33,6 +36,16 @@ import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
+
+const mergeHeterogeneousAgentEnv = (
+  globalEnv?: Record<string, string>,
+  agentEnv?: Record<string, string>,
+  enforcedEnv?: Record<string, string>,
+) => {
+  const env = { ...globalEnv, ...agentEnv, ...enforcedEnv };
+
+  return Object.keys(env).length > 0 ? env : undefined;
+};
 
 /**
  * Fire desktop notification + dock badge when a CC/Codex/ACP run finishes.
@@ -1279,13 +1292,20 @@ export const executeHeterogeneousAgent = async (
   };
 
   try {
+    const globalEnv = settingsSelectors.heterogeneousAgentEnv(getUserStoreState());
+    const enforcedEnv =
+      heterogeneousProvider.type === 'claude-code' && heterogeneousProvider.billingType === 'api'
+        ? CLAUDE_CODE_API_BILLING_ENV
+        : undefined;
+    const env = mergeHeterogeneousAgentEnv(globalEnv, heterogeneousProvider.env, enforcedEnv);
+
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: heterogeneousProvider.args,
       command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
       cwd: workingDirectory,
-      env: heterogeneousProvider.env,
+      env,
       resumeSessionId,
     });
     agentSessionId = result.sessionId;

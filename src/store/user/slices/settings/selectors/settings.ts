@@ -28,6 +28,8 @@ export const getProviderConfigById = (provider: string) => (s: UserStore) =>
 
 const currentImageSettings = (s: UserStore) => currentSettings(s).image;
 
+const heterogeneousAgentEnv = (s: UserStore) => currentSettings(s).heterogeneousAgent?.env;
+
 const currentMemorySettings = (s: UserStore) =>
   merge(DEFAULT_MEMORY_SETTINGS, currentSettings(s).memory);
 
@@ -59,6 +61,7 @@ export const settingsSelectors = {
   defaultAgentMeta,
   exportSettings,
   getHotkeyById,
+  heterogeneousAgentEnv,
   memoryEnabled,
   providerConfig: getProviderConfigById,
 };

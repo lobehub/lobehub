@@ -15,6 +15,14 @@ import type { UserTTSConfig } from './tts';
 
 export type UserDefaultAgent = LobeAgentSettings;
 
+export interface UserHeterogeneousAgentSettings {
+  /**
+   * Global environment variables injected into every heterogeneous agent CLI process.
+   * Agent-level environment variables override these values by key.
+   */
+  env?: Record<string, string>;
+}
+
 export * from './filesConfig';
 export * from './general';
 export * from './hotkey';
@@ -35,6 +43,7 @@ export * from './tts';
 export interface UserSettings {
   defaultAgent: UserDefaultAgent;
   general: UserGeneralConfig;
+  heterogeneousAgent?: UserHeterogeneousAgentSettings;
   hotkey: UserHotkeyConfig;
   image: UserImageConfig;
   keyVaults: UserKeyVaults;
@@ -55,6 +64,7 @@ export const UserSettingsSchema = z
   .object({
     defaultAgent: z.any().optional(),
     general: z.any().optional(),
+    heterogeneousAgent: z.any().optional(),
     hotkey: z.any().optional(),
     image: z.any().optional(),
     keyVaults: z.any().optional(),

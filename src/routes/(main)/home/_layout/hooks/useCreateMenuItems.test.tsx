@@ -166,7 +166,7 @@ describe('useCreateMenuItems', () => {
       groupId: undefined,
     });
     expect(refreshAgentListMock).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex/profile');
   });
 
   it('creates the Codex agent normally without preflight interception', async () => {
@@ -199,6 +199,6 @@ describe('useCreateMenuItems', () => {
       groupId: undefined,
     });
     expect(refreshAgentListMock).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex/profile');
   });
 });

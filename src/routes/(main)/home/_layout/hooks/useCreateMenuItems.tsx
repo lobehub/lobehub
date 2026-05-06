@@ -197,8 +197,9 @@ export const useCreateMenuItems = () => {
   /**
    * Create a heterogeneous agent with CLI provider pre-configured.
    *
-   * Bypasses `mutateAgent` so we skip its default /profile redirect —
-   * external CLI agents land straight on the chat page since their config is fixed.
+   * Bypasses `mutateAgent` so the provider-specific defaults are created
+   * explicitly, then lands on profile because external CLI agents may need
+   * per-agent command and environment configuration before first execution.
    */
   const createHeterogeneousAgent = useCallback(
     async (
@@ -220,7 +221,7 @@ export const useCreateMenuItems = () => {
         groupId: options?.groupId,
       });
       await refreshAgentList();
-      navigate(`/agent/${result.agentId}`);
+      navigate(`/agent/${result.agentId}/profile`);
       options?.onSuccess?.();
     },
     [storeCreateAgent, refreshAgentList, navigate],

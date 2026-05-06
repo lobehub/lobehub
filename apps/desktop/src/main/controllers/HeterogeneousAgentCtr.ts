@@ -111,6 +111,23 @@ interface SessionInfo {
   agentSessionId?: string;
 }
 
+interface CheckClaudeCodeApiConnectionParams {
+  env: Record<string, string>;
+}
+
+interface CheckClaudeCodeApiConnectionResult {
+  message: string;
+  model?: string;
+  ok: boolean;
+  responseTimeMs?: number;
+  status?: number;
+}
+
+interface ClaudeCodeApiCredential {
+  headerName: 'authorization' | 'x-api-key';
+  headerValue: string;
+}
+
 // ─── Internal session tracking ───
 
 interface AgentSession {
@@ -248,6 +265,82 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
             typeof error.message === 'string'
           ? error.message
           : undefined;
+  }
+
+  private getClaudeCodeApiConnectionCredential(
+    env: Record<string, string>,
+  ): ClaudeCodeApiCredential | undefined {
+    const authToken = env.ANTHROPIC_AUTH_TOKEN?.trim();
+    if (authToken) {
+      return { headerName: 'authorization', headerValue: `Bearer ${authToken}` };
+    }
+
+    const apiKey = env.ANTHROPIC_API_KEY?.trim();
+    if (apiKey) {
+      return { headerName: 'x-api-key', headerValue: apiKey };
+    }
+  }
+
+  private getClaudeCodeApiConnectionModel(env: Record<string, string>): string {
+    return (
+      env.ANTHROPIC_MODEL?.trim() ||
+      env.ANTHROPIC_DEFAULT_SONNET_MODEL?.trim() ||
+      env.ANTHROPIC_DEFAULT_OPUS_MODEL?.trim() ||
+      env.ANTHROPIC_DEFAULT_HAIKU_MODEL?.trim() ||
+      'claude-sonnet-4-6'
+    );
+  }
+
+  private getClaudeCodeApiMessagesUrl(baseUrl: string): string {
+    const normalizedBaseUrl = baseUrl.trim().replaceAll(/\/+$/g, '');
+
+    if (/\/v1\/messages$/i.test(normalizedBaseUrl) || /\/messages$/i.test(normalizedBaseUrl)) {
+      return normalizedBaseUrl;
+    }
+
+    return normalizedBaseUrl.endsWith('/v1')
+      ? `${normalizedBaseUrl}/messages`
+      : `${normalizedBaseUrl}/v1/messages`;
+  }
+
+  private async readConnectionErrorBody(response: Response): Promise<string | undefined> {
+    try {
+      const body = await response.text();
+      if (!body) return;
+
+      try {
+        const parsed = JSON.parse(body);
+        const message = parsed?.error?.message || parsed?.message || parsed?.detail;
+
+        if (typeof message === 'string') return message.slice(0, 300);
+      } catch {
+        // Fall through to the raw body summary.
+      }
+
+      return body.slice(0, 300);
+    } catch {
+      return;
+    }
+  }
+
+  private getClaudeCodeApiConnectionErrorMessage(status: number, body?: string): string {
+    if (status === 401 || status === 403) {
+      return 'API token is invalid or does not have permission for this provider.';
+    }
+
+    if (status === 429) {
+      return 'The provider rejected the probe because the API token is rate limited.';
+    }
+
+    if (status === 404) {
+      return body || 'The configured Anthropic-compatible messages endpoint was not found.';
+    }
+
+    if (status >= 500) {
+      return body || 'The provider returned a server error during the connection check.';
+    }
+
+    return body || `The provider rejected the connection check with HTTP ${status}.`;
   }
 
   private buildCodexResumeError(
@@ -674,6 +767,82 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
     logger.info('Session created:', { agentType, sessionId });
     return { sessionId };
+  }
+
+  @IpcMethod()
+  async checkClaudeCodeApiConnection(
+    params: CheckClaudeCodeApiConnectionParams,
+  ): Promise<CheckClaudeCodeApiConnectionResult> {
+    const baseUrl = params.env.ANTHROPIC_BASE_URL?.trim();
+    const credential = this.getClaudeCodeApiConnectionCredential(params.env);
+
+    if (!baseUrl) {
+      return { message: 'ANTHROPIC_BASE_URL is required.', ok: false };
+    }
+
+    if (!credential) {
+      return { message: 'ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY is required.', ok: false };
+    }
+
+    const model = this.getClaudeCodeApiConnectionModel(params.env);
+    const messagesUrl = this.getClaudeCodeApiMessagesUrl(baseUrl);
+    const startedAt = Date.now();
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), 15_000);
+
+    try {
+      const response = await fetch(messagesUrl, {
+        body: JSON.stringify({
+          max_tokens: 1,
+          messages: [{ content: 'ping', role: 'user' }],
+          model,
+        }),
+        headers: {
+          'accept': 'application/json',
+          'anthropic-beta': 'claude-code-20250219,interleaved-thinking-2025-05-14',
+          'anthropic-version': '2023-06-01',
+          [credential.headerName]: credential.headerValue,
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+        signal: abortController.signal,
+      });
+      const responseTimeMs = Date.now() - startedAt;
+
+      if (response.ok) {
+        return {
+          message: 'Connection successful.',
+          model,
+          ok: true,
+          responseTimeMs,
+          status: response.status,
+        };
+      }
+
+      const body = await this.readConnectionErrorBody(response);
+
+      return {
+        message: this.getClaudeCodeApiConnectionErrorMessage(response.status, body),
+        model,
+        ok: false,
+        responseTimeMs,
+        status: response.status,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error && error.name === 'AbortError'
+          ? 'The connection check timed out.'
+          : this.getErrorMessage(error) || 'The connection check failed.';
+
+      return {
+        message,
+        model,
+        ok: false,
+        responseTimeMs: Date.now() - startedAt,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /**

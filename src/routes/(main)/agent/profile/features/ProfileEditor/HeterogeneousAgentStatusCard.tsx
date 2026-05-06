@@ -1,20 +1,111 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { type ClaudeAuthStatus, type ToolStatus } from '@lobechat/electron-client-ipc';
+import type { ClaudeAuthStatus, ToolStatus } from '@lobechat/electron-client-ipc';
 import { getHeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
-import type { HeterogeneousProviderConfig } from '@lobechat/types';
-import { ActionIcon, CopyButton, Flexbox, Icon, Input, Tag, Text, Tooltip } from '@lobehub/ui';
+import type {
+  HeterogeneousProviderBillingType,
+  HeterogeneousProviderConfig,
+} from '@lobechat/types';
+import {
+  ActionIcon,
+  CopyButton,
+  Flexbox,
+  Icon,
+  Input,
+  Segmented,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { createStyles } from 'antd-style';
-import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Loader2Icon,
+  PencilLine,
+  PlusIcon,
+  RefreshCw,
+  SaveIcon,
+  Trash2Icon,
+  XCircle,
+} from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { toolDetectorService } from '@/services/electron/toolDetector';
 
+import type { ClaudeCodeApiProviderPreset } from './claudeCodeProviderPresets';
+import {
+  CLAUDE_CODE_API_PROVIDER_PRESETS,
+  DEFAULT_CLAUDE_CODE_API_PROVIDER_PRESET,
+  formatRequiredEnvGroup,
+  getClaudeCodeApiProviderPreset,
+  inferClaudeCodeApiProviderPresetId,
+} from './claudeCodeProviderPresets';
+
 const COMMAND_LINE_HEIGHT = 28;
+
+interface EnvRow {
+  id: string;
+  key: string;
+  value: string;
+}
+
+interface EnvConnectionResult {
+  message: string;
+  ok: boolean;
+  responseTimeMs?: number;
+  status?: number;
+}
+
+const envToRows = (env?: Record<string, string>): EnvRow[] =>
+  Object.entries(env ?? {}).map(([key, value], index) => ({
+    id: `${key}-${index}`,
+    key,
+    value,
+  }));
+
+const createEnvRow = (key = '', value = ''): EnvRow => ({
+  id: `${key || 'new'}-${Date.now()}`,
+  key,
+  value,
+});
+
+const getDefaultRequiredEnvKeys = (required: string[][]) => [
+  ...new Set(required.map((group) => group[0])),
+];
+
+const ensureEnvRows = (rows: EnvRow[], keys: string[]): EnvRow[] => {
+  const existingKeys = new Set(rows.map((row) => row.key));
+  const missingRows = keys.filter((key) => !existingKeys.has(key)).map((key) => createEnvRow(key));
+
+  return [...rows, ...missingRows];
+};
+
+const emptyEnvRow = (): EnvRow => createEnvRow();
+
+const rowsToEnv = (rows: EnvRow[]): Record<string, string> | undefined => {
+  const env: Record<string, string> = {};
+
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (!key) continue;
+
+    env[key] = row.value;
+  }
+
+  return Object.keys(env).length > 0 ? env : undefined;
+};
+
+const findMissingRequiredEnvGroups = (
+  env: Record<string, string> | undefined,
+  required: string[][],
+) => required.filter((group) => !group.some((key) => env?.[key]?.trim()));
+
+const isSensitiveEnvKey = (key: string) => /TOKEN|API_KEY|SECRET|PASSWORD/i.test(key);
 
 const useStyles = createStyles(({ css, token }) => ({
   card: css`
@@ -189,6 +280,87 @@ const useStyles = createStyles(({ css, token }) => ({
     line-height: 20px;
     color: ${token.colorText};
   `,
+  billingContent: css`
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  billingHint: css`
+    font-size: 12px;
+    color: ${token.colorTextTertiary};
+  `,
+  envActions: css`
+    display: flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+  `,
+  envEditor: css`
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+
+    min-width: 0;
+  `,
+  envDetailRow: css`
+    align-items: flex-start;
+
+    > div:first-child {
+      padding-block-start: 6px;
+    }
+  `,
+  envPresetSelect: css`
+    width: min(320px, 100%);
+  `,
+  envInput: css`
+    min-width: 120px;
+    font-family: ${token.fontFamilyCode};
+  `,
+  envRow: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+  `,
+  envSummary: css`
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  envSummaryText: css`
+    max-width: 100%;
+    font-family: ${token.fontFamilyCode};
+    font-size: 13px;
+    color: ${token.colorTextSecondary};
+  `,
+  envToolbar: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+  `,
+  envConnectionError: css`
+    font-size: 12px;
+    color: ${token.colorError};
+  `,
+  envConnectionSuccess: css`
+    font-size: 12px;
+    color: ${token.colorSuccess};
+  `,
+  envValidation: css`
+    font-size: 12px;
+    color: ${token.colorError};
+  `,
   accountValue: css`
     font-size: 15px;
     color: ${token.colorText};
@@ -205,12 +377,15 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 interface HeterogeneousAgentStatusCardProps {
+  onBillingTypeChange?: (billingType: HeterogeneousProviderBillingType) => Promise<void> | void;
   onCommandChange?: (command: string) => Promise<void> | void;
+  onEnvChange?: (env?: Record<string, string>) => Promise<void> | void;
+  onProviderPresetChange?: (preset: ClaudeCodeApiProviderPreset) => Promise<void> | void;
   provider: HeterogeneousProviderConfig;
 }
 
 const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
-  ({ provider, onCommandChange }) => {
+  ({ provider, onBillingTypeChange, onCommandChange, onEnvChange, onProviderPresetChange }) => {
     const { t } = useTranslation('setting');
     const { styles } = useStyles();
     const navigate = useNavigate();
@@ -218,24 +393,53 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const defaultCommand = providerConfig?.command || '';
     const resolvedCommand = provider.command?.trim() || defaultCommand;
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
+    const persistedBillingType = provider.billingType ?? (provider.env ? 'api' : 'subscription');
+    const [billingType, setBillingType] =
+      useState<HeterogeneousProviderBillingType>(persistedBillingType);
+    const isClaudeCode = provider.type === 'claude-code';
+    const isApiBilling = isClaudeCode && billingType === 'api';
     const [status, setStatus] = useState<ToolStatus | undefined>();
     const [auth, setAuth] = useState<ClaudeAuthStatus | null>(null);
     const [commandInput, setCommandInput] = useState(resolvedCommand);
     const [detecting, setDetecting] = useState(true);
+    const [envError, setEnvError] = useState<string | undefined>();
+    const [envConnectionResult, setEnvConnectionResult] = useState<
+      EnvConnectionResult | undefined
+    >();
     const [isEditingCommand, setIsEditingCommand] = useState(false);
+    const [isEditingEnv, setIsEditingEnv] = useState(false);
+    const [checkingEnvConnection, setCheckingEnvConnection] = useState(false);
     const [savingCommand, setSavingCommand] = useState(false);
+    const [savingEnv, setSavingEnv] = useState(false);
+    const [envRows, setEnvRows] = useState(() => envToRows(provider.env));
+    const [envPresetId, setEnvPresetId] = useState(() =>
+      inferClaudeCodeApiProviderPresetId(provider.env),
+    );
     const commandInputRef = useRef<HTMLInputElement | null>(null);
+    const newEnvRowIndexRef = useRef(0);
 
     const displayName = providerConfig?.title || provider.type;
     const AgentIcon = providerConfig?.icon;
+    const envEntries = useMemo(() => Object.entries(provider.env ?? {}), [provider.env]);
+    const envNames = useMemo(() => envEntries.map(([key]) => key), [envEntries]);
+    const envPresetOptions = useMemo(
+      () =>
+        CLAUDE_CODE_API_PROVIDER_PRESETS.map((preset) => ({
+          label: preset.label,
+          value: preset.id,
+        })),
+      [],
+    );
+    const selectedEnvPreset =
+      getClaudeCodeApiProviderPreset(envPresetId) ?? DEFAULT_CLAUDE_CODE_API_PROVIDER_PRESET;
     const showCliInstallGuide =
-      (provider.type === 'claude-code' || provider.type === 'codex') &&
+      (isClaudeCode || provider.type === 'codex') &&
       !detecting &&
       !status?.available &&
       !isUsingCustomCommand;
 
     const fetchAuth = useCallback(async () => {
-      if (provider.type !== 'claude-code') {
+      if (provider.type !== 'claude-code' || isApiBilling) {
         setAuth(null);
         return;
       }
@@ -247,7 +451,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         console.warn('[HeterogeneousAgentStatusCard] Failed to get Claude auth status:', error);
         setAuth(null);
       }
-    }, [provider.type, resolvedCommand]);
+    }, [isApiBilling, provider.type, resolvedCommand]);
 
     const detect = useCallback(async () => {
       if (!isDesktop || !resolvedCommand) {
@@ -283,6 +487,18 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     useEffect(() => {
       setCommandInput(resolvedCommand);
     }, [resolvedCommand]);
+
+    useEffect(() => {
+      setBillingType(persistedBillingType);
+    }, [persistedBillingType]);
+
+    useEffect(() => {
+      if (isEditingEnv) return;
+
+      setEnvRows(envToRows(provider.env));
+      setEnvPresetId(inferClaudeCodeApiProviderPresetId(provider.env));
+      setEnvConnectionResult(undefined);
+    }, [isEditingEnv, provider.env]);
 
     useEffect(() => {
       if (!isEditingCommand) return;
@@ -328,6 +544,196 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         setSavingCommand(false);
       }
     }, [commandInput, defaultCommand, onCommandChange, resolvedCommand, savingCommand]);
+
+    const startEditingEnv = useCallback(() => {
+      if (savingEnv) return;
+
+      const rows = envToRows(provider.env);
+      if (isApiBilling) {
+        const presetId = inferClaudeCodeApiProviderPresetId(provider.env);
+        const preset =
+          getClaudeCodeApiProviderPreset(presetId) ?? DEFAULT_CLAUDE_CODE_API_PROVIDER_PRESET;
+        setEnvPresetId(presetId);
+        setEnvRows(ensureEnvRows(rows, getDefaultRequiredEnvKeys(preset.required)));
+      } else {
+        setEnvRows(rows.length > 0 ? rows : [emptyEnvRow()]);
+      }
+      setEnvError(undefined);
+      setEnvConnectionResult(undefined);
+      setIsEditingEnv(true);
+    }, [isApiBilling, provider.env, savingEnv]);
+
+    const cancelEditingEnv = useCallback(() => {
+      setEnvRows(envToRows(provider.env));
+      setEnvError(undefined);
+      setEnvConnectionResult(undefined);
+      setIsEditingEnv(false);
+    }, [provider.env]);
+
+    const addEnvRow = useCallback(() => {
+      const nextIndex = newEnvRowIndexRef.current + 1;
+      newEnvRowIndexRef.current = nextIndex;
+
+      setEnvConnectionResult(undefined);
+      setEnvRows((rows) => [...rows, { id: `new-${nextIndex}`, key: '', value: '' }]);
+    }, []);
+
+    const updateEnvRow = useCallback((id: string, field: 'key' | 'value', value: string) => {
+      setEnvConnectionResult(undefined);
+      setEnvRows((rows) => rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+    }, []);
+
+    const removeEnvRow = useCallback((id: string) => {
+      setEnvConnectionResult(undefined);
+      setEnvRows((rows) => rows.filter((row) => row.id !== id));
+    }, []);
+
+    const applyEnvPreset = useCallback((presetId: string) => {
+      const preset =
+        getClaudeCodeApiProviderPreset(presetId) ?? DEFAULT_CLAUDE_CODE_API_PROVIDER_PRESET;
+
+      setEnvPresetId(preset.id);
+      setEnvRows(envToRows(preset.env));
+      setEnvError(undefined);
+      setEnvConnectionResult(undefined);
+    }, []);
+
+    const commitEnv = useCallback(async () => {
+      if (savingEnv) return;
+
+      const nextEnv = rowsToEnv(envRows);
+      if (isApiBilling) {
+        const missingGroups = findMissingRequiredEnvGroups(nextEnv, selectedEnvPreset.required);
+
+        if (missingGroups.length > 0) {
+          setEnvError(
+            t('heterogeneousStatus.env.required', {
+              keys: missingGroups.map(formatRequiredEnvGroup).join(', '),
+            }),
+          );
+          return;
+        }
+      }
+
+      try {
+        setSavingEnv(true);
+        await onEnvChange?.(nextEnv);
+        if (isApiBilling) {
+          await onProviderPresetChange?.(selectedEnvPreset);
+        }
+        setEnvError(undefined);
+        setEnvConnectionResult(undefined);
+        setIsEditingEnv(false);
+      } finally {
+        setSavingEnv(false);
+      }
+    }, [
+      envRows,
+      isApiBilling,
+      onEnvChange,
+      onProviderPresetChange,
+      savingEnv,
+      selectedEnvPreset,
+      t,
+    ]);
+
+    const getEnvConnectionResultText = useCallback(
+      (result: EnvConnectionResult) => {
+        if (result.ok) {
+          return result.responseTimeMs === undefined
+            ? t('heterogeneousStatus.env.checkSuccess')
+            : t('heterogeneousStatus.env.checkSuccessWithLatency', {
+                latency: result.responseTimeMs,
+              });
+        }
+
+        return t('heterogeneousStatus.env.checkFailed', { message: result.message });
+      },
+      [t],
+    );
+
+    const checkEnvConnection = useCallback(async () => {
+      if (!isApiBilling || checkingEnvConnection) return;
+
+      const targetEnv = isEditingEnv ? rowsToEnv(envRows) : provider.env;
+      const missingGroups = findMissingRequiredEnvGroups(targetEnv, selectedEnvPreset.required);
+
+      if (missingGroups.length > 0) {
+        setEnvConnectionResult({
+          message: t('heterogeneousStatus.env.required', {
+            keys: missingGroups.map(formatRequiredEnvGroup).join(', '),
+          }),
+          ok: false,
+        });
+        return;
+      }
+
+      try {
+        setCheckingEnvConnection(true);
+        setEnvConnectionResult(undefined);
+        setEnvError(undefined);
+        const result = await heterogeneousAgentService.checkClaudeCodeApiConnection({
+          env: targetEnv ?? {},
+        });
+        setEnvConnectionResult(result);
+      } catch (error) {
+        setEnvConnectionResult({
+          message: error instanceof Error ? error.message : String(error),
+          ok: false,
+        });
+      } finally {
+        setCheckingEnvConnection(false);
+      }
+    }, [
+      checkingEnvConnection,
+      envRows,
+      isApiBilling,
+      isEditingEnv,
+      provider.env,
+      selectedEnvPreset.required,
+      t,
+    ]);
+
+    const updateBillingType = useCallback(
+      async (nextBillingType: HeterogeneousProviderBillingType) => {
+        if (nextBillingType === billingType) return;
+
+        await onBillingTypeChange?.(nextBillingType);
+        setEnvError(undefined);
+        setEnvConnectionResult(undefined);
+
+        if (nextBillingType === 'api') {
+          const presetId = inferClaudeCodeApiProviderPresetId(provider.env);
+          const preset =
+            getClaudeCodeApiProviderPreset(presetId) ?? DEFAULT_CLAUDE_CODE_API_PROVIDER_PRESET;
+          setEnvPresetId(presetId);
+          setEnvRows(
+            ensureEnvRows(envToRows(provider.env), getDefaultRequiredEnvKeys(preset.required)),
+          );
+          setIsEditingEnv(true);
+        } else {
+          setEnvRows(envToRows(provider.env));
+          setIsEditingEnv(false);
+        }
+
+        setBillingType(nextBillingType);
+      },
+      [billingType, onBillingTypeChange, provider.env],
+    );
+
+    const renderEnvConnectionResult = () => {
+      if (!envConnectionResult) return null;
+
+      return (
+        <Text
+          className={
+            envConnectionResult.ok ? styles.envConnectionSuccess : styles.envConnectionError
+          }
+        >
+          {getEnvConnectionResultText(envConnectionResult)}
+        </Text>
+      );
+    };
 
     const renderStatusTag = () => {
       if (detecting) {
@@ -453,8 +859,186 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       );
     };
 
+    const renderBillingType = () => {
+      if (!isClaudeCode) return null;
+
+      return (
+        <div className={styles.detailRow}>
+          <Text className={styles.detailLabel}>{t('heterogeneousStatus.billing.label')}</Text>
+          <div className={styles.billingContent}>
+            <Segmented
+              value={billingType}
+              options={[
+                {
+                  label: t('heterogeneousStatus.billing.subscription'),
+                  value: 'subscription',
+                },
+                {
+                  label: t('heterogeneousStatus.billing.api'),
+                  value: 'api',
+                },
+              ]}
+              onChange={(value) => {
+                void updateBillingType(value as HeterogeneousProviderBillingType);
+              }}
+            />
+            <Text className={styles.billingHint}>
+              {t(
+                isApiBilling
+                  ? 'heterogeneousStatus.billing.apiDesc'
+                  : 'heterogeneousStatus.billing.subscriptionDesc',
+              )}
+            </Text>
+          </div>
+        </div>
+      );
+    };
+
+    const renderEnvEditor = () => {
+      return (
+        <div className={`${styles.detailRow} ${styles.envDetailRow}`}>
+          <Text className={styles.detailLabel}>{t('heterogeneousStatus.env.label')}</Text>
+          {isEditingEnv ? (
+            <div className={styles.envEditor}>
+              {isClaudeCode && isApiBilling && (
+                <div className={styles.envToolbar}>
+                  <Select
+                    aria-label={t('heterogeneousStatus.env.preset')}
+                    className={styles.envPresetSelect}
+                    options={envPresetOptions}
+                    value={envPresetId}
+                    onChange={(value) => applyEnvPreset(value as string)}
+                  />
+                  <Text className={styles.billingHint}>
+                    {t('heterogeneousStatus.env.presetHint')}
+                  </Text>
+                </div>
+              )}
+              {envRows.map((row) => (
+                <div className={styles.envRow} key={row.id}>
+                  <Input
+                    className={styles.envInput}
+                    disabled={savingEnv}
+                    placeholder={t('heterogeneousStatus.env.keyPlaceholder')}
+                    value={row.key}
+                    onChange={(event) => {
+                      updateEnvRow(row.id, 'key', event.target.value);
+                    }}
+                  />
+                  <Input
+                    className={styles.envInput}
+                    disabled={savingEnv}
+                    placeholder={t('heterogeneousStatus.env.valuePlaceholder')}
+                    type={isSensitiveEnvKey(row.key) ? 'password' : 'text'}
+                    value={row.value}
+                    onChange={(event) => {
+                      updateEnvRow(row.id, 'value', event.target.value);
+                    }}
+                  />
+                  <ActionIcon
+                    aria-label={t('heterogeneousStatus.env.remove')}
+                    icon={Trash2Icon}
+                    size="small"
+                    onClick={() => removeEnvRow(row.id)}
+                  />
+                </div>
+              ))}
+              {envError && <Text className={styles.envValidation}>{envError}</Text>}
+              {renderEnvConnectionResult()}
+              <Flexbox horizontal align="center" justify="space-between">
+                <ActionIcon
+                  aria-label={t('heterogeneousStatus.env.add')}
+                  icon={PlusIcon}
+                  size="small"
+                  title={t('heterogeneousStatus.env.add')}
+                  onClick={addEnvRow}
+                />
+                <div className={styles.envActions}>
+                  {isApiBilling && (
+                    <ActionIcon
+                      aria-label={t('heterogeneousStatus.env.checkConnection')}
+                      disabled={checkingEnvConnection || savingEnv}
+                      icon={RefreshCw}
+                      loading={checkingEnvConnection}
+                      size="small"
+                      title={t('heterogeneousStatus.env.checkConnection')}
+                      onClick={() => {
+                        void checkEnvConnection();
+                      }}
+                    />
+                  )}
+                  <ActionIcon
+                    aria-label={t('heterogeneousStatus.env.cancel')}
+                    icon={XCircle}
+                    size="small"
+                    title={t('heterogeneousStatus.env.cancel')}
+                    onClick={cancelEditingEnv}
+                  />
+                  <ActionIcon
+                    aria-label={t('heterogeneousStatus.env.save')}
+                    icon={SaveIcon}
+                    loading={savingEnv}
+                    size="small"
+                    title={t('heterogeneousStatus.env.save')}
+                    onClick={() => {
+                      void commitEnv();
+                    }}
+                  />
+                </div>
+              </Flexbox>
+            </div>
+          ) : (
+            <>
+              <div className={styles.envSummary}>
+                {envEntries.length > 0 ? (
+                  <>
+                    <Tag color="processing" style={{ marginInlineEnd: 0 }}>
+                      {t('heterogeneousStatus.env.count', { count: envEntries.length })}
+                    </Tag>
+                    <Text ellipsis className={styles.envSummaryText}>
+                      {envNames.join(', ')}
+                    </Text>
+                    {renderEnvConnectionResult()}
+                  </>
+                ) : (
+                  <>
+                    <Text className={styles.envSummaryText}>
+                      {t('heterogeneousStatus.env.empty')}
+                    </Text>
+                    {renderEnvConnectionResult()}
+                  </>
+                )}
+              </div>
+              {isApiBilling && (
+                <Tooltip title={t('heterogeneousStatus.env.checkConnection')}>
+                  <ActionIcon
+                    aria-label={t('heterogeneousStatus.env.checkConnection')}
+                    disabled={checkingEnvConnection}
+                    icon={RefreshCw}
+                    loading={checkingEnvConnection}
+                    size="small"
+                    onClick={() => {
+                      void checkEnvConnection();
+                    }}
+                  />
+                </Tooltip>
+              )}
+              <Tooltip title={t('heterogeneousStatus.env.edit')}>
+                <ActionIcon
+                  aria-label={t('heterogeneousStatus.env.edit')}
+                  icon={PencilLine}
+                  size="small"
+                  onClick={startEditingEnv}
+                />
+              </Tooltip>
+            </>
+          )}
+        </div>
+      );
+    };
+
     const renderAuth = () => {
-      if (provider.type !== 'claude-code' || detecting || !status?.available || !auth?.loggedIn)
+      if (!isClaudeCode || isApiBilling || detecting || !status?.available || !auth?.loggedIn)
         return null;
 
       const authMode =
@@ -518,6 +1102,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         </div>
         <div className={styles.detailList}>
           {renderCommandEditor()}
+          {renderBillingType()}
+          {renderEnvEditor()}
           {renderAuth()}
         </div>
         {showCliInstallGuide && (

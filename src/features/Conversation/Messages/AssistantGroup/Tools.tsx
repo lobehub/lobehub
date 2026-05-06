@@ -21,19 +21,20 @@ export const Tools = memo<ToolsRendererProps>(({ disableEditing, messageId, tool
   return (
     <Flexbox gap={8}>
       {visibleTools.map((tool) => (
-        <Tool
-          apiName={tool.apiName}
-          arguments={tool.arguments}
-          assistantMessageId={messageId}
-          disableEditing={disableEditing}
-          id={tool.id}
-          identifier={tool.identifier}
-          intervention={tool.intervention}
-          key={tool.id}
-          result={tool.result}
-          toolMessageId={tool.result_msg_id}
-          type={tool.type}
-        />
+        <Flexbox flex={'none'} key={tool.id} width={'100%'}>
+          <Tool
+            apiName={tool.apiName}
+            arguments={tool.arguments}
+            assistantMessageId={messageId}
+            disableEditing={disableEditing}
+            id={tool.id}
+            identifier={tool.identifier}
+            intervention={tool.intervention}
+            result={tool.result}
+            toolMessageId={tool.result_msg_id}
+            type={tool.type}
+          />
+        </Flexbox>
       ))}
     </Flexbox>
   );

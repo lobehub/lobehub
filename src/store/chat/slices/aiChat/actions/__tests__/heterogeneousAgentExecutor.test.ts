@@ -16,6 +16,8 @@ import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useUserStore } from '@/store/user';
+
 import { createGatewayEventHandler } from '../gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../heterogeneousAgentExecutor';
@@ -369,6 +371,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useUserStore.setState({ settings: {} });
     ipc = setupIpcCapture();
     // Register the IPC session's agent type from the params the executor
     // hands to startSession, so the helper picks the right adapter when the
@@ -400,6 +403,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   afterEach(() => {
+    useUserStore.setState({ settings: {} });
     delete (globalThis as any).window;
   });
 
@@ -1175,6 +1179,127 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
 
       expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', 'op-1', imageList);
+    });
+
+    it('should forward per-agent environment variables to the heterogeneous agent session', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const env = {
+        ANTHROPIC_AUTH_TOKEN: 'kimi-token',
+        ANTHROPIC_BASE_URL: 'https://api.moonshot.cn/anthropic',
+      };
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          billingType: 'api',
+          command: 'claude',
+          env,
+          type: 'claude-code' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'claude',
+          env: expect.objectContaining({
+            ...env,
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+            DISABLE_TELEMETRY: '1',
+          }),
+        }),
+      );
+    });
+
+    it('should force Claude Code API billing guard environment variables', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          billingType: 'api',
+          command: 'claude',
+          env: {
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '0',
+            DISABLE_TELEMETRY: '0',
+          },
+          type: 'claude-code' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+            DISABLE_TELEMETRY: '1',
+          }),
+        }),
+      );
+    });
+
+    it('should forward per-agent environment variables in subscription billing mode', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const env = {
+        ANTHROPIC_AUTH_TOKEN: 'custom-token',
+        ANTHROPIC_BASE_URL: 'https://api.custom.example/anthropic',
+      };
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          billingType: 'subscription',
+          command: 'claude',
+          env,
+          type: 'claude-code' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env,
+        }),
+      );
+    });
+
+    it('should merge global heterogeneous environment variables before agent overrides', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      useUserStore.setState({
+        settings: {
+          heterogeneousAgent: {
+            env: {
+              ANTHROPIC_BASE_URL: 'https://global.example/anthropic',
+              CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+            },
+          },
+        },
+      });
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          billingType: 'subscription',
+          command: 'claude',
+          env: {
+            ANTHROPIC_BASE_URL: 'https://agent.example/anthropic',
+            CUSTOM_AGENT_ENV: 'enabled',
+          },
+          type: 'claude-code' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env: {
+            ANTHROPIC_BASE_URL: 'https://agent.example/anthropic',
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+            CUSTOM_AGENT_ENV: 'enabled',
+          },
+        }),
+      );
     });
 
     it('should clear stale resume metadata and retry once without resume for recoverable Codex errors', async () => {

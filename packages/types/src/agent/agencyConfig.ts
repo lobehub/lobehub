@@ -3,9 +3,13 @@
  * When set, the assistant delegates execution to an external agent CLI
  * instead of using the built-in model runtime.
  */
+export type HeterogeneousProviderBillingType = 'api' | 'subscription';
+
 export interface HeterogeneousProviderConfig {
   /** Additional CLI arguments for the agent command */
   args?: string[];
+  /** Billing mode for external provider execution */
+  billingType?: HeterogeneousProviderBillingType;
   /** Command to spawn the agent (e.g. 'claude') */
   command?: string;
   /** Custom environment variables */

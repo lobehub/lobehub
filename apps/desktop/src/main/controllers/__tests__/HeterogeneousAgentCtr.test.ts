@@ -115,6 +115,7 @@ describe('HeterogeneousAgentCtr', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllGlobals();
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
@@ -197,6 +198,121 @@ describe('HeterogeneousAgentCtr', () => {
       expect(Buffer.from(result.buffer).toString('utf8')).toBe('IGNORED');
       expect(result.mediaType).toBe('text/plain');
       await expect(readFile(outOfRootDataPath, 'utf8')).resolves.toBe('SECRET');
+    });
+  });
+
+  describe('checkClaudeCodeApiConnection', () => {
+    it('validates the configured Anthropic-compatible endpoint with a Bearer-only request', async () => {
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: vi.fn(),
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const result = await ctr.checkClaudeCodeApiConnection({
+        env: {
+          ANTHROPIC_AUTH_TOKEN: 'test-token',
+          ANTHROPIC_BASE_URL: 'https://api.example.com/anthropic',
+          ANTHROPIC_MODEL: 'provider-model',
+        },
+      });
+
+      expect(result).toMatchObject({
+        model: 'provider-model',
+        ok: true,
+        status: 200,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const [url, init] = fetchMock.mock.calls[0];
+      const headers = (init as RequestInit).headers as Record<string, string>;
+      const body = JSON.parse((init as RequestInit).body as string);
+
+      expect(url).toBe('https://api.example.com/anthropic/v1/messages');
+      expect(headers.authorization).toBe('Bearer test-token');
+      expect(headers['anthropic-version']).toBe('2023-06-01');
+      expect(headers).not.toHaveProperty('x-api-key');
+      expect(body).toMatchObject({
+        max_tokens: 1,
+        messages: [{ content: 'ping', role: 'user' }],
+        model: 'provider-model',
+      });
+
+      vi.unstubAllGlobals();
+    });
+
+    it('uses x-api-key when probing ANTHROPIC_API_KEY based configs', async () => {
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: vi.fn(),
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const result = await ctr.checkClaudeCodeApiConnection({
+        env: {
+          ANTHROPIC_API_KEY: 'test-api-key',
+          ANTHROPIC_BASE_URL: 'https://api.example.com/anthropic',
+        },
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        status: 200,
+      });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const headers = (init as RequestInit).headers as Record<string, string>;
+
+      expect(headers['x-api-key']).toBe('test-api-key');
+      expect(headers).not.toHaveProperty('authorization');
+
+      vi.unstubAllGlobals();
+    });
+
+    it('maps provider authorization failures without exposing the token', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: false,
+          status: 401,
+          text: vi.fn(async () =>
+            JSON.stringify({ error: { message: 'token test-token is invalid' } }),
+          ),
+        })),
+      );
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const result = await ctr.checkClaudeCodeApiConnection({
+        env: {
+          ANTHROPIC_AUTH_TOKEN: 'test-token',
+          ANTHROPIC_BASE_URL: 'https://api.example.com/anthropic/v1',
+        },
+      });
+
+      expect(result).toMatchObject({
+        message: 'API token is invalid or does not have permission for this provider.',
+        ok: false,
+        status: 401,
+      });
+      expect(result.message).not.toContain('test-token');
+
+      vi.unstubAllGlobals();
     });
   });
 

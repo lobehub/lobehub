@@ -19,6 +19,10 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.startSession(params);
   }
 
+  async checkClaudeCodeApiConnection(params: { env: Record<string, string> }) {
+    return this.ipc.heterogeneousAgent.checkClaudeCodeApiConnection(params);
+  }
+
   async sendPrompt(
     sessionId: string,
     prompt: string,
