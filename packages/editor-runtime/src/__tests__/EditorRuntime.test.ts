@@ -531,7 +531,7 @@ describe('EditorRuntime', () => {
       await runtime.initPage({ markdown: 'Test content' });
       await moment();
 
-      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ apiName: 'initPage' });
     });
 
     it('should call beforeMutateHandler before editTitle', async () => {
@@ -540,7 +540,7 @@ describe('EditorRuntime', () => {
 
       await runtime.editTitle({ title: 'New Title' });
 
-      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ apiName: 'editTitle' });
     });
 
     it('should call beforeMutateHandler before modifyNodes', async () => {
@@ -551,7 +551,7 @@ describe('EditorRuntime', () => {
         operations: [{ action: 'insert', afterId: 'root', litexml: '<p>Test</p>' }],
       });
 
-      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ apiName: 'modifyNodes' });
     });
 
     it('should call beforeMutateHandler before replaceText', async () => {
@@ -560,7 +560,7 @@ describe('EditorRuntime', () => {
 
       await runtime.replaceText({ searchText: 'old', newText: 'new' });
 
-      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ apiName: 'replaceText' });
     });
 
     it('should still proceed when beforeMutateHandler is not set', async () => {

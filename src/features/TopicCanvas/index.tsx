@@ -11,6 +11,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { DiffAllToolbar, EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
+import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorContent';
 import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
 import { useDocumentStore } from '@/store/document';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
@@ -140,12 +141,21 @@ const TopicCanvasPageAgentBridge = memo<
       },
       () => titleRef.current,
     );
-    pageAgentRuntime.setBeforeMutateHandler(() => {
+    pageAgentRuntime.setBeforeMutateHandler(({ apiName }) => {
+      const editorData = editor?.getDocument('json');
+      const hasHistorySnapshot = hasMeaningfulEditorContent(editorData);
+
       log('[TopicCanvas/PageAgentBridge] beforeMutate', {
+        apiName,
         dataSourceTypes: getPageAgentEditorSnapshot(editor).dataSourceTypes,
         documentId,
         hasEditor: !!editor,
+        hasHistorySnapshot,
       });
+      if (!hasHistorySnapshot) {
+        return;
+      }
+
       documentHistoryQueueService.enqueueEditorSnapshot({ documentId, editor });
     });
     pageAgentRuntime.setAfterMutateHandler(async () => {

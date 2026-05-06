@@ -14,7 +14,7 @@ const mockEditor = {
     ['markdown', {}],
   ]),
   focus: vi.fn(),
-  getDocument: vi.fn(() => ({ root: true })),
+  getDocument: vi.fn((): unknown => ({ root: true })),
   getLexicalEditor: vi.fn(() => ({})),
 } as const;
 
@@ -144,8 +144,8 @@ describe('TopicCanvas', () => {
 
     const beforeMutateHandler = runtimeSpies.setBeforeMutateHandler.mock.calls.find(
       ([handler]) => typeof handler === 'function',
-    )?.[0] as (() => void) | undefined;
-    beforeMutateHandler?.();
+    )?.[0] as ((context: { apiName: 'modifyNodes' }) => void) | undefined;
+    beforeMutateHandler?.({ apiName: 'modifyNodes' });
 
     expect(documentHistoryQueueService.enqueueEditorSnapshot).toHaveBeenCalledWith({
       documentId: 'doc-1',
@@ -168,5 +168,32 @@ describe('TopicCanvas', () => {
     expect(runtimeSpies.setTitleHandlers).toHaveBeenLastCalledWith(null, null);
     expect(runtimeSpies.setBeforeMutateHandler).toHaveBeenLastCalledWith(null);
     expect(runtimeSpies.setEditor).toHaveBeenLastCalledWith(null);
+  });
+
+  it('does not save a history snapshot for an empty editor state', async () => {
+    const { unmount } = render(
+      <TopicCanvas documentId="doc-1" title="Topic Title" onTitleChange={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(runtimeSpies.setBeforeMutateHandler).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    const beforeMutateHandler = runtimeSpies.setBeforeMutateHandler.mock.calls.find(
+      ([handler]) => typeof handler === 'function',
+    )?.[0] as ((context: { apiName: 'modifyNodes' }) => void) | undefined;
+
+    mockEditor.getDocument.mockReturnValueOnce({
+      root: {
+        children: [{ children: [], type: 'paragraph' }],
+        type: 'root',
+      },
+    });
+
+    beforeMutateHandler?.({ apiName: 'modifyNodes' });
+
+    expect(documentHistoryQueueService.enqueueEditorSnapshot).not.toHaveBeenCalled();
+
+    unmount();
   });
 });

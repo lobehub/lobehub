@@ -3,6 +3,7 @@
 import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorContent';
 import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
 import { useDocumentStore } from '@/store/document';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
@@ -78,9 +79,16 @@ const StoreUpdater = memo<StoreUpdaterProps>(
       pageAgentRuntime.setCurrentDocId(pageId);
       pageAgentRuntime.setTitleHandlers(storeApi.getState().setTitle, titleGetter);
       pageAgentRuntime.setBeforeMutateHandler(() => {
+        const editor = storeApi.getState().editor;
+        const editorData = editor?.getDocument('json');
+
+        if (!hasMeaningfulEditorContent(editorData)) {
+          return;
+        }
+
         documentHistoryQueueService.enqueueEditorSnapshot({
           documentId: pageId,
-          editor: storeApi.getState().editor,
+          editor,
         });
       });
       pageAgentRuntime.setAfterMutateHandler(async () => {

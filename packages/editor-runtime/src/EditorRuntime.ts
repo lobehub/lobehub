@@ -27,6 +27,12 @@ interface InspectableEditor {
   pluginsInstances?: unknown[];
 }
 
+export type EditorMutationApiName = 'editTitle' | 'initPage' | 'modifyNodes' | 'replaceText';
+
+export interface EditorMutationContext {
+  apiName: EditorMutationApiName;
+}
+
 export interface EditorRuntimeDebugSnapshot {
   currentDocId?: string;
   dataSourceTypes: string[];
@@ -66,7 +72,8 @@ export class EditorRuntime {
   private titleGetter: (() => string) | null = null;
   private currentDocId: string | undefined = undefined;
   private afterMutateHandler: (() => void | Promise<void>) | null = null;
-  private beforeMutateHandler: (() => void | Promise<void>) | null = null;
+  private beforeMutateHandler: ((context: EditorMutationContext) => void | Promise<void>) | null =
+    null;
 
   /**
    * Set the current editor instance
@@ -96,7 +103,9 @@ export class EditorRuntime {
    * Set a handler to be called before any mutating operation.
    * This can be used to save history or perform other pre-mutation tasks.
    */
-  setBeforeMutateHandler(handler: (() => void | Promise<void>) | null) {
+  setBeforeMutateHandler(
+    handler: ((context: EditorMutationContext) => void | Promise<void>) | null,
+  ) {
     this.beforeMutateHandler = handler;
     log('[EditorRuntime] setBeforeMutateHandler', this.getDebugSnapshot());
   }
@@ -178,9 +187,9 @@ export class EditorRuntime {
     return { getter: this.titleGetter, setter: this.titleSetter };
   }
 
-  private async runBeforeMutate() {
+  private async runBeforeMutate(apiName: EditorMutationApiName) {
     try {
-      await this.beforeMutateHandler?.();
+      await this.beforeMutateHandler?.({ apiName });
     } catch {
       /* ignore pre-mutation errors */
     }
@@ -211,7 +220,7 @@ export class EditorRuntime {
       throw new Error('initPage failed: markdown content is empty.');
     }
 
-    await this.runBeforeMutate();
+    await this.runBeforeMutate('initPage');
     const editor = this.getEditor();
 
     let markdown = args.markdown;
@@ -287,7 +296,7 @@ export class EditorRuntime {
       titleLength: args.title.length,
     });
 
-    await this.runBeforeMutate();
+    await this.runBeforeMutate('editTitle');
     const { setter, getter } = this.getTitleHandlers();
     const previousTitle = getter();
 
@@ -380,11 +389,7 @@ export class EditorRuntime {
       snapshot: this.getDebugSnapshot(),
     });
 
-    try {
-      await this.beforeMutateHandler?.();
-    } catch {
-      /* ignore pre-mutation errors */
-    }
+    await this.runBeforeMutate('modifyNodes');
     const editor = this.getEditor();
     let { operations } = args;
 
@@ -660,7 +665,7 @@ export class EditorRuntime {
    * @returns Raw result with modifiedNodeIds and replacementCount
    */
   async replaceText(args: ReplaceTextArgs): Promise<ReplaceTextRuntimeResult> {
-    await this.runBeforeMutate();
+    await this.runBeforeMutate('replaceText');
     const editor = this.getEditor();
     const { searchText, newText, useRegex = false, replaceAll = true, nodeIds } = args;
 
