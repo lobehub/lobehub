@@ -473,7 +473,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       { type: 'separator' },
       {
         click: () => this.app.browserManager.retrieveByIdentifier('settings').show(),
-        label: t('file.preferences'),
+        label: t('tray.settings'),
       },
       { type: 'separator' },
       { label: t('tray.quit'), role: 'quit' },

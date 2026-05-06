@@ -5,6 +5,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 
 export interface ElectronMainStore {
+  appTrayVisible: boolean;
   dataSyncConfig: DataSyncConfig;
   encryptedTokens: {
     accessToken?: string;

@@ -75,6 +75,7 @@ const menu = {
   'tray.open': 'Open {{appName}}',
   'tray.quickChat': 'Quick Chat',
   'tray.quit': 'Quit',
+  'tray.settings': 'Settings',
   'tray.show': 'Show {{appName}}',
   'view.forceReload': 'Force Reload',
   'view.reload': 'Reload',

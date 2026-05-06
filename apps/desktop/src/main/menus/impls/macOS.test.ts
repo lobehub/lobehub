@@ -31,6 +31,19 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.mock('electron-is', () => ({
+  macOS: vi.fn(() => true),
+}));
+
+vi.mock('@/utils/logger', () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  }),
+}));
+
 // Mock isDev
 vi.mock('@/const/env', () => ({
   isDev: false,
@@ -177,6 +190,7 @@ describe('MacOSMenu', () => {
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       expect(template.length).toBeGreaterThan(0);
       expect(template.some((item: any) => item.label?.includes('Show'))).toBe(true);
+      expect(template.some((item: any) => item.label === 'Settings')).toBe(true);
       expect(template.some((item: any) => item.label === 'Quit')).toBe(true);
     });
 

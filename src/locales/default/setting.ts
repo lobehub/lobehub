@@ -944,6 +944,10 @@ When I am ___, I need ___
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
   'tab.addAgentSkill': 'Add Agent Skill',
+  'tab.advanced.appTray.desc':
+    'Show the LobeHub tray icon in the desktop system tray or macOS menu bar.',
+  'tab.advanced.appTray.title': 'Show App Tray',
+  'tab.advanced.desktop.title': 'Desktop',
   'tab.advanced.updateChannel.canary': 'Canary',
   'tab.advanced.updateChannel.canaryDesc':
     'Triggered on every PR merge, multiple builds per day. Most unstable.',
