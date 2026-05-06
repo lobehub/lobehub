@@ -79,7 +79,7 @@ const BriefCard = memo<BriefCardProps>(
           onClick={canNavigate ? () => navigate(`/task/${brief.taskId}`) : undefined}
         >
           <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
-            <BriefIcon type={brief.type} />
+            <BriefIcon muted={isResolved} type={brief.type} />
             <Text ellipsis fontSize={16} style={{ flex: 1 }} weight={500}>
               {brief.title}
             </Text>
