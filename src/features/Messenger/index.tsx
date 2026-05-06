@@ -74,16 +74,17 @@ const MessengerSettings = memo(() => {
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
   }, [message, t]);
 
-  const platforms = (platformsSWR.data ?? []).map((p) => p.platform as MessengerPlatform);
-  const selectedMeta = platformsSWR.data?.find((p) => p.platform === selected);
+  const platforms = platformsSWR.data ?? [];
+  const selectedMeta = platforms.find((p) => p.id === selected);
 
   return (
     <div className={styles.page}>
       <Flexbox gap={20}>
-        {selected ? (
+        {selected && selectedMeta ? (
           <IntegrationDetail
-            appId={selectedMeta?.appId}
-            botUsername={selectedMeta?.botUsername}
+            appId={selectedMeta.appId}
+            botUsername={selectedMeta.botUsername}
+            name={selectedMeta.name}
             platform={selected}
             onBack={() => setSelected(null)}
           />

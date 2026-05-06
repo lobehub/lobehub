@@ -11,6 +11,7 @@ export type {
   MessengerPlatformDefinition,
   MessengerPlatformWebhookGate,
   MessengerWebhookContext,
+  SerializedMessengerPlatformDefinition,
 } from './types';
 
 /**

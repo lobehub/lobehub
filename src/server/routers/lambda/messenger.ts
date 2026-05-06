@@ -23,6 +23,7 @@ import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import {
   consumeLinkToken,
   MessengerDiscordBinder,
+  messengerPlatformRegistry,
   MessengerSlackBinder,
   MessengerTelegramBinder,
   peekLinkToken,
@@ -95,34 +96,51 @@ const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
 });
 
 export const messengerRouter = router({
-  /** Surface available platforms + bot deep-link metadata to the UI. */
+  /**
+   * Surface available platforms + bot deep-link metadata to the UI.
+   *
+   * The static per-platform fields (`id`, `name`, ...) come from the
+   * registry's serialized definitions — same pattern as
+   * `agentBotProvider.listPlatforms` for bot channels. Per-deployment
+   * fields (`appId`, `botUsername`) layer on top from each platform's
+   * DB-backed config:
+   *
+   * - Slack `appId` powers the verify-im success state's
+   *   `slack://app?team=…&id=…` deep link straight into the bot DM.
+   * - Discord `applicationId` doubles as the bot user id and feeds the
+   *   LinkModal's OAuth2 install URL.
+   */
   availablePlatforms: publicProcedure.query(async () => {
-    const platforms = await getEnabledMessengerPlatforms();
-    // Pull each platform's deep-link metadata from its DB-backed config.
-    // Slack App ID is used by the verify-im success state to build a
-    // `slack://app?team=…&id=…` deep link straight into the bot DM. Discord
-    // Application ID doubles as the bot user id and feeds the LinkModal's
-    // OAuth2 install URL.
+    const enabled = await getEnabledMessengerPlatforms();
+    const enabledSet = new Set<string>(enabled);
+    const definitions = messengerPlatformRegistry
+      .listSerializedPlatforms()
+      .filter((def) => enabledSet.has(def.id));
+
     const [discordConfig, slackConfig, telegramConfig] = await Promise.all([
-      platforms.includes('discord') ? getMessengerDiscordConfig() : Promise.resolve(null),
-      platforms.includes('slack') ? getMessengerSlackConfig() : Promise.resolve(null),
-      platforms.includes('telegram') ? getMessengerTelegramConfig() : Promise.resolve(null),
+      enabledSet.has('discord') ? getMessengerDiscordConfig() : Promise.resolve(null),
+      enabledSet.has('slack') ? getMessengerSlackConfig() : Promise.resolve(null),
+      enabledSet.has('telegram') ? getMessengerTelegramConfig() : Promise.resolve(null),
     ]);
-    return platforms.map((platform) => ({
+
+    return definitions.map((def) => ({
+      ...def,
       appId:
-        platform === 'slack'
+        def.id === 'slack'
           ? slackConfig?.appId
-          : platform === 'discord'
+          : def.id === 'discord'
             ? discordConfig?.applicationId
             : undefined,
       botUsername:
-        platform === 'telegram'
+        def.id === 'telegram'
           ? telegramConfig?.botUsername
-          : platform === 'discord'
+          : def.id === 'discord'
             ? discordConfig?.botUsername
             : undefined,
       enabled: true,
-      platform,
+      // Legacy field — older callers index by `.platform` rather than `.id`.
+      // Keep until those callers migrate; safe alias of the registry id.
+      platform: def.id,
     }));
   }),
 

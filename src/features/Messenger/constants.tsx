@@ -3,20 +3,6 @@ import type { ReactNode } from 'react';
 
 export type MessengerPlatform = 'telegram' | 'slack' | 'discord';
 
-/**
- * Brand-name display for each platform. Trademarks — not translated.
- *
- * Keep this in sync with the per-platform `name` in
- * `src/server/services/messenger/platforms/<name>/definition.ts`. Both files
- * carry the same string because the server can't be imported from the client;
- * if you add a platform, update both.
- */
-export const PLATFORM_NAMES: Record<MessengerPlatform, string> = {
-  discord: 'Discord',
-  slack: 'Slack',
-  telegram: 'Telegram',
-};
-
 export const PLATFORM_TAB_ICONS: Record<MessengerPlatform, ReactNode> = {
   discord: <Discord.Color size={16} />,
   slack: <Slack.Color size={16} />,

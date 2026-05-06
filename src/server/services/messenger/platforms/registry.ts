@@ -1,6 +1,6 @@
 import type { InstallationCredentials } from '../installations/types';
 import type { MessengerPlatformBinder } from '../types';
-import type { MessengerPlatformDefinition } from './types';
+import type { MessengerPlatformDefinition, SerializedMessengerPlatformDefinition } from './types';
 
 /**
  * Messenger platform registry — manages all platform definitions.
@@ -30,6 +30,15 @@ export class MessengerPlatformRegistry {
   /** List all registered platform definitions. */
   listPlatforms(): MessengerPlatformDefinition[] {
     return [...this.platforms.values()];
+  }
+
+  /**
+   * List platform definitions serialized for the frontend — drops the
+   * factory and gate fields that aren't safe to ship over TRPC. Mirrors
+   * `bot/platforms` `PlatformRegistry.listSerializedPlatforms`.
+   */
+  listSerializedPlatforms(): SerializedMessengerPlatformDefinition[] {
+    return this.listPlatforms().map(({ createBinder, webhookGate, ...rest }) => rest);
   }
 
   /**

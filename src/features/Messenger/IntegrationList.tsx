@@ -6,7 +6,9 @@ import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type MessengerPlatform, PLATFORM_NAMES, PlatformAvatar } from './constants';
+import type { SerializedMessengerPlatformDefinition } from '@/server/services/messenger/platforms/types';
+
+import { type MessengerPlatform, PlatformAvatar } from './constants';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -35,7 +37,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface IntegrationListProps {
   onSelect: (platform: MessengerPlatform) => void;
-  platforms: MessengerPlatform[];
+  platforms: SerializedMessengerPlatformDefinition[];
 }
 
 const IntegrationList = memo<IntegrationListProps>(({ onSelect, platforms }) => {
@@ -44,15 +46,15 @@ const IntegrationList = memo<IntegrationListProps>(({ onSelect, platforms }) => 
   return (
     <div className={styles.grid}>
       {platforms.map((platform) => (
-        <Block className={styles.card} key={platform} onClick={() => onSelect(platform)}>
+        <Block className={styles.card} key={platform.id} onClick={() => onSelect(platform.id)}>
           <Flexbox horizontal align="center" gap={16}>
-            <PlatformAvatar platform={platform} size={48} />
+            <PlatformAvatar platform={platform.id} size={48} />
             <Flexbox flex={1} gap={2}>
               <Text strong style={{ fontSize: 15 }}>
-                {PLATFORM_NAMES[platform]}
+                {platform.name}
               </Text>
               <Text style={{ fontSize: 13 }} type="secondary">
-                {t(`messenger.list.${platform}.description` as any)}
+                {t(`messenger.list.${platform.id}.description` as any)}
               </Text>
             </Flexbox>
             <Icon icon={ChevronRightIcon} />

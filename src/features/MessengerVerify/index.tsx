@@ -13,7 +13,6 @@ import useSWR from 'swr';
 import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
 import AgentSelect from '@/features/Messenger/AgentSelect';
-import { PLATFORM_NAMES } from '@/features/Messenger/constants';
 import { getMessengerErrorMessage } from '@/features/Messenger/i18n';
 import { useSession } from '@/libs/better-auth/auth-client';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -288,10 +287,8 @@ const MessengerVerifyPage = memo(() => {
     const platform = (existingLinkSWR.data?.platform ?? tokenSWR.data?.platform ?? imType) as
       | string
       | undefined;
-    const platformLabelSuccess = platform
-      ? (PLATFORM_NAMES[platform as keyof typeof PLATFORM_NAMES] ?? platform)
-      : '';
-    const platformMeta = platformsSWR.data?.find((p) => p.platform === platform);
+    const platformMeta = platformsSWR.data?.find((p) => p.id === platform);
+    const platformLabelSuccess = platformMeta?.name ?? platform ?? '';
     const tenantId = existingLinkSWR.data?.tenantId ?? tokenSWR.data?.tenantId ?? undefined;
     const openBotUrl = platform
       ? buildOpenBotUrl(platform, {
@@ -336,7 +333,8 @@ const MessengerVerifyPage = memo(() => {
   }
 
   const platformLabel =
-    PLATFORM_NAMES[tokenSWR.data.platform as keyof typeof PLATFORM_NAMES] ?? tokenSWR.data.platform;
+    platformsSWR.data?.find((p) => p.id === tokenSWR.data!.platform)?.name ??
+    tokenSWR.data.platform;
   const handle = tokenSWR.data.platformUsername ?? `ID ${tokenSWR.data.platformUserId}`;
   const workspaceName = tokenSWR.data.tenantName;
   const lobeAccount = session?.user?.email ?? session?.user?.name ?? '';

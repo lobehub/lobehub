@@ -12,7 +12,6 @@ import {
   buildDiscordOpenBotUrl,
   buildTelegramDeepLink,
   type MessengerPlatform,
-  PLATFORM_NAMES,
   PlatformAvatar,
 } from './constants';
 
@@ -45,14 +44,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface LinkModalProps {
   appId?: string;
   botUsername?: string;
+  /** Brand-name label (e.g. `"Slack"`) sourced from the registry. */
+  name: string;
   onClose: () => void;
   open: boolean;
   platform: MessengerPlatform;
 }
 
-const LinkModal = memo<LinkModalProps>(({ appId, botUsername, onClose, open, platform }) => {
+const LinkModal = memo<LinkModalProps>(({ appId, botUsername, name, onClose, open, platform }) => {
   const { t } = useTranslation('messenger');
-  const platformLabel = PLATFORM_NAMES[platform];
+  const platformLabel = name;
   const isSlack = platform === 'slack';
   const isDiscord = platform === 'discord';
   const isTelegram = platform === 'telegram';

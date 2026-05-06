@@ -52,3 +52,13 @@ export interface MessengerPlatformDefinition {
   name: string;
   webhookGate?: MessengerPlatformWebhookGate;
 }
+
+/**
+ * Serialized definition for client consumption — strips the runtime-only
+ * `createBinder` factory and the webhook gate (which carries closures and
+ * Node-only deps). Mirrors `bot/platforms` `SerializedPlatformDefinition`.
+ */
+export type SerializedMessengerPlatformDefinition = Omit<
+  MessengerPlatformDefinition,
+  'createBinder' | 'webhookGate'
+>;
