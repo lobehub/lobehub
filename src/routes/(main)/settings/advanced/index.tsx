@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
-import { useElectronStore } from '@/store/electron';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
@@ -55,14 +54,6 @@ const Page = memo(() => {
   const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
-  const [desktopLoading, setDesktopLoading] = useState(false);
-  const [appTrayVisible, setAppTrayVisible, useGetAppTrayVisible] = useElectronStore((s) => [
-    s.appTrayVisible,
-    s.setAppTrayVisible,
-    s.useGetAppTrayVisible,
-  ]);
-
-  useGetAppTrayVisible(isDesktop);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -110,31 +101,6 @@ const Page = memo(() => {
       },
     ],
     title: t('tab.advanced.updateChannel.title'),
-  };
-
-  const desktopGroup: FormGroupItemType = {
-    children: [
-      {
-        children: (
-          <Switch
-            checked={appTrayVisible}
-            loading={desktopLoading}
-            onChange={async (checked: boolean) => {
-              setDesktopLoading(true);
-              try {
-                await setAppTrayVisible(checked);
-              } finally {
-                setDesktopLoading(false);
-              }
-            }}
-          />
-        ),
-        desc: t('tab.advanced.appTray.desc'),
-        label: t('tab.advanced.appTray.title'),
-        minWidth: undefined,
-      },
-    ],
-    title: t('tab.advanced.desktop.title'),
   };
 
   const labItems: FormItemProps[] = [
@@ -200,7 +166,7 @@ const Page = memo(() => {
   };
 
   const items = isDesktop
-    ? [advancedGroup, desktopGroup, updateChannelGroup, labsGroup]
+    ? [advancedGroup, updateChannelGroup, labsGroup]
     : [advancedGroup, labsGroup];
 
   return (

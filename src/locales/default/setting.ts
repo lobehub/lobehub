@@ -549,6 +549,9 @@ export default {
   'settingAgent.tag.placeholder': 'Enter tag',
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
+  'settingAppearance.appTray.desc':
+    'Show the LobeHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
+  'settingAppearance.appTray.title': 'Show App Tray',
   'settingAppearance.animationMode.agile': 'Agile',
   'settingAppearance.animationMode.desc':
     'Select the animation speed for application response actions',
@@ -559,6 +562,7 @@ export default {
   'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
+  'settingAppearance.desktop.title': 'Desktop',
   'settingAppearance.neutralColor.desc': 'Custom grayscale with different color tendencies',
   'settingAppearance.neutralColor.title': 'Neutral Color',
   'settingAppearance.noAnimation.desc': 'Disable all animation effects in the application',
@@ -944,10 +948,6 @@ When I am ___, I need ___
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
   'tab.addAgentSkill': 'Add Agent Skill',
-  'tab.advanced.appTray.desc':
-    'Show the LobeHub tray icon in the desktop system tray or macOS menu bar.',
-  'tab.advanced.appTray.title': 'Show App Tray',
-  'tab.advanced.desktop.title': 'Desktop',
   'tab.advanced.updateChannel.canary': 'Canary',
   'tab.advanced.updateChannel.canaryDesc':
     'Triggered on every PR merge, multiple builds per day. Most unstable.',
