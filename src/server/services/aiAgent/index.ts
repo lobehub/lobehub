@@ -1472,6 +1472,7 @@ export class AiAgentService {
     const userMessage = {
       content: prompt,
       fileList,
+      id: userMessageRecord?.id,
       imageList,
       role: 'user' as const,
       videoList,
