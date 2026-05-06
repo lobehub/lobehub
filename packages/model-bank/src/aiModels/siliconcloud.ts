@@ -66,6 +66,10 @@ const siliconcloudChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    releasedAt: '2026-04-17',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken32k'],
+    },
     type: 'chat',
   },
   {
@@ -111,7 +115,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-17',
     settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken32k'],
     },
     type: 'chat',
   },
