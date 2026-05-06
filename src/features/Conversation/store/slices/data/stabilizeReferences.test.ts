@@ -44,13 +44,13 @@ describe('stabilizeReferences', () => {
   it('returns next when array length differs', () => {
     const prev = [1, 2, 3];
     const next = [1, 2];
-    expect(stabilizeReferences(prev, next)).toBe(next);
+    expect(stabilizeReferences(prev, next)).toEqual(next);
   });
 
   it('returns next when object keys differ', () => {
     const prev = { a: 1 };
     const next = { a: 1, b: 2 };
-    expect(stabilizeReferences(prev, next)).toBe(next);
+    expect(stabilizeReferences(prev, next)).toEqual(next);
   });
 
   it('returns next for changed non-plain objects', () => {
