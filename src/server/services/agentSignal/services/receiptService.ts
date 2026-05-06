@@ -3,6 +3,43 @@ import type { AgentSignalSource, BaseAction, ExecutorResult } from '@lobechat/ag
 import { AGENT_SIGNAL_DEFAULTS } from '../constants';
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../policies/types';
 import { redisReceiptStore } from '../store/adapters/redis/receiptStore';
+import type {
+  EvidenceRef,
+  MaintenanceActionPlan,
+  MaintenanceActionResult,
+  MaintenanceActionType,
+  MaintenancePlan,
+  MaintenanceReviewRunResult,
+} from './maintenance/types';
+import {
+  MaintenanceActionStatus,
+  MaintenanceReviewScope,
+  ReviewRunStatus,
+} from './maintenance/types';
+
+/** Metadata envelope used by maintenance receipts. */
+export interface AgentSignalReceiptMetadata {
+  /** Number of action results summarized by a review receipt. */
+  actionCount?: number;
+  /** Maintenance action status for action receipts. */
+  actionStatus?: MaintenanceActionStatus;
+  /** Maintenance action type for action receipts. */
+  actionType?: MaintenanceActionType;
+  /** Evidence refs used by the reviewer/planner. */
+  evidenceRefs?: EvidenceRef[];
+  /** User-local date for nightly receipts. */
+  localDate?: string;
+  /** Maintenance review scope that produced the receipt. */
+  reviewScope?: MaintenanceReviewScope;
+  /** Scoped self-reflection id for non-nightly review receipts. */
+  scopeId?: string;
+  /** Scoped self-reflection namespace for non-nightly review receipts. */
+  scopeType?: string;
+  /** Source type that produced the receipt. */
+  sourceType?: string;
+  /** IANA timezone used for nightly receipt projection. */
+  timezone?: string;
+}
 
 /**
  * User-visible Agent Signal receipt persisted for recent topic activity.
@@ -19,7 +56,9 @@ export interface AgentSignalReceipt {
   /** Stable receipt id used as Redis member and payload key suffix. */
   id: string;
   /** User-facing durable outcome domain. */
-  kind: 'memory' | 'skill';
+  kind: 'maintenance' | 'memory' | 'review' | 'skill';
+  /** Structured metadata for audit, brief linking, and eval assertions. */
+  metadata?: AgentSignalReceiptMetadata;
   /** Agent runtime operation that produced the receipt, when known. */
   operationId?: string;
   /** Source event id that triggered the receipt. */
@@ -27,7 +66,7 @@ export interface AgentSignalReceipt {
   /** Source event type that triggered the receipt. */
   sourceType: string;
   /** User-facing terminal status. */
-  status: 'applied' | 'updated';
+  status: 'applied' | 'completed' | 'failed' | 'proposed' | 'skipped' | 'updated';
   /** Snapshot of the resource affected when the receipt was produced. */
   target?: {
     /** Backing resource id for future navigation when still available. Skill ids use `documents.id`. */
@@ -86,6 +125,73 @@ interface PersistAgentSignalReceiptsOptions {
   store?: AgentSignalReceiptStore;
 }
 
+/** Input used to create one maintenance review summary receipt. */
+export interface CreateReviewSummaryReceiptInput {
+  /** Agent that owns the reviewed scope. */
+  agentId: string;
+  /** Millisecond timestamp for receipt ordering. */
+  createdAt?: number;
+  /** User-local date for nightly reviews. */
+  localDate?: string;
+  /** Normalized maintenance plan that was executed. */
+  plan: MaintenancePlan;
+  /** Aggregated executor result for the review. */
+  result: MaintenanceReviewRunResult;
+  /** Scoped review id for self-reflection and intent runs. */
+  scopeId?: string;
+  /** Scoped review namespace for self-reflection and intent runs. */
+  scopeType?: string;
+  /** Source id that triggered the review. */
+  sourceId: string;
+  /** Source type that triggered the review. */
+  sourceType: string;
+  /** IANA timezone for nightly reviews. */
+  timezone?: string;
+  /** Topic index id for topic-local receipts. Falls back to source id for day-level receipts. */
+  topicId?: string;
+  /** User that owns the reviewed agent. */
+  userId: string;
+}
+
+/** Input used to create one maintenance action receipt. */
+export interface CreateMaintenanceActionReceiptInput {
+  /** Planner-normalized action. */
+  action: MaintenanceActionPlan;
+  /** Agent that owns the reviewed scope. */
+  agentId: string;
+  /** Millisecond timestamp for receipt ordering. */
+  createdAt?: number;
+  /** User-local date for nightly reviews. */
+  localDate?: string;
+  /** Executor result for the action. */
+  result: MaintenanceActionResult;
+  /** Review scope that produced this action. */
+  reviewScope: MaintenanceReviewScope;
+  /** Scoped review id for self-reflection and intent runs. */
+  scopeId?: string;
+  /** Scoped review namespace for self-reflection and intent runs. */
+  scopeType?: string;
+  /** Source id that triggered the review. */
+  sourceId: string;
+  /** Source type that triggered the review. */
+  sourceType: string;
+  /** IANA timezone for nightly reviews. */
+  timezone?: string;
+  /** Topic index id for topic-local receipts. Falls back to source id for day-level receipts. */
+  topicId?: string;
+  /** User that owns the reviewed agent. */
+  userId: string;
+}
+
+/** Input used to create all receipts for one maintenance review run. */
+export interface CreateMaintenanceReviewReceiptsInput extends Omit<
+  CreateReviewSummaryReceiptInput,
+  'plan'
+> {
+  /** Normalized maintenance plan that was executed. */
+  plan: MaintenancePlan;
+}
+
 const getPayloadString = (payload: Record<string, unknown>, key: string) => {
   const value = payload[key];
 
@@ -105,7 +211,12 @@ const getReceiptTarget = (
   if (target && typeof target === 'object') {
     const payload = target as Record<string, unknown>;
     const title = typeof payload.title === 'string' ? payload.title.trim() : undefined;
-    const type = payload.type === 'memory' || payload.type === 'skill' ? payload.type : kind;
+    const type =
+      payload.type === 'memory' || payload.type === 'skill'
+        ? payload.type
+        : kind === 'skill'
+          ? 'skill'
+          : 'memory';
 
     if (title) {
       return {
@@ -152,6 +263,174 @@ const toReceiptKind = (
   }
 
   return;
+};
+
+const getMaintenanceTopicId = (input: { sourceId: string; topicId?: string }) =>
+  input.topicId ?? input.sourceId;
+
+const getActionReceiptKind = (action: MaintenanceActionPlan): AgentSignalReceipt['kind'] =>
+  action.operation?.domain ?? 'maintenance';
+
+const getActionReceiptStatus = (
+  status: MaintenanceActionStatus,
+): AgentSignalReceipt['status'] | undefined => {
+  if (status === MaintenanceActionStatus.Applied) return 'applied';
+  if (status === MaintenanceActionStatus.Proposed) return 'proposed';
+
+  return;
+};
+
+const getActionReceiptTitle = (action: MaintenanceActionPlan, result: MaintenanceActionResult) => {
+  if (result.summary) return getClampedString(result.summary);
+  if (action.actionType === 'write_memory') return 'Memory maintenance action';
+  if (action.actionType === 'create_skill') return 'Skill creation proposal';
+  if (action.actionType === 'refine_skill') return 'Skill refinement proposal';
+  if (action.actionType === 'consolidate_skill') return 'Skill consolidation proposal';
+
+  return 'Maintenance action';
+};
+
+/**
+ * Creates one source-level receipt summarizing a maintenance review run.
+ *
+ * Use when:
+ * - Nightly or scoped self-reflection handlers finish a maintenance review
+ * - Receipts need one audit anchor before action-level receipts are linked to briefs
+ *
+ * Expects:
+ * - `plan.reviewScope` is the authoritative review scope
+ * - Topic-scoped reviews pass `topicId`; day-level reviews can omit it
+ *
+ * Returns:
+ * - One stable summary receipt indexed by topic id or source id
+ */
+export const createReviewSummaryReceipt = (
+  input: CreateReviewSummaryReceiptInput,
+): AgentSignalReceipt => ({
+  agentId: input.agentId,
+  createdAt: input.createdAt ?? Date.now(),
+  detail: input.plan.summary,
+  id: `${input.sourceId}:review-summary`,
+  kind: 'review',
+  metadata: {
+    actionCount: input.result.actions.length,
+    evidenceRefs: input.plan.actions.flatMap((action) => action.evidenceRefs),
+    ...(input.localDate ? { localDate: input.localDate } : {}),
+    reviewScope: input.plan.reviewScope,
+    ...(input.scopeId ? { scopeId: input.scopeId } : {}),
+    ...(input.scopeType ? { scopeType: input.scopeType } : {}),
+    sourceType: input.sourceType,
+    ...(input.timezone ? { timezone: input.timezone } : {}),
+  },
+  sourceId: input.sourceId,
+  sourceType: input.sourceType,
+  status: input.result.status === ReviewRunStatus.Failed ? 'failed' : 'completed',
+  title:
+    input.plan.reviewScope === MaintenanceReviewScope.Nightly
+      ? 'Nightly self-review completed'
+      : 'Self-review completed',
+  topicId: getMaintenanceTopicId(input),
+  userId: input.userId,
+});
+
+/**
+ * Creates one action-level maintenance receipt for applied or proposed actions.
+ *
+ * Use when:
+ * - A maintenance action mutated a resource or produced a user-visible proposal
+ * - Brief metadata needs durable receipt ids linked to individual outcomes
+ *
+ * Expects:
+ * - The action/result pair share the same idempotency key
+ * - Skipped, deduped, and failed actions are represented by the summary receipt only
+ *
+ * Returns:
+ * - A stable action receipt, or `undefined` when no user-visible action receipt is needed
+ */
+export const createMaintenanceActionReceipt = (
+  input: CreateMaintenanceActionReceiptInput,
+): AgentSignalReceipt | undefined => {
+  if (input.action.actionType === 'noop') return;
+
+  const status = getActionReceiptStatus(input.result.status);
+  if (!status) return;
+
+  const kind = getActionReceiptKind(input.action);
+  const title = getActionReceiptTitle(input.action, input.result);
+
+  return {
+    agentId: input.agentId,
+    createdAt: input.createdAt ?? Date.now(),
+    detail: input.action.rationale,
+    id: `${input.action.idempotencyKey}:action`,
+    kind,
+    metadata: {
+      actionStatus: input.result.status,
+      actionType: input.action.actionType,
+      evidenceRefs: input.action.evidenceRefs,
+      ...(input.localDate ? { localDate: input.localDate } : {}),
+      reviewScope: input.reviewScope,
+      ...(input.scopeId ? { scopeId: input.scopeId } : {}),
+      ...(input.scopeType ? { scopeType: input.scopeType } : {}),
+      sourceType: input.sourceType,
+      ...(input.timezone ? { timezone: input.timezone } : {}),
+    },
+    sourceId: input.sourceId,
+    sourceType: input.sourceType,
+    status,
+    target: {
+      ...(input.result.resourceId ? { id: input.result.resourceId } : {}),
+      ...(input.result.summary ? { summary: input.result.summary } : {}),
+      title,
+      type: kind === 'skill' ? 'skill' : 'memory',
+    },
+    title,
+    topicId: getMaintenanceTopicId(input),
+    userId: input.userId,
+  };
+};
+
+/**
+ * Projects one review summary receipt plus applied/proposed action receipts.
+ *
+ * Use when:
+ * - Source handlers need receipts before Daily Brief creation
+ * - Tests need a single deterministic projection boundary
+ *
+ * Expects:
+ * - `plan.actions` and `result.actions` share action idempotency keys
+ *
+ * Returns:
+ * - Receipts ordered as summary first, then action results in executor order
+ */
+export const createMaintenanceReviewReceipts = (
+  input: CreateMaintenanceReviewReceiptsInput,
+): AgentSignalReceipt[] => {
+  const actionByKey = new Map(input.plan.actions.map((action) => [action.idempotencyKey, action]));
+  const actionReceipts = input.result.actions.flatMap((result) => {
+    const action = actionByKey.get(result.idempotencyKey);
+    if (!action) return [];
+
+    const receipt = createMaintenanceActionReceipt({
+      action,
+      agentId: input.agentId,
+      createdAt: input.createdAt,
+      ...(input.localDate ? { localDate: input.localDate } : {}),
+      result,
+      reviewScope: input.plan.reviewScope,
+      ...(input.scopeId ? { scopeId: input.scopeId } : {}),
+      ...(input.scopeType ? { scopeType: input.scopeType } : {}),
+      sourceId: input.sourceId,
+      sourceType: input.sourceType,
+      ...(input.topicId ? { topicId: input.topicId } : {}),
+      ...(input.timezone ? { timezone: input.timezone } : {}),
+      userId: input.userId,
+    });
+
+    return receipt ? [receipt] : [];
+  });
+
+  return [createReviewSummaryReceipt(input), ...actionReceipts];
 };
 
 /**

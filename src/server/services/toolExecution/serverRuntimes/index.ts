@@ -6,7 +6,7 @@
  * - Pre-instantiated runtimes (e.g., WebBrowsing - no per-request context needed)
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
-import { type ToolExecutionContext } from '../types';
+import type { ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentMarketplaceRuntime } from './agentMarketplace';
@@ -22,12 +22,13 @@ import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { remoteDeviceRuntime } from './remoteDevice';
+import { selfIterationIntentRuntime } from './selfIterationIntent';
 import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
 import { taskRuntime } from './task';
 import { topicReferenceRuntime } from './topicReference';
-import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
+import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
 import { webBrowsingRuntime } from './webBrowsing';
 import { webOnboardingRuntime } from './webOnboarding';
@@ -71,6 +72,7 @@ registerRuntimes([
   webOnboardingRuntime,
   agentMarketplaceRuntime,
   lobeAgentRuntime,
+  selfIterationIntentRuntime,
 ]);
 
 // ==================== Registry API ====================

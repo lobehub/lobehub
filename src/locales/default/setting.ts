@@ -596,6 +596,10 @@ export default {
   'settingChat.inputTemplate.placeholder':
     'Preprocessing template {{text}} will be replaced with real-time input information',
   'settingChat.inputTemplate.title': 'User Input Preprocessing',
+  'settingChat.selfIteration.enabled.desc':
+    'Allow this assistant to review recent signals and improve its own skills when the lab workflow runs',
+  'settingChat.selfIteration.enabled.title': 'Enable Self-Iteration',
+  'settingChat.selfIteration.title': 'Advanced Labs',
   'settingChat.submit': 'Update Chat Preferences',
   'settingChat.title': 'Chat Settings',
   'settingChatAppearance.autoScrollOnStreaming.desc':

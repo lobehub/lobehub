@@ -10,6 +10,7 @@ const toReceiptHash = (receipt: AgentSignalReceipt): Record<string, string> => (
   detail: receipt.detail,
   id: receipt.id,
   kind: receipt.kind,
+  ...(receipt.metadata ? { metadata: JSON.stringify(receipt.metadata) } : {}),
   ...(receipt.operationId ? { operationId: receipt.operationId } : {}),
   sourceId: receipt.sourceId,
   sourceType: receipt.sourceType,
@@ -42,15 +43,46 @@ const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | unde
   }
 };
 
+const parseReceiptMetadata = (value?: string): AgentSignalReceipt['metadata'] | undefined => {
+  if (!value) return;
+
+  try {
+    const metadata = JSON.parse(value);
+
+    return metadata && typeof metadata === 'object'
+      ? (metadata as AgentSignalReceipt['metadata'])
+      : undefined;
+  } catch {
+    return;
+  }
+};
+
 const fromReceiptHash = (payload: Record<string, string>): AgentSignalReceipt | undefined => {
   const createdAt = Number(payload.createdAt);
 
   if (!payload.id || !payload.userId || !payload.agentId || !payload.topicId) return;
-  if (payload.kind !== 'memory' && payload.kind !== 'skill') return;
-  if (payload.status !== 'applied' && payload.status !== 'updated') return;
+  if (
+    payload.kind !== 'maintenance' &&
+    payload.kind !== 'memory' &&
+    payload.kind !== 'review' &&
+    payload.kind !== 'skill'
+  ) {
+    return;
+  }
+  if (
+    payload.status !== 'applied' &&
+    payload.status !== 'completed' &&
+    payload.status !== 'failed' &&
+    payload.status !== 'proposed' &&
+    payload.status !== 'skipped' &&
+    payload.status !== 'updated'
+  ) {
+    return;
+  }
   if (!Number.isFinite(createdAt)) return;
 
   const target = parseReceiptTarget(payload.target);
+  const metadata = parseReceiptMetadata(payload.metadata);
 
   return {
     agentId: payload.agentId,
@@ -59,6 +91,7 @@ const fromReceiptHash = (payload: Record<string, string>): AgentSignalReceipt | 
     detail: payload.detail,
     id: payload.id,
     kind: payload.kind,
+    ...(metadata ? { metadata } : {}),
     operationId: payload.operationId,
     sourceId: payload.sourceId,
     sourceType: payload.sourceType,

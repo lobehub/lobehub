@@ -16,6 +16,8 @@ export interface AgentAvatarInfo {
 export type BriefWithAgent = BriefItem & {
   /** Avatar of the agent that produced this brief; `null` when the brief has no `agentId` or the agent has been deleted. */
   agent: AgentAvatarInfo | null;
+  /** Agents related to this brief, ordered with the direct producing agent before task-tree agents. */
+  agents: AgentAvatarInfo[];
   /** Parent task's runtime status — `scheduled` marks a task parked between automated runs. */
   taskStatus: TaskStatus | null;
 };
@@ -36,19 +38,27 @@ export class BriefService {
   }
 
   async enrichBriefsWithAgents(briefs: BriefItem[]): Promise<BriefWithAgent[]> {
-    const taskIds = briefs.map((b) => b.taskId).filter((id): id is string => id !== null);
-    const agentIds = [
-      ...new Set(briefs.map((b) => b.agentId).filter((id): id is string => Boolean(id))),
+    const taskIds = [...new Set(briefs.map((b) => b.taskId).filter((id): id is string => !!id))];
+    const directAgentIds = [
+      ...new Set(briefs.map((b) => b.agentId).filter((id): id is string => !!id)),
     ];
-
-    if (taskIds.length === 0 && agentIds.length === 0) {
-      return briefs.map((brief) => ({ ...brief, agent: null, taskStatus: null }));
+    if (taskIds.length === 0 && directAgentIds.length === 0) {
+      return briefs.map((brief) => ({ ...brief, agent: null, agents: [], taskStatus: null }));
     }
 
-    const [taskRows, agentList] = await Promise.all([
+    const emptyTreeAgentIdsByTaskId: Record<string, string[]> = {};
+    const [taskRows, treeAgentIdsByTaskId] = await Promise.all([
       taskIds.length > 0 ? this.taskModel.findByIds(taskIds) : Promise.resolve([]),
-      agentIds.length > 0 ? this.agentModel.getAgentAvatarsByIds(agentIds) : Promise.resolve([]),
+      taskIds.length > 0
+        ? this.taskModel.getTreeAgentIdsForTaskIds(taskIds)
+        : Promise.resolve(emptyTreeAgentIdsByTaskId),
     ]);
+
+    const agentIds = [
+      ...new Set([...directAgentIds, ...Object.values(treeAgentIdsByTaskId).flat()]),
+    ];
+    const agentList =
+      agentIds.length > 0 ? await this.agentModel.getAgentAvatarsByIds(agentIds) : [];
     const taskStatusMap = Object.fromEntries(
       taskRows.map((t) => [t.id, (t.status as TaskStatus) ?? null]),
     );
@@ -56,11 +66,26 @@ export class BriefService {
       agentList.map((a) => [a.id, a]),
     );
 
-    return briefs.map((brief) => ({
-      ...brief,
-      agent: brief.agentId ? (agentMap[brief.agentId] ?? null) : null,
-      taskStatus: brief.taskId ? (taskStatusMap[brief.taskId] ?? null) : null,
-    }));
+    return briefs.map((brief) => {
+      const briefAgentIds = new Set<string>();
+      if (brief.agentId) {
+        briefAgentIds.add(brief.agentId);
+      }
+      if (brief.taskId) {
+        for (const agentId of treeAgentIdsByTaskId[brief.taskId] ?? []) {
+          briefAgentIds.add(agentId);
+        }
+      }
+
+      return {
+        ...brief,
+        agent: brief.agentId ? (agentMap[brief.agentId] ?? null) : null,
+        agents: [...briefAgentIds]
+          .map((agentId) => agentMap[agentId])
+          .filter((agent): agent is AgentAvatarInfo => Boolean(agent)),
+        taskStatus: brief.taskId ? (taskStatusMap[brief.taskId] ?? null) : null,
+      };
+    });
   }
 
   async list(options?: { limit?: number; offset?: number; type?: string }) {

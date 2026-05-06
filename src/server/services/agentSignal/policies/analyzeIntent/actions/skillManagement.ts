@@ -55,6 +55,7 @@ import type {
 
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
+import { createSkillManagementService } from '../../../services/maintenance/skill';
 import { hasAppliedActionIdempotency, markAppliedActionIdempotency } from '../../actionIdempotency';
 import type { ActionSkillManagementHandle, AgentSignalFeedbackEvidence } from '../../types';
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../types';
@@ -1244,6 +1245,7 @@ const runMaintainerWorkflow = async (
     };
   }
 
+  const agentId = input.agentId;
   const targetSkillRefs = getSkillTargets(decision);
   const minimumTargets = decision.action === 'consolidate' ? 2 : 1;
 
@@ -1256,7 +1258,7 @@ const runMaintainerWorkflow = async (
   }
 
   const service =
-    options.skillManagementServiceFactory?.({ agentId: input.agentId }) ??
+    options.skillManagementServiceFactory?.({ agentId }) ??
     createDefaultSkillManagementService(options);
   const workflowRunner =
     options.skillMaintainerRunner ??
@@ -1266,7 +1268,7 @@ const runMaintainerWorkflow = async (
         options.userId,
         options.skillDecisionModel,
       ).run(workflowInput));
-  const targetSkills = await readTargetSkills(service, input.agentId, targetSkillRefs);
+  const targetSkills = await readTargetSkills(service, agentId, targetSkillRefs);
 
   if (targetSkills.length < minimumTargets) {
     return {
@@ -1304,25 +1306,83 @@ const runMaintainerWorkflow = async (
   let updatedSkill: SkillDetail | SkillSummary = canonical;
 
   try {
-    if (workflowResult.rename?.newName || workflowResult.rename?.newTitle) {
-      updatedSkill =
-        (await service.renameSkill({
-          agentDocumentId: canonical.bundle.agentDocumentId,
-          agentId: input.agentId,
-          newName: workflowResult.rename.newName,
-          newTitle: workflowResult.rename.newTitle,
-          updateReason: workflowResult.reason,
-        })) ?? updatedSkill;
-    }
+    const skillMaintenanceService = createSkillManagementService({
+      consolidateSkill: async () => {
+        if (workflowResult.rename?.newName || workflowResult.rename?.newTitle) {
+          updatedSkill =
+            (await service.renameSkill({
+              agentDocumentId: canonical.bundle.agentDocumentId,
+              agentId,
+              newName: workflowResult.rename.newName,
+              newTitle: workflowResult.rename.newTitle,
+              updateReason: workflowResult.reason,
+            })) ?? updatedSkill;
+        }
 
-    updatedSkill =
-      (await service.replaceSkillIndex({
-        agentDocumentId: canonical.bundle.agentDocumentId,
-        agentId: input.agentId,
-        bodyMarkdown: workflowResult.bodyMarkdown,
-        description: workflowResult.description,
-        updateReason: workflowResult.reason,
-      })) ?? updatedSkill;
+        updatedSkill =
+          (await service.replaceSkillIndex({
+            agentDocumentId: canonical.bundle.agentDocumentId,
+            agentId,
+            bodyMarkdown: workflowResult.bodyMarkdown,
+            description: workflowResult.description,
+            updateReason: workflowResult.reason,
+          })) ?? updatedSkill;
+
+        return {
+          skillDocumentId: canonical.bundle.agentDocumentId,
+          summary: workflowResult.reason,
+        };
+      },
+      refineSkill: async () => {
+        if (workflowResult.rename?.newName || workflowResult.rename?.newTitle) {
+          updatedSkill =
+            (await service.renameSkill({
+              agentDocumentId: canonical.bundle.agentDocumentId,
+              agentId,
+              newName: workflowResult.rename.newName,
+              newTitle: workflowResult.rename.newTitle,
+              updateReason: workflowResult.reason,
+            })) ?? updatedSkill;
+        }
+
+        updatedSkill =
+          (await service.replaceSkillIndex({
+            agentDocumentId: canonical.bundle.agentDocumentId,
+            agentId,
+            bodyMarkdown: workflowResult.bodyMarkdown,
+            description: workflowResult.description,
+            updateReason: workflowResult.reason,
+          })) ?? updatedSkill;
+
+        return {
+          skillDocumentId: canonical.bundle.agentDocumentId,
+          summary: workflowResult.reason,
+        };
+      },
+    });
+
+    if (decision.action === 'consolidate') {
+      await skillMaintenanceService.consolidateSkill({
+        evidenceRefs: [],
+        idempotencyKey: `same-turn-skill:${canonical.bundle.agentDocumentId}`,
+        input: {
+          approval: { source: 'same_turn_feedback' },
+          canonicalSkillDocumentId: canonical.bundle.agentDocumentId,
+          sourceSkillIds: targetSkillRefs,
+          userId: options.userId,
+        },
+      });
+    } else {
+      await skillMaintenanceService.refineSkill({
+        evidenceRefs: [],
+        idempotencyKey: `same-turn-skill:${canonical.bundle.agentDocumentId}`,
+        input: {
+          patch: workflowResult.bodyMarkdown,
+          skillDocumentId: canonical.bundle.agentDocumentId,
+          userId: options.userId,
+        },
+      });
+    }
   } catch (error) {
     return {
       decision,
@@ -1374,6 +1434,7 @@ const runCreateWorkflow = async (
     };
   }
 
+  const agentId = input.agentId;
   const source = await readCreateSourceDocument(input, options, decision);
   const createRunner =
     options.skillCreateRunner ??
@@ -1394,24 +1455,46 @@ const runCreateWorkflow = async (
     ),
   );
   const service =
-    options.skillManagementServiceFactory?.({ agentId: input.agentId }) ??
+    options.skillManagementServiceFactory?.({ agentId }) ??
     createDefaultSkillManagementService(options);
 
   try {
-    const skill = await service.createSkill({
-      agentId: input.agentId,
-      bodyMarkdown: authored.bodyMarkdown,
-      description: authored.description,
-      name: authored.name,
-      sourceAgentDocumentId: source.sourceAgentDocumentId,
-      title: authored.title ?? authored.name,
+    let createdSkill: SkillDetail | undefined;
+    const skillMaintenanceService = createSkillManagementService({
+      createSkill: async () => {
+        const skill = await service.createSkill({
+          agentId,
+          bodyMarkdown: authored.bodyMarkdown,
+          description: authored.description,
+          name: authored.name,
+          sourceAgentDocumentId: source.sourceAgentDocumentId,
+          title: authored.title ?? authored.name,
+        });
+        createdSkill = skill;
+
+        return {
+          skillDocumentId: skill.bundle.agentDocumentId,
+          summary: authored.reason,
+        };
+      },
+    });
+    await skillMaintenanceService.createSkill({
+      evidenceRefs: [],
+      idempotencyKey: `same-turn-skill:create:${authored.name}`,
+      input: {
+        bodyMarkdown: authored.bodyMarkdown,
+        description: authored.description,
+        name: authored.name,
+        title: authored.title ?? authored.name,
+        userId: options.userId,
+      },
     });
 
     return {
       decision,
       detail: authored.reason ?? `Created skill ${authored.name}.`,
       status: 'applied',
-      target: toSkillActionTarget(skill),
+      target: createdSkill ? toSkillActionTarget(createdSkill) : undefined,
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes('already exists')) {

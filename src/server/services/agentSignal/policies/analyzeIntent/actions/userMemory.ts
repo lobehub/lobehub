@@ -25,6 +25,10 @@ import { AgentService } from '@/server/services/agent';
 
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
+import {
+  createMemoryMaintenanceService,
+  MemoryMaintenanceActionError,
+} from '../../../services/maintenance/memory';
 import { hasAppliedActionIdempotency, markAppliedActionIdempotency } from '../../actionIdempotency';
 import type {
   ActionUserMemoryHandle,
@@ -205,7 +209,7 @@ const hasFailedMemoryWrite = (state: AgentState) => {
   );
 };
 
-const runMemoryActionAgent = async (
+export const runMemoryActionAgent = async (
   input: {
     agentId?: string;
     conflictPolicy?: AgentSignalFeedbackDomainConflictPolicy;
@@ -392,16 +396,18 @@ export const handleUserMemoryAction = async (
       };
     }
 
-    const runner = options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options));
-    const result = await runner({
+    const feedbackHint =
+      action.payload.feedbackHint === 'satisfied' || action.payload.feedbackHint === 'not_satisfied'
+        ? action.payload.feedbackHint
+        : undefined;
+    const runnerInput = {
       agentId: typeof action.payload.agentId === 'string' ? action.payload.agentId : undefined,
       conflictPolicy:
         typeof action.payload.conflictPolicy === 'object' && action.payload.conflictPolicy
           ? action.payload.conflictPolicy
           : undefined,
       evidence: Array.isArray(action.payload.evidence) ? action.payload.evidence : undefined,
-      feedbackHint:
-        action.payload.feedbackHint === 'satisfied' ? 'satisfied' : action.payload.feedbackHint,
+      feedbackHint,
       message,
       reason: typeof action.payload.reason === 'string' ? action.payload.reason : undefined,
       serializedContext:
@@ -413,7 +419,49 @@ export const handleUserMemoryAction = async (
           ? action.payload.sourceHints
           : undefined,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
+    };
+    const runner = options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options));
+    const memoryService = createMemoryMaintenanceService({
+      writeMemory: async () => {
+        const result = await runner(runnerInput);
+
+        if (result.status === 'applied') {
+          return {
+            memoryId: idempotencyKey ?? action.actionId,
+            summary: result.detail,
+          };
+        }
+
+        throw new MemoryMaintenanceActionError(
+          result.detail ?? 'Memory action agent did not apply a durable memory write.',
+          result.status,
+        );
+      },
     });
+
+    const result = await memoryService
+      .writeMemory({
+        evidenceRefs: [],
+        idempotencyKey: idempotencyKey ?? action.actionId,
+        input: {
+          content: message,
+          userId: options.userId,
+        },
+      })
+      .then<MemoryAgentActionResult>((writeResult) => ({
+        detail: writeResult.summary,
+        status: 'applied',
+      }))
+      .catch((error: unknown): MemoryAgentActionResult => {
+        if (error instanceof MemoryMaintenanceActionError) {
+          return {
+            detail: error.message,
+            status: error.status,
+          };
+        }
+
+        throw error;
+      });
 
     if (result.status === 'applied') {
       await markAppliedActionIdempotency(context, idempotencyKey);

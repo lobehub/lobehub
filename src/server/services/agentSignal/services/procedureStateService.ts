@@ -1,7 +1,7 @@
 import {
   appendAndScoreProcedureAccumulatorRecord,
   appendProcedureAccumulatorRecord,
-} from '../procedure/accumulator';
+} from '../procedure/accumulators/procedure';
 import { AgentSignalProcedureInspector } from '../procedure/inspector';
 import { createProcedureMarkerKeysForRead } from '../procedure/keys';
 import {

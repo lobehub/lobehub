@@ -5,11 +5,12 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
+import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import {
-  type DeviceAttachment,
-  generateSystemPrompt,
-  RemoteDeviceManifest,
-} from '@lobechat/builtin-tool-remote-device';
+  injectSelfIterationIntentTool,
+  shouldExposeSelfIterationIntentTool,
+} from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
@@ -53,21 +54,19 @@ import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { toolsEnv } from '@/envs/tools';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
-import {
-  createServerAgentToolsEngine,
-  type EvalContext,
-  type ServerAgentToolsContext,
-} from '@/server/modules/Mecha';
-import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
+import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
-import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
-import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
+import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
@@ -146,6 +145,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
   cronJobId?: string;
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
   disableLocalSystem?: boolean;
+  /** Disable the self-iteration declaration tool for reviewer/runtime paths. */
+  disableSelfIterationIntentTool?: boolean;
   /** Disable all tools (no plugins, no system manifests). Useful for eval/benchmark scenarios. */
   disableTools?: boolean;
   /** Discord context for injecting channel/guild info into agent system message */
@@ -866,7 +867,6 @@ export class AiAgentService {
       });
 
       tools = toolsResult.tools;
-
       log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
       // Start with the scoped manifest map (pluginIds + defaultToolIds)
@@ -950,6 +950,27 @@ export class AiAgentService {
         lobehubSkillManifests.length,
         klavisManifests.length,
       );
+
+      const agentSelfIterationEnabled = agentConfig.chatConfig?.selfIteration?.enabled === true;
+      const shouldCheckUserSelfIterationGate =
+        agentSelfIterationEnabled && !params.disableSelfIterationIntentTool;
+      if (
+        shouldCheckUserSelfIterationGate &&
+        shouldExposeSelfIterationIntentTool({
+          agentSelfIterationEnabled,
+          disableSelfIterationIntentTool: params.disableSelfIterationIntentTool,
+          featureUserEnabled: await isAgentSignalEnabledForUser(this.db, this.userId),
+        })
+      ) {
+        tools = tools ?? [];
+        injectSelfIterationIntentTool({
+          enabledToolIds: toolsResult.enabledToolIds,
+          manifestMap: toolManifestMap,
+          sourceMap: toolSourceMap,
+          tools,
+        });
+        log('execAgent: injected self-iteration intent declaration tool');
+      }
     }
 
     // Inject client function tools from Response API

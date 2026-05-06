@@ -1,9 +1,11 @@
 import { createProcedureStateService } from '../services/procedureStateService';
 import type { AgentSignalPolicyStateStore } from '../store/types';
+import type { ToolOutcomeSelfReflectionDeps } from './toolOutcome';
 import type { AgentSignalProcedureRecord } from './types';
 
 export { createProcedureStateService } from '../services/procedureStateService';
-export * from './accumulator';
+export * from './accumulators/procedure';
+export * from './accumulators/selfReflection';
 export * from './batchScorer';
 export * from './emitToolOutcome';
 export * from './inspector';
@@ -22,6 +24,8 @@ export interface CreateProcedurePolicyOptionsInput {
   now?: () => number;
   /** Policy-state store shared by records, markers, receipts, and accumulators. */
   policyStateStore: AgentSignalPolicyStateStore;
+  /** Optional weak-signal self-reflection wiring for procedure-owned tool outcomes. */
+  selfReflection?: ToolOutcomeSelfReflectionDeps;
   /** TTL in seconds for procedure policy-state fields. */
   ttlSeconds: number;
 }
@@ -70,6 +74,7 @@ export const createProcedurePolicyOptions = (input: CreateProcedurePolicyOptions
     recordStore: {
       write: (record: AgentSignalProcedureRecord) => procedureState.records.write(record),
     },
+    ...(input.selfReflection ? { selfReflection: input.selfReflection } : {}),
     ttlSeconds: input.ttlSeconds,
   };
 };

@@ -61,6 +61,7 @@ describe('BriefService', () => {
   describe('enrichBriefsWithAgents', () => {
     beforeEach(() => {
       mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getTreeAgentIdsForTaskIds.mockResolvedValue({});
     });
 
     it('should return briefs with null agent when no taskIds and no agentIds', async () => {
@@ -117,7 +118,7 @@ describe('BriefService', () => {
       });
       expect(result[1].taskStatus).toBe('paused');
 
-      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).toHaveBeenCalledWith(['task-1', 'task-2']);
       expect(mockTaskModel.findByIds).toHaveBeenCalledWith(['task-1', 'task-2']);
       expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(
         expect.arrayContaining(['agent-a', 'agent-c']),
@@ -166,6 +167,66 @@ describe('BriefService', () => {
       expect(result[0].agent).toBeNull();
       expect(result[0].taskStatus).toBe('paused');
       expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(['agent-gone']);
+    });
+
+    it('should enrich direct agent briefs without requiring a task id', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        {
+          agentId: 'agent-direct',
+          id: 'b1',
+          taskId: null,
+          title: 'Nightly self-review',
+          trigger: 'agent-signal:nightly-review',
+        },
+      ] as any[];
+
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        {
+          avatar: '🤖',
+          backgroundColor: '#fff',
+          id: 'agent-direct',
+          title: 'Reviewer Agent',
+        },
+      ]);
+
+      const result = await service.enrichBriefsWithAgents(briefs);
+
+      expect(result[0].agents).toEqual([
+        {
+          avatar: '🤖',
+          backgroundColor: '#fff',
+          id: 'agent-direct',
+          title: 'Reviewer Agent',
+        },
+      ]);
+      expect(result[0].taskStatus).toBeNull();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
+      expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(['agent-direct']);
+    });
+
+    it('should preserve direct-agent priority and deduplicate task-tree agents', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: 'agent-a', id: 'b1', taskId: 'task-1', title: 'Brief 1' },
+      ] as any[];
+
+      mockTaskModel.getTreeAgentIdsForTaskIds.mockResolvedValue({
+        'task-1': ['agent-a', 'agent-b'],
+      });
+      mockTaskModel.findByIds.mockResolvedValue([{ id: 'task-1', status: 'scheduled' }]);
+
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: '🤖', backgroundColor: null, id: 'agent-a', title: 'Agent A' },
+        { avatar: '🧠', backgroundColor: '#fff', id: 'agent-b', title: 'Agent B' },
+      ]);
+
+      const result = await service.enrichBriefsWithAgents(briefs);
+
+      expect(result[0].agents.map((agent) => agent.id)).toEqual(['agent-a', 'agent-b']);
     });
   });
 
