@@ -101,6 +101,76 @@ describe('redis receipt store', () => {
     );
   });
 
+  it('round-trips skill receipt target document refs', async () => {
+    const store = await loadStore();
+    const skillReceipt = {
+      ...receipt,
+      detail: 'Improved how this assistant handles similar requests',
+      id: 'receipt-skill-1',
+      kind: 'skill' as const,
+      status: 'updated' as const,
+      target: {
+        agentDocumentId: 'index-agent-document-1',
+        documentId: 'index-document-1',
+        id: 'bundle-document-1',
+        summary: 'Review metadata, diff, blockers, and merge status.',
+        title: 'GitHub PR review workflow',
+        type: 'skill' as const,
+      },
+      title: 'Skill updated',
+    };
+
+    await store.appendReceipt(skillReceipt, 259_200);
+
+    await expect(
+      store.listReceipts({ agentId: 'agent-1', limit: 10, topicId: 'topic-1', userId: 'user-1' }),
+    ).resolves.toMatchObject({
+      receipts: [
+        {
+          target: {
+            agentDocumentId: 'index-agent-document-1',
+            documentId: 'index-document-1',
+            id: 'bundle-document-1',
+            title: 'GitHub PR review workflow',
+            type: 'skill',
+          },
+        },
+      ],
+    });
+  });
+
+  it('lists receipts created after a known timestamp for refresh polling', async () => {
+    const store = await loadStore();
+
+    await store.appendReceipt(receipt, 259_200);
+    await store.appendReceipt({ ...receipt, createdAt: 1_700_010, id: 'receipt-2' }, 259_200);
+    await store.appendReceipt({ ...receipt, createdAt: 1_700_020, id: 'receipt-3' }, 259_200);
+
+    await expect(
+      store.listReceipts({
+        agentId: 'agent-1',
+        limit: 10,
+        sinceCreatedAt: 1_700_010,
+        topicId: 'topic-1',
+        userId: 'user-1',
+      }),
+    ).resolves.toEqual({
+      cursor: undefined,
+      receipts: [{ ...receipt, createdAt: 1_700_020, id: 'receipt-3' }],
+    });
+
+    expect(mockRedis.zrange).toHaveBeenCalledWith(
+      'agent-signal:receipts:user:user-1:agent:agent-1:topic:topic-1',
+      '+inf',
+      '(1700010',
+      'BYSCORE',
+      'REV',
+      'LIMIT',
+      0,
+      11,
+    );
+  });
+
   it('dedupes repeated receipt appends', async () => {
     const store = await loadStore();
 

@@ -119,6 +119,8 @@ export interface SkillManagementActionResult {
 }
 
 export interface SkillManagementActionTarget {
+  agentDocumentId?: string;
+  documentId?: string;
   id: string;
   summary?: string;
   title: string;
@@ -1210,8 +1212,10 @@ const isMaintainerDecision = (
   decision.action === 'refine' || decision.action === 'consolidate';
 
 const toSkillActionTarget = (
-  skill: Pick<SkillSummary, 'bundle' | 'description' | 'title'>,
+  skill: Pick<SkillSummary, 'bundle' | 'description' | 'index' | 'title'>,
 ): SkillManagementActionTarget => ({
+  agentDocumentId: skill.index.agentDocumentId,
+  documentId: skill.index.documentId,
   id: skill.bundle.documentId,
   summary: skill.description,
   title: skill.title,

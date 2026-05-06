@@ -69,6 +69,10 @@ export interface AgentSignalReceipt {
   status: 'applied' | 'completed' | 'failed' | 'proposed' | 'skipped' | 'updated';
   /** Snapshot of the resource affected when the receipt was produced. */
   target?: {
+    /** Agent-document binding id for the concrete resource that should be opened. */
+    agentDocumentId?: string;
+    /** Backing document id for the concrete resource that should be opened in document UIs. */
+    documentId?: string;
     /** Backing resource id for future navigation when still available. Skill ids use `documents.id`. */
     id?: string;
     /** Short summary captured at write time. */
@@ -94,6 +98,8 @@ export interface AgentSignalReceiptListInput {
   cursor?: number;
   /** Maximum receipt count to return. */
   limit: number;
+  /** Exclusive lower createdAt boundary for polling only newer receipts. */
+  sinceCreatedAt?: number;
   /** Topic whose receipts should be listed. */
   topicId: string;
   /** Current authenticated user. */
@@ -220,6 +226,12 @@ const getReceiptTarget = (
 
     if (title) {
       return {
+        ...(typeof payload.agentDocumentId === 'string' && payload.agentDocumentId.length > 0
+          ? { agentDocumentId: payload.agentDocumentId }
+          : {}),
+        ...(typeof payload.documentId === 'string' && payload.documentId.length > 0
+          ? { documentId: payload.documentId }
+          : {}),
         ...(typeof payload.id === 'string' && payload.id.length > 0 ? { id: payload.id } : {}),
         ...(typeof payload.summary === 'string' && payload.summary.length > 0
           ? { summary: payload.summary }

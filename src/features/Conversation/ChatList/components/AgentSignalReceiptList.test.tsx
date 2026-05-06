@@ -137,6 +137,39 @@ describe('AgentSignalReceiptList', () => {
     expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
   });
 
+  it('opens skill receipt document refs while keeping the bundle target id for display metadata', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-1',
+            kind: 'skill',
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              agentDocumentId: 'index-agent-document-1',
+              documentId: 'index-document-1',
+              id: 'bundle-document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
+
+    expect(mocks.openDocument).toHaveBeenCalledWith('index-document-1');
+  });
+
   it('navigates memory receipts to the memory surface', () => {
     render(
       <AgentSignalReceiptList

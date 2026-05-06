@@ -31,6 +31,12 @@ const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | unde
     if (typeof target.title !== 'string' || target.title.length === 0) return;
 
     return {
+      ...(typeof target.agentDocumentId === 'string' && target.agentDocumentId.length > 0
+        ? { agentDocumentId: target.agentDocumentId }
+        : {}),
+      ...(typeof target.documentId === 'string' && target.documentId.length > 0
+        ? { documentId: target.documentId }
+        : {}),
       ...(typeof target.id === 'string' && target.id.length > 0 ? { id: target.id } : {}),
       ...(typeof target.summary === 'string' && target.summary.length > 0
         ? { summary: target.summary }
@@ -134,7 +140,19 @@ export const listReceipts: AgentSignalReceiptStore['listReceipts'] = async (inpu
   const indexKey = AGENT_SIGNAL_KEYS.receiptIndex(input);
   const start = input.cursor ?? 0;
   const stop = start + input.limit;
-  const ids = await redis.zrevrange(indexKey, start, stop);
+  const ids =
+    input.sinceCreatedAt === undefined
+      ? await redis.zrevrange(indexKey, start, stop)
+      : await redis.zrange(
+          indexKey,
+          '+inf',
+          `(${input.sinceCreatedAt}`,
+          'BYSCORE',
+          'REV',
+          'LIMIT',
+          0,
+          input.limit + 1,
+        );
   const receipts: AgentSignalReceipt[] = [];
   const missingIds: string[] = [];
 
@@ -161,7 +179,10 @@ export const listReceipts: AgentSignalReceiptStore['listReceipts'] = async (inpu
   }
 
   return {
-    cursor: ids.length > input.limit ? start + input.limit : undefined,
+    cursor:
+      input.sinceCreatedAt === undefined && ids.length > input.limit
+        ? start + input.limit
+        : undefined,
     receipts,
   };
 };
