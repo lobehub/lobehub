@@ -47,6 +47,24 @@ const buildVerifyImUrl = (params: {
   return url.toString();
 };
 
+// Telegram rejects inline-keyboard URL buttons whose host is not publicly
+// resolvable (e.g. `localhost`, `127.0.0.1`) with `Bad Request: Wrong HTTP URL`.
+// In local dev we fall back to a plain text message so the flow is still
+// testable without a public tunnel.
+const isLocalhostUrl = (raw: string): boolean => {
+  try {
+    const { hostname } = new URL(raw);
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1'
+    );
+  } catch {
+    return false;
+  }
+};
+
 const escapeHtml = (s: string): string =>
   s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
@@ -106,10 +124,18 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
       randomId,
     });
 
+    const api = new TelegramApi(config.botToken);
+
+    if (isLocalhostUrl(verifyUrl)) {
+      log('handleUnlinkedMessage: APP_URL is localhost, falling back to plain text link');
+      const text = `Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub. The link expires in 30 minutes:\n\n${verifyUrl}\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.`;
+      await api.sendMessage(ctx.chatId, text);
+      return;
+    }
+
     const text =
       'Welcome to LobeHub! 🤖\n\nTo continue, link your Telegram account to LobeHub.\n\nTap the button below — the link expires in 30 minutes.\n\nAfter linking, send /agents anytime to list your agents and tap one to switch the active agent.';
 
-    const api = new TelegramApi(config.botToken);
     await api.sendMessageWithUrlButton(ctx.chatId, text, {
       text: '🔗 Link Account',
       url: verifyUrl,
