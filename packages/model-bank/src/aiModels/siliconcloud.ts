@@ -415,9 +415,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-02-13',
-    settings: {
-      extendParams: ['reasoningBudgetToken'],
-    },
     type: 'chat',
   },
   {
@@ -648,7 +645,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-21',
     settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      extendParams: ['enableReasoning'],
     },
     type: 'chat',
   },
