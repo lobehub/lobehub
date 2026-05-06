@@ -1,4 +1,8 @@
-import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
+import {
+  type AssistantContentBlock,
+  type ChatToolPayloadWithResult,
+  type UIChatMessage,
+} from '@lobechat/types';
 
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -124,6 +128,54 @@ const pendingInterventions = (s: State) => getPendingInterventions(s.displayMess
 
 const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
 
+/**
+ * Walk displayMessages (including agentCouncil members) to find an assistant
+ * content block by its id. Used to let tool subtrees self-subscribe to their
+ * own data instead of receiving it as props from the message-level renderer.
+ */
+const findBlockById = (
+  blockId: string,
+  messages: UIChatMessage[],
+): AssistantContentBlock | undefined => {
+  for (const message of messages) {
+    if (message.children) {
+      const block = message.children.find((child) => child.id === blockId);
+      if (block) return block;
+    }
+    if (message.role === 'agentCouncil' && (message as any).members) {
+      const inMembers = findBlockById(blockId, (message as any).members);
+      if (inMembers) return inMembers;
+    }
+  }
+  return undefined;
+};
+
+const getToolsInBlock =
+  (blockId: string) =>
+  (s: State): ChatToolPayloadWithResult[] | undefined => {
+    const block = findBlockById(blockId, s.displayMessages);
+    return block?.tools;
+  };
+
+const getToolInBlock =
+  (blockId: string, toolCallId: string) =>
+  (s: State): ChatToolPayloadWithResult | undefined => {
+    const tools = getToolsInBlock(blockId)(s);
+    return tools?.find((t) => t.id === toolCallId);
+  };
+
+const getBlockContent =
+  (blockId: string) =>
+  (s: State): string | undefined =>
+    findBlockById(blockId, s.displayMessages)?.content;
+
+const getBlockHasTools =
+  (blockId: string) =>
+  (s: State): boolean => {
+    const tools = findBlockById(blockId, s.displayMessages)?.tools;
+    return !!tools && tools.length > 0;
+  };
+
 export const dataSelectors = {
   currentTopicSummary,
   dbMessages,
@@ -132,8 +184,12 @@ export const dataSelectors = {
   findLastMessageId,
   getDbMessageById,
   getDbMessageByToolCallId,
+  getBlockContent,
+  getBlockHasTools,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
+  getToolInBlock,
+  getToolsInBlock,
   isSecondLastMessageFromUser,
   messagesInit,
   pendingInterventions,
