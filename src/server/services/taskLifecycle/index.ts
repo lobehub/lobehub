@@ -176,6 +176,7 @@ export class TaskLifecycleService {
         summary: `Execution failed: ${errorMessage || 'Unknown error'}`,
         taskId,
         title: `${taskIdentifier} topic${topicRef} error`,
+        trigger: 'task',
         type: 'error',
       });
 
@@ -477,6 +478,7 @@ export class TaskLifecycleService {
         taskId,
         title: generated.title,
         topicId,
+        trigger: 'task',
         type: briefType,
       });
 
@@ -549,6 +551,7 @@ export class TaskLifecycleService {
           summary: `Review passed (score: ${reviewResult.overallScore}%, iteration: ${iteration}). ${content.slice(0, 150)}`,
           taskId,
           title: `${taskIdentifier} review passed`,
+          trigger: 'task',
           type: 'result',
         });
         await this.taskModel.updateStatus(taskId, 'completed', { error: null });
@@ -562,6 +565,7 @@ export class TaskLifecycleService {
           summary: `Review failed (score: ${reviewResult.overallScore}%, iteration ${iteration}/${reviewConfig.maxIterations}). Auto-retrying...`,
           taskId,
           title: `${taskIdentifier} review failed, retrying`,
+          trigger: 'task',
           type: 'insight',
         });
 
@@ -579,6 +583,7 @@ export class TaskLifecycleService {
         summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
         taskId,
         title: `${taskIdentifier} review failed — needs attention`,
+        trigger: 'task',
         type: 'result',
       });
       await this.taskModel.updateStatus(taskId, 'paused', { error: null });
