@@ -5,7 +5,8 @@ import {
   type Cost,
   type Usage,
 } from '@lobechat/agent-runtime';
-import { AgentRuntime, computeStepContext, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { AgentRuntime, computeStepContext } from '@lobechat/agent-runtime';
+import * as agentRuntimeModule from '@lobechat/agent-runtime';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -541,7 +542,7 @@ export class StreamingExecutorActionImpl {
       provider!,
     )(getAiInfraStoreState());
 
-    const agent = new GeneralChatAgent({
+    const agent = new agentRuntimeModule.GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
       compressionConfig: {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
