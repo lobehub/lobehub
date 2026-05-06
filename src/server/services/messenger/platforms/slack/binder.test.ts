@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 
-import { issueLinkToken } from '../linkTokenStore';
-import { MessengerSlackBinder } from './slack';
+import { issueLinkToken } from '../../linkTokenStore';
+import { MessengerSlackBinder } from './binder';
 
 vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
 }));
 
-vi.mock('../linkTokenStore', () => ({
+vi.mock('../../linkTokenStore', () => ({
   issueLinkToken: vi.fn(),
 }));
 
@@ -22,7 +22,7 @@ vi.mock('@/server/services/bot/platforms/slack/client', () => ({
   SlackClientFactory: vi.fn(),
 }));
 
-vi.mock('../installations', () => ({
+vi.mock('../../installations', () => ({
   getInstallationStore: vi.fn(),
 }));
 
@@ -168,7 +168,7 @@ describe('MessengerSlackBinder.notifyLinkSuccess', () => {
   });
 
   it('lazily resolves creds via the installation store when constructed without them', async () => {
-    const { getInstallationStore } = await import('../installations');
+    const { getInstallationStore } = await import('../../installations');
     const resolveByKey = vi.fn().mockResolvedValue(slackCreds());
     vi.mocked(getInstallationStore).mockReturnValue({
       markRevoked: vi.fn(),

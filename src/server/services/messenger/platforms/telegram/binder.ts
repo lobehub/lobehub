@@ -6,14 +6,14 @@ import type { PlatformClient } from '@/server/services/bot/platforms';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramClientFactory } from '@/server/services/bot/platforms/telegram/client';
 
-import { issueLinkToken } from '../linkTokenStore';
+import { issueLinkToken } from '../../linkTokenStore';
 import type {
   AgentPickerEntry,
   CallbackAcknowledgement,
   InboundCallbackAction,
   MessengerPlatformBinder,
   UnlinkedMessageContext,
-} from '../types';
+} from '../../types';
 
 /**
  * Application prefix on Telegram callback_data so we can distinguish OUR

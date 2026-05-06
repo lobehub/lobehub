@@ -6,8 +6,12 @@ import type { PlatformClient } from '@/server/services/bot/platforms';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import { DiscordClientFactory } from '@/server/services/bot/platforms/discord/client';
 
-import { issueLinkToken } from '../linkTokenStore';
-import type { AgentPickerEntry, MessengerPlatformBinder, UnlinkedMessageContext } from '../types';
+import { issueLinkToken } from '../../linkTokenStore';
+import type {
+  AgentPickerEntry,
+  MessengerPlatformBinder,
+  UnlinkedMessageContext,
+} from '../../types';
 
 const log = debug('lobe-server:messenger:discord');
 

@@ -5,16 +5,16 @@ import type { PlatformClient } from '@/server/services/bot/platforms';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import { SlackClientFactory } from '@/server/services/bot/platforms/slack/client';
 
-import { getInstallationStore } from '../installations';
-import type { InstallationCredentials } from '../installations/types';
-import { issueLinkToken } from '../linkTokenStore';
+import { getInstallationStore } from '../../installations';
+import type { InstallationCredentials } from '../../installations/types';
+import { issueLinkToken } from '../../linkTokenStore';
 import type {
   AgentPickerEntry,
   CallbackAcknowledgement,
   InboundCallbackAction,
   MessengerPlatformBinder,
   UnlinkedMessageContext,
-} from '../types';
+} from '../../types';
 
 const log = debug('lobe-server:messenger:slack');
 

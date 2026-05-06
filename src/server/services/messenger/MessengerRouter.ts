@@ -11,7 +11,7 @@ import {
 import debug from 'debug';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 
-import { getMessengerSlackConfig, type MessengerPlatform } from '@/config/messenger';
+import type { MessengerPlatform } from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import type { MessengerAccountLinkItem } from '@/database/schemas';
@@ -25,10 +25,7 @@ import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
 import { getInstallationStore } from './installations';
 import type { InstallationCredentials } from './installations/types';
-import { verifySignature as verifySlackSignature } from './oauth/slackOAuth';
-import { MessengerDiscordBinder } from './platforms/discord';
-import { MessengerSlackBinder } from './platforms/slack';
-import { MessengerTelegramBinder } from './platforms/telegram';
+import { messengerPlatformRegistry } from './platforms';
 import type {
   AgentPickerEntry,
   CallbackAcknowledgement,
@@ -66,43 +63,6 @@ const parseCommand = (text: string | undefined): CommandMatch | null => {
   const match = trimmed.match(/^\/([a-z][\w-]*)(?:@\S+)?(?:\s(.*))?$/is);
   if (!match) return null;
   return { args: (match[2] ?? '').trim(), name: match[1].toLowerCase() };
-};
-
-/**
- * Slack lifecycle events we treat specially before falling into normal
- * routing. Both indicate the install is gone — flag the row revoked so
- * subsequent webhooks short-circuit, and acknowledge with 200 (no retries).
- */
-const SLACK_LIFECYCLE_EVENTS = new Set(['app_uninstalled', 'tokens_revoked']);
-
-const isSlackLifecycleEvent = (rawBody: string): { eventType: string } | null => {
-  try {
-    const parsed = JSON.parse(rawBody);
-    if (parsed?.type !== 'event_callback') return null;
-    const eventType = parsed?.event?.type;
-    if (typeof eventType === 'string' && SLACK_LIFECYCLE_EVENTS.has(eventType)) {
-      return { eventType };
-    }
-  } catch {
-    /* not JSON / not an Events API payload — fall through */
-  }
-  return null;
-};
-
-/** Slack `url_verification` is the once-only setup challenge; reply with the challenge value. */
-const handleSlackUrlVerification = (rawBody: string): Response | null => {
-  try {
-    const parsed = JSON.parse(rawBody);
-    if (parsed?.type === 'url_verification' && typeof parsed?.challenge === 'string') {
-      return new Response(parsed.challenge, {
-        headers: { 'Content-Type': 'text/plain' },
-        status: 200,
-      });
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
 };
 
 /**
@@ -153,51 +113,25 @@ export class MessengerRouter {
    */
   getWebhookHandler(platform: string): (req: Request) => Promise<Response> {
     return async (req: Request) => {
-      if (!isMessengerPlatform(platform)) {
+      const definition = messengerPlatformRegistry.getPlatform(platform);
+      if (!definition) {
         return new Response(`Unknown messenger platform: ${platform}`, { status: 404 });
       }
 
       const rawBody = await req.text();
 
-      // ----- Slack-specific gate ------------------------------------------
-      if (platform === 'slack') {
-        const config = await getMessengerSlackConfig();
-        if (!config) {
-          return new Response('Slack messenger not configured', { status: 404 });
-        }
-
-        const ts = req.headers.get('x-slack-request-timestamp');
-        const sig = req.headers.get('x-slack-signature');
-        if (!ts || !sig) {
-          log('webhook: missing Slack signature headers');
-          return new Response('missing signature', { status: 401 });
-        }
-        const ok = verifySlackSignature({
-          rawBody,
-          signature: sig,
-          signingSecret: config.signingSecret,
-          timestamp: ts,
+      // ----- Per-platform gate (signature verification, setup challenges,
+      //       lifecycle events). Returning a Response short-circuits the
+      //       shared flow; null means continue.
+      if (definition.webhookGate) {
+        const early = await definition.webhookGate.preprocess(req, rawBody, {
+          invalidateBot: (key) => this.bots.delete(key),
         });
-        if (!ok) {
-          log('webhook: invalid Slack signature');
-          return new Response('invalid signature', { status: 401 });
-        }
-
-        // Setup-time URL verification challenge.
-        const verification = handleSlackUrlVerification(rawBody);
-        if (verification) return verification;
-
-        // Workspace removed the App / rotated tokens away — mark the install
-        // revoked and ack so Slack stops retrying.
-        const lifecycle = isSlackLifecycleEvent(rawBody);
-        if (lifecycle) {
-          await this.handleSlackLifecycleEvent(rawBody, lifecycle.eventType);
-          return new Response('OK', { status: 200 });
-        }
+        if (early) return early;
       }
 
       // ----- Resolve install + lazy-load bot -------------------------------
-      const store = getInstallationStore(platform);
+      const store = getInstallationStore(definition.id);
       if (!store) {
         return new Response(`Messenger ${platform} has no installation store`, { status: 500 });
       }
@@ -218,7 +152,7 @@ export class MessengerRouter {
         try {
           const action = await bot.binder.extractCallbackAction(reconstructRequest(req, rawBody));
           if (action) {
-            await this.handleCallbackAction(bot, platform, creds, action);
+            await this.handleCallbackAction(bot, definition.id, creds, action);
             return new Response('OK', { status: 200 });
           }
         } catch (error) {
@@ -305,20 +239,7 @@ export class MessengerRouter {
   }
 
   private createBinder(creds: InstallationCredentials): MessengerPlatformBinder | null {
-    switch (creds.platform) {
-      case 'telegram': {
-        return new MessengerTelegramBinder();
-      }
-      case 'slack': {
-        return new MessengerSlackBinder(creds);
-      }
-      case 'discord': {
-        return new MessengerDiscordBinder();
-      }
-      default: {
-        return null;
-      }
-    }
+    return messengerPlatformRegistry.createBinder(creds);
   }
 
   private createChatBot(adapters: Record<string, any>, creds: InstallationCredentials): Chat<any> {
@@ -341,33 +262,6 @@ export class MessengerRouter {
     }
 
     return new Chat(config);
-  }
-
-  private async handleSlackLifecycleEvent(rawBody: string, eventType: string): Promise<void> {
-    try {
-      const parsed = JSON.parse(rawBody);
-      const auth = Array.isArray(parsed.authorizations) ? parsed.authorizations[0] : null;
-      const isEnterprise =
-        auth?.is_enterprise_install === true || parsed.is_enterprise_install === true;
-      const tenantId = isEnterprise
-        ? (auth?.enterprise_id ?? parsed.enterprise_id)
-        : (auth?.team_id ?? parsed.team_id);
-      if (!tenantId) {
-        log('lifecycle %s: missing tenant id, skipping', eventType);
-        return;
-      }
-      const installationKey = `slack:${tenantId}`;
-      const store = getInstallationStore('slack');
-      if (store?.markRevoked) {
-        await store.markRevoked(installationKey);
-      }
-      // Drop the cached bot so a re-install (which clears `revoked_at`) gets
-      // a fresh Chat SDK instance with the new token.
-      this.bots.delete(installationKey);
-      log('lifecycle %s: revoked install %s', eventType, installationKey);
-    } catch (error) {
-      log('lifecycle %s: failed to process: %O', eventType, error);
-    }
   }
 
   private registerHandlers(
@@ -1081,9 +975,6 @@ export class MessengerRouter {
     });
   }
 }
-
-const isMessengerPlatform = (platform: string): platform is MessengerPlatform =>
-  platform === 'telegram' || platform === 'slack' || platform === 'discord';
 
 let singleton: MessengerRouter | undefined;
 

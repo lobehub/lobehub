@@ -44,7 +44,9 @@ vi.mock('@/config/messenger', () => ({
 const mockWebhookHandler = vi.fn(async () => new Response('chat-sdk OK', { status: 200 }));
 const mockChatBot = {
   initialize: vi.fn().mockResolvedValue(undefined),
+  onAction: vi.fn(),
   onDirectMessage: vi.fn(),
+  onSlashCommand: vi.fn(),
   onSubscribedMessage: vi.fn(),
   webhooks: {
     slack: mockWebhookHandler,
@@ -78,9 +80,10 @@ vi.mock('@/server/services/bot/replyTemplate', () => ({
   renderInlineError: (msg: string) => msg,
 }));
 
-// Stub the binders so createClient returns a usable PlatformClient without
-// hitting any platform SDK.
-vi.mock('./platforms/slack', () => ({
+// Stub the binder classes (leaf modules) so the real platform definitions +
+// slackWebhookGate still load, but createClient returns a usable PlatformClient
+// without hitting any platform SDK.
+vi.mock('./platforms/slack/binder', () => ({
   MessengerSlackBinder: vi.fn().mockImplementation(() => ({
     createClient: () => ({
       createAdapter: () => ({}),
@@ -95,7 +98,7 @@ vi.mock('./platforms/slack', () => ({
   })),
 }));
 
-vi.mock('./platforms/telegram', () => ({
+vi.mock('./platforms/telegram/binder', () => ({
   MessengerTelegramBinder: vi.fn().mockImplementation(() => ({
     createClient: () => ({
       createAdapter: () => ({}),

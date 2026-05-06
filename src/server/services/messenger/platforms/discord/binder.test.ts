@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 
-import { issueLinkToken } from '../linkTokenStore';
-import { buildDiscordSwitchButtons, MessengerDiscordBinder } from './discord';
+import { issueLinkToken } from '../../linkTokenStore';
+import { buildDiscordSwitchButtons, MessengerDiscordBinder } from './binder';
 
 vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
@@ -19,7 +19,7 @@ vi.mock('@/config/messenger', () => ({
   })),
 }));
 
-vi.mock('../linkTokenStore', () => ({
+vi.mock('../../linkTokenStore', () => ({
   issueLinkToken: vi.fn(),
 }));
 
