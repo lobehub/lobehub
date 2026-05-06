@@ -248,18 +248,22 @@ describe('StreamingExecutor actions', () => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
-      const agentConfig = createMockAgentConfig();
-
       useAiInfraStore.setState({
         enabledAiModels: [
           {
             abilities: { functionCall: true },
             contextWindowTokens: 200_000,
-            id: agentConfig.model,
-            providerId: agentConfig.provider,
+            id: 'gpt-4o-mini',
+            providerId: 'openai',
             type: 'chat',
           } as EnabledAiModel,
         ],
+      });
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig({ model: 'gpt-4o-mini', provider: 'openai' }),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
       });
 
       const stepSpy = vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step');

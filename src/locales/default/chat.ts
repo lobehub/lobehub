@@ -390,7 +390,7 @@ export default {
   'followUpPlaceholder': 'Follow up. @ to assign tasks to other agents.',
   'followUpPlaceholderHeterogeneous': 'Follow up.',
   'sendPlaceholder': 'Ask, create, or start a task, <hotkey><hotkey/>',
-  'sendPlaceholderHeterogeneous': 'Ask {{name}} to do a task...',
+  'sendPlaceholderHeterogeneous': 'Describe a task or ask a question to {{name}}',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
   'sessionGroup.config': 'Category Management',

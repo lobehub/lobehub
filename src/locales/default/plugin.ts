@@ -502,7 +502,7 @@ export default {
   'localSystem.workingDirectory.checkoutFailed': 'Checkout failed',
   'localSystem.workingDirectory.createBranchAction': 'Checkout new branch…',
   'localSystem.workingDirectory.current': 'Current working directory',
-  'localSystem.workingDirectory.chooseDifferentFolder': 'Choose a different folder',
+  'localSystem.workingDirectory.chooseDifferentFolder': 'Choose a folder...',
   'localSystem.workingDirectory.pullAction': 'Click to pull {{count}} commit(s) from {{upstream}}',
   'localSystem.workingDirectory.pullInProgress': 'Pulling…',
   'localSystem.workingDirectory.pullSuccess': 'Pulled successfully',

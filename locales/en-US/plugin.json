@@ -478,7 +478,7 @@
   "localSystem.workingDirectory.cancel": "Cancel",
   "localSystem.workingDirectory.checkoutAction": "Checkout",
   "localSystem.workingDirectory.checkoutFailed": "Checkout failed",
-  "localSystem.workingDirectory.chooseDifferentFolder": "Choose a different folder",
+  "localSystem.workingDirectory.chooseDifferentFolder": "Choose a folder...",
   "localSystem.workingDirectory.createBranchAction": "Checkout new branch…",
   "localSystem.workingDirectory.current": "Current working directory",
   "localSystem.workingDirectory.detachedHead": "Detached HEAD at {{sha}}",

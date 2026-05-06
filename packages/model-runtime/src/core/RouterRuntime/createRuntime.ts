@@ -196,7 +196,7 @@ export const createRouterRuntime = ({
       // Save configuration without creating runtimes
       this._routers = routers;
       this._params = params;
-      this._id = id;
+      this._id = options.id ?? id;
     }
 
     /**

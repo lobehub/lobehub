@@ -84,12 +84,7 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {showMessageContent && (
           <SafeBoundary variant="alert">
-            <MessageContent
-              content={content}
-              disableStreaming={disableMarkdownStreaming}
-              hasTools={hasTools}
-              id={id}
-            />
+            <MessageContent disableStreaming={disableMarkdownStreaming} id={id} />
           </SafeBoundary>
         )}
 
@@ -101,7 +96,7 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {hasTools && (
           <SafeBoundary>
-            <Tools disableEditing={disableEditing} messageId={id} tools={tools} />
+            <Tools disableEditing={disableEditing} messageId={id} />
           </SafeBoundary>
         )}
       </Flexbox>

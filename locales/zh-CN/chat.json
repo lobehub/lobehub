@@ -354,7 +354,7 @@
   "searchAgents": "搜索助理…",
   "selectedAgents": "已选助理",
   "sendPlaceholder": "从任何想法开始… <hotkey><hotkey/>",
-  "sendPlaceholderHeterogeneous": "请 {{name}} 执行一个任务…",
+  "sendPlaceholderHeterogeneous": "描述任务或向 {{name}} 提问",
   "sendPlaceholderWithAgentAssignment": "提问、创建或开始任务。使用 @ 分配任务给其他智能体。",
   "sessionGroup.config": "分类管理",
   "sessionGroup.confirmRemoveGroupAlert": "确认删除该分类吗？分类内的助理会移回默认列表",

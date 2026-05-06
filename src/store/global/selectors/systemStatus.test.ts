@@ -4,6 +4,7 @@ import { merge } from '@/utils/merge';
 
 import type { GlobalState } from '../initialState';
 import {
+  DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
   DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
   INITIAL_STATUS,
   initialState,
@@ -190,6 +191,30 @@ describe('systemStatusSelectors', () => {
       });
       const items = systemStatusSelectors.sidebarItems(s);
       expect(items.indexOf('recents')).toBeLessThan(items.indexOf('agent'));
+    });
+  });
+
+  describe('sidebarExpandedKeys', () => {
+    it('should expand sidebar accordion sections by default', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: {
+          ...initialState.status,
+          sidebarExpandedKeys: undefined,
+        },
+      };
+
+      expect(systemStatusSelectors.sidebarExpandedKeys(s)).toEqual(
+        DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+      );
+    });
+
+    it('should preserve an empty stored preference when all sections are collapsed', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarExpandedKeys: [] },
+      });
+
+      expect(systemStatusSelectors.sidebarExpandedKeys(s)).toEqual([]);
     });
   });
 
