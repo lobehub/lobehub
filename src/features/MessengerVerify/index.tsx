@@ -4,7 +4,7 @@ import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Discord, Slack, Telegram } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { CheckCircle2Icon, LinkIcon } from 'lucide-react';
+import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,15 +13,11 @@ import useSWR from 'swr';
 import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
 import AgentSelect from '@/features/Messenger/AgentSelect';
+import { PLATFORM_NAMES } from '@/features/Messenger/constants';
+import { getMessengerErrorMessage } from '@/features/Messenger/i18n';
 import { useSession } from '@/libs/better-auth/auth-client';
 import { lambdaClient } from '@/libs/trpc/client';
 import { messengerService } from '@/services/messenger';
-
-const PLATFORM_LABELS: Record<string, string> = {
-  discord: 'Discord',
-  slack: 'Slack',
-  telegram: 'Telegram',
-};
 
 const PLATFORM_BRAND_ICONS: Record<string, ReactNode> = {
   discord: <Discord.Color size={32} />,
@@ -122,6 +118,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  warningBlock: css`
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-color: ${cssVar.colorWarningBorder};
+    background: ${cssVar.colorWarningBg};
+  `,
+  warningIcon: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorWarning};
+  `,
 }));
 
 const ChainBubble = ({ className }: { className: string }) => (
@@ -217,8 +223,8 @@ const MessengerVerifyPage = memo(() => {
         randomId,
       });
       setDone(true);
-    } catch (error: any) {
-      message.error(error?.message ?? t('verify.error.generic'));
+    } catch (error) {
+      message.error(getMessengerErrorMessage(error, t, 'verify.error.generic'));
     } finally {
       setConfirming(false);
     }
@@ -282,7 +288,9 @@ const MessengerVerifyPage = memo(() => {
     const platform = (existingLinkSWR.data?.platform ?? tokenSWR.data?.platform ?? imType) as
       | string
       | undefined;
-    const platformLabelSuccess = platform ? (PLATFORM_LABELS[platform] ?? platform) : '';
+    const platformLabelSuccess = platform
+      ? (PLATFORM_NAMES[platform as keyof typeof PLATFORM_NAMES] ?? platform)
+      : '';
     const platformMeta = platformsSWR.data?.find((p) => p.platform === platform);
     const tenantId = existingLinkSWR.data?.tenantId ?? tokenSWR.data?.tenantId ?? undefined;
     const openBotUrl = platform
@@ -320,17 +328,27 @@ const MessengerVerifyPage = memo(() => {
     return (
       <Flexbox align="center" className={styles.card} gap={24}>
         <Heading
-          subtitle={tokenSWR.error?.message ?? t('verify.error.expired')}
+          subtitle={getMessengerErrorMessage(tokenSWR.error, t, 'verify.error.expired')}
           title={t('verify.error.title')}
         />
       </Flexbox>
     );
   }
 
-  const platformLabel = PLATFORM_LABELS[tokenSWR.data.platform] ?? tokenSWR.data.platform;
+  const platformLabel =
+    PLATFORM_NAMES[tokenSWR.data.platform as keyof typeof PLATFORM_NAMES] ?? tokenSWR.data.platform;
   const handle = tokenSWR.data.platformUsername ?? `ID ${tokenSWR.data.platformUserId}`;
   const workspaceName = tokenSWR.data.tenantName;
   const lobeAccount = session?.user?.email ?? session?.user?.name ?? '';
+  // `linkedToEmail` is set by the server when the IM identity is already
+  // bound to a LobeHub account. If we reach this branch (the alreadyLinked
+  // short-circuit above didn't fire), the existing binding belongs to a
+  // *different* LobeHub account — block confirm and tell the user to switch.
+  const linkedToEmail = tokenSWR.data.linkedToEmail;
+  const hasConflict = !!linkedToEmail;
+  const signInUrl = `/signin?callbackUrl=${encodeURIComponent(
+    `/verify-im?${searchParams.toString()}`,
+  )}`;
 
   const infoRows: { label: string; value: string }[] = [
     { label: t('verify.confirm.fields.lobeHubAccount'), value: lobeAccount },
@@ -369,25 +387,47 @@ const MessengerVerifyPage = memo(() => {
         </Flexbox>
       </Block>
 
-      <Flexbox gap={8} style={{ width: '100%' }}>
-        <Text strong>{t('verify.confirm.defaultAgent')}</Text>
-        {agentsSWR.data?.length === 0 ? (
-          <Text type="warning">{t('verify.confirm.noAgents')}</Text>
-        ) : (
-          <AgentSelect
-            placeholder={t('verify.confirm.defaultAgentPlaceholder')}
-            value={selectedAgentId}
-            onChange={setSelectedAgentId}
-          />
-        )}
-        <Text style={{ fontSize: 12 }} type="secondary">
-          {t('verify.confirm.defaultAgentHint')}
-        </Text>
-      </Flexbox>
+      {hasConflict && (
+        <Block className={styles.warningBlock} style={{ width: '100%' }} variant={'outlined'}>
+          <Flexbox horizontal gap={12}>
+            <Icon className={styles.warningIcon} icon={AlertTriangleIcon} size={20} />
+            <Flexbox gap={8} style={{ flex: 1 }}>
+              <Text strong>{t('verify.confirm.conflict.title')}</Text>
+              <Text style={{ fontSize: 13 }} type="secondary">
+                {t('verify.confirm.conflict.description', {
+                  email: linkedToEmail,
+                  platform: platformLabel,
+                })}
+              </Text>
+              <Button block href={signInUrl} type="default">
+                {t('verify.confirm.conflict.switchAccount')}
+              </Button>
+            </Flexbox>
+          </Flexbox>
+        </Block>
+      )}
+
+      {!hasConflict && (
+        <Flexbox gap={8} style={{ width: '100%' }}>
+          <Text strong>{t('verify.confirm.defaultAgent')}</Text>
+          {agentsSWR.data?.length === 0 ? (
+            <Text type="warning">{t('verify.confirm.noAgents')}</Text>
+          ) : (
+            <AgentSelect
+              placeholder={t('verify.confirm.defaultAgentPlaceholder')}
+              value={selectedAgentId}
+              onChange={setSelectedAgentId}
+            />
+          )}
+          <Text style={{ fontSize: 12 }} type="secondary">
+            {t('verify.confirm.defaultAgentHint')}
+          </Text>
+        </Flexbox>
+      )}
 
       <Button
         block
-        disabled={!selectedAgentId}
+        disabled={hasConflict || !selectedAgentId}
         loading={confirming}
         size="large"
         type="primary"

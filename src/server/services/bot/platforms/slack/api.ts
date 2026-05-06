@@ -328,6 +328,29 @@ export class SlackApi {
     return { messages: data.messages ?? [] };
   }
 
+  /**
+   * Verify the bot token is still valid for this install. Used by the
+   * messenger settings page to reconcile stale local install rows when Slack
+   * app removal didn't reach our lifecycle webhook.
+   */
+  async authTest(): Promise<{
+    appId?: string;
+    botId?: string;
+    team?: string;
+    teamId?: string;
+    userId?: string;
+  }> {
+    log('authTest');
+    const data = await this.call('auth.test', {});
+    return {
+      appId: data.app_id,
+      botId: data.bot_id,
+      team: data.team,
+      teamId: data.team_id,
+      userId: data.user_id,
+    };
+  }
+
   // ==================== File Download ====================
 
   /**

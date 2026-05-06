@@ -44,5 +44,11 @@ export interface MessengerPlatformDefinition {
    */
   createBinder: (creds?: InstallationCredentials) => MessengerPlatformBinder;
   id: MessengerPlatform;
+  /**
+   * Brand-name label shown in UI. Hard-coded per platform — these are
+   * trademarks, not user-facing copy, so they are NOT translated. Surfaced
+   * to the client through the `availablePlatforms` TRPC return.
+   */
+  name: string;
   webhookGate?: MessengerPlatformWebhookGate;
 }

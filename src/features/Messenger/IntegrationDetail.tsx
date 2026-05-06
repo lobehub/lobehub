@@ -19,7 +19,8 @@ import useSWR from 'swr';
 import { messengerService } from '@/services/messenger';
 
 import AgentSelect from './AgentSelect';
-import { type MessengerPlatform, PLATFORM_LABELS, PlatformAvatar } from './constants';
+import { type MessengerPlatform, PLATFORM_NAMES, PlatformAvatar } from './constants';
+import { getMessengerErrorMessage } from './i18n';
 import LinkModal from './LinkModal';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -122,7 +123,7 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
       messengerService.listMyInstallations(),
     );
 
-    const platformLabel = PLATFORM_LABELS[platform];
+    const platformLabel = PLATFORM_NAMES[platform];
     const allLinks = linksSWR.data ?? [];
     const links = allLinks.filter((l) => l.platform === platform);
     const installations = (installationsSWR.data ?? []).filter((i) => i.platform === platform);
@@ -137,8 +138,8 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
         });
         await linksSWR.mutate();
         message.success(t('messenger.setActiveSuccess'));
-      } catch (error: any) {
-        message.error(error?.message ?? t('messenger.setActiveFailed'));
+      } catch (error) {
+        message.error(getMessengerErrorMessage(error, t, 'messenger.setActiveFailed'));
       }
     };
 
@@ -151,8 +152,8 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
             await messengerService.unlink({ platform, tenantId: tenantId || undefined });
             await linksSWR.mutate();
             message.success(t('messenger.unlinkSuccess'));
-          } catch (error: any) {
-            message.error(error?.message ?? t('messenger.unlinkFailed'));
+          } catch (error) {
+            message.error(getMessengerErrorMessage(error, t, 'messenger.unlinkFailed'));
           }
         },
         title: t('messenger.unlinkTitle'),
@@ -169,8 +170,10 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
             await installationsSWR.mutate();
             await linksSWR.mutate();
             message.success(t('messenger.slack.connections.disconnectSuccess'));
-          } catch (error: any) {
-            message.error(error?.message ?? t('messenger.slack.connections.disconnectFailed'));
+          } catch (error) {
+            message.error(
+              getMessengerErrorMessage(error, t, 'messenger.slack.connections.disconnectFailed'),
+            );
           }
         },
         title: t('messenger.slack.connections.disconnectTitle'),

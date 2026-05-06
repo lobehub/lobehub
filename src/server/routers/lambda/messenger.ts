@@ -12,11 +12,14 @@ import {
   type MessengerPlatform,
 } from '@/config/messenger';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
+import type { DecryptedMessengerInstallation } from '@/database/models/messengerInstallation';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
-import { agents } from '@/database/schemas';
+import { agents, users } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import {
   consumeLinkToken,
   MessengerDiscordBinder,
@@ -30,6 +33,57 @@ const platformEnum = z.enum([
   'slack',
   'discord',
 ]) satisfies z.ZodType<MessengerPlatform>;
+
+const REVOKED_SLACK_AUTH_ERRORS = new Set([
+  'account_inactive',
+  'invalid_auth',
+  'not_authed',
+  'token_revoked',
+]);
+
+const extractSlackAuthErrorCode = (error: unknown): string | null => {
+  if (!(error instanceof Error)) return null;
+
+  const match = error.message.match(/Slack API auth\.test failed: ([a-z_]+)/);
+  return match?.[1] ?? null;
+};
+
+const reconcileSlackInstallation = async (
+  serverDB: LobeChatDatabase,
+  row: DecryptedMessengerInstallation,
+): Promise<DecryptedMessengerInstallation | null> => {
+  if (row.platform !== 'slack') return row;
+
+  const botToken = (row.credentials as { botToken?: string })?.botToken;
+  if (!botToken) return row;
+
+  try {
+    await new SlackApi(botToken).authTest();
+    return row;
+  } catch (error) {
+    const errorCode = extractSlackAuthErrorCode(error);
+
+    if (errorCode && REVOKED_SLACK_AUTH_ERRORS.has(errorCode)) {
+      await MessengerInstallationModel.markRevoked(serverDB, row.id);
+      return null;
+    }
+
+    console.error('[messenger:listMyInstallations] failed to verify Slack installation', error);
+    return row;
+  }
+};
+
+/**
+ * Reveal enough of the email so a legitimate owner recognizes the account
+ * without exposing the full address to anyone with Slack-side access to
+ * the IM identity.
+ */
+const maskEmail = (email: string): string => {
+  const [local, domain] = email.split('@');
+  if (!domain) return email;
+  const head = local.slice(0, Math.min(2, local.length));
+  return `${head}***@${domain}`;
+};
 
 const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -75,18 +129,46 @@ export const messengerRouter = router({
   /**
    * Public peek used by the verify-im page to render the IM identity preview
    * before the user confirms. Does NOT consume the token.
+   *
+   * Also surfaces `linkedToEmail` when the IM identity is already bound to
+   * a LobeHub account — the page uses it to warn the user before they create
+   * a duplicate that would either fail the unique index or shadow another
+   * account's binding. Email is partially masked for privacy.
    */
   peekLinkToken: publicProcedure
+    .use(serverDatabase)
     .input(z.object({ randomId: z.string().min(8) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const payload = await peekLinkToken(input.randomId);
       if (!payload) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'Link token expired or invalid. Please return to the bot and try /start again.',
+          message: 'verify.error.expired',
         });
       }
+
+      const existingLink = await MessengerAccountLinkModel.findByPlatformUser(
+        ctx.serverDB,
+        payload.platform,
+        payload.platformUserId,
+        payload.tenantId ?? '',
+      );
+
+      let linkedToEmail: string | null = null;
+      if (existingLink) {
+        const [owner] = await ctx.serverDB
+          .select({ email: users.email })
+          .from(users)
+          .where(eq(users.id, existingLink.userId))
+          .limit(1);
+        if (owner?.email) linkedToEmail = maskEmail(owner.email);
+      }
+
       return {
+        // Set when the IM identity is already linked to some LobeHub account.
+        // The verify-im page compares against the current session email and
+        // shows a warning when they don't match.
+        linkedToEmail,
         platform: payload.platform,
         platformUserId: payload.platformUserId,
         platformUsername: payload.platformUsername,
@@ -107,17 +189,40 @@ export const messengerRouter = router({
   confirmLink: messengerProcedure
     .input(
       z.object({
-        initialAgentId: z.string().min(1, 'Pick a default agent before confirming'),
+        initialAgentId: z.string().min(1, 'messenger.error.pickDefaultAgent'),
         randomId: z.string().min(8),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const payload = await consumeLinkToken(input.randomId);
-      if (!payload) {
+      // Peek first so a cross-user conflict / missing agent doesn't burn the
+      // one-shot token — the user can fix the issue (re-login, pick another
+      // agent) without going back to the bot for a fresh /start.
+      const peeked = await peekLinkToken(input.randomId);
+      if (!peeked) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message:
-            'Link token expired or already used. Please return to the bot and try /start again.',
+          message: 'verify.error.expired',
+        });
+      }
+
+      // Cross-user conflict: the (platform, tenant, platformUserId) tuple is
+      // already bound to a different LobeHub account. The DB unique index
+      // would surface this as an opaque "duplicate key" — replace with a
+      // user-facing 409 carrying the masked email of the existing owner.
+      const existingLink = await MessengerAccountLinkModel.findByPlatformUser(
+        ctx.serverDB,
+        peeked.platform,
+        peeked.platformUserId,
+        peeked.tenantId ?? '',
+      );
+      if (existingLink && existingLink.userId !== ctx.userId) {
+        // The verify-im page surfaces the same conflict (with the masked
+        // email of the existing owner) via peekLinkToken's `linkedToEmail`
+        // before the user even clicks confirm — this throw is the defensive
+        // backstop for the rare race / direct-API caller.
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'verify.error.alreadyLinkedToOther',
         });
       }
 
@@ -127,7 +232,19 @@ export const messengerRouter = router({
         .where(and(eq(agents.id, input.initialAgentId), eq(agents.userId, ctx.userId)))
         .limit(1);
       if (!agentRow) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'messenger.error.agentNotFound' });
+      }
+
+      // Now safe to consume — token is single-use; do this last so any error
+      // above leaves the token available for retry.
+      const payload = await consumeLinkToken(input.randomId);
+      if (!payload) {
+        // Lost a race with another consumer (or the token expired during the
+        // checks above). Treat the same as the initial peek-miss.
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'verify.error.expired',
+        });
       }
 
       const link = await ctx.messengerLinkModel.upsertForPlatform({
@@ -236,7 +353,7 @@ export const messengerRouter = router({
           .where(and(eq(agents.id, input.agentId), eq(agents.userId, ctx.userId)))
           .limit(1);
         if (!agentRow) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'messenger.error.agentNotFound' });
         }
       }
 
@@ -248,7 +365,7 @@ export const messengerRouter = router({
       if (!updated) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'No messenger link for this platform yet. Send /start in the bot first.',
+          message: 'messenger.error.linkRequired',
         });
       }
       return { data: updated, success: true };
@@ -261,7 +378,7 @@ export const messengerRouter = router({
       if (!(await isMessengerPlatformEnabled(input.platform))) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: `Messenger ${input.platform} bot is not configured`,
+          message: 'messenger.error.platformNotConfigured',
         });
       }
       await ctx.messengerLinkModel.deleteByPlatform(input.platform, input.tenantId);
@@ -275,8 +392,17 @@ export const messengerRouter = router({
    * the safe metadata only — never the encrypted credentials.
    */
   listMyInstallations: messengerProcedure.query(async ({ ctx }) => {
-    const rows = await MessengerInstallationModel.listByInstallerUserId(ctx.serverDB, ctx.userId);
-    return rows.map((row) => ({
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
+    const rows = await MessengerInstallationModel.listByInstallerUserId(
+      ctx.serverDB,
+      ctx.userId,
+      gateKeeper,
+    );
+    const activeRows = (
+      await Promise.all(rows.map((row) => reconcileSlackInstallation(ctx.serverDB, row)))
+    ).filter((row): row is DecryptedMessengerInstallation => row !== null);
+
+    return activeRows.map((row) => ({
       applicationId: row.applicationId,
       enterpriseId: (row.metadata as Record<string, unknown> | null)?.enterpriseId ?? null,
       id: row.id,
@@ -311,7 +437,10 @@ export const messengerRouter = router({
         gateKeeper,
       );
       if (!row) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Installation not found' });
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'messenger.error.installationNotFound',
+        });
       }
       // Authorization: only the user who initiated the install can disconnect
       // it. Workspace admins who installed via a different LobeHub account
@@ -319,7 +448,7 @@ export const messengerRouter = router({
       if (row.installedByUserId !== ctx.userId) {
         throw new TRPCError({
           code: 'FORBIDDEN',
-          message: 'You can only disconnect installations you initiated.',
+          message: 'messenger.error.disconnectNotAllowed',
         });
       }
       await MessengerInstallationModel.markRevoked(ctx.serverDB, row.id);

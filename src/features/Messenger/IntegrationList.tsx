@@ -6,7 +6,7 @@ import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type MessengerPlatform, PLATFORM_LABELS, PlatformAvatar } from './constants';
+import { type MessengerPlatform, PLATFORM_NAMES, PlatformAvatar } from './constants';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -49,7 +49,7 @@ const IntegrationList = memo<IntegrationListProps>(({ onSelect, platforms }) => 
             <PlatformAvatar platform={platform} size={48} />
             <Flexbox flex={1} gap={2}>
               <Text strong style={{ fontSize: 15 }}>
-                {PLATFORM_LABELS[platform]}
+                {PLATFORM_NAMES[platform]}
               </Text>
               <Text style={{ fontSize: 13 }} type="secondary">
                 {t(`messenger.list.${platform}.description` as any)}

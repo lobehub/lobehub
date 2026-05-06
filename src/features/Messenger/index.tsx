@@ -10,6 +10,7 @@ import useSWR from 'swr';
 import { messengerService } from '@/services/messenger';
 
 import { type MessengerPlatform, PlatformAvatar } from './constants';
+import { getSlackInstallErrorReason } from './i18n';
 import IntegrationDetail from './IntegrationDetail';
 import IntegrationList from './IntegrationList';
 
@@ -60,7 +61,11 @@ const MessengerSettings = memo(() => {
       // Empty string sentinel = open modal even when workspace name is unknown.
       setBlockedWorkspace(workspace ?? '');
     } else if (error) {
-      message.error(t('messenger.slack.installResult.failed', { reason: error }));
+      message.error(
+        t('messenger.slack.installResult.failed', {
+          reason: getSlackInstallErrorReason(t, error),
+        }),
+      );
     }
 
     url.searchParams.delete('slack_installed');

@@ -12,7 +12,7 @@ import {
   buildDiscordOpenBotUrl,
   buildTelegramDeepLink,
   type MessengerPlatform,
-  PLATFORM_LABELS,
+  PLATFORM_NAMES,
   PlatformAvatar,
 } from './constants';
 
@@ -52,7 +52,7 @@ interface LinkModalProps {
 
 const LinkModal = memo<LinkModalProps>(({ appId, botUsername, onClose, open, platform }) => {
   const { t } = useTranslation('messenger');
-  const platformLabel = PLATFORM_LABELS[platform];
+  const platformLabel = PLATFORM_NAMES[platform];
   const isSlack = platform === 'slack';
   const isDiscord = platform === 'discord';
   const isTelegram = platform === 'telegram';

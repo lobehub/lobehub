@@ -11,6 +11,13 @@ export default {
   'messenger.detail.connections.userLabel': 'user',
   'messenger.detail.connections.workspaceLabel': 'workspace',
   'messenger.detail.disconnect': 'Disconnect',
+  'messenger.error.agentNotFound': 'Agent not found.',
+  'messenger.error.disconnectNotAllowed': 'You can only disconnect installations you started.',
+  'messenger.error.installationNotFound': 'Installation not found.',
+  'messenger.error.linkRequired': 'Open the bot and send /start before changing this connection.',
+  'messenger.error.pickDefaultAgent': 'Select a default agent before confirming.',
+  'messenger.error.platformNotConfigured':
+    "This messenger platform isn't available right now. Please try again later.",
   'messenger.linkCta': 'Connect',
   'messenger.linkModal.continueIn': 'Continue setup in {{platform}}',
   'messenger.linkModal.instructions':
@@ -42,6 +49,18 @@ export default {
     'This Slack workspace is already connected to LobeHub by another user.',
   'messenger.slack.installResult.failed':
     'Slack install failed ({{reason}}). Please try again or contact support.',
+  'messenger.slack.installResult.reasons.accessDenied': 'authorization was cancelled',
+  'messenger.slack.installResult.reasons.exchangeFailed': 'Slack authorization failed',
+  'messenger.slack.installResult.reasons.generic': 'an unknown error occurred',
+  'messenger.slack.installResult.reasons.invalidState': 'the install session expired',
+  'messenger.slack.installResult.reasons.missingAppId': 'Slack returned incomplete app information',
+  'messenger.slack.installResult.reasons.missingCodeOrState':
+    'Slack returned incomplete install parameters',
+  'messenger.slack.installResult.reasons.missingTenant':
+    'Slack did not return a workspace identifier',
+  'messenger.slack.installResult.reasons.missingToken': 'Slack did not return a bot token',
+  'messenger.slack.installResult.reasons.persistFailed':
+    'the workspace connection could not be saved',
   'messenger.slack.installResult.success': 'Slack workspace connected.',
   'messenger.discord.connectModal.continueButton': 'Open in Discord',
   'messenger.discord.connectModal.description':
@@ -67,6 +86,10 @@ export default {
   'messenger.unlinkFailed': 'Failed to disconnect.',
   'messenger.unlinkSuccess': 'Disconnected.',
   'messenger.unlinkTitle': 'Disconnect account',
+  'verify.confirm.conflict.description':
+    'This {{platform}} account is already linked to LobeHub account {{email}}. Sign in to that account to manage the link, or unlink there before retrying.',
+  'verify.confirm.conflict.switchAccount': 'Sign in with another account',
+  'verify.confirm.conflict.title': 'This account is already linked',
   'verify.confirm.cta': 'Confirm linking',
   'verify.confirm.defaultAgent': 'Default agent',
   'verify.confirm.defaultAgentHint':
@@ -79,6 +102,8 @@ export default {
     "You don't have any agents yet. Create one in LobeHub, then come back to finish linking.",
   'verify.confirm.title': 'Confirm linking',
   'verify.confirm.workspace': 'Workspace: {{workspace}}',
+  'verify.error.alreadyLinkedToOther':
+    'This account is already linked to a different LobeHub account. Sign in to that account first.',
   'verify.error.expired': 'This link has expired. Please return to the bot and send /start again.',
   'verify.error.generic': 'Something went wrong. Please try again.',
   'verify.error.missingToken': 'Invalid link. Open this page from the bot.',
