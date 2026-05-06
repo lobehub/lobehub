@@ -23,6 +23,22 @@ import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from '.
 
 const serverConfigMock = vi.hoisted(() => ({ enableVisualUnderstanding: false }));
 
+interface AgentRuntimeStepContext {
+  agent: {
+    config: {
+      compressionConfig: {
+        enabled: boolean;
+        maxWindowToken?: number;
+      };
+    };
+  };
+}
+
+const getCreatedAgentCompressionConfig = (stepSpy: { mock: { contexts: unknown[] } }) => {
+  const runtime = stepSpy.mock.contexts[0] as AgentRuntimeStepContext;
+  return runtime.agent.config.compressionConfig;
+};
+
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
 vi.mock('@/store/serverConfig', () => ({
@@ -232,19 +248,21 @@ describe('StreamingExecutor actions', () => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
+      const agentConfig = createMockAgentConfig();
+
       useAiInfraStore.setState({
         enabledAiModels: [
           {
             abilities: { functionCall: true },
             contextWindowTokens: 200_000,
-            id: 'gpt-4o-mini',
-            providerId: 'openai',
+            id: agentConfig.model,
+            providerId: agentConfig.provider,
             type: 'chat',
           } as EnabledAiModel,
         ],
       });
 
-      const agentSpy = vi.spyOn(agentRuntime, 'GeneralChatAgent');
+      const stepSpy = vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step');
       const { result } = renderHook(() => useChatStore());
       const userMessage = {
         id: TEST_IDS.USER_MESSAGE_ID,
@@ -269,14 +287,10 @@ describe('StreamingExecutor actions', () => {
         });
       });
 
-      expect(agentSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          compressionConfig: expect.objectContaining({
-            enabled: true,
-            maxWindowToken: 200_000,
-          }),
-        }),
-      );
+      expect(getCreatedAgentCompressionConfig(stepSpy)).toEqual({
+        enabled: true,
+        maxWindowToken: 200_000,
+      });
 
       streamSpy.mockRestore();
     });
@@ -286,7 +300,7 @@ describe('StreamingExecutor actions', () => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
-      const agentSpy = vi.spyOn(agentRuntime, 'GeneralChatAgent');
+      const stepSpy = vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step');
 
       vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
         agentConfig: createMockAgentConfig({ model: 'unknown-model', provider: 'openai' }),
@@ -319,14 +333,10 @@ describe('StreamingExecutor actions', () => {
         });
       });
 
-      expect(agentSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          compressionConfig: expect.objectContaining({
-            enabled: true,
-            maxWindowToken: undefined,
-          }),
-        }),
-      );
+      expect(getCreatedAgentCompressionConfig(stepSpy)).toEqual({
+        enabled: true,
+        maxWindowToken: undefined,
+      });
 
       streamSpy.mockRestore();
     });
