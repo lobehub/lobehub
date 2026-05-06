@@ -236,8 +236,9 @@ export interface TaskDetailActivityAgent {
 
 export interface TaskDetailActivity {
   actions?: unknown;
+  /** Brief-only: avatar of the agent that produced this brief; `null` when the agent is unknown or has been deleted. */
+  agent?: TaskDetailActivityAgent | null;
   agentId?: string | null;
-  agents?: TaskDetailActivityAgent[];
   artifacts?: BriefArtifacts | null;
   author?: TaskDetailActivityAuthor;
   briefType?: string;

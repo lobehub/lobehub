@@ -13,8 +13,9 @@ export interface AgentAvatarInfo {
   title: string | null;
 }
 
-export type BriefWithAgents = BriefItem & {
-  agents: AgentAvatarInfo[];
+export type BriefWithAgent = BriefItem & {
+  /** Avatar of the agent that produced this brief; `null` when the brief has no `agentId` or the agent has been deleted. */
+  agent: AgentAvatarInfo | null;
   /** Parent task's runtime status — `scheduled` marks a task parked between automated runs. */
   taskStatus: TaskStatus | null;
 };
@@ -34,34 +35,30 @@ export class BriefService {
     this.taskModel = new TaskModel(db, userId);
   }
 
-  async enrichBriefsWithAgents(briefs: BriefItem[]): Promise<BriefWithAgents[]> {
+  async enrichBriefsWithAgents(briefs: BriefItem[]): Promise<BriefWithAgent[]> {
     const taskIds = briefs.map((b) => b.taskId).filter((id): id is string => id !== null);
+    const agentIds = [
+      ...new Set(briefs.map((b) => b.agentId).filter((id): id is string => Boolean(id))),
+    ];
 
-    if (taskIds.length === 0) {
-      return briefs.map((brief) => ({ ...brief, agents: [], taskStatus: null }));
+    if (taskIds.length === 0 && agentIds.length === 0) {
+      return briefs.map((brief) => ({ ...brief, agent: null, taskStatus: null }));
     }
 
-    const [taskAgentIdsMap, taskRows] = await Promise.all([
-      this.taskModel.getTreeAgentIdsForTaskIds(taskIds),
-      this.taskModel.findByIds(taskIds),
+    const [taskRows, agentList] = await Promise.all([
+      taskIds.length > 0 ? this.taskModel.findByIds(taskIds) : Promise.resolve([]),
+      agentIds.length > 0 ? this.agentModel.getAgentAvatarsByIds(agentIds) : Promise.resolve([]),
     ]);
     const taskStatusMap = Object.fromEntries(
       taskRows.map((t) => [t.id, (t.status as TaskStatus) ?? null]),
     );
-
-    const allAgentIds = [...new Set(Object.values(taskAgentIdsMap).flat())];
-    let agentMap: Record<string, AgentAvatarInfo> = {};
-
-    if (allAgentIds.length > 0) {
-      const agentList = await this.agentModel.getAgentAvatarsByIds(allAgentIds);
-      agentMap = Object.fromEntries(agentList.map((a) => [a.id, a]));
-    }
+    const agentMap: Record<string, AgentAvatarInfo> = Object.fromEntries(
+      agentList.map((a) => [a.id, a]),
+    );
 
     return briefs.map((brief) => ({
       ...brief,
-      agents: (brief.taskId ? taskAgentIdsMap[brief.taskId] || [] : [])
-        .map((id) => agentMap[id])
-        .filter(Boolean),
+      agent: brief.agentId ? (agentMap[brief.agentId] ?? null) : null,
       taskStatus: brief.taskId ? (taskStatusMap[brief.taskId] ?? null) : null,
     }));
   }

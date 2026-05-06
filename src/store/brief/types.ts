@@ -14,8 +14,8 @@ export interface AgentAvatarInfo {
 
 export interface BriefItem {
   actions: BriefAction[] | null;
+  agent: AgentAvatarInfo | null;
   agentId: string | null;
-  agents: AgentAvatarInfo[];
   artifacts: BriefArtifacts | null;
   createdAt: Date | string;
   cronJobId: string | null;
