@@ -102,7 +102,11 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
           },
           { type: 'separator' },
           {
-            click: () => this.app.browserManager.retrieveByIdentifier('settings').show(),
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('navigate', { path: '/settings' });
+            },
             label: t('file.preferences'),
           },
           this.getUpdateMenuItem(t),
@@ -472,7 +476,11 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       },
       { type: 'separator' },
       {
-        click: () => this.app.browserManager.retrieveByIdentifier('settings').show(),
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.show();
+          mainWindow.broadcast('navigate', { path: '/settings' });
+        },
         label: t('file.preferences'),
       },
       { type: 'separator' },
