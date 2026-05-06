@@ -27,6 +27,13 @@ interface InspectableEditor {
   pluginsInstances?: unknown[];
 }
 
+interface LiteXMLNodeMatch {
+  attributes: string;
+  content: string;
+  id: string;
+  tagName: string;
+}
+
 export type EditorMutationApiName = 'editTitle' | 'initPage' | 'modifyNodes' | 'replaceText';
 
 export interface EditorMutationContext {
@@ -497,23 +504,21 @@ export class EditorRuntime {
 
   /**
    * Extract all element nodes with their IDs and content from LiteXML
-   * Returns an array of { id, tagName, fullMatch, content } objects
+   * Returns an array of { id, tagName, attributes, content } objects
    */
-  private extractNodesFromLiteXML(
-    litexml: string,
-  ): Array<{ content: string; fullMatch: string; id: string; tagName: string }> {
-    const nodes: Array<{ content: string; fullMatch: string; id: string; tagName: string }> = [];
+  private extractNodesFromLiteXML(litexml: string): LiteXMLNodeMatch[] {
+    const nodes: LiteXMLNodeMatch[] = [];
 
     // Match elements with id attributes and their content
     // Pattern: <tagName id="nodeId" ...>content</tagName>
-    const elementRegex = /<(\w+)\s[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/\1>/g;
+    const elementRegex = /<(\w+)(\s[^>]*id="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>/g;
     let match;
 
     while ((match = elementRegex.exec(litexml)) !== null) {
       nodes.push({
-        content: match[3],
-        fullMatch: match[0],
-        id: match[2],
+        attributes: match[2].trim(),
+        content: match[4],
+        id: match[3],
         tagName: match[1],
       });
     }
@@ -681,6 +686,7 @@ export class EditorRuntime {
     const pageXML = editor.getDocument('litexml') as unknown as string;
 
     if (!pageXML) {
+      console.error('[EditorRuntime] replaceText:failed — pageXML is empty');
       throw new Error('Document is empty or not initialized');
     }
 
@@ -698,6 +704,8 @@ export class EditorRuntime {
 
     // Extract nodes from LiteXML
     const nodes = this.extractNodesFromLiteXML(pageXML);
+    const allNodeIds = nodes.map((n) => n.id);
+
     log('Found nodes:', nodes.length);
 
     // Filter nodes if nodeIds is specified and non-empty
@@ -706,12 +714,7 @@ export class EditorRuntime {
     const targetNodes = hasNodeFilter ? nodes.filter((node) => nodeIds.includes(node.id)) : nodes;
 
     if (hasNodeFilter && targetNodes.length === 0) {
-      log(
-        '[replaceText] Node IDs requested:',
-        nodeIds,
-        'Available IDs:',
-        nodes.map((n) => n.id),
-      );
+      log('[replaceText] Node IDs requested:', nodeIds, 'Available IDs:', allNodeIds);
       throw new Error(`None of the specified nodes were found: ${nodeIds.join(', ')}`);
     }
 
@@ -728,7 +731,9 @@ export class EditorRuntime {
           ? node.content.includes(searchPattern)
           : searchPattern.test(node.content);
 
-      if (!hasMatch) continue;
+      if (!hasMatch) {
+        continue;
+      }
 
       // Reset regex lastIndex if using regex
       if (searchPattern instanceof RegExp) {
@@ -748,12 +753,7 @@ export class EditorRuntime {
         modifiedNodeIds.push(node.id);
 
         // Build the updated LiteXML for this node
-        // Extract attributes from the original fullMatch
-        const firstSpace = node.fullMatch.indexOf(' ');
-        const attributes =
-          firstSpace > 0 ? node.fullMatch.slice(firstSpace + 1, -1) : `id="${node.id}"`;
-
-        const updatedLitexml = `<${node.tagName} ${attributes}>${newContent}</${node.tagName}>`;
+        const updatedLitexml = `<${node.tagName} ${node.attributes}>${newContent}</${node.tagName}>`;
         litexmlUpdates.push(updatedLitexml);
 
         log('Updated node:', node.id, 'count:', count);
@@ -766,20 +766,18 @@ export class EditorRuntime {
     }
 
     // Apply updates if any replacements were made
+
     if (litexmlUpdates.length > 0) {
       log('Applying updates:', litexmlUpdates.length);
+      if (!hasDataSource(editor as InspectableEditor, 'litexml')) {
+        throw new Error('replaceText failed: LiteXML data source is not ready.');
+      }
+
       const dispatchSuccess = editor.dispatchCommand(LITEXML_APPLY_COMMAND, {
         litexml: litexmlUpdates,
       });
-      log('Command dispatched, success:', dispatchSuccess);
 
-      if (!dispatchSuccess) {
-        throw new Error(
-          `replaceText failed: editor.dispatchCommand returned false. ` +
-            `Replacement count: ${totalReplacementCount}, ` +
-            `Modified nodes: ${modifiedNodeIds.join(', ')}.`,
-        );
-      }
+      log('Command dispatched, success:', dispatchSuccess);
     }
 
     const result = { modifiedNodeIds, replacementCount: totalReplacementCount };
