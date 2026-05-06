@@ -683,15 +683,19 @@ export class DocumentActionImpl {
     // Queue background sync to DB
     try {
       await documentService.updateDocument({
-        content: updatedPage.content || '',
-        editorData:
-          typeof updatedPage.editorData === 'string'
-            ? updatedPage.editorData
-            : JSON.stringify(updatedPage.editorData || {}),
         id: documentId,
         metadata: updatedPage.metadata || {},
         parentId: updatedPage.parentId !== undefined ? updatedPage.parentId : undefined,
         title: updatedPage.title || updatedPage.filename,
+        ...(updates.content === undefined ? {} : { content: updatedPage.content ?? '' }),
+        ...(updates.editorData === undefined
+          ? {}
+          : {
+              editorData:
+                typeof updatedPage.editorData === 'string'
+                  ? updatedPage.editorData
+                  : JSON.stringify(updatedPage.editorData || {}),
+            }),
       });
       if (existingResource) {
         this.#syncResourceItem(this.#createResourceItem(updatedPage, existingResource));

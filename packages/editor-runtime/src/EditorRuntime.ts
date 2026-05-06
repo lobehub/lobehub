@@ -57,6 +57,9 @@ const getDataSourceTypes = (editor: InspectableEditor): string[] => {
   return Object.keys(dataTypeMap).sort();
 };
 
+const hasDataSource = (editor: InspectableEditor, type: string) =>
+  getDataSourceTypes(editor).includes(type);
+
 /**
  * Editor Execution Runtime
  * Handles the execution logic for editor operations including:
@@ -466,17 +469,14 @@ export class EditorRuntime {
       }
     }
 
-    // Dispatch all operations at once
-    log('Dispatching LITEXML_MODIFY_COMMAND with payload:', commandPayload);
-    const dispatchSuccess = editor.dispatchCommand(LITEXML_MODIFY_COMMAND, commandPayload);
-    log('Command dispatched, success:', dispatchSuccess);
-
-    if (!dispatchSuccess && commandPayload.length > 0) {
-      throw new Error(
-        `modifyNodes failed: editor.dispatchCommand returned false. ` +
-          `Operations attempted: ${commandPayload.map((p) => p.action).join(', ')}.`,
-      );
+    if (!hasDataSource(editor as InspectableEditor, 'litexml')) {
+      throw new Error('modifyNodes failed: LiteXML data source is not ready.');
     }
+
+    // Dispatch all operations at once. The LiteXML command handler returns false
+    // even after handling the command, so the return value is not a failure signal.
+    log('Dispatching LITEXML_MODIFY_COMMAND with payload:', commandPayload);
+    editor.dispatchCommand(LITEXML_MODIFY_COMMAND, commandPayload);
 
     const successCount = results.filter((r) => r.success).length;
     const totalCount = results.length;
