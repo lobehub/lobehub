@@ -285,12 +285,14 @@ export class TaskLifecycleService {
     currentTask: any,
   ): Promise<void> {
     try {
-      const { model, provider } = await (this.systemAgentService as any).getTaskModelConfig(
-        'topic',
-      );
+      const [{ model, provider }, responseLanguage] = await Promise.all([
+        (this.systemAgentService as any).getTaskModelConfig('topic'),
+        this.systemAgentService.getUserLocale(),
+      ]);
 
       const payload = chainTaskTopicHandoff({
         lastAssistantContent,
+        responseLanguage,
         taskInstruction: currentTask?.instruction || '',
         taskName: currentTask?.name || taskIdentifier,
       });
@@ -378,9 +380,10 @@ export class TaskLifecycleService {
       const artifacts: BriefArtifacts = { documents: pinnedDocs };
       const handoff = (topicLink?.handoff as TaskTopicHandoff | null) ?? null;
 
-      const { model, provider } = await (this.systemAgentService as any).getTaskModelConfig(
-        'topic',
-      );
+      const [{ model, provider }, responseLanguage] = await Promise.all([
+        (this.systemAgentService as any).getTaskModelConfig('topic'),
+        this.systemAgentService.getUserLocale(),
+      ]);
 
       let decision: BriefDecision;
       if (ruleVerdict.emit === 'unknown') {
@@ -442,6 +445,7 @@ export class TaskLifecycleService {
         artifacts,
         handoff,
         lastAssistantContent,
+        responseLanguage,
         taskInstruction: currentTask.instruction || '',
         taskName: currentTask.name || taskIdentifier,
       });

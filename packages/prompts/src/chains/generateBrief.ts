@@ -25,6 +25,7 @@ export const chainGenerateBrief = (params: {
   artifacts?: BriefArtifacts | null;
   handoff?: TaskTopicHandoff | null;
   lastAssistantContent: string;
+  responseLanguage?: string;
   taskInstruction: string;
   taskName: string;
 }): Partial<ChatStreamPayload> => {
@@ -41,17 +42,21 @@ export const chainGenerateBrief = (params: {
 ${params.artifacts.documents.map((d) => `- ${d.title || '(untitled)'} [id=${d.id}]`).join('\n')}`
     : 'Artifacts: (none)';
 
+  const languageInstruction = params.responseLanguage
+    ? `Output language: ${params.responseLanguage}. Always use this language regardless of the content language.`
+    : "Use the same language as the assistant's content.";
+
   const systemContent = `You are writing the user-facing brief for a topic that has already been judged worth surfacing. Your job is to produce a short delivery report — no skip option, no emit vote. Always return a non-empty title and summary.
 
 Output a JSON object with these fields:
-- "title": string. A non-empty user-facing headline (max 60 chars, same language as the assistant's content). Required.
+- "title": string. A non-empty user-facing headline (max 60 chars). Required.
 - "summary": string. A 2-4 sentence delivery report describing what was produced or observed and why it matters to the user. Required, non-empty.
 
 If the topic has little new activity ("no new tickets today", "no changes since last run"), state that outcome plainly in the summary — that itself is the report. Do not invent activity that did not occur.
 
 Voice and style:
 - Write FOR THE USER, not for the agent or developer.
-- Use the same language as the assistant's content.
+- ${languageInstruction}
 - Lead with the outcome (what changed, what was found, what is unchanged).
 - Do NOT reference internal tool names, operation IDs, topic IDs, or implementation details.
 - Do NOT say "I" or "the agent" — describe the outcome, not the actor.
