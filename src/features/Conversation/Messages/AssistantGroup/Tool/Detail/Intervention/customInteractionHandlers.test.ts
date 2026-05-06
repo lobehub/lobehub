@@ -26,6 +26,17 @@ describe('customInteractionHandlers', () => {
     vi.mocked(installMarketplaceAgents).mockResolvedValue({
       installedAgentIds: ['agent-1'],
       skippedAgentIds: ['template-existing'],
+      summaries: [
+        {
+          category: 'engineering',
+          description: 'A pair programmer',
+          installedAgentId: 'agent-1',
+          skipped: false,
+          templateId: 'template-1',
+          title: 'Pair Programmer',
+        },
+        { skipped: true, templateId: 'template-existing' },
+      ],
     });
 
     const result = await prepareCustomInteractionSubmit(

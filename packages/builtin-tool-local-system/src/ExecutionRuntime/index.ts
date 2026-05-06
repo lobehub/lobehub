@@ -202,6 +202,9 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'grepContent': {
         return {
+          // Surface raw.error so ComputerRuntime.errorOutput has a real message
+          // to render instead of `JSON.stringify(undefined)` → undefined content.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             matches: raw.matches,
             totalMatches: raw.total_matches,
@@ -212,6 +215,12 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'globLocalFiles': {
         return {
+          // Surface raw.error so ComputerRuntime.errorOutput has a real message
+          // to render instead of `JSON.stringify(undefined)` → undefined content.
+          // Without this, a fast-glob throw (e.g. EACCES traversing a protected
+          // dir under the wrong cwd) leaves the tool message with state set but
+          // content stuck at "" — see "Glob search files Response 空" report.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             files: raw.files,
             totalCount: raw.total_files,

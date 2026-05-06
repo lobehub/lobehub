@@ -46,6 +46,8 @@ const RETRYABLE_MESSAGE_PATTERNS = [
 ];
 
 const NON_RETRYABLE_MESSAGE_PATTERNS = [
+  'assistant message prefill',
+  'conversation must end with a user message',
   'context length exceeded',
   'context_length_exceeded',
   'expected a string',

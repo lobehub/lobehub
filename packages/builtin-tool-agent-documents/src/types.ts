@@ -14,11 +14,13 @@ export const AgentDocumentsApiName = {
 
 export interface CreateDocumentArgs {
   content: string;
+  hintIsSkill?: boolean;
   target?: 'agent' | 'currentTopic';
   title: string;
 }
 
 export interface CreateDocumentState {
+  agentDocumentId?: string;
   documentId?: string;
 }
 

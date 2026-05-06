@@ -7,7 +7,6 @@ import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import WideScreenContainer from '@/features/WideScreenContainer';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { shinyTextStyles } from '@/styles';
 
@@ -31,17 +30,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
     user-select: none;
 
-    margin-block-end: 8px;
-    margin-inline: 10px;
     padding-block: 8px 10px;
     padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorFillSecondary};
+    border-block-end: none;
     border-start-start-radius: 12px;
     border-start-end-radius: 12px;
 
     background: ${cssVar.colorBgElevated};
 
     transition: all 0.2s ${cssVar.motionEaseInOut};
+  `,
+  containerTopAttached: css`
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
   `,
   count: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -114,9 +116,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface TodoProgressProps {
   className?: string;
+  /**
+   * When true, square the top corners — used when another panel (e.g.
+   * QueueTray) sits flush above this one in the stack so the seams align.
+   */
+  topAttached?: boolean;
 }
 
-const TodoProgress = memo<TodoProgressProps>(({ className }) => {
+const TodoProgress = memo<TodoProgressProps>(({ className, topAttached }) => {
   const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(false);
 
@@ -153,93 +160,94 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
   const toggleExpanded = () => setExpanded(!expanded);
 
   return (
-    <WideScreenContainer>
-      <div className={cx(styles.container, className)} onClick={toggleExpanded}>
-        {/* Header */}
-        <Flexbox horizontal align="center" gap={8} justify="space-between">
-          <Flexbox horizontal align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
-            <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
-              <circle
-                className={styles.ringTrack}
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                fill="none"
-                r={RING_RADIUS}
-                strokeWidth={RING_STROKE}
-              />
-              <circle
-                className={styles.ringProgress}
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                fill="none"
-                r={RING_RADIUS}
-                stroke={ringColor}
-                strokeDasharray={RING_CIRCUM}
-                strokeDashoffset={ringOffset}
-                strokeLinecap="round"
-                strokeWidth={RING_STROKE}
-              />
-            </svg>
-            <span className={cx(styles.header, isAIGenerating && shinyTextStyles.shinyText)}>
-              {currentPendingTask?.text ||
-                t('todoProgress.allCompleted', { defaultValue: 'All tasks completed' })}
+    <div
+      className={cx(styles.container, topAttached && styles.containerTopAttached, className)}
+      onClick={toggleExpanded}
+    >
+      {/* Header */}
+      <Flexbox horizontal align="center" gap={8} justify="space-between">
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
+          <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
+            <circle
+              className={styles.ringTrack}
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              fill="none"
+              r={RING_RADIUS}
+              strokeWidth={RING_STROKE}
+            />
+            <circle
+              className={styles.ringProgress}
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              fill="none"
+              r={RING_RADIUS}
+              stroke={ringColor}
+              strokeDasharray={RING_CIRCUM}
+              strokeDashoffset={ringOffset}
+              strokeLinecap="round"
+              strokeWidth={RING_STROKE}
+            />
+          </svg>
+          <span className={cx(styles.header, isAIGenerating && shinyTextStyles.shinyText)}>
+            {currentPendingTask?.text ||
+              t('todoProgress.allCompleted', { defaultValue: 'All tasks completed' })}
+          </span>
+          <Tag size="small" style={{ flexShrink: 0 }}>
+            <span className={styles.count}>
+              {completed}/{total}
             </span>
-            <Tag size="small" style={{ flexShrink: 0 }}>
-              <span className={styles.count}>
-                {completed}/{total}
-              </span>
-            </Tag>
-          </Flexbox>
-          <Icon
-            icon={expanded ? ChevronUp : ChevronDown}
-            size={16}
-            style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
-          />
+          </Tag>
         </Flexbox>
+        <Icon
+          icon={expanded ? ChevronUp : ChevronDown}
+          size={16}
+          style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
+        />
+      </Flexbox>
 
-        {/* Expandable Todo List */}
-        <div className={cx(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}>
-          {items.map((item, index) => {
-            const isCompleted = item.status === 'completed';
-            const isProcessing = item.status === 'processing';
+      {/* Expandable Todo List */}
+      <div className={cx(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}>
+        {items.map((item, index) => {
+          const isCompleted = item.status === 'completed';
+          const isProcessing = item.status === 'processing';
 
-            // Processing state uses CircleArrowRight icon
-            if (isProcessing) {
-              return (
-                <div className={cx(styles.itemRow, styles.processingRow)} key={index}>
-                  <Icon
-                    icon={CircleArrowRight}
-                    size={17}
-                    style={{ color: cssVar.colorTextSecondary }}
-                  />
-                  <span className={styles.textProcessing}>{item.text}</span>
-                </div>
-              );
-            }
-
-            // Todo and completed states use Checkbox
+          // Processing state uses CircleArrowRight icon
+          if (isProcessing) {
             return (
-              <Checkbox
-                backgroundColor={cssVar.colorSuccess}
-                checked={isCompleted}
-                key={index}
-                shape="circle"
-                style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
-                classNames={{
-                  text: cx(styles.textTodo, isCompleted && styles.textCompleted),
-                  wrapper: styles.itemRow,
-                }}
-                textProps={{
-                  type: isCompleted ? 'secondary' : undefined,
-                }}
-              >
-                {item.text}
-              </Checkbox>
+              <div className={cx(styles.itemRow, styles.processingRow)} key={index}>
+                <Icon
+                  icon={CircleArrowRight}
+                  size={17}
+                  style={{ color: cssVar.colorTextSecondary }}
+                />
+                <span className={styles.textProcessing}>{item.text}</span>
+              </div>
             );
-          })}
-        </div>
+          }
+
+          // Todo and completed states use Checkbox
+          return (
+            <Checkbox
+              backgroundColor={cssVar.colorSuccess}
+              checked={isCompleted}
+              key={index}
+              shape="circle"
+              style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
+              classNames={{
+                text: cx(styles.textTodo, isCompleted && styles.textCompleted),
+                wrapper: styles.itemRow,
+              }}
+              textProps={{
+                type: isCompleted ? 'secondary' : undefined,
+              }}
+            >
+              {item.text}
+            </Checkbox>
+          );
+        })}
       </div>
-    </WideScreenContainer>
+    </div>
   );
 });
 

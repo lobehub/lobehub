@@ -302,6 +302,15 @@ describe('file operations', () => {
       expect(dir!.isDirectory).toBe(true);
       expect(dir!.type).toBe('directory');
     });
+
+    it('should expand leading ~ to the user home directory', async () => {
+      const home = os.homedir();
+      const homeListing = await listLocalFiles({ path: home });
+      const tildeListing = await listLocalFiles({ path: '~' });
+
+      expect(tildeListing.totalCount).toBe(homeListing.totalCount);
+      expect(tildeListing.totalCount).toBeGreaterThan(0);
+    });
   });
 
   // ─── moveLocalFiles ───

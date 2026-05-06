@@ -7,6 +7,7 @@ export const USE_AZURE_OPENAI = 'X-use-azure-openai';
 export const AZURE_OPENAI_API_VERSION = 'X-azure-openai-api-version';
 
 export const OAUTH_AUTHORIZED = 'X-oauth-authorized';
+export const REQUEST_TRIGGER_HEADER = 'x-lobechat-request-trigger';
 
 /**
  * @deprecated

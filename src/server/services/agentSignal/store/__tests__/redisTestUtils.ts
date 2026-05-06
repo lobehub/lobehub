@@ -7,9 +7,13 @@ export interface AgentSignalRedisTestGlobal {
 
 type HashState = Map<string, Record<string, string>>;
 type ListState = Map<string, string[]>;
+type SortedSetState = Map<string, Map<string, number>>;
+type StringState = Set<string>;
 
 export const hashes: HashState = new Map();
 export const lists: ListState = new Map();
+export const sortedSets: SortedSetState = new Map();
+export const strings: StringState = new Set();
 
 const cloneHash = (value?: Record<string, string>) => {
   return value ? { ...value } : {};
@@ -30,6 +34,8 @@ const applyHashWrite = (key: string, payload: Record<string, string>) => {
 export const resetRedisState = () => {
   hashes.clear();
   lists.clear();
+  sortedSets.clear();
+  strings.clear();
 };
 
 const queuedExecResults: Array<Array<readonly [null, 'OK']> | null | undefined> = [];
@@ -49,6 +55,9 @@ const createMockRedisClient = () => {
     set: vi.fn(),
     unwatch: vi.fn(),
     watch: vi.fn(),
+    zadd: vi.fn(),
+    zrem: vi.fn(),
+    zrevrange: vi.fn(),
   };
 };
 
@@ -57,7 +66,11 @@ const casClients: Array<typeof mockRedis> = [];
 
 const installRedisClientBehavior = (client: typeof mockRedis) => {
   client.del.mockImplementation(async (key: string) => {
-    const removed = Number(hashes.delete(key)) + Number(lists.delete(key));
+    const removed =
+      Number(hashes.delete(key)) +
+      Number(lists.delete(key)) +
+      Number(sortedSets.delete(key)) +
+      Number(strings.delete(key));
     return removed;
   });
   client.expire.mockImplementation(async () => 1);
@@ -87,6 +100,47 @@ const installRedisClientBehavior = (client: typeof mockRedis) => {
     lists.set(key, current);
 
     return current.length;
+  });
+  client.set.mockImplementation(
+    async (key: string, value: string, mode?: string, ttlSeconds?: number, nx?: string) => {
+      void value;
+      void ttlSeconds;
+
+      if (mode === 'EX' && nx === 'NX') {
+        if (strings.has(key)) return null;
+
+        strings.add(key);
+        return 'OK';
+      }
+
+      strings.add(key);
+      return 'OK';
+    },
+  );
+  client.zadd.mockImplementation(async (key: string, score: number, member: string) => {
+    const current = sortedSets.get(key) ?? new Map<string, number>();
+    current.set(member, score);
+    sortedSets.set(key, current);
+
+    return 1;
+  });
+  client.zrem.mockImplementation(async (key: string, ...members: string[]) => {
+    const current = sortedSets.get(key) ?? new Map<string, number>();
+    let removed = 0;
+
+    for (const member of members) {
+      if (current.delete(member)) removed++;
+    }
+
+    sortedSets.set(key, current);
+
+    return removed;
+  });
+  client.zrevrange.mockImplementation(async (key: string, start: number, stop: number) => {
+    const entries = [...(sortedSets.get(key)?.entries() ?? [])].sort((a, b) => b[1] - a[1]);
+    const normalizedStop = stop < 0 ? entries.length + stop + 1 : stop + 1;
+
+    return entries.slice(start, normalizedStop).map(([member]) => member);
   });
   client.watch.mockImplementation(async () => 'OK');
   client.unwatch.mockImplementation(async () => 'OK');

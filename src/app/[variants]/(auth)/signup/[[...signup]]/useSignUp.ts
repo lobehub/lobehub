@@ -4,23 +4,36 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type BusinessSignupFomData } from '@/business/client/hooks/useBusinessSignup';
+import type { BusinessSignupFomData } from '@/business/client/hooks/useBusinessSignup';
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import { message } from '@/components/AntdStaticMethods';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
 
 import { useAuthServerConfigStore } from '../../_layout/AuthServerConfigProvider';
-import { type BaseSignUpFormValues } from './types';
+import type { AuthFetchOptions } from '../../utils/authFetchOptions';
+import { withCaptchaToken } from '../../utils/authFetchOptions';
+import type { BaseSignUpFormValues } from './types';
 
 export type SignUpFormValues = BaseSignUpFormValues & BusinessSignupFomData;
+
+interface SignUpErrorLike {
+  code?: string;
+  details?: {
+    cause?: {
+      code?: string;
+    };
+  };
+  message?: string;
+}
 
 export const useSignUp = () => {
   const { t } = useTranslation(['auth', 'authError']);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
-  const { getFetchOptions, preSocialSignupCheck, businessElement } = useBusinessSignup(form);
+  const { getCaptchaTokenOnError, getFetchOptions, preSocialSignupCheck, businessElement } =
+    useBusinessSignup(form);
   const enableEmailVerification = useAuthServerConfigStore(
     (s) => s.serverConfig.enableEmailVerification || false,
   );
@@ -37,34 +50,47 @@ export const useSignUp = () => {
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const username = values.email.split('@')[0];
+      const fetchOptions = await getFetchOptions();
 
-      const { error } = await signUp.email({
-        callbackURL: callbackUrl,
-        email: values.email,
-        fetchOptions: await getFetchOptions(),
-        name: username,
-        password: values.password,
-      });
+      const submit = async (nextFetchOptions?: AuthFetchOptions) =>
+        signUp.email({
+          callbackURL: callbackUrl,
+          email: values.email,
+          fetchOptions: nextFetchOptions,
+          name: username,
+          password: values.password,
+        });
+
+      let { error } = await submit(fetchOptions);
 
       if (error) {
+        const captchaToken = await getCaptchaTokenOnError(error);
+        if (captchaToken === null) return;
+        if (captchaToken) {
+          ({ error } = await submit(withCaptchaToken(fetchOptions, captchaToken)));
+        }
+      }
+
+      if (error) {
+        const signUpError = error as SignUpErrorLike;
         const isEmailDuplicate =
-          error.code === 'FAILED_TO_CREATE_USER' &&
-          (error as any)?.details?.cause?.code === '23505';
+          signUpError.code === 'FAILED_TO_CREATE_USER' &&
+          signUpError.details?.cause?.code === '23505';
 
         if (isEmailDuplicate) {
           message.error(t('betterAuth.errors.emailExists'));
           return;
         }
 
-        if (error.code === 'INVALID_EMAIL' || error.message === 'Invalid email') {
+        if (signUpError.code === 'INVALID_EMAIL' || signUpError.message === 'Invalid email') {
           message.error(t('betterAuth.errors.emailInvalid'));
           return;
         }
 
-        const translated = error.code
-          ? t(`authError:codes.${error.code}`, { defaultValue: '' })
+        const translated = signUpError.code
+          ? t(`authError:codes.${signUpError.code}`, { defaultValue: '' })
           : '';
-        message.error(translated || error.message || t('betterAuth.signup.error'));
+        message.error(translated || signUpError.message || t('betterAuth.signup.error'));
         return;
       }
 

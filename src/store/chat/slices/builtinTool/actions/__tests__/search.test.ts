@@ -1,7 +1,6 @@
 import { WebBrowsingApiName, WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { type SearchQuery, type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
-import { type Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mocks
@@ -33,13 +32,7 @@ describe('search actions', () => {
       activeAgentId: 'session-id',
       activeTopicId: 'topic-id',
       messageOperationMap: {},
-      optimisticUpdateMessageContent: vi.fn(),
-      optimisticUpdateMessagePluginError: vi.fn(),
       optimisticUpdatePluginArguments: vi.fn(),
-      optimisticUpdatePluginState: vi.fn(),
-      optimisticCreateMessage: vi.fn(),
-      optimisticAddToolToAssistantMessage: vi.fn(),
-      openToolUI: vi.fn(),
       invokeBuiltinTool: vi.fn(),
     });
 
@@ -172,78 +165,6 @@ describe('search actions', () => {
     });
   });
 
-  describe('saveSearchResult', () => {
-    it('should save search result as tool message', async () => {
-      const messageId = 'test-message-id';
-      const parentId = 'parent-message-id';
-      const mockMessage: Partial<UIChatMessage> = {
-        id: messageId,
-        parentId,
-        sessionId: undefined,
-        topicId: undefined,
-        content: 'test content',
-        plugin: {
-          identifier: 'search',
-          arguments: '{}',
-          apiName: 'search',
-          type: 'default',
-        },
-        pluginState: {},
-        role: 'assistant',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(
-        () => () => mockMessage as UIChatMessage,
-      );
-
-      const { result } = renderHook(() => useChatStore());
-      const { saveSearchResult } = result.current;
-
-      await act(async () => {
-        await saveSearchResult(messageId);
-      });
-
-      // Note: context is undefined when no operationId is set in messageOperationMap
-      expect(result.current.optimisticCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: 'test content',
-          parentId,
-          plugin: mockMessage.plugin,
-          pluginState: mockMessage.pluginState,
-          role: 'tool',
-          agentId: 'session-id',
-          topicId: 'topic-id',
-        }),
-        undefined,
-      );
-
-      expect(result.current.optimisticAddToolToAssistantMessage).toHaveBeenCalledWith(
-        parentId,
-        expect.objectContaining({
-          identifier: 'search',
-          type: 'default',
-        }),
-        undefined,
-      );
-    });
-
-    it('should not save if message not found', async () => {
-      vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(() => () => undefined);
-
-      const { result } = renderHook(() => useChatStore());
-      const { saveSearchResult } = result.current;
-
-      await act(async () => {
-        await saveSearchResult('non-existent-id');
-      });
-
-      expect(result.current.optimisticCreateMessage).not.toHaveBeenCalled();
-      expect(result.current.optimisticAddToolToAssistantMessage).not.toHaveBeenCalled();
-    });
-  });
-
   describe('togglePageContent', () => {
     it('should set activePageContentUrl', () => {
       const { result } = renderHook(() => useChatStore());
@@ -254,70 +175,6 @@ describe('search actions', () => {
       });
 
       expect(useChatStore.getState().activePageContentUrl).toBe(url);
-    });
-  });
-
-  describe('saveSearchResult with context', () => {
-    it('should pass context to optimistic methods when operationId exists', async () => {
-      const messageId = 'test-message-id';
-      const parentId = 'parent-message-id';
-      const contextTopicId = 'context-topic-id';
-      const operationId = 'op_test';
-
-      const mockMessage: Partial<UIChatMessage> = {
-        id: messageId,
-        parentId,
-        sessionId: 'context-session-id',
-        topicId: contextTopicId,
-        content: 'test content',
-        plugin: {
-          identifier: 'search',
-          arguments: '{}',
-          apiName: 'search',
-          type: 'default',
-        },
-        pluginState: {},
-        role: 'tool',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      vi.spyOn(dbMessageSelectors, 'getDbMessageById').mockImplementation(
-        () => () => mockMessage as UIChatMessage,
-      );
-
-      (useChatStore.getState().optimisticCreateMessage as Mock).mockResolvedValue({
-        id: 'new-message-id',
-      });
-
-      // Set up messageOperationMap so saveSearchResult can get operationId
-      useChatStore.setState({
-        messageOperationMap: {
-          [messageId]: operationId,
-        },
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.saveSearchResult(messageId);
-      });
-
-      expect(result.current.optimisticAddToolToAssistantMessage).toHaveBeenCalledWith(
-        parentId,
-        expect.objectContaining({
-          identifier: 'search',
-          type: 'default',
-        }),
-        { operationId },
-      );
-      expect(result.current.optimisticCreateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: 'session-id',
-          topicId: contextTopicId,
-        }),
-        { operationId },
-      );
     });
   });
 });

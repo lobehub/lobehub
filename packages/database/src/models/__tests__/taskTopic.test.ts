@@ -242,6 +242,90 @@ describe('TaskTopicModel', () => {
     });
   });
 
+  describe('updateBriefDecision', () => {
+    it('patches briefDecision into a fresh handoff JSONB (no prior handoff)', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_bd_a');
+
+      await topicModel.add(task.id, 'tpc_bd_a', { seq: 1 });
+      await topicModel.updateBriefDecision(task.id, 'tpc_bd_a', {
+        decidedAt: '2026-05-01T12:00:00.000Z',
+        emit: false,
+        reason: 'heartbeat-tick',
+        source: 'rule',
+      });
+
+      const topics = await topicModel.findByTaskId(task.id);
+      const handoff = topics[0].handoff as any;
+      expect(handoff.briefDecision).toEqual({
+        decidedAt: '2026-05-01T12:00:00.000Z',
+        emit: false,
+        reason: 'heartbeat-tick',
+        source: 'rule',
+      });
+    });
+
+    it('preserves existing handoff fields when patching briefDecision', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_bd_b');
+
+      await topicModel.add(task.id, 'tpc_bd_b', { seq: 1 });
+      await topicModel.updateHandoff(task.id, 'tpc_bd_b', {
+        keyFindings: ['F1'],
+        nextAction: 'Next',
+        summary: 'Sum',
+        title: 'T',
+      });
+      await topicModel.updateBriefDecision(task.id, 'tpc_bd_b', {
+        decidedAt: '2026-05-01T12:00:00.000Z',
+        emit: true,
+        model: 'opus-4',
+        reason: 'finished deliverable',
+        source: 'llm-judge',
+      });
+
+      const topics = await topicModel.findByTaskId(task.id);
+      const handoff = topics[0].handoff as any;
+      expect(handoff.title).toBe('T');
+      expect(handoff.summary).toBe('Sum');
+      expect(handoff.nextAction).toBe('Next');
+      expect(handoff.keyFindings).toEqual(['F1']);
+      expect(handoff.briefDecision.emit).toBe(true);
+      expect(handoff.briefDecision.source).toBe('llm-judge');
+      expect(handoff.briefDecision.model).toBe('opus-4');
+    });
+
+    it('overwrites a previous briefDecision on re-emit (e.g. retry)', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_bd_c');
+
+      await topicModel.add(task.id, 'tpc_bd_c', { seq: 1 });
+      await topicModel.updateBriefDecision(task.id, 'tpc_bd_c', {
+        decidedAt: '2026-05-01T11:00:00.000Z',
+        emit: false,
+        reason: 'first call',
+        source: 'rule',
+      });
+      await topicModel.updateBriefDecision(task.id, 'tpc_bd_c', {
+        decidedAt: '2026-05-01T12:00:00.000Z',
+        emit: true,
+        reason: 'second call',
+        source: 'llm-judge',
+      });
+
+      const topics = await topicModel.findByTaskId(task.id);
+      const handoff = topics[0].handoff as any;
+      expect(handoff.briefDecision.emit).toBe(true);
+      expect(handoff.briefDecision.reason).toBe('second call');
+    });
+  });
+
   describe('updateReview', () => {
     it('should store review results', async () => {
       const taskModel = new TaskModel(serverDB, userId);

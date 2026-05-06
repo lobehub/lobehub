@@ -38,6 +38,20 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns true for assistant prefill request-shape errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          body: { httpStatusCode: 400 },
+          message:
+            'This model does not support assistant message prefill. The conversation must end with a user message.',
+          type: 'ValidationException',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+      }),
+    ).toBe(true);
+  });
+
   it('returns false for bare 400/413/422 request errors', () => {
     expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 400 })).toBe(false);
     expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 413 })).toBe(false);

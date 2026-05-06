@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE } from './consolidate';
 import {
   AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE,
   createAgentSkillManagerDecisionPrompt,
 } from './decision';
-import { AGENT_SKILL_REFINE_SYSTEM_ROLE as REFINE_SYSTEM_ROLE } from './refine';
 
 describe('agentSkillManager decision prompt', () => {
+  /**
+   * @example
+   * Decision prompts select target skill refs by agent document id.
+   */
   it('requires strict JSON and exposes the four actions', () => {
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('create');
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('refine');
@@ -15,9 +17,17 @@ describe('agentSkillManager decision prompt', () => {
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('noop');
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('Do not wrap the JSON');
     expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('candidateSkills[].id');
-    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('managed skill package names');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('targetSkillRefs');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('agent document ids');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('not backing documents.id values');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).not.toContain('targetSkillIds');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).not.toContain('managed skill package names');
   });
 
+  /**
+   * @example
+   * Decision prompt serialization keeps stable feedback context.
+   */
   it('serializes feedback context into the user prompt', () => {
     const prompt = createAgentSkillManagerDecisionPrompt({
       agentId: 'agent-1',
@@ -48,28 +58,16 @@ describe('agentSkillManager decision prompt', () => {
 
   /**
    * @example
-   * Refinement applies focused file operations instead of patch/rewrite modes.
+   * Decision prompts stay decision-only and never expose file operations.
    */
-  it('limits refine output to focused v1.2 file operations', () => {
-    expect(REFINE_SYSTEM_ROLE).toContain('updateSkill');
-    expect(REFINE_SYSTEM_ROLE).toContain('writeSkillFile');
-    expect(REFINE_SYSTEM_ROLE).toContain('removeSkillFile');
-    expect(REFINE_SYSTEM_ROLE).toContain('proposedLifecycleActions');
-    expect(REFINE_SYSTEM_ROLE).not.toContain('deleteSkill');
-    expect(REFINE_SYSTEM_ROLE).not.toContain('patchSkill');
-    expect(REFINE_SYSTEM_ROLE).not.toContain('rewriteSkillFile');
-  });
-
-  /**
-   * @example
-   * Consolidation can propose lifecycle follow-up, but cannot apply it.
-   */
-  it('limits consolidate output to file operations and human lifecycle proposals', () => {
-    expect(AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE).toContain('proposedLifecycleActions');
-    expect(AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE).toContain('updateSkill');
-    expect(AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE).toContain('writeSkillFile');
-    expect(AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE).toContain('removeSkillFile');
-    expect(AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE).not.toContain('mergeSkill');
-    expect(AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE).not.toContain('deleteSkill');
+  it('keeps the strict decision-only JSON contract', () => {
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain(
+      'output exactly one minified JSON object and nothing else',
+    );
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('Do not wrap the JSON');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('Return exactly:');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).toContain('Return only the JSON object.');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).not.toContain('writeSkillFile');
+    expect(AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE).not.toContain('updateSkill');
   });
 });

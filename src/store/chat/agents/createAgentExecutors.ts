@@ -1988,7 +1988,7 @@ export const createAgentExecutors = (context: {
      * Flow:
      * 1. Create a task message (role: 'task') as placeholder
      * 2. Create Thread via API (for isolation)
-     * 3. Execute using internal_execAgentRuntime (client-side)
+     * 3. Execute using executeClientAgent (client-side)
      * 4. Update Thread status via API on completion
      * 5. Update task message content with result
      * 6. Return task_result phase with result
@@ -2207,10 +2207,10 @@ export const createAgentExecutors = (context: {
           context.get().replaceMessages(subMessages, { context: subContext });
         }
 
-        // 7. Execute using internal_execAgentRuntime (client-side with local tools access)
+        // 7. Execute using executeClientAgent (client-side with local tools access)
         log('[%s][exec_client_task] Starting client-side AgentRuntime execution', taskLogId);
 
-        const runtimeResult = await context.get().internal_execAgentRuntime({
+        const runtimeResult = await context.get().executeClientAgent({
           context: subContext,
           messages: subMessages,
           parentMessageId: userMessageId, // Use server-returned userMessageId
@@ -2345,7 +2345,7 @@ export const createAgentExecutors = (context: {
      * Flow:
      * 1. For each task, create a task message (role: 'task') as placeholder
      * 2. Create Thread via API (for isolation)
-     * 3. Execute using internal_execAgentRuntime (client-side)
+     * 3. Execute using executeClientAgent (client-side)
      * 4. Update Thread status via API on completion
      * 5. Update task message content with result
      * 6. Return tasks_batch_result phase with all results
@@ -2532,10 +2532,10 @@ export const createAgentExecutors = (context: {
               context.get().replaceMessages(subMessages, { context: subContext });
             }
 
-            // 7. Execute using internal_execAgentRuntime (client-side with local tools access)
+            // 7. Execute using executeClientAgent (client-side with local tools access)
             log('[%s] Starting client-side AgentRuntime execution', taskLogId);
 
-            await context.get().internal_execAgentRuntime({
+            await context.get().executeClientAgent({
               context: subContext,
               messages: subMessages,
               parentMessageId: userMessageId, // Use server-returned userMessageId

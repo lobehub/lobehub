@@ -2,6 +2,31 @@
 
 # Changelog
 
+### [Version 2.1.56](https://github.com/lobehub/lobe-chat/compare/v2.1.55...v2.1.56)
+
+<sup>Released on **2026-05-01**</sup>
+
+#### 👷 Build System
+
+- **database**: add `metadata` and `trigger` to `briefs` table.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **database**: add `metadata` and `trigger` to `briefs` table, closes [#14354](https://github.com/lobehub/lobe-chat/issues/14354) ([86a23b5](https://github.com/lobehub/lobe-chat/commit/86a23b5))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.55](https://github.com/lobehub/lobe-chat/compare/v2.1.54...v2.1.55)
 
 <sup>Released on **2026-04-29**</sup>

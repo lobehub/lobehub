@@ -52,6 +52,13 @@ export class TaskLifecycleSliceActionImpl {
     }
   };
 
+  runReadySubtasks = async (parentTaskId: string) => {
+    const result = await taskService.runReadySubtasks(parentTaskId);
+    await this.#get().internal_refreshTaskDetail(parentTaskId);
+    await this.#get().refreshTaskList();
+    return result;
+  };
+
   updateTaskStatus = async (
     id: string | undefined,
     status: TaskStatus,

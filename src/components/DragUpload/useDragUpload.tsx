@@ -1,9 +1,8 @@
- 
 import { App } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useModelSupportVision } from '@/hooks/useModelSupportVision';
+import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -78,9 +77,24 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
 
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
-  const supportVision = useModelSupportVision(model, provider);
+  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
 
-  const handleDragEnter = (e: DragEvent) => {
+  const warnIfVisualUploadUnsupported = useCallback(
+    (files: File[]) => {
+      const hasImageFiles = files.some((file) => file.type.startsWith('image/'));
+      const hasVideoFiles = files.some((file) => file.type.startsWith('video/'));
+
+      if ((hasImageFiles && !canUploadImage) || (hasVideoFiles && !canUploadVideo)) {
+        message.warning(t('upload.clientMode.visionNotSupported'));
+        return true;
+      }
+
+      return false;
+    },
+    [canUploadImage, canUploadVideo, message, t],
+  );
+
+  const handleDragEnter = useCallback((e: DragEvent) => {
     if (!e.dataTransfer?.items || e.dataTransfer.items.length === 0) return;
 
     const isFile = e.dataTransfer.types.includes('Files');
@@ -89,9 +103,9 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
       e.preventDefault();
       setIsDragging(true);
     }
-  };
+  }, []);
 
-  const handleDragLeave = (e: DragEvent) => {
+  const handleDragLeave = useCallback((e: DragEvent) => {
     if (!e.dataTransfer?.items || e.dataTransfer.items.length === 0) return;
 
     const isFile = e.dataTransfer.types.includes('Files');
@@ -105,54 +119,50 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
         setIsDragging(false);
       }
     }
-  };
+  }, []);
 
-  const handleDrop = async (e: DragEvent) => {
-    if (!e.dataTransfer?.items || e.dataTransfer.items.length === 0) return;
+  const handleDrop = useCallback(
+    async (e: DragEvent) => {
+      if (!e.dataTransfer?.items || e.dataTransfer.items.length === 0) return;
 
-    const isFile = e.dataTransfer.types.includes('Files');
-    if (!isFile) return;
+      const isFile = e.dataTransfer.types.includes('Files');
+      if (!isFile) return;
 
-    e.preventDefault();
+      e.preventDefault();
 
-    // reset counter
-    dragCounter.current = 0;
+      // reset counter
+      dragCounter.current = 0;
 
-    setIsDragging(false);
-    const items = Array.from(e.dataTransfer?.items);
+      setIsDragging(false);
+      const items = Array.from(e.dataTransfer?.items);
 
-    const files = await getFileListFromDataTransferItems(items);
+      const files = await getFileListFromDataTransferItems(items);
 
-    if (files.length === 0) return;
+      if (files.length === 0) return;
 
-    // Check if there are image files and the model does not support vision
-    const hasImageFiles = files.some((file) => file.type.startsWith('image/'));
-    if (hasImageFiles && !supportVision) {
-      message.warning(t('upload.clientMode.visionNotSupported'));
-      return;
-    }
+      if (warnIfVisualUploadUnsupported(files)) return;
 
-    // upload files
-    onUploadFiles(files);
-  };
+      // upload files
+      onUploadFiles(files);
+    },
+    [onUploadFiles, warnIfVisualUploadUnsupported],
+  );
 
-  const handlePaste = async (event: ClipboardEvent) => {
-    // get files from clipboard
-    if (!event.clipboardData) return;
-    const items = Array.from(event.clipboardData?.items);
+  const handlePaste = useCallback(
+    async (event: ClipboardEvent) => {
+      // get files from clipboard
+      if (!event.clipboardData) return;
+      const items = Array.from(event.clipboardData?.items);
 
-    const files = await getFileListFromDataTransferItems(items);
-    if (files.length === 0) return;
+      const files = await getFileListFromDataTransferItems(items);
+      if (files.length === 0) return;
 
-    // Check if there are image files and the model does not support vision
-    const hasImageFiles = files.some((file) => file.type.startsWith('image/'));
-    if (hasImageFiles && !supportVision) {
-      message.warning(t('upload.clientMode.visionNotSupported'));
-      return;
-    }
+      if (warnIfVisualUploadUnsupported(files)) return;
 
-    onUploadFiles(files);
-  };
+      onUploadFiles(files);
+    },
+    [onUploadFiles, warnIfVisualUploadUnsupported],
+  );
 
   useEffect(() => {
     if (getContainer()) return;
@@ -179,7 +189,7 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
       window.removeEventListener('drop', handleDrop);
       window.removeEventListener('paste', handlePaste);
     };
-  }, [handleDragEnter, handleDragOver, handleDragLeave, handleDrop, handlePaste]);
+  }, [handleDragEnter, handleDragLeave, handleDrop, handlePaste]);
 
   return isDragging;
 };

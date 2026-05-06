@@ -16,11 +16,13 @@ import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { cronRuntime } from './cron';
 import { gtdRuntime } from './gtd';
+import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { remoteDeviceRuntime } from './remoteDevice';
+import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
 import { taskRuntime } from './task';
@@ -50,6 +52,7 @@ registerRuntimes([
   cloudSandboxRuntime,
   calculatorRuntime,
   agentDocumentsRuntime,
+  skillManagementRuntime,
   notebookRuntime,
   skillStoreRuntime,
   skillsRuntime,
@@ -67,6 +70,7 @@ registerRuntimes([
   gtdRuntime,
   webOnboardingRuntime,
   agentMarketplaceRuntime,
+  lobeAgentRuntime,
 ]);
 
 // ==================== Registry API ====================

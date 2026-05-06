@@ -23,14 +23,13 @@ import {
 } from '../../processors/procedure';
 import type { RuntimeProcessorContext } from '../../runtime/context';
 import { defineSignalHandler } from '../../runtime/middleware';
-import type { AgentSignalActionServices } from '../../services/actionServices';
+import type {
+  AgentSignalActionServices,
+  NonSatisfiedSkillActionServiceSignal,
+} from '../../services/actionServices';
 import { createDefaultActionServices } from '../../services/actionServices';
 import type { ProcedureMarkerSuppressInput, ProcedureStateService } from '../../services/types';
-import type {
-  AgentSignalFeedbackSatisfactionResult,
-  SignalFeedbackDomainMemory,
-  SignalFeedbackDomainSkill,
-} from '../types';
+import type { SignalFeedbackDomainMemory } from '../types';
 import { AGENT_SIGNAL_POLICY_SIGNAL_TYPES } from '../types';
 
 /**
@@ -83,25 +82,30 @@ export interface FeedbackActionPlannerOptions {
   procedure?: FeedbackActionProcedureDeps;
 }
 
-const isSatisfiedSkillSignal = (
-  signal: FeedbackDomainSignal,
-): signal is SatisfiedSkillFeedbackDomainSignal => {
-  return signal.payload.target === 'skill' && signal.payload.satisfactionResult === 'satisfied';
-};
-
 const isMemorySignal = (signal: FeedbackDomainSignal): signal is SignalFeedbackDomainMemory => {
   return signal.payload.target === 'memory';
 };
 
-const isNonSatisfiedSkillSignal = (
+const isDirectSkillDecisionSignal = (
   signal: FeedbackDomainSignal,
-): signal is SignalFeedbackDomainSkill & {
-  payload: SignalFeedbackDomainSkill['payload'] & {
-    satisfactionResult: Exclude<AgentSignalFeedbackSatisfactionResult, 'satisfied'>;
-    target: 'skill';
-  };
-} => {
-  return signal.payload.target === 'skill' && signal.payload.satisfactionResult !== 'satisfied';
+): signal is NonSatisfiedSkillActionServiceSignal => {
+  if (signal.payload.target !== 'skill') return false;
+  if (signal.payload.skillRoute === 'direct_decision') return true;
+
+  return (
+    signal.payload.satisfactionResult !== 'satisfied' && signal.payload.skillRoute !== 'non_skill'
+  );
+};
+
+const isAccumulatingSkillSignal = (
+  signal: FeedbackDomainSignal,
+): signal is SatisfiedSkillFeedbackDomainSignal => {
+  return (
+    signal.payload.target === 'skill' &&
+    signal.payload.satisfactionResult === 'satisfied' &&
+    signal.payload.skillRoute !== 'direct_decision' &&
+    signal.payload.skillRoute !== 'non_skill'
+  );
 };
 
 const createPlannerProcedureState = (
@@ -318,7 +322,7 @@ export const createFeedbackActionPlannerSignalHandler = (
         };
       }
 
-      if (isNonSatisfiedSkillSignal(signal)) {
+      if (isDirectSkillDecisionSignal(signal)) {
         const plan = actionServices.skillActions.prepare(signal);
 
         return {
@@ -327,7 +331,7 @@ export const createFeedbackActionPlannerSignalHandler = (
         };
       }
 
-      if (isSatisfiedSkillSignal(signal)) {
+      if (isAccumulatingSkillSignal(signal)) {
         return handleSatisfiedSkillFeedback(signal, procedureContext, options, procedureState);
       }
     },

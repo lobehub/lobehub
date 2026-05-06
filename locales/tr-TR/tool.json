@@ -106,6 +106,7 @@
   "localFiles.grepContent.glob": "Dosya filtresi",
   "localFiles.grepContent.pattern": "Arama deseni",
   "localFiles.grepContent.type": "Dosya türü",
+  "localFiles.listFiles.emptyDirectory": "Bu dizin boş",
   "localFiles.moveFiles.itemsMoved": "{{count}} öğe taşındı:",
   "localFiles.moveFiles.itemsMoved_one": "{{count}} öğe taşındı:",
   "localFiles.moveFiles.itemsMoved_other": "{{count}} öğe taşındı:",

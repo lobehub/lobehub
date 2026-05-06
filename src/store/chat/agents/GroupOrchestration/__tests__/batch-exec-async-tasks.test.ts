@@ -54,7 +54,7 @@ const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore => {
   return {
     dbMessagesMap: {},
     internal_dispatchMessage: vi.fn(),
-    internal_execAgentRuntime: vi.fn().mockResolvedValue(undefined),
+    executeClientAgent: vi.fn().mockResolvedValue(undefined),
     messagesMap: {},
     operations,
     optimisticCreateMessage: vi.fn().mockImplementation(async () => ({

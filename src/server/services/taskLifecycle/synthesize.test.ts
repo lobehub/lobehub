@@ -18,48 +18,56 @@ const baseInput = (overrides: Partial<Parameters<typeof shouldEmitTopicBrief>[0]
 });
 
 describe('shouldEmitTopicBrief', () => {
-  it('skips when reason=error (error branch handles its own brief)', () => {
+  it("returns 'yes' when reason=error (user must be told the run failed)", () => {
     const result = shouldEmitTopicBrief(baseInput({ reason: 'error' }));
-    expect(result.emit).toBe(false);
-    expect(result.reason).toBe('error-branch-handled');
+    expect(result.emit).toBe('yes');
+    expect(result.reason).toBe('execution-error');
   });
 
-  it('skips when judge already terminated the lifecycle', () => {
+  it("returns 'no' when judge already terminated the lifecycle", () => {
     const result = shouldEmitTopicBrief(baseInput({ reviewTerminated: true }));
-    expect(result.emit).toBe(false);
+    expect(result.emit).toBe('no');
     expect(result.reason).toBe('judge-handled');
   });
 
-  it('skips when review is configured (judge owns the brief on this path)', () => {
+  it("returns 'no' when review is configured (judge owns the brief on this path)", () => {
     const result = shouldEmitTopicBrief(baseInput({ hasReviewConfigEnabled: true }));
-    expect(result.emit).toBe(false);
+    expect(result.emit).toBe('no');
     expect(result.reason).toBe('review-config-enabled');
   });
 
-  it('skips heartbeat automation ticks (mid-loop, not a delivery)', () => {
+  it("returns 'unknown' for heartbeat ticks (defers to LLM — most are noise but some warrant surfacing)", () => {
     const result = shouldEmitTopicBrief(baseInput({ task: { automationMode: 'heartbeat' } }));
-    expect(result.emit).toBe(false);
-    expect(result.reason).toBe('automation-tick');
+    expect(result.emit).toBe('unknown');
+    expect(result.reason).toBe('heartbeat-needs-judge');
   });
 
-  it('skips schedule automation ticks', () => {
+  it("returns 'yes' on every schedule tick (contractual daily brief)", () => {
     const result = shouldEmitTopicBrief(baseInput({ task: { automationMode: 'schedule' } }));
-    expect(result.emit).toBe(false);
-    expect(result.reason).toBe('automation-tick');
+    expect(result.emit).toBe('yes');
+    expect(result.reason).toBe('scheduled-tick');
   });
 
-  it('skips trivial content (empty / whitespace-only acks)', () => {
+  it("still returns 'yes' for a schedule tick even when content looks trivial", () => {
+    const result = shouldEmitTopicBrief(
+      baseInput({ isTrivialContent: true, task: { automationMode: 'schedule' } }),
+    );
+    expect(result.emit).toBe('yes');
+  });
+
+  it("returns 'no' for trivial content on a non-scheduled task", () => {
     const result = shouldEmitTopicBrief(baseInput({ isTrivialContent: true }));
-    expect(result.emit).toBe(false);
+    expect(result.emit).toBe('no');
     expect(result.reason).toBe('trivial-content');
   });
 
-  it('emits for a normal manual-mode topic with substantive content', () => {
+  it("returns 'unknown' for a normal manual-mode topic with substantive content (defers to LLM judge)", () => {
     const result = shouldEmitTopicBrief(baseInput());
-    expect(result.emit).toBe(true);
+    expect(result.emit).toBe('unknown');
+    expect(result.reason).toBe('needs-llm-judge');
   });
 
-  it('skips automation even when other conditions look fine', () => {
+  it("returns 'unknown' for heartbeat even when other conditions look fine", () => {
     const result = shouldEmitTopicBrief(
       baseInput({
         hasReviewConfigEnabled: false,
@@ -67,7 +75,7 @@ describe('shouldEmitTopicBrief', () => {
         task: { automationMode: 'heartbeat' },
       }),
     );
-    expect(result.emit).toBe(false);
+    expect(result.emit).toBe('unknown');
   });
 });
 

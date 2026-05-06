@@ -196,6 +196,31 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - Default: -
 - Example: `https://cdn.example.com`
 
+## Visual Understanding
+
+### `VISUAL_UNDERSTANDING_PROVIDER`
+
+- Type: Optional
+- Description: Provider ID of the fallback visual understanding model. Configure this together with `VISUAL_UNDERSTANDING_MODEL` to let models without native image or video understanding inspect uploaded visual media through the built-in visual understanding tool.
+- Default: -
+- Example: `openai`, `google`, or `ollama`
+
+### `VISUAL_UNDERSTANDING_MODEL`
+
+- Type: Optional
+- Description: Model ID used by the fallback visual understanding tool. This model should support the visual media types you want to analyze. The feature is enabled only when both `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` are configured.
+- Default: -
+- Example: `gpt-4o`, `gemini-2.5-flash`, or your local visual model ID
+
+Configuration example:
+
+```bash
+VISUAL_UNDERSTANDING_PROVIDER=google
+VISUAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+```
+
+When this feature is enabled, users can upload images or videos while using a model that does not have native visual capabilities, as long as the active model supports tool use. File upload still requires the normal file storage configuration for your deployment.
+
 ## AI Image
 
 ### `AI_IMAGE_DEFAULT_IMAGE_NUM`

@@ -1,4 +1,4 @@
-import type { TaskTopicHandoff } from '@lobechat/types';
+import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
 import { and, desc, eq, sql } from 'drizzle-orm';
 
 import type { TaskTopicItem } from '../schemas/task';
@@ -106,6 +106,31 @@ export class TaskTopicModel {
     await this.db
       .update(taskTopics)
       .set({ handoff })
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.userId, this.userId),
+        ),
+      );
+  }
+
+  /**
+   * Patch the `briefDecision` field inside the handoff JSONB without
+   * disturbing other handoff keys (`title` / `summary` / `keyFindings` /
+   * `nextAction`). Uses `jsonb_set` so the operation is order-independent
+   * with respect to `updateHandoff` — either can run first.
+   */
+  async updateBriefDecision(
+    taskId: string,
+    topicId: string,
+    decision: BriefDecision,
+  ): Promise<void> {
+    await this.db
+      .update(taskTopics)
+      .set({
+        handoff: sql`jsonb_set(COALESCE(${taskTopics.handoff}, '{}'::jsonb), '{briefDecision}', ${JSON.stringify(decision)}::jsonb)`,
+      })
       .where(
         and(
           eq(taskTopics.taskId, taskId),

@@ -17,9 +17,8 @@ interface SourcePayloadCarrier {
 /**
  * Skill-domain feedback signal that is eligible for direct skill-management action planning.
  */
-export type NonSatisfiedSkillFeedbackDomainSignal = SignalFeedbackDomainSkill & {
+export type DirectSkillFeedbackDomainSignal = SignalFeedbackDomainSkill & {
   payload: SignalFeedbackDomainSkill['payload'] & {
-    satisfactionResult: 'neutral' | 'not_satisfied';
     target: 'skill';
   };
 };
@@ -102,7 +101,7 @@ export const planUserMemory = (signal: SignalFeedbackDomainMemory): ActionUserMe
  * - A typed skill-management action node with stable chain, signal, source, and idempotency metadata
  */
 export const planSkillManagement = (
-  signal: NonSatisfiedSkillFeedbackDomainSignal,
+  signal: DirectSkillFeedbackDomainSignal,
 ): ActionSkillManagementHandle => {
   const { payload } = signal;
 
@@ -119,7 +118,7 @@ export const planSkillManagement = (
       agentId: payload.agentId,
       conflictPolicy: payload.conflictPolicy,
       evidence: payload.evidence,
-      feedbackHint: 'not_satisfied',
+      feedbackHint: payload.satisfactionResult === 'satisfied' ? 'satisfied' : 'not_satisfied',
       idempotencyKey: `${signal.chain.rootSourceId}:skill:${payload.messageId}`,
       message: payload.message,
       messageId: payload.messageId,

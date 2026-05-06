@@ -51,15 +51,25 @@ const InputEditor = memo<{
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
 }>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
-  const [editor, slashMenuRef, send, updateMarkdownContent, expand, slashPlacement] =
-    useChatInputStore((s) => [
-      s.editor,
-      s.slashMenuRef,
-      s.handleSendButton,
-      s.updateMarkdownContent,
-      s.expand,
-      s.slashPlacement ?? 'top',
-    ]);
+  const [
+    editor,
+    slashMenuRef,
+    send,
+    updateMarkdownContent,
+    expand,
+    slashPlacement,
+    disableMention,
+    disableSlash,
+  ] = useChatInputStore((s) => [
+    s.editor,
+    s.slashMenuRef,
+    s.handleSendButton,
+    s.updateMarkdownContent,
+    s.expand,
+    s.slashPlacement ?? 'top',
+    s.disableMention,
+    s.disableSlash,
+  ]);
 
   const storeApi = useStoreApi();
   const state = useEditorState(editor);
@@ -118,13 +128,13 @@ const InputEditor = memo<{
 
   const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
 
-  const enableMention = allMentionItems.length > 0 || enableLocalFileMention;
+  const enableMention = !disableMention && (allMentionItems.length > 0 || enableLocalFileMention);
   const heterogeneousName = heterogeneousType
     ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
     : undefined;
   // Heterogeneous agents (e.g. Claude Code) don't yet support @-assigning to other agents
   const showAgentAssignmentHint =
-    !heterogeneousName && categories.some((category) => category.id === 'agent');
+    !disableMention && !heterogeneousName && categories.some((category) => category.id === 'agent');
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   // Listen to editor's paste event for file uploads
@@ -284,7 +294,10 @@ const InputEditor = memo<{
     [enableMention, mentionItemsFn, mentionMarkdownWriter, mentionOnSelect, MentionMenuComp],
   );
 
-  const slashOption = useMemo(() => ({ items: slashItems }), [slashItems]);
+  const slashOption = useMemo(
+    () => (disableSlash ? undefined : { items: slashItems }),
+    [disableSlash, slashItems],
+  );
 
   const richRenderProps = useMemo(() => {
     const basePlugins = !enableRichRender

@@ -6,7 +6,7 @@ import { memo, Suspense, useMemo } from 'react';
 
 import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
-import { ChatList, ConversationProvider, TodoProgress } from '@/features/Conversation';
+import { ChatList, ConversationProvider } from '@/features/Conversation';
 import ZenModeToast from '@/features/ZenModeToast';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -90,7 +90,6 @@ const Conversation = memo(() => {
           welcome={<AgentHome />}
         />
       </Flexbox>
-      <TodoProgress />
       {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
       <ThreadHydration />
       <ChatMiniMap />

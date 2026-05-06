@@ -156,6 +156,7 @@ export class PluginTypesActionImpl {
           registerAfterCompletion,
           scope,
           signal: operation?.abortController?.signal,
+          sourceMessageId: rootRuntimeOperationContext?.messageId,
           stepContext,
           taskId,
           topicId,

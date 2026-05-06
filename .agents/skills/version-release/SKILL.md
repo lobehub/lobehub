@@ -189,7 +189,7 @@ If metrics cannot be reliably computed, omit unknown numbers instead of guessing
 
 Follow this section order unless the user asks otherwise:
 
-1. `# 🚀 LobeHub v<x.y.z> (<YYYYMMDD>)`
+1. `# 🚀 LobeHub Release (<YYYYMMDD>)`
 2. Metadata lines:
    - `Release Date`
    - `Since <Previous Version>` metrics
@@ -262,7 +262,7 @@ If a new contributor appears who is not on this list, treat them as community by
 ### GitHub Release Changelog Template
 
 ```md
-# 🚀 LobeHub v<x.y.z> (<YYYYMMDD>)
+# 🚀 LobeHub Release (<YYYYMMDD>)
 
 **Release Date:** <Month DD, YYYY>  
 **Since <Previous Version>:** <N merged PRs> · <N resolved issues> · <N contributors>
