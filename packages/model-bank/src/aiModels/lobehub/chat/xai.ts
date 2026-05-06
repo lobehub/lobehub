@@ -18,7 +18,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 0.2 },
+            { rate: 0.2, upTo: 200_000 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -27,7 +27,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.25, upTo: 0.2 },
+            { rate: 1.25, upTo: 200_000 },
             { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -36,7 +36,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2.5, upTo: 0.2 },
+            { rate: 2.5, upTo: 200_000 },
             { rate: 5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -67,7 +67,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 0.2 },
+            { rate: 0.2, upTo: 200_000 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -76,7 +76,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 0.2 },
+            { rate: 2, upTo: 200_000 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -85,7 +85,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 6, upTo: 0.2 },
+            { rate: 6, upTo: 200_000 },
             { rate: 12, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -115,7 +115,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 0.2 },
+            { rate: 0.2, upTo: 200_000 },
             { rate: 0.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -124,7 +124,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 0.2 },
+            { rate: 2, upTo: 200_000 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -133,7 +133,7 @@ export const xaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 6, upTo: 0.2 },
+            { rate: 6, upTo: 200_000 },
             { rate: 12, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
