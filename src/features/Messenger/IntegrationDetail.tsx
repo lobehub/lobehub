@@ -1,6 +1,6 @@
 'use client';
 
-import { Block, Button, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
@@ -19,7 +19,7 @@ import useSWR from 'swr';
 import { messengerService } from '@/services/messenger';
 
 import AgentSelect from './AgentSelect';
-import { type MessengerPlatform, PLATFORM_NAMES, PlatformAvatar } from './constants';
+import { type MessengerPlatform, PlatformAvatar } from './constants';
 import { getMessengerErrorMessage } from './i18n';
 import LinkModal from './LinkModal';
 
@@ -105,15 +105,74 @@ const ConnectionRow = memo<ConnectionRowProps>(
 );
 ConnectionRow.displayName = 'MessengerConnectionRow';
 
+const ConnectionsSkeleton = memo<{ withNestedContent?: boolean }>(
+  ({ withNestedContent = false }) => (
+    <Flexbox gap={12}>
+      {Array.from({ length: 2 }).map((_, index) => (
+        <Flexbox gap={12} key={index} style={{ paddingBlock: 12 }}>
+          <Flexbox horizontal align="center" gap={12}>
+            <Skeleton.Avatar active shape={'square'} size={36} />
+            <Flexbox flex={1} gap={6}>
+              <Skeleton.Button active size={'small'} style={{ width: 56 }} />
+              <Skeleton.Button active style={{ height: 18, width: '40%' }} />
+            </Flexbox>
+            <Skeleton.Button active size={'small'} style={{ width: 72 }} />
+            <Skeleton.Button active size={'small'} style={{ width: 84 }} />
+          </Flexbox>
+          {withNestedContent && (
+            <Flexbox gap={6} style={{ paddingInlineStart: 48 }}>
+              <Skeleton.Button active size={'small'} style={{ width: 72 }} />
+              <Skeleton.Button active style={{ height: 32, width: '100%' }} />
+            </Flexbox>
+          )}
+        </Flexbox>
+      ))}
+    </Flexbox>
+  ),
+);
+ConnectionsSkeleton.displayName = 'MessengerConnectionsSkeleton';
+
+const IntegrationDetailSkeleton = memo<{ withNestedContent?: boolean }>(
+  ({ withNestedContent = false }) => (
+    <Flexbox gap={20}>
+      <Flexbox horizontal align="center" gap={12}>
+        <Skeleton.Button active size={'small'} style={{ width: 20 }} />
+        <Skeleton.Button active style={{ height: 28, width: 96 }} />
+      </Flexbox>
+
+      <Block className={styles.card}>
+        <Flexbox horizontal align="center" gap={16}>
+          <Skeleton.Avatar active shape={'square'} size={48} />
+          <Flexbox flex={1} gap={6}>
+            <Skeleton.Button active size={'small'} style={{ width: 64 }} />
+            <Skeleton active paragraph={{ rows: 1, width: '65%' }} title={false} />
+          </Flexbox>
+          <Skeleton.Button active style={{ height: 40, width: 120 }} />
+        </Flexbox>
+      </Block>
+
+      <Flexbox gap={8}>
+        <Skeleton.Button active size={'small'} style={{ width: 72 }} />
+        <Block className={styles.card}>
+          <ConnectionsSkeleton withNestedContent={withNestedContent} />
+        </Block>
+      </Flexbox>
+    </Flexbox>
+  ),
+);
+IntegrationDetailSkeleton.displayName = 'MessengerIntegrationDetailSkeleton';
+
 interface IntegrationDetailProps {
   appId?: string;
   botUsername?: string;
+  /** Brand-name label (e.g. `"Slack"`) sourced from the registry. */
+  name: string;
   onBack: () => void;
   platform: MessengerPlatform;
 }
 
 const IntegrationDetail = memo<IntegrationDetailProps>(
-  ({ appId, botUsername, onBack, platform }) => {
+  ({ appId, botUsername, name, onBack, platform }) => {
     const { t } = useTranslation('messenger');
     const { message, modal } = App.useApp();
     const [linkOpen, setLinkOpen] = useState(false);
@@ -123,11 +182,12 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
       messengerService.listMyInstallations(),
     );
 
-    const platformLabel = PLATFORM_NAMES[platform];
+    const platformLabel = name;
     const allLinks = linksSWR.data ?? [];
     const links = allLinks.filter((l) => l.platform === platform);
     const installations = (installationsSWR.data ?? []).filter((i) => i.platform === platform);
     const tenantNameByTenantId = new Map(installations.map((i) => [i.tenantId, i.tenantName]));
+    const isInitialLoading = linksSWR.data === undefined || installationsSWR.data === undefined;
 
     const handleSetActive = async (tenantId: string, agentId: string | null) => {
       try {
@@ -324,6 +384,10 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
       );
     };
 
+    if (isInitialLoading) {
+      return <IntegrationDetailSkeleton withNestedContent={!usesPerTenantInstall} />;
+    }
+
     return (
       <Flexbox gap={20}>
         <Flexbox horizontal align="center" gap={8}>
@@ -364,6 +428,7 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
         <LinkModal
           appId={appId}
           botUsername={botUsername}
+          name={name}
           open={linkOpen}
           platform={platform}
           onClose={() => setLinkOpen(false)}
