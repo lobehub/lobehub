@@ -169,6 +169,7 @@
   "channel.userIdHint": "您在此平台上的使用者 ID。AI 可以使用它向您發送直接訊息。",
   "channel.userIdHint.discord": "啟用開發者模式（設定 → 進階），然後右鍵點擊你的頭像 → 複製使用者 ID。",
   "channel.userIdHint.feishu": "前往飛書／Lark 開放平台的應用程式 → 權限，查看你的 Open ID。",
+  "channel.userIdHint.line": "開啟 LINE Developers Console → 您的頻道 → 基本設定頁籤，複製「您的使用者 ID」（以 U 開頭，共 33 個字元）。",
   "channel.userIdHint.qq": "你的 QQ 號碼，顯示在 QQ 個人資料頁面。",
   "channel.userIdHint.slack": "開啟你的 Slack 個人檔案 → ⋮ More → Copy member ID（以 U 開頭）。",
   "channel.userIdHint.telegram": "在 Telegram 傳送任何訊息給 @userinfobot — 它會回覆你的數字使用者 ID。",

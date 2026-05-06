@@ -37,7 +37,7 @@ export interface AgentSignalProcedureInspectionSnapshot {
  * - Store values are JSON fields written by procedure helpers
  *
  * Returns:
- * - Inspection snapshots without exposing a production route
+ * - Inspection snapshots without exposing a server route
  */
 export class AgentSignalProcedureInspector {
   constructor(private readonly store: Pick<AgentSignalPolicyStateStore, 'readPolicyState'>) {}

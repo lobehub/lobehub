@@ -1,7 +1,6 @@
 import {
-  AGENT_SIGNAL_SOURCE_TYPES,
   type AgentSignalSourceVariants,
-  type SourceAgentUserMessage,
+  isAgentUserMessageSource,
 } from '@lobechat/agent-signal/source';
 
 import {
@@ -50,12 +49,6 @@ export type FeedbackDomainClassifierSignal =
   | SignalFeedbackDomainNone
   | SignalFeedbackDomainPrompt
   | SignalFeedbackDomainSkill;
-
-const isAgentUserMessageSource = (
-  source: AgentSignalSourceVariants,
-): source is SourceAgentUserMessage => {
-  return source.sourceType === AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage;
-};
 
 const isRecordLike = (value: unknown): value is Record<PropertyKey, unknown> => {
   return typeof value === 'object' && value !== null;

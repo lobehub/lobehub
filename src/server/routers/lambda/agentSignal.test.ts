@@ -86,7 +86,12 @@ describe('agentSignalRouter', () => {
 
   it('lists receipts for the current user topic', async () => {
     await expect(
-      router.listReceipts({ agentId: 'agent-1', limit: 20, topicId: 'topic-1' }),
+      router.listReceipts({
+        agentId: 'agent-1',
+        limit: 20,
+        sinceCreatedAt: 1_700_000,
+        topicId: 'topic-1',
+      }),
     ).resolves.toEqual({
       cursor: undefined,
       receipts: [
@@ -103,6 +108,7 @@ describe('agentSignalRouter', () => {
       agentId: 'agent-1',
       cursor: undefined,
       limit: 20,
+      sinceCreatedAt: 1_700_000,
       topicId: 'topic-1',
       userId: 'user-1',
     });

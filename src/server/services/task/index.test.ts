@@ -7,6 +7,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
+import { BriefService } from '@/server/services/brief';
 
 import { TaskService } from './index';
 
@@ -992,7 +993,6 @@ describe('TaskService', () => {
       mockTaskModel.findByIds.mockResolvedValue([]);
       mockTaskModel.getCheckpointConfig.mockReturnValue({});
       mockTaskModel.getReviewConfig.mockReturnValue(undefined);
-      mockTaskModel.getTreeAgentIdsForTaskIds.mockResolvedValue({ task_001: ['agent-1'] });
       mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
         { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
       ]);
@@ -1002,10 +1002,8 @@ describe('TaskService', () => {
 
       expect(result?.activities?.[0]).toMatchObject({
         actions: [{ key: 'approve', label: '✅', type: 'resolve' }],
+        agent: { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
         agentId: 'agent-1',
-        agents: [
-          { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
-        ],
         artifacts: ['doc_1'],
         briefType: 'decision',
         createdAt: '2024-01-01T00:00:00.000Z',
@@ -1122,7 +1120,11 @@ describe('TaskService', () => {
       mockTaskModel.findByIds.mockResolvedValue([]);
       mockTaskModel.getCheckpointConfig.mockReturnValue({});
       mockTaskModel.getReviewConfig.mockReturnValue(undefined);
-      mockTaskModel.getTreeAgentIdsForTaskIds.mockRejectedValue(new Error('DB error'));
+      // Force the brief enrichment path to reject without breaking the
+      // sibling resolveAuthors call (which shares the agent model mock).
+      const enrichSpy = vi
+        .spyOn(BriefService.prototype, 'enrichBriefsWithAgents')
+        .mockRejectedValueOnce(new Error('DB error'));
 
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-1');
@@ -1130,10 +1132,11 @@ describe('TaskService', () => {
       expect(result).not.toBeNull();
       expect(result?.activities).toHaveLength(1);
       expect(result?.activities?.[0]).toMatchObject({
-        agents: [],
+        agent: null,
         id: 'brief-1',
         type: 'brief',
       });
+      enrichSpy.mockRestore();
     });
 
     it('should use topic handoff title with fallback to Untitled', async () => {

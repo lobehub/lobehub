@@ -365,12 +365,14 @@ export class GeneralChatAgent implements Agent {
    */
   private toLLMCall(payload: GeneralAgentCallLLMInstructionPayload): AgentInstruction {
     const compressionEnabled = this.config.compressionConfig?.enabled ?? true;
+    const compressionOptions = {
+      maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+      thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+    };
 
     if (compressionEnabled) {
       const messages = payload.messages;
-      const compressionCheck = shouldCompress(messages, {
-        maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-      });
+      const compressionCheck = shouldCompress(messages, compressionOptions);
 
       if (compressionCheck.needsCompression) {
         return {
@@ -433,11 +435,13 @@ export class GeneralChatAgent implements Agent {
       case 'user_input': {
         // Check if context compression is enabled and needed before calling LLM
         const compressionEnabled = this.config.compressionConfig?.enabled ?? true; // Default to enabled
+        const compressionOptions = {
+          maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+          thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+        };
 
         if (compressionEnabled) {
-          const compressionCheck = shouldCompress(state.messages, {
-            maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-          });
+          const compressionCheck = shouldCompress(state.messages, compressionOptions);
 
           if (compressionCheck.needsCompression) {
             // Context exceeds threshold, compress ALL messages into a single summary

@@ -169,6 +169,7 @@
   "channel.userIdHint": "이 플랫폼에서의 사용자 ID입니다. AI는 이를 사용하여 직접 메시지를 보낼 수 있습니다.",
   "channel.userIdHint.discord": "개발자 모드(설정 → 고급)를 활성화한 뒤 아바타를 우클릭 → 사용자 ID 복사.",
   "channel.userIdHint.feishu": "Feishu / Lark 오픈 플랫폼 앱을 열고 → 권한에서 Open ID를 확인하세요.",
+  "channel.userIdHint.line": "LINE 개발자 콘솔 → 채널 → 기본 설정 탭으로 이동하여 \"사용자 ID\"를 복사하세요 (U로 시작하며, 33자 길이).",
   "channel.userIdHint.qq": "QQ 프로필 페이지에 표시된 QQ 번호입니다.",
   "channel.userIdHint.slack": "Slack 프로필 열기 → ⋮ 더보기 → 구성원 ID 복사(U로 시작).",
   "channel.userIdHint.telegram": "Telegram에서 @userinfobot 에 아무 메시지나 보내면 숫자 사용자 ID를 알려줍니다.",

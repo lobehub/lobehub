@@ -29,13 +29,15 @@ const toBriefItem = (act: TaskDetailActivity): BriefItem | null => {
   if (!act.id || !act.briefType) return null;
   return {
     actions: (act.actions ?? null) as BriefItem['actions'],
+    agent: act.agent
+      ? {
+          avatar: act.agent.avatar,
+          backgroundColor: act.agent.backgroundColor,
+          id: act.agent.id,
+          title: act.agent.title,
+        }
+      : null,
     agentId: act.agentId ?? null,
-    agents: (act.agents ?? []).map((a) => ({
-      avatar: a.avatar,
-      backgroundColor: a.backgroundColor,
-      id: a.id,
-      title: a.title,
-    })),
     artifacts: act.artifacts ?? null,
     createdAt: act.createdAt ?? act.time ?? new Date().toISOString(),
     cronJobId: act.cronJobId ?? null,

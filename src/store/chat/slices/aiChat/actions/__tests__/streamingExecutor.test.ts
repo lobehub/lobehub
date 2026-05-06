@@ -1,3 +1,4 @@
+import * as agentRuntime from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
@@ -21,6 +22,22 @@ import {
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
 const serverConfigMock = vi.hoisted(() => ({ enableVisualUnderstanding: false }));
+
+interface AgentRuntimeStepContext {
+  agent: {
+    config: {
+      compressionConfig: {
+        enabled: boolean;
+        maxWindowToken?: number;
+      };
+    };
+  };
+}
+
+const getCreatedAgentCompressionConfig = (stepSpy: { mock: { contexts: unknown[] } }) => {
+  const runtime = stepSpy.mock.contexts[0] as AgentRuntimeStepContext;
+  return runtime.agent.config.compressionConfig;
+};
 
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
@@ -222,6 +239,104 @@ describe('StreamingExecutor actions', () => {
       if (toolOperations.length > 0) {
         expect(toolOperations.every((op) => op.status === 'cancelled')).toBe(true);
       }
+
+      streamSpy.mockRestore();
+    });
+
+    it('should pass model contextWindowTokens into compressionConfig when creating the agent', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      const agentConfig = createMockAgentConfig();
+
+      useAiInfraStore.setState({
+        enabledAiModels: [
+          {
+            abilities: { functionCall: true },
+            contextWindowTokens: 200_000,
+            id: agentConfig.model,
+            providerId: agentConfig.provider,
+            type: 'chat',
+          } as EnabledAiModel,
+        ],
+      });
+
+      const stepSpy = vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step');
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [userMessage],
+          parentMessageId: userMessage.id,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(getCreatedAgentCompressionConfig(stepSpy)).toEqual({
+        enabled: true,
+        maxWindowToken: 200_000,
+      });
+
+      streamSpy.mockRestore();
+    });
+
+    it('should fall back to undefined maxWindowToken for unknown models', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      const stepSpy = vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step');
+
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig({ model: 'unknown-model', provider: 'openai' }),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [userMessage],
+          parentMessageId: userMessage.id,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(getCreatedAgentCompressionConfig(stepSpy)).toEqual({
+        enabled: true,
+        maxWindowToken: undefined,
+      });
 
       streamSpy.mockRestore();
     });

@@ -50,6 +50,7 @@ const NON_RETRYABLE_MESSAGE_PATTERNS = [
   'conversation must end with a user message',
   'context length exceeded',
   'context_length_exceeded',
+  'does not support parameter',
   'expected a string',
   'input is too long',
   'input tokens exceed',

@@ -56,6 +56,7 @@ const createMockRedisClient = () => {
     unwatch: vi.fn(),
     watch: vi.fn(),
     zadd: vi.fn(),
+    zrange: vi.fn(),
     zrem: vi.fn(),
     zrevrange: vi.fn(),
   };
@@ -124,6 +125,50 @@ const installRedisClientBehavior = (client: typeof mockRedis) => {
 
     return 1;
   });
+  client.zrange.mockImplementation(
+    async (
+      key: string,
+      min: number | string,
+      max: number | string,
+      ...args: Array<number | string>
+    ) => {
+      const entries = [...(sortedSets.get(key)?.entries() ?? [])];
+      const byScore = args.includes('BYSCORE');
+      const rev = args.includes('REV');
+      const limitIndex = args.indexOf('LIMIT');
+      const offset = typeof args[limitIndex + 1] === 'number' ? Number(args[limitIndex + 1]) : 0;
+      const count =
+        typeof args[limitIndex + 2] === 'number' ? Number(args[limitIndex + 2]) : entries.length;
+
+      if (!byScore) {
+        return entries.map(([member]) => member);
+      }
+
+      const parseBoundary = (value: number | string) => {
+        if (typeof value === 'number') return { exclusive: false, value };
+        if (value === '+inf') return { exclusive: false, value: Number.POSITIVE_INFINITY };
+        if (value === '-inf') return { exclusive: false, value: Number.NEGATIVE_INFINITY };
+        if (value.startsWith('(')) {
+          return { exclusive: true, value: Number(value.slice(1)) };
+        }
+
+        return { exclusive: false, value: Number(value) };
+      };
+
+      const lower = parseBoundary(rev ? max : min);
+      const upper = parseBoundary(rev ? min : max);
+      const filtered = entries
+        .filter(([, score]) => {
+          const aboveLower = lower.exclusive ? score > lower.value : score >= lower.value;
+          const belowUpper = upper.exclusive ? score < upper.value : score <= upper.value;
+
+          return aboveLower && belowUpper;
+        })
+        .sort((a, b) => (rev ? b[1] - a[1] : a[1] - b[1]));
+
+      return filtered.slice(offset, offset + count).map(([member]) => member);
+    },
+  );
   client.zrem.mockImplementation(async (key: string, ...members: string[]) => {
     const current = sortedSets.get(key) ?? new Map<string, number>();
     let removed = 0;

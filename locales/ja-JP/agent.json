@@ -169,6 +169,7 @@
   "channel.userIdHint": "このプラットフォーム上のあなたのユーザーIDです。AIはこれを使用して、あなたに直接メッセージを送ることができます。",
   "channel.userIdHint.discord": "「開発者モード」（設定 → 詳細設定）を有効にし、アバターを右クリック →「ユーザーIDをコピー」。",
   "channel.userIdHint.feishu": "Feishu／Lark Open Platform アプリを開き → 権限 → Open ID を確認します。",
+  "channel.userIdHint.line": "LINE Developersコンソールを開き、チャンネル → 基本設定タブに移動し、「ユーザーID」（Uで始まり、33文字）をコピーしてください。",
   "channel.userIdHint.qq": "QQプロフィールページに表示されるQQ番号です。",
   "channel.userIdHint.slack": "Slackプロフィールを開く → ⋮ その他 →「メンバーIDをコピー」（Uで始まる）。",
   "channel.userIdHint.telegram": "Telegramで @userinfobot にメッセージを送ると、数値のユーザーIDが返信されます。",

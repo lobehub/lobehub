@@ -1,9 +1,15 @@
+import type {
+  SourceEventAgentUserMessage,
+  SourceEventClientRuntimeStart,
+} from '@lobechat/agent-signal/source';
 import {
   AGENT_SIGNAL_SOURCE_TYPES,
-  type AgentSignalSourceEvent,
-  type AgentSignalSourceType,
-  type SourceAgentUserMessage,
-  type SourceClientRuntimeStart,
+  isAgentUserMessageSource,
+  isClientRuntimeStartSource,
+  isNightlyReviewSource,
+  isSelfIterationIntentSource,
+  isSelfReflectionSource,
+  isToolOutcomeSource,
 } from '@lobechat/agent-signal/source';
 import type { ExecutionSnapshot, ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
 import { messages } from '@lobechat/database/schemas';
@@ -26,6 +32,12 @@ import type { GeneratedAgentSignalEmissionResult } from '@/server/services/agent
 import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal/orchestrator';
 import { assembleFeedbackContext } from '@/server/services/agentSignal/policies/analyzeIntent/context/feedbackContextAssembler';
 import { createRedisRuntimeGuardBackend } from '@/server/services/agentSignal/runtime/backend/redisGuard';
+import {
+  createServerNightlyReviewPolicyOptions,
+  createServerProcedurePolicyOptions,
+  createServerSelfIterationIntentPolicyOptions,
+  createServerSelfReflectionPolicyOptions,
+} from '@/server/services/agentSignal/services/maintenance/serverRuntime';
 
 import type { AgentSignalWorkflowRunPayload } from './types';
 
@@ -50,20 +62,15 @@ export interface AgentSignalWorkflowContext<TPayload = AgentSignalWorkflowRunPay
 
 /** Dependencies for executing one Agent Signal workflow payload. */
 export interface RunAgentSignalWorkflowDeps {
+  createNightlyReviewPolicyOptions?: typeof createServerNightlyReviewPolicyOptions;
+  createProcedurePolicyOptions?: typeof createServerProcedurePolicyOptions;
   createRuntimeGuardBackend?: typeof createRedisRuntimeGuardBackend;
+  createSelfIterationIntentPolicyOptions?: typeof createServerSelfIterationIntentPolicyOptions;
+  createSelfReflectionPolicyOptions?: typeof createServerSelfReflectionPolicyOptions;
   createSnapshotStore?: () => ISnapshotStore | null;
   executeSourceEvent?: typeof executeAgentSignalSourceEvent;
   getDb?: typeof getServerDB;
 }
-
-/**
- * One normalized workflow source event after ingress bridging.
- *
- * @param TSourceType - Concrete Agent Signal source type after normalization.
- */
-interface NormalizedWorkflowSourceEventInput<
-  TSourceType extends AgentSignalSourceType = AgentSignalSourceType,
-> extends AgentSignalSourceEvent<TSourceType> {}
 
 const buildWorkflowMetricAttributes = (
   sourceType: string,
@@ -181,18 +188,6 @@ const persistWorkflowSnapshot = async (
   await store.save(snapshot);
 };
 
-const isClientRuntimeStartSource = (
-  sourceEvent: AgentSignalWorkflowRunPayload['sourceEvent'],
-): sourceEvent is NormalizedWorkflowSourceEventInput<SourceClientRuntimeStart['sourceType']> => {
-  return sourceEvent.sourceType === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart;
-};
-
-const isAgentUserMessageSource = (
-  sourceEvent: AgentSignalWorkflowRunPayload['sourceEvent'],
-): sourceEvent is NormalizedWorkflowSourceEventInput<SourceAgentUserMessage['sourceType']> => {
-  return sourceEvent.sourceType === AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage;
-};
-
 /**
  * Rebuilds one `agent.user.message` source from the client runtime-start event.
  *
@@ -209,11 +204,9 @@ const isAgentUserMessageSource = (
  * - Otherwise returns `undefined` so the original client source can continue unchanged
  */
 const bridgeClientRuntimeStartToAgentUserMessage = async (
-  sourceEvent: NormalizedWorkflowSourceEventInput<SourceClientRuntimeStart['sourceType']>,
+  sourceEvent: SourceEventClientRuntimeStart,
   input: { db: Awaited<ReturnType<typeof getServerDB>>; userId: string },
-): Promise<
-  NormalizedWorkflowSourceEventInput<SourceAgentUserMessage['sourceType']> | undefined
-> => {
+): Promise<SourceEventAgentUserMessage | undefined> => {
   if (sourceEvent.payload.parentMessageType !== 'user') return undefined;
   if (typeof sourceEvent.payload.parentMessageId !== 'string') return undefined;
 
@@ -246,7 +239,7 @@ const bridgeClientRuntimeStartToAgentUserMessage = async (
 };
 
 const buildFeedbackSourceSerializedContext = async (
-  sourceEvent: NormalizedWorkflowSourceEventInput<SourceAgentUserMessage['sourceType']>,
+  sourceEvent: SourceEventAgentUserMessage,
   input: { db: Awaited<ReturnType<typeof getServerDB>>; userId: string },
 ): Promise<string | undefined> => {
   if (typeof sourceEvent.payload.serializedContext === 'string') {
@@ -434,6 +427,15 @@ export const runAgentSignalWorkflow = async (
 
           const getDb = deps.getDb ?? getServerDB;
           const executeSourceEvent = deps.executeSourceEvent ?? executeAgentSignalSourceEvent;
+          const createNightlyReviewPolicyOptions =
+            deps.createNightlyReviewPolicyOptions ?? createServerNightlyReviewPolicyOptions;
+          const createSelfReflectionPolicyOptions =
+            deps.createSelfReflectionPolicyOptions ?? createServerSelfReflectionPolicyOptions;
+          const createSelfIterationIntentPolicyOptions =
+            deps.createSelfIterationIntentPolicyOptions ??
+            createServerSelfIterationIntentPolicyOptions;
+          const createProcedurePolicyOptions =
+            deps.createProcedurePolicyOptions ?? createServerProcedurePolicyOptions;
           const createGuardBackend =
             deps.createRuntimeGuardBackend ?? createRedisRuntimeGuardBackend;
           const snapshotStore = (deps.createSnapshotStore ?? createDefaultSnapshotStore)();
@@ -471,6 +473,38 @@ export const runAgentSignalWorkflow = async (
             'agent_signal.workflow.execute',
             async (executeSpan) => {
               try {
+                const nightlyReview = isNightlyReviewSource(normalizedSourceEvent)
+                  ? createNightlyReviewPolicyOptions({
+                      agentId: payload.agentId,
+                      db,
+                      selfIterationEnabled,
+                      userId: payload.userId,
+                    })
+                  : undefined;
+                const selfReflection = isSelfReflectionSource(normalizedSourceEvent)
+                  ? createSelfReflectionPolicyOptions({
+                      agentId: payload.agentId,
+                      db,
+                      selfIterationEnabled,
+                      userId: payload.userId,
+                    })
+                  : undefined;
+                const selfIterationIntent = isSelfIterationIntentSource(normalizedSourceEvent)
+                  ? createSelfIterationIntentPolicyOptions({
+                      agentId: payload.agentId,
+                      db,
+                      selfIterationEnabled,
+                      userId: payload.userId,
+                    })
+                  : undefined;
+                const procedure = isToolOutcomeSource(normalizedSourceEvent)
+                  ? createProcedurePolicyOptions({
+                      agentId: payload.agentId,
+                      db,
+                      selfIterationEnabled,
+                      userId: payload.userId,
+                    })
+                  : undefined;
                 const executionResult = await context.run(
                   `agent-signal:execute:${normalizedSourceEvent.sourceType}:${normalizedSourceEvent.sourceId}`,
                   () =>
@@ -483,6 +517,10 @@ export const runAgentSignalWorkflow = async (
                       },
                       {
                         policyOptions: {
+                          ...(nightlyReview ? { nightlyReview } : {}),
+                          ...(procedure ? { procedure } : {}),
+                          ...(selfIterationIntent ? { selfIterationIntent } : {}),
+                          ...(selfReflection ? { selfReflection } : {}),
                           skillManagement: {
                             selfIterationEnabled,
                           },

@@ -169,6 +169,7 @@
   "channel.userIdHint": "Bu platformdaki kullanıcı kimliğiniz. Yapay zeka, size doğrudan mesaj göndermek için bunu kullanabilir.",
   "channel.userIdHint.discord": "Geliştirici Modunu etkinleştirin (Ayarlar → Gelişmiş), ardından avatarınıza sağ tıklayın → Kullanıcı ID'sini Kopyala.",
   "channel.userIdHint.feishu": "Feishu / Lark Açık Platform uygulamanızı açın → İzinler, ardından Open ID'nizi bulun.",
+  "channel.userIdHint.line": "LINE Geliştirici Konsolu'nu açın → kanalınız → Temel ayarlar sekmesi ve \"Kullanıcı Kimliğiniz\"i kopyalayın (U ile başlar, 33 karakter).",
   "channel.userIdHint.qq": "QQ profil sayfanızda gösterilen QQ numaranız.",
   "channel.userIdHint.slack": "Slack profilinizi açın → ⋮ Diğer → Üye ID'sini kopyala (U ile başlar).",
   "channel.userIdHint.telegram": "Telegram’da @userinfobot’a herhangi bir mesaj gönderin — size sayısal Kullanıcı ID’nizle yanıt verir.",

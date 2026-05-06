@@ -1,11 +1,11 @@
-import type { AgentSignalPolicyStateStore } from '../store/types';
-import { scoreDomainProcedureBatch } from './batchScorer';
-import { getCoarseProcedureDomain, PROCEDURE_ACCUMULATOR_POLICY_ID } from './keys';
+import type { AgentSignalPolicyStateStore } from '../../store/types';
+import { scoreDomainProcedureBatch } from '../batchScorer';
+import { getCoarseProcedureDomain, PROCEDURE_ACCUMULATOR_POLICY_ID } from '../keys';
 import type {
   AgentSignalProcedureRecord,
   DomainProcedureAccumulatorState,
   DomainProcedureBatchScore,
-} from './types';
+} from '../types';
 
 /**
  * Default deterministic P0 scoring thresholds for weak procedure candidates.

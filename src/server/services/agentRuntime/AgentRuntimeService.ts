@@ -7,6 +7,7 @@ import type {
 import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -1523,11 +1524,21 @@ export class AgentRuntimeService {
     operationId: string;
     stepIndex: number;
   }) {
+    const contextWindowTokens =
+      metadata?.modelRuntimeConfig?.model && metadata?.modelRuntimeConfig?.provider
+        ? await getModelPropertyWithFallback<number | undefined>(
+            metadata.modelRuntimeConfig.model,
+            'contextWindowTokens',
+            metadata.modelRuntimeConfig.provider,
+          )
+        : undefined;
+
     // Create Agent instance — use custom factory if provided, otherwise default to GeneralChatAgent
     const generalConfig = {
       agentConfig: metadata?.agentConfig,
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
+        maxWindowToken: contextWindowTokens ?? undefined,
       },
       dynamicInterventionAudits,
       modelRuntimeConfig: metadata?.modelRuntimeConfig,

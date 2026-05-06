@@ -1,4 +1,4 @@
-import type { ProcedureAccumulatorScoreResult } from '../procedure/accumulator';
+import type { ProcedureAccumulatorScoreResult } from '../procedure/accumulators/procedure';
 import type { AgentSignalProcedureInspectionSnapshot } from '../procedure/inspector';
 import type { ProcedureMarkerKeyInput } from '../procedure/keys';
 import type {
