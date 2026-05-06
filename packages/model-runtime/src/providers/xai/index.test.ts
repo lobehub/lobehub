@@ -173,6 +173,66 @@ describe('LobeXAI - custom features', () => {
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
       expect(createCall.tools).toEqual([{ type: 'web_search' }, { type: 'x_search' }]);
     });
+
+    it('should sanitize slash-delimited enum values from function tool schemas', async () => {
+      await instance.chat({
+        enabledSearch: true,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-4.20-beta-0309-reasoning',
+        tools: [
+          {
+            function: {
+              description: 'Send an email',
+              name: 'gmail____gmail_send_email',
+              parameters: {
+                additionalProperties: false,
+                properties: {
+                  mimeType: {
+                    default: 'text/plain',
+                    enum: ['text/plain', 'text/html', 'multipart/alternative'],
+                    type: 'string',
+                  },
+                  mode: {
+                    enum: ['plain', 'html'],
+                    type: 'string',
+                  },
+                },
+                required: ['mimeType'],
+                type: 'object',
+              },
+            },
+            type: 'function' as const,
+          },
+        ],
+      });
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+      expect(createCall.tools).toEqual([
+        {
+          description: 'Send an email',
+          name: 'gmail____gmail_send_email',
+          parameters: {
+            additionalProperties: false,
+            properties: {
+              mimeType: {
+                default: 'text/plain',
+                type: 'string',
+              },
+              mode: {
+                enum: ['plain', 'html'],
+                type: 'string',
+              },
+            },
+            required: ['mimeType'],
+            type: 'object',
+          },
+          type: 'function',
+        },
+        { type: 'web_search' },
+        { type: 'x_search' },
+      ]);
+    });
   });
 
   describe('models', () => {
