@@ -1,6 +1,7 @@
 /**
  * @vitest-environment node
  */
+import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +12,10 @@ import {
   type OperationCreationParams,
   type StartExecutionParams,
 } from './types';
+
+vi.mock('@lobechat/model-runtime', () => ({
+  getModelPropertyWithFallback: vi.fn(),
+}));
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -393,6 +398,71 @@ describe('AgentRuntimeService', () => {
     beforeEach(() => {
       mockCoordinator.loadAgentState.mockResolvedValue(mockState);
       mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
+    });
+
+    it('should pass resolved contextWindowTokens into compressionConfig', async () => {
+      vi.mocked(getModelPropertyWithFallback).mockResolvedValueOnce(200_000);
+
+      let capturedConfig: any;
+      const serviceWithFactory = new AgentRuntimeService(mockDb, mockUserId, {
+        agentFactory: (config) => {
+          capturedConfig = config;
+          return { runner: vi.fn() } as any;
+        },
+      });
+
+      await (serviceWithFactory as any).createAgentRuntime({
+        metadata: {
+          agentConfig: { chatConfig: { enableContextCompression: true } },
+          modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
+        },
+        operationId: 'test-operation-1',
+        stepIndex: 1,
+      });
+
+      expect(getModelPropertyWithFallback).toHaveBeenCalledWith(
+        'gpt-4o-mini',
+        'contextWindowTokens',
+        'openai',
+      );
+      expect(capturedConfig).toEqual(
+        expect.objectContaining({
+          compressionConfig: expect.objectContaining({
+            enabled: true,
+            maxWindowToken: 200_000,
+          }),
+        }),
+      );
+    });
+
+    it('should fall back to undefined maxWindowToken when model lookup misses', async () => {
+      vi.mocked(getModelPropertyWithFallback).mockResolvedValueOnce(undefined);
+
+      let capturedConfig: any;
+      const serviceWithFactory = new AgentRuntimeService(mockDb, mockUserId, {
+        agentFactory: (config) => {
+          capturedConfig = config;
+          return { runner: vi.fn() } as any;
+        },
+      });
+
+      await (serviceWithFactory as any).createAgentRuntime({
+        metadata: {
+          agentConfig: { chatConfig: { enableContextCompression: true } },
+          modelRuntimeConfig: { model: 'unknown-model', provider: 'openai' },
+        },
+        operationId: 'test-operation-1',
+        stepIndex: 1,
+      });
+
+      expect(capturedConfig).toEqual(
+        expect.objectContaining({
+          compressionConfig: expect.objectContaining({
+            enabled: true,
+            maxWindowToken: undefined,
+          }),
+        }),
+      );
     });
 
     it('should execute step successfully', async () => {

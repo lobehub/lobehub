@@ -577,6 +577,47 @@ describe('createRouterRuntime', () => {
       expect(mockChatFail).toHaveBeenCalledTimes(1);
     });
 
+    it('should not retry when the upstream rejects an unsupported model parameter', async () => {
+      const unsupportedParameterError = {
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        error: {
+          error: {
+            code: 'bad_response_status_code',
+            message: 'Model grok-4.20-0309-reasoning does not support parameter presencePenalty.',
+            param: '400',
+            type: 'upstream_error',
+          },
+          message: '400 Model grok-4.20-0309-reasoning does not support parameter presencePenalty.',
+        },
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(unsupportedParameterError);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(unsupportedParameterError);
+
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+    });
+
     it('should not retry when shouldStopFallback returns true', async () => {
       const moderationError = {
         errorType: AgentRuntimeErrorType.ProviderBizError,

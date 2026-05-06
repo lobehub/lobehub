@@ -119,17 +119,19 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
       return;
     }
 
-    if (target?.type !== 'skill' || !target.id) return;
+    if (target?.type !== 'skill') return;
+    const documentId = target.documentId ?? target.id;
+    if (!documentId) return;
 
     const pathname = globalThis.location?.pathname ?? '';
     const pageMatch = PAGE_ROUTE_PATTERN.exec(pathname);
 
     if (pageMatch?.[1] && pageMatch[2]) {
-      navigate(`/agent/${pageMatch[1]}/${pageMatch[2]}/page/${target.id}`);
+      navigate(`/agent/${pageMatch[1]}/${pageMatch[2]}/page/${documentId}`);
       return;
     }
 
-    openDocument(target.id);
+    openDocument(documentId);
   }, [navigate, openDocument, target]);
 
   return (

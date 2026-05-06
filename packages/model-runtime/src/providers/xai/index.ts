@@ -1,6 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { ChatStreamPayload } from '../../types';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createXAIImage } from './createImage';
 import { createXAIVideo } from './createVideo';
@@ -9,9 +10,43 @@ export interface XAIModelCard {
   id: string;
 }
 
+interface XAIChatStreamPayload extends ChatStreamPayload {
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stop?: string | string[];
+}
+
+const supportsChatCompletionPenaltyParameters = (model: string) => model.startsWith('grok-3');
+
+const stripUnsupportedPenaltyParameters = (payload: ChatStreamPayload) => {
+  const {
+    frequencyPenalty: _frequencyPenalty,
+    presencePenalty: _presencePenalty,
+    ...rest
+  } = payload as XAIChatStreamPayload;
+
+  return {
+    ...rest,
+    frequency_penalty: undefined,
+    presence_penalty: undefined,
+    stop: undefined,
+  } as ChatStreamPayload;
+};
+
+const pruneUnsupportedChatCompletionParameters = (payload: ChatStreamPayload) => {
+  if (supportsChatCompletionPenaltyParameters(payload.model)) return payload;
+
+  return stripUnsupportedPenaltyParameters(payload);
+};
+
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
   chatCompletion: {
+    handlePayload: (payload) =>
+      ({
+        ...pruneUnsupportedChatCompletionParameters(payload),
+        stream: payload.stream ?? true,
+      }) as any,
     useResponse: true,
   },
   createImage: createXAIImage,
@@ -36,7 +71,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.XAI,
   responses: {
     handlePayload: (payload) => {
-      const { enabledSearch, tools, ...rest } = payload;
+      const { enabledSearch, tools, ...rest } = stripUnsupportedPenaltyParameters(payload);
 
       const xaiTools = enabledSearch
         ? [...(tools || []), { type: 'web_search' }, { type: 'x_search' }]
@@ -44,8 +79,6 @@ export const LobeXAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
-        frequency_penalty: undefined, // NOT SUPPORTED in Responses API
-        presence_penalty: undefined, // NOT SUPPORTED in Responses API
         tools: xaiTools,
         include: ['reasoning.encrypted_content'],
       } as any;

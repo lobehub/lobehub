@@ -1,3 +1,4 @@
+import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
@@ -15,6 +16,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
+import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import { nanoid } from '@/utils/uuid';
 
 const log = debug('lobe-server:ai-agent-router');
@@ -326,6 +328,67 @@ const InterruptTaskSchema = z
     message: 'Either threadId or operationId must be provided',
   });
 
+/**
+ * Wire shape of an `AgentStreamEvent` produced by `lh hetero exec`. Mirrors
+ * `AgentStreamEvent` in `@lobechat/agent-gateway-client` (kept here as a Zod
+ * schema for tRPC input validation; tRPC's type inference takes care of the
+ * client-side typing). Republished verbatim through `StreamEventManager` so
+ * gateway WS subscribers see the same shape regardless of producer.
+ */
+const AgentStreamEventSchema = z.object({
+  data: z.any(),
+  operationId: z.string(),
+  stepIndex: z.number().int().nonnegative(),
+  timestamp: z.number().int().nonnegative(),
+  type: z.enum([
+    'agent_runtime_init',
+    'agent_runtime_end',
+    'stream_start',
+    'stream_chunk',
+    'stream_end',
+    'stream_retry',
+    'tool_start',
+    'tool_end',
+    'tool_execute',
+    'tool_result',
+    'step_start',
+    'step_complete',
+    'error',
+  ]),
+});
+
+/**
+ * Schema for `aiAgent.heteroIngest` — accepts a batch of producer-side
+ * `AgentStreamEvent`s from `lh hetero exec`. `topicId` is required (operationId
+ * → topic reverse-lookup is unreliable per LOBE-8516 design decision).
+ */
+const HeteroIngestSchema = z.object({
+  agentType: z.enum(['claude-code', 'codex']),
+  events: z.array(AgentStreamEventSchema).min(1),
+  operationId: z.string().min(1),
+  topicId: z.string().min(1),
+});
+
+/**
+ * Schema for `aiAgent.heteroFinish` — terminal call, mirrors the CLI process
+ * exit. `result` is the high-level outcome; `error` carries CLI-classified
+ * details when `result === 'error'`. `sessionId` is the native CLI session
+ * (CC's per-cwd id), kept here so the server can resume next time.
+ */
+const HeteroFinishSchema = z.object({
+  agentType: z.enum(['claude-code', 'codex']),
+  error: z
+    .object({
+      message: z.string(),
+      type: z.string(),
+    })
+    .optional(),
+  operationId: z.string().min(1),
+  result: z.enum(['success', 'error', 'cancelled']),
+  sessionId: z.string().optional(),
+  topicId: z.string().min(1),
+});
+
 const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -334,6 +397,7 @@ const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId),
       aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId),
+      heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
@@ -1147,6 +1211,75 @@ export const aiAgentRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Operation ID not found' });
       }
       throw error;
+    }
+  }),
+
+  /**
+   * Ingest a batch of `AgentStreamEvent`s from a `lh hetero exec` producer
+   * (CLI standalone, sandboxed CC, etc.) and republish them through the
+   * existing stream fanout so renderer-side gateway WS subscribers see them
+   * unchanged. Phase 2a: pub/sub only — no DB persistence (phase 2b adds it).
+   */
+  heteroIngest: aiAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
+    const { agentType, events, operationId, topicId } = input;
+
+    log(
+      'heteroIngest: topic=%s op=%s type=%s count=%d',
+      topicId,
+      operationId,
+      agentType,
+      events.length,
+    );
+
+    try {
+      // Zod's z.any() infers `data?: any`, but the wire shape always includes
+      // a `data` field (may be null). Cast at the boundary instead of widening
+      // the shared `AgentStreamEvent` type or the service signature.
+      await ctx.heterogeneousAgentService.heteroIngest({
+        agentType,
+        events: events as AgentStreamEvent[],
+        operationId,
+        topicId,
+      });
+      return { ack: true as const };
+    } catch (error: any) {
+      log('heteroIngest failed: %s', error?.message);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: error?.message || 'Failed to ingest heterogeneous agent events',
+      });
+    }
+  }),
+
+  /**
+   * Terminal handshake from a `lh hetero exec` producer: signals process exit
+   * and carries the run's high-level outcome. Always emits a final
+   * `agent_runtime_end` so renderer subscribers can shut down even when the
+   * CLI's own end-event was lost mid-flight.
+   */
+  heteroFinish: aiAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
+    const { agentType, error, operationId, result, sessionId, topicId } = input;
+
+    log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
+
+    try {
+      await ctx.heterogeneousAgentService.heteroFinish({
+        agentType,
+        error,
+        operationId,
+        result,
+        sessionId,
+        topicId,
+      });
+      return { ack: true as const };
+    } catch (err: any) {
+      log('heteroFinish failed: %s', err?.message);
+      throw new TRPCError({
+        cause: err,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: err?.message || 'Failed to finalize heterogeneous agent run',
+      });
     }
   }),
 

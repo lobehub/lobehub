@@ -18,6 +18,7 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { selfIterationIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
@@ -119,6 +120,13 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: SkillMaintainerManifest.identifier,
     manifest: SkillMaintainerManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: selfIterationIntentManifest.identifier,
+    manifest: selfIterationIntentManifest,
     type: 'builtin',
   },
   {

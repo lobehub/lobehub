@@ -121,6 +121,8 @@ describe('projectAgentSignalReceipts', () => {
             actionId: 'action-skill-1',
             output: {
               target: {
+                agentDocumentId: 'index-agent-document-1',
+                documentId: 'index-document-1',
                 id: 'document-1',
                 summary: 'Review metadata before diff and produce a merge decision.',
                 title: 'GitHub PR review workflow',
@@ -137,6 +139,8 @@ describe('projectAgentSignalReceipts', () => {
       {
         kind: 'skill',
         target: {
+          agentDocumentId: 'index-agent-document-1',
+          documentId: 'index-document-1',
           id: 'document-1',
           summary: 'Review metadata before diff and produce a merge decision.',
           title: 'GitHub PR review workflow',

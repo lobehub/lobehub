@@ -546,6 +546,7 @@ export const taskRouter = router({
           summary: `Task has been running without heartbeat update for more than ${task.heartbeatTimeout} seconds.`,
           taskId: task.id,
           title: `${task.identifier} heartbeat timeout`,
+          trigger: 'task',
           type: 'error',
         });
 

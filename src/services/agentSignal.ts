@@ -14,6 +14,7 @@ export interface ListAgentSignalReceiptsParams {
   agentId: string;
   cursor?: number;
   limit?: number;
+  sinceCreatedAt?: number;
   topicId: string;
 }
 

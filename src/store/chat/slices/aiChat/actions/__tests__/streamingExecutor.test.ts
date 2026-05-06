@@ -1,3 +1,4 @@
+import * as agentRuntime from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
@@ -222,6 +223,110 @@ describe('StreamingExecutor actions', () => {
       if (toolOperations.length > 0) {
         expect(toolOperations.every((op) => op.status === 'cancelled')).toBe(true);
       }
+
+      streamSpy.mockRestore();
+    });
+
+    it('should pass model contextWindowTokens into compressionConfig when creating the agent', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      useAiInfraStore.setState({
+        enabledAiModels: [
+          {
+            abilities: { functionCall: true },
+            contextWindowTokens: 200_000,
+            id: 'gpt-4o-mini',
+            providerId: 'openai',
+            type: 'chat',
+          } as EnabledAiModel,
+        ],
+      });
+
+      const agentSpy = vi.spyOn(agentRuntime, 'GeneralChatAgent');
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [userMessage],
+          parentMessageId: userMessage.id,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(agentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          compressionConfig: expect.objectContaining({
+            enabled: true,
+            maxWindowToken: 200_000,
+          }),
+        }),
+      );
+
+      streamSpy.mockRestore();
+    });
+
+    it('should fall back to undefined maxWindowToken for unknown models', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+      const agentSpy = vi.spyOn(agentRuntime, 'GeneralChatAgent');
+
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig({ model: 'unknown-model', provider: 'openai' }),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [userMessage],
+          parentMessageId: userMessage.id,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(agentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          compressionConfig: expect.objectContaining({
+            enabled: true,
+            maxWindowToken: undefined,
+          }),
+        }),
+      );
 
       streamSpy.mockRestore();
     });

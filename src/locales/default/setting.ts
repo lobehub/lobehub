@@ -549,6 +549,9 @@ export default {
   'settingAgent.tag.placeholder': 'Enter tag',
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
+  'settingAppearance.appTray.desc':
+    'Show the LobeHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
+  'settingAppearance.appTray.title': 'Show App Tray',
   'settingAppearance.animationMode.agile': 'Agile',
   'settingAppearance.animationMode.desc':
     'Select the animation speed for application response actions',
@@ -559,6 +562,7 @@ export default {
   'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
+  'settingAppearance.desktop.title': 'Desktop',
   'settingAppearance.neutralColor.desc': 'Custom grayscale with different color tendencies',
   'settingAppearance.neutralColor.title': 'Neutral Color',
   'settingAppearance.noAnimation.desc': 'Disable all animation effects in the application',
@@ -596,6 +600,10 @@ export default {
   'settingChat.inputTemplate.placeholder':
     'Preprocessing template {{text}} will be replaced with real-time input information',
   'settingChat.inputTemplate.title': 'User Input Preprocessing',
+  'settingChat.selfIteration.enabled.desc':
+    'Allow this assistant to review recent signals and improve its own skills when the lab workflow runs',
+  'settingChat.selfIteration.enabled.title': 'Enable Self-Iteration',
+  'settingChat.selfIteration.title': 'Advanced Labs',
   'settingChat.submit': 'Update Chat Preferences',
   'settingChat.title': 'Chat Settings',
   'settingChatAppearance.autoScrollOnStreaming.desc':

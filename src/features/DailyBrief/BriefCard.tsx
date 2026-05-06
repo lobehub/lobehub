@@ -17,27 +17,20 @@ import BriefIcon from './BriefIcon';
 import { styles } from './style';
 import { type AgentAvatarInfo, type BriefItem } from './types';
 
-interface AgentAvatarsProps {
-  agents: AgentAvatarInfo[];
+interface ProducingAgentAvatarProps {
+  agent: AgentAvatarInfo;
 }
 
-const AgentAvatars = memo<AgentAvatarsProps>(({ agents }) => {
+const ProducingAgentAvatar = memo<ProducingAgentAvatarProps>(({ agent }) => {
   const { t } = useTranslation('common');
-  if (agents.length === 0) return null;
-
+  const isInbox = agent.id === INBOX_SESSION_ID;
   return (
-    <Avatar.Group
-      shadow
+    <Avatar
+      avatar={agent.avatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)}
+      background={agent.backgroundColor || cssVar.colorBgContainer}
+      shape={'circle'}
       size={28}
-      items={agents.map((agent, index) => {
-        const isInbox = agent?.id === INBOX_SESSION_ID;
-        return {
-          avatar: agent?.avatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
-          background: agent.backgroundColor || cssVar.colorBgContainer,
-          key: agent.id || index.toString(),
-          title: agent?.title || (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession')),
-        };
-      })}
+      title={agent.title || (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession'))}
     />
   );
 });
@@ -79,7 +72,7 @@ const BriefCard = memo<BriefCardProps>(
           onClick={canNavigate ? () => navigate(`/task/${brief.taskId}`) : undefined}
         >
           <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
-            <BriefIcon type={brief.type} />
+            <BriefIcon muted={isResolved} type={brief.type} />
             <Text ellipsis fontSize={16} style={{ flex: 1 }} weight={500}>
               {brief.title}
             </Text>
@@ -92,7 +85,7 @@ const BriefCard = memo<BriefCardProps>(
                 <Text className={styles.resolvedTag}>{t('brief.resolved')}</Text>
               </Flexbox>
             )}
-            {brief.agents.length > 0 && <AgentAvatars agents={brief.agents} />}
+            {brief.agent && <ProducingAgentAvatar agent={brief.agent} />}
             {isResolved && (
               <ActionIcon
                 icon={expanded ? ChevronUpIcon : ChevronDownIcon}

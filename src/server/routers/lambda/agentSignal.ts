@@ -50,6 +50,7 @@ export const agentSignalRouter = router({
         agentId: z.string().min(1),
         cursor: z.number().int().min(0).optional(),
         limit: z.number().int().min(1).max(50).default(20),
+        sinceCreatedAt: z.number().int().min(0).optional(),
         topicId: z.string().min(1),
       }),
     )
@@ -58,6 +59,7 @@ export const agentSignalRouter = router({
         agentId: input.agentId,
         cursor: input.cursor,
         limit: input.limit,
+        sinceCreatedAt: input.sinceCreatedAt,
         topicId: input.topicId,
         userId: ctx.userId,
       });

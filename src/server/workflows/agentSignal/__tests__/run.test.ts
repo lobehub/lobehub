@@ -1,17 +1,16 @@
 // @vitest-environment node
-import {
-  AGENT_SIGNAL_SOURCE_TYPES,
-  type AgentSignalSourceEvent,
-  type SourceAgentUserMessage,
-} from '@lobechat/agent-signal/source';
+import type { AgentSignalSourceEvent, SourceAgentUserMessage } from '@lobechat/agent-signal/source';
+import { AGENT_SIGNAL_SOURCE_TYPES, createSourceEvent } from '@lobechat/agent-signal/source';
 import { agents, messages, threads, topics, users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  runAgentSignalWorkflow,
-  type RunAgentSignalWorkflowDeps,
-} from '@/server/workflows/agentSignal/run';
+import type { SelfReflectionReviewContext } from '@/server/services/agentSignal/policies/reviewNightly/selfReflection';
+import { createProcedurePolicyOptions as createProcedurePolicyOptionsFixture } from '@/server/services/agentSignal/procedure';
+import { MaintenanceReviewScope, ReviewRunStatus } from '@/server/services/agentSignal/services';
+import type { AgentSignalPolicyStateStore } from '@/server/services/agentSignal/store/types';
+import type { RunAgentSignalWorkflowDeps } from '@/server/workflows/agentSignal/run';
+import { runAgentSignalWorkflow } from '@/server/workflows/agentSignal/run';
 import { uuid } from '@/utils/uuid';
 
 vi.mock('@/server/services/agentSignal/featureGate', () => ({
@@ -22,6 +21,17 @@ const createWorkflowContext = <TPayload>(requestPayload: TPayload) => {
   return {
     requestPayload,
     run: async <TRunResult>(_stepId: string, handler: () => Promise<TRunResult>) => handler(),
+  };
+};
+
+const createPolicyStateStore = (): AgentSignalPolicyStateStore => {
+  const state = new Map<string, Record<string, string>>();
+
+  return {
+    readPolicyState: async (policyId, scopeKey) => state.get(`${policyId}:${scopeKey}`),
+    writePolicyState: async (policyId, scopeKey, data) => {
+      state.set(`${policyId}:${scopeKey}`, { ...state.get(`${policyId}:${scopeKey}`), ...data });
+    },
   };
 };
 
@@ -435,6 +445,292 @@ describe('runAgentSignalWorkflow', () => {
     );
     expect(userMessageSource.payload.serializedContext).not.toContain(
       'Later root message that should still be excluded from the threaded context.',
+    );
+  });
+
+  it('installs nightly review policy dependencies only for nightly review sources', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const agentId = `agent_${uuid()}`;
+    const localDate = '2026-05-04';
+    const sourceId = `nightly-review:${userId}:${agentId}:${localDate}`;
+    const nightlyReviewPolicyOptions = {
+      acquireReviewGuard: vi.fn(async () => true),
+      canRunReview: vi.fn(async () => true),
+      collectContext: vi.fn(async () => ({
+        agentId,
+        managedSkills: [],
+        relevantMemories: [],
+        reviewWindowEnd: '2026-05-04T14:30:00.000Z',
+        reviewWindowStart: '2026-05-03T16:00:00.000Z',
+        topics: [],
+        userId,
+      })),
+      executePlan: vi.fn(async () => ({ actions: [], status: ReviewRunStatus.Completed })),
+      planReviewOutput: vi.fn(() => ({
+        actions: [],
+        plannerVersion: 'test',
+        reviewScope: MaintenanceReviewScope.Nightly,
+        summary: 'Noop',
+      })),
+      runMaintenanceReviewAgent: vi.fn(async () => ({
+        actions: [],
+        findings: [],
+        summary: 'Noop',
+      })),
+    };
+    const createNightlyReviewPolicyOptions: NonNullable<
+      RunAgentSignalWorkflowDeps['createNightlyReviewPolicyOptions']
+    > = vi.fn(() => nightlyReviewPolicyOptions);
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async () => undefined,
+    );
+    const sourceEvent = createSourceEvent({
+      payload: {
+        agentId,
+        localDate,
+        requestedAt: '2026-05-04T14:30:00.000Z',
+        reviewWindowEnd: '2026-05-04T14:30:00.000Z',
+        reviewWindowStart: '2026-05-03T16:00:00.000Z',
+        timezone: 'Asia/Shanghai',
+        userId,
+      },
+      scopeKey: `agent:${agentId}`,
+      sourceId,
+      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+      timestamp: Date.now(),
+    });
+
+    await runAgentSignalWorkflow(createWorkflowContext({ agentId, sourceEvent, userId }), {
+      createNightlyReviewPolicyOptions,
+      executeSourceEvent,
+      getDb: async () => db,
+    });
+
+    expect(createNightlyReviewPolicyOptions).toHaveBeenCalledWith({
+      agentId,
+      db,
+      selfIterationEnabled: true,
+      userId,
+    });
+    expect(executeSourceEvent).toHaveBeenCalledWith(
+      sourceEvent,
+      expect.any(Object),
+      expect.objectContaining({
+        policyOptions: expect.objectContaining({
+          nightlyReview: nightlyReviewPolicyOptions,
+          skillManagement: {
+            selfIterationEnabled: true,
+          },
+        }),
+      }),
+    );
+  });
+
+  it('installs self-reflection policy dependencies for self-reflection sources', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const agentId = `agent_${uuid()}`;
+    const sourceId = `self-reflection:${userId}:${agentId}:topic:topic-1:failed_tool_count:2026-05-04T14:30:00.000Z`;
+    const selfReflectionContext: SelfReflectionReviewContext = {
+      agentId,
+      scopeId: 'topic-1',
+      scopeType: 'topic',
+      userId,
+      windowEnd: '2026-05-04T14:30:00.000Z',
+      windowStart: '2026-05-04T14:00:00.000Z',
+    };
+    const selfReflectionPolicyOptions = {
+      acquireReviewGuard: vi.fn(async () => true),
+      canRunReview: vi.fn(async () => true),
+      collectContext: vi.fn(async () => selfReflectionContext),
+      executePlan: vi.fn(async () => ({ actions: [], status: ReviewRunStatus.Completed })),
+      planReviewOutput: vi.fn(() => ({
+        actions: [],
+        plannerVersion: 'test',
+        reviewScope: MaintenanceReviewScope.SelfReflection,
+        summary: 'Noop',
+      })),
+      runMaintenanceReviewAgent: vi.fn(async () => ({
+        actions: [],
+        findings: [],
+        summary: 'Noop',
+      })),
+      writeReceipt: vi.fn(async () => {}),
+    };
+    const createSelfReflectionPolicyOptions: NonNullable<
+      RunAgentSignalWorkflowDeps['createSelfReflectionPolicyOptions']
+    > = vi.fn(() => selfReflectionPolicyOptions);
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async () => undefined,
+    );
+    const sourceEvent = createSourceEvent({
+      payload: {
+        agentId,
+        reason: 'failed_tool_count',
+        scopeId: 'topic-1',
+        scopeType: 'topic',
+        topicId: 'topic-1',
+        userId,
+        windowEnd: '2026-05-04T14:30:00.000Z',
+        windowStart: '2026-05-04T14:00:00.000Z',
+      },
+      scopeKey: 'topic:topic-1',
+      sourceId,
+      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfReflectionRequested,
+      timestamp: Date.now(),
+    });
+
+    await runAgentSignalWorkflow(createWorkflowContext({ agentId, sourceEvent, userId }), {
+      createSelfReflectionPolicyOptions,
+      executeSourceEvent,
+      getDb: async () => db,
+    });
+
+    expect(createSelfReflectionPolicyOptions).toHaveBeenCalledWith({
+      agentId,
+      db,
+      selfIterationEnabled: true,
+      userId,
+    });
+    expect(executeSourceEvent).toHaveBeenCalledWith(
+      sourceEvent,
+      expect.any(Object),
+      expect.objectContaining({
+        policyOptions: expect.objectContaining({
+          selfReflection: selfReflectionPolicyOptions,
+          skillManagement: {
+            selfIterationEnabled: true,
+          },
+        }),
+      }),
+    );
+  });
+
+  it('installs self-iteration intent policy dependencies for declared intent sources', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const agentId = `agent_${uuid()}`;
+    const sourceId = `self-iteration-intent:${userId}:${agentId}:topic:topic-1:tool-call-1`;
+    const selfIterationIntentPolicyOptions = {
+      acquireReviewGuard: vi.fn(async () => true),
+      canRunReview: vi.fn(async () => true),
+      executePlan: vi.fn(async () => ({ actions: [], status: ReviewRunStatus.Completed })),
+      planReviewOutput: vi.fn(() => ({
+        actions: [],
+        plannerVersion: 'test',
+        reviewScope: MaintenanceReviewScope.SelfIterationIntent,
+        summary: 'Noop',
+      })),
+      writeReceipt: vi.fn(async () => {}),
+    };
+    const createSelfIterationIntentPolicyOptions: NonNullable<
+      RunAgentSignalWorkflowDeps['createSelfIterationIntentPolicyOptions']
+    > = vi.fn(() => selfIterationIntentPolicyOptions);
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async () => undefined,
+    );
+    const sourceEvent = createSourceEvent({
+      payload: {
+        action: 'refine',
+        agentId,
+        confidence: 0.9,
+        evidenceRefs: [{ id: 'msg-1', type: 'message' }],
+        kind: 'skill',
+        reason: 'Reusable correction.',
+        skillId: 'skill-1',
+        summary: 'Refine release-note workflow.',
+        toolCallId: 'tool-call-1',
+        topicId: 'topic-1',
+        userId,
+      },
+      scopeKey: 'topic:topic-1',
+      sourceId,
+      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfIterationIntentDeclared,
+      timestamp: Date.now(),
+    });
+
+    await runAgentSignalWorkflow(createWorkflowContext({ agentId, sourceEvent, userId }), {
+      createSelfIterationIntentPolicyOptions,
+      executeSourceEvent,
+      getDb: async () => db,
+    });
+
+    expect(createSelfIterationIntentPolicyOptions).toHaveBeenCalledWith({
+      agentId,
+      db,
+      selfIterationEnabled: true,
+      userId,
+    });
+    expect(executeSourceEvent).toHaveBeenCalledWith(
+      sourceEvent,
+      expect.any(Object),
+      expect.objectContaining({
+        policyOptions: expect.objectContaining({
+          selfIterationIntent: selfIterationIntentPolicyOptions,
+          skillManagement: {
+            selfIterationEnabled: true,
+          },
+        }),
+      }),
+    );
+  });
+
+  it('installs procedure self-reflection dependencies for tool outcome sources', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const agentId = `agent_${uuid()}`;
+    const procedurePolicyOptions = createProcedurePolicyOptionsFixture({
+      policyStateStore: createPolicyStateStore(),
+      ttlSeconds: 60,
+    });
+    const createProcedurePolicyOptions: NonNullable<
+      RunAgentSignalWorkflowDeps['createProcedurePolicyOptions']
+    > = vi.fn(() => procedurePolicyOptions);
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async () => undefined,
+    );
+    const sourceEvent = createSourceEvent({
+      payload: {
+        agentId,
+        domainKey: 'skill:tool-call',
+        outcome: {
+          status: 'failed',
+          summary: 'Tool failed twice.',
+        },
+        tool: { apiName: 'writeFile', identifier: 'filesystem' },
+        toolCallId: 'tool-call-1',
+        topicId: 'topic-1',
+      },
+      scopeKey: 'topic:topic-1',
+      sourceId: 'tool-outcome:filesystem:writeFile:failed:tool-call-1',
+      sourceType: AGENT_SIGNAL_SOURCE_TYPES.toolOutcomeFailed,
+      timestamp: Date.now(),
+    });
+
+    await runAgentSignalWorkflow(createWorkflowContext({ agentId, sourceEvent, userId }), {
+      createProcedurePolicyOptions,
+      executeSourceEvent,
+      getDb: async () => db,
+    });
+
+    expect(createProcedurePolicyOptions).toHaveBeenCalledWith({
+      agentId,
+      db,
+      selfIterationEnabled: true,
+      userId,
+    });
+    expect(executeSourceEvent).toHaveBeenCalledWith(
+      sourceEvent,
+      expect.any(Object),
+      expect.objectContaining({
+        policyOptions: expect.objectContaining({
+          procedure: procedurePolicyOptions,
+          skillManagement: {
+            selfIterationEnabled: true,
+          },
+        }),
+      }),
     );
   });
 });

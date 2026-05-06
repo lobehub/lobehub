@@ -38,6 +38,23 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns true for unsupported model parameter errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          error: {
+            code: 'bad_response_status_code',
+            message: 'Model grok-4.20-0309-reasoning does not support parameter presencePenalty.',
+            param: '400',
+            type: 'upstream_error',
+          },
+          message: '400 Model grok-4.20-0309-reasoning does not support parameter presencePenalty.',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+      }),
+    ).toBe(true);
+  });
+
   it('returns true for assistant prefill request-shape errors', () => {
     expect(
       isNonRetryableRequestError({

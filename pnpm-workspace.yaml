@@ -5,8 +5,9 @@ packages:
   - apps/desktop/src/main
 
 onlyBuiltDependencies:
-  - '@vercel/speed-insights'
+  - '@google/genai'
   - '@lobehub/editor'
+  - '@vercel/speed-insights'
 
 overrides:
   jose: ^6.1.3

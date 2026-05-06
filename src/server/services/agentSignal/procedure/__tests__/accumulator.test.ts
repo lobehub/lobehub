@@ -3,7 +3,7 @@ import {
   appendAndScoreProcedureAccumulatorRecord,
   appendDomainProcedureRecord,
   shouldScoreAccumulator,
-} from '../accumulator';
+} from '../accumulators/procedure';
 import { PROCEDURE_ACCUMULATOR_POLICY_ID } from '../keys';
 
 const createStore = (): AgentSignalPolicyStateStore => {
