@@ -12,6 +12,7 @@ import { DiffAllToolbar, EditorCanvas as SharedEditorCanvas } from '@/features/E
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
+import { useDocumentStore } from '@/store/document';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { StyleSheet } from '@/utils/styles';
 
@@ -147,10 +148,18 @@ const TopicCanvasPageAgentBridge = memo<
       });
       documentHistoryQueueService.enqueueEditorSnapshot({ documentId, editor });
     });
+    pageAgentRuntime.setAfterMutateHandler(async () => {
+      if (!documentId) return;
+
+      await useDocumentStore
+        .getState()
+        .commitEditorMutation(documentId, { saveSource: 'llm_call' });
+    });
 
     return () => {
       log('[TopicCanvas/PageAgentBridge] clearDocumentContext', { documentId });
       pageAgentRuntime.setCurrentDocId(undefined);
+      pageAgentRuntime.setAfterMutateHandler(null);
       pageAgentRuntime.setTitleHandlers(null, null);
       pageAgentRuntime.setBeforeMutateHandler(null);
       void documentHistoryQueueService.flush();

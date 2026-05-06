@@ -30,6 +30,7 @@ interface InspectableEditor {
 export interface EditorRuntimeDebugSnapshot {
   currentDocId?: string;
   dataSourceTypes: string[];
+  hasAfterMutateHandler: boolean;
   hasBeforeMutateHandler: boolean;
   hasEditor: boolean;
   hasLexicalEditor: boolean;
@@ -64,6 +65,7 @@ export class EditorRuntime {
   private titleSetter: ((title: string) => void) | null = null;
   private titleGetter: (() => string) | null = null;
   private currentDocId: string | undefined = undefined;
+  private afterMutateHandler: (() => void | Promise<void>) | null = null;
   private beforeMutateHandler: (() => void | Promise<void>) | null = null;
 
   /**
@@ -100,6 +102,15 @@ export class EditorRuntime {
   }
 
   /**
+   * Set a handler to be called after any successful mutating operation.
+   * This can be used to synchronize editor changes into the host persistence layer.
+   */
+  setAfterMutateHandler(handler: (() => void | Promise<void>) | null) {
+    this.afterMutateHandler = handler;
+    log('[EditorRuntime] setAfterMutateHandler', this.getDebugSnapshot());
+  }
+
+  /**
    * Set the title setter and getter functions
    */
   setTitleHandlers(setter: ((title: string) => void) | null, getter: (() => string) | null) {
@@ -125,6 +136,7 @@ export class EditorRuntime {
     return {
       currentDocId: this.currentDocId,
       dataSourceTypes: inspectableEditor ? getDataSourceTypes(inspectableEditor) : [],
+      hasAfterMutateHandler: !!this.afterMutateHandler,
       hasBeforeMutateHandler: !!this.beforeMutateHandler,
       hasEditor: !!this.editor,
       hasLexicalEditor,
@@ -166,6 +178,22 @@ export class EditorRuntime {
     return { getter: this.titleGetter, setter: this.titleSetter };
   }
 
+  private async runBeforeMutate() {
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
+  }
+
+  private async runAfterMutate() {
+    try {
+      await this.afterMutateHandler?.();
+    } catch {
+      /* ignore post-mutation errors */
+    }
+  }
+
   // ==================== Initialize ====================
 
   /**
@@ -175,14 +203,15 @@ export class EditorRuntime {
   async initPage(args: InitDocumentArgs): Promise<InitPageRuntimeResult> {
     log('[EditorRuntime] initPage:start', {
       markdownLength: args.markdown.length,
+
       snapshot: this.getDebugSnapshot(),
     });
 
-    try {
-      await this.beforeMutateHandler?.();
-    } catch {
-      /* ignore pre-mutation errors */
+    if (!args.markdown || args.markdown.trim().length === 0) {
+      throw new Error('initPage failed: markdown content is empty.');
     }
+
+    await this.runBeforeMutate();
     const editor = this.getEditor();
 
     let markdown = args.markdown;
@@ -196,6 +225,11 @@ export class EditorRuntime {
       // Remove the title line from markdown
       markdown = markdown.slice(titleLine.length).trimStart();
 
+      log('[EditorRuntime] initPage:titleExtracted', {
+        extractedTitle,
+        remainingMarkdownLength: markdown.length,
+      });
+
       // Set the title separately if title handlers are available
       if (this.titleSetter) {
         this.titleSetter(extractedTitle);
@@ -203,11 +237,31 @@ export class EditorRuntime {
     }
 
     // Set markdown content directly - the editor will convert it internally
+
     editor.setDocument('markdown', markdown, { keepId: true });
 
     // Get the resulting document to count nodes
+    // Lexical getDocument('json') returns { root: { children: [...] } }
+    // where 'root' wraps the top-level block elements
     const jsonState = editor.getDocument('json') as any;
-    const nodeCount = jsonState?.children?.length || 0;
+    const root = jsonState?.root ?? jsonState;
+    const nodeCount = root?.children?.length || 0;
+
+    log('[EditorRuntime] initPage:afterSetDocument', {
+      nodeCount,
+      jsonStateKeys: jsonState ? Object.keys(jsonState) : null,
+      rootKeys: root ? Object.keys(root) : null,
+    });
+
+    if (nodeCount === 0) {
+      throw new Error(
+        `initPage failed: setDocument produced 0 nodes. ` +
+          `Input markdown length: ${args.markdown.length}, ` +
+          `after title-stripping: ${markdown.length}. ` +
+          `jsonState keys: ${jsonState ? JSON.stringify(Object.keys(jsonState)) : 'null'}, ` +
+          `root keys: ${root ? JSON.stringify(Object.keys(root)) : 'null'}.`,
+      );
+    }
 
     const result = { extractedTitle, nodeCount };
     log('[EditorRuntime] initPage:success', {
@@ -215,6 +269,8 @@ export class EditorRuntime {
       snapshot: this.getDebugSnapshot(),
       titleExtracted: !!extractedTitle,
     });
+
+    await this.runAfterMutate();
 
     return result;
   }
@@ -231,11 +287,7 @@ export class EditorRuntime {
       titleLength: args.title.length,
     });
 
-    try {
-      await this.beforeMutateHandler?.();
-    } catch {
-      /* ignore pre-mutation errors */
-    }
+    await this.runBeforeMutate();
     const { setter, getter } = this.getTitleHandlers();
     const previousTitle = getter();
 
@@ -247,6 +299,8 @@ export class EditorRuntime {
       snapshot: this.getDebugSnapshot(),
       titleLength: args.title.length,
     });
+
+    await this.runAfterMutate();
 
     return result;
   }
@@ -373,6 +427,10 @@ export class EditorRuntime {
                 afterId: op.afterId,
                 litexml: op.litexml,
               });
+            } else {
+              throw new Error(
+                `Insert operation requires either 'beforeId' or 'afterId'. Got: ${JSON.stringify(Object.keys(op))}.`,
+              );
             }
             results.push({ action: 'insert', success: true });
             break;
@@ -405,8 +463,15 @@ export class EditorRuntime {
 
     // Dispatch all operations at once
     log('Dispatching LITEXML_MODIFY_COMMAND with payload:', commandPayload);
-    const success = editor.dispatchCommand(LITEXML_MODIFY_COMMAND, commandPayload);
-    log('Command dispatched, success:', success);
+    const dispatchSuccess = editor.dispatchCommand(LITEXML_MODIFY_COMMAND, commandPayload);
+    log('Command dispatched, success:', dispatchSuccess);
+
+    if (!dispatchSuccess && commandPayload.length > 0) {
+      throw new Error(
+        `modifyNodes failed: editor.dispatchCommand returned false. ` +
+          `Operations attempted: ${commandPayload.map((p) => p.action).join(', ')}.`,
+      );
+    }
 
     const successCount = results.filter((r) => r.success).length;
     const totalCount = results.length;
@@ -417,6 +482,8 @@ export class EditorRuntime {
       successCount,
       totalCount,
     });
+
+    await this.runAfterMutate();
 
     return result;
   }
@@ -593,11 +660,7 @@ export class EditorRuntime {
    * @returns Raw result with modifiedNodeIds and replacementCount
    */
   async replaceText(args: ReplaceTextArgs): Promise<ReplaceTextRuntimeResult> {
-    try {
-      await this.beforeMutateHandler?.();
-    } catch {
-      /* ignore pre-mutation errors */
-    }
+    await this.runBeforeMutate();
     const editor = this.getEditor();
     const { searchText, newText, useRegex = false, replaceAll = true, nodeIds } = args;
 
@@ -700,12 +763,24 @@ export class EditorRuntime {
     // Apply updates if any replacements were made
     if (litexmlUpdates.length > 0) {
       log('Applying updates:', litexmlUpdates.length);
-      const success = editor.dispatchCommand(LITEXML_APPLY_COMMAND, {
+      const dispatchSuccess = editor.dispatchCommand(LITEXML_APPLY_COMMAND, {
         litexml: litexmlUpdates,
       });
-      log('Command dispatched, success:', success);
+      log('Command dispatched, success:', dispatchSuccess);
+
+      if (!dispatchSuccess) {
+        throw new Error(
+          `replaceText failed: editor.dispatchCommand returned false. ` +
+            `Replacement count: ${totalReplacementCount}, ` +
+            `Modified nodes: ${modifiedNodeIds.join(', ')}.`,
+        );
+      }
     }
 
-    return { modifiedNodeIds, replacementCount: totalReplacementCount };
+    const result = { modifiedNodeIds, replacementCount: totalReplacementCount };
+
+    await this.runAfterMutate();
+
+    return result;
   }
 }

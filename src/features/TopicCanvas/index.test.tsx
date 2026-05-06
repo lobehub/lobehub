@@ -19,6 +19,7 @@ const mockEditor = {
 } as const;
 
 const runtimeSpies = vi.hoisted(() => ({
+  setAfterMutateHandler: vi.fn(),
   setBeforeMutateHandler: vi.fn(),
   setCurrentDocId: vi.fn(),
   setEditor: vi.fn(),
@@ -26,6 +27,9 @@ const runtimeSpies = vi.hoisted(() => ({
 }));
 
 const useEditorMock = vi.hoisted(() => vi.fn(() => mockEditor));
+const documentStoreMock = vi.hoisted(() => ({
+  commitEditorMutation: vi.fn(),
+}));
 
 vi.mock('@lobehub/editor/react', () => ({
   EditorProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -106,6 +110,12 @@ vi.mock('@/services/documentHistoryQueue', () => ({
   },
 }));
 
+vi.mock('@/store/document', () => ({
+  useDocumentStore: {
+    getState: () => documentStoreMock,
+  },
+}));
+
 vi.mock('@/store/tool/slices/builtin/executors/lobe-page-agent', () => ({
   pageAgentRuntime: runtimeSpies,
 }));
@@ -129,6 +139,7 @@ describe('TopicCanvas', () => {
       expect(runtimeSpies.setCurrentDocId).toHaveBeenCalledWith('doc-1');
       expect(runtimeSpies.setTitleHandlers).toHaveBeenCalledTimes(1);
       expect(runtimeSpies.setBeforeMutateHandler).toHaveBeenCalledWith(expect.any(Function));
+      expect(runtimeSpies.setAfterMutateHandler).toHaveBeenCalledWith(expect.any(Function));
     });
 
     const beforeMutateHandler = runtimeSpies.setBeforeMutateHandler.mock.calls.find(
@@ -141,9 +152,19 @@ describe('TopicCanvas', () => {
       editor: mockEditor,
     });
 
+    const afterMutateHandler = runtimeSpies.setAfterMutateHandler.mock.calls.find(
+      ([handler]) => typeof handler === 'function',
+    )?.[0] as (() => Promise<void>) | undefined;
+    await afterMutateHandler?.();
+
+    expect(documentStoreMock.commitEditorMutation).toHaveBeenCalledWith('doc-1', {
+      saveSource: 'llm_call',
+    });
+
     unmount();
 
     expect(runtimeSpies.setCurrentDocId).toHaveBeenLastCalledWith(undefined);
+    expect(runtimeSpies.setAfterMutateHandler).toHaveBeenLastCalledWith(null);
     expect(runtimeSpies.setTitleHandlers).toHaveBeenLastCalledWith(null, null);
     expect(runtimeSpies.setBeforeMutateHandler).toHaveBeenLastCalledWith(null);
     expect(runtimeSpies.setEditor).toHaveBeenLastCalledWith(null);

@@ -583,6 +583,40 @@ describe('EditorRuntime', () => {
     });
   });
 
+  describe('afterMutateHandler', () => {
+    it('should call afterMutateHandler after initPage succeeds', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      runtime.setAfterMutateHandler(handler);
+
+      await runtime.initPage({ markdown: 'Test content' });
+      await moment();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not call afterMutateHandler when initPage fails before mutation', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      runtime.setAfterMutateHandler(handler);
+
+      await expect(runtime.initPage({ markdown: '' })).rejects.toThrow(
+        'initPage failed: markdown content is empty.',
+      );
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('should still proceed when afterMutateHandler throws', async () => {
+      const handler = vi.fn().mockRejectedValue(new Error('Handler failed'));
+      runtime.setAfterMutateHandler(handler);
+
+      const result = await runtime.initPage({ markdown: 'Test content' });
+      await moment();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(result.nodeCount).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe('getPageContentContext', () => {
     beforeEach(async () => {
       await runtime.initPage({ markdown: 'Test content for context' });

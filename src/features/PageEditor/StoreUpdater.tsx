@@ -4,6 +4,7 @@ import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
+import { useDocumentStore } from '@/store/document';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
 import { type PublicState } from './store';
@@ -82,9 +83,15 @@ const StoreUpdater = memo<StoreUpdaterProps>(
           editor: storeApi.getState().editor,
         });
       });
+      pageAgentRuntime.setAfterMutateHandler(async () => {
+        if (!pageId) return;
+
+        await useDocumentStore.getState().commitEditorMutation(pageId, { saveSource: 'llm_call' });
+      });
 
       return () => {
         pageAgentRuntime.setCurrentDocId(undefined);
+        pageAgentRuntime.setAfterMutateHandler(null);
         pageAgentRuntime.setTitleHandlers(null, null);
         pageAgentRuntime.setBeforeMutateHandler(null);
         void documentHistoryQueueService.flush();
