@@ -177,7 +177,12 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
           fileResults: [],
           totalResults: 0,
         };
-        return { content: promptNoSearchResults(query), state, success: true };
+        // Use formatSearchResults when errors are present so failure details
+        // are surfaced instead of being silently dropped.
+        const content = errors
+          ? formatSearchResults(fileResults, query, documents, errors)
+          : promptNoSearchResults(query);
+        return { content, state, success: true };
       }
 
       const formattedContent = formatSearchResults(fileResults, query, documents, errors);
