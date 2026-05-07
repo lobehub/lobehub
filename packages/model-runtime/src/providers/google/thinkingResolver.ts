@@ -89,10 +89,13 @@ const THINKING_ENABLED_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Patterns to detect Gemini 3.0+ models (which support thinkingLevel)
+ * Patterns to detect models that support thinkingLevel
+ * - Gemini 3.0+
+ * - Gemma 4
  */
 const GEMINI_3_PATTERNS: RegExp[] = [
   /gemini-3(?:\.\d+)?-/i, // gemini-3-pro, gemini-3.0-flash
+  /gemma-4(?:-|$)/i, // gemma-4-31b-it
 ];
 
 // ============================================================================

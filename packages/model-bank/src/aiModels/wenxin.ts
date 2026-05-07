@@ -159,10 +159,10 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'ERNIE 4.5 Turbo 128K is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
-    displayName: 'ERNIE 4.5 Turbo 128K',
+      'ERNIE 4.5 Turbo 20260402 is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
+    displayName: 'ERNIE 4.5 Turbo 20260402',
     enabled: true,
-    id: 'ernie-4.5-turbo-128k',
+    id: 'ernie-4.5-turbo-20260402',
     maxOutput: 12_288,
     pricing: {
       currency: 'CNY',
@@ -184,9 +184,9 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'ERNIE 4.5 Turbo 128K preview with release-level capabilities, suitable for integration and canary testing.',
-    displayName: 'ERNIE 4.5 Turbo 128K Preview',
-    id: 'ernie-4.5-turbo-128k-preview',
+      'ERNIE 4.5 Turbo 128K is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
+    displayName: 'ERNIE 4.5 Turbo 128K',
+    id: 'ernie-4.5-turbo-128k',
     maxOutput: 12_288,
     pricing: {
       currency: 'CNY',
@@ -195,6 +195,9 @@ const wenxinChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
+    },
+    settings: {
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -281,22 +284,6 @@ const wenxinChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'ERNIE Character 8K is a persona dialogue model for IP character building and long-term companionship chat.',
-    displayName: 'ERNIE Character 8K',
-    id: 'ernie-char-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
       'ERNIE Character Fiction 8K is a persona model for novels and plot creation, suited for long-form story generation.',
     displayName: 'ERNIE Character Fiction 8K',
     id: 'ernie-char-fiction-8k',
@@ -355,75 +342,6 @@ const wenxinChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      search: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'ERNIE 4.5 21B A3B is an open-source large-parameter model with stronger understanding and generation.',
-    displayName: 'ERNIE 4.5 21B A3B',
-    id: 'ernie-4.5-21b-a3b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'ERNIE-4.5-21B-A3B-Thinking is a text MoE (Mixture-of-Experts) post-trained model with a total of 21B parameters and 3B active parameters, offering significantly enhanced reasoning quality and depth.',
-    displayName: 'ERNIE 4.5 21B A3B Thinking',
-    id: 'ernie-4.5-21b-a3b-thinking',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'ERNIE 4.5 VL 28B A3B is an open-source multimodal model for image-text understanding and reasoning.',
-    displayName: 'ERNIE 4.5 VL 28B A3B',
-    id: 'ernie-4.5-vl-28b-a3b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
     },
     type: 'chat',
   },
@@ -491,30 +409,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'ERNIE 4.5 Turbo VL Preview is a multimodal preview model for image-text understanding and generation, suitable for visual QA and content comprehension.',
-    displayName: 'ERNIE 4.5 Turbo VL Preview',
-    id: 'ernie-4.5-turbo-vl-preview',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
       'ERNIE 4.5 Turbo VL is a mature multimodal model for production image-text understanding and recognition.',
     displayName: 'ERNIE 4.5 Turbo VL',
     id: 'ernie-4.5-turbo-vl',
@@ -547,30 +441,6 @@ const wenxinChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
       ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'ERNIE 4.5 Turbo VL 32K Preview is a 32K multimodal preview for evaluating long-context vision ability.',
-    displayName: 'ERNIE 4.5 Turbo VL 32K Preview',
-    id: 'ernie-4.5-turbo-vl-32k-preview',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
     },
     type: 'chat',
   },
@@ -795,25 +665,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Qianfan Llama VL 8B is a Llama-based multimodal model for general image-text understanding.',
-    displayName: 'Qianfan Llama VL 8B',
-    id: 'qianfan-llama-vl-8b',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1118,26 +969,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 16_384,
-    description:
-      'Qwen2.5 VL 7B Instruct is a lightweight multimodal model balancing deployment cost and recognition ability.',
-    displayName: 'Qwen2.5 VL 7B Instruct',
-    id: 'qwen2.5-vl-7b-instruct',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1529,26 +1360,6 @@ const wenxinChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'QWQ-32B is a large open-source reasoning model, suitable as a reasoning core for agents.',
-    displayName: 'QWQ 32B',
-    id: 'qwq-32b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -1773,22 +1584,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768,
-    description:
-      'Qwen2.5 7B Instruct is a mature open-source instruct model for multi-scenario chat and generation.',
-    displayName: 'Qwen2.5 7B Instruct',
-    id: 'qwen2.5-7b-instruct',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-      ],
     },
     type: 'chat',
   },

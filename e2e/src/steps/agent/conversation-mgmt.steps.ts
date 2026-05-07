@@ -9,81 +9,9 @@
  * - Search conversations
  */
 import { Given, Then, When } from '@cucumber/cucumber';
-import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
 import type { CustomWorld } from '../../support/world';
-
-const TOPIC_ITEM_SELECTOR = '[data-testid="topic-item"]';
-const VISIBLE_TOPIC_ITEM_SELECTOR = `${TOPIC_ITEM_SELECTOR}:visible`;
-const TOPIC_SECTION_TITLE = /^(?:Topic|话题)(?:\s+\d+)?$/;
-const TOPIC_GROUP_TITLES = [
-  'Today',
-  'Yesterday',
-  'This Week',
-  'This Month',
-  'No directory',
-  '今天',
-  '昨天',
-  '本周',
-  '本月',
-  '无目录',
-];
-
-const clickFirstVisible = async (locator: Locator) => {
-  const count = await locator.count();
-
-  for (let index = 0; index < count; index++) {
-    const item = locator.nth(index);
-    const visible = await item.isVisible().catch(() => false);
-
-    if (visible) {
-      await item.click();
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const visibleTopicCount = async (page: Page) => page.locator(VISIBLE_TOPIC_ITEM_SELECTOR).count();
-
-const waitForVisibleTopics = async (page: Page) => {
-  await page
-    .locator(VISIBLE_TOPIC_ITEM_SELECTOR)
-    .first()
-    .waitFor({ state: 'visible', timeout: 1500 })
-    .catch(() => undefined);
-};
-
-const expandTopicGroups = async (page: Page) => {
-  for (const title of TOPIC_GROUP_TITLES) {
-    const clicked = await clickFirstVisible(page.getByText(title, { exact: true }));
-
-    if (clicked) {
-      await waitForVisibleTopics(page);
-      if ((await visibleTopicCount(page)) > 0) return true;
-    }
-  }
-
-  return false;
-};
-
-const getVisibleSidebarTopics = async (page: Page) => {
-  await waitForVisibleTopics(page);
-  if ((await visibleTopicCount(page)) > 0) return page.locator(VISIBLE_TOPIC_ITEM_SELECTOR);
-
-  await expandTopicGroups(page);
-  if ((await visibleTopicCount(page)) > 0) return page.locator(VISIBLE_TOPIC_ITEM_SELECTOR);
-
-  const topicSectionExpanded = await clickFirstVisible(page.getByText(TOPIC_SECTION_TITLE));
-  if (topicSectionExpanded) {
-    await page.waitForTimeout(300);
-    await expandTopicGroups(page);
-  }
-
-  return page.locator(VISIBLE_TOPIC_ITEM_SELECTOR);
-};
 
 // ============================================
 // Given Steps
@@ -115,7 +43,7 @@ Given('用户已有一个对话', async function (this: CustomWorld) {
   await this.page.waitForTimeout(2000);
 
   // Store the current conversation title for later reference
-  const topicItems = await getVisibleSidebarTopics(this.page);
+  const topicItems = this.page.locator('.ant-menu-item, [class*="NavItem"]');
   const topicCount = await topicItems.count();
   console.log(`   📍 Found ${topicCount} topic items after creating conversation`);
 
@@ -230,7 +158,7 @@ When('用户点击另一个对话', async function (this: CustomWorld) {
   }
 
   // Fallback: try to find topic items in the sidebar
-  const sidebarTopics = await getVisibleSidebarTopics(this.page);
+  const sidebarTopics = this.page.locator('[data-testid="topic-item"]');
   const topicCount = await sidebarTopics.count();
   console.log(`   📍 Found ${topicCount} topic items`);
 
@@ -248,7 +176,7 @@ When('用户点击另一个对话', async function (this: CustomWorld) {
 When('用户右键点击对话', async function (this: CustomWorld) {
   console.log('   📍 Step: 右键点击对话...');
 
-  const sidebarTopics = await getVisibleSidebarTopics(this.page);
+  const sidebarTopics = this.page.locator('[data-testid="topic-item"]');
   const topicCount = await sidebarTopics.count();
   console.log(`   📍 Found ${topicCount} topic items`);
 
@@ -265,7 +193,7 @@ When('用户右键点击对话', async function (this: CustomWorld) {
 When('用户右键点击一个对话', async function (this: CustomWorld) {
   console.log('   📍 Step: 右键点击一个对话...');
 
-  const sidebarTopics = await getVisibleSidebarTopics(this.page);
+  const sidebarTopics = this.page.locator('[data-testid="topic-item"]');
   const topicCount = await sidebarTopics.count();
   console.log(`   📍 Found ${topicCount} topic items`);
 
@@ -291,7 +219,7 @@ When('用户选择重命名选项', async function (this: CustomWorld) {
 
   // Instead of using right-click context menu, use the "..." dropdown menu
   // which appears when hovering over a topic item
-  const topicItems = await getVisibleSidebarTopics(this.page);
+  const topicItems = this.page.locator('[data-testid="topic-item"]');
   const topicCount = await topicItems.count();
   console.log(`   📍 Found ${topicCount} topic items`);
 

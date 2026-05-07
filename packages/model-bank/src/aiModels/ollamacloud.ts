@@ -32,6 +32,17 @@ const ollamaCloudModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    displayName: 'Gemma 4 31B',
+    id: 'gemma4:31b',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 204_800,
     description:

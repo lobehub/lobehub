@@ -32,6 +32,7 @@ import { type AiProviderDetailItem, type AiProviderSourceType } from '@/types/ai
 import { AiProviderSourceEnum } from '@/types/aiProvider';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
+import { isResponsesApiSupportedSdkType } from '../providerSettings';
 import { type CheckErrorRender } from './Checker';
 import Checker from './Checker';
 import EnableSwitch from './EnableSwitch';
@@ -378,10 +379,13 @@ const ProviderConfig = memo<ProviderConfigProps>(
         }
       : undefined;
 
+    const showResponsesApiSwitch =
+      !!supportResponsesApi || (isCustom && isResponsesApiSupportedSdkType(settings?.sdkType));
+
     const configItems = [
       ...apiKeyItem,
       endpointItem,
-      supportResponsesApi
+      showResponsesApiSwitch
         ? {
             children: isLoading ? <Skeleton.Button active /> : <Switch loading={configUpdating} />,
             desc: t('providerModels.config.responsesApi.desc'),
