@@ -76,7 +76,7 @@ The router caches loaded bots in memory. Cache is **invalidated** by `BotMessage
 2. Calls `execAgent` with `stepWebhook` and `completionWebhook` pointing at `${INTERNAL_APP_URL ?? APP_URL}/api/agent/webhooks/bot-callback`, plus `webhookDelivery: 'qstash'`.
 3. Returns immediately; the bridge `finally` block keeps the active-thread marker held until the `completion` callback fires.
 
-`/api/agent/webhooks/bot-callback/route.ts` verifies the QStash signature and hands off to `BotCallbackService.handleCallback`:
+`POST /api/agent/webhooks/bot-callback` (`src/server/agent-hono/handlers/botCallback.ts`) verifies the QStash signature via the `qstashAuth` middleware and hands off to `BotCallbackService.handleCallback`:
 
 - `type: 'step'` → `handleStep` re-renders `renderStepProgress`, edits `progressMessageId` (skipped if `displayToolCalls=false` or platform `supportsMessageEdit=false`).
 - `type: 'completion'` → `handleCompletion` writes the final reply (or error/interrupted message), removes the 👀 reaction, clears active-thread tracker, fires async `summarizeTopicTitle`.
@@ -140,12 +140,12 @@ Webhook platforms run fine in serverless functions. Persistent platforms (`webso
 - On Vercel + webhook mode → start the client inline (one HTTP call).
 - Off-Vercel → `GatewayManager` singleton holds long-lived clients in process.
 
-**`GET /api/agent/gateway/route.ts`** (cron, `Bearer ${CRON_SECRET}`):
+**`GET /api/agent/gateway`** (`src/server/agent-hono/handlers/gatewayCron.ts`, cron, `Bearer ${CRON_SECRET}`):
 
 - Iterates registered platforms and starts every enabled persistent provider with `durationMs = 10min`, then in `after(...)` polls `BotConnectQueue` every 30s for new connect requests, until the window expires.
 - `getEffectiveConnectionMode(platform, settings)` is the only place that resolves per-provider mode — respect it everywhere.
 
-**`POST /api/agent/gateway/start/route.ts`** is the non-Vercel `ensureRunning` entry point (`Bearer ${KEY_VAULTS_SECRET}`).
+**`POST /api/agent/gateway/start`** (`src/server/agent-hono/handlers/gatewayStart.ts`) is the non-Vercel `ensureRunning` entry point (`Bearer ${KEY_VAULTS_SECRET}`).
 
 **Runtime status** is stored in Redis at `bot:runtime-status:platform:appId` with TTL ≈ `durationMs + 60s`. States: `starting | connected | disconnected | failed | queued`. Updated by each `PlatformClient.start/stop` and by the gateway service.
 
@@ -226,11 +226,11 @@ Client service: `src/services/agentBotProvider.ts`. Store actions: `src/store/ag
 ## Key Files
 
 ```plaintext
-Webhook routes:
-  src/app/(backend)/api/agent/webhooks/[platform]/[[...appId]]/route.ts  — inbound catch-all
-  src/app/(backend)/api/agent/webhooks/bot-callback/route.ts             — qstash bot callback
-  src/app/(backend)/api/agent/gateway/route.ts                           — cron gateway (10min window)
-  src/app/(backend)/api/agent/gateway/start/route.ts                     — non-Vercel ensureRunning
+Webhook routes (mounted via `src/app/(backend)/api/agent/[[...route]]/route.ts` → `src/server/agent-hono`):
+  src/server/agent-hono/handlers/platformWebhook.ts  — inbound catch-all (POST /webhooks/:platform/:appId?)
+  src/server/agent-hono/handlers/botCallback.ts      — qstash bot callback
+  src/server/agent-hono/handlers/gatewayCron.ts      — cron gateway (10min window)
+  src/server/agent-hono/handlers/gatewayStart.ts     — non-Vercel ensureRunning
 
 Bot service:
   src/server/services/bot/index.ts                          — barrel

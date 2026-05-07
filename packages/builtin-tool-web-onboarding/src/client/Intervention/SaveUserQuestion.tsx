@@ -5,15 +5,6 @@ import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const chipStyle = {
-  background: 'var(--lobe-fill-quaternary)',
-  border: '1px solid var(--lobe-colorBorderSecondary)',
-  borderRadius: 999,
-  color: 'var(--lobe-colorTextSecondary)',
-  fontSize: 12,
-  padding: '4px 10px',
-} as const;
-
 const detailCardStyle = {
   background: 'var(--lobe-fill-tertiary)',
   border: '1px solid var(--lobe-colorBorderSecondary)',
@@ -50,81 +41,32 @@ interface AgentIdentitySectionProps {
 const AgentIdentitySection = memo<AgentIdentitySectionProps>(({ agentEmoji, agentName }) => {
   const { t } = useTranslation('chat');
 
-  const fields = useMemo<DetailField[]>(
-    () =>
-      [
-        agentName && {
-          label: t('tool.intervention.onboarding.agentIdentity.name'),
-          value: agentName,
-        },
-        agentEmoji && {
-          label: t('tool.intervention.onboarding.agentIdentity.emoji'),
-          value: agentEmoji,
-        },
-      ].filter(Boolean) as DetailField[],
-    [agentEmoji, agentName, t],
-  );
+  // Manifest routes name-only and emoji-only saves through the same intervention
+  // as the both-fields case, so the title must reflect what's actually pending —
+  // otherwise an emoji-only approval claims to also rename the agent.
+  const titleKey =
+    agentName && agentEmoji
+      ? 'tool.intervention.onboarding.agentIdentity.title'
+      : agentName
+        ? 'tool.intervention.onboarding.agentIdentity.titleNameOnly'
+        : 'tool.intervention.onboarding.agentIdentity.titleAvatarOnly';
 
   return (
     <Flexbox gap={12}>
-      <Flexbox gap={4}>
-        <Text style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.04em' }} type="secondary">
-          {t('tool.intervention.onboarding.agentIdentity.eyebrow')}
-        </Text>
-        <Text style={{ fontSize: 16, fontWeight: 600 }}>
-          {t('tool.intervention.onboarding.agentIdentity.title')}
-        </Text>
-        <Text style={{ fontSize: 13 }} type="secondary">
-          {t('tool.intervention.onboarding.agentIdentity.description')}
-        </Text>
-      </Flexbox>
+      <Text style={{ fontSize: 16, fontWeight: 600 }}>{t(titleKey)}</Text>
 
       <div style={detailCardStyle}>
-        <Flexbox gap={16}>
-          <Flexbox horizontal align="center" gap={12}>
-            <Avatar
-              avatar={agentEmoji || '🤖'}
-              size={48}
-              style={{
-                background: 'var(--lobe-fill-quaternary)',
-                borderRadius: 16,
-                flex: 'none',
-              }}
-            />
-            <Flexbox gap={2}>
-              <Text style={{ fontSize: 16, fontWeight: 600 }}>
-                {agentName || t('untitledAgent')}
-              </Text>
-              <Text style={{ fontSize: 12 }} type="secondary">
-                {t('tool.intervention.onboarding.agentIdentity.applyHint')}
-              </Text>
-            </Flexbox>
-          </Flexbox>
-
-          <div style={detailGridStyle}>
-            {fields.map((field) => (
-              <Flexbox gap={6} key={field.label}>
-                <Text style={{ fontSize: 12, fontWeight: 600 }} type="secondary">
-                  {field.label}
-                </Text>
-                <div style={detailValueStyle}>{field.value}</div>
-              </Flexbox>
-            ))}
-          </div>
-
-          <Flexbox gap={8}>
-            <Text style={{ fontSize: 12, fontWeight: 600 }} type="secondary">
-              {t('tool.intervention.onboarding.agentIdentity.targets')}
-            </Text>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <span style={chipStyle}>
-                {t('tool.intervention.onboarding.agentIdentity.targetInbox')}
-              </span>
-              <span style={chipStyle}>
-                {t('tool.intervention.onboarding.agentIdentity.targetOnboarding')}
-              </span>
-            </div>
-          </Flexbox>
+        <Flexbox horizontal align="center" gap={12}>
+          <Avatar
+            avatar={agentEmoji || '🤖'}
+            size={48}
+            style={{
+              background: 'var(--lobe-fill-quaternary)',
+              borderRadius: 16,
+              flex: 'none',
+            }}
+          />
+          <Text style={{ fontSize: 16, fontWeight: 600 }}>{agentName || t('untitledAgent')}</Text>
         </Flexbox>
       </div>
     </Flexbox>

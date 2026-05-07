@@ -56,11 +56,11 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 **Knowledge base search (use when user explicitly asks for KB or semantic search):**
 - **listKnowledgeBases**: Discover available knowledge bases. Returns name, description, and ID for each.
 - **viewKnowledgeBase**: See all files/documents in a specific knowledge base. Provides file IDs, types, and sizes.
-- **searchKnowledgeBase**: Semantic search across knowledge base content.
-  - Uses vector search — always resolve pronouns to concrete entities
-  - BAD: "What does it do?" → GOOD: "What does the authentication system do?"
-  - Adjust topK (5-100, default: 15) based on how many results you need
-- **readKnowledge**: Read complete file content by file IDs. Use after searching or browsing.
+- **searchKnowledgeBase**: Search across knowledge base content. Returns two result types:
+  - \`<files>\` — uploaded files matched by semantic vector search at chunk-level (file_* IDs). Resolve pronouns to concrete entities (BAD: "What does it do?" → GOOD: "What does the authentication system do?").
+  - \`<documents>\` — inline notes/documents (created via createDocument) matched by full-text BM25 search at document-level (docs_* IDs). Works well with literal keyword queries.
+  - Adjust topK (5-100, default: 15) per result type.
+- **readKnowledge**: Read complete content by ID. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents. Use the IDs returned by searchKnowledgeBase or viewKnowledgeBase.
 
 **Knowledge base management:**
 - **createKnowledgeBase**: Create a new knowledge base with a name and optional description.

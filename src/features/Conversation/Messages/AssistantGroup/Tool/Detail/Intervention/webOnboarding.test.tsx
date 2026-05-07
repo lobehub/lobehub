@@ -3,7 +3,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@lobehub/ui', () => ({
   Avatar: ({ avatar }: { avatar: string }) => <div>{avatar}</div>,
@@ -20,17 +20,9 @@ vi.mock('react-i18next', () => ({
     t: (key: string) =>
       (
         ({
-          'tool.intervention.onboarding.agentIdentity.applyHint':
-            'The new identity will appear after approval.',
-          'tool.intervention.onboarding.agentIdentity.description':
-            'Approving this change updates the Agent shown in Inbox and in this onboarding conversation.',
-          'tool.intervention.onboarding.agentIdentity.emoji': 'Agent avatar',
-          'tool.intervention.onboarding.agentIdentity.eyebrow': 'Onboarding approval',
-          'tool.intervention.onboarding.agentIdentity.name': 'Agent name',
-          'tool.intervention.onboarding.agentIdentity.targetInbox': 'Inbox Agent',
-          'tool.intervention.onboarding.agentIdentity.targetOnboarding': 'Current onboarding Agent',
-          'tool.intervention.onboarding.agentIdentity.targets': 'Applies to',
-          'tool.intervention.onboarding.agentIdentity.title': 'Confirm Agent identity update',
+          'tool.intervention.onboarding.agentIdentity.title': "I'll update my name and avatar",
+          'tool.intervention.onboarding.agentIdentity.titleAvatarOnly': "I'll update my avatar",
+          'tool.intervention.onboarding.agentIdentity.titleNameOnly': "I'll update my name",
           'untitledAgent': 'Untitled Agent',
         }) satisfies Record<string, string>
       )[key] || key,
@@ -38,22 +30,41 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('web onboarding intervention registry', () => {
-  it('renders the custom agent identity approval card for saveUserQuestion', async () => {
+  let Component: ReturnType<typeof Object> | undefined;
+
+  beforeEach(async () => {
     const { WebOnboardingInterventions } =
       await import('@lobechat/builtin-tool-web-onboarding/client');
     const { WebOnboardingApiName } = await import('@lobechat/builtin-tool-web-onboarding');
-
-    const Component = WebOnboardingInterventions[WebOnboardingApiName.saveUserQuestion];
-
+    Component = WebOnboardingInterventions[WebOnboardingApiName.saveUserQuestion];
     expect(Component).toBeDefined();
+  });
+
+  it('uses the combined title when both agentName and agentEmoji are pending', () => {
     if (!Component) throw new TypeError('Expected web onboarding intervention to be registered');
 
     render(<Component args={{ agentEmoji: '🛰️', agentName: 'Atlas' }} messageId="message-1" />);
 
-    expect(screen.getByText('Confirm Agent identity update')).toBeInTheDocument();
-    expect(screen.getAllByText('Atlas')).toHaveLength(2);
-    expect(screen.getAllByText('🛰️')).toHaveLength(2);
-    expect(screen.getByText('Inbox Agent')).toBeInTheDocument();
-    expect(screen.getByText('Current onboarding Agent')).toBeInTheDocument();
+    expect(screen.getByText("I'll update my name and avatar")).toBeInTheDocument();
+    expect(screen.getByText('Atlas')).toBeInTheDocument();
+    expect(screen.getByText('🛰️')).toBeInTheDocument();
+  });
+
+  it('uses the name-only title when only agentName is pending', () => {
+    if (!Component) throw new TypeError('Expected web onboarding intervention to be registered');
+
+    render(<Component args={{ agentName: 'Atlas' }} messageId="message-2" />);
+
+    expect(screen.getByText("I'll update my name")).toBeInTheDocument();
+    expect(screen.queryByText("I'll update my name and avatar")).not.toBeInTheDocument();
+  });
+
+  it('uses the avatar-only title when only agentEmoji is pending', () => {
+    if (!Component) throw new TypeError('Expected web onboarding intervention to be registered');
+
+    render(<Component args={{ agentEmoji: '🛰️' }} messageId="message-3" />);
+
+    expect(screen.getByText("I'll update my avatar")).toBeInTheDocument();
+    expect(screen.queryByText("I'll update my name and avatar")).not.toBeInTheDocument();
   });
 });

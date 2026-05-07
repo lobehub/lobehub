@@ -452,6 +452,7 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'user-msg-123',
           prompt: 'Original question',
         }),
+        expect.anything(),
       );
     });
 
@@ -483,6 +484,7 @@ describe('GatewayActionImpl', () => {
           parentMessageId: undefined,
           prompt: 'Hello',
         }),
+        expect.anything(),
       );
     });
 
@@ -523,6 +525,7 @@ describe('GatewayActionImpl', () => {
             taskId: 'T-1',
           }),
         }),
+        expect.anything(),
       );
     });
 
@@ -555,7 +558,95 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'assistant-msg-456',
           prompt: '',
         }),
+        expect.anything(),
       );
+    });
+
+    it('forwards the parent abort signal to execAgentTask and bails out (with server interrupt) when cancel arrives after the request resolved', async () => {
+      const startOperation = vi.fn(() => ({ operationId: 'gw-op-local' }));
+      const completeOperation = vi.fn();
+      const associateMessageWithOperation = vi.fn();
+      const connectToGateway = vi.fn();
+      const onOperationCancel = vi.fn();
+
+      // Pre-aborted controller simulates the user clicking Stop while
+      // execAgentTask is still in flight: when it resolves the signal is
+      // already `aborted: true`, so executeGatewayAgent must NOT proceed to
+      // start the child op or open a WS connection.
+      const controller = new AbortController();
+      controller.abort('user cancelled');
+
+      const mockClient = createMockClient();
+      const state: Record<string, any> = { gatewayConnections: {} };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation,
+        completeOperation,
+        connectToGateway,
+        getOperationAbortSignal: vi.fn(() => controller.signal),
+        internal_updateTopicLoading: vi.fn(),
+        onOperationCancel,
+        replaceMessages: vi.fn(),
+        startOperation,
+        switchTopic: vi.fn(),
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => mockClient);
+      const interruptTaskSpy = vi
+        .mocked(aiAgentService.interruptTask)
+        .mockResolvedValue({ operationId: 'server-op-cancel', success: true });
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-cancel',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await expect(
+        action.executeGatewayAgent({
+          context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+          message: 'Hello',
+          parentOperationId: 'parent-send-msg-op',
+        }),
+      ).rejects.toBeDefined();
+
+      // The signal must be forwarded into execAgentTask so the fetch itself
+      // is aborted in-flight when cancel comes during the round-trip.
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ signal: controller.signal }),
+      );
+
+      // Server task was created before the signal flipped — best-effort
+      // interrupt must fire so the agent run stops server-side.
+      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'server-op-cancel' });
+
+      // No child op, no message association, no WS connect, no parent complete
+      // — the cancel must short-circuit the whole hand-off.
+      expect(startOperation).not.toHaveBeenCalled();
+      expect(associateMessageWithOperation).not.toHaveBeenCalled();
+      expect(connectToGateway).not.toHaveBeenCalled();
+      expect(completeOperation).not.toHaveBeenCalled();
     });
 
     it('registers a cancel handler that calls aiAgentService.interruptTask with the server operationId', async () => {

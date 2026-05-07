@@ -259,6 +259,15 @@ export class GatewayActionImpl {
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
     /**
+     * Caller-owned operation that should be completed once the gateway side
+     * has finished phase-1 init (network round-trip + child
+     * `execServerAgentRuntime` op started). Lets the caller keep its own
+     * loading state running through `execAgentTask` without any gap before
+     * the child op takes over. The relationship is also recorded as
+     * parent/child lineage on the new op.
+     */
+    parentOperationId?: string;
+    /**
      * Resume a paused op waiting on `human_approve_required`. Forwarded to
      * `aiAgentService.execAgentTask` so the new server-side op knows to apply
      * the user's decision to the target tool message instead of starting from
@@ -266,7 +275,15 @@ export class GatewayActionImpl {
      */
     resumeApproval?: ResumeApprovalParam;
   }): Promise<ExecAgentResult> => {
-    const { context, fileIds, message, onComplete, parentMessageId, resumeApproval } = params;
+    const {
+      context,
+      fileIds,
+      message,
+      onComplete,
+      parentMessageId,
+      parentOperationId,
+      resumeApproval,
+    } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
@@ -274,26 +291,48 @@ export class GatewayActionImpl {
     const isCreateNewTopic = !context.topicId;
     const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;
 
-    const result = await aiAgentService.execAgentTask({
-      agentId: context.agentId,
-      appContext: {
-        defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
-        documentId: context.documentId,
-        groupId: context.groupId,
-        scope: context.scope,
-        taskId,
-        threadId: context.threadId,
-        topicId: context.topicId,
+    // Honour user-initiated cancel during phase-1 init: while we await the
+    // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
+    // is still running, so the ChatInput stop button is active. Forward the
+    // signal into the request so the fetch aborts in-flight, and re-check
+    // afterwards in case cancel arrived just after the request resolved (the
+    // server task is then already created — best-effort interrupt it before
+    // bailing out, otherwise the agent run continues server-side).
+    const abortSignal = parentOperationId
+      ? this.#get().getOperationAbortSignal(parentOperationId)
+      : undefined;
+
+    const result = await aiAgentService.execAgentTask(
+      {
+        agentId: context.agentId,
+        appContext: {
+          defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
+          documentId: context.documentId,
+          groupId: context.groupId,
+          scope: context.scope,
+          taskId,
+          threadId: context.threadId,
+          topicId: context.topicId,
+        },
+        // Tell the server this caller is a desktop Electron client so it can
+        // enable `executor: 'client'` tools (local-system, stdio MCP) and
+        // dispatch them back over the Agent Gateway WS.
+        clientRuntime: isDesktop ? 'desktop' : 'web',
+        fileIds,
+        parentMessageId,
+        prompt: message,
+        resumeApproval,
       },
-      // Tell the server this caller is a desktop Electron client so it can
-      // enable `executor: 'client'` tools (local-system, stdio MCP) and
-      // dispatch them back over the Agent Gateway WS.
-      clientRuntime: isDesktop ? 'desktop' : 'web',
-      fileIds,
-      parentMessageId,
-      prompt: message,
-      resumeApproval,
-    });
+      { signal: abortSignal },
+    );
+
+    if (abortSignal?.aborted) {
+      // Cancel arrived after execAgentTask resolved — server task exists.
+      aiAgentService
+        .interruptTask({ operationId: result.operationId })
+        .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+      throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
+    }
 
     // If server created a new topic, fetch messages first then switch topic
     // (same pattern as client mode: replaceMessages before switchTopic to avoid skeleton flash)
@@ -310,6 +349,13 @@ export class GatewayActionImpl {
         clearNewKey: true,
         skipRefreshMessage: true,
       });
+
+      if (abortSignal?.aborted) {
+        aiAgentService
+          .interruptTask({ operationId: result.operationId })
+          .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+        throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
+      }
     }
 
     // Use the server-created topicId for the execution context
@@ -326,11 +372,16 @@ export class GatewayActionImpl {
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context: execContext,
       metadata: { serverOperationId: result.operationId },
+      parentOperationId,
       type: 'execServerAgentRuntime',
     });
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
+
+    // Phase-1 init done: child op is running. Hand off loading state from
+    // the caller's op (e.g. `sendMessage`) to the child without a gap.
+    if (parentOperationId) this.#get().completeOperation(parentOperationId);
 
     // When the local operation is cancelled (e.g. user clicks stop), forward
     // the interrupt directly to the server via the existing tRPC endpoint.

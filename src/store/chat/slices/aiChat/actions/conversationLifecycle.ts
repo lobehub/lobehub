@@ -644,13 +644,17 @@ export class ConversationLifecycleActionImpl {
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
     if (runtimeType === 'gateway') {
-      this.#get().completeOperation(operationId);
-
       try {
+        // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
+        // completes it the instant phase-1 init finishes (after the child
+        // `execServerAgentRuntime` op starts). Without this hand-off the
+        // input loading state would drop during the execAgentTask round-trip
+        // and the send button would flicker back to "send".
         const result = await this.#get().executeGatewayAgent({
           context: operationContext,
           fileIds: fileIdList,
           message,
+          parentOperationId: operationId,
         });
 
         return {
@@ -658,6 +662,12 @@ export class ConversationLifecycleActionImpl {
           userMessageId: result.userMessageId,
         };
       } catch (e) {
+        // User cancelled during phase-1 init — `cancelOperation` already set
+        // the op to 'cancelled' and `executeGatewayAgent` cleaned up the
+        // server task. Don't clobber that with 'failed'.
+        const op = this.#get().operations[operationId];
+        if (op?.status === 'cancelled') return;
+
         console.error('[Gateway] Failed to start server-side agent:', e);
         this.#get().failOperation(operationId, {
           message: e instanceof Error ? e.message : 'Unknown error',
