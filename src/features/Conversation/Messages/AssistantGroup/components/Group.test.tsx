@@ -41,20 +41,33 @@ vi.mock('./WorkflowCollapse', () => ({
   }: {
     blocks: Array<{
       content: string;
+      contentOverride?: string;
       disableMarkdownStreaming?: boolean;
       domId?: string;
+      hasToolsOverride?: boolean;
       tools?: unknown[];
     }>;
   }) => (
     <div
       data-testid="workflow-segment"
       data-blocks={JSON.stringify(
-        blocks.map(({ content, disableMarkdownStreaming, domId, tools }) => ({
-          content,
-          disableMarkdownStreaming: !!disableMarkdownStreaming,
-          domId,
-          toolCount: tools?.length ?? 0,
-        })),
+        blocks.map(
+          ({
+            content,
+            contentOverride,
+            disableMarkdownStreaming,
+            domId,
+            hasToolsOverride,
+            tools,
+          }) => ({
+            content,
+            contentOverride,
+            disableMarkdownStreaming: !!disableMarkdownStreaming,
+            domId,
+            hasToolsOverride,
+            toolCount: tools?.length ?? 0,
+          }),
+        ),
       )}
     />
   ),
@@ -63,15 +76,19 @@ vi.mock('./WorkflowCollapse', () => ({
 vi.mock('./GroupItem', () => ({
   default: ({
     content,
+    contentOverride,
     disableMarkdownStreaming,
     domId,
+    hasToolsOverride,
     id,
     isFirstBlock,
     tools,
   }: {
     content: string;
+    contentOverride?: string;
     disableMarkdownStreaming?: boolean;
     domId?: string;
+    hasToolsOverride?: boolean;
     id: string;
     isFirstBlock?: boolean;
     tools?: unknown[];
@@ -80,8 +97,10 @@ vi.mock('./GroupItem', () => ({
       data-testid="answer-segment"
       data-block={JSON.stringify({
         content,
+        contentOverride,
         disableMarkdownStreaming: !!disableMarkdownStreaming,
         domId,
+        hasToolsOverride,
         id,
         isFirstBlock: !!isFirstBlock,
         toolCount: tools?.length ?? 0,
@@ -137,16 +156,20 @@ describe('Group', () => {
     expect(parseAnswerSegments()).toEqual([
       {
         content: longContent,
+        contentOverride: longContent,
         disableMarkdownStreaming: true,
         domId: 'block-1__answer',
+        hasToolsOverride: false,
         id: 'block-1',
         isFirstBlock: false,
         toolCount: 0,
       },
       {
         content: '',
+        contentOverride: '',
         disableMarkdownStreaming: true,
         domId: 'block-1__workflow',
+        hasToolsOverride: true,
         id: 'block-1',
         isFirstBlock: false,
         toolCount: 1,
@@ -209,8 +232,10 @@ describe('Group', () => {
     expect(sequence).toEqual(['answer-segment', 'workflow-segment']);
     expect(parseAnswerSegment()).toEqual({
       content: '我先帮你查一下。',
+      contentOverride: '我先帮你查一下。',
       disableMarkdownStreaming: true,
       domId: 'block-1__answer',
+      hasToolsOverride: false,
       id: 'block-1',
       isFirstBlock: false,
       toolCount: 0,
@@ -218,8 +243,10 @@ describe('Group', () => {
     expect(parseWorkflowSegment()).toEqual([
       {
         content: '接下来我会继续整理结果。',
+        contentOverride: '接下来我会继续整理结果。',
         disableMarkdownStreaming: true,
         domId: 'block-1__workflow',
+        hasToolsOverride: true,
         toolCount: 1,
       },
       {

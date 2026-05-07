@@ -26,9 +26,11 @@ const ContentBlock = memo<ContentBlockProps>(
     reasoning,
     error,
     domId,
+    contentOverride,
     assistantId,
     disableEditing,
     disableMarkdownStreaming,
+    hasToolsOverride,
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
@@ -37,7 +39,7 @@ const ContentBlock = memo<ContentBlockProps>(
       s.deleteDBMessage,
       s.continueGeneration,
     ]);
-    const hasTools = tools && tools.length > 0;
+    const hasTools = !!tools?.length;
     const showReasoning =
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
@@ -84,7 +86,12 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {showMessageContent && (
           <SafeBoundary variant="alert">
-            <MessageContent disableStreaming={disableMarkdownStreaming} id={id} />
+            <MessageContent
+              contentOverride={contentOverride}
+              disableStreaming={disableMarkdownStreaming}
+              hasToolsOverride={hasToolsOverride}
+              id={id}
+            />
           </SafeBoundary>
         )}
 
