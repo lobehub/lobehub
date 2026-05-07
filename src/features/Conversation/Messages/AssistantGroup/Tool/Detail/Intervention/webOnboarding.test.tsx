@@ -20,8 +20,6 @@ vi.mock('react-i18next', () => ({
     t: (key: string) =>
       (
         ({
-          'tool.intervention.onboarding.agentIdentity.description':
-            'Approving this change updates the Agent shown in Inbox and in this onboarding conversation.',
           'tool.intervention.onboarding.agentIdentity.title': "I'll update my name and avatar",
           'tool.intervention.onboarding.agentIdentity.titleAvatarOnly': "I'll update my avatar",
           'tool.intervention.onboarding.agentIdentity.titleNameOnly': "I'll update my name",

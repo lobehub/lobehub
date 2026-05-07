@@ -53,12 +53,7 @@ const AgentIdentitySection = memo<AgentIdentitySectionProps>(({ agentEmoji, agen
 
   return (
     <Flexbox gap={12}>
-      <Flexbox gap={4}>
-        <Text style={{ fontSize: 16, fontWeight: 600 }}>{t(titleKey)}</Text>
-        <Text style={{ fontSize: 13 }} type="secondary">
-          {t('tool.intervention.onboarding.agentIdentity.description')}
-        </Text>
-      </Flexbox>
+      <Text style={{ fontSize: 16, fontWeight: 600 }}>{t(titleKey)}</Text>
 
       <div style={detailCardStyle}>
         <Flexbox horizontal align="center" gap={12}>

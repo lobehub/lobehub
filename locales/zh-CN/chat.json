@@ -681,7 +681,6 @@
   "tool.intervention.mode.autoRunDesc": "自动批准所有技能调用",
   "tool.intervention.mode.manual": "手动批准",
   "tool.intervention.mode.manualDesc": "每次调用都需要你确认",
-  "tool.intervention.onboarding.agentIdentity.description": "批准后，会同步更新 Inbox 中显示的 Agent，以及当前 onboarding 对话里的 Agent。",
   "tool.intervention.onboarding.agentIdentity.title": "我将更新自己的名字与头像",
   "tool.intervention.onboarding.agentIdentity.titleAvatarOnly": "我将更新自己的头像",
   "tool.intervention.onboarding.agentIdentity.titleNameOnly": "我将更新自己的名字",
