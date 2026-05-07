@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { type NextRequest, NextResponse } from 'next/server';
+import type { Context } from 'hono';
 import { z } from 'zod';
 
 import { gatewayEnv } from '@/envs/gateway';
@@ -9,7 +9,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
-const log = debug('api-route:agent:gateway:callback');
+const log = debug('lobe-server:agent:gateway-callback');
 
 const StateChangeSchema = z.object({
   applicationId: z.string().optional(),
@@ -23,49 +23,46 @@ const StateChangeSchema = z.object({
 
 /**
  * Receive connection state-change callbacks from the external message gateway.
- * When a persistent connection (e.g. Discord WebSocket) transitions to
- * "connected" or "error" asynchronously, the gateway POSTs here so LobeHub
- * can update the bot runtime status visible to users.
+ * Authenticated with `MESSAGE_GATEWAY_SERVICE_TOKEN`.
  *
- * Authenticated with MESSAGE_GATEWAY_SERVICE_TOKEN.
+ * Auth is inline (not a route-level middleware) because the disabled-feature
+ * 204 short-circuit must run *before* the auth check — when the gateway is
+ * off we silently no-op rather than 401 stale callers.
  */
-export async function POST(request: NextRequest) {
+export async function gatewayCallback(c: Context): Promise<Response> {
   // Ignore callbacks when gateway is disabled — connections are managed locally,
   // and stale gateway callbacks (e.g. from disconnectAll during migration) could
   // overwrite locally-managed status.
   if (gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1') {
-    return new NextResponse(null, { status: 204 });
+    return c.body(null, 204);
   }
 
   const serviceToken = gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN;
   if (!serviceToken) {
-    return NextResponse.json({ error: 'Service not configured' }, { status: 503 });
+    return c.json({ error: 'Service not configured' }, 503);
   }
 
-  const authHeader = request.headers.get('authorization');
+  const authHeader = c.req.header('authorization');
   if (authHeader !== `Bearer ${serviceToken}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return c.json({ error: 'Unauthorized' }, 401);
   }
 
   let parsed;
   try {
-    const body = await request.json();
+    const body = await c.req.json();
     parsed = StateChangeSchema.safeParse(body);
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    return c.json({ error: 'Invalid JSON' }, 400);
   }
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid body', issues: parsed.error.issues },
-      { status: 400 },
-    );
+    return c.json({ error: 'Invalid body', issues: parsed.error.issues }, 400);
   }
 
   const { applicationId, platform, state } = parsed.data;
 
   if (!applicationId) {
-    return new NextResponse(null, { status: 204 });
+    return c.body(null, 204);
   }
 
   const statusMap: Partial<Record<string, BotRuntimeStatus>> = {
@@ -78,7 +75,7 @@ export async function POST(request: NextRequest) {
   const runtimeStatus = statusMap[state.status];
   if (!runtimeStatus) {
     // "connecting" — no status update needed
-    return new NextResponse(null, { status: 204 });
+    return c.body(null, 204);
   }
 
   await updateBotRuntimeStatus({
@@ -90,5 +87,5 @@ export async function POST(request: NextRequest) {
 
   log('Updated %s:%s → %s', platform, applicationId, runtimeStatus);
 
-  return new NextResponse(null, { status: 204 });
+  return c.body(null, 204);
 }

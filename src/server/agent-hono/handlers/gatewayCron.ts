@@ -1,5 +1,5 @@
 import debug from 'debug';
-import type { NextRequest } from 'next/server';
+import type { Context } from 'hono';
 import { after } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -125,12 +125,14 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
   return processed;
 }
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
+/**
+ * Cron-driven gateway entry point. Runs once per Vercel cron tick and keeps
+ * persistent bot connections alive for a 10-minute window via `next/server`'s
+ * `after()`.
+ *
+ * Auth: `bearerSecretAuth(CRON_SECRET)` on the route.
+ */
+export async function gatewayCron(c: Context): Promise<Response> {
   // When the external message gateway is enabled, sync connections via gateway.
   if (process.env.MESSAGE_GATEWAY_URL && process.env.MESSAGE_GATEWAY_SERVICE_TOKEN) {
     const { GatewayService } = await import('@/server/services/gateway');
@@ -138,7 +140,7 @@ export async function GET(request: NextRequest) {
 
     if (service.useMessageGateway) {
       await service.ensureRunning();
-      return Response.json({ ensureRunning: true });
+      return c.json({ ensureRunning: true });
     }
   }
 
@@ -215,5 +217,5 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  return Response.json({ platforms: stats, queued, started, total });
+  return c.json({ platforms: stats, queued, started, total });
 }

@@ -1,29 +1,30 @@
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
-import { verifyQStashSignature } from '@/libs/qstash';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 
-const log = debug('api-route:agent:execute-step');
+const log = debug('lobe-server:agent:run-step');
 
-export async function POST(request: NextRequest) {
+/**
+ * Execute a single agent step. Invoked by QStash with the body
+ * `{ operationId, stepIndex, context, humanInput?, approvedToolCall?, ... }`.
+ *
+ * Auth: `qstashAuth` on the route — QStash signature required.
+ */
+export async function runStep(c: Context): Promise<Response> {
   const startTime = Date.now();
 
-  // Read raw body for signature verification (must be done before parsing JSON)
-  const rawBody = await request.text();
-
-  // Verify QStash signature
-  const isValidSignature = await verifyQStashSignature(request, rawBody);
-  if (!isValidSignature) {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
-  // Parse body after verification
-  const body = JSON.parse(rawBody);
-  const externalRetryCount = Number(request.headers.get('Upstash-Retried') ?? 0) || 0;
+  const externalRetryCount = Number(c.req.header('upstash-retried') ?? 0) || 0;
+
   try {
     const {
       operationId,
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!operationId) {
-      return NextResponse.json({ error: 'operationId is required' }, { status: 400 });
+      return c.json({ error: 'operationId is required' }, 400);
     }
 
     log(`[${operationId}] Starting step ${stepIndex}`);
@@ -48,14 +49,12 @@ export async function POST(request: NextRequest) {
 
     if (!metadata?.userId) {
       log(`[${operationId}] Invalid operation or no userId found`);
-      return NextResponse.json({ error: 'Invalid operation or unauthorized' }, { status: 401 });
+      return c.json({ error: 'Invalid operation or unauthorized' }, 401);
     }
 
-    // Initialize service with userId from operation metadata
     const serverDB = await getServerDB();
     const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId);
 
-    // Execute step using AgentRuntimeService
     const result = await agentRuntimeService.executeStep({
       approvedToolCall,
       context,
@@ -71,14 +70,10 @@ export async function POST(request: NextRequest) {
     // Step is currently being executed by another instance — tell QStash to retry later
     if (result.locked) {
       log(`[${operationId}] Step ${stepIndex} locked by another instance, returning 429`);
-      return NextResponse.json(
+      return c.json(
         { error: 'Step is currently being executed, retry later', operationId, stepIndex },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': '37', // unit: seconds
-          },
-        },
+        429,
+        { 'Retry-After': '37' },
       );
     }
 
@@ -106,41 +101,30 @@ export async function POST(request: NextRequest) {
       `[${operationId}] Step ${stepIndex} completed (${executionTime}ms, status: ${result.state.status})`,
     );
 
-    return NextResponse.json(responseData);
+    return c.json(responseData);
   } catch (error: any) {
     const executionTime = Date.now() - startTime;
     console.error('Error in execution: %O', error);
 
-    return NextResponse.json(
+    return c.json(
       {
         error: error.message,
         executionTime,
         operationId: body?.operationId,
         stepIndex: body?.stepIndex || 0,
       },
-      { status: 500 },
+      500,
     );
   }
 }
 
 /**
- * Health check endpoint
+ * Health check for the agent execution path.
  */
-export async function GET() {
-  try {
-    return NextResponse.json({
-      healthy: true,
-      message: 'Agent execution service is running',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        error: error.message,
-        healthy: false,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 503 },
-    );
-  }
+export function runStepHealth(c: Context): Response {
+  return c.json({
+    healthy: true,
+    message: 'Agent execution service is running',
+    timestamp: new Date().toISOString(),
+  });
 }
