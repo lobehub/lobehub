@@ -1,9 +1,10 @@
 'use client';
 
 import { ActionIcon, Center, Collapse, Empty, Flexbox } from '@lobehub/ui';
-import { Dropdown, type MenuProps, Spin } from 'antd';
+import { Dropdown, type MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
+  ArrowLeftIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
@@ -11,6 +12,7 @@ import {
   GitCompareIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
+  RotateCcwIcon,
   Rows2Icon,
   UnfoldVerticalIcon,
   WholeWordIcon,
@@ -19,14 +21,17 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 
 import FileItemBody, { FileItemHeader } from './FileItem';
-import { useWorkingTreePatches } from './useWorkingTreePatches';
+import { type ReviewMode, useGitRemoteBranches, useReviewPatches } from './useReviewPatches';
 
 const WORD_WRAP_STORAGE_KEY = 'lobechat-review-word-wrap';
 const TEXT_DIFF_STORAGE_KEY = 'lobechat-review-text-diff';
 const VIEW_MODE_STORAGE_KEY = 'lobechat-review-view-mode';
+const REVIEW_MODE_STORAGE_KEY = 'lobechat-review-mode';
+const BASE_REF_OVERRIDES_STORAGE_KEY = 'lobechat-review-base-overrides';
 
 interface ReviewProps {
   workingDirectory: string;
@@ -42,19 +47,8 @@ const itemKey = (entry: { filePath: string; status: string }) =>
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   caret: css`
+    flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
-  `,
-  count: css`
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
   `,
   totalAdditions: css`
     color: ${cssVar.colorSuccess};
@@ -64,6 +58,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   totalStats: css`
     display: inline-flex;
+    flex-shrink: 0;
     gap: 6px;
     align-items: center;
 
@@ -97,13 +92,86 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       min-width: 0 !important;
     }
   `,
-  scopeChip: css`
+  arrow: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  basePicker: css`
+    cursor: pointer;
+    user-select: none;
+
+    overflow: hidden;
     display: inline-flex;
+    flex: 0 1 auto;
+    gap: 4px;
+    align-items: center;
+
+    min-width: 0;
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    transition: background 0.15s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  compareChip: css`
+    overflow: hidden;
+    display: inline-flex;
+    flex: 0 1 auto;
     gap: 6px;
     align-items: center;
 
+    min-width: 0;
+  `,
+  headRefText: css`
+    overflow: hidden;
+    flex: 0 1 auto;
+
+    min-width: 0;
+    padding-inline-end: 4px;
+
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  refName: css`
+    overflow: hidden;
+    flex: 0 1 auto;
+
+    min-width: 0;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  scopeChip: css`
+    cursor: pointer;
+    user-select: none;
+
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 2px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    transition: background 0.15s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
   subheader: css`
     display: flex;
@@ -119,10 +187,40 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Review = memo<ReviewProps>(({ workingDirectory }) => {
   const { t } = useTranslation('chat');
-  const { data, isLoading, isValidating, mutate } = useWorkingTreePatches(workingDirectory);
+  const [mode, setMode] = useLocalStorageState<ReviewMode>(REVIEW_MODE_STORAGE_KEY, 'unstaged');
+  // Per-repo base-ref override — when set, the branch diff compares against
+  // this ref instead of `origin/HEAD`. Stored as a single keyed object so we
+  // don't proliferate localStorage keys across repos.
+  const [baseOverrides, setBaseOverrides] = useLocalStorageState<Record<string, string>>(
+    BASE_REF_OVERRIDES_STORAGE_KEY,
+    {},
+  );
+  const baseOverride = baseOverrides[workingDirectory];
+  const setBaseOverride = (next: string | undefined) => {
+    setBaseOverrides((prev) => {
+      const updated = { ...prev };
+      if (next === undefined) delete updated[workingDirectory];
+      else updated[workingDirectory] = next;
+      return updated;
+    });
+  };
+
+  const { data, isLoading, isValidating, mutate } = useReviewPatches(
+    workingDirectory,
+    mode,
+    baseOverride,
+  );
+  // Lazy: only fetch remote branches list once the user opens the picker.
+  const [basePickerOpen, setBasePickerOpen] = useState(false);
+  const { data: remoteBranches } = useGitRemoteBranches(
+    workingDirectory,
+    mode === 'branch' && basePickerOpen,
+  );
   // Memo-stabilise the fallback so downstream useMemo deps don't flap on
   // every render while the SWR result is undefined.
   const patches = useMemo(() => data?.patches ?? [], [data]);
+  const baseRef = data?.mode === 'branch' ? data.baseRef : undefined;
+  const headRef = data?.mode === 'branch' ? data.headRef : undefined;
   const [viewMode, setViewMode] = useLocalStorageState<'unified' | 'split'>(
     VIEW_MODE_STORAGE_KEY,
     'unified',
@@ -159,15 +257,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
   if (!data && isLoading) {
     return (
       <Center flex={1}>
-        <Spin />
-      </Center>
-    );
-  }
-
-  if (patches.length === 0) {
-    return (
-      <Center flex={1} gap={8} paddingBlock={24}>
-        <Empty description={t('workingPanel.review.empty')} icon={GitCompareIcon} />
+        <NeuralNetworkLoading size={48} />
       </Center>
     );
   }
@@ -248,15 +338,107 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
     },
   ];
 
+  const modeMenuItems: MenuProps['items'] = [
+    {
+      key: 'unstaged',
+      label: t('workingPanel.review.mode.unstaged'),
+      onClick: () => setMode('unstaged'),
+    },
+    {
+      key: 'branch',
+      label: t('workingPanel.review.mode.branch'),
+      onClick: () => setMode('branch'),
+    },
+  ];
+
+  // Branches are only loaded after the user opens the picker (see
+  // `basePickerOpen`). While loading, render a single disabled placeholder
+  // so the menu doesn't pop empty + jump to its final size.
+  const baseRefMenuItems: MenuProps['items'] = remoteBranches
+    ? [
+        ...remoteBranches.map((branch) => ({
+          key: branch.name,
+          label: branch.isDefault
+            ? `${branch.name} · ${t('workingPanel.review.baseRef.default')}`
+            : branch.name,
+          onClick: () =>
+            setBaseOverride(branch.isDefault && !baseOverride ? undefined : branch.name),
+        })),
+        ...(baseOverride
+          ? [
+              { type: 'divider' as const },
+              {
+                icon: <RotateCcwIcon size={14} />,
+                key: 'reset',
+                label: t('workingPanel.review.baseRef.reset'),
+                onClick: () => setBaseOverride(undefined),
+              },
+            ]
+          : []),
+      ]
+    : [
+        {
+          disabled: true,
+          key: 'loading',
+          label: t('workingPanel.review.baseRef.loading'),
+        },
+      ];
+
+  const isEmpty = patches.length === 0;
+  const emptyText =
+    mode === 'branch'
+      ? baseRef
+        ? t('workingPanel.review.empty.branch', { baseRef })
+        : t('workingPanel.review.empty.noBaseRef')
+      : t('workingPanel.review.empty');
+
   return (
     <Flexbox style={{ overflow: 'hidden' }} width={'100%'}>
       <div className={styles.subheader}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <span className={styles.scopeChip}>
-            {t('workingPanel.review.unstaged')}
-            <span className={styles.count}>{patches.length}</span>
-            <ChevronDownIcon className={styles.caret} size={12} />
-          </span>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}
+        >
+          <Dropdown
+            menu={{ items: modeMenuItems, selectedKeys: [mode] }}
+            placement={'bottomLeft'}
+            trigger={['click']}
+          >
+            <span className={styles.scopeChip} role={'button'} tabIndex={0}>
+              {mode === 'branch'
+                ? t('workingPanel.review.mode.branch')
+                : t('workingPanel.review.mode.unstaged')}
+              <ChevronDownIcon className={styles.caret} size={12} />
+            </span>
+          </Dropdown>
+          {mode === 'branch' && (baseRef || headRef) && (
+            <span className={styles.compareChip}>
+              <Dropdown
+                placement={'bottomLeft'}
+                trigger={['click']}
+                menu={{
+                  items: baseRefMenuItems,
+                  selectedKeys: baseRef ? [baseRef] : [],
+                }}
+                onOpenChange={setBasePickerOpen}
+              >
+                <span className={styles.basePicker} role={'button'} tabIndex={0}>
+                  <span className={styles.refName}>
+                    {baseRef ?? t('workingPanel.review.baseRef.unresolved')}
+                  </span>
+                  <ChevronDownIcon className={styles.caret} size={12} />
+                </span>
+              </Dropdown>
+              {headRef && (
+                <>
+                  <ArrowLeftIcon className={styles.arrow} size={12} />
+                  <span className={styles.headRefText}>{headRef}</span>
+                </>
+              )}
+            </span>
+          )}
           {(totals.additions > 0 || totals.deletions > 0) && (
             <span className={styles.totalStats}>
               {totals.additions > 0 && (
@@ -269,16 +451,18 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
           )}
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={2}>
-          <ActionIcon
-            icon={allExpanded ? FoldVerticalIcon : UnfoldVerticalIcon}
-            size={'small'}
-            title={
-              allExpanded
-                ? t('workingPanel.review.collapseAll')
-                : t('workingPanel.review.expandAll')
-            }
-            onClick={handleToggleAll}
-          />
+          {!isEmpty && (
+            <ActionIcon
+              icon={allExpanded ? FoldVerticalIcon : UnfoldVerticalIcon}
+              size={'small'}
+              title={
+                allExpanded
+                  ? t('workingPanel.review.collapseAll')
+                  : t('workingPanel.review.expandAll')
+              }
+              onClick={handleToggleAll}
+            />
+          )}
           <Dropdown menu={{ items: moreMenuItems }} placement={'bottomRight'} trigger={['click']}>
             <ActionIcon
               icon={MoreHorizontalIcon}
@@ -289,32 +473,38 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
           </Dropdown>
         </Flexbox>
       </div>
-      <Flexbox
-        className={styles.list}
-        gap={6}
-        paddingInline={8}
-        style={{ overflow: 'auto' }}
-        width={'100%'}
-      >
-        <Collapse
-          activeKey={activeKeys}
-          expandIconPlacement={'end'}
-          items={items}
-          padding={{ body: 0, header: '6px 12px' }}
-          variant={'outlined'}
-          expandIcon={({ isActive }) => (
-            <ChevronRightIcon
-              size={14}
-              style={{
-                color: 'var(--ant-color-text-tertiary)',
-                transform: isActive ? 'rotate(90deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s',
-              }}
-            />
-          )}
-          onChange={(next) => setActiveKeys(Array.isArray(next) ? next : [next])}
-        />
-      </Flexbox>
+      {isEmpty ? (
+        <Center flex={1} gap={8} paddingBlock={24}>
+          <Empty description={emptyText} icon={GitCompareIcon} />
+        </Center>
+      ) : (
+        <Flexbox
+          className={styles.list}
+          gap={6}
+          paddingInline={8}
+          style={{ overflow: 'auto' }}
+          width={'100%'}
+        >
+          <Collapse
+            activeKey={activeKeys}
+            expandIconPlacement={'end'}
+            items={items}
+            padding={{ body: 0, header: '6px 12px' }}
+            variant={'outlined'}
+            expandIcon={({ isActive }) => (
+              <ChevronRightIcon
+                size={14}
+                style={{
+                  color: 'var(--ant-color-text-tertiary)',
+                  transform: isActive ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              />
+            )}
+            onChange={(next) => setActiveKeys(Array.isArray(next) ? next : [next])}
+          />
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });
