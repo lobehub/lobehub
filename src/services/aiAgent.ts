@@ -126,8 +126,11 @@ class AiAgentService {
    * Execute a single Agent task.
    * Returns the operationId needed to connect to the Agent Gateway.
    */
-  async execAgentTask(params: ExecAgentTaskParams): Promise<ExecAgentResult> {
-    return await lambdaClient.aiAgent.execAgent.mutate(params);
+  async execAgentTask(
+    params: ExecAgentTaskParams,
+    options?: { signal?: AbortSignal },
+  ): Promise<ExecAgentResult> {
+    return await lambdaClient.aiAgent.execAgent.mutate(params, options);
   }
 
   /**

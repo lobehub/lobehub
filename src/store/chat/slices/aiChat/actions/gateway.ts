@@ -291,26 +291,48 @@ export class GatewayActionImpl {
     const isCreateNewTopic = !context.topicId;
     const taskId = context.viewedTask?.type === 'detail' ? context.viewedTask.taskId : undefined;
 
-    const result = await aiAgentService.execAgentTask({
-      agentId: context.agentId,
-      appContext: {
-        defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
-        documentId: context.documentId,
-        groupId: context.groupId,
-        scope: context.scope,
-        taskId,
-        threadId: context.threadId,
-        topicId: context.topicId,
+    // Honour user-initiated cancel during phase-1 init: while we await the
+    // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
+    // is still running, so the ChatInput stop button is active. Forward the
+    // signal into the request so the fetch aborts in-flight, and re-check
+    // afterwards in case cancel arrived just after the request resolved (the
+    // server task is then already created — best-effort interrupt it before
+    // bailing out, otherwise the agent run continues server-side).
+    const abortSignal = parentOperationId
+      ? this.#get().getOperationAbortSignal(parentOperationId)
+      : undefined;
+
+    const result = await aiAgentService.execAgentTask(
+      {
+        agentId: context.agentId,
+        appContext: {
+          defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
+          documentId: context.documentId,
+          groupId: context.groupId,
+          scope: context.scope,
+          taskId,
+          threadId: context.threadId,
+          topicId: context.topicId,
+        },
+        // Tell the server this caller is a desktop Electron client so it can
+        // enable `executor: 'client'` tools (local-system, stdio MCP) and
+        // dispatch them back over the Agent Gateway WS.
+        clientRuntime: isDesktop ? 'desktop' : 'web',
+        fileIds,
+        parentMessageId,
+        prompt: message,
+        resumeApproval,
       },
-      // Tell the server this caller is a desktop Electron client so it can
-      // enable `executor: 'client'` tools (local-system, stdio MCP) and
-      // dispatch them back over the Agent Gateway WS.
-      clientRuntime: isDesktop ? 'desktop' : 'web',
-      fileIds,
-      parentMessageId,
-      prompt: message,
-      resumeApproval,
-    });
+      { signal: abortSignal },
+    );
+
+    if (abortSignal?.aborted) {
+      // Cancel arrived after execAgentTask resolved — server task exists.
+      aiAgentService
+        .interruptTask({ operationId: result.operationId })
+        .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+      throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
+    }
 
     // If server created a new topic, fetch messages first then switch topic
     // (same pattern as client mode: replaceMessages before switchTopic to avoid skeleton flash)
@@ -327,6 +349,13 @@ export class GatewayActionImpl {
         clearNewKey: true,
         skipRefreshMessage: true,
       });
+
+      if (abortSignal?.aborted) {
+        aiAgentService
+          .interruptTask({ operationId: result.operationId })
+          .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
+        throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
+      }
     }
 
     // Use the server-created topicId for the execution context
