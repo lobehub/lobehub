@@ -644,14 +644,18 @@ export class ConversationLifecycleActionImpl {
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
     if (runtimeType === 'gateway') {
-      this.#get().completeOperation(operationId);
-
       try {
         const result = await this.#get().executeGatewayAgent({
           context: operationContext,
           fileIds: fileIdList,
           message,
         });
+
+        // Complete sendMessage only after executeGatewayAgent has started its
+        // own `execServerAgentRuntime` op, otherwise the input loading state
+        // briefly drops to false during the execAgentTask network round-trip
+        // and the send button flickers back to "send".
+        this.#get().completeOperation(operationId);
 
         return {
           assistantMessageId: result.assistantMessageId,
