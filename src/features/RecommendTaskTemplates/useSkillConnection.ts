@@ -241,9 +241,10 @@ export const useSkillConnection = (
     setIsConnecting(true);
     try {
       if (next.source === 'lobehub') {
-        const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(
-          next.provider,
-        )}`;
+        // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
+        const redirectUri = window.location.protocol.startsWith('http')
+          ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.provider)}`
+          : undefined;
         const { authorizeUrl } = await getLobehubAuth(next.provider, { redirectUri });
         openOAuthWindow(authorizeUrl, next);
         return;
