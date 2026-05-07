@@ -72,26 +72,28 @@ export const ConnectionRow = memo<ConnectionRowProps>(
     const { t } = useTranslation('messenger');
 
     return (
-      <Flexbox gap={12} style={{ paddingBlock: 12 }}>
-        <Flexbox horizontal align="center" gap={12}>
-          <div className={styles.rowIcon}>{icon}</div>
-          <Flexbox flex={1} gap={2}>
-            <Text style={{ fontSize: 12 }} type="secondary">
-              {label}
-            </Text>
-            <Text strong>{name}</Text>
+      <Block className={styles.card}>
+        <Flexbox gap={12}>
+          <Flexbox horizontal align="center" gap={12}>
+            <div className={styles.rowIcon}>{icon}</div>
+            <Flexbox flex={1} gap={2}>
+              <Text style={{ fontSize: 12 }} type="secondary">
+                {label}
+              </Text>
+              <Text strong>{name}</Text>
+            </Flexbox>
+            {status === 'connected' ? (
+              <Tag color="success" icon={<Icon icon={CheckCircle2Icon} size="small" />}>
+                {t('messenger.detail.connections.connected')}
+              </Tag>
+            ) : (
+              <Tag color="warning">{t('messenger.detail.connections.pending')}</Tag>
+            )}
+            {action}
           </Flexbox>
-          {status === 'connected' ? (
-            <Tag color="success" icon={<Icon icon={CheckCircle2Icon} size="small" />}>
-              {t('messenger.detail.connections.connected')}
-            </Tag>
-          ) : (
-            <Tag color="warning">{t('messenger.detail.connections.pending')}</Tag>
-          )}
-          {action}
+          {children && <Flexbox style={{ paddingInlineStart: 48 }}>{children}</Flexbox>}
         </Flexbox>
-        {children && <Flexbox style={{ paddingInlineStart: 48 }}>{children}</Flexbox>}
-      </Flexbox>
+      </Block>
     );
   },
 );
@@ -101,23 +103,25 @@ const ConnectionsSkeleton = memo<{ withNestedContent?: boolean }>(
   ({ withNestedContent = false }) => (
     <Flexbox gap={12}>
       {Array.from({ length: 2 }).map((_, index) => (
-        <Flexbox gap={12} key={index} style={{ paddingBlock: 12 }}>
-          <Flexbox horizontal align="center" gap={12}>
-            <Skeleton.Avatar active shape={'square'} size={36} />
-            <Flexbox flex={1} gap={6}>
-              <Skeleton.Button active size={'small'} style={{ width: 56 }} />
-              <Skeleton.Button active style={{ height: 18, width: '40%' }} />
-            </Flexbox>
-            <Skeleton.Button active size={'small'} style={{ width: 72 }} />
-            <Skeleton.Button active size={'small'} style={{ width: 84 }} />
-          </Flexbox>
-          {withNestedContent && (
-            <Flexbox gap={6} style={{ paddingInlineStart: 48 }}>
+        <Block className={styles.card} key={index}>
+          <Flexbox gap={12}>
+            <Flexbox horizontal align="center" gap={12}>
+              <Skeleton.Avatar active shape={'square'} size={36} />
+              <Flexbox flex={1} gap={6}>
+                <Skeleton.Button active size={'small'} style={{ width: 56 }} />
+                <Skeleton.Button active style={{ height: 18, width: '40%' }} />
+              </Flexbox>
               <Skeleton.Button active size={'small'} style={{ width: 72 }} />
-              <Skeleton.Button active style={{ height: 32, width: '100%' }} />
+              <Skeleton.Button active size={'small'} style={{ width: 84 }} />
             </Flexbox>
-          )}
-        </Flexbox>
+            {withNestedContent && (
+              <Flexbox gap={6} style={{ paddingInlineStart: 48 }}>
+                <Skeleton.Button active size={'small'} style={{ width: 72 }} />
+                <Skeleton.Button active style={{ height: 32, width: '100%' }} />
+              </Flexbox>
+            )}
+          </Flexbox>
+        </Block>
       ))}
     </Flexbox>
   ),
@@ -145,9 +149,7 @@ export const IntegrationDetailSkeleton = memo<{ withNestedContent?: boolean }>(
 
       <Flexbox gap={8}>
         <Skeleton.Button active size={'small'} style={{ width: 72 }} />
-        <Block className={styles.card}>
-          <ConnectionsSkeleton withNestedContent={withNestedContent} />
-        </Block>
+        <ConnectionsSkeleton withNestedContent={withNestedContent} />
       </Flexbox>
     </Flexbox>
   ),
@@ -198,7 +200,7 @@ export const DetailLayout = memo<DetailLayoutProps>(
             <Text strong style={{ fontSize: 15 }}>
               {t('messenger.detail.connections.title')}
             </Text>
-            <Block className={styles.card}>{children}</Block>
+            <Flexbox gap={12}>{children}</Flexbox>
           </Flexbox>
         )}
       </Flexbox>

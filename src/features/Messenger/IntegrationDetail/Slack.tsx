@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
 import { BriefcaseIcon, LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -83,43 +83,41 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
         platform="slack"
         onBack={onBack}
       >
-        <Flexbox>
-          {installations.map((install) => (
-            <ConnectionRow
-              icon={<Icon icon={BriefcaseIcon} size="small" />}
-              key={install.id}
-              label={t('messenger.detail.connections.workspaceLabel')}
-              name={install.tenantName || install.tenantId}
-              status="connected"
-              action={
-                <Button
-                  danger
-                  icon={<Icon icon={Trash2Icon} />}
-                  size="small"
-                  onClick={() => handleDisconnectInstallation(install.id)}
-                >
-                  {t('messenger.detail.disconnect')}
-                </Button>
-              }
+        {installations.map((install) => (
+          <ConnectionRow
+            icon={<Icon icon={BriefcaseIcon} size="small" />}
+            key={install.id}
+            label={t('messenger.detail.connections.workspaceLabel')}
+            name={install.tenantName || install.tenantId}
+            status="connected"
+            action={
+              <Button
+                danger
+                icon={<Icon icon={Trash2Icon} />}
+                size="small"
+                onClick={() => handleDisconnectInstallation(install.id)}
+              >
+                {t('messenger.detail.disconnect')}
+              </Button>
+            }
+          />
+        ))}
+        {links.map((link) => {
+          const workspace = tenantNameByTenantId.get(link.tenantId) || link.tenantId;
+          return (
+            <UserAgentConnection
+              extraLabel={workspace}
+              key={link.id}
+              link={link}
+              onSetActive={(agentId) => handleSetActive(link.tenantId, agentId)}
+              onUnlink={() => handleUnlink(link.tenantId)}
             />
-          ))}
-          {links.map((link) => {
-            const workspace = tenantNameByTenantId.get(link.tenantId) || link.tenantId;
-            return (
-              <UserAgentConnection
-                extraLabel={workspace}
-                key={link.id}
-                link={link}
-                onSetActive={(agentId) => handleSetActive(link.tenantId, agentId)}
-                onUnlink={() => handleUnlink(link.tenantId)}
-              />
-            );
-          })}
-          {/* Installs without any user link yet — gentle nudge to /start in Slack. */}
-          {allInstallsUnlinked && !hasLinks && (
-            <div className={styles.emptyRow}>{t('messenger.detail.connections.linkHint')}</div>
-          )}
-        </Flexbox>
+          );
+        })}
+        {/* Installs without any user link yet — gentle nudge to /start in Slack. */}
+        {allInstallsUnlinked && !hasLinks && (
+          <div className={styles.emptyRow}>{t('messenger.detail.connections.linkHint')}</div>
+        )}
       </DetailLayout>
 
       <LinkModal

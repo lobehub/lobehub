@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Icon, Text } from '@lobehub/ui';
 import { LinkIcon, ServerIcon, Trash2Icon, UserIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -80,62 +80,60 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
         platform="discord"
         onBack={onBack}
       >
-        <Flexbox>
-          {installations.map((install) => (
+        {installations.map((install) => (
+          <ConnectionRow
+            icon={<Icon icon={ServerIcon} size="small" />}
+            key={install.id}
+            label={t('messenger.detail.connections.serverLabel')}
+            name={install.tenantName || install.tenantId}
+            status="connected"
+            action={
+              <Button
+                danger
+                icon={<Icon icon={Trash2Icon} />}
+                size="small"
+                onClick={() => handleDisconnectInstallation(install.id)}
+              >
+                {t('messenger.detail.disconnect')}
+              </Button>
+            }
+          />
+        ))}
+        {link ? (
+          <UserAgentConnection
+            link={link}
+            onSetActive={(agentId) => handleSetActive('', agentId)}
+            onUnlink={() => handleUnlink('')}
+          />
+        ) : (
+          hasInstallations &&
+          appId && (
             <ConnectionRow
-              icon={<Icon icon={ServerIcon} size="small" />}
-              key={install.id}
-              label={t('messenger.detail.connections.serverLabel')}
-              name={install.tenantName || install.tenantId}
-              status="connected"
+              icon={<Icon icon={UserIcon} size="small" />}
+              label={t('messenger.detail.connections.userLabel')}
+              name={t('messenger.discord.userPending.name')}
+              status="pending"
               action={
                 <Button
-                  danger
-                  icon={<Icon icon={Trash2Icon} />}
+                  href={buildDiscordOpenBotUrl(appId)}
+                  icon={<Icon icon={LinkIcon} />}
                   size="small"
-                  onClick={() => handleDisconnectInstallation(install.id)}
+                  target="_blank"
+                  type="primary"
                 >
-                  {t('messenger.detail.disconnect')}
+                  {t('messenger.discord.userPending.cta')}
                 </Button>
               }
-            />
-          ))}
-          {link ? (
-            <UserAgentConnection
-              link={link}
-              onSetActive={(agentId) => handleSetActive('', agentId)}
-              onUnlink={() => handleUnlink('')}
-            />
-          ) : (
-            hasInstallations &&
-            appId && (
-              <ConnectionRow
-                icon={<Icon icon={UserIcon} size="small" />}
-                label={t('messenger.detail.connections.userLabel')}
-                name={t('messenger.discord.userPending.name')}
-                status="pending"
-                action={
-                  <Button
-                    href={buildDiscordOpenBotUrl(appId)}
-                    icon={<Icon icon={LinkIcon} />}
-                    size="small"
-                    target="_blank"
-                    type="primary"
-                  >
-                    {t('messenger.discord.userPending.cta')}
-                  </Button>
-                }
-              >
-                <Text style={{ fontSize: 12 }} type="secondary">
-                  {t('messenger.discord.userPending.hint')}
-                </Text>
-              </ConnectionRow>
-            )
-          )}
-          {!hasLinks && !hasInstallations && (
-            <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
-          )}
-        </Flexbox>
+            >
+              <Text style={{ fontSize: 12 }} type="secondary">
+                {t('messenger.discord.userPending.hint')}
+              </Text>
+            </ConnectionRow>
+          )
+        )}
+        {!hasLinks && !hasInstallations && (
+          <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
+        )}
       </DetailLayout>
 
       <LinkModal

@@ -5,6 +5,7 @@ import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { messengerService } from '@/services/messenger';
@@ -13,6 +14,11 @@ import { type MessengerPlatform, PlatformAvatar } from './constants';
 import { getSlackInstallErrorReason } from './i18n';
 import IntegrationDetail from './IntegrationDetail';
 import IntegrationList from './IntegrationList';
+
+const VALID_PLATFORMS: ReadonlySet<MessengerPlatform> = new Set(['slack', 'telegram', 'discord']);
+
+const isMessengerPlatform = (value: string | undefined): value is MessengerPlatform =>
+  !!value && VALID_PLATFORMS.has(value as MessengerPlatform);
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   emptyState: css`
@@ -33,7 +39,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const MessengerSettings = memo(() => {
   const { t } = useTranslation('messenger');
   const { message } = App.useApp();
-  const [selected, setSelected] = useState<MessengerPlatform | null>(null);
+  const navigate = useNavigate();
+  const params = useParams<{ sub?: string }>();
+  const selected: MessengerPlatform | null = isMessengerPlatform(params.sub) ? params.sub : null;
   // Workspace name from `?slack_workspace=...`. When set, render the takeover
   // explainer modal — toast is too transient for a flow where the user just
   // round-tripped through Slack OAuth and needs clear next-step guidance.
@@ -43,24 +51,35 @@ const MessengerSettings = memo(() => {
     messengerService.availablePlatforms(),
   );
 
-  // Surface Slack OAuth callback outcomes. Success / generic failure stay as
-  // toasts; the "already installed by another user" case is escalated to a
-  // modal because the user needs to understand what happened and what to do
-  // next.
+  // If the URL points at an unknown platform sub-segment, replace it with the
+  // bare list URL — keeps deep-links graceful when bots get removed from the
+  // registry.
+  useEffect(() => {
+    if (params.sub && !isMessengerPlatform(params.sub)) {
+      navigate('/settings/messenger', { replace: true });
+    }
+  }, [navigate, params.sub]);
+
+  // Surface OAuth callback outcomes for the currently-selected platform. The
+  // callback redirects to `/settings/messenger/<platform>?installed=ok` (or
+  // `?error=...&workspace=...`); we toast success/generic-failure and escalate
+  // Slack's "already installed by another user" to a modal — the user just
+  // round-tripped through OAuth and needs clear next-step guidance.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!selected) return;
     const url = new URL(window.location.href);
-    const installed = url.searchParams.get('slack_installed');
-    const error = url.searchParams.get('slack_error');
-    const workspace = url.searchParams.get('slack_workspace');
+    const installed = url.searchParams.get('installed');
+    const error = url.searchParams.get('error');
+    const workspace = url.searchParams.get('workspace');
     if (!installed && !error) return;
 
-    if (installed) {
+    if (installed && selected === 'slack') {
       message.success(t('messenger.slack.installResult.success'));
-    } else if (error === 'already_installed') {
+    } else if (error === 'already_installed' && selected === 'slack') {
       // Empty string sentinel = open modal even when workspace name is unknown.
       setBlockedWorkspace(workspace ?? '');
-    } else if (error) {
+    } else if (error && selected === 'slack') {
       message.error(
         t('messenger.slack.installResult.failed', {
           reason: getSlackInstallErrorReason(t, error),
@@ -68,11 +87,11 @@ const MessengerSettings = memo(() => {
       );
     }
 
-    url.searchParams.delete('slack_installed');
-    url.searchParams.delete('slack_error');
-    url.searchParams.delete('slack_workspace');
+    url.searchParams.delete('installed');
+    url.searchParams.delete('error');
+    url.searchParams.delete('workspace');
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
-  }, [message, t]);
+  }, [message, t, selected]);
 
   const platforms = platformsSWR.data ?? [];
   const selectedMeta = platforms.find((p) => p.id === selected);
@@ -86,7 +105,7 @@ const MessengerSettings = memo(() => {
             botUsername={selectedMeta.botUsername}
             name={selectedMeta.name}
             platform={selected}
-            onBack={() => setSelected(null)}
+            onBack={() => navigate('/settings/messenger')}
           />
         ) : (
           <>
@@ -96,7 +115,10 @@ const MessengerSettings = memo(() => {
             ) : platforms.length === 0 ? (
               <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
             ) : (
-              <IntegrationList platforms={platforms} onSelect={setSelected} />
+              <IntegrationList
+                platforms={platforms}
+                onSelect={(platform) => navigate(`/settings/messenger/${platform}`)}
+              />
             )}
           </>
         )}

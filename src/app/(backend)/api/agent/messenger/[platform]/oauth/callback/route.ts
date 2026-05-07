@@ -11,15 +11,18 @@ const log = debug('lobe-server:messenger:oauth-callback');
 
 const SETTINGS_PATH = '/settings/messenger';
 
-const redirectToSettings = (origin: string, query?: string): Response => {
-  const target = new URL(SETTINGS_PATH + (query ? `?${query}` : ''), origin);
+// All OAuth callbacks land on the per-platform detail page so the user sees the
+// freshly-installed workspace/server without an extra click. The detail page
+// reads `installed=ok` / `error=...` / `workspace=...` from the URL.
+const redirectToPlatform = (origin: string, platform: string, query?: string): Response => {
+  const target = new URL(`${SETTINGS_PATH}/${platform}${query ? `?${query}` : ''}`, origin);
   return Response.redirect(target, 302);
 };
 
 const errorRedirect = (origin: string, platform: string, code: string, extra?: URLSearchParams) => {
   const params = new URLSearchParams(extra);
-  params.set(`${platform}_error`, code);
-  return redirectToSettings(origin, params.toString());
+  params.set('error', code);
+  return redirectToPlatform(origin, platform, params.toString());
 };
 
 /**
@@ -180,7 +183,7 @@ export const GET = async (
       statePayload.lobeUserId,
     );
     const extra = new URLSearchParams();
-    if (install.tenantName) extra.set(`${platform}_workspace`, install.tenantName);
+    if (install.tenantName) extra.set('workspace', install.tenantName);
     return errorRedirect(url.origin, platform, 'already_installed', extra);
   }
 
@@ -197,5 +200,5 @@ export const GET = async (
     return Response.redirect(deepLink, 302);
   }
 
-  return redirectToSettings(url.origin, `${platform}_installed=ok`);
+  return redirectToPlatform(url.origin, platform, 'installed=ok');
 };
