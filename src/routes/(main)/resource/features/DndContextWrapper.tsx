@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
-import { moveExternalResourceTreeItems } from '@/features/ResourceManager/tree/resourceTreeBridge';
+import { useTreeStore } from '@/store/tree';
 
 import { useResourceManagerStore } from './store';
 
@@ -148,9 +148,10 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
 
       setCurrentDrag(null);
 
-      const movePromise =
-        moveExternalResourceTreeItems(itemsToMove, toParent || null, fromParent || null) ??
-        Promise.resolve();
+      const treeState = useTreeStore.getState();
+      const movePromise = isDraggingSelection
+        ? treeState.moveItems(itemsToMove, fromParent, toParent)
+        : treeState.moveItem(drag.id, fromParent, toParent);
 
       movePromise.catch(() => {
         message.error(t('FileManager.actions.moveError'));

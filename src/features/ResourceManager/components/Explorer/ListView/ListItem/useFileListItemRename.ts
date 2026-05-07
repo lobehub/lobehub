@@ -2,13 +2,14 @@ import { App } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { revalidateResourceTreeParent } from '@/features/ResourceManager/tree/resourceTreeBridge';
 import { useEventCallback } from '@/hooks/useEventCallback';
+import { useTreeStore } from '@/store/tree';
 
 interface UseFileListItemRenameOptions {
   id: string;
   isFolder: boolean;
   isPendingRename?: boolean;
+  libraryId?: string;
   name?: string | null;
   refreshFileList: (options?: { revalidateResources?: boolean }) => Promise<void>;
   setPendingRenameItemId: (id: string | null) => void;
@@ -19,6 +20,7 @@ export const useFileListItemRename = ({
   id,
   isPendingRename,
   isFolder,
+  libraryId,
   name,
   refreshFileList,
   setPendingRenameItemId,
@@ -61,8 +63,8 @@ export const useFileListItemRename = ({
       await updateResource(id, { name: renamingValue.trim() });
       // Revalidate tree for the parent folder — the explorer subscription will reconcile
       const { queryParams } = await import('@/store/file').then((m) => m.useFileStore.getState());
-      const parentId = queryParams?.parentId ?? null;
-      revalidateResourceTreeParent(parentId);
+      const parentId = queryParams?.parentId ?? '';
+      useTreeStore.getState().revalidate(parentId);
       await refreshFileList({ revalidateResources: false });
 
       message.success(t('FileManager.actions.renameSuccess'));

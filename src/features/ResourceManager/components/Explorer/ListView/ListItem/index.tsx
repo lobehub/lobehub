@@ -133,7 +133,6 @@ const FileListItem = ({
   metadata,
   name,
   onSelectedChange,
-  parentId,
   selected,
   size,
   slug,
@@ -200,6 +199,7 @@ const FileListItem = ({
     id,
     isPendingRename: resourceManagerState.isPendingRename,
     isFolder,
+    libraryId: resourceManagerState.libraryId,
     name,
     refreshFileList: fileStoreState.refreshFileList,
     setPendingRenameItemId: resourceManagerState.setPendingRenameItemId,
@@ -219,7 +219,6 @@ const FileListItem = ({
     id,
     libraryId: resourceManagerState.libraryId,
     onRenameStart: isFolder ? handleRenameStart : undefined,
-    parentId,
     sourceType,
     url,
   });
