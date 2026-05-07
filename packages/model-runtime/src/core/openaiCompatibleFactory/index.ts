@@ -353,10 +353,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     private resolvePromptCacheKey(model?: string, user?: string) {
-      if (!model?.startsWith('gpt-') || !user) return;
+      if (!user) return;
 
       // Keep the default key at {userId}:{model}; {agentId} can be added later if a narrower cache bucket is needed.
-      return `lobe:${user}:${model}`;
+      if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
+        return `lobe:${user}:${model}`;
+      }
     }
 
     private resolvePromptCacheKeyParams(
