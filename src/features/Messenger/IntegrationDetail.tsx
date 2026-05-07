@@ -380,6 +380,25 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
         : null;
       return (
         <Flexbox>
+          {installations.map((install) => (
+            <ConnectionRow
+              icon={<Icon icon={ServerIcon} size="small" />}
+              key={install.id}
+              label={t('messenger.detail.connections.serverLabel')}
+              name={install.tenantName || install.tenantId}
+              status="connected"
+              action={
+                <Button
+                  danger
+                  icon={<Icon icon={Trash2Icon} />}
+                  size="small"
+                  onClick={() => handleDisconnectInstallation(install.id)}
+                >
+                  {t('messenger.detail.disconnect')}
+                </Button>
+              }
+            />
+          ))}
           {link && handle && (
             <ConnectionRow
               icon={<Icon icon={UserIcon} size="small" />}
@@ -409,25 +428,6 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
               </Flexbox>
             </ConnectionRow>
           )}
-          {installations.map((install) => (
-            <ConnectionRow
-              icon={<Icon icon={ServerIcon} size="small" />}
-              key={install.id}
-              label={t('messenger.detail.connections.serverLabel')}
-              name={install.tenantName || install.tenantId}
-              status="connected"
-              action={
-                <Button
-                  danger
-                  icon={<Icon icon={Trash2Icon} />}
-                  size="small"
-                  onClick={() => handleDisconnectInstallation(install.id)}
-                >
-                  {t('messenger.detail.disconnect')}
-                </Button>
-              }
-            />
-          ))}
           {!hasLinks && !hasInstallations && (
             <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
           )}
