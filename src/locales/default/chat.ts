@@ -738,6 +738,8 @@ export default {
   'tool.intervention.onboarding.agentIdentity.description':
     'Approving this change updates the Agent shown in Inbox and in this onboarding conversation.',
   'tool.intervention.onboarding.agentIdentity.title': "I'll update my name and avatar",
+  'tool.intervention.onboarding.agentIdentity.titleAvatarOnly': "I'll update my avatar",
+  'tool.intervention.onboarding.agentIdentity.titleNameOnly': "I'll update my name",
   'tool.intervention.onboarding.userProfile.applyHint':
     'These details will be saved to your profile after approval.',
   'tool.intervention.onboarding.userProfile.description':

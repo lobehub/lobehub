@@ -683,6 +683,8 @@
   "tool.intervention.mode.manualDesc": "每次调用都需要你确认",
   "tool.intervention.onboarding.agentIdentity.description": "批准后，会同步更新 Inbox 中显示的 Agent，以及当前 onboarding 对话里的 Agent。",
   "tool.intervention.onboarding.agentIdentity.title": "我将更新自己的名字与头像",
+  "tool.intervention.onboarding.agentIdentity.titleAvatarOnly": "我将更新自己的头像",
+  "tool.intervention.onboarding.agentIdentity.titleNameOnly": "我将更新自己的名字",
   "tool.intervention.onboarding.userProfile.applyHint": "这些信息将在批准后保存到您的个人资料中。",
   "tool.intervention.onboarding.userProfile.description": "批准此更改将更新您的入职资料，以便代理可以定制未来的回复。",
   "tool.intervention.onboarding.userProfile.eyebrow": "入职批准",

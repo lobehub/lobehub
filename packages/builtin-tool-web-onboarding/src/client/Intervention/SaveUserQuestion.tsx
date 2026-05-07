@@ -41,12 +41,20 @@ interface AgentIdentitySectionProps {
 const AgentIdentitySection = memo<AgentIdentitySectionProps>(({ agentEmoji, agentName }) => {
   const { t } = useTranslation('chat');
 
+  // Manifest routes name-only and emoji-only saves through the same intervention
+  // as the both-fields case, so the title must reflect what's actually pending —
+  // otherwise an emoji-only approval claims to also rename the agent.
+  const titleKey =
+    agentName && agentEmoji
+      ? 'tool.intervention.onboarding.agentIdentity.title'
+      : agentName
+        ? 'tool.intervention.onboarding.agentIdentity.titleNameOnly'
+        : 'tool.intervention.onboarding.agentIdentity.titleAvatarOnly';
+
   return (
     <Flexbox gap={12}>
       <Flexbox gap={4}>
-        <Text style={{ fontSize: 16, fontWeight: 600 }}>
-          {t('tool.intervention.onboarding.agentIdentity.title')}
-        </Text>
+        <Text style={{ fontSize: 16, fontWeight: 600 }}>{t(titleKey)}</Text>
         <Text style={{ fontSize: 13 }} type="secondary">
           {t('tool.intervention.onboarding.agentIdentity.description')}
         </Text>
