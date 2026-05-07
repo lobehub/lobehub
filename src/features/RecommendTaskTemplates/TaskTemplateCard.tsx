@@ -200,7 +200,6 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(({ template, onDismi
             <ActionIcon
               icon={Clock}
               size={12}
-              type={'secondary'}
               title={
                 <Center>
                   <span>{scheduleText}</span>
