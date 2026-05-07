@@ -1,4 +1,4 @@
-CREATE TABLE "messenger_account_links" (
+CREATE TABLE IF NOT EXISTS "messenger_account_links" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
 	"platform" varchar(50) NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE "messenger_account_links" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "messenger_installations" (
+CREATE TABLE IF NOT EXISTS "messenger_installations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"platform" varchar(50) NOT NULL,
 	"tenant_id" varchar(255) NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE "messenger_installations" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "system_bot_providers" (
+CREATE TABLE IF NOT EXISTS "system_bot_providers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"platform" varchar(50) NOT NULL,
 	"enabled" boolean DEFAULT true NOT NULL,
@@ -41,13 +41,16 @@ CREATE TABLE "system_bot_providers" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "messenger_account_links" DROP CONSTRAINT IF EXISTS "messenger_account_links_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "messenger_account_links" ADD CONSTRAINT "messenger_account_links_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messenger_account_links" DROP CONSTRAINT IF EXISTS "messenger_account_links_active_agent_id_agents_id_fk";--> statement-breakpoint
 ALTER TABLE "messenger_account_links" ADD CONSTRAINT "messenger_account_links_active_agent_id_agents_id_fk" FOREIGN KEY ("active_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messenger_installations" DROP CONSTRAINT IF EXISTS "messenger_installations_installed_by_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "messenger_installations" ADD CONSTRAINT "messenger_installations_installed_by_user_id_users_id_fk" FOREIGN KEY ("installed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "messenger_account_links_platform_tenant_user_unique" ON "messenger_account_links" USING btree ("platform","tenant_id","platform_user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "messenger_account_links_user_platform_tenant_unique" ON "messenger_account_links" USING btree ("user_id","platform","tenant_id");--> statement-breakpoint
-CREATE INDEX "messenger_account_links_active_agent_idx" ON "messenger_account_links" USING btree ("active_agent_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "messenger_installations_platform_app_tenant_unique" ON "messenger_installations" USING btree ("platform","application_id","tenant_id");--> statement-breakpoint
-CREATE INDEX "messenger_installations_platform_tenant_idx" ON "messenger_installations" USING btree ("platform","tenant_id");--> statement-breakpoint
-CREATE INDEX "messenger_installations_token_expires_at_idx" ON "messenger_installations" USING btree ("token_expires_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "system_bot_providers_platform_unique" ON "system_bot_providers" USING btree ("platform");
+CREATE UNIQUE INDEX IF NOT EXISTS "messenger_account_links_platform_tenant_user_unique" ON "messenger_account_links" USING btree ("platform","tenant_id","platform_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "messenger_account_links_user_platform_tenant_unique" ON "messenger_account_links" USING btree ("user_id","platform","tenant_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "messenger_account_links_active_agent_idx" ON "messenger_account_links" USING btree ("active_agent_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "messenger_installations_platform_app_tenant_unique" ON "messenger_installations" USING btree ("platform","application_id","tenant_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "messenger_installations_platform_tenant_idx" ON "messenger_installations" USING btree ("platform","tenant_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "messenger_installations_token_expires_at_idx" ON "messenger_installations" USING btree ("token_expires_at");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "system_bot_providers_platform_unique" ON "system_bot_providers" USING btree ("platform");
