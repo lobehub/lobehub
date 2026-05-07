@@ -176,17 +176,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'An advanced LLM supporting synthetic data generation, knowledge distillation, and reasoning for chatbots, coding, and domain tasks.',
-    displayName: 'Llama 3.1 405B Instruct',
-    id: 'meta/llama-3.1-405b-instruct',
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 32_768,
     description: 'A distinctive language model delivering exceptional accuracy and efficiency.',
     displayName: 'Llama 3.1 Nemotron 51B Instruct',

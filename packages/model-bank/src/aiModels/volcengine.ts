@@ -80,7 +80,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'doubao-seed-2-0-lite-260215',
+      deploymentName: 'doubao-seed-2-0-lite-260428',
     },
     contextWindowTokens: 256_000,
     description:
@@ -143,7 +143,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'doubao-seed-2-0-mini-260215',
+      deploymentName: 'doubao-seed-2-0-mini-260428',
     },
     contextWindowTokens: 256_000,
     description:
