@@ -1,7 +1,9 @@
+import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 
+import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -33,6 +35,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(ShellCommandCtr);
   }
 
+  private get heterogeneousAgentCtr() {
+    return this.app.getController(HeterogeneousAgentCtr);
+  }
+
   // ─── Lifecycle ───
 
   afterAppReady() {
@@ -46,6 +52,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up tool call handler
     srv.setToolCallHandler((apiName, args) => this.executeToolCall(apiName, args));
+
+    // Wire up agent run handler
+    srv.setAgentRunHandler((request) => this.executeAgentRun(request));
 
     // Auto-connect if already logged in
     this.tryAutoConnect();
@@ -106,6 +115,45 @@ export default class GatewayConnectionCtr extends ControllerModule {
     if (!token) return;
 
     await this.service.connect();
+  }
+
+  // ─── Agent Run Routing ───
+
+  private async executeAgentRun(
+    request: AgentRunRequestMessage,
+  ): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
+    try {
+      const ctr = this.heterogeneousAgentCtr;
+
+      // Create a session for the hetero agent.
+      const { sessionId } = await ctr.startSession({
+        agentType: request.agentType,
+        args: [],
+        command: request.agentType === 'codex' ? 'codex' : 'claude',
+        cwd: request.cwd,
+        // Inject LOBEHUB_JWT so the CLI authenticates against heteroIngest.
+        env: { LOBEHUB_JWT: request.jwt },
+        resumeSessionId: request.resumeSessionId,
+      });
+
+      // Fire-and-forget: sendPrompt runs the CLI until completion.
+      ctr
+        .sendPrompt({
+          operationId: request.operationId,
+          prompt: request.prompt,
+          sessionId,
+        })
+        .catch((err: Error) => {
+          // Errors are surfaced via heteroFinish on the server side.
+          // Log locally for desktop debugging only.
+          console.error('[GatewayConnectionCtr] agent run failed:', err.message);
+        });
+
+      return { status: 'accepted' };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return { reason, status: 'rejected' };
+    }
   }
 
   // ─── Tool Call Routing ───

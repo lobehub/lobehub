@@ -5,6 +5,8 @@ import os from 'node:os';
 import WebSocket from 'ws';
 
 import type {
+  AgentRunAckMessage,
+  AgentRunRequestMessage,
   ClientMessage,
   ConnectionStatus,
   GatewayClientEvents,
@@ -151,6 +153,13 @@ export class GatewayClient extends EventEmitter {
     });
   }
 
+  sendAgentRunAck(response: Omit<AgentRunAckMessage, 'type'>): void {
+    this.sendMessage({
+      ...response,
+      type: 'agent_run_ack',
+    });
+  }
+
   // ─── Connection Logic ───
 
   private doConnect() {
@@ -249,6 +258,11 @@ export class GatewayClient extends EventEmitter {
 
         case 'system_info_request': {
           this.emit('system_info_request', message as SystemInfoRequestMessage);
+          break;
+        }
+
+        case 'agent_run_request': {
+          this.emit('agent_run_request', message as AgentRunRequestMessage);
           break;
         }
 

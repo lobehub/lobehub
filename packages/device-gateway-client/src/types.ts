@@ -88,12 +88,34 @@ export interface SystemInfoResponseMessage {
   type: 'system_info_response';
 }
 
+/** Server → Client: request the desktop to spawn `lh hetero exec`. */
+export interface AgentRunRequestMessage {
+  agentType: 'claude-code' | 'codex';
+  cwd?: string;
+  jwt: string;
+  operationId: string;
+  prompt: string;
+  resumeSessionId?: string;
+  topicId: string;
+  type: 'agent_run_request';
+}
+
+/** Client → Server: acknowledgement for an agent_run_request. */
+export interface AgentRunAckMessage {
+  operationId: string;
+  reason?: string;
+  status: 'accepted' | 'rejected';
+  type: 'agent_run_ack';
+}
+
 export type ClientMessage =
+  | AgentRunAckMessage
   | AuthMessage
   | HeartbeatMessage
   | SystemInfoResponseMessage
   | ToolCallResponseMessage;
 export type ServerMessage =
+  | AgentRunRequestMessage
   | AuthExpiredMessage
   | AuthFailedMessage
   | AuthSuccessMessage
@@ -111,6 +133,7 @@ export type ConnectionStatus =
   | 'reconnecting';
 
 export interface GatewayClientEvents {
+  agent_run_request: (request: AgentRunRequestMessage) => void;
   auth_expired: () => void;
   auth_failed: (reason: string) => void;
   connected: () => void;
