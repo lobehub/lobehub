@@ -7,8 +7,14 @@ export type ResourceViewMode = 'list' | 'tree';
 
 const ResourcesSection = memo(() => {
   return (
-    <Flexbox data-testid="workspace-resources" paddingBlock={8} paddingInline={16}>
-      <AgentDocumentsGroup viewMode={'list'} />
+    <Flexbox
+      data-testid="workspace-resources"
+      flex={1}
+      paddingBlock={8}
+      paddingInline={16}
+      style={{ minHeight: 0 }}
+    >
+      <AgentDocumentsGroup style={{ flex: 1, minHeight: 0 }} viewMode={'list'} />
     </Flexbox>
   );
 });

@@ -4,10 +4,12 @@ import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { FileTextIcon, GlobeIcon, type LucideIcon, Trash2Icon } from 'lucide-react';
-import { memo, type MouseEvent, useMemo, useState } from 'react';
+import { type CSSProperties, memo, type MouseEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 
+import type { ExplorerTreeNode } from '@/features/ExplorerTree';
+import { ExplorerTree } from '@/features/ExplorerTree';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -85,6 +87,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     font-weight: 500;
+  `,
+  documentTree: css`
+    --trees-bg-override: transparent;
+    --trees-border-color-override: transparent;
+    --trees-selected-bg-override: ${cssVar.colorFillSecondary};
+    --trees-bg-muted-override: ${cssVar.colorFillTertiary};
+    --trees-fg-override: ${cssVar.colorText};
+    --trees-fg-muted-override: ${cssVar.colorTextSecondary};
+    --trees-accent-override: ${cssVar.colorPrimary};
+    --trees-padding-inline-override: 0px;
+    --trees-font-size-override: 12px;
+    --trees-border-radius-override: 6px;
   `,
 }));
 
@@ -204,13 +218,18 @@ const DocumentItem = memo<DocumentItemProps>(({ agentId, document, mutate }) => 
 DocumentItem.displayName = 'AgentDocumentsGroupItem';
 
 interface AgentDocumentsGroupProps {
+  style?: CSSProperties;
   viewMode?: 'list' | 'tree';
 }
 
-const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' }) => {
+const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 'list' }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentStore((s) => s.activeAgentId);
   const [filter, setFilter] = useState<ResourceFilter>('all');
+  const navigate = useNavigate();
+  const openDocument = useChatStore((s) => s.openDocument);
+  const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
+  const { message, modal } = App.useApp();
 
   const {
     data = [],
@@ -237,6 +256,70 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' 
       ] as const
     ).filter((group) => group.items.length > 0);
   }, [data]);
+
+  const documentTreeNodes = useMemo(
+    () =>
+      data
+        .filter((doc) => doc.sourceType !== 'web')
+        .map(
+          (doc): ExplorerTreeNode<AgentDocumentListItem> => ({
+            data: doc,
+            id: doc.documentId,
+            isFolder: doc.fileType === 'custom/folder',
+            name: doc.title || doc.filename || '',
+            parentId: doc.parentId,
+          }),
+        ),
+    [data],
+  );
+
+  const handleDocumentTreeNodeClick = (node: ExplorerTreeNode<AgentDocumentListItem>) => {
+    const doc = node.data;
+    if (!doc || !doc.documentId || node.isFolder) return;
+    if (pageMatch?.params.aid && pageMatch.params.topicId) {
+      navigate(`/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${doc.documentId}`);
+      return;
+    }
+    openDocument(doc.documentId);
+  };
+
+  const handleDocumentTreeContextMenu = (node: ExplorerTreeNode<AgentDocumentListItem>) => {
+    const doc = node.data;
+    if (!doc) return [];
+    return [
+      {
+        danger: true,
+        icon: <Trash2Icon size={14} />,
+        key: 'delete',
+        label: t('delete', { ns: 'common' }),
+        onClick: () => {
+          modal.confirm({
+            centered: true,
+            okButtonProps: { danger: true },
+            onOk: async () => {
+              try {
+                await agentDocumentService.removeDocument({
+                  agentId: agentId!,
+                  documentId: doc.documentId,
+                  id: doc.id,
+                  topicId: pageMatch?.params.topicId,
+                });
+                await mutate();
+                message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
+              } catch (error) {
+                message.error(
+                  error instanceof Error
+                    ? error.message
+                    : t('workingPanel.resources.deleteError', { ns: 'chat' }),
+                );
+              }
+            },
+            title: t('workingPanel.resources.deleteTitle', { ns: 'chat' }),
+          });
+        },
+      },
+    ];
+  };
 
   if (!agentId) return null;
 
@@ -284,7 +367,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' 
   }
 
   return (
-    <Flexbox gap={12}>
+    <Flexbox gap={12} style={style}>
       <Flexbox horizontal gap={4} role={'tablist'}>
         {FILTER_OPTIONS.map((option) => {
           const active = filter === option.value;
@@ -308,6 +391,16 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' 
             icon={filter === 'web' ? GlobeIcon : FileTextIcon}
           />
         </Center>
+      ) : filter === 'documents' ? (
+        <Flexbox className={styles.documentTree} flex={1} style={{ minHeight: 0 }}>
+          <ExplorerTree
+            density="relaxed"
+            getContextMenuItems={handleDocumentTreeContextMenu}
+            nodes={documentTreeNodes}
+            style={{ height: '100%' }}
+            onNodeClick={handleDocumentTreeNodeClick}
+          />
+        </Flexbox>
       ) : (
         <Flexbox gap={8}>
           {filteredData.map((doc) => (
