@@ -735,17 +735,9 @@ export default {
   'tool.intervention.mode.autoRunDesc': 'Automatically approve all tool executions',
   'tool.intervention.mode.manual': 'Manual',
   'tool.intervention.mode.manualDesc': 'Manual approval required for each invocation',
-  'tool.intervention.onboarding.agentIdentity.applyHint':
-    'The new identity will appear after approval.',
   'tool.intervention.onboarding.agentIdentity.description':
     'Approving this change updates the Agent shown in Inbox and in this onboarding conversation.',
-  'tool.intervention.onboarding.agentIdentity.emoji': 'Agent avatar',
-  'tool.intervention.onboarding.agentIdentity.eyebrow': 'Onboarding approval',
-  'tool.intervention.onboarding.agentIdentity.name': 'Agent name',
-  'tool.intervention.onboarding.agentIdentity.targetInbox': 'Inbox Agent',
-  'tool.intervention.onboarding.agentIdentity.targetOnboarding': 'Current onboarding Agent',
-  'tool.intervention.onboarding.agentIdentity.targets': 'Applies to',
-  'tool.intervention.onboarding.agentIdentity.title': 'Confirm Agent identity update',
+  'tool.intervention.onboarding.agentIdentity.title': "I'll update my name and avatar",
   'tool.intervention.onboarding.userProfile.applyHint':
     'These details will be saved to your profile after approval.',
   'tool.intervention.onboarding.userProfile.description':
