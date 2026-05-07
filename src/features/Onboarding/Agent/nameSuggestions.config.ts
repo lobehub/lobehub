@@ -1414,8 +1414,8 @@ export const nameSuggestionPool: NameSuggestionItem[] = [
 
 export const resolveNameSuggestion = (
   item: NameSuggestionItem,
-  locale: string,
+  locale: string | undefined,
 ): NameSuggestionContent => {
-  const lang = locale.toLowerCase().split('-')[0];
-  return item.content[lang] ?? item.content.en;
+  const lang = locale?.toLowerCase().split('-')[0];
+  return (lang && item.content[lang]) || item.content.en;
 };
