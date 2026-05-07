@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 type MessengerT = TFunction<'messenger'>;
-type MessengerTranslationKey = `messenger.${string}` | `verify.${string}`;
+export type MessengerTranslationKey = `messenger.${string}` | `verify.${string}`;
 
 const SLACK_INSTALL_ERROR_REASON_KEYS = {
   access_denied: 'messenger.slack.installResult.reasons.accessDenied',

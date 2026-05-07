@@ -1,20 +1,17 @@
 'use client';
 
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { App } from 'antd';
 import { BriefcaseIcon, LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { messengerService } from '@/services/messenger';
-
-import { getMessengerErrorMessage } from '../i18n';
 import LinkModal from '../LinkModal';
 import {
   ConnectionRow,
   DetailLayout,
   IntegrationDetailSkeleton,
   styles,
+  useDisconnectInstallation,
   useLinkActions,
   useMessengerData,
   UserAgentConnection,
@@ -29,7 +26,6 @@ interface SlackDetailProps {
 
 const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }) => {
   const { t } = useTranslation('messenger');
-  const { message, modal } = App.useApp();
   const [linkOpen, setLinkOpen] = useState(false);
 
   const data = useMessengerData('slack');
@@ -39,29 +35,21 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
     name,
     platform: 'slack',
   });
+  const disconnectInstallation = useDisconnectInstallation({
+    installationsMutate: data.installationsMutate,
+    linksMutate: data.linksMutate,
+  });
 
   // For Slack, disconnecting an install row freezes the workspace's bot —
   // dispatch is token-gated, so removing the install effectively kills the
   // workspace integration even though the bot user remains in Slack.
-  const handleDisconnectInstallation = (id: string) => {
-    modal.confirm({
-      content: t('messenger.slack.connections.disconnectConfirm'),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await messengerService.uninstallInstallation({ installationId: id });
-          await data.installationsMutate();
-          await data.linksMutate();
-          message.success(t('messenger.slack.connections.disconnectSuccess'));
-        } catch (error) {
-          message.error(
-            getMessengerErrorMessage(error, t, 'messenger.slack.connections.disconnectFailed'),
-          );
-        }
-      },
+  const handleDisconnectInstallation = (id: string) =>
+    disconnectInstallation(id, {
+      confirm: t('messenger.slack.connections.disconnectConfirm'),
+      failedKey: 'messenger.slack.connections.disconnectFailed',
+      success: t('messenger.slack.connections.disconnectSuccess'),
       title: t('messenger.slack.connections.disconnectTitle'),
     });
-  };
 
   if (data.isInitialLoading) return <IntegrationDetailSkeleton />;
 

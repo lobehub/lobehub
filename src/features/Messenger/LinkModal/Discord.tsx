@@ -5,7 +5,7 @@ import { LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { buildDiscordOpenBotUrl, PlatformAvatar } from '../constants';
+import { PlatformAvatar } from '../constants';
 
 interface DiscordLinkBodyProps {
   appId?: string;
@@ -32,8 +32,6 @@ const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, name }) => {
     );
   }
 
-  const openBotUrl = buildDiscordOpenBotUrl(appId);
-
   return (
     <>
       <PlatformAvatar platform="discord" size={64} />
@@ -53,9 +51,6 @@ const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, name }) => {
         type="primary"
       >
         {t('messenger.discord.connectModal.inviteButton')}
-      </Button>
-      <Button block href={openBotUrl} size="large" target="_blank">
-        {t('messenger.discord.connectModal.continueButton')}
       </Button>
     </>
   );

@@ -64,18 +64,21 @@ export default {
   'messenger.slack.installResult.reasons.persistFailed':
     'the workspace connection could not be saved',
   'messenger.slack.installResult.success': 'Slack workspace connected.',
-  'messenger.discord.connectModal.continueButton': 'Open in Discord',
   'messenger.discord.connectModal.description':
-    'Add the bot to a Discord server you own (so it can DM you), then open the bot in Discord and send any message to start linking.',
+    'Add the LobeHub bot to a Discord server you manage.',
   'messenger.discord.connectModal.inviteButton': 'Add to Discord server',
   'messenger.discord.connectModal.notConfigured':
     "Discord isn't available right now. Please try again later.",
-  'messenger.discord.connectModal.title': 'Continue setup in Discord',
+  'messenger.discord.connectModal.title': 'Add bot to your server',
   'messenger.discord.connections.disconnectConfirm':
     'Remove this server from your audit list? The bot will stay in the server until a server admin kicks it.',
   'messenger.discord.connections.disconnectFailed': 'Failed to remove server.',
   'messenger.discord.connections.disconnectSuccess': 'Server removed.',
   'messenger.discord.connections.disconnectTitle': 'Remove server',
+  'messenger.discord.userPending.cta': 'Open in Discord',
+  'messenger.discord.userPending.hint':
+    'Open the bot in Discord and send any message to finish linking your account.',
+  'messenger.discord.userPending.name': 'Not linked yet',
   'messenger.list.discord.description':
     'Chat with your LobeHub agents from any Discord server via DM with the LobeHub bot.',
   'messenger.list.slack.description':

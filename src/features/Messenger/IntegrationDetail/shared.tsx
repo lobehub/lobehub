@@ -13,7 +13,7 @@ import { messengerService } from '@/services/messenger';
 
 import AgentSelect from '../AgentSelect';
 import { type MessengerPlatform, PlatformAvatar } from '../constants';
-import { getMessengerErrorMessage } from '../i18n';
+import { getMessengerErrorMessage, type MessengerTranslationKey } from '../i18n';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   backButton: css`
@@ -326,4 +326,54 @@ export const useLinkActions = ({
   };
 
   return { handleSetActive, handleUnlink };
+};
+
+export interface DisconnectInstallationCopy {
+  /** Confirm modal body. */
+  confirm: string;
+  /** i18n key used for the toast fallback when the server doesn't return a known messenger error. */
+  failedKey: MessengerTranslationKey;
+  /** Toast text on success. */
+  success: string;
+  /** Confirm modal title. */
+  title: string;
+}
+
+interface UseDisconnectInstallationArgs {
+  installationsMutate: () => Promise<unknown>;
+  linksMutate: () => Promise<unknown>;
+}
+
+/**
+ * Disconnect-installation handler shared by Slack and Discord. The copy
+ * diverges sharply between platforms — for Slack the operation freezes the
+ * workspace's bot (token-gated dispatch); for Discord it only removes the
+ * audit entry, since the bot stays in the guild until a server admin kicks
+ * it. The platform passes already-localized strings + the `failedKey` so the
+ * shared hook avoids embedding any platform-specific copy.
+ */
+export const useDisconnectInstallation = ({
+  installationsMutate,
+  linksMutate,
+}: UseDisconnectInstallationArgs) => {
+  const { t } = useTranslation('messenger');
+  const { message, modal } = App.useApp();
+
+  return (id: string, copy: DisconnectInstallationCopy) => {
+    modal.confirm({
+      content: copy.confirm,
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await messengerService.uninstallInstallation({ installationId: id });
+          await installationsMutate();
+          await linksMutate();
+          message.success(copy.success);
+        } catch (error) {
+          message.error(getMessengerErrorMessage(error, t, copy.failedKey));
+        }
+      },
+      title: copy.title,
+    });
+  };
 };

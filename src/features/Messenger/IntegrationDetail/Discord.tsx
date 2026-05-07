@@ -1,20 +1,18 @@
 'use client';
 
-import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { App } from 'antd';
-import { LinkIcon, ServerIcon, Trash2Icon } from 'lucide-react';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { LinkIcon, ServerIcon, Trash2Icon, UserIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { messengerService } from '@/services/messenger';
-
-import { getMessengerErrorMessage } from '../i18n';
+import { buildDiscordOpenBotUrl } from '../constants';
 import LinkModal from '../LinkModal';
 import {
   ConnectionRow,
   DetailLayout,
   IntegrationDetailSkeleton,
   styles,
+  useDisconnectInstallation,
   useLinkActions,
   useMessengerData,
   UserAgentConnection,
@@ -29,9 +27,11 @@ interface DiscordDetailProps {
 
 // Discord: a single global user link (Discord uses an env-side bot token, so
 // there's no per-guild link), plus an audit list of server installs.
+// Disconnecting only removes the audit entry — the bot stays in the guild
+// until a server admin kicks it. Disconnect copy
+// (`messenger.discord.connections.*`) makes that distinction explicit.
 const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBack }) => {
   const { t } = useTranslation('messenger');
-  const { message, modal } = App.useApp();
   const [linkOpen, setLinkOpen] = useState(false);
 
   const data = useMessengerData('discord');
@@ -41,31 +41,18 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
     name,
     platform: 'discord',
   });
+  const disconnectInstallation = useDisconnectInstallation({
+    installationsMutate: data.installationsMutate,
+    linksMutate: data.linksMutate,
+  });
 
-  // For Discord, disconnecting only removes the audit entry — the bot stays in
-  // the guild until a server admin kicks it (Discord uses an env-side bot
-  // token, decoupled from per-install state). The `disconnect*` copy strings
-  // call this distinction out so the user isn't surprised by the bot
-  // remaining in the server list.
-  const handleDisconnectInstallation = (id: string) => {
-    modal.confirm({
-      content: t('messenger.discord.connections.disconnectConfirm'),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await messengerService.uninstallInstallation({ installationId: id });
-          await data.installationsMutate();
-          await data.linksMutate();
-          message.success(t('messenger.discord.connections.disconnectSuccess'));
-        } catch (error) {
-          message.error(
-            getMessengerErrorMessage(error, t, 'messenger.discord.connections.disconnectFailed'),
-          );
-        }
-      },
+  const handleDisconnectInstallation = (id: string) =>
+    disconnectInstallation(id, {
+      confirm: t('messenger.discord.connections.disconnectConfirm'),
+      failedKey: 'messenger.discord.connections.disconnectFailed',
+      success: t('messenger.discord.connections.disconnectSuccess'),
       title: t('messenger.discord.connections.disconnectTitle'),
     });
-  };
 
   if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
 
@@ -113,12 +100,37 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
               }
             />
           ))}
-          {link && (
+          {link ? (
             <UserAgentConnection
               link={link}
               onSetActive={(agentId) => handleSetActive('', agentId)}
               onUnlink={() => handleUnlink('')}
             />
+          ) : (
+            hasInstallations &&
+            appId && (
+              <ConnectionRow
+                icon={<Icon icon={UserIcon} size="small" />}
+                label={t('messenger.detail.connections.userLabel')}
+                name={t('messenger.discord.userPending.name')}
+                status="pending"
+                action={
+                  <Button
+                    href={buildDiscordOpenBotUrl(appId)}
+                    icon={<Icon icon={LinkIcon} />}
+                    size="small"
+                    target="_blank"
+                    type="primary"
+                  >
+                    {t('messenger.discord.userPending.cta')}
+                  </Button>
+                }
+              >
+                <Text style={{ fontSize: 12 }} type="secondary">
+                  {t('messenger.discord.userPending.hint')}
+                </Text>
+              </ConnectionRow>
+            )
           )}
           {!hasLinks && !hasInstallations && (
             <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
