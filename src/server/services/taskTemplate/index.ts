@@ -5,7 +5,19 @@ import {
   type TaskTemplateSkillSource,
 } from '@lobechat/const';
 
+import { klavisEnv } from '@/config/klavis';
+import { appEnv } from '@/envs/app';
+
 export const RECOMMEND_COUNT = 3;
+
+export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
+  const sources = new Set<TaskTemplateSkillSource>();
+  if (klavisEnv.KLAVIS_API_KEY) sources.add('klavis');
+  if (appEnv.MARKET_TRUSTED_CLIENT_ID && appEnv.MARKET_TRUSTED_CLIENT_SECRET) {
+    sources.add('lobehub');
+  }
+  return sources;
+})();
 
 const hashString = (str: string): number => {
   let hash = 0;

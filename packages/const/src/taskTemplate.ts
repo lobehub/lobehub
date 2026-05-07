@@ -639,3 +639,5 @@ export const taskTemplates: TaskTemplate[] = [
     optionalSkills: [{ provider: 'notion', source: 'klavis' }],
   },
 ];
+
+export const KNOWN_TASK_TEMPLATE_IDS: ReadonlySet<string> = new Set(taskTemplates.map((t) => t.id));
