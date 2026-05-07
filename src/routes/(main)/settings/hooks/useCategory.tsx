@@ -109,13 +109,6 @@ export const useCategory = () => {
         key: SettingsTabs.Notification,
         label: t('tab.notification'),
       },
-      // Gated by Labs → Messenger; the lab flag also controls whether the
-      // verify-im binding flow is reachable.
-      enableMessenger && {
-        icon: MessageCircleIcon,
-        key: SettingsTabs.Messenger,
-        label: t('tab.messenger'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -172,6 +165,13 @@ export const useCategory = () => {
         icon: KeyIcon,
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
+      },
+      // Gated by Labs → Messenger; the lab flag also controls whether the
+      // verify-im binding flow is reachable.
+      enableMessenger && {
+        icon: MessageCircleIcon,
+        key: SettingsTabs.Messenger,
+        label: t('tab.messenger'),
       },
     ].filter(Boolean) as CategoryItem[];
 
