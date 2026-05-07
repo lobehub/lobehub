@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS "system_bot_providers" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+-- Bridge for envs that ran a pre-squash version of this migration where
+-- `messenger_account_links` was created without `tenant_id` and used 2-column
+-- unique indexes. No-op on fresh DBs (column already exists, indexes never did).
+ALTER TABLE "messenger_account_links" ADD COLUMN IF NOT EXISTS "tenant_id" varchar(255) DEFAULT '' NOT NULL;--> statement-breakpoint
+DROP INDEX IF EXISTS "messenger_account_links_platform_user_unique";--> statement-breakpoint
+DROP INDEX IF EXISTS "messenger_account_links_user_platform_unique";--> statement-breakpoint
 ALTER TABLE "messenger_account_links" DROP CONSTRAINT IF EXISTS "messenger_account_links_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "messenger_account_links" ADD CONSTRAINT "messenger_account_links_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messenger_account_links" DROP CONSTRAINT IF EXISTS "messenger_account_links_active_agent_id_agents_id_fk";--> statement-breakpoint
