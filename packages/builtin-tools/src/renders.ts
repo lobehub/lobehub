@@ -34,6 +34,10 @@ import {
   WebBrowsingManifest,
   WebBrowsingRenders,
 } from '@lobechat/builtin-tool-web-browsing/client';
+import {
+  WebOnboardingManifest,
+  WebOnboardingRenders,
+} from '@lobechat/builtin-tool-web-onboarding/client';
 import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
 import { type BuiltinRender } from '@lobechat/types';
 
@@ -71,6 +75,7 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
   [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
   [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
+  [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
   codex: {
     ...CodexRenders,
     command_execution: RunCommandRender as BuiltinRender,

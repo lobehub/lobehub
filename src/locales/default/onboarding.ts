@@ -55,40 +55,14 @@ export default {
   'agent.welcome.guide.knowYou.title': 'Get to Know You',
   'agent.welcome.guide.name.desc': 'Give me a name so this feels more personal from the start.',
   'agent.welcome.guide.name.title': 'Name Me',
-  'agent.welcome.suggestion.items.1.name': 'Lumi',
-  'agent.welcome.suggestion.items.1.prompt':
-    'Let’s call you Lumi first. Warm, thoughtful, and a little dreamy.',
-  'agent.welcome.suggestion.items.2.name': 'Atlas',
-  'agent.welcome.suggestion.items.2.prompt':
-    'How about Atlas? Steady, reliable, and good at getting things done.',
-  'agent.welcome.suggestion.items.3.name': 'Momo',
-  'agent.welcome.suggestion.items.3.prompt':
-    'Maybe Momo. Lighthearted, approachable, and easy to talk to.',
-  'agent.welcome.suggestion.items.4.name': 'Nova',
-  'agent.welcome.suggestion.items.4.prompt':
-    'Let’s go with Nova. Sharp, imaginative, and full of fresh ideas.',
-  'agent.welcome.suggestion.items.5.name': 'Milo',
-  'agent.welcome.suggestion.items.5.prompt':
-    'Milo sounds good. Friendly, quick-minded, and quietly capable.',
-  'agent.welcome.suggestion.items.6.name': 'Aster',
-  'agent.welcome.suggestion.items.6.prompt':
-    'How about Aster? Clean, direct, and calm under pressure.',
-  'agent.welcome.suggestion.items.7.name': 'Pixel',
-  'agent.welcome.suggestion.items.7.prompt':
-    'Call you Pixel? Curious, product-minded, and detail-aware.',
-  'agent.welcome.suggestion.items.8.name': 'Echo',
-  'agent.welcome.suggestion.items.8.prompt':
-    'Maybe Echo. Patient, attentive, and always listening closely.',
-  'agent.welcome.suggestion.items.9.name': 'Orbit',
-  'agent.welcome.suggestion.items.9.prompt':
-    'Let’s try Orbit. Feels like a long-term companion who grows with me.',
+  'agent.welcome.suggestion.avatarHint': 'Use {{emoji}} as the avatar.',
   'agent.welcome.suggestion.switch': 'Try another set',
   'agent.welcome.suggestion.title': 'Need a starting point? Pick one and we can refine it later.',
   'agent.welcome.sentence.1': 'So nice to meet you! Let’s get to know each other.',
   'agent.welcome.sentence.2': 'What kind of partner do you want me to be?',
   'agent.welcome.sentence.3': 'First, give me a name :)',
   'agent.welcome.footer':
-    'Configure your Lobe AI Agent. It lives on your server, learns from every interaction, and becomes more powerful the longer it runs.',
+    'Configure your Lobe AI Agent. It learns from every interaction, and the longer it runs, the better it gets to know you.',
   'agent.greeting.prompt': 'Give me a name, a vibe, and an emoji',
   'agent.greeting.nameLabel': 'Name',
   'agent.greeting.namePlaceholder': 'e.g. Lumi, Atlas, Neko...',

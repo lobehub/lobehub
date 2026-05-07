@@ -14,10 +14,12 @@ import {
 } from '@/features/Conversation';
 import FollowUpChips from '@/features/Conversation/FollowUp/FollowUpChips';
 import { dataSelectors, messageStateSelectors } from '@/features/Conversation/store';
+import WideScreenContainer from '@/features/WideScreenContainer';
 import type { OnboardingPhase } from '@/types/user';
 import { isDev } from '@/utils/env';
 
 import CompletionPanel from './CompletionPanel';
+import NameSuggestions from './NameSuggestions';
 import Welcome from './Welcome';
 import WrapUpHint from './WrapUpHint';
 
@@ -176,12 +178,17 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
           />
         </Flexbox>
         {!readOnly && !onboardingFinished && (
-          <>
+          <Flexbox gap={8}>
             <WrapUpHint
               discoveryUserMessageCount={discoveryUserMessageCount}
               phase={phase}
               onAfterFinish={onAfterWrapUp}
             />
+            {shouldShowGreetingWelcome && (
+              <WideScreenContainer>
+                <NameSuggestions />
+              </WideScreenContainer>
+            )}
             <ChatInput
               disableFollowUpVariant
               disableMention
@@ -192,7 +199,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
               rightActions={chatInputRightActions}
               showRuntimeConfig={false}
             />
-          </>
+          </Flexbox>
         )}
       </Flexbox>
     );
