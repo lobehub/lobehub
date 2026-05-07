@@ -1,4 +1,3 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { type LucideIcon } from 'lucide-react';
 import {
@@ -31,8 +30,62 @@ export interface ContextCommand {
   subPath: string;
 }
 
+const BUSINESS_SETTINGS_COMMANDS: ContextCommand[] = [
+  {
+    icon: Map,
+    keywords: ['subscription', 'plan', 'upgrade', 'pricing'],
+    keywordsKey: 'cmdk.keywords.plans',
+    label: 'Subscription Plans',
+    labelKey: 'tab.plans',
+    labelNamespace: 'subscription',
+    path: '/settings/plans',
+    subPath: 'plans',
+  },
+  {
+    icon: Coins,
+    keywords: ['credits', 'balance', 'credit', 'money'],
+    keywordsKey: 'cmdk.keywords.credits',
+    label: 'Credits',
+    labelKey: 'tab.credits',
+    labelNamespace: 'subscription',
+    path: '/settings/credits',
+    subPath: 'credits',
+  },
+  {
+    icon: PieChart,
+    keywords: ['usage', 'statistics', 'consumption', 'quota'],
+    keywordsKey: 'cmdk.keywords.usage',
+    label: 'Usage',
+    labelKey: 'tab.usage',
+    labelNamespace: 'subscription',
+    path: '/settings/usage',
+    subPath: 'usage',
+  },
+  {
+    icon: CreditCard,
+    keywords: ['billing', 'payment', 'invoice', 'transaction'],
+    keywordsKey: 'cmdk.keywords.billing',
+    label: 'Billing',
+    labelKey: 'tab.billing',
+    labelNamespace: 'subscription',
+    path: '/settings/billing',
+    subPath: 'billing',
+  },
+  {
+    icon: Gift,
+    keywords: ['referral', 'rewards', 'invite', 'bonus'],
+    keywordsKey: 'cmdk.keywords.referral',
+    label: 'Referral Rewards',
+    labelKey: 'tab.referral',
+    labelNamespace: 'subscription',
+    path: '/settings/referral',
+    subPath: 'referral',
+  },
+];
+
 /**
- * Map of context types to their available commands
+ * Map of context types to their core (non-business) commands.
+ * Business commands are appended at runtime via {@link buildContextCommands}.
  */
 export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
   agent: [],
@@ -136,62 +189,24 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
       path: '/settings/about',
       subPath: 'about',
     },
-    ...(ENABLE_BUSINESS_FEATURES
-      ? [
-          {
-            icon: Map,
-            keywords: ['subscription', 'plan', 'upgrade', 'pricing'],
-            keywordsKey: 'cmdk.keywords.plans',
-            label: 'Subscription Plans',
-            labelKey: 'tab.plans',
-            labelNamespace: 'subscription' as const,
-            path: '/settings/plans',
-            subPath: 'plans',
-          },
-          {
-            icon: Coins,
-            keywords: ['credits', 'balance', 'credit', 'money'],
-            keywordsKey: 'cmdk.keywords.credits',
-            label: 'Credits',
-            labelKey: 'tab.credits',
-            labelNamespace: 'subscription' as const,
-            path: '/settings/credits',
-            subPath: 'credits',
-          },
-          {
-            icon: PieChart,
-            keywords: ['usage', 'statistics', 'consumption', 'quota'],
-            keywordsKey: 'cmdk.keywords.usage',
-            label: 'Usage',
-            labelKey: 'tab.usage',
-            labelNamespace: 'subscription' as const,
-            path: '/settings/usage',
-            subPath: 'usage',
-          },
-          {
-            icon: CreditCard,
-            keywords: ['billing', 'payment', 'invoice', 'transaction'],
-            keywordsKey: 'cmdk.keywords.billing',
-            label: 'Billing',
-            labelKey: 'tab.billing',
-            labelNamespace: 'subscription' as const,
-            path: '/settings/billing',
-            subPath: 'billing',
-          },
-          {
-            icon: Gift,
-            keywords: ['referral', 'rewards', 'invite', 'bonus'],
-            keywordsKey: 'cmdk.keywords.referral',
-            label: 'Referral Rewards',
-            labelKey: 'tab.referral',
-            labelNamespace: 'subscription' as const,
-            path: '/settings/referral',
-            subPath: 'referral',
-          },
-        ]
-      : []),
   ],
 };
+
+interface BuildContextCommandsOptions {
+  enableBusinessFeatures: boolean;
+}
+
+/**
+ * Build the full command map, optionally appending business-only entries.
+ */
+export const buildContextCommands = ({
+  enableBusinessFeatures,
+}: BuildContextCommandsOptions): Record<ContextType, ContextCommand[]> => ({
+  ...CONTEXT_COMMANDS,
+  settings: enableBusinessFeatures
+    ? [...CONTEXT_COMMANDS.settings, ...BUSINESS_SETTINGS_COMMANDS]
+    : CONTEXT_COMMANDS.settings,
+});
 
 /**
  * Get context-specific commands based on context type and current sub-path
@@ -199,9 +214,10 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
  */
 export const getContextCommands = (
   contextType: MenuContext,
-  currentSubPath?: string,
+  currentSubPath: string | undefined,
+  options: BuildContextCommandsOptions,
 ): ContextCommand[] => {
-  const commands = CONTEXT_COMMANDS[contextType as ContextType] || [];
+  const commands = buildContextCommands(options)[contextType as ContextType] || [];
 
   // Filter out the current page
   return commands.filter((cmd) => cmd.subPath !== currentSubPath);
