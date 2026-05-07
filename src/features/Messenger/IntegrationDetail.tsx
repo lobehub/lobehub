@@ -8,6 +8,7 @@ import {
   BriefcaseIcon,
   CheckCircle2Icon,
   LinkIcon,
+  ServerIcon,
   Trash2Icon,
   UserIcon,
 } from 'lucide-react';
@@ -220,44 +221,66 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
       });
     };
 
+    // Disconnect an install row. Copy diverges by platform: for Slack the
+    // operation actually freezes the workspace's bot (token-gated dispatch);
+    // for Discord it only removes the audit entry (the bot stays in the guild
+    // until a server admin kicks it — Discord runs on the global env token).
+    const disconnectKeys =
+      platform === 'discord'
+        ? ({
+            confirm: 'messenger.discord.connections.disconnectConfirm',
+            failed: 'messenger.discord.connections.disconnectFailed',
+            success: 'messenger.discord.connections.disconnectSuccess',
+            title: 'messenger.discord.connections.disconnectTitle',
+          } as const)
+        : ({
+            confirm: 'messenger.slack.connections.disconnectConfirm',
+            failed: 'messenger.slack.connections.disconnectFailed',
+            success: 'messenger.slack.connections.disconnectSuccess',
+            title: 'messenger.slack.connections.disconnectTitle',
+          } as const);
     const handleDisconnectInstallation = (id: string) => {
       modal.confirm({
-        content: t('messenger.slack.connections.disconnectConfirm'),
+        content: t(disconnectKeys.confirm),
         okButtonProps: { danger: true },
         onOk: async () => {
           try {
-            await messengerService.uninstallSlack({ installationId: id });
+            await messengerService.uninstallInstallation({ installationId: id });
             await installationsSWR.mutate();
             await linksSWR.mutate();
-            message.success(t('messenger.slack.connections.disconnectSuccess'));
+            message.success(t(disconnectKeys.success));
           } catch (error) {
-            message.error(
-              getMessengerErrorMessage(error, t, 'messenger.slack.connections.disconnectFailed'),
-            );
+            message.error(getMessengerErrorMessage(error, t, disconnectKeys.failed));
           }
         },
-        title: t('messenger.slack.connections.disconnectTitle'),
+        title: t(disconnectKeys.title),
       });
     };
 
     const isSlack = platform === 'slack';
-    // Discord uses a single global bot token (no per-tenant install records),
-    // so its connection UX matches Telegram: one row per linked account, no
-    // "Connections > Workspace" panel.
-    const usesPerTenantInstall = isSlack;
+    const isDiscord = platform === 'discord';
+    // Slack and Discord both surface per-tenant install rows in the audit list.
+    // Slack pairs each workspace install with at most one user link (link
+    // dispatch is workspace-token-gated). Discord keeps the install list as
+    // pure audit data — the runtime bot uses a global env token, so the user
+    // link is a single global row, decoupled from the server installs below it.
+    const usesInstallList = isSlack || isDiscord;
     const hasInstallations = installations.length > 0;
     const hasLinks = links.length > 0;
 
-    // Header action — Slack always lets the user add another workspace; the
-    // global-bot platforms (Telegram, Discord) toggle between Connect (no link)
-    // and Disconnect (linked).
-    const headerAction = usesPerTenantInstall ? (
+    // Header action — Slack/Discord always lets the user add another tenant
+    // (workspace / server); Telegram (the only remaining global-bot platform)
+    // toggles between Connect (no link) and Disconnect (linked).
+    const addTenantLabel = isDiscord
+      ? t('messenger.detail.addServer')
+      : t('messenger.detail.addWorkspace');
+    const headerAction = usesInstallList ? (
       <Button
         icon={<Icon icon={LinkIcon} />}
         type={hasInstallations ? 'default' : 'primary'}
         onClick={() => setLinkOpen(true)}
       >
-        {hasInstallations ? t('messenger.detail.addWorkspace') : t('messenger.linkCta')}
+        {hasInstallations ? addTenantLabel : t('messenger.linkCta')}
       </Button>
     ) : hasLinks ? (
       <Button danger icon={<Icon icon={Trash2Icon} />} onClick={() => handleUnlink('')}>
@@ -343,8 +366,77 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
       );
     };
 
-    // Generic single-account connection rendering — used by Telegram and Discord
-    // (any platform with a global-token bot and a single account-link row).
+    // Discord: a single global user link (Discord uses an env-side bot token,
+    // so there's no per-guild link), plus an audit list of server installs.
+    // Disconnecting a server row only removes the audit entry — the bot stays
+    // in the guild until a server admin kicks it. Disconnect copy
+    // (`messenger.discord.connections.*`) makes that distinction explicit.
+    const renderDiscordConnections = () => {
+      const link = links[0];
+      const handle = link
+        ? link.platformUsername
+          ? `@${link.platformUsername}`
+          : `ID ${link.platformUserId}`
+        : null;
+      return (
+        <Flexbox>
+          {link && handle && (
+            <ConnectionRow
+              icon={<Icon icon={UserIcon} size="small" />}
+              label={t('messenger.detail.connections.userLabel')}
+              name={handle}
+              status="connected"
+              action={
+                <Button
+                  danger
+                  icon={<Icon icon={Trash2Icon} />}
+                  size="small"
+                  onClick={() => handleUnlink('')}
+                >
+                  {t('messenger.detail.disconnect')}
+                </Button>
+              }
+            >
+              <Flexbox gap={6}>
+                <Text style={{ fontSize: 12 }} type="secondary">
+                  {t('messenger.activeAgent')}
+                </Text>
+                <AgentSelect
+                  placeholder={t('messenger.activeAgentPlaceholder')}
+                  value={link.activeAgentId ?? undefined}
+                  onChange={(agentId) => handleSetActive('', (agentId ?? null) as string | null)}
+                />
+              </Flexbox>
+            </ConnectionRow>
+          )}
+          {installations.map((install) => (
+            <ConnectionRow
+              icon={<Icon icon={ServerIcon} size="small" />}
+              key={install.id}
+              label={t('messenger.detail.connections.serverLabel')}
+              name={install.tenantName || install.tenantId}
+              status="connected"
+              action={
+                <Button
+                  danger
+                  icon={<Icon icon={Trash2Icon} />}
+                  size="small"
+                  onClick={() => handleDisconnectInstallation(install.id)}
+                >
+                  {t('messenger.detail.disconnect')}
+                </Button>
+              }
+            />
+          ))}
+          {!hasLinks && !hasInstallations && (
+            <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
+          )}
+        </Flexbox>
+      );
+    };
+
+    // Generic single-account connection rendering — used by Telegram (the only
+    // remaining global-token bot with no install audit list).
     const renderGlobalBotConnections = () => {
       if (!hasLinks) {
         return <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>;
@@ -385,7 +477,10 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
     };
 
     if (isInitialLoading) {
-      return <IntegrationDetailSkeleton withNestedContent={!usesPerTenantInstall} />;
+      // Discord shows a user row (with nested AgentSelect) above the server
+      // audit list, so it benefits from the nested-content skeleton even
+      // though it also surfaces install rows.
+      return <IntegrationDetailSkeleton withNestedContent={!isSlack} />;
     }
 
     return (
@@ -420,7 +515,11 @@ const IntegrationDetail = memo<IntegrationDetailProps>(
               {t('messenger.detail.connections.title')}
             </Text>
             <Block className={styles.card}>
-              {usesPerTenantInstall ? renderSlackConnections() : renderGlobalBotConnections()}
+              {isSlack
+                ? renderSlackConnections()
+                : isDiscord
+                  ? renderDiscordConnections()
+                  : renderGlobalBotConnections()}
             </Block>
           </Flexbox>
         )}

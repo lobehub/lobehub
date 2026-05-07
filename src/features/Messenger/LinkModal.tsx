@@ -8,7 +8,6 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
-  buildDiscordInviteUrl,
   buildDiscordOpenBotUrl,
   buildTelegramDeepLink,
   type MessengerPlatform,
@@ -59,7 +58,13 @@ const LinkModal = memo<LinkModalProps>(({ appId, botUsername, name, onClose, ope
   const isTelegram = platform === 'telegram';
   const telegramDeepLink =
     isTelegram && botUsername ? buildTelegramDeepLink(botUsername) : undefined;
-  const discordInviteUrl = isDiscord && appId ? buildDiscordInviteUrl(appId) : undefined;
+  // Route Discord installs through the LobeHub install endpoint so the OAuth
+  // redirect lands at our callback — we read `guild_id` straight off the
+  // redirect (Discord puts it in the URL for `scope=bot` flows) and fetch
+  // guild metadata via the bot token, so no `client_secret` is needed.
+  // `appId` gating still surfaces "not configured" copy when no bot is
+  // registered at all.
+  const discordInstallUrl = isDiscord && appId ? '/api/agent/messenger/discord/install' : undefined;
   const discordOpenBotUrl = isDiscord && appId ? buildDiscordOpenBotUrl(appId) : undefined;
 
   const renderBody = () => {
@@ -89,7 +94,7 @@ const LinkModal = memo<LinkModalProps>(({ appId, botUsername, name, onClose, ope
     }
 
     if (isDiscord) {
-      if (!discordInviteUrl) {
+      if (!discordInstallUrl) {
         return (
           <>
             <Icon icon={LinkIcon} size={36} />
@@ -109,7 +114,7 @@ const LinkModal = memo<LinkModalProps>(({ appId, botUsername, name, onClose, ope
               {t('messenger.discord.connectModal.description')}
             </Text>
           </Flexbox>
-          <Button block href={discordInviteUrl} size="large" target="_blank" type="primary">
+          <Button block href={discordInstallUrl} size="large" target="_blank" type="primary">
             {t('messenger.discord.connectModal.inviteButton')}
           </Button>
           {discordOpenBotUrl && (

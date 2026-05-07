@@ -435,17 +435,25 @@ export const messengerRouter = router({
   }),
 
   /**
-   * Disconnect a Slack install — soft-revoke the row so the router stops
-   * dispatching to it and inbound webhooks short-circuit. Cascading effect on
-   * `messenger_account_links` rows for that tenant is intentional: the user
-   * link rows persist (so re-installing the workspace later restores the
-   * binding without re-running verify-im). To wipe a user's link, call `unlink`
+   * Disconnect a per-tenant install row. Platform-agnostic — the underlying
+   * action is `markRevoked`, which the router uses to short-circuit inbound
+   * traffic.
+   *
+   * Semantics differ per platform: for Slack, revoking the row freezes the
+   * workspace's bot since dispatch is gated on the install token. For Discord,
+   * the runtime still uses the global env-side bot token, so revoking only
+   * removes the audit/listing entry — the bot itself remains in the guild
+   * until an admin removes it. UI copy is responsible for surfacing this.
+   *
+   * Cascading effect on `messenger_account_links` rows for that tenant is
+   * intentional: link rows persist so re-installing later restores the
+   * binding without re-running verify-im. To wipe a user's link, call `unlink`
    * with `tenantId`.
    *
-   * Slack's `auth.revoke` to also invalidate the token server-side is a
+   * Slack's `auth.revoke` to invalidate the token server-side is a
    * nice-to-have (frees a workspace bot slot), deferred to PR3.
    */
-  uninstallSlack: messengerProcedure
+  uninstallInstallation: messengerProcedure
     .input(z.object({ installationId: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);

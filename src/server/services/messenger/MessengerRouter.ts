@@ -410,6 +410,51 @@ export class MessengerRouter {
       await handle(thread, message);
     });
 
+    // First-touch @mention in a non-DM context (Slack channel, Discord guild
+    // channel). Without this, an unlinked user's first interaction would be
+    // dropped — chat-sdk routes channel mentions to `onNewMention`, not the
+    // DM/subscribed paths above. We treat the unlinked case as "DM the user
+    // a link button"; the runtime is DM-only today (see binder docstrings),
+    // so a linked user's channel mention is intentionally a no-op.
+    bot.onNewMention(async (thread, message, _context?: MessageContext) => {
+      if (message.author.isBot === true) return;
+      const senderId = message.author.userId;
+      if (!senderId) {
+        log('onNewMention: missing author.userId, dropping');
+        return;
+      }
+      log(
+        'onNewMention: install=%s, msgId=%s, threadId=%s',
+        creds.installationKey,
+        (message as any).id,
+        thread.id,
+      );
+      try {
+        const link = await MessengerAccountLinkModel.findByPlatformUser(
+          serverDB,
+          platform,
+          senderId,
+          tenantId,
+        );
+        if (link) return;
+
+        // Route the link prompt to the user's DM, never the public channel —
+        // the verify-im URL carries a one-shot token. Slack's chat.postMessage
+        // auto-opens an IM when the channel argument is a user id; Discord's
+        // binder calls openDM(authorUserId) and ignores chatId; Telegram uses
+        // the user's chat id directly. So `authorUserId` is the correct
+        // private target across platforms.
+        await binder.handleUnlinkedMessage({
+          authorUserId: senderId,
+          authorUserName: message.author.userName,
+          chatId: senderId,
+          message,
+        });
+      } catch (error) {
+        log('onNewMention: handler error: %O', error);
+      }
+    });
+
     // Native slash commands — wired only for platforms that opt in by
     // exposing `replyPrivately` (Slack, Discord). The full set of command
     // names comes from the shared registry so every native-slash platform

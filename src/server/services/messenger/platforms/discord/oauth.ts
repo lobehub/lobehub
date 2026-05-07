@@ -9,16 +9,21 @@ import type {
 
 const DISCORD_AUTHORIZE_URL = 'https://discord.com/api/oauth2/authorize';
 const DISCORD_TOKEN_URL = 'https://discord.com/api/oauth2/token';
+const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
 /**
- * Bot scopes requested when the user adds the LobeHub bot to a Discord guild.
- * `bot` is the scope that triggers the "add to server" picker; the
- * `permissions` integer narrows what the bot can do once added.
+ * Scopes requested at install. Combines the bot install (`bot` +
+ * `applications.commands`, which trigger the "add to server" picker and
+ * register slash commands) with the user-scope `identify` so the callback
+ * can resolve who installed the app and persist it on the install row.
  *
- * `applications.commands` is required for slash commands; we ship them in v1
- * so the bot can register `/lobe ...` commands per guild on first install.
+ * `identify` is a low-friction scope on Discord — no app verification
+ * required, no email exposure, just the user's id / username / avatar.
+ * Adding more user-scope features later (e.g. `email`, `guilds`) requires
+ * Discord's verification process once the bot crosses 100 servers, so we
+ * keep the surface narrow until product asks for it.
  */
-const DISCORD_BOT_SCOPES = ['bot', 'applications.commands'];
+const DISCORD_BOT_SCOPES = ['bot', 'applications.commands', 'identify'];
 
 /**
  * Bitfield permissions requested at install. Matches Slack v1's DM-only
@@ -56,8 +61,20 @@ interface DiscordTokenResponse {
   token_type?: 'Bearer';
 }
 
+interface DiscordUserResponse {
+  avatar?: string | null;
+  global_name?: string | null;
+  id: string;
+  username?: string;
+}
+
 const getAppConfig = async (): Promise<{ clientId: string; clientSecret: string } | null> => {
   const config = await getMessengerDiscordConfig();
+  // `clientSecret` is required for the `oauth2/token` exchange. Without it
+  // the install endpoint returns a 503 with operator-facing copy ("configure
+  // Discord client_secret in dc-center → Agent → System Bots"). Bot runtime
+  // still works without `clientSecret` because dispatch uses `botToken`, but
+  // the audit-trail / user-identity install flow needs the exchange.
   if (!config?.clientSecret) return null;
   return { clientId: config.applicationId, clientSecret: config.clientSecret };
 };
@@ -73,6 +90,14 @@ const buildAuthorizeUrl = (params: OAuthBuildAuthorizeUrlParams): string => {
   return url.toString();
 };
 
+/**
+ * Standard Discord OAuth2 code-grant: POST `oauth2/token`, parse the response
+ * (which carries `guild` for `bot`-scope installs and `access_token` for
+ * user-scope), then call `/users/@me` to capture the installer's identity.
+ *
+ * Throws on any required-field gap so the callback maps to a clean
+ * `?discord_error=...` redirect.
+ */
 const exchangeCode = async (params: OAuthExchangeCodeParams): Promise<NormalizedInstallation> => {
   const body = new URLSearchParams({
     client_id: params.clientId,
@@ -82,27 +107,40 @@ const exchangeCode = async (params: OAuthExchangeCodeParams): Promise<Normalized
     redirect_uri: params.redirectUri,
   });
 
-  const response = await fetch(DISCORD_TOKEN_URL, {
+  const tokenResponse = await fetch(DISCORD_TOKEN_URL, {
     body,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     method: 'POST',
   });
-
-  if (!response.ok) {
-    throw new Error(`oauth2/token HTTP ${response.status}: ${await response.text()}`);
+  if (!tokenResponse.ok) {
+    throw new Error(`oauth2/token HTTP ${tokenResponse.status}: ${await tokenResponse.text()}`);
   }
-
-  const data = (await response.json()) as DiscordTokenResponse;
+  const data = (await tokenResponse.json()) as DiscordTokenResponse;
   if (data.error) {
     throw new Error(`oauth2/token failed: ${data.error_description ?? data.error}`);
   }
+  if (!data.access_token) throw new Error('missing_token');
 
-  // For `bot` scope installs Discord returns `guild` describing where the bot
-  // was added. No `guild` => the user authorised but didn't pick a server,
-  // which we can't persist as a per-tenant install row.
   const tenantId = data.guild?.id;
   if (!tenantId) throw new Error('missing_tenant');
-  if (!data.access_token) throw new Error('missing_token');
+
+  // Identify the installer via `/users/@me` (gated behind the `identify`
+  // scope we just acquired). Best-effort — if Discord rejects the call we
+  // still persist the install with `installedByPlatformUserId: null`; the
+  // takeover guard in the callback then falls back to "owned by whoever's
+  // session minted the state".
+  let installedByPlatformUserId: string | null = null;
+  try {
+    const userResponse = await fetch(`${DISCORD_API_BASE}/users/@me`, {
+      headers: { Authorization: `Bearer ${data.access_token}` },
+    });
+    if (userResponse.ok) {
+      const user = (await userResponse.json()) as DiscordUserResponse;
+      installedByPlatformUserId = user.id ?? null;
+    }
+  } catch {
+    /* swallow — null is the documented fallback */
+  }
 
   // Application id sits at the OAuth client level, not in `data.application`
   // for every response — `params.clientId` is authoritative.
@@ -112,19 +150,17 @@ const exchangeCode = async (params: OAuthExchangeCodeParams): Promise<Normalized
   if (data.refresh_token) credentials.refreshToken = data.refresh_token;
 
   return {
-    // Discord OAuth doesn't expose a separate bot-user id at install time —
-    // the bot user shares the application id. The runtime bot continues to
-    // call Discord with the global `botToken` from system_bot_providers.
+    // Discord's bot user id == application id. The runtime continues to talk
+    // to Discord with the global `botToken` from `system_bot_providers`; the
+    // per-install user access token persisted here is reserved for messenger
+    // user-scope API calls (e.g. listing the installer's guilds).
     accountId: applicationId,
     applicationId,
     credentials,
-    // Discord doesn't report the user who triggered the install in the bot
-    // grant response (would need the `identify` scope + a separate /users/@me
-    // call). Leave null for v1.
-    installedByPlatformUserId: null,
+    installedByPlatformUserId,
     metadata: {
       guildIcon: data.guild?.icon ?? null,
-      scope: data.scope ?? '',
+      scope: data.scope ?? DISCORD_BOT_SCOPES.join(' '),
       tenantName: data.guild?.name ?? '',
     },
     tenantId,

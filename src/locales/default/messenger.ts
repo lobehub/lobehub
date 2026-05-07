@@ -1,12 +1,14 @@
 export default {
   'messenger.activeAgent': 'Active agent',
   'messenger.activeAgentPlaceholder': 'Select an agent',
+  'messenger.detail.addServer': 'Add server',
   'messenger.detail.addWorkspace': 'Add workspace',
   'messenger.detail.connections.connected': 'Connected',
   'messenger.detail.connections.empty': 'Open the bot and send /start to link your account.',
   'messenger.detail.connections.linkHint':
     'Workspace installed. Open Slack and DM the bot to finish linking your personal account.',
   'messenger.detail.connections.pending': 'Pending',
+  'messenger.detail.connections.serverLabel': 'server',
   'messenger.detail.connections.title': 'Connections',
   'messenger.detail.connections.userLabel': 'user',
   'messenger.detail.connections.workspaceLabel': 'workspace',
@@ -69,6 +71,11 @@ export default {
   'messenger.discord.connectModal.notConfigured':
     "Discord isn't available right now. Please try again later.",
   'messenger.discord.connectModal.title': 'Continue setup in Discord',
+  'messenger.discord.connections.disconnectConfirm':
+    'Remove this server from your audit list? The bot will stay in the server until a server admin kicks it.',
+  'messenger.discord.connections.disconnectFailed': 'Failed to remove server.',
+  'messenger.discord.connections.disconnectSuccess': 'Server removed.',
+  'messenger.discord.connections.disconnectTitle': 'Remove server',
   'messenger.list.discord.description':
     'Chat with your LobeHub agents from any Discord server via DM with the LobeHub bot.',
   'messenger.list.slack.description':

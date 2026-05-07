@@ -43,8 +43,8 @@ class MessengerService {
     return lambdaClient.messenger.listMyInstallations.query();
   };
 
-  uninstallSlack = async (params: { installationId: string }) => {
-    return lambdaClient.messenger.uninstallSlack.mutate(params);
+  uninstallInstallation = async (params: { installationId: string }) => {
+    return lambdaClient.messenger.uninstallInstallation.mutate(params);
   };
 }
 
