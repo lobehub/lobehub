@@ -118,7 +118,7 @@ const BotIntegrationBanner = memo(() => {
       data-testid="bot-integration-banner"
       onClick={handleNavigateToChannels}
     >
-      <Flexbox horizontal align="center" gap={4}>
+      <Flexbox horizontal align="center" gap={8}>
         <Icon className={styles.icon} icon={RadioTowerIcon} size={18} />
         <span className={styles.text}>{t('botIntegrationBanner.title')}</span>
       </Flexbox>

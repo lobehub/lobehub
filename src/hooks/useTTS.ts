@@ -1,4 +1,3 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import {
   type EdgeSpeechOptions,
   type MicrosoftSpeechOptions,
@@ -15,6 +14,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type TTSServer } from '@/types/agent';
@@ -31,6 +31,7 @@ export const useTTS = (content: string, config?: TTSConfig) => {
   const lang = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const voice = useAgentStore(agentSelectors.currentAgentTTSVoice(lang));
   const businessTTSProvider = useBusinessTTSProvider();
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   let useSelectedTTS;
   let options: any = {};
   switch (config?.server || ttsAgentSettings.ttsService) {
@@ -39,7 +40,7 @@ export const useTTS = (content: string, config?: TTSConfig) => {
       options = {
         api: {
           headers: createHeaderWithOpenAI(),
-          serviceUrl: API_ENDPOINTS.tts(ENABLE_BUSINESS_FEATURES ? businessTTSProvider : 'openai'),
+          serviceUrl: API_ENDPOINTS.tts(enableBusinessFeatures ? businessTTSProvider : 'openai'),
         },
         options: {
           model: ttsSettings.openAI.ttsModel,

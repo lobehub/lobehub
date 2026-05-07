@@ -1,4 +1,3 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
@@ -17,6 +16,7 @@ import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorConte
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import ChatInvalidAPIKey from './ChatInvalidApiKey';
 
@@ -156,13 +156,13 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
   const error = data.error;
   const navigate = useNavigate();
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const sessionErrorCode = error?.body?.code;
   const sessionAgentType = error?.body?.agentType;
   const sessionErrorBody = error?.body;
   const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
-  if (ENABLE_BUSINESS_FEATURES && businessChatErrorMessageExtra)
-    return businessChatErrorMessageExtra;
+  if (enableBusinessFeatures && businessChatErrorMessageExtra) return businessChatErrorMessageExtra;
 
   if (
     (error?.type === AgentRuntimeErrorType.AgentRuntimeError || !error?.type) &&

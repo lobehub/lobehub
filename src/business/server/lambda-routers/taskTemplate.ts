@@ -1,3 +1,1 @@
-import { router } from '@/libs/trpc/lambda';
-
-export const taskTemplateRouter = router({});
+export { taskTemplateRouter } from '@/server/routers/lambda/taskTemplate';

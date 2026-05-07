@@ -226,10 +226,10 @@ const BriefCardActions = memo<BriefCardActionsProps>(
           })}
           {primaryActions && (
             <Button
+              shadow
               className={styles.actionBtnPrimary}
               disabled={loadingKey === primaryActions.key}
               shape={'round'}
-              variant={'filled'}
               onClick={() => handleResolve(primaryActions.key)}
             >
               {getActionLabel(primaryActions)}

@@ -131,7 +131,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
     <Text
       align={'right'}
       fontSize={12}
-      style={{ whiteSpace: 'nowrap', width: variant === 'compact' ? undefined : 76 }}
+      style={{ whiteSpace: 'nowrap', width: variant === 'compact' ? undefined : 48 }}
       type={'secondary'}
     >
       {time}
