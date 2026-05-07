@@ -85,11 +85,12 @@ RUN set -e && \
     export COREPACK_NPM_REGISTRY=$(npm config get registry | sed 's/\/$//') && \
     npm i -g corepack@latest && \
     corepack enable && \
-    corepack use $(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json) && \
+    PACKAGE_MANAGER=$(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json) && \
+    corepack use "${PACKAGE_MANAGER}" && \
     pnpm i && \
     mkdir -p /deps && \
     cd /deps && \
-    pnpm init && \
+    printf '{"private":true,"type":"module","packageManager":"%s"}\n' "${PACKAGE_MANAGER}" > package.json && \
     pnpm add pg drizzle-orm
 
 COPY . .
