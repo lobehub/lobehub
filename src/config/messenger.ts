@@ -61,7 +61,6 @@ export interface MessengerSlackConfig {
 export interface MessengerDiscordConfig {
   applicationId: string;
   botToken: string;
-  botUsername?: string;
   /**
    * Discord OAuth client secret. Required only for the per-guild install flow
    * (`[platform]/install` → `[platform]/oauth/callback`). The runtime bot
@@ -155,7 +154,6 @@ export const getMessengerDiscordConfig = async (): Promise<MessengerDiscordConfi
     return {
       applicationId: row.applicationId,
       botToken: c.botToken,
-      botUsername: c.botUsername,
       clientSecret: c.clientSecret,
       publicKey: c.publicKey,
     };

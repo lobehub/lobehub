@@ -131,12 +131,10 @@ export const messengerRouter = router({
           : def.id === 'discord'
             ? discordConfig?.applicationId
             : undefined,
-      botUsername:
-        def.id === 'telegram'
-          ? telegramConfig?.botUsername
-          : def.id === 'discord'
-            ? discordConfig?.botUsername
-            : undefined,
+      // Telegram-only: deep-link target (`https://t.me/<botUsername>`) — no
+      // direct equivalent on Slack/Discord, both of which use App/Application
+      // IDs to deep-link to the bot.
+      botUsername: def.id === 'telegram' ? telegramConfig?.botUsername : undefined,
       enabled: true,
       // Legacy field — older callers index by `.platform` rather than `.id`.
       // Keep until those callers migrate; safe alias of the registry id.

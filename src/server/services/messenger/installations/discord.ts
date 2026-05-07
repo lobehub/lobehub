@@ -22,7 +22,6 @@ const buildCreds = async (): Promise<InstallationCredentials | null> => {
     botToken: config.botToken,
     installationKey: DISCORD_INSTALLATION_KEY,
     metadata: {
-      botUsername: config.botUsername ?? '',
       publicKey: config.publicKey,
     },
     platform: 'discord',
