@@ -645,17 +645,17 @@ export class ConversationLifecycleActionImpl {
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
     if (runtimeType === 'gateway') {
       try {
+        // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
+        // completes it the instant phase-1 init finishes (after the child
+        // `execServerAgentRuntime` op starts). Without this hand-off the
+        // input loading state would drop during the execAgentTask round-trip
+        // and the send button would flicker back to "send".
         const result = await this.#get().executeGatewayAgent({
           context: operationContext,
           fileIds: fileIdList,
           message,
+          parentOperationId: operationId,
         });
-
-        // Complete sendMessage only after executeGatewayAgent has started its
-        // own `execServerAgentRuntime` op, otherwise the input loading state
-        // briefly drops to false during the execAgentTask network round-trip
-        // and the send button flickers back to "send".
-        this.#get().completeOperation(operationId);
 
         return {
           assistantMessageId: result.assistantMessageId,

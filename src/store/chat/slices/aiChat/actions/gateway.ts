@@ -259,6 +259,15 @@ export class GatewayActionImpl {
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
     /**
+     * Caller-owned operation that should be completed once the gateway side
+     * has finished phase-1 init (network round-trip + child
+     * `execServerAgentRuntime` op started). Lets the caller keep its own
+     * loading state running through `execAgentTask` without any gap before
+     * the child op takes over. The relationship is also recorded as
+     * parent/child lineage on the new op.
+     */
+    parentOperationId?: string;
+    /**
      * Resume a paused op waiting on `human_approve_required`. Forwarded to
      * `aiAgentService.execAgentTask` so the new server-side op knows to apply
      * the user's decision to the target tool message instead of starting from
@@ -266,7 +275,15 @@ export class GatewayActionImpl {
      */
     resumeApproval?: ResumeApprovalParam;
   }): Promise<ExecAgentResult> => {
-    const { context, fileIds, message, onComplete, parentMessageId, resumeApproval } = params;
+    const {
+      context,
+      fileIds,
+      message,
+      onComplete,
+      parentMessageId,
+      parentOperationId,
+      resumeApproval,
+    } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
@@ -326,11 +343,16 @@ export class GatewayActionImpl {
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context: execContext,
       metadata: { serverOperationId: result.operationId },
+      parentOperationId,
       type: 'execServerAgentRuntime',
     });
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
+
+    // Phase-1 init done: child op is running. Hand off loading state from
+    // the caller's op (e.g. `sendMessage`) to the child without a gap.
+    if (parentOperationId) this.#get().completeOperation(parentOperationId);
 
     // When the local operation is cancelled (e.g. user clicks stop), forward
     // the interrupt directly to the server via the existing tRPC endpoint.
