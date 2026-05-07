@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
         'brief.commentPlaceholder': 'Share your feedback...',
         'brief.commentSubmit': 'Submit feedback',
         'brief.action.confirm': 'Confirm',
-        'brief.action.confirmDone': 'Confirm complete',
+        'brief.action.confirmDone': 'Confirm',
         'brief.editResult': 'Edit',
         'brief.viewRun': 'View run',
       };
@@ -122,7 +122,7 @@ describe('BriefCardActions', () => {
     expect(screen.getByText('✅ Confirm')).toBeInTheDocument();
   });
 
-  it('should hardcode primary action label to "Confirm complete" for result briefs', () => {
+  it('should hardcode primary action label to "Confirm " for result briefs', () => {
     renderWithRouter(
       <BriefCardActions
         actions={[{ key: 'approve', label: '✅ Custom approve', type: 'resolve' }]}
@@ -131,7 +131,7 @@ describe('BriefCardActions', () => {
       />,
     );
 
-    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.getByText('Confirm')).toBeInTheDocument();
     expect(screen.queryByText('✅ Custom approve')).not.toBeInTheDocument();
   });
 
@@ -173,7 +173,7 @@ describe('BriefCardActions', () => {
     expect(screen.queryByText('View run')).not.toBeInTheDocument();
   });
 
-  it('should label the result action "Confirm complete" when the parent task is not parked at scheduled', () => {
+  it('should label the result action "Confirm " when the parent task is not parked at scheduled', () => {
     renderWithRouter(
       <BriefCardActions
         actions={[{ key: 'approve', label: 'X', type: 'resolve' }]}
@@ -183,7 +183,7 @@ describe('BriefCardActions', () => {
         taskStatus={'paused'}
       />,
     );
-    expect(screen.getByText('Confirm complete')).toBeInTheDocument();
+    expect(screen.getByText('Confirm')).toBeInTheDocument();
     expect(screen.queryByText('Confirm', { exact: true })).not.toBeInTheDocument();
   });
 
@@ -198,6 +198,6 @@ describe('BriefCardActions', () => {
       />,
     );
     expect(screen.getByText('Confirm')).toBeInTheDocument();
-    expect(screen.queryByText('Confirm complete')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confirm')).not.toBeInTheDocument();
   });
 });
