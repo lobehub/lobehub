@@ -1,5 +1,4 @@
 import type { TaskDetailActivity } from '@lobechat/types';
-import { formatActivityTime } from '@lobechat/utils/time';
 import { Editor, useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
@@ -19,6 +18,7 @@ import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
@@ -29,7 +29,6 @@ interface CommentCardProps {
 
 const CommentCard = memo<CommentCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
-  const { t: tDiscover } = useTranslation('discover');
   const { modal } = App.useApp();
   const deleteComment = useTaskStore((s) => s.deleteComment);
   const updateComment = useTaskStore((s) => s.updateComment);
@@ -38,10 +37,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
   const [submitting, setSubmitting] = useState(false);
   const editor = useEditor();
 
-  const { text: relTime, title: relTimeTitle } = formatActivityTime(activity.time, {
-    formatOtherYear: tDiscover('time.formatOtherYear'),
-    formatThisYear: tDiscover('time.formatThisYear'),
-  });
+  const { text: relTime, title: relTimeTitle } = useActivityTime(activity.time);
   const content = activity.content || t('taskDetail.activities.fallback.comment');
   const commentId = activity.id;
 

@@ -20,6 +20,26 @@ export default class TrayMenuCtr extends ControllerModule {
   }
 
   /**
+   * Get whether the application tray is visible.
+   */
+  @IpcMethod()
+  getAppTrayVisible(): boolean {
+    return this.app.storeManager.get('appTrayVisible', true);
+  }
+
+  /**
+   * Persist and apply application tray visibility.
+   */
+  @IpcMethod()
+  setAppTrayVisible(visible: boolean) {
+    logger.debug(`Set app tray visibility: ${visible}`);
+    this.app.storeManager.set('appTrayVisible', visible);
+    this.app.trayManager.setAppTrayVisible(visible);
+
+    return { success: true };
+  }
+
+  /**
    * Show tray balloon notification
    * @param options Balloon options
    * @returns Operation result

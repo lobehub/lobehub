@@ -71,6 +71,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     isSecondLastMessageFromUser,
     virtuaRef,
   });
+
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
   // Store actions

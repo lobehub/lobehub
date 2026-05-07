@@ -17,7 +17,7 @@ const googleChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Latest release of Gemini Pro',
+    description: 'Points to gemini-3.1-pro-preview',
     displayName: 'Gemini Pro Latest',
     id: 'gemini-pro-latest',
     maxOutput: 65_536,
@@ -68,7 +68,7 @@ const googleChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Latest release of Gemini Flash',
+    description: 'Points to gemini-3-flash-preview',
     displayName: 'Gemini Flash Latest',
     id: 'gemini-flash-latest',
     maxOutput: 65_536,
@@ -95,7 +95,7 @@ const googleChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Latest release of Gemini Flash-Lite',
+    description: 'Points to gemini-2.5-flash-lite-preview-09-2025',
     displayName: 'Gemini Flash-Lite Latest',
     id: 'gemini-flash-lite-latest',
     maxOutput: 65_536,
@@ -108,6 +108,56 @@ const googleChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['thinkingBudget', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144 + 32_768,
+    displayName: 'Gemma 4 26B A4B IT',
+    id: 'gemma-4-26b-a4b-it',
+    maxOutput: 32_768,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['thinkingLevel4'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144 + 32_768,
+    displayName: 'Gemma 4 31B IT',
+    id: 'gemma-4-31b-it',
+    maxOutput: 32_768,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['thinkingLevel4'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -131,8 +181,9 @@ const googleChatModels: AIChatModelCard[] = [
       approximatePricePerImage: 0.067,
       units: [
         { name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-26',
@@ -172,6 +223,33 @@ const googleChatModels: AIChatModelCard[] = [
         },
         {
           name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'imageInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'videoInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 200_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'audioInput',
           strategy: 'tiered',
           tiers: [
             { rate: 2, upTo: 200_000 },
@@ -224,6 +302,9 @@ const googleChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
@@ -254,6 +335,9 @@ const googleChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         {
           lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
@@ -282,7 +366,6 @@ const googleChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3 Pro Image (Nano Banana Pro) is Google’s image generation model and also supports multimodal chat.',
     displayName: 'Nano Banana Pro',
-    enabled: true,
     id: 'gemini-3-pro-image-preview',
     maxOutput: 32_768,
     pricing: {
@@ -290,6 +373,7 @@ const googleChatModels: AIChatModelCard[] = [
       units: [
         { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
@@ -328,6 +412,33 @@ const googleChatModels: AIChatModelCard[] = [
         },
         {
           name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.25, upTo: 200_000 },
+            { rate: 2.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'imageInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.25, upTo: 200_000 },
+            { rate: 2.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'videoInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.25, upTo: 200_000 },
+            { rate: 2.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'audioInput',
           strategy: 'tiered',
           tiers: [
             { rate: 1.25, upTo: 200_000 },
@@ -377,6 +488,9 @@ const googleChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
@@ -436,34 +550,6 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-07-22',
-    settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Preview release (September 25th, 2025) of Gemini 2.5 Flash-Lite',
-    displayName: 'Gemini 2.5 Flash-Lite Preview Sep 2025',
-    id: 'gemini-2.5-flash-lite-preview-09-2025',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-25',
     settings: {
       extendParams: ['thinkingBudget', 'urlContext'],
       searchImpl: 'params',
@@ -559,152 +645,6 @@ const googleChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-02-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_008_192,
-    description:
-      'Gemini 1.5 Flash 002 is an efficient multimodal model built for broad deployment.',
-    displayName: 'Gemini 1.5 Flash 002',
-    id: 'gemini-1.5-flash-002', // Deprecated on 2025-09-24
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.018, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-25',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_008_192,
-    description:
-      'Gemini 1.5 Pro 002 is the latest production-ready model with higher-quality output, especially for math, long context, and vision tasks.',
-    displayName: 'Gemini 1.5 Pro 002',
-    id: 'gemini-1.5-pro-002', // Deprecated on 2025-09-24
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.3125, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-24',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 8B is an efficient multimodal model built for broad deployment.',
-    displayName: 'Gemini 1.5 Flash 8B',
-    id: 'gemini-1.5-flash-8b-latest',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.0375, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-10-03',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768 + 8192,
-    displayName: 'Gemma 3 1B',
-    id: 'gemma-3-1b-it',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768 + 8192,
-    displayName: 'Gemma 3 4B',
-    id: 'gemma-3-4b-it',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768 + 8192,
-    displayName: 'Gemma 3 12B',
-    id: 'gemma-3-12b-it',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072 + 8192,
-    displayName: 'Gemma 3 27B',
-    id: 'gemma-3-27b-it',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 2048 + 8192,
-    displayName: 'Gemma 3n E2B',
-    id: 'gemma-3n-e2b-it',
-    maxOutput: 2048,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 2048 + 8192,
-    displayName: 'Gemma 3n E4B',
-    id: 'gemma-3n-e4b-it',
-    maxOutput: 2048,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
     type: 'chat',
   },
 ];

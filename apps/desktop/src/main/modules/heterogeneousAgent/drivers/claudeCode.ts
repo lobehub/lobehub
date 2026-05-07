@@ -1,4 +1,3 @@
-import { JsonlStreamProcessor } from '../jsonlProcessor';
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
 const CLAUDE_CODE_BASE_ARGS = [
@@ -31,11 +30,5 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
       ],
       stdinPayload,
     };
-  },
-  createStreamProcessor() {
-    return new JsonlStreamProcessor({
-      extractSessionId: (payload) =>
-        payload?.type === 'system' && payload?.subtype === 'init' ? payload?.session_id : undefined,
-    });
   },
 };

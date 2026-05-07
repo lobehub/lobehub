@@ -257,6 +257,28 @@ describe('RecentModel', () => {
         expect(result).toEqual([]);
       });
 
+      it('excludes agent-owned document rows', async () => {
+        await serverDB.insert(documents).values([
+          {
+            id: 'doc-agent',
+            userId,
+            sourceType: 'agent',
+            updatedAt: minutesAgo(1),
+            ...baseDocFields,
+          },
+          {
+            id: 'doc-agent-signal',
+            userId,
+            sourceType: 'agent-signal',
+            updatedAt: now(),
+            ...baseDocFields,
+          },
+        ]);
+
+        const result = await recentModel.queryRecent();
+        expect(result).toEqual([]);
+      });
+
       it('excludes documents inside a knowledge base', async () => {
         await serverDB.insert(knowledgeBases).values({ id: 'kb-1', userId, name: 'kb' });
         await serverDB.insert(documents).values({

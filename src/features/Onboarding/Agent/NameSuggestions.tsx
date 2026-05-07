@@ -6,100 +6,52 @@ import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
 
-interface SuggestionItem {
-  emoji: string;
-  id: string;
-  nameKey: string;
-  promptKey: string;
-}
+import {
+  type NameSuggestionItem,
+  nameSuggestionPool,
+  resolveNameSuggestion,
+} from './nameSuggestions.config';
 
-const suggestionGroups = [
-  [
-    {
-      emoji: '🌙',
-      id: 'lumi',
-      nameKey: 'agent.welcome.suggestion.items.1.name',
-      promptKey: 'agent.welcome.suggestion.items.1.prompt',
-    },
-    {
-      emoji: '🧭',
-      id: 'atlas',
-      nameKey: 'agent.welcome.suggestion.items.2.name',
-      promptKey: 'agent.welcome.suggestion.items.2.prompt',
-    },
-    {
-      emoji: '🍡',
-      id: 'momo',
-      nameKey: 'agent.welcome.suggestion.items.3.name',
-      promptKey: 'agent.welcome.suggestion.items.3.prompt',
-    },
-  ],
-  [
-    {
-      emoji: '🌌',
-      id: 'nova',
-      nameKey: 'agent.welcome.suggestion.items.4.name',
-      promptKey: 'agent.welcome.suggestion.items.4.prompt',
-    },
-    {
-      emoji: '🪄',
-      id: 'milo',
-      nameKey: 'agent.welcome.suggestion.items.5.name',
-      promptKey: 'agent.welcome.suggestion.items.5.prompt',
-    },
-    {
-      emoji: '🌿',
-      id: 'aster',
-      nameKey: 'agent.welcome.suggestion.items.6.name',
-      promptKey: 'agent.welcome.suggestion.items.6.prompt',
-    },
-  ],
-  [
-    {
-      emoji: '🧩',
-      id: 'pixel',
-      nameKey: 'agent.welcome.suggestion.items.7.name',
-      promptKey: 'agent.welcome.suggestion.items.7.prompt',
-    },
-    {
-      emoji: '🎧',
-      id: 'echo',
-      nameKey: 'agent.welcome.suggestion.items.8.name',
-      promptKey: 'agent.welcome.suggestion.items.8.prompt',
-    },
-    {
-      emoji: '🪐',
-      id: 'orbit',
-      nameKey: 'agent.welcome.suggestion.items.9.name',
-      promptKey: 'agent.welcome.suggestion.items.9.prompt',
-    },
-  ],
-] as const satisfies SuggestionItem[][];
+const SUGGESTIONS_PER_GROUP = 3;
 
-const getRandomGroupIndex = (currentIndex?: number) => {
-  const nextIndex = Math.floor(Math.random() * suggestionGroups.length);
-
-  if (currentIndex === undefined || suggestionGroups.length <= 1 || nextIndex !== currentIndex) {
-    return nextIndex;
+const sampleSuggestions = (count: number, excludeIds: string[] = []): NameSuggestionItem[] => {
+  const remaining = nameSuggestionPool.filter((item) => !excludeIds.includes(item.id));
+  const target = Math.min(count, remaining.length);
+  const picked: NameSuggestionItem[] = [];
+  while (picked.length < target) {
+    const idx = Math.floor(Math.random() * remaining.length);
+    picked.push(remaining.splice(idx, 1)[0]);
   }
-
-  return (nextIndex + 1) % suggestionGroups.length;
+  return picked;
 };
 
 const NameSuggestions = memo(() => {
-  const { t } = useTranslation('onboarding');
-  const sendMessage = useConversationStore((s) => s.sendMessage);
-  const [groupIndex, setGroupIndex] = useState(() => getRandomGroupIndex());
+  const { t, i18n } = useTranslation('onboarding');
+  const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
+  const editor = useConversationStore((s) => s.editor);
+  const [items, setItems] = useState<NameSuggestionItem[]>(() =>
+    sampleSuggestions(SUGGESTIONS_PER_GROUP),
+  );
 
   const handleRefresh = useCallback(() => {
-    setGroupIndex((current) => getRandomGroupIndex(current));
+    setItems((current) => {
+      const excludeIds = current.map((item) => item.id);
+      const next = sampleSuggestions(SUGGESTIONS_PER_GROUP, excludeIds);
+      return next.length === SUGGESTIONS_PER_GROUP
+        ? next
+        : sampleSuggestions(SUGGESTIONS_PER_GROUP);
+    });
   }, []);
 
   const handleSelect = useCallback(
-    async (prompt: string, emoji: string) => {
-      await sendMessage({ message: `${prompt} ${emoji}` });
+    (prompt: string, emoji: string) => {
+      const avatarHint = t('agent.welcome.suggestion.avatarHint', { emoji });
+      const message = `${prompt} ${avatarHint}`;
+      updateInputMessage(message);
+      editor?.setDocument('text', message);
+      editor?.focus();
     },
-    [sendMessage],
+    [t, updateInputMessage, editor],
   );
 
   return (
@@ -123,9 +75,8 @@ const NameSuggestions = memo(() => {
         gap={12}
         style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
       >
-        {suggestionGroups[groupIndex].map((item) => {
-          const prompt = t(item.promptKey);
-
+        {items.map((item) => {
+          const { name, prompt } = resolveNameSuggestion(item, i18n.language);
           return (
             <Block
               clickable
@@ -139,12 +90,14 @@ const NameSuggestions = memo(() => {
               }}
               onClick={() => handleSelect(prompt, item.emoji)}
             >
-              <Flexbox gap={8} padding={16}>
-                <FluentEmoji emoji={item.emoji} size={24} type={'anim'} />
-                <Text fontSize={15} weight={500}>
-                  {t(item.nameKey)}
-                </Text>
-                <Text fontSize={13} type={'secondary'}>
+              <Flexbox gap={6} padding={12}>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <FluentEmoji emoji={item.emoji} size={20} type={'anim'} />
+                  <Text fontSize={14} weight={500}>
+                    {name}
+                  </Text>
+                </Flexbox>
+                <Text ellipsis fontSize={12} type={'secondary'}>
                   {prompt}
                 </Text>
               </Flexbox>

@@ -1,5 +1,6 @@
 import {
   AGENT_SKILL_CONSOLIDATE_SYSTEM_ROLE,
+  AGENT_SKILL_CREATE_SYSTEM_ROLE,
   AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE,
   AGENT_SKILL_REFINE_SYSTEM_ROLE,
 } from '../prompts/agentSkillManager';
@@ -21,6 +22,10 @@ export const agentSkillManagerAgents = {
   decision: {
     identifier: 'agent-skill-manager-decision',
     systemRole: AGENT_SKILL_MANAGER_DECISION_SYSTEM_ROLE,
+  },
+  create: {
+    identifier: 'agent-skill-manager-create',
+    systemRole: AGENT_SKILL_CREATE_SYSTEM_ROLE,
   },
   consolidate: {
     identifier: 'agent-skill-manager-consolidate',

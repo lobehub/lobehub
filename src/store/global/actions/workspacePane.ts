@@ -123,6 +123,11 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showSystemRole }, n('toggleMobileTopic', newValue));
   };
 
+  setWorkingSidebarTab = (tab: 'resources' | 'review'): void => {
+    if (this.#get().status.workingSidebarTab === tab) return;
+    this.#get().updateSystemStatus({ workingSidebarTab: tab }, n('setWorkingSidebarTab', tab));
+  };
+
   toggleWideScreen = (newValue?: boolean): void => {
     const noWideScreen =
       typeof newValue === 'boolean' ? !newValue : !this.#get().status.noWideScreen;

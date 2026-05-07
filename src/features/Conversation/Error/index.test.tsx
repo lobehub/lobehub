@@ -103,6 +103,13 @@ vi.mock('@/libs/next/dynamic', () => ({
   default: () => () => <div>dynamic</div>,
 }));
 
+vi.mock('@/store/serverConfig', () => ({
+  serverConfigSelectors: {
+    enableBusinessFeatures: () => false,
+  },
+  useServerConfigStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+
 describe('ErrorMessageExtra', () => {
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(

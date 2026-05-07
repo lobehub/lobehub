@@ -1,0 +1,34 @@
+---
+title: 'Delegate Claude Code and Codex'
+description: >-
+  Delegate Claude Code and Codex from inside LobeHub, with a redesigned home, a Review tab for bulk git diffs, visual understanding, and a wave of new models.
+
+
+tags:
+  - Coding agent
+  - Claude Code
+  - Home
+  - Review
+  - Models
+---
+
+# Delegate Claude Code and Codex
+
+## Features
+
+- New: Delegate Claude Code and Codex in LobeHub
+- Agent-specific topic grouping: switch the topic list to group by agent, with a friendlier empty state
+- Review tab: a new tab that aggregates bulk git diffs across a tree, \~9× faster on large repos
+- Local file mention snapshots: drag a file into chat and a snapshot is captured for the model to reason over
+- Visual understanding tool: a new built-in tool for image analysis and visual reasoning
+- Line bot support: connect a Line channel as an agent endpoint
+- New models: `grok-4.3`, DeepSeek Anthropic runtime, plus `gpt-image-2` and Grok 4.20 in the model library
+
+## Improvements and fixes
+
+- DeepSeek now shows pricing in the model card and respects model defaults.
+- Document modal shows a skeleton while the title loads and surfaces the document update time in space.
+- Agent documents can be exposed as a virtual file system with fs-compatible output.
+- Sessions are revoked after a password reset, and tRPC pagination now enforces a max limit.
+- Skill OAuth no longer breaks the desktop app by skipping `redirectUri` on Electron.
+- CAPTCHA retries during sign-in are handled cleanly instead of failing the flow.

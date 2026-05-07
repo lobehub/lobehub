@@ -855,11 +855,6 @@ export default {
 
   'publishedTime': 'Published',
 
-  'time.formatOtherYear': 'MMM D, YYYY',
-  'time.formatThisYear': 'MMM D',
-  'time.today': 'Today',
-  'time.yesterday': 'Yesterday',
-
   'search.placeholder': 'Search by name, description, or keywords...',
 
   'search.result': '{{count}} results about <highlight>{{keyword}}</highlight>',

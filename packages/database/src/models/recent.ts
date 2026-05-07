@@ -19,9 +19,9 @@ export interface RecentDbItem {
 // System-trigger topics live in their own surfaces and would clutter Recent.
 const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task'];
 
-// Excluded so file uploads and web-browsing tool scrapes don't surface as
-// "recent docs"; only user-authored pages ('api') and legacy 'topic' rows remain.
-const TOOL_DOCUMENT_SOURCE_TYPES = ['file', 'web'] as const;
+// Excluded so tool-owned document rows don't surface as generic recent docs;
+// only user-authored pages ('api') and legacy 'topic' rows remain.
+const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as const;
 
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 

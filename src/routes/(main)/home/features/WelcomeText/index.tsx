@@ -23,7 +23,7 @@ const WelcomeText = memo(() => {
       }}
     >
       <TypewriterEffect
-        cursorCharacter={<LoadingDots color={cssVar.colorText} size={20} variant={'pulse'} />}
+        cursorCharacter={<LoadingDots color={cssVar.colorText} size={12} variant={'pulse'} />}
         cursorFade={false}
         deletePauseDuration={1000}
         deletingSpeed={32}

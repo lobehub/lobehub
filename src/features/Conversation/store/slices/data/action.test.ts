@@ -1,4 +1,4 @@
-import { type UIChatMessage } from '@lobechat/types';
+import type { UIChatMessage } from '@lobechat/types';
 import { act, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -346,6 +346,53 @@ describe('DataSlice', () => {
 
       const notFound = dataSelectors.getDisplayMessageById('nonexistent')(store.getState());
       expect(notFound).toBeUndefined();
+    });
+
+    it('getBlockContent should find assistant blocks in compressed messages', () => {
+      const store = createTestStore();
+
+      store.getState().replaceMessages([
+        {
+          id: 'compressed-group',
+          content: '',
+          role: 'compressedGroup',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          compressedMessages: [
+            {
+              id: 'compressed-assistant',
+              content: 'Compressed assistant content',
+              role: 'assistant',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+            {
+              id: 'compressed-assistant-group',
+              content: '',
+              role: 'assistantGroup',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              children: [
+                {
+                  id: 'compressed-block',
+                  content: 'Compressed block content',
+                  tools: [{ id: 'compressed-tool' }],
+                },
+              ],
+            },
+          ],
+        },
+      ] as any);
+
+      expect(dataSelectors.getBlockContent('compressed-assistant')(store.getState())).toBe(
+        'Compressed assistant content',
+      );
+      expect(dataSelectors.getBlockContent('compressed-block')(store.getState())).toBe(
+        'Compressed block content',
+      );
+      expect(dataSelectors.getToolsInBlock('compressed-block')(store.getState())).toEqual([
+        { id: 'compressed-tool' },
+      ]);
     });
 
     it('getDbMessageById should find message from dbMessages', () => {

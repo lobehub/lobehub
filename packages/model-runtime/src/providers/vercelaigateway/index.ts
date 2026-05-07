@@ -17,6 +17,7 @@ export interface VercelAIGatewayModelCard {
     input_cache_write?: string | number;
     output?: string | number;
   };
+  released?: number | string;
   tags?: string[];
   type?: string;
 }
@@ -104,7 +105,7 @@ export const params = {
 
       return {
         contextWindowTokens: m.context_window ?? undefined,
-        created: m.created,
+        created: m.released ?? m.created,
         description: m.description ?? '',
         displayName,
         functionCall: tags.includes('tool-use') || false,

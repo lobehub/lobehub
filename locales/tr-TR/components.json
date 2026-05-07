@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "Girdi (Önbelleğe Yazma)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "Çıktı",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "Video Oluşturma",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "Video Girişi",
   "ModelSwitchPanel.detail.releasedAt": "{{date}} tarihinde yayınlandı",
   "ModelSwitchPanel.emptyModel": "Etkinleştirilmiş model yok. Lütfen ayarlardan etkinleştirin.",
   "ModelSwitchPanel.emptyProvider": "Etkinleştirilmiş sağlayıcı yok. Lütfen ayarlardan birini etkinleştirin.",

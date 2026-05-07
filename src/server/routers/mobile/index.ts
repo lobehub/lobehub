@@ -15,6 +15,7 @@ import { chunkRouter } from '../lambda/chunk';
 import { configRouter } from '../lambda/config';
 import { documentRouter } from '../lambda/document';
 import { fileRouter } from '../lambda/file';
+import { homeRouter } from '../lambda/home';
 import { knowledgeBaseRouter } from '../lambda/knowledgeBase';
 import { marketRouter } from '../lambda/market';
 import { messageRouter } from '../lambda/message';
@@ -37,6 +38,7 @@ export const mobileRouter = router({
   document: documentRouter,
   file: fileRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
+  home: homeRouter,
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,

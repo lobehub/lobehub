@@ -92,6 +92,10 @@ class TaskService {
   run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
     lambdaClient.task.run.mutate({ id, ...params });
 
+  previewSubtaskLayers = async (id: string) => lambdaClient.task.previewSubtaskLayers.query({ id });
+
+  runReadySubtasks = async (id: string) => lambdaClient.task.runReadySubtasks.mutate({ id });
+
   addComment = async (id: string, content: string, opts?: { briefId?: string; topicId?: string }) =>
     lambdaClient.task.addComment.mutate({ content, id, ...opts });
 

@@ -38,6 +38,37 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns true for unsupported model parameter errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          error: {
+            code: 'bad_response_status_code',
+            message: 'Model grok-4.20-0309-reasoning does not support parameter presencePenalty.',
+            param: '400',
+            type: 'upstream_error',
+          },
+          message: '400 Model grok-4.20-0309-reasoning does not support parameter presencePenalty.',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+      }),
+    ).toBe(true);
+  });
+
+  it('returns true for assistant prefill request-shape errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          body: { httpStatusCode: 400 },
+          message:
+            'This model does not support assistant message prefill. The conversation must end with a user message.',
+          type: 'ValidationException',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+      }),
+    ).toBe(true);
+  });
+
   it('returns false for bare 400/413/422 request errors', () => {
     expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 400 })).toBe(false);
     expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 413 })).toBe(false);

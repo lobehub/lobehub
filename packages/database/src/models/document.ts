@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import { DOCUMENT_FOLDER_TYPE, documents } from '../schemas';
@@ -81,7 +81,14 @@ export class DocumentModel {
     }
 
     if (sourceTypes?.length) {
-      conditions.push(inArray(documents.sourceType, sourceTypes as ('file' | 'web' | 'api')[]));
+      conditions.push(
+        inArray(
+          documents.sourceType,
+          sourceTypes as ('file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal')[],
+        ),
+      );
+    } else {
+      conditions.push(notInArray(documents.sourceType, ['agent', 'agent-signal']));
     }
 
     const whereCondition = and(...conditions);

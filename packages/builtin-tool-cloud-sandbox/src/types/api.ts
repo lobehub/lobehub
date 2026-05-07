@@ -2,20 +2,19 @@
  * API names for Cloud Sandbox tool
  */
 export const CloudSandboxApiName = {
-  editLocalFile: 'editLocalFile',
+  editFile: 'editFile',
   executeCode: 'executeCode',
   exportFile: 'exportFile',
   getCommandOutput: 'getCommandOutput',
-  globLocalFiles: 'globLocalFiles',
+  globFiles: 'globFiles',
   grepContent: 'grepContent',
   killCommand: 'killCommand',
-  listLocalFiles: 'listLocalFiles',
-  moveLocalFiles: 'moveLocalFiles',
-  readLocalFile: 'readLocalFile',
-  renameLocalFile: 'renameLocalFile',
+  listFiles: 'listFiles',
+  moveFiles: 'moveFiles',
+  readFile: 'readFile',
   runCommand: 'runCommand',
-  searchLocalFiles: 'searchLocalFiles',
-  writeLocalFile: 'writeLocalFile',
+  searchFiles: 'searchFiles',
+  writeFile: 'writeFile',
 } as const;
 
 export type CloudSandboxApiNameType =

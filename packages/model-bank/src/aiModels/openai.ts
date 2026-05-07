@@ -13,6 +13,31 @@ export const openaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 400_000,
+    description: 'Latest Instant model used in ChatGPT.',
+    displayName: 'Chat Latest',
+    id: 'chat-latest',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-05',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
       search: true,
       structuredOutput: true,
@@ -104,68 +129,6 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-23',
     settings: {
       extendParams: ['gpt5_2ProReasoningEffort', 'textVerbosity'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_050_000,
-    description:
-      'GPT-5.5 is the frontier model for the most complex professional work, coding, and agentic tasks.',
-    displayName: 'GPT-5.5',
-    enabled: true,
-    id: 'gpt-5.5',
-    maxOutput: 128_000,
-    pricing: {
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 5,
-              '[0.272, infinity]': 10,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 0.5,
-              '[0.272, infinity]': 1,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.272]': 30,
-              '[0.272, infinity]': 45,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-04-23',
-    settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1294,59 +1257,6 @@ export const openaiChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2024-04-09',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
-    displayName: 'GPT-4 Turbo Preview',
-    id: 'gpt-4-turbo-preview',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
-    displayName: 'GPT-4 Turbo Preview 0125',
-    id: 'gpt-4-0125-preview',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-01-25',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.',
-    displayName: 'GPT-4 Turbo Preview 1106',
-    id: 'gpt-4-1106-preview',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2023-11-06',
     type: 'chat',
   },
   {

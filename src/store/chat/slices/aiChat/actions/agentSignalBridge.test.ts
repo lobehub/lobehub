@@ -10,6 +10,10 @@ vi.mock('@/store/user/store', () => ({
   getUserStoreState: vi.fn(),
 }));
 
+vi.mock('@/store/chat/store', () => ({
+  getChatStoreState: vi.fn(() => ({})),
+}));
+
 describe('emitClientAgentSignalSourceEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks();

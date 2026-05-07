@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "입력 (캐시 쓰기)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "출력",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "비디오 생성",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "비디오 입력",
   "ModelSwitchPanel.detail.releasedAt": "{{date}} 출시",
   "ModelSwitchPanel.emptyModel": "활성화된 모델이 없습니다. 설정에서 활성화하세요.",
   "ModelSwitchPanel.emptyProvider": "활성화된 서비스 제공자가 없습니다. 설정에서 활성화하세요.",

@@ -32,7 +32,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding-block: 8px 10px;
     padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-start-start-radius: 12px;
     border-start-end-radius: 12px;

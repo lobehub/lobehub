@@ -3,10 +3,8 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentDocumentModel } from '@/database/models/agentDocuments';
-import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
-import { createSkillTree } from '@/server/services/agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
+import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
 import {
   cleanupTestUser,
@@ -38,16 +36,13 @@ describe('runSkillManagementAction integration', () => {
     await cleanupTestUser(serverDB, userId);
   });
 
-  const createManagedSkill = async (skillName: string, content: string) => {
-    const snapshot = await createMarkdownEditorSnapshot(content);
-
-    await createSkillTree({
-      agentDocumentModel: new AgentDocumentModel(serverDB, userId),
+  const createManagedSkill = async (skillName: string, bodyMarkdown: string) => {
+    return new SkillManagementDocumentService(serverDB, userId).createSkill({
       agentId,
-      content: snapshot.content,
-      editorData: snapshot.editorData,
-      namespace: 'agent',
-      skillName,
+      bodyMarkdown,
+      description: `${skillName} description`,
+      name: skillName,
+      title: skillName,
     });
   };
 
@@ -62,10 +57,10 @@ describe('runSkillManagementAction integration', () => {
 
   /**
    * @example
-   * Refine reads and writes the selected managed skill through the real resolver and VFS adapter.
+   * Refine reads and writes the selected managed skill through the document-backed service.
    */
-  it('refines a real managed skill through resolver and VFS-backed maintainer operations', async () => {
-    await createManagedSkill('review-skill', '# Review Skill');
+  it('refines a real managed skill through document-backed replacement', async () => {
+    const skill = await createManagedSkill('review-skill', '# Review Skill');
 
     const result = await runSkillManagementAction(
       {
@@ -77,24 +72,16 @@ describe('runSkillManagementAction integration', () => {
         selfIterationEnabled: true,
         skillMaintainerRunner: async ({ targetSkills }) => {
           expect(targetSkills).toEqual([
-            {
-              content: '# Review Skill\n',
-              id: 'review-skill',
-              metadata: {},
-            },
+            expect.objectContaining({
+              content:
+                '---\ndescription: review-skill description\nname: review-skill\n---\n# Review Skill',
+              id: skill.bundle.agentDocumentId,
+              name: 'review-skill',
+            }),
           ]);
 
           return {
-            operations: [
-              {
-                arguments: {
-                  content: '# Review Skill\n\n## Procedure\n- Check failed assertions first.',
-                  path: 'SKILL.md',
-                  skillRef: 'review-skill',
-                },
-                name: 'updateSkill',
-              },
-            ],
+            bodyMarkdown: '# Review Skill\n\n## Procedure\n- Check failed assertions first.',
             reason: 'refined review skill',
           };
         },
@@ -103,7 +90,7 @@ describe('runSkillManagementAction integration', () => {
       {
         action: 'refine',
         reason: 'update existing review skill',
-        targetSkillIds: ['review-skill'],
+        targetSkillRefs: [skill.bundle.agentDocumentId],
       },
     );
 
@@ -112,17 +99,17 @@ describe('runSkillManagementAction integration', () => {
       status: 'applied',
     });
     expect(await readSkillIndex('review-skill')).toBe(
-      '# Review Skill\n\n## Procedure\n\n- Check failed assertions first.\n',
+      '---\ndescription: review-skill description\nname: review-skill\n---\n# Review Skill\n\n## Procedure\n- Check failed assertions first.',
     );
   });
 
   /**
    * @example
-   * Consolidate updates an allowed target skill and does not apply lifecycle proposals.
+   * Consolidate updates an allowed target skill and leaves other skills untouched.
    */
-  it('consolidates real managed skills without applying lifecycle proposals automatically', async () => {
-    await createManagedSkill('review-skill', '# Review Skill');
-    await createManagedSkill('review-checklist', '# Review Checklist');
+  it('consolidates real managed skills without deleting source skills automatically', async () => {
+    const reviewSkill = await createManagedSkill('review-skill', '# Review Skill');
+    const checklistSkill = await createManagedSkill('review-checklist', '# Review Checklist');
 
     const result = await runSkillManagementAction(
       {
@@ -134,36 +121,22 @@ describe('runSkillManagementAction integration', () => {
         selfIterationEnabled: true,
         skillMaintainerRunner: async ({ targetSkills }) => {
           expect(targetSkills).toEqual([
-            {
-              content: '# Review Skill\n',
-              id: 'review-skill',
-              metadata: {},
-            },
-            {
-              content: '# Review Checklist\n',
-              id: 'review-checklist',
-              metadata: {},
-            },
+            expect.objectContaining({
+              content:
+                '---\ndescription: review-skill description\nname: review-skill\n---\n# Review Skill',
+              id: reviewSkill.bundle.agentDocumentId,
+              name: 'review-skill',
+            }),
+            expect.objectContaining({
+              content:
+                '---\ndescription: review-checklist description\nname: review-checklist\n---\n# Review Checklist',
+              id: checklistSkill.bundle.agentDocumentId,
+              name: 'review-checklist',
+            }),
           ]);
 
           return {
-            operations: [
-              {
-                arguments: {
-                  content: '# Review Skill\n\n## Procedure\n- Use one consolidated checklist.',
-                  path: 'SKILL.md',
-                  skillRef: 'review-skill',
-                },
-                name: 'updateSkill',
-              },
-            ],
-            proposedLifecycleActions: [
-              {
-                action: 'archive',
-                reason: 'merged into review-skill',
-                skillRef: 'review-checklist',
-              },
-            ],
+            bodyMarkdown: '# Review Skill\n\n## Procedure\n- Use one consolidated checklist.',
             reason: 'consolidated review skills',
           };
         },
@@ -172,7 +145,10 @@ describe('runSkillManagementAction integration', () => {
       {
         action: 'consolidate',
         reason: 'overlapping review skills',
-        targetSkillIds: ['review-skill', 'review-checklist'],
+        targetSkillRefs: [
+          reviewSkill.bundle.agentDocumentId,
+          checklistSkill.bundle.agentDocumentId,
+        ],
       },
     );
 
@@ -181,8 +157,10 @@ describe('runSkillManagementAction integration', () => {
       status: 'applied',
     });
     expect(await readSkillIndex('review-skill')).toBe(
-      '# Review Skill\n\n## Procedure\n\n- Use one consolidated checklist.\n',
+      '---\ndescription: review-skill description\nname: review-skill\n---\n# Review Skill\n\n## Procedure\n- Use one consolidated checklist.',
     );
-    expect(await readSkillIndex('review-checklist')).toBe('# Review Checklist\n');
+    expect(await readSkillIndex('review-checklist')).toBe(
+      '---\ndescription: review-checklist description\nname: review-checklist\n---\n# Review Checklist',
+    );
   });
 });

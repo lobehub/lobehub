@@ -6,8 +6,17 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
 import { agentDocumentsRuntime } from '../agentDocuments';
 
+const agentSignalProcedureMocks = vi.hoisted(() => ({
+  emitToolOutcomeSafely: vi.fn(),
+  resolveToolOutcomeScope: vi.fn(() => ({
+    scope: { agentId: 'agent-1', userId: 'user-1' },
+    scopeKey: 'agent:agent-1:user:user-1',
+  })),
+}));
+
 vi.mock('@/server/services/agentDocuments');
 vi.mock('@/database/models/task');
+vi.mock('@/server/services/agentSignal/procedure', () => agentSignalProcedureMocks);
 
 describe('agentDocumentsRuntime', () => {
   it('should have correct identifier', () => {
@@ -39,14 +48,20 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     copyDocumentById: ReturnType<typeof vi.fn>;
     createDocument: ReturnType<typeof vi.fn>;
     createForTopic: ReturnType<typeof vi.fn>;
+    getDocumentSnapshotById: ReturnType<typeof vi.fn>;
+    renameDocumentById: ReturnType<typeof vi.fn>;
   };
   let pinDocument: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    agentSignalProcedureMocks.emitToolOutcomeSafely.mockClear();
+    agentSignalProcedureMocks.resolveToolOutcomeScope.mockClear();
     serviceImpl = {
       copyDocumentById: vi.fn().mockResolvedValue(newDoc),
       createDocument: vi.fn().mockResolvedValue(newDoc),
       createForTopic: vi.fn().mockResolvedValue(newDoc),
+      getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
+      renameDocumentById: vi.fn().mockResolvedValue(newDoc),
     };
     pinDocument = vi.fn().mockResolvedValue(undefined);
 
@@ -67,6 +82,67 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
 
     expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('emits create outcomes with the agent document binding id', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+
+    expect(agentSignalProcedureMocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiName: 'createDocument',
+        relatedObjects: [
+          {
+            objectId: 'agent-doc-assoc-id',
+            objectType: 'agent-document',
+            relation: 'created',
+          },
+        ],
+      }),
+    );
+  });
+
+  it('emits copy outcomes with the agent document binding id', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.copyDocument({ id: 'source-agent-doc-id' }, { agentId: 'agent-1' });
+
+    expect(agentSignalProcedureMocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiName: 'copyDocument',
+        relatedObjects: [
+          {
+            objectId: 'agent-doc-assoc-id',
+            objectType: 'agent-document',
+            relation: 'created',
+          },
+        ],
+      }),
+    );
+  });
+
+  it('emits update outcomes with the input agent document binding id', async () => {
+    serviceImpl.createDocument.mockClear();
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.renameDocument(
+      { id: 'agent-doc-assoc-id', newTitle: 'Renamed' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(agentSignalProcedureMocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiName: 'renameDocument',
+        relatedObjects: [
+          {
+            objectId: 'agent-doc-assoc-id',
+            objectType: 'agent-document',
+            relation: 'updated',
+          },
+        ],
+      }),
+    );
   });
 
   it('skips pin when no taskId is provided', async () => {
@@ -124,7 +200,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     updateLoadRule: vi.fn(),
   });
 
-  it('returns documents.id (not agentDocuments.id) for state.documentId', async () => {
+  it('returns both agentDocuments.id and documents.id in create state', async () => {
     const stub = makeStub();
     stub.createDocument.mockResolvedValue({
       documentId: 'documents-row-id',
@@ -140,7 +216,10 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.state).toEqual({ documentId: 'documents-row-id' });
+    expect(result.state).toEqual({
+      agentDocumentId: 'agent-doc-assoc-id',
+      documentId: 'documents-row-id',
+    });
   });
 
   it('refuses to run without agentId', async () => {
@@ -169,7 +248,10 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.state).toEqual({ documentId: 'documents-row-id' });
+    expect(result.state).toEqual({
+      agentDocumentId: 'agent-doc-assoc-id',
+      documentId: 'documents-row-id',
+    });
     expect(stub.createTopicDocument).toHaveBeenCalledWith({
       agentId: 'agent-1',
       content: 'body',

@@ -169,6 +169,7 @@
   "channel.userIdHint": "ID người dùng của bạn trên nền tảng này. AI có thể sử dụng nó để gửi tin nhắn trực tiếp cho bạn.",
   "channel.userIdHint.discord": "Bật Chế độ Nhà phát triển (Cài đặt → Nâng cao), sau đó nhấp chuột phải vào ảnh đại diện của bạn → Sao chép ID Người dùng.",
   "channel.userIdHint.feishu": "Mở ứng dụng của bạn trên Feishu / Lark Open Platform → Permissions, sau đó tra Open ID của bạn.",
+  "channel.userIdHint.line": "Mở LINE Developers Console → kênh của bạn → tab Cài đặt cơ bản, và sao chép \"ID người dùng của bạn\" (bắt đầu bằng U, 33 ký tự).",
   "channel.userIdHint.qq": "Số QQ của bạn, hiển thị trên trang hồ sơ QQ.",
   "channel.userIdHint.slack": "Mở hồ sơ Slack của bạn → ⋮ More → Copy member ID (bắt đầu bằng U).",
   "channel.userIdHint.telegram": "Gửi bất kỳ tin nhắn nào đến @userinfobot trên Telegram — bot sẽ trả lời bằng ID Người dùng dạng số của bạn.",

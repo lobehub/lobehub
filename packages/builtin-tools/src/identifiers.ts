@@ -10,10 +10,12 @@ import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-bu
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { selfIterationIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
@@ -37,11 +39,13 @@ export const builtinToolIdentifiers: string[] = [
   MemoryManifest.identifier,
   NotebookManifest.identifier,
   PageAgentManifest.identifier,
+  selfIterationIntentManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
   TopicReferenceManifest.identifier,
   LobeActivatorManifest.identifier,
   WebBrowsingManifest.identifier,
   UserInteractionManifest.identifier,
+  LobeAgentManifest.identifier,
   WebOnboardingManifest.identifier,
 ];

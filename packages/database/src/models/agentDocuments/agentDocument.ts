@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { agentDocuments, documents } from '../../schemas';
-import type { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase, Transaction } from '../../type';
 import { buildDocumentFilename } from './filename';
 import {
   composeToolPolicyUpdate,
@@ -15,6 +15,7 @@ import {
 import type {
   AgentDocument,
   AgentDocumentPolicy,
+  AgentDocumentSourceType,
   AgentDocumentWithRules,
   DocumentLoadRules,
   ToolUpdateLoadRule,
@@ -36,6 +37,35 @@ interface AgentDocumentQueryOptions {
   limit?: number;
 }
 
+interface AgentDocumentCreateParams {
+  createdAt?: Date;
+  editorData?: Record<string, any>;
+  fileType?: string;
+  loadPosition?: DocumentLoadPosition;
+  loadRules?: DocumentLoadRules;
+  metadata?: Record<string, any>;
+  parentId?: string | null;
+  policy?: AgentDocumentPolicy;
+  policyLoad?: PolicyLoad;
+  source?: string;
+  sourceType?: AgentDocumentSourceType;
+  templateId?: string;
+  title?: string;
+  updatedAt?: Date;
+}
+
+interface ConvertAgentDocumentToSkillIndexParams {
+  agentDocumentId: string;
+  content: string;
+  editorData?: Record<string, unknown>;
+  filename: string;
+  metadata: Record<string, unknown>;
+  parentId: string;
+  source: string;
+  sourceType: AgentDocumentSourceType;
+  title: string;
+}
+
 export class AgentDocumentModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -52,6 +82,21 @@ export class AgentDocumentModel {
       totalCharCount: content.length,
       totalLineCount: content.split('\n').length,
     };
+  }
+
+  private getMetadataDescription(metadata?: Record<string, unknown> | null): string | undefined {
+    if (!metadata) return undefined;
+
+    if (typeof metadata.description === 'string') return metadata.description;
+
+    const skill = metadata.skill;
+    if (!skill || typeof skill !== 'object') return undefined;
+
+    const frontmatter = (skill as Record<string, unknown>).frontmatter;
+    if (!frontmatter || typeof frontmatter !== 'object') return undefined;
+
+    const description = (frontmatter as Record<string, unknown>).description;
+    return typeof description === 'string' ? description : undefined;
   }
 
   private toAgentDocument(
@@ -214,20 +259,31 @@ export class AgentDocumentModel {
     agentId: string,
     filename: string,
     content: string,
-    params?: {
-      createdAt?: Date;
-      editorData?: Record<string, any>;
-      fileType?: string;
-      loadPosition?: DocumentLoadPosition;
-      loadRules?: DocumentLoadRules;
-      metadata?: Record<string, any>;
-      parentId?: string | null;
-      policy?: AgentDocumentPolicy;
-      policyLoad?: PolicyLoad;
-      templateId?: string;
-      title?: string;
-      updatedAt?: Date;
-    },
+    params?: AgentDocumentCreateParams,
+  ): Promise<AgentDocument> {
+    return this.db.transaction((trx) => this.createWithTx(trx, agentId, filename, content, params));
+  }
+
+  /**
+   * Creates a document row and links it to an agent inside a caller-owned transaction.
+   *
+   * Use when:
+   * - A higher-level aggregate must create multiple agent documents atomically.
+   * - Callers already run `db.transaction` and need to avoid nested transactions.
+   *
+   * Expects:
+   * - `trx` is the active transaction for every write in the aggregate.
+   * - `filename` is a single VFS segment supplied by the caller.
+   *
+   * Returns:
+   * - The created agent document with joined document content and metadata.
+   */
+  async createWithTx(
+    trx: Transaction,
+    agentId: string,
+    filename: string,
+    content: string,
+    params?: AgentDocumentCreateParams,
   ): Promise<AgentDocument> {
     const {
       createdAt,
@@ -239,6 +295,8 @@ export class AgentDocumentModel {
       parentId,
       policy,
       policyLoad,
+      source,
+      sourceType = 'agent',
       templateId,
       title: providedTitle,
       updatedAt,
@@ -248,58 +306,168 @@ export class AgentDocumentModel {
     const stats = this.getDocumentStats(content);
     const normalizedPolicy = normalizePolicy(loadPosition, loadRules, policy);
 
-    return this.db.transaction(async (trx) => {
-      const documentPayload: NewDocument = {
-        content,
-        createdAt,
-        description: metadata?.description,
-        editorData,
-        fileType,
-        filename,
-        parentId,
-        metadata,
-        source: `agent-document://${agentId}/${encodeURIComponent(filename)}`,
-        sourceType: 'file',
-        title,
+    const documentPayload: NewDocument = {
+      content,
+      createdAt,
+      description: this.getMetadataDescription(metadata),
+      editorData,
+      fileType,
+      filename,
+      parentId,
+      metadata,
+      source: source ?? `agent-document://${agentId}/${encodeURIComponent(filename)}`,
+      sourceType,
+      title,
+      totalCharCount: stats.totalCharCount,
+      totalLineCount: stats.totalLineCount,
+      updatedAt: updatedAt ?? createdAt,
+      userId: this.userId,
+    };
+
+    const [insertedDocument] = await trx.insert(documents).values(documentPayload).returning();
+
+    const newDoc: NewAgentDocument = {
+      accessPublic: 0,
+      accessSelf:
+        AgentAccess.EXECUTE |
+        AgentAccess.LIST |
+        AgentAccess.READ |
+        AgentAccess.WRITE |
+        AgentAccess.DELETE,
+      accessShared: 0,
+      agentId,
+      createdAt,
+      policyLoad: policyLoad ?? PolicyLoad.PROGRESSIVE,
+      deleteReason: null,
+      deletedAt: null,
+      deletedByAgentId: null,
+      deletedByUserId: null,
+      documentId: insertedDocument!.id,
+      policy: normalizedPolicy,
+      policyLoadFormat: normalizedPolicy.context?.policyLoadFormat || DocumentLoadFormat.RAW,
+      policyLoadPosition:
+        normalizedPolicy.context?.position || DocumentLoadPosition.BEFORE_FIRST_USER,
+      policyLoadRule: normalizedPolicy.context?.rule || DocumentLoadRule.ALWAYS,
+      templateId,
+      updatedAt: updatedAt ?? createdAt,
+      userId: this.userId,
+    };
+
+    const [settings] = await trx.insert(agentDocuments).values(newDoc).returning();
+
+    return this.toAgentDocument(settings!, insertedDocument!);
+  }
+
+  /**
+   * Converts an existing ordinary agent document binding into a managed skill index.
+   *
+   * Use when:
+   * - Agent Signal promoted an already-created agent document into skill management.
+   * - The caller must preserve both the agent document id and backing document id.
+   *
+   * Expects:
+   * - `agentDocumentId` is a live binding owned by the current user.
+   * - `parentId` points to the managed skill bundle document row.
+   *
+   * Returns:
+   * - The same agent document binding after document identity and load metadata are updated.
+   *
+   */
+  async convertAgentDocumentToSkillIndex(
+    params: ConvertAgentDocumentToSkillIndexParams,
+  ): Promise<AgentDocument | undefined> {
+    return this.db.transaction((trx) => this.convertAgentDocumentToSkillIndexWithTx(trx, params));
+  }
+
+  /**
+   * Converts a live agent document binding into a managed skill index inside a transaction.
+   *
+   * Use when:
+   * - A higher-level skill aggregate also creates the owning bundle in the same transaction.
+   * - The caller must preserve both `agent_documents.id` and `documents.id`.
+   *
+   * Expects:
+   * - `trx` is the active transaction for the whole skill creation operation.
+   * - `parentId` points to the managed skill bundle document row inside the same transaction.
+   *
+   * Returns:
+   * - The same agent document binding after document identity and load metadata are updated.
+   */
+  async convertAgentDocumentToSkillIndexWithTx(
+    trx: Transaction,
+    params: ConvertAgentDocumentToSkillIndexParams,
+  ): Promise<AgentDocument | undefined> {
+    const [existingResult] = await trx
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.id, params.agentDocumentId),
+          eq(agentDocuments.userId, this.userId),
+          isNull(agentDocuments.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!existingResult) return undefined;
+
+    const existing = this.toAgentDocument(existingResult.settings, existingResult.doc);
+    if (!existing) return undefined;
+
+    const stats = this.getDocumentStats(params.content);
+    const updatedAt = new Date();
+
+    await trx
+      .update(documents)
+      .set({
+        content: params.content,
+        description: this.getMetadataDescription(params.metadata),
+        ...(params.editorData !== undefined && { editorData: params.editorData }),
+        filename: params.filename,
+        fileType: 'skills/index',
+        metadata: params.metadata,
+        parentId: params.parentId,
+        source: params.source,
+        sourceType: params.sourceType,
+        title: params.title,
         totalCharCount: stats.totalCharCount,
         totalLineCount: stats.totalLineCount,
-        updatedAt: updatedAt ?? createdAt,
-        userId: this.userId,
-      };
+        updatedAt,
+      })
+      .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
 
-      const [insertedDocument] = await trx.insert(documents).values(documentPayload).returning();
+    await trx
+      .update(agentDocuments)
+      .set({
+        policyLoad: PolicyLoad.DISABLED,
+        templateId: 'agent-skill',
+        updatedAt,
+      })
+      .where(
+        and(
+          eq(agentDocuments.id, params.agentDocumentId),
+          eq(agentDocuments.userId, this.userId),
+          isNull(agentDocuments.deletedAt),
+        ),
+      );
 
-      const newDoc: NewAgentDocument = {
-        accessPublic: 0,
-        accessSelf:
-          AgentAccess.EXECUTE |
-          AgentAccess.LIST |
-          AgentAccess.READ |
-          AgentAccess.WRITE |
-          AgentAccess.DELETE,
-        accessShared: 0,
-        agentId,
-        createdAt,
-        policyLoad: policyLoad ?? PolicyLoad.PROGRESSIVE,
-        deleteReason: null,
-        deletedAt: null,
-        deletedByAgentId: null,
-        deletedByUserId: null,
-        documentId: insertedDocument!.id,
-        policy: normalizedPolicy,
-        policyLoadFormat: normalizedPolicy.context?.policyLoadFormat || DocumentLoadFormat.RAW,
-        policyLoadPosition:
-          normalizedPolicy.context?.position || DocumentLoadPosition.BEFORE_FIRST_USER,
-        policyLoadRule: normalizedPolicy.context?.rule || DocumentLoadRule.ALWAYS,
-        templateId,
-        updatedAt: updatedAt ?? createdAt,
-        userId: this.userId,
-      };
+    const [updatedResult] = await trx
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.id, params.agentDocumentId),
+          eq(agentDocuments.userId, this.userId),
+          isNull(agentDocuments.deletedAt),
+        ),
+      )
+      .limit(1);
 
-      const [settings] = await trx.insert(agentDocuments).values(newDoc).returning();
-
-      return this.toAgentDocument(settings!, insertedDocument!);
-    });
+    return updatedResult
+      ? this.toAgentDocument(updatedResult.settings, updatedResult.doc)
+      : undefined;
   }
 
   async update(
@@ -367,7 +535,7 @@ export class AgentDocumentModel {
 
         if (metadata !== undefined) {
           documentUpdate.metadata = metadata;
-          documentUpdate.description = metadata?.description;
+          documentUpdate.description = this.getMetadataDescription(metadata);
         }
 
         await trx
@@ -381,6 +549,58 @@ export class AgentDocumentModel {
         .set(settingsUpdate)
         .where(and(eq(agentDocuments.id, documentId), eq(agentDocuments.userId, this.userId)));
     });
+  }
+
+  /**
+   * Updates backing document identity fields without changing ids or load policy.
+   *
+   * Use when:
+   * - Managed skill services need to rename or reparent a document row.
+   * - Callers must preserve agent document id and backing document id.
+   *
+   * Expects:
+   * - `agentDocumentId` is the agent document binding id, not the backing document row id.
+   * - Omitted fields are left untouched.
+   *
+   * Returns:
+   * - The same agent document binding after identity fields are updated.
+   *
+   */
+  async updateDocumentIdentity(
+    agentDocumentId: string,
+    params: {
+      filename?: string;
+      metadata?: Record<string, unknown>;
+      parentId?: string | null;
+      title?: string;
+    },
+  ): Promise<AgentDocument | undefined> {
+    const existing = await this.findById(agentDocumentId);
+    if (!existing) return undefined;
+
+    if (
+      params.filename === undefined &&
+      params.metadata === undefined &&
+      params.parentId === undefined &&
+      params.title === undefined
+    ) {
+      return existing;
+    }
+
+    await this.db
+      .update(documents)
+      .set({
+        ...(params.filename !== undefined && { filename: params.filename }),
+        ...(params.metadata !== undefined && {
+          description: this.getMetadataDescription(params.metadata),
+          metadata: params.metadata,
+        }),
+        ...(params.parentId !== undefined && { parentId: params.parentId }),
+        ...(params.title !== undefined && { title: params.title }),
+      })
+      .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+
+    return this.findById(agentDocumentId);
   }
 
   /**
