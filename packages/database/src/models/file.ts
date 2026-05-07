@@ -5,8 +5,10 @@ import type { PgTransaction } from 'drizzle-orm/pg-core';
 
 import type { FileItem, NewFile, NewGlobalFile } from '../schemas';
 import {
+  asyncTasks,
   chunks,
   documentChunks,
+  documents,
   embeddings,
   fileChunks,
   files,
@@ -120,10 +122,33 @@ export class FileModel {
 
       const fileHash = file.fileHash!;
 
-      // 2. Delete related chunks
+      // 1. Delete related chunks
       await this.deleteFileChunks(tx as any, [id]);
 
-      // 3. Delete file record
+      // 2. Delete mirror documents whose source is this file. Without this,
+      // documents.fileId would be set null by FK and leave orphan rows behind
+      // (still indexed by BM25, still occupying KB slots).
+      await tx
+        .delete(documents)
+        .where(
+          and(
+            eq(documents.fileId, id),
+            eq(documents.userId, this.userId),
+            eq(documents.sourceType, 'file'),
+          ),
+        );
+
+      // 3. Delete the chunk/embedding asyncTasks tied to this file. files.chunkTaskId
+      // and embeddingTaskId are `set null` on the asyncTasks side, so without this
+      // the task rows would dangle in the DB forever.
+      const taskIds = [file.chunkTaskId, file.embeddingTaskId].filter((taskId): taskId is string =>
+        Boolean(taskId),
+      );
+      if (taskIds.length > 0) {
+        await tx.delete(asyncTasks).where(inArray(asyncTasks.id, taskIds));
+      }
+
+      // 4. Delete file record
       await tx.delete(files).where(and(eq(files.id, id), eq(files.userId, this.userId)));
 
       const result = await tx
@@ -177,7 +202,27 @@ export class FileModel {
       // 2. Delete related chunks
       await this.deleteFileChunks(trx as any, ids);
 
-      // 3. Delete file records
+      // 3. Delete mirror documents (sourceType='file') so they don't linger as
+      // orphans with fileId set to null after the file row is removed.
+      await trx
+        .delete(documents)
+        .where(
+          and(
+            inArray(documents.fileId, ids),
+            eq(documents.userId, this.userId),
+            eq(documents.sourceType, 'file'),
+          ),
+        );
+
+      // 4. Delete chunk/embedding asyncTasks attached to these files.
+      const taskIds = fileList
+        .flatMap((file) => [file.chunkTaskId, file.embeddingTaskId])
+        .filter((taskId): taskId is string => Boolean(taskId));
+      if (taskIds.length > 0) {
+        await trx.delete(asyncTasks).where(inArray(asyncTasks.id, taskIds));
+      }
+
+      // 5. Delete file records
       await trx.delete(files).where(and(inArray(files.id, ids), eq(files.userId, this.userId)));
 
       // If global files don't need to be deleted, return directly
