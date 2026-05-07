@@ -26,7 +26,7 @@ export const WithActivitySchema = z.object({
   associatedSubjects: z.array(ActivityAssociationSchema).optional().nullable(),
   endsAt: z.string().optional().nullable(),
   feedback: z.string().optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional().nullable(),
   narrative: z.string(),
   notes: z.string().optional().nullable(),
   startsAt: z.string().optional().nullable(),

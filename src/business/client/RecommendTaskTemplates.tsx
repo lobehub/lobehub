@@ -1,3 +1,1 @@
-import { memo } from 'react';
-
-export const RecommendTaskTemplates = memo(() => null);
+export { RecommendTaskTemplates } from '@/features/RecommendTaskTemplates';

@@ -1,8 +1,11 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -12,10 +15,11 @@ import OpenaiSTT from './openai';
 const STT = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { sttServer } = useUserStore(settingsSelectors.currentTTS, isEqual);
   const { enableSTT } = useServerConfigStore(featureFlagsSelectors);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   if (!enableSTT) return;
 
-  if (ENABLE_BUSINESS_FEATURES) {
+  if (enableBusinessFeatures) {
     return <BrowserSTT mobile={mobile} />;
   }
   switch (sttServer) {
