@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { hashApiKey } from '@/utils/server/apiKeyHash';
+import { hashApiKey, hashApiKeyWithSecret } from '@/utils/server/apiKeyHash';
 
 import { getTestDB } from '../../core/getTestDB';
 import { apiKeys, users } from '../../schemas';
@@ -12,14 +12,18 @@ import { ApiKeyModel } from '../apiKey';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'api-key-model-test-user-id';
+const legacyKeyVaultsSecret = 'Q10pwdq00KXUu9R+c8A8p4PSlIRWi7KwgUophBtkHVk=';
 const validKeyVaultsSecret = 'ofQiJCXLF8mYemwfMWLOHoHimlPu91YmLfU7YZ4lreQ=';
 
 let apiKeyModel: ApiKeyModel;
+let originalLegacyKeyVaultsSecret: string | undefined;
 let originalKeyVaultsSecret: string | undefined;
 
 beforeEach(async () => {
   originalKeyVaultsSecret = process.env.KEY_VAULTS_SECRET;
+  originalLegacyKeyVaultsSecret = process.env.LEGACY_KEY_VAULTS_SECRET;
   process.env.KEY_VAULTS_SECRET = validKeyVaultsSecret;
+  delete process.env.LEGACY_KEY_VAULTS_SECRET;
   apiKeyModel = new ApiKeyModel(serverDB, userId);
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: 'user2' }]);
@@ -29,6 +33,11 @@ afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
   await serverDB.delete(apiKeys).where(eq(apiKeys.userId, userId));
   process.env.KEY_VAULTS_SECRET = originalKeyVaultsSecret;
+  if (originalLegacyKeyVaultsSecret) {
+    process.env.LEGACY_KEY_VAULTS_SECRET = originalLegacyKeyVaultsSecret;
+  } else {
+    delete process.env.LEGACY_KEY_VAULTS_SECRET;
+  }
 });
 
 describe('ApiKeyModel', () => {
@@ -200,6 +209,24 @@ describe('ApiKeyModel', () => {
       expect(found).toBeDefined();
       expect(found?.key).toBe(validKey);
       expect(found?.name).toBe('Test Key');
+    });
+
+    it('should find API key by legacy key hash fallback', async () => {
+      const validKey = 'sk-lh-abcdef0123456789';
+      await serverDB.insert(apiKeys).values({
+        enabled: true,
+        key: validKey,
+        keyHash: hashApiKeyWithSecret(validKey, legacyKeyVaultsSecret),
+        name: 'Legacy Key',
+        userId,
+      });
+      process.env.LEGACY_KEY_VAULTS_SECRET = legacyKeyVaultsSecret;
+
+      const found = await apiKeyModel.findByKey(validKey);
+
+      expect(found).toBeDefined();
+      expect(found?.keyHash).toBe(hashApiKeyWithSecret(validKey, legacyKeyVaultsSecret));
+      expect(found?.name).toBe('Legacy Key');
     });
 
     it('should return null for invalid key format', async () => {

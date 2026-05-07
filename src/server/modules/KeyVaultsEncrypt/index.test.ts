@@ -1,22 +1,32 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { KeyVaultsGateKeeper } from './index';
+import { isKeyVaultsSecretBearerToken, KeyVaultsGateKeeper } from './index';
 
 describe('KeyVaultsGateKeeper', () => {
+  const legacySecret = 'ofQiJCXLF8mYemwfMWLOHoHimlPu91YmLfU7YZ4lreQ=';
+  const primarySecret = 'Q10pwdq00KXUu9R+c8A8p4PSlIRWi7KwgUophBtkHVk=';
   let gateKeeper: KeyVaultsGateKeeper;
+  let originalLegacySecret: string | undefined;
   let originalSecret: string | undefined;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     originalSecret = process.env.KEY_VAULTS_SECRET;
-    process.env.KEY_VAULTS_SECRET = 'Q10pwdq00KXUu9R+c8A8p4PSlIRWi7KwgUophBtkHVk=';
+    originalLegacySecret = process.env.LEGACY_KEY_VAULTS_SECRET;
+    process.env.KEY_VAULTS_SECRET = primarySecret;
+    delete process.env.LEGACY_KEY_VAULTS_SECRET;
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   });
 
   afterEach(() => {
     process.env.KEY_VAULTS_SECRET = originalSecret;
+    if (originalLegacySecret) {
+      process.env.LEGACY_KEY_VAULTS_SECRET = originalLegacySecret;
+    } else {
+      delete process.env.LEGACY_KEY_VAULTS_SECRET;
+    }
     consoleErrorSpy.mockRestore();
   });
 
@@ -56,10 +66,49 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
     );
   });
 
+  it('should throw an error if LEGACY_KEY_VAULTS_SECRET decodes to an unsupported length', async () => {
+    process.env.LEGACY_KEY_VAULTS_SECRET = Buffer.from('short').toString('base64');
+
+    await expect(KeyVaultsGateKeeper.initWithEnvKey()).rejects.toThrow(
+      '`LEGACY_KEY_VAULTS_SECRET` must be 16, 24, or 32 bytes',
+    );
+  });
+
+  it('should throw an error if LEGACY_KEY_VAULTS_SECRET equals KEY_VAULTS_SECRET', async () => {
+    process.env.LEGACY_KEY_VAULTS_SECRET = primarySecret;
+
+    await expect(KeyVaultsGateKeeper.initWithEnvKey()).rejects.toThrow(
+      '`LEGACY_KEY_VAULTS_SECRET` must be different from `KEY_VAULTS_SECRET`.',
+    );
+  });
+
   it('should throw an error for invalid encrypted data format', async () => {
     await expect(gateKeeper.decrypt('invalid-format')).rejects.toThrow(
       'Invalid encrypted data format',
     );
+  });
+
+  it('should decrypt data encrypted with LEGACY_KEY_VAULTS_SECRET fallback', async () => {
+    process.env.KEY_VAULTS_SECRET = legacySecret;
+    const legacyGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    const encrypted = await legacyGateKeeper.encrypt('legacy data');
+
+    process.env.KEY_VAULTS_SECRET = primarySecret;
+    process.env.LEGACY_KEY_VAULTS_SECRET = legacySecret;
+    const rotatingGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+    await expect(rotatingGateKeeper.decrypt(encrypted)).resolves.toEqual({
+      plaintext: 'legacy data',
+      wasAuthentic: true,
+    });
+  });
+
+  it('should accept primary and legacy bearer tokens for internal service auth', () => {
+    process.env.LEGACY_KEY_VAULTS_SECRET = legacySecret;
+
+    expect(isKeyVaultsSecretBearerToken(`Bearer ${primarySecret}`)).toBe(true);
+    expect(isKeyVaultsSecretBearerToken(`Bearer ${legacySecret}`)).toBe(true);
+    expect(isKeyVaultsSecretBearerToken('Bearer invalid')).toBe(false);
   });
 
   describe('getUserKeyVaults', () => {

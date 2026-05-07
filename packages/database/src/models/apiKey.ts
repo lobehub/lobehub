@@ -1,5 +1,5 @@
 import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@lobechat/utils/apiKey';
-import { hashApiKey } from '@lobechat/utils/server';
+import { hashApiKey, hashApiKeyWithLegacySecret } from '@lobechat/utils/server';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -15,8 +15,17 @@ export class ApiKeyModel {
     }
     const keyHash = hashApiKey(key);
 
-    return db.query.apiKeys.findFirst({
+    const apiKey = await db.query.apiKeys.findFirst({
       where: eq(apiKeys.keyHash, keyHash),
+    });
+
+    if (apiKey) return apiKey;
+
+    const legacyKeyHash = hashApiKeyWithLegacySecret(key);
+    if (!legacyKeyHash) return;
+
+    return db.query.apiKeys.findFirst({
+      where: eq(apiKeys.keyHash, legacyKeyHash),
     });
   };
 

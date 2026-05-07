@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 
-import { getServerDBConfig } from '@/config/db';
+import { isKeyVaultsSecretBearerToken } from '@/server/modules/KeyVaultsEncrypt';
 import { GatewayService } from '@/server/services/gateway';
 
 export const POST = async (req: Request): Promise<Response> => {
-  const { KEY_VAULTS_SECRET } = getServerDBConfig();
-
   const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${KEY_VAULTS_SECRET}`) {
+  if (!isKeyVaultsSecretBearerToken(authHeader)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

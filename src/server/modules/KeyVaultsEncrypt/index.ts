@@ -6,39 +6,96 @@ interface DecryptionResult {
   wasAuthentic: boolean;
 }
 
-export class KeyVaultsGateKeeper {
-  private aesKey: CryptoKey;
+interface KeyVaultSecretConfig {
+  legacy?: string;
+  primary: string;
+}
 
-  constructor(aesKey: CryptoKey) {
-    this.aesKey = aesKey;
-  }
+const getConfiguredKeyVaultSecrets = () => {
+  const { KEY_VAULTS_SECRET, LEGACY_KEY_VAULTS_SECRET } = getServerDBConfig();
 
-  static initWithEnvKey = async () => {
-    const { KEY_VAULTS_SECRET } = getServerDBConfig();
-    if (!KEY_VAULTS_SECRET)
-      throw new Error(` \`KEY_VAULTS_SECRET\` is not set, please set it in your environment variables.
+  return [KEY_VAULTS_SECRET, LEGACY_KEY_VAULTS_SECRET].filter(
+    (secret): secret is string => !!secret && secret.trim() !== '',
+  );
+};
+
+const getKeyVaultSecretConfig = (): KeyVaultSecretConfig => {
+  const { KEY_VAULTS_SECRET, LEGACY_KEY_VAULTS_SECRET } = getServerDBConfig();
+  const legacySecret = LEGACY_KEY_VAULTS_SECRET?.trim() ? LEGACY_KEY_VAULTS_SECRET : undefined;
+
+  if (!KEY_VAULTS_SECRET)
+    throw new Error(` \`KEY_VAULTS_SECRET\` is not set, please set it in your environment variables.
 
 If you don't have it, please run \`openssl rand -base64 32\` to create one.
 `);
 
-    const rawKey = Buffer.from(KEY_VAULTS_SECRET, 'base64');
+  if (legacySecret && legacySecret === KEY_VAULTS_SECRET) {
+    throw new Error('`LEGACY_KEY_VAULTS_SECRET` must be different from `KEY_VAULTS_SECRET`.');
+  }
 
-    // Validate key length - AES-GCM supports 128, 192, and 256 bit keys (16, 24, or 32 bytes)
-    // See: https://developer.mozilla.org/en-US/docs/Web/API/AesKeyGenParams#length
-    if (![16, 24, 32].includes(rawKey.length)) {
-      throw new Error(
-        `\`KEY_VAULTS_SECRET\` must be 16, 24, or 32 bytes (128, 192, or 256 bits) when base64 decoded, got ${rawKey.length} bytes. ` +
-          'Please run `openssl rand -base64 32` to create a valid key.',
-      );
-    }
-    const aesKey = await crypto.subtle.importKey(
-      'raw',
-      rawKey,
-      { length: 256, name: 'AES-GCM' },
-      false,
-      ['encrypt', 'decrypt'],
+  return legacySecret
+    ? {
+        legacy: legacySecret,
+        primary: KEY_VAULTS_SECRET,
+      }
+    : { primary: KEY_VAULTS_SECRET };
+};
+
+const importAesKey = async (secret: string, label: string) => {
+  const rawKey = Buffer.from(secret, 'base64');
+
+  if (![16, 24, 32].includes(rawKey.length)) {
+    throw new Error(
+      `\`${label}\` must be 16, 24, or 32 bytes (128, 192, or 256 bits) when base64 decoded, got ${rawKey.length} bytes. ` +
+        'Please run `openssl rand -base64 32` to create a valid key.',
     );
-    return new KeyVaultsGateKeeper(aesKey);
+  }
+
+  return crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+};
+
+export const isKeyVaultsSecretBearerToken = (authorization: string | null) =>
+  getConfiguredKeyVaultSecrets().some((secret) => authorization === `Bearer ${secret}`);
+
+export class KeyVaultsGateKeeper {
+  private legacyAesKey?: CryptoKey;
+  private primaryAesKey: CryptoKey;
+
+  constructor(primaryAesKey: CryptoKey, legacyAesKey?: CryptoKey) {
+    this.primaryAesKey = primaryAesKey;
+    this.legacyAesKey = legacyAesKey;
+  }
+
+  static initWithEnvKey = async () => {
+    const { legacy, primary } = getKeyVaultSecretConfig();
+    const primaryAesKey = await importAesKey(primary, 'KEY_VAULTS_SECRET');
+    const legacyAesKey = legacy
+      ? await importAesKey(legacy, 'LEGACY_KEY_VAULTS_SECRET')
+      : undefined;
+
+    return new KeyVaultsGateKeeper(primaryAesKey, legacyAesKey);
+  };
+
+  private decryptWithKey = async (encryptedData: string, aesKey: CryptoKey) => {
+    const parts = encryptedData.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid encrypted data format');
+    }
+
+    const iv = Buffer.from(parts[0], 'hex');
+    const authTag = Buffer.from(parts[1], 'hex');
+    const encrypted = Buffer.from(parts[2], 'hex');
+
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      {
+        iv,
+        name: 'AES-GCM',
+      },
+      aesKey,
+      Buffer.concat([encrypted, authTag]),
+    );
+
+    return new TextDecoder().decode(decryptedBuffer);
   };
 
   /**
@@ -53,7 +110,7 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
         iv,
         name: 'AES-GCM',
       },
-      this.aesKey,
+      this.primaryAesKey,
       encodedKeyVault,
     );
 
@@ -66,34 +123,29 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
 
   // Assuming key and encrypted data are obtained from external sources
   decrypt = async (encryptedData: string): Promise<DecryptionResult> => {
-    const parts = encryptedData.split(':');
-    if (parts.length !== 3) {
+    if (encryptedData.split(':').length !== 3) {
       throw new Error('Invalid encrypted data format');
     }
 
-    const iv = Buffer.from(parts[0], 'hex');
-    const authTag = Buffer.from(parts[1], 'hex');
-    const encrypted = Buffer.from(parts[2], 'hex');
-
-    // Combine encrypted data and authentication tag
-    const combined = Buffer.concat([encrypted, authTag]);
-
     try {
-      const decryptedBuffer = await crypto.subtle.decrypt(
-        {
-          iv,
-          name: 'AES-GCM',
-        },
-        this.aesKey,
-        combined,
-      );
-
-      const decrypted = new TextDecoder().decode(decryptedBuffer);
+      const decrypted = await this.decryptWithKey(encryptedData, this.primaryAesKey);
       return {
         plaintext: decrypted,
         wasAuthentic: true,
       };
     } catch {
+      if (this.legacyAesKey) {
+        try {
+          const decrypted = await this.decryptWithKey(encryptedData, this.legacyAesKey);
+          return {
+            plaintext: decrypted,
+            wasAuthentic: true,
+          };
+        } catch {
+          // Fall through to unauthentic result when neither rotation key can decrypt.
+        }
+      }
+
       return {
         plaintext: '',
         wasAuthentic: false,

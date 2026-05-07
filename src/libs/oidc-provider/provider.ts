@@ -21,11 +21,15 @@ export const API_AUDIENCE = 'urn:lobehub:chat';
 /**
  * Get cookie keys using KEY_VAULTS_SECRET
  */
-const getCookieKeys = () => {
+export const getCookieKeys = () => {
   const key = serverDBEnv.KEY_VAULTS_SECRET;
   if (!key) {
     throw new Error('KEY_VAULTS_SECRET is required for OIDC Provider cookie encryption');
   }
+
+  const legacyKey = serverDBEnv.LEGACY_KEY_VAULTS_SECRET;
+  if (legacyKey && legacyKey !== key) return [key, legacyKey];
+
   return [key];
 };
 

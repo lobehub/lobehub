@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { getServerDBConfig } from '@/config/db';
 import { createCallerFactory } from '@/libs/trpc/lambda';
+import { isKeyVaultsSecretBearerToken } from '@/server/modules/KeyVaultsEncrypt';
 import { lambdaRouter } from '@/server/routers/lambda';
 
 export const maxDuration = 300;
@@ -83,7 +84,7 @@ export const POST = async (req: Request) => {
     const authorization = req.headers.get('Authorization');
 
     // If request has internal service token, bypass regular auth
-    if (authorization === `Bearer ${serverDBEnv.KEY_VAULTS_SECRET}`) {
+    if (isKeyVaultsSecretBearerToken(authorization)) {
       // Internal service call from ComfyUI provider
       // Pass a system user ID for internal service calls
       return handler(req, { jwtPayload: { userId: 'INTERNAL_SERVICE' } });

@@ -15,6 +15,7 @@ vi.mock('@/envs/app', () => ({
 vi.mock('@/config/db', () => ({
   serverDBEnv: {
     KEY_VAULTS_SECRET: 'test-secret-key',
+    LEGACY_KEY_VAULTS_SECRET: undefined,
   },
 }));
 
@@ -85,6 +86,21 @@ describe('OIDC Provider - Market Client Integration', () => {
       expect(typeof module.createOIDCProvider).toBe('function');
 
       vi.doUnmock('@/envs/app');
+    }, 10000);
+
+    it('should put primary cookie key before legacy cookie key', async () => {
+      vi.doMock('@/config/db', () => ({
+        serverDBEnv: {
+          KEY_VAULTS_SECRET: 'primary-secret-key',
+          LEGACY_KEY_VAULTS_SECRET: 'legacy-secret-key',
+        },
+      }));
+
+      const module = await import('./provider');
+
+      expect(module.getCookieKeys()).toEqual(['primary-secret-key', 'legacy-secret-key']);
+
+      vi.doUnmock('@/config/db');
     }, 10000);
   });
 
