@@ -6,7 +6,7 @@ import { documents } from '../../schemas';
 import type { NewAgent } from '../../schemas/agent';
 import { agents } from '../../schemas/agent';
 import type { NewFile } from '../../schemas/file';
-import { files } from '../../schemas/file';
+import { files, knowledgeBases } from '../../schemas/file';
 import { messages } from '../../schemas/message';
 import type { NewTopic } from '../../schemas/topic';
 import { topics } from '../../schemas/topic';
@@ -848,6 +848,124 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expect(page.relevance).toBeGreaterThan(0);
       expect(page.createdAt).toBeInstanceOf(Date);
       expect(page.updatedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('searchKnowledgeBaseDocuments', () => {
+    const kbA = 'kb-search-a';
+    const kbB = 'kb-search-b';
+
+    beforeEach(async () => {
+      // Create two KBs for the test user + one for the other user
+      await serverDB.insert(knowledgeBases).values([
+        { id: kbA, name: 'Knowledge Base A', userId },
+        { id: kbB, name: 'Knowledge Base B', userId },
+        { id: 'kb-other-1', name: 'Other User KB', userId: otherUserId },
+      ]);
+
+      // Documents in KB-A
+      await serverDB.insert(documents).values([
+        {
+          content:
+            'Machine learning algorithms can be supervised, unsupervised, or reinforcement-based. ' +
+            'Common supervised methods include linear regression, decision trees, and neural networks.',
+          fileType: 'custom/document',
+          filename: 'ml-overview.md',
+          knowledgeBaseId: kbA,
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Machine Learning Overview',
+          totalCharCount: 200,
+          totalLineCount: 5,
+          userId,
+        },
+        {
+          content: 'Documentation about cooking — completely unrelated topic.',
+          fileType: 'custom/document',
+          filename: 'cooking.md',
+          knowledgeBaseId: kbA,
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Cooking Notes',
+          totalCharCount: 50,
+          totalLineCount: 2,
+          userId,
+        },
+        // Document in KB-B (must NOT be returned when searching KB-A)
+        {
+          content:
+            'This document is in a different knowledge base and should not match KB-A scope.',
+          fileType: 'custom/document',
+          filename: 'ml-other-kb.md',
+          knowledgeBaseId: kbB,
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Machine Learning in KB-B',
+          totalCharCount: 100,
+          totalLineCount: 3,
+          userId,
+        },
+        // Document for other user (cross-user isolation check)
+        {
+          content: 'Machine learning notes from another user.',
+          fileType: 'custom/document',
+          filename: 'ml-other-user.md',
+          knowledgeBaseId: 'kb-other-1',
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Other user ML notes',
+          totalCharCount: 50,
+          totalLineCount: 2,
+          userId: otherUserId,
+        },
+      ]);
+    });
+
+    it('should return [] for empty query', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('', [kbA]);
+      expect(results).toEqual([]);
+    });
+
+    it('should return [] when no knowledgeBaseIds provided', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', []);
+      expect(results).toEqual([]);
+    });
+
+    it('should match documents within KB scope by content', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      expect(results.length).toBeGreaterThan(0);
+      // Should hit ML overview, not cooking
+      expect(results.some((r) => r.title === 'Machine Learning Overview')).toBe(true);
+      expect(results.every((r) => r.knowledgeBaseId === kbA)).toBe(true);
+    });
+
+    it('should respect KB scope (KB-A query does not return KB-B docs)', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      expect(results.every((r) => r.title !== 'Machine Learning in KB-B')).toBe(true);
+    });
+
+    it('should isolate across users', async () => {
+      // Searching with otherUserId's KB should not leak to current user
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [
+        'kb-other-1',
+      ]);
+      // Current user (`userId`) does not own kb-other-1, so query against it returns []
+      expect(results).toEqual([]);
+    });
+
+    it('should produce snippet ≤ 300 characters', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      results.forEach((r) => {
+        expect(r.snippet.length).toBeLessThanOrEqual(303); // 300 + '...' suffix
+      });
+    });
+
+    it('should produce relevance in [1, 3] range', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      results.forEach((r) => {
+        expect(r.relevance).toBeGreaterThanOrEqual(1);
+        expect(r.relevance).toBeLessThanOrEqual(3);
+      });
     });
   });
 

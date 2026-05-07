@@ -62,7 +62,12 @@ interface RagService {
   semanticSearchForChat: (
     params: { knowledgeIds?: string[]; query: string; topK: number },
     signal?: AbortSignal,
-  ) => Promise<{ chunks: any[]; fileResults: any[] }>;
+  ) => Promise<{
+    chunks: any[];
+    documents?: any[];
+    errors?: { bm25?: string; vector?: string };
+    fileResults: any[];
+  }>;
 }
 
 interface KnowledgeBaseService {
@@ -252,18 +257,35 @@ export class KnowledgeBaseExecutionRuntime {
     try {
       const { query, topK = 20 } = args;
 
-      const { chunks, fileResults } = await this.ragService.semanticSearchForChat(
+      const result = await this.ragService.semanticSearchForChat(
         { knowledgeIds: options?.knowledgeBaseIds, query, topK },
         options?.signal,
       );
+      const chunks = result.chunks ?? [];
+      const fileResults = result.fileResults ?? [];
+      const documents = result.documents ?? [];
+      const errors = result.errors;
+      const totalResults = chunks.length + documents.length;
 
-      if (chunks.length === 0) {
-        const state: SearchKnowledgeBaseState = { chunks: [], fileResults: [], totalResults: 0 };
+      if (totalResults === 0) {
+        const state: SearchKnowledgeBaseState = {
+          chunks: [],
+          documents: [],
+          errors,
+          fileResults: [],
+          totalResults: 0,
+        };
         return { content: promptNoSearchResults(query), state, success: true };
       }
 
-      const formattedContent = formatSearchResults(fileResults, query);
-      const state: SearchKnowledgeBaseState = { chunks, fileResults, totalResults: chunks.length };
+      const formattedContent = formatSearchResults(fileResults, query, documents, errors);
+      const state: SearchKnowledgeBaseState = {
+        chunks,
+        documents,
+        errors,
+        fileResults,
+        totalResults,
+      };
 
       return { content: formattedContent, state, success: true };
     } catch (e) {

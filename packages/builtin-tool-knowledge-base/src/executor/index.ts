@@ -159,18 +159,35 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
       const knowledgeIds = agentSelectors.currentKnowledgeIds(agentState);
       const knowledgeBaseIds = knowledgeIds.knowledgeBaseIds;
 
-      const { chunks, fileResults } = await ragService.semanticSearchForChat(
+      const result = await ragService.semanticSearchForChat(
         { knowledgeIds: knowledgeBaseIds, query, topK },
         ctx.signal,
       );
+      const chunks = result.chunks ?? [];
+      const fileResults = result.fileResults ?? [];
+      const documents = result.documents ?? [];
+      const errors = result.errors;
+      const totalResults = chunks.length + documents.length;
 
-      if (chunks.length === 0) {
-        const state: SearchKnowledgeBaseState = { chunks: [], fileResults: [], totalResults: 0 };
+      if (totalResults === 0) {
+        const state: SearchKnowledgeBaseState = {
+          chunks: [],
+          documents: [],
+          errors,
+          fileResults: [],
+          totalResults: 0,
+        };
         return { content: promptNoSearchResults(query), state, success: true };
       }
 
-      const formattedContent = formatSearchResults(fileResults, query);
-      const state: SearchKnowledgeBaseState = { chunks, fileResults, totalResults: chunks.length };
+      const formattedContent = formatSearchResults(fileResults, query, documents, errors);
+      const state: SearchKnowledgeBaseState = {
+        chunks,
+        documents,
+        errors,
+        fileResults,
+        totalResults,
+      };
 
       return { content: formattedContent, state, success: true };
     } catch (e) {
