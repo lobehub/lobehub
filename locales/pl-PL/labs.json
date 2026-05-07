@@ -9,5 +9,7 @@
   "features.groupChat.title": "Czat Grupowy (Wielu Agentów)",
   "features.inputMarkdown.desc": "Renderuj Markdown w polu wprowadzania w czasie rzeczywistym (pogrubiony tekst, bloki kodu, tabele itp.).",
   "features.inputMarkdown.title": "Renderowanie Markdown w Polu Wprowadzania",
+  "features.messenger.desc": "Rozmawiaj ze swoimi agentami za pośrednictwem Telegrama (i innych komunikatorów) za pomocą wspólnego bota LobeHub. Dodaje zakładkę Messenger w Ustawieniach, umożliwiając powiązanie konta i wybór agenta, który odbiera wiadomości.",
+  "features.messenger.title": "Komunikator",
   "title": "Laboratorium"
 }

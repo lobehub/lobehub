@@ -9,5 +9,7 @@
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
   "features.inputMarkdown.desc": "入力エリアでMarkdown（太字、コードブロック、表など）をリアルタイムでレンダリングします。",
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
+  "features.messenger.desc": "Telegram（およびその他のメッセンジャー）を通じて、共有のLobeHubボットを使用してエージェントと会話できます。設定にMessengerタブを追加し、アカウントを紐付けてメッセージを受信するエージェントを選択できます。",
+  "features.messenger.title": "メッセンジャー",
   "title": "ラボ"
 }
