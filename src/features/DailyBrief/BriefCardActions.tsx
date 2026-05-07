@@ -89,7 +89,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     // A result brief on a task parked at status='scheduled' is one occurrence
     // of a recurring run — approving must NOT mark the task as completed
     // (server-side guard mirrors this). Use a plain "Confirm" so the label
-    // reflects the dismiss-only behavior; otherwise "Confirm " signals
+    // reflects the dismiss-only behavior; otherwise "Confirm complete" signals
     // the terminal transition.
     const resultLabelKey =
       taskStatus === 'scheduled' ? 'brief.action.confirm' : 'brief.action.confirmDone';
