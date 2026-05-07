@@ -7,6 +7,7 @@ const UNTITLED_AGENT_TITLE = 'Untitled Agent';
 interface OverlayAgentSource {
   avatar?: unknown;
   backgroundColor?: string | null;
+  heterogeneousType?: string | null;
   id: string;
   title?: string | null;
 }
@@ -32,11 +33,13 @@ interface ResolveOverlayDefaultAgentIdParams {
 const toOverlayAgentOption = ({
   avatar,
   backgroundColor,
+  heterogeneousType,
   id,
   title,
 }: OverlayAgentSource): ScreenCaptureAgentOption => ({
   avatar: typeof avatar === 'string' ? avatar : DEFAULT_AVATAR,
   backgroundColor: backgroundColor ?? undefined,
+  heterogeneousType,
   id,
   title: title?.trim() || UNTITLED_AGENT_TITLE,
 });

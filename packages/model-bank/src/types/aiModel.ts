@@ -438,6 +438,7 @@ export interface AiFullModelCard extends AIBaseModelCard {
   maxDimension?: number;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
+  settings?: AiModelSettings;
   type: AiModelType;
 }
 

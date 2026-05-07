@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "Ввод (запись в кэш)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "Вывод",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "Генерация видео",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "Видеовход",
   "ModelSwitchPanel.detail.releasedAt": "Выпущено {{date}}",
   "ModelSwitchPanel.emptyModel": "Нет включённых моделей. Перейдите в настройки, чтобы включить.",
   "ModelSwitchPanel.emptyProvider": "Нет включённых провайдеров. Перейдите в настройки, чтобы включить одного из них.",

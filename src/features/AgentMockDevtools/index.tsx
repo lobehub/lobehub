@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from 'react';
+import { useMatches } from 'react-router-dom';
 
 import { Fab } from './Fab';
 import { Modal } from './Modal';
@@ -26,9 +27,17 @@ const useDevtoolsEnabled = (): boolean => {
   return enabled;
 };
 
+const useIsAgentTopicRoute = (): boolean => {
+  const matches = useMatches();
+  // Check if any resolved route segment has a topicId param
+  // This correctly distinguishes /agent/:topicId from /agent/page, /agent/profile, etc.
+  return matches.some((m) => 'topicId' in m.params);
+};
+
 const AgentMockDevtools = memo(() => {
   const enabled = useDevtoolsEnabled();
-  if (!isDevEnv || !enabled) return null;
+  const isAgentTopicRoute = useIsAgentTopicRoute();
+  if (!isDevEnv || !enabled || !isAgentTopicRoute) return null;
   return (
     <>
       <Fab />

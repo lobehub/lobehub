@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "Đầu vào (ghi bộ nhớ đệm)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "Đầu ra",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "Tạo Video",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "Đầu vào video",
   "ModelSwitchPanel.detail.releasedAt": "Phát hành vào {{date}}",
   "ModelSwitchPanel.emptyModel": "Không có mô hình nào được bật. Vui lòng vào cài đặt để bật.",
   "ModelSwitchPanel.emptyProvider": "Không có nhà cung cấp nào được bật. Vui lòng vào cài đặt để bật.",

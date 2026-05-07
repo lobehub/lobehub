@@ -5,6 +5,7 @@ import { LOADING_FLAT } from '@/const/message';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
 
+import { dataSelectors, useConversationStore } from '../../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../../utils/markdown';
 import { useMarkdown } from '../useMarkdown';
 
@@ -15,15 +16,18 @@ const styles = createStaticStyles(({ css, cssVar }) => {
     `,
   };
 });
-interface ContentBlockProps {
-  content: string;
+interface MessageContentProps {
   disableStreaming?: boolean;
-  hasTools?: boolean;
   id: string;
 }
 
-const MessageContent = memo<ContentBlockProps>(({ content, disableStreaming, hasTools, id }) => {
-  const message = normalizeThinkTags(processWithArtifact(content));
+const MessageContent = memo<MessageContentProps>(({ disableStreaming, id }) => {
+  // Subscribe to this block's content + hasTools directly so streaming chunks
+  // do not need to flow through ContentBlock's prop chain to reach us.
+  const content = useConversationStore(dataSelectors.getBlockContent(id));
+  const hasTools = useConversationStore(dataSelectors.getBlockHasTools(id));
+
+  const message = normalizeThinkTags(processWithArtifact(content ?? ''));
   const markdownProps = useMarkdown(id, disableStreaming);
 
   if (!content && !hasTools) return <ContentLoading id={id} />;

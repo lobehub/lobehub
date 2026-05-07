@@ -30,6 +30,7 @@ import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
 import { isAbortError, throwIfAborted } from './abort';
 import { hookDispatcher } from './hooks';
+import { OperationTraceRecorder } from './OperationTraceRecorder';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -153,7 +154,7 @@ export class AgentRuntimeService {
   private coordinator: AgentRuntimeCoordinator;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
-  private snapshotStore: ISnapshotStore | null;
+  private traceRecorder: OperationTraceRecorder;
   private toolExecutionService: ToolExecutionService;
   private get baseURL() {
     const baseUrl = process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
@@ -176,7 +177,9 @@ export class AgentRuntimeService {
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
-    this.snapshotStore = options?.snapshotStore ?? this.createDefaultSnapshotStore();
+    this.traceRecorder = new OperationTraceRecorder(
+      options?.snapshotStore ?? this.createDefaultSnapshotStore(),
+    );
     this.agentFactory = options?.agentFactory;
     this.serverDB = db;
     this.userId = userId;
@@ -882,113 +885,17 @@ export class AgentRuntimeService {
         log('[%s] afterStep hook dispatch error: %O', operationId, hookError);
       }
 
-      // Record step snapshot via injected snapshot store
-      if (this.snapshotStore) {
-        try {
-          const partial = (await this.snapshotStore.loadPartial(operationId)) ?? { steps: [] };
-
-          if (!partial.startedAt) {
-            partial.startedAt = Date.now();
-            partial.model =
-              (agentState?.metadata as any)?.agentConfig?.model ??
-              agentState?.modelRuntimeConfig?.model;
-            partial.provider =
-              (agentState?.metadata as any)?.agentConfig?.provider ??
-              agentState?.modelRuntimeConfig?.provider;
-          }
-
-          if (!partial.steps) partial.steps = [];
-
-          // Incremental diff: only store message delta + baseline at reset points
-          const prevMessages = agentState?.messages ?? [];
-          const afterMessages = stepResult.newState.messages;
-          const isCompression = stepResult.events?.some(
-            (e: any) => e.type === 'compression_complete',
-          );
-          const isBaseline = stepIndex === 0 || isCompression;
-          // Always store only the newly added messages, even for baseline steps
-          const messagesDelta = afterMessages.slice(prevMessages.length);
-
-          // Strip heavy/redundant data from events before persisting to snapshot
-          const snapshotEvents = [
-            ...beforeStepSignalEvents,
-            ...((stepResult.events as any[])
-              ?.filter((e) => e.type !== 'llm_stream')
-              .map((e) => {
-                if (e.type === 'done' && e.finalState) {
-                  // Remove reconstructible fields from finalState:
-                  // - messages: from messagesBaseline + messagesDelta chain
-                  // - operationToolSet: from toolsetBaseline (step 0)
-                  // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
-                  const {
-                    messages: _msgs,
-                    operationToolSet: _ots,
-                    toolManifestMap: _tmm,
-                    toolSourceMap: _tsm,
-                    tools: _tools,
-                    // activatedStepTools is kept since it's the cumulative record
-                    ...restState
-                  } = e.finalState;
-                  return { ...e, finalState: restState };
-                }
-                return e;
-              }) ?? []),
-            ...afterStepSignalEvents,
-          ];
-
-          // Strip toolResults from payload (already in step.toolsResult)
-          let snapshotPayload: unknown = currentContext?.payload;
-          if (
-            snapshotPayload &&
-            typeof snapshotPayload === 'object' &&
-            'toolResults' in snapshotPayload
-          ) {
-            const { toolResults: _tr, ...restPayload } = snapshotPayload as Record<string, unknown>;
-            snapshotPayload = restPayload;
-          }
-
-          // Compute activatedStepTools delta (newly discovered tools in this step)
-          const prevActivated = agentState?.activatedStepTools ?? [];
-          const afterActivated = stepResult.newState.activatedStepTools ?? [];
-          const activatedStepToolsDelta =
-            afterActivated.length > prevActivated.length
-              ? afterActivated.slice(prevActivated.length)
-              : undefined;
-
-          partial.steps.push({
-            activatedStepToolsDelta,
-            completedAt: Date.now(),
-            content: stepPresentationData.content,
-            context: {
-              payload: snapshotPayload,
-              phase: currentContext?.phase ?? 'unknown',
-              stepContext: currentContext?.stepContext,
-            },
-            events: snapshotEvents,
-            externalRetryCount,
-            executionTimeMs: stepPresentationData.executionTimeMs,
-            inputTokens: stepPresentationData.stepInputTokens,
-            isCompressionReset: isCompression || undefined,
-            messagesBaseline: isBaseline ? prevMessages : undefined,
-            messagesDelta,
-            outputTokens: stepPresentationData.stepOutputTokens,
-            reasoning: stepPresentationData.reasoning,
-            startedAt: startAt,
-            stepIndex,
-            stepType: stepPresentationData.stepType,
-            // Store operation-level toolset once at step 0
-            toolsetBaseline: stepIndex === 0 ? agentState?.operationToolSet : undefined,
-            toolsCalling: stepPresentationData.toolsCalling,
-            toolsResult: stepPresentationData.toolsResult,
-            totalCost: stepPresentationData.totalCost,
-            totalTokens: stepPresentationData.totalTokens,
-          });
-
-          await this.snapshotStore.savePartial(operationId, partial);
-        } catch (e) {
-          log('[%s] snapshot step recording failed: %O', operationId, e);
-        }
-      }
+      await this.traceRecorder.appendStep(operationId, {
+        afterStepSignalEvents,
+        agentState,
+        beforeStepSignalEvents,
+        currentContext,
+        externalRetryCount,
+        presentation: stepPresentationData,
+        startedAt: startAt,
+        stepIndex,
+        stepResult,
+      });
 
       // Update step tracking in state metadata for afterStep hooks (cross-step accumulator)
       const hasAfterStepHooks = stepResult.newState.metadata?._hooks?.some(
@@ -1056,9 +963,9 @@ export class AgentRuntimeService {
         await this.dispatchCompletionHooks(operationId, stepResult.newState, reason);
 
         // Finalize tracing snapshot. The error catch below uses the same
-        // helper so propagated failures still write the canonical S3
+        // recorder so propagated failures still write the canonical S3
         // snapshot instead of orphaning the partial (LOBE-8533).
-        await this.finalizeSnapshotForOperation(operationId, {
+        await this.traceRecorder.finalize(operationId, {
           appendEventsToLastStep: completionSignalEvents,
           completionReason: reason,
           error: stepResult.newState.error
@@ -1157,7 +1064,7 @@ export class AgentRuntimeService {
       // success path could push it. Without this synthetic step, the
       // snapshot's step count would lag the assistant message that
       // triggered the failing call.
-      await this.finalizeSnapshotForOperation(operationId, {
+      await this.traceRecorder.finalize(operationId, {
         completionReason: 'error',
         error: {
           message: formattedError.message ?? String(formattedError.type),
@@ -1987,123 +1894,6 @@ export class AgentRuntimeService {
     if (error.type || error.errorType) return String(error.type || error.errorType);
 
     return undefined;
-  }
-
-  /**
-   * Finalize the partial snapshot for an operation into the final S3 path.
-   *
-   * Centralizes the success-path finalize and the error-path finalize so a
-   * propagated exception (e.g. `markPersistFatal` from RuntimeExecutors) still
-   * lands in the same trace bucket as a normal completion. Without this, the
-   * partial sits orphaned at `_partial/<op>.json` and the canonical
-   * `agent-traces/<agentId>/<topicId>/<op>.json` returns 404 — see LOBE-8533.
-   *
-   * `failedStep` is for the error path: when the failing step never reached
-   * `appendStepToPartial`, callers from `catch` pass it to keep step counts
-   * aligned with the assistant message that triggered the call. If the
-   * partial already contains a step with the same `stepIndex` (the
-   * success-path append landed before a later persist/queue failure), the
-   * error event is merged into the existing record instead of duplicating
-   * the step.
-   */
-  private async finalizeSnapshotForOperation(
-    operationId: string,
-    params: {
-      /**
-       * Events to merge into the last partial step before save. Used by the
-       * success path to attach agentSignal completion events to the trailing
-       * step. Error path leaves this empty.
-       */
-      appendEventsToLastStep?: Array<{ [key: string]: unknown; type: string }>;
-      completionReason: StepCompletionReason;
-      error?: { message: string; type: string };
-      failedStep?: { stepIndex: number; startedAt: number };
-      state: any;
-    },
-  ): Promise<void> {
-    if (!this.snapshotStore) return;
-
-    try {
-      const partial = await this.snapshotStore.loadPartial(operationId);
-      if (!partial) {
-        // No partial recorded — nothing to finalize. Skip rather than write an
-        // empty snapshot.
-        return;
-      }
-
-      if (params.appendEventsToLastStep?.length && partial.steps?.length) {
-        const lastStep = partial.steps.at(-1);
-        if (lastStep) {
-          lastStep.events = [...(lastStep.events ?? []), ...params.appendEventsToLastStep];
-        }
-      }
-
-      if (params.failedStep) {
-        if (!partial.steps) partial.steps = [];
-        // The success path may have already appended this step to the partial
-        // before a later failure (e.g. saveAgentState or queue scheduling
-        // throwing post-append). In that case attach the error event to the
-        // existing record instead of pushing a duplicate stepIndex — duplicates
-        // corrupt ordering and per-step metrics in trace reconstruction.
-        const existing = partial.steps.find((s) => s.stepIndex === params.failedStep!.stepIndex);
-        if (existing) {
-          if (params.error) {
-            existing.events = [...(existing.events ?? []), { error: params.error, type: 'error' }];
-          }
-        } else {
-          const now = Date.now();
-          partial.steps.push({
-            completedAt: now,
-            events: params.error ? [{ error: params.error, type: 'error' }] : undefined,
-            executionTimeMs: now - params.failedStep.startedAt,
-            startedAt: params.failedStep.startedAt,
-            stepIndex: params.failedStep.stepIndex,
-            // StepSnapshot.stepType is strictly 'call_llm' | 'call_tool';
-            // persist-fatal originates in the tool path, so 'call_tool' is the
-            // truthful label. LLM-side failures still map to 'call_tool' here —
-            // the surrounding `events: [{type: 'error'}]` is the discriminant
-            // consumers should read.
-            stepType: 'call_tool',
-            totalCost: params.state?.cost?.total ?? 0,
-            totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
-          });
-        }
-      }
-
-      const metadata = (params.state?.metadata ?? {}) as any;
-      const finalizedSteps = (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex);
-      const snapshot = {
-        agentId: metadata?.agentId,
-        completedAt: Date.now(),
-        completionReason: params.completionReason,
-        error: params.error,
-        externalRetryCount:
-          typeof metadata?.externalRetryCount === 'number'
-            ? metadata.externalRetryCount
-            : undefined,
-        model: partial.model,
-        operationId,
-        provider: partial.provider,
-        retryDelayExpression:
-          typeof metadata?.queueRetryDelay === 'string' ? metadata.queueRetryDelay : undefined,
-        startedAt: partial.startedAt ?? Date.now(),
-        steps: finalizedSteps,
-        topicId: metadata?.topicId,
-        totalCost: params.state?.cost?.total ?? 0,
-        // Trust the finalized step array over `state.stepCount`: on the error
-        // path stepCount comes from Redis and reflects the last completed step,
-        // so it lags behind the synthetic failed step we just appended.
-        totalSteps: finalizedSteps.length || (params.state?.stepCount ?? 0),
-        totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
-        traceId: operationId,
-        userId: metadata?.userId,
-      };
-
-      await this.snapshotStore.save(snapshot as any);
-      await this.snapshotStore.removePartial(operationId);
-    } catch (e) {
-      log('[%s] snapshot finalize failed (reason=%s): %O', operationId, params.completionReason, e);
-    }
   }
 
   /**

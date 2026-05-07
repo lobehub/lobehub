@@ -28,8 +28,8 @@ describe('LobeXAI - custom features', () => {
     vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(new ReadableStream() as any);
   });
 
-  describe('chatCompletion.handlePayload', () => {
-    it('should remove camelCase penalty parameters for grok-4.20 reasoning variants', async () => {
+  describe('Responses API routing', () => {
+    it('should ignore chatCompletion apiMode and remove camelCase penalty parameters', async () => {
       await instance.chat({
         apiMode: 'chatCompletion',
         frequencyPenalty: 0.4,
@@ -38,14 +38,15 @@ describe('LobeXAI - custom features', () => {
         presencePenalty: 0.6,
       } as any);
 
-      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
 
       expect(createCall.frequencyPenalty).toBeUndefined();
       expect(createCall.presencePenalty).toBeUndefined();
       expect(createCall.stream).toBe(true);
+      expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
     });
 
-    it('should remove penalty parameters for Grok 4 non-reasoning variants', async () => {
+    it('should remove snake_case penalty parameters via forced Responses API', async () => {
       await instance.chat({
         apiMode: 'chatCompletion',
         frequency_penalty: 0.4,
@@ -54,13 +55,13 @@ describe('LobeXAI - custom features', () => {
         presence_penalty: 0.6,
       } as any);
 
-      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
 
       expect(createCall.frequency_penalty).toBeUndefined();
       expect(createCall.presence_penalty).toBeUndefined();
     });
 
-    it('should preserve penalty parameters for Grok 3 models', async () => {
+    it('should remove penalty parameters for Grok 3 models via Responses API', async () => {
       await instance.chat({
         apiMode: 'chatCompletion',
         frequency_penalty: 0.4,
@@ -69,10 +70,48 @@ describe('LobeXAI - custom features', () => {
         presence_penalty: 0.6,
       } as any);
 
-      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
 
-      expect(createCall.frequency_penalty).toBe(0.4);
-      expect(createCall.presence_penalty).toBe(0.6);
+      expect(createCall.frequency_penalty).toBeUndefined();
+      expect(createCall.presence_penalty).toBeUndefined();
+    });
+
+    it('should map chat response_format to Responses API text.format', async () => {
+      await instance.chat({
+        apiMode: 'chatCompletion',
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-4',
+        response_format: {
+          json_schema: {
+            name: 'answer',
+            schema: {
+              additionalProperties: false,
+              properties: { answer: { type: 'string' } },
+              required: ['answer'],
+              type: 'object',
+            },
+            strict: true,
+          },
+          type: 'json_schema',
+        },
+      } as any);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+      expect(createCall.response_format).toBeUndefined();
+      expect(createCall.text).toEqual({
+        format: {
+          name: 'answer',
+          schema: {
+            additionalProperties: false,
+            properties: { answer: { type: 'string' } },
+            required: ['answer'],
+            type: 'object',
+          },
+          strict: true,
+          type: 'json_schema',
+        },
+      });
     });
   });
 
@@ -133,6 +172,66 @@ describe('LobeXAI - custom features', () => {
 
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
       expect(createCall.tools).toEqual([{ type: 'web_search' }, { type: 'x_search' }]);
+    });
+
+    it('should sanitize slash-delimited enum values from function tool schemas', async () => {
+      await instance.chat({
+        enabledSearch: true,
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'grok-4.20-beta-0309-reasoning',
+        tools: [
+          {
+            function: {
+              description: 'Send an email',
+              name: 'gmail____gmail_send_email',
+              parameters: {
+                additionalProperties: false,
+                properties: {
+                  mimeType: {
+                    default: 'text/plain',
+                    enum: ['text/plain', 'text/html', 'multipart/alternative'],
+                    type: 'string',
+                  },
+                  mode: {
+                    enum: ['plain', 'html'],
+                    type: 'string',
+                  },
+                },
+                required: ['mimeType'],
+                type: 'object',
+              },
+            },
+            type: 'function' as const,
+          },
+        ],
+      });
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+      expect(createCall.tools).toEqual([
+        {
+          description: 'Send an email',
+          name: 'gmail____gmail_send_email',
+          parameters: {
+            additionalProperties: false,
+            properties: {
+              mimeType: {
+                default: 'text/plain',
+                type: 'string',
+              },
+              mode: {
+                enum: ['plain', 'html'],
+                type: 'string',
+              },
+            },
+            required: ['mimeType'],
+            type: 'object',
+          },
+          type: 'function',
+        },
+        { type: 'web_search' },
+        { type: 'x_search' },
+      ]);
     });
   });
 

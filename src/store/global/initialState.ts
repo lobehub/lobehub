@@ -102,6 +102,8 @@ export const DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS = [
   'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];
 
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent'];
+
 export interface SystemStatus {
   /**
    * Agent Builder panel width
@@ -223,6 +225,7 @@ export interface SystemStatus {
   /**
    * Flat ordered list of sidebar items.
    */
+  sidebarExpandedKeys?: string[];
   sidebarItems?: string[];
   /**
    * Legacy accordion-only ordering (recents/agent) from the pre-rework sidebar.
@@ -369,6 +372,7 @@ export const INITIAL_STATUS = {
   showTaskAgentPanel: false,
   showVideoPanel: true,
   showVideoTopicPanel: true,
+  sidebarExpandedKeys: [...DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS],
   systemRoleExpandedMap: {},
   tokenDisplayFormatShort: true,
   topicPageSize: 20,

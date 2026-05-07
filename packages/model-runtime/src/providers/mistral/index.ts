@@ -1,4 +1,5 @@
 import type { ChatModelCard } from '@lobechat/types';
+import type { AiModelSettings } from 'model-bank';
 import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
@@ -15,6 +16,20 @@ export interface MistralModelCard {
   max_context_length: number;
 }
 
+const adjustableReasoningSettings = {
+  extendParams: ['enableReasoning'],
+} as const satisfies AiModelSettings;
+
+const isAdjustableReasoningModel = (id: string) =>
+  ['mistral-medium-3.5', 'mistral-small-latest', 'mistral-small-2603'].includes(id.toLowerCase());
+
+const resolveReasoningEffort = (payload: any) => {
+  if (payload.reasoning_effort) return payload.reasoning_effort;
+
+  if (payload.thinking?.type === 'enabled') return 'high';
+  if (payload.thinking?.type === 'disabled') return 'none';
+};
+
 export const params = {
   baseURL: 'https://api.mistral.ai/v1',
   chatCompletion: {
@@ -27,11 +42,13 @@ export const params = {
         { max_tokens: payload.max_tokens, temperature: payload.temperature, top_p: payload.top_p },
         { normalizeTemperature: true },
       );
+      const reasoningEffort = resolveReasoningEffort(payload);
 
       return {
         ...resolvedParams,
         messages: payload.messages as any,
         model: payload.model,
+        ...(reasoningEffort && { reasoning_effort: reasoningEffort }),
         stream: true,
         ...(payload.tools && { tools: payload.tools }),
       };
@@ -61,6 +78,9 @@ export const params = {
           functionCall: model.capabilities.function_calling,
           id: model.id,
           reasoning: knownModel?.abilities?.reasoning || false,
+          settings:
+            knownModel?.settings ??
+            (isAdjustableReasoningModel(model.id) ? adjustableReasoningSettings : undefined),
           vision: model.capabilities.vision,
         };
       })

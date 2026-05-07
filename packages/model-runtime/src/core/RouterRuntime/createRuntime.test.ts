@@ -1159,5 +1159,45 @@ describe('createRouterRuntime', () => {
 
       expect(constructorOptions[0].apiKey).toBe('default-api-key');
     });
+
+    it('should preserve inherited runtime id across nested router runtimes', async () => {
+      const constructorOptions: any[] = [];
+
+      class LeafRuntime implements LobeRuntimeAI {
+        constructor(options: any) {
+          constructorOptions.push(options);
+        }
+        chat = vi.fn().mockResolvedValue('response');
+      }
+
+      const InnerRuntime = createRouterRuntime({
+        id: 'deepseek',
+        routers: [
+          {
+            apiType: 'deepseek',
+            models: ['deepseek-v4-pro'],
+            options: {},
+            runtime: LeafRuntime as any,
+          },
+        ],
+      });
+
+      const OuterRuntime = createRouterRuntime({
+        id: 'lobehub',
+        routers: [
+          {
+            apiType: 'deepseek',
+            models: ['deepseek-v4-pro'],
+            options: {},
+            runtime: InnerRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new OuterRuntime();
+      await runtime.chat({ messages: [], model: 'deepseek-v4-pro', temperature: 0.7 });
+
+      expect(constructorOptions[0]).toEqual(expect.objectContaining({ id: 'lobehub' }));
+    });
   });
 });
