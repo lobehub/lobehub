@@ -54,7 +54,7 @@ export default {
     'Connect this assistant to LINE Messaging API for direct and group chats.',
   'channel.line.destinationUserId': 'Destination User ID',
   'channel.line.destinationUserIdHint':
-    'The bot\'s destination user ID (starts with `U`, 33 chars total). The LINE Developers Console does NOT display this value. Issue a Channel Access Token below first, then click "Fetch from LINE" to auto-fill this field. Note: "Your user ID" in Basic settings is your personal LINE user ID, not the bot\'s.',
+    'The bot\'s own user ID (`U` + 32 chars) — click "Fetch from LINE" below to auto-fill. Not the personal "Your user ID" shown in LINE\'s Basic settings.',
   'channel.line.fetchBotInfo': 'Fetch from LINE',
   'channel.line.fetchBotInfoSuccess': 'Destination User ID fetched',
   'channel.line.fetchBotInfoFailed': 'Failed to fetch bot info',
@@ -215,6 +215,8 @@ export default {
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':
     'Open your app on the Feishu / Lark Open Platform → Permissions, then look up your Open ID.',
+  'channel.userIdHint.line':
+    'Open the LINE Developers Console → your channel → Basic settings tab, and copy "Your user ID" (starts with U, 33 chars).',
   'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':

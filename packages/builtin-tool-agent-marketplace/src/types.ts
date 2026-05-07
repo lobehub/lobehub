@@ -7,14 +7,8 @@ export const AgentMarketplaceIdentifier = 'lobe-agent-marketplace';
  * Agent Marketplace API Names
  */
 export const AgentMarketplaceApiName = {
-  /** Cancel a pending marketplace request. Usually framework-handled. */
-  cancelAgentPick: 'cancelAgentPick',
-  /** Inspect current state of a known pick request. For recovery/diagnostics. */
-  getPickState: 'getPickState',
   /** Open the Marketplace picker with category hints. */
   showAgentMarketplace: 'showAgentMarketplace',
-  /** Mark a pending marketplace request as skipped. Usually framework-handled. */
-  skipAgentPick: 'skipAgentPick',
   /** Record the user's template selection. Usually framework-handled. */
   submitAgentPick: 'submitAgentPick',
 } as const;
@@ -76,20 +70,7 @@ export interface SubmitAgentPickArgs {
   selectedTemplateIds: string[];
 }
 
-export interface SkipAgentPickArgs {
-  reason?: string;
-  requestId: string;
-}
-
-export interface CancelAgentPickArgs {
-  requestId: string;
-}
-
-export interface GetPickStateArgs {
-  requestId: string;
-}
-
-export type PickStatus = 'cancelled' | 'pending' | 'skipped' | 'submitted';
+export type PickStatus = 'pending' | 'submitted';
 
 export interface PickState {
   categoryHints: MarketplaceCategory[];
@@ -97,13 +78,6 @@ export interface PickState {
   prompt: string;
   requestId: string;
   selectedTemplateIds?: string[];
-  skipReason?: string;
   status: PickStatus;
-  /** topic the pick belongs to; used for per-conversation duplicate detection */
   topicId?: string;
 }
-
-export type AgentPickResult =
-  | { requestId: string; selectedTemplateIds: string[]; type: 'submitted' }
-  | { reason?: string; requestId: string; type: 'skipped' }
-  | { requestId: string; type: 'cancelled' };

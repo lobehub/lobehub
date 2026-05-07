@@ -7,8 +7,8 @@ import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 
+import { DEVTOOLS_GROUP_DETAIL, DEVTOOLS_GROUP_ID } from './fixtures';
 import Sidebar from './Sidebar';
-import { DEVTOOLS_GROUP_DETAIL, DEVTOOLS_GROUP_ID } from './toolRenderFixtures';
 import { toToolsetPath, useDevtoolsEntries } from './useDevtoolsEntries';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

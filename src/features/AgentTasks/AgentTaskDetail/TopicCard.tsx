@@ -10,12 +10,12 @@ import {
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import { CircleDot, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
+import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
@@ -68,7 +68,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
   }, [activity.operationId]);
 
-  const startedAt = activity.time ? dayjs(activity.time).fromNow() : '';
+  const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
     ? formatDuration(elapsed)
     : finalDuration != null && finalDuration >= 0
@@ -149,7 +149,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
 
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
           {startedAt && (
-            <Text fontSize={12} type={'secondary'}>
+            <Text fontSize={12} title={startedAtTitle} type={'secondary'}>
               {startedAt}
             </Text>
           )}

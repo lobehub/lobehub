@@ -233,6 +233,65 @@ describe('DocumentAction', () => {
     expect(useStore.getState().resourceMap.get('doc-1')?._optimistic).toBeUndefined();
   });
 
+  it('does not send content or editorData when Page Agent editTitle follows initPage', async () => {
+    const { result } = renderHook(() => useStore());
+    const initializedEditorData = {
+      root: {
+        children: [{ children: [], type: 'paragraph', version: 1 }],
+        type: 'root',
+        version: 1,
+      },
+    };
+
+    vi.mocked(documentService.updateDocument).mockResolvedValue({
+      historyAppended: false,
+      id: 'doc-1',
+    });
+
+    act(() => {
+      useStore.setState(
+        {
+          documents: [
+            createDocumentFixture({
+              content: '',
+              editorData: {},
+            }),
+          ],
+        },
+        false,
+      );
+    });
+
+    await act(async () => {
+      await result.current.updateDocumentOptimistically('doc-1', {
+        content: 'Body written by page agent.',
+        editorData: initializedEditorData,
+      });
+    });
+
+    await act(async () => {
+      await result.current.updateDocumentOptimistically('doc-1', {
+        metadata: { emoji: 'page' },
+        title: 'Final title',
+      });
+    });
+
+    expect(documentService.updateDocument).toHaveBeenNthCalledWith(1, {
+      content: 'Body written by page agent.',
+      editorData: JSON.stringify(initializedEditorData),
+      id: 'doc-1',
+      metadata: {},
+      parentId: undefined,
+      title: 'Old title',
+    });
+    expect(documentService.updateDocument).toHaveBeenNthCalledWith(2, {
+      id: 'doc-1',
+      metadata: { emoji: 'page' },
+      parentId: undefined,
+      title: 'Final title',
+    });
+  });
+
   it('reverts optimistic resource updates when the sync fails', async () => {
     const { result } = renderHook(() => useStore());
     const existingDocument = createDocumentFixture();

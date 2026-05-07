@@ -16,7 +16,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           type: 'pathScopeAudit',
         },
       },
-      name: LocalSystemApiName.listLocalFiles,
+      name: LocalSystemApiName.listFiles,
       parameters: {
         properties: {
           limit: {
@@ -55,7 +55,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           type: 'pathScopeAudit',
         },
       },
-      name: LocalSystemApiName.readLocalFile,
+      name: LocalSystemApiName.readFile,
       parameters: {
         properties: {
           loc: {
@@ -85,7 +85,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           type: 'pathScopeAudit',
         },
       },
-      name: LocalSystemApiName.searchLocalFiles,
+      name: LocalSystemApiName.searchFiles,
       parameters: {
         properties: {
           contentContains: {
@@ -169,7 +169,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           type: 'pathScopeAudit',
         },
       },
-      name: LocalSystemApiName.moveLocalFiles,
+      name: LocalSystemApiName.moveFiles,
       parameters: {
         properties: {
           items: {
@@ -198,32 +198,6 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Rename a file or folder in its current location. Input should be the current full path and the new name.',
-      humanIntervention: {
-        dynamic: {
-          default: 'never',
-          policy: 'required',
-          type: 'pathScopeAudit',
-        },
-      },
-      name: LocalSystemApiName.renameLocalFile,
-      parameters: {
-        properties: {
-          newName: {
-            description: 'The new name for the file or folder (without path)',
-            type: 'string',
-          },
-          path: {
-            description: 'The current full path of the file or folder to rename',
-            type: 'string',
-          },
-        },
-        required: ['path', 'newName'],
-        type: 'object',
-      },
-    },
-    {
-      description:
         'Write content to a specific file. Input should be the file path and content. Overwrites existing file or creates a new one.',
       humanIntervention: {
         dynamic: {
@@ -232,7 +206,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           type: 'pathScopeAudit',
         },
       },
-      name: LocalSystemApiName.writeLocalFile,
+      name: LocalSystemApiName.writeFile,
       parameters: {
         properties: {
           content: {
@@ -258,7 +232,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           type: 'pathScopeAudit',
         },
       },
-      name: LocalSystemApiName.editLocalFile,
+      name: LocalSystemApiName.editFile,
       parameters: {
         properties: {
           file_path: {
@@ -433,7 +407,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           type: 'pathScopeAudit',
         },
       },
-      name: LocalSystemApiName.globLocalFiles,
+      name: LocalSystemApiName.globFiles,
       parameters: {
         properties: {
           pattern: {

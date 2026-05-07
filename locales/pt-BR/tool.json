@@ -106,6 +106,7 @@
   "localFiles.grepContent.glob": "Filtro de arquivos",
   "localFiles.grepContent.pattern": "Padrão de busca",
   "localFiles.grepContent.type": "Tipo de arquivo",
+  "localFiles.listFiles.emptyDirectory": "Este diretório está vazio",
   "localFiles.moveFiles.itemsMoved": "{{count}} item(ns) movido(s):",
   "localFiles.moveFiles.itemsMoved_one": "{{count}} item movido:",
   "localFiles.moveFiles.itemsMoved_other": "{{count}} itens movidos:",

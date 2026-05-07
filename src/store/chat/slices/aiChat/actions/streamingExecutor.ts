@@ -6,6 +6,7 @@ import {
   type Usage,
 } from '@lobechat/agent-runtime';
 import { AgentRuntime, computeStepContext, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
@@ -21,12 +22,15 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import { isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { aiModelSelectors } from '@/store/aiInfra/selectors';
+import { getAiInfraStoreState } from '@/store/aiInfra/store';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
@@ -34,6 +38,7 @@ import {
   notifyDesktopHumanApprovalRequired,
   resolveNotificationNavigatePath,
 } from '@/store/chat/utils/desktopNotification';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
@@ -49,7 +54,7 @@ import {
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 } from '../../message/selectors/dbMessage';
-import { mergeQueuedMessages } from '../../operation/types';
+import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../operation/types';
 
 const log = debug('lobe-store:streaming-executor');
 
@@ -74,6 +79,11 @@ const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): 
   };
   return walk(editorData.root);
 };
+
+const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
+  hasImages: messages.some((message) => message.role === 'user' && !!message.imageList?.length),
+  hasVideos: messages.some((message) => message.role === 'user' && !!message.videoList?.length),
+});
 
 /**
  * Core streaming execution actions for AI chat
@@ -161,10 +171,6 @@ export class StreamingExecutorActionImpl {
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
       (tool) => tool.identifier,
     );
-    const mergedToolIds =
-      selectedToolIds && selectedToolIds.length > 0
-        ? [...new Set([...(pluginIds || []), ...selectedToolIds])]
-        : pluginIds;
 
     if (!agentConfigData || !agentConfigData.model) {
       throw new Error(
@@ -172,11 +178,30 @@ export class StreamingExecutorActionImpl {
       );
     }
 
-    // Dynamically inject topic-reference tool when messages contain refer-topic nodes
+    // Dynamically inject turn-scoped builtin tools.
     const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
-    const effectivePluginIds = hasTopicReference
-      ? [...(pluginIds || []), 'lobe-topic-reference']
-      : pluginIds;
+    const visualMediaAvailability = getVisualMediaAvailability(messages);
+    const serverConfigState = getServerConfigStoreState();
+    const visualUnderstandingConfigured =
+      !!serverConfigState && serverConfigSelectors.enableVisualUnderstanding(serverConfigState);
+    const shouldEnableVisualUnderstanding =
+      visualUnderstandingConfigured &&
+      ((visualMediaAvailability.hasImages &&
+        !isCanUseVision(agentConfigData.model, agentConfigData.provider!)) ||
+        (visualMediaAvailability.hasVideos &&
+          !isCanUseVideo(agentConfigData.model, agentConfigData.provider!)));
+    const runtimePluginIds = [
+      ...new Set([
+        ...(pluginIds || []),
+        ...(hasTopicReference ? ['lobe-topic-reference'] : []),
+        ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
+      ]),
+    ];
+    const effectivePluginIds = runtimePluginIds.length > 0 ? runtimePluginIds : undefined;
+    const mergedToolIds =
+      selectedToolIds && selectedToolIds.length > 0
+        ? [...new Set([...runtimePluginIds, ...selectedToolIds])]
+        : effectivePluginIds;
 
     log(
       '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s, hasTopicReference=%s',
@@ -388,13 +413,12 @@ export class StreamingExecutorActionImpl {
     return { agentConfig: agentConfigWithTools, context, state, toolsEngine };
   };
 
-  internal_execAgentRuntime = async (params: {
+  executeClientAgent = async (params: {
     context: ConversationContext;
     disableTools?: boolean;
     initialContext?: AgentRuntimeContext;
     initialState?: AgentState;
     inPortalThread?: boolean;
-    inSearchWorkflow?: boolean;
     messages: UIChatMessage[];
     operationId?: string;
     parentMessageId: string;
@@ -444,7 +468,7 @@ export class StreamingExecutorActionImpl {
     }
 
     log(
-      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, scope: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d, disableTools: %s',
+      '[executeClientAgent] start, operationId: %s, agentId: %s, subAgentId: %s, scope: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d, disableTools: %s',
       operationId,
       agentId,
       subAgentId,
@@ -510,12 +534,18 @@ export class StreamingExecutorActionImpl {
     // ===========================================
     // Step 2: Create and Execute Agent Runtime
     // ===========================================
-    log('[internal_execAgentRuntime] Creating agent runtime with config', modelRuntimeConfig);
+    log('[executeClientAgent] Creating agent runtime with config', modelRuntimeConfig);
+
+    const contextWindowTokens = aiModelSelectors.modelContextWindowTokens(
+      model,
+      provider!,
+    )(getAiInfraStoreState());
 
     const agent = new GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
       compressionConfig: {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
+        maxWindowToken: contextWindowTokens ?? undefined,
       },
       dynamicInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,
@@ -546,10 +576,7 @@ export class StreamingExecutorActionImpl {
     let state = initialAgentState;
     let nextContext = initialAgentContext;
 
-    log(
-      '[internal_execAgentRuntime] Agent runtime loop start, initial phase: %s',
-      nextContext.phase,
-    );
+    log('[executeClientAgent] Agent runtime loop start, initial phase: %s', nextContext.phase);
 
     // Compute contextKey for message queue (per-context, not per-operation)
     const contextKey = messageKey;
@@ -560,7 +587,7 @@ export class StreamingExecutorActionImpl {
       // Check if operation has been cancelled
       const currentOperation = this.#get().operations[operationId];
       if (currentOperation?.status === 'cancelled') {
-        log('[internal_execAgentRuntime] Operation cancelled, marking state as interrupted');
+        log('[executeClientAgent] Operation cancelled, marking state as interrupted');
 
         // Update state status to 'interrupted' so agent can handle abort
         state = { ...state, status: 'interrupted' };
@@ -569,7 +596,7 @@ export class StreamingExecutorActionImpl {
         const result = await runtime.step(state, nextContext);
         state = result.newState;
 
-        log('[internal_execAgentRuntime] Operation cancelled, stopping loop');
+        log('[executeClientAgent] Operation cancelled, stopping loop');
         break;
       }
 
@@ -603,7 +630,7 @@ export class StreamingExecutorActionImpl {
           };
         } catch (error) {
           // Page agent runtime may not be available, ignore errors
-          log('[internal_execAgentRuntime] Failed to get page XML for step: %o', error);
+          log('[executeClientAgent] Failed to get page XML for step: %o', error);
         }
       }
 
@@ -611,7 +638,7 @@ export class StreamingExecutorActionImpl {
       nextContext = { ...nextContext, stepContext };
 
       log(
-        '[internal_execAgentRuntime][step-%d]: phase=%s, status=%s, state.messages=%d, dbMessagesMap[%s]=%d, stepContext=%O',
+        '[executeClientAgent][step-%d]: phase=%s, status=%s, state.messages=%d, dbMessagesMap[%s]=%d, stepContext=%O',
         stepCount,
         nextContext.phase,
         state.status,
@@ -624,7 +651,7 @@ export class StreamingExecutorActionImpl {
       const result = await runtime.step(state, nextContext);
 
       log(
-        '[internal_execAgentRuntime] Step %d completed, events: %d, newStatus=%s, newState.messages=%d',
+        '[executeClientAgent] Step %d completed, events: %d, newStatus=%s, newState.messages=%d',
         stepCount,
         result.events.length,
         result.newState.status,
@@ -639,7 +666,7 @@ export class StreamingExecutorActionImpl {
         ['tasks_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
       ) {
         log(
-          `[internal_execAgentRuntime] ${result.nextContext?.phase} completed, refreshing messages to sync state`,
+          `[executeClientAgent] ${result.nextContext?.phase} completed, refreshing messages to sync state`,
         );
         await this.#get().refreshMessages(context);
       }
@@ -648,7 +675,7 @@ export class StreamingExecutorActionImpl {
       for (const event of result.events) {
         switch (event.type) {
           case 'done': {
-            log('[internal_execAgentRuntime] Received done event');
+            log('[executeClientAgent] Received done event');
             break;
           }
 
@@ -662,7 +689,7 @@ export class StreamingExecutorActionImpl {
           }
 
           case 'error': {
-            log('[internal_execAgentRuntime] Received error event: %o', event.error);
+            log('[executeClientAgent] Received error event: %o', event.error);
             // Find the assistant message to update error
             const currentMessages = this.#get().messagesMap[messageKey] || [];
             const assistantMessage = currentMessages.findLast((m) => m.role === 'assistant');
@@ -686,7 +713,7 @@ export class StreamingExecutorActionImpl {
       const operationAfterStep = this.#get().operations[operationId];
       if (operationAfterStep?.status === 'cancelled') {
         log(
-          '[internal_execAgentRuntime] Operation cancelled after step %d, marking state as interrupted',
+          '[executeClientAgent] Operation cancelled after step %d, marking state as interrupted',
           stepCount,
         );
 
@@ -700,13 +727,13 @@ export class StreamingExecutorActionImpl {
         const abortResult = await runtime.step(state, contextForAbort);
         state = abortResult.newState;
 
-        log('[internal_execAgentRuntime] Operation cancelled, stopping loop');
+        log('[executeClientAgent] Operation cancelled, stopping loop');
         break;
       }
 
       // If no nextContext, stop execution
       if (!result.nextContext) {
-        log('[internal_execAgentRuntime] No next context, stopping loop');
+        log('[executeClientAgent] No next context, stopping loop');
         break;
       }
 
@@ -716,7 +743,7 @@ export class StreamingExecutorActionImpl {
     }
 
     log(
-      '[internal_execAgentRuntime] Agent runtime loop finished, final status: %s, total steps: %d',
+      '[executeClientAgent] Agent runtime loop finished, final status: %s, total steps: %d',
       state.status,
       stepCount,
     );
@@ -728,7 +755,7 @@ export class StreamingExecutorActionImpl {
     const afterCompletionCallbacks = operation?.metadata?.runtimeHooks?.afterCompletionCallbacks;
     if (afterCompletionCallbacks && afterCompletionCallbacks.length > 0) {
       log(
-        '[internal_execAgentRuntime] Executing %d afterCompletion callbacks',
+        '[executeClientAgent] Executing %d afterCompletion callbacks',
         afterCompletionCallbacks.length,
       );
 
@@ -736,11 +763,11 @@ export class StreamingExecutorActionImpl {
         try {
           await callback();
         } catch (error) {
-          console.error('[internal_execAgentRuntime] afterCompletion callback error:', error);
+          console.error('[executeClientAgent] afterCompletion callback error:', error);
         }
       }
 
-      log('[internal_execAgentRuntime] afterCompletion callbacks executed');
+      log('[executeClientAgent] afterCompletion callbacks executed');
     }
 
     // If completed successfully and queue has messages, drain and trigger new sendMessage.
@@ -750,7 +777,7 @@ export class StreamingExecutorActionImpl {
       if (remainingQueued.length > 0) {
         const merged = mergeQueuedMessages(remainingQueued);
         log(
-          '[internal_execAgentRuntime] %d queued messages after completion, triggering new sendMessage',
+          '[executeClientAgent] %d queued messages after completion, triggering new sendMessage',
           remainingQueued.length,
         );
 
@@ -763,9 +790,16 @@ export class StreamingExecutorActionImpl {
 
         const execContext = { ...context };
         const mergedContent = merged.content;
-        // Convert file id strings — sendMessage only reads f.id from each item
+        // Rebuild UploadFileItem-shaped objects from the queued file previews so
+        // sendMessage can both pass file ids to the server AND construct
+        // imageList/videoList for the optimistic temp message. Falls back to
+        // id-only wrappers if no preview metadata was captured.
         const mergedFiles =
-          merged.files.length > 0 ? merged.files.map((id) => ({ id }) as any) : undefined;
+          merged.filesPreview.length > 0
+            ? reconstructUploadFilesFromQueue(merged.filesPreview)
+            : merged.files.length > 0
+              ? (merged.files.map((id) => ({ id })) as any)
+              : undefined;
 
         setTimeout(() => {
           useChatStore
@@ -778,10 +812,7 @@ export class StreamingExecutorActionImpl {
               metadata: merged.metadata,
             })
             .catch((e: unknown) => {
-              console.error(
-                '[internal_execAgentRuntime] sendMessage for queued content failed:',
-                e,
-              );
+              console.error('[executeClientAgent] sendMessage for queued content failed:', e);
             });
         }, 100);
 
@@ -793,7 +824,7 @@ export class StreamingExecutorActionImpl {
     switch (state.status) {
       case 'done': {
         this.#get().completeOperation(operationId);
-        log('[internal_execAgentRuntime] Operation completed successfully');
+        log('[executeClientAgent] Operation completed successfully');
 
         // Mark unread completion for background conversations
         const completedOp = this.#get().operations[operationId];
@@ -807,19 +838,19 @@ export class StreamingExecutorActionImpl {
           type: 'runtime_error',
           message: 'Agent runtime execution failed',
         });
-        log('[internal_execAgentRuntime] Operation failed');
+        log('[executeClientAgent] Operation failed');
         break;
       }
       case 'waiting_for_human': {
         // When waiting for human intervention, complete the current operation
         // A new operation will be created when user approves/rejects
         this.#get().completeOperation(operationId);
-        log('[internal_execAgentRuntime] Operation paused for human intervention');
+        log('[executeClientAgent] Operation paused for human intervention');
         break;
       }
     }
 
-    log('[internal_execAgentRuntime] completed');
+    log('[executeClientAgent] completed');
     void emitClientAgentSignalSourceEvent({
       payload: {
         agentId,

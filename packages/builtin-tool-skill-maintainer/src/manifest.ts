@@ -2,21 +2,28 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { SkillMaintainerApiName, SkillMaintainerIdentifier } from './types';
 
-const skillRefProperties = {
-  skillRef: { type: 'string' },
+const skillTargetProperties = {
+  agentDocumentId: {
+    description: 'Managed skill bundle id from agent_documents.id.',
+    type: 'string',
+  },
+  name: {
+    description: 'Stable managed skill bundle name.',
+    type: 'string',
+  },
 } as const;
 
-const filePathProperties = {
-  path: { type: 'string' },
-  ...skillRefProperties,
+const skillBodyMarkdownProperty = {
+  description: 'Markdown body for SKILL.md. Do not include YAML frontmatter.',
+  type: 'string',
 } as const;
 
 /**
  * System-only builtin manifest for automatic skill maintenance.
  *
  * Use when:
- * - Agent Signal delegates refinement or consolidation to maintainer tools
- * - A hidden system surface needs merge orchestration APIs
+ * - Agent Signal delegates skill creation, refinement, or rename work to a hidden worker.
+ * - A hidden system surface needs document-backed skill-management APIs.
  *
  * Expects:
  * - Calls are made by trusted orchestration code
@@ -27,73 +34,69 @@ const filePathProperties = {
 export const SkillMaintainerManifest: BuiltinToolManifest = {
   api: [
     {
-      description: 'Read one package-relative file from a managed skill.',
-      name: SkillMaintainerApiName.readSkillFile,
+      description: 'List managed skills for the current agent.',
+      name: SkillMaintainerApiName.listSkills,
       parameters: {
-        properties: filePathProperties,
-        required: ['skillRef', 'path'],
+        properties: {},
+        required: [],
         type: 'object',
       },
     },
     {
-      description: 'Update one existing package-relative file in a managed skill.',
-      name: SkillMaintainerApiName.updateSkill,
+      description: 'Read one managed skill bundle and its SKILL.md index.',
+      name: SkillMaintainerApiName.getSkill,
       parameters: {
         properties: {
-          content: { type: 'string' },
-          reason: { type: 'string' },
-          ...filePathProperties,
+          includeContent: { type: 'boolean' },
+          ...skillTargetProperties,
         },
-        required: ['skillRef', 'path', 'content', 'reason'],
+        required: [],
         type: 'object',
       },
     },
     {
-      description: 'Write one package-relative file in a managed skill.',
-      name: SkillMaintainerApiName.writeSkillFile,
+      description: 'Create a managed skill bundle and SKILL.md index.',
+      name: SkillMaintainerApiName.createSkill,
       parameters: {
         properties: {
-          content: { type: 'string' },
-          reason: { type: 'string' },
-          ...filePathProperties,
+          bodyMarkdown: skillBodyMarkdownProperty,
+          description: { type: 'string' },
+          name: { type: 'string' },
+          sourceAgentDocumentId: {
+            description: 'Existing hinted agent document id from agent_documents.id.',
+            type: 'string',
+          },
+          title: { type: 'string' },
         },
-        required: ['skillRef', 'path', 'content', 'reason'],
+        required: ['name', 'title', 'description', 'bodyMarkdown'],
         type: 'object',
       },
     },
     {
-      description: 'Remove one package-relative file from a managed skill.',
-      name: SkillMaintainerApiName.removeSkillFile,
+      description: 'Replace the SKILL.md index content for a managed skill.',
+      name: SkillMaintainerApiName.replaceSkillIndex,
       parameters: {
         properties: {
+          bodyMarkdown: skillBodyMarkdownProperty,
+          description: { type: 'string' },
           reason: { type: 'string' },
-          ...filePathProperties,
+          ...skillTargetProperties,
         },
-        required: ['skillRef', 'path', 'reason'],
+        required: ['bodyMarkdown'],
         type: 'object',
       },
     },
     {
-      description: 'Run single-skill refinement for a target skill reference.',
-      name: SkillMaintainerApiName.refine,
+      description: 'Rename a managed skill bundle and synchronize SKILL.md frontmatter.',
+      name: SkillMaintainerApiName.renameSkill,
       parameters: {
         properties: {
+          newName: { type: 'string' },
+          newTitle: { type: 'string' },
           reason: { type: 'string' },
-          skillRef: { type: 'string' },
+          ...skillTargetProperties,
         },
-        required: ['skillRef', 'reason'],
-        type: 'object',
-      },
-    },
-    {
-      description: 'Find and reconcile overlapping skills.',
-      name: SkillMaintainerApiName.consolidate,
-      parameters: {
-        properties: {
-          reason: { type: 'string' },
-          sourceSkillIds: { items: { type: 'string' }, type: 'array' },
-        },
-        required: ['sourceSkillIds'],
+        required: [],
         type: 'object',
       },
     },
@@ -101,9 +104,10 @@ export const SkillMaintainerManifest: BuiltinToolManifest = {
   identifier: SkillMaintainerIdentifier,
   meta: {
     description:
-      'Run hidden Agent Signal maintenance actions for skill refinement and consolidation.',
+      'Run hidden Agent Signal maintenance actions for document-backed skill management.',
     title: 'Skill Maintainer',
   },
-  systemRole: 'Maintain skills through Agent Signal. This tool is system-only.',
+  systemRole:
+    'Maintain skills through Agent Signal using only list/get/create/replace/rename operations. This tool is system-only and cannot delete skills or manage skill resources.',
   type: 'builtin',
 };

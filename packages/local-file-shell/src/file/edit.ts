@@ -3,13 +3,15 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createPatch } from 'diff';
 
 import type { EditFileParams, EditFileResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function editLocalFile({
-  file_path: filePath,
+  file_path: rawPath,
   old_string,
   new_string,
   replace_all = false,
 }: EditFileParams): Promise<EditFileResult> {
+  const filePath = expandTilde(rawPath) ?? rawPath;
   try {
     const content = await readFile(filePath, 'utf8');
 

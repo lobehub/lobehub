@@ -72,7 +72,7 @@ sequenceDiagram
 After the user sends a message, `sendMessage()`
 (`src/store/chat/slices/aiChat/actions/conversationLifecycle.ts`)
 creates the user message and assistant message placeholder,
-then calls `internal_execAgentRuntime()`.
+then calls `executeClientAgent()`.
 
 ### 2. Agent Runtime Drives the Loop
 
@@ -325,7 +325,7 @@ depends on the scenario:
 - **Client-side loop** (browser): Regular 1:1 chat,
   continue generation, group orchestration decisions.
   The loop runs in the browser, entry point is
-  `internal_execAgentRuntime()`
+  `executeClientAgent()`
   (`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`)
 - **Server-side loop** (queue/local):
   Group chat supervisor agent, sub-agent tasks,

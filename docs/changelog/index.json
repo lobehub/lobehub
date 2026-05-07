@@ -3,6 +3,15 @@
   "cloud": [],
   "community": [
     {
+      "image": "/blog/assetsb2bf4ddf0a45ff887a993c18cb7ab983.webp",
+      "id": "2026-05-04-task-scheduler",
+      "date": "2026-05-04",
+      "versionRange": [
+        "2.1.54",
+        "2.1.56"
+      ]
+    },
+    {
       "image": "/blog/assetsfa267a02f20bc5ba6f1273bcf27b7c9f.webp",
       "id": "2026-04-27-heterogeneous-agent",
       "date": "2026-04-27",

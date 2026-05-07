@@ -106,6 +106,7 @@
   "localFiles.grepContent.glob": "Филтър за файлове",
   "localFiles.grepContent.pattern": "Шаблон за търсене",
   "localFiles.grepContent.type": "Тип файл",
+  "localFiles.listFiles.emptyDirectory": "Тази директория е празна",
   "localFiles.moveFiles.itemsMoved": "{{count}} елемент(а) преместени:",
   "localFiles.moveFiles.itemsMoved_one": "{{count}} елемент преместен:",
   "localFiles.moveFiles.itemsMoved_other": "{{count}} елемента преместени:",

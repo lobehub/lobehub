@@ -6,7 +6,7 @@ import { SESSION_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,6 +19,8 @@ import { topicService } from '@/services/topic';
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
 import { isDev } from '@/utils/env';
 
@@ -28,6 +30,7 @@ import AgentOnboardingConversation from './Conversation';
 import AgentOnboardingDebugExportButton from './DebugExportButton';
 import HistoryPanel from './HistoryPanel';
 import OnboardingConversationProvider from './OnboardingConversationProvider';
+import { useOnboardingFollowUp } from './useOnboardingFollowUp';
 
 const CLASSIC_ONBOARDING_PATH = '/onboarding/classic';
 
@@ -107,6 +110,63 @@ const AgentOnboardingPage = memo(() => {
   const viewingHistoricalTopic =
     !!activeTopicId && !!effectiveTopicId && effectiveTopicId !== activeTopicId;
 
+  const onboardingChatKey = useMemo(
+    () => messageMapKey({ agentId: onboardingAgentId || '', topicId: effectiveTopicId }),
+    [onboardingAgentId, effectiveTopicId],
+  );
+  const messagesForOnboarding = useChatStore((s) => s.dbMessagesMap[onboardingChatKey]);
+  const isGreeting = useMemo(() => {
+    if (!messagesForOnboarding || messagesForOnboarding.length !== 1) return false;
+    return messagesForOnboarding[0]?.role !== 'user';
+  }, [messagesForOnboarding]);
+
+  const onboardingFollowUp = useOnboardingFollowUp({
+    enabled: !onboardingFinished && !viewingHistoricalTopic,
+    isGreeting,
+  });
+  const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
+
+  const syncOnboardingContext = useCallback(async () => {
+    const nextContext = await userService.getOrCreateOnboardingState();
+    await mutate(nextContext, { revalidate: false });
+    if (isDev && onboardingAgentId) await mutateHistoryTopics();
+
+    return nextContext;
+  }, [mutate, mutateHistoryTopics, onboardingAgentId]);
+
+  const handleAssistantTurnSettled = useCallback(async () => {
+    if (!effectiveTopicId) return;
+
+    const prevPhase = data?.context?.phase;
+    const prevFinishedAt = agentOnboarding?.finishedAt;
+
+    const extractPromise = triggerExtract(effectiveTopicId, prevPhase);
+
+    // Sync first to learn the next phase/finishedAt; only then decide whether
+    // the heavier user-store / builtin-agent refreshes are needed this turn.
+    const [nextContext] = await Promise.all([syncOnboardingContext(), extractPromise]);
+
+    const newPhase = nextContext?.context?.phase;
+    const newFinishedAt = nextContext?.agentOnboarding?.finishedAt;
+
+    const refreshes: Promise<unknown>[] = [];
+    if (newFinishedAt !== prevFinishedAt) refreshes.push(refreshUserState());
+    if (newPhase !== prevPhase) {
+      refreshes.push(refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding));
+    }
+    if (refreshes.length > 0) await Promise.all(refreshes);
+  }, [
+    agentOnboarding?.finishedAt,
+    data?.context?.phase,
+    effectiveTopicId,
+    refreshBuiltinAgent,
+    refreshUserState,
+    syncOnboardingContext,
+    triggerExtract,
+  ]);
+  const assistantTurnSettledHandler =
+    onboardingFinished || viewingHistoricalTopic ? undefined : handleAssistantTurnSettled;
+
   if (error) {
     return (
       <OnboardingContainer>
@@ -118,14 +178,6 @@ const AgentOnboardingPage = memo(() => {
   if (isLoading || !activeTopicId || !onboardingAgentId || !effectiveTopicId) {
     return <Loading debugId="AgentOnboarding" />;
   }
-
-  const syncOnboardingContext = async () => {
-    const nextContext = await userService.getOrCreateOnboardingState();
-    await mutate(nextContext, { revalidate: false });
-    if (isDev && onboardingAgentId) await mutateHistoryTopics();
-
-    return nextContext;
-  };
 
   const handleReset = async () => {
     setIsResetting(true);
@@ -151,13 +203,7 @@ const AgentOnboardingPage = memo(() => {
             onboardingFinished
               ? undefined
               : {
-                  onAfterSendMessage: async () => {
-                    await syncOnboardingContext();
-                    await Promise.all([
-                      refreshUserState(),
-                      refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
-                    ]);
-                  },
+                  onBeforeSendMessage,
                 }
           }
         >
@@ -172,6 +218,7 @@ const AgentOnboardingPage = memo(() => {
               showFeedback={!viewingHistoricalTopic}
               topicId={effectiveTopicId}
               onAfterWrapUp={syncOnboardingContext}
+              onAssistantTurnSettled={assistantTurnSettledHandler}
             />
           </ErrorBoundary>
         </OnboardingConversationProvider>

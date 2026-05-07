@@ -55,6 +55,9 @@ describe('TrayManager', () => {
       menuManager: {
         buildTrayMenu: vi.fn(() => ({ _mockMenu: true }) as any),
       },
+      storeManager: {
+        get: vi.fn(() => true),
+      },
     } as unknown as App;
 
     // Mock Tray constructor
@@ -92,6 +95,15 @@ describe('TrayManager', () => {
 
       expect(mockApp.menuManager.buildTrayMenu).toHaveBeenCalled();
       expect(mockTray.setMenu).toHaveBeenCalledWith({ _mockMenu: true });
+    });
+
+    it('should skip tray initialization when app tray is disabled', () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue(false);
+
+      trayManager.initializeTrays();
+
+      expect(Tray).not.toHaveBeenCalled();
+      expect(trayManager.trays.size).toBe(0);
     });
   });
 
@@ -270,6 +282,24 @@ describe('TrayManager', () => {
 
     it('should not throw when no trays exist', () => {
       expect(() => trayManager.destroyAll()).not.toThrow();
+    });
+  });
+
+  describe('setAppTrayVisible', () => {
+    it('should initialize trays when visible is true', () => {
+      trayManager.setAppTrayVisible(true);
+
+      expect(Tray).toHaveBeenCalled();
+      expect(trayManager.trays.has('main')).toBe(true);
+    });
+
+    it('should destroy all trays when visible is false', () => {
+      trayManager.initializeTrays();
+
+      trayManager.setAppTrayVisible(false);
+
+      expect(mockTray.destroy).toHaveBeenCalled();
+      expect(trayManager.trays.size).toBe(0);
     });
   });
 

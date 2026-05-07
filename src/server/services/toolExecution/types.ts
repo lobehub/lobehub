@@ -9,6 +9,8 @@ export interface ToolExecutionContext {
   agentId?: string;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
+  /** Current group ID for group chat context */
+  groupId?: string | null;
   /** Memory tool permission from agent chat config */
   memoryToolPermission?: 'read-only' | 'read-write';
   /** Source user message ID used by Agent Signal procedure suppression. */
@@ -21,6 +23,8 @@ export interface ToolExecutionContext {
   serverDB?: LobeChatDatabase;
   /** Task ID when executing within the Task system */
   taskId?: string;
+  /** Current thread ID for thread-scoped conversations */
+  threadId?: string | null;
   /** Stable LLM tool call ID for structured tool outcome identity. */
   toolCallId?: string;
   toolManifestMap: Record<string, LobeToolManifest>;

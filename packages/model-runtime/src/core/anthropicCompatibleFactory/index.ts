@@ -5,6 +5,7 @@ import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -159,8 +160,10 @@ export const buildDefaultAnthropicPayload = async (
 
   const postMessages = await buildAnthropicMessages(userMessages, { enabledContextCaching });
 
-  // Claude 4.6 models do not support assistant turn prefill
-  if (model.includes('-4-6') && postMessages.at(-1)?.role === 'assistant') {
+  if (
+    shouldDropUnsupportedClaudeAssistantPrefill(model) &&
+    postMessages.at(-1)?.role === 'assistant'
+  ) {
     postMessages.pop();
   }
 

@@ -70,7 +70,7 @@ export interface AgentSignalActionServices {
  *
  * Use when:
  * - Handlers need stable memory and skill action planning without owning payload construction
- * - Tests need injectable action services while preserving production defaults
+ * - Tests need injectable action services while preserving server defaults
  *
  * Expects:
  * - Input signals have already been narrowed by the handler control flow

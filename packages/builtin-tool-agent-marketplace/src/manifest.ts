@@ -63,43 +63,6 @@ export const AgentMarketplaceManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
-    {
-      description:
-        'Mark a pending pick request as skipped with an optional reason. Normally client-handled after the user skips.',
-      name: AgentMarketplaceApiName.skipAgentPick,
-      parameters: {
-        properties: {
-          reason: { description: 'Optional reason for skipping.', type: 'string' },
-          requestId: { description: 'The pick request ID to skip.', type: 'string' },
-        },
-        required: ['requestId'],
-        type: 'object',
-      },
-    },
-    {
-      description: 'Cancel a pending pick request. Normally client-handled after the user cancels.',
-      name: AgentMarketplaceApiName.cancelAgentPick,
-      parameters: {
-        properties: {
-          requestId: { description: 'The pick request ID to cancel.', type: 'string' },
-        },
-        required: ['requestId'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Inspect the current state of a known pick request. Use for recovery or diagnostics, not routine polling.',
-      name: AgentMarketplaceApiName.getPickState,
-      parameters: {
-        properties: {
-          requestId: { description: 'The pick request ID to query.', type: 'string' },
-        },
-        required: ['requestId'],
-        type: 'object',
-      },
-      renderDisplayControl: 'collapsed',
-    },
   ],
   identifier: AgentMarketplaceIdentifier,
   meta: {

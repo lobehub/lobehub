@@ -169,6 +169,7 @@
   "channel.userIdHint": "Вашият потребителски ID на тази платформа. AI може да го използва, за да ви изпраща директни съобщения.",
   "channel.userIdHint.discord": "Включете Developer Mode (Settings → Advanced), след това кликнете с десен бутон върху своя аватар → Copy User ID.",
   "channel.userIdHint.feishu": "Отворете вашето приложение в Feishu / Lark Open Platform → Permissions и намерете своя Open ID.",
+  "channel.userIdHint.line": "Отворете LINE Developers Console → вашия канал → раздел Основни настройки и копирайте „Вашето потребителско ID“ (започва с U, 33 символа).",
   "channel.userIdHint.qq": "Вашият QQ номер, показан на страницата на вашия QQ профил.",
   "channel.userIdHint.slack": "Отворете своя Slack профил → ⋮ More → Copy member ID (започва с U).",
   "channel.userIdHint.telegram": "Изпратете произволно съобщение на @userinfobot в Telegram — той ще ви отговори с вашия числов User ID.",

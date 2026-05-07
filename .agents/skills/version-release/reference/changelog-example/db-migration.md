@@ -1,17 +1,9 @@
-# 🚀 LobeHub v2.1.50 (20260416)
+# 🚀 LobeHub Release (20260416)
 
 **Release Date:** April 20, 2026\
 **Migration Scope:** Agent benchmark data model bootstrap (5 new tables, 2 new indexes)
 
 > This release introduces a schema foundation for benchmark execution and reporting, so agent evaluation data is stored as a complete lifecycle instead of fragmented records.
-
----
-
-## ✨ Highlights
-
-- **Benchmark Lifecycle Schema** — Added a relational model that tracks benchmark setup, runs, per-topic execution, and record outputs end-to-end.
-- **Queryability Upgrade** — Added indexes for run status and benchmark-topic joins, improving operational queries in dashboard and debugging workflows.
-- **Safer Operator Rollout** — Migration is startup-driven and backward-compatible with existing non-benchmark chat workflows.
 
 ---
 

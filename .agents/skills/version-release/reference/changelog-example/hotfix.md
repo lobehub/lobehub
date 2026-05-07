@@ -1,4 +1,4 @@
-# 🚀 LobeHub v2.1.54 (20260427)
+# 🚀 LobeHub Release (20260427)
 
 **Hotfix Scope:** Agent topic-switching regression — stale chat state on agent change
 

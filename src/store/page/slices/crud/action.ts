@@ -326,11 +326,6 @@ export class CrudActionImpl {
     // Queue background sync to DB
     try {
       await documentService.updateDocument({
-        content: updatedPage.content || '',
-        editorData:
-          typeof updatedPage.editorData === 'string'
-            ? updatedPage.editorData
-            : JSON.stringify(updatedPage.editorData || {}),
         id: pageId,
         metadata: updatedPage.metadata || {},
         parentId: updatedPage.parentId || undefined,

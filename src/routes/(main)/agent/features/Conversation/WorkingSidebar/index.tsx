@@ -1,7 +1,7 @@
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PanelRightCloseIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
@@ -68,14 +68,15 @@ type Tab = 'review' | 'resources';
 const AgentWorkingSidebar = memo(() => {
   const { t } = useTranslation('chat');
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
+  const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
+  const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
 
   const reviewAvailable = !!workingDirectory;
   // When the topic has a working directory we lead with Review — that's why
   // the sidebar is open in agent-coding flows. Otherwise no tab strip at all,
   // we just show the resources view as before.
-  const [tab, setTab] = useState<Tab>(reviewAvailable ? 'review' : 'resources');
-  const activeTab: Tab = reviewAvailable ? tab : 'resources';
+  const activeTab: Tab = reviewAvailable ? (storedTab ?? 'review') : 'resources';
 
   return (
     <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>
@@ -93,14 +94,14 @@ const AgentWorkingSidebar = memo(() => {
               <button
                 className={`${styles.tab} ${activeTab === 'resources' ? styles.tabActive : ''}`}
                 type="button"
-                onClick={() => setTab('resources')}
+                onClick={() => setWorkingSidebarTab('resources')}
               >
                 {t('workingPanel.space')}
               </button>
               <button
                 className={`${styles.tab} ${activeTab === 'review' ? styles.tabActive : ''}`}
                 type="button"
-                onClick={() => setTab('review')}
+                onClick={() => setWorkingSidebarTab('review')}
               >
                 {t('workingPanel.review.title')}
               </button>

@@ -16,14 +16,20 @@ export interface AgentSignalBotScopeKeyInput {
  * Producer metadata used to derive a stable source-event scope key.
  */
 export interface AgentSignalProducerScopeInput {
+  /** Optional assistant or agent identifier for broad agent-user scoped events. */
+  agentId?: string;
   /** Optional external application identifier for bot-originated events. */
   applicationId?: string;
   /** Optional external platform identifier for bot-originated events. */
   platform?: string;
   /** Optional external thread identifier for bot-originated events. */
   platformThreadId?: string;
-  /** Optional LobeChat topic identifier. Takes precedence over bot-thread metadata. */
+  /** Optional task identifier. Used when no topic is available. */
+  taskId?: string;
+  /** Optional LobeChat topic identifier. Takes precedence over task and bot-thread metadata. */
   topicId?: string;
+  /** Optional user identifier for broad authenticated scopes. */
+  userId?: string;
 }
 
 /**
@@ -91,6 +97,7 @@ export const AgentSignalScopeKey = {
   forUser: (input: AgentSignalUserScopeKeyInput) => joinScopeKey('user', input.userId),
   fromProducerInput: (input: AgentSignalProducerScopeInput) => {
     if (input.topicId) return AgentSignalScopeKey.forTopic({ topicId: input.topicId });
+    if (input.taskId) return AgentSignalScopeKey.forTask({ taskId: input.taskId });
 
     if (input.platform && input.applicationId && input.platformThreadId) {
       return AgentSignalScopeKey.forBotThread({
@@ -99,6 +106,12 @@ export const AgentSignalScopeKey = {
         platformThreadId: input.platformThreadId,
       });
     }
+
+    if (input.agentId && input.userId) {
+      return AgentSignalScopeKey.forAgentUser({ agentId: input.agentId, userId: input.userId });
+    }
+
+    if (input.userId) return AgentSignalScopeKey.forUser({ userId: input.userId });
 
     return 'fallback:global';
   },
@@ -125,9 +138,12 @@ export const AgentSignalScopeKey = {
  */
 export const getSourceEventScopeKey = (input: Record<string, unknown>) => {
   return AgentSignalScopeKey.fromProducerInput({
+    agentId: pickString(input, 'agentId'),
     applicationId: pickString(input, 'applicationId'),
     platform: pickString(input, 'platform'),
     platformThreadId: pickString(input, 'platformThreadId'),
+    taskId: pickString(input, 'taskId'),
     topicId: pickString(input, 'topicId'),
+    userId: pickString(input, 'userId'),
   });
 };

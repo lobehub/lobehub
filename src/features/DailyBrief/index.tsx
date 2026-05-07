@@ -4,6 +4,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
+import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -56,6 +58,8 @@ const DailyBrief = memo(() => {
           <BriefCard brief={brief} key={brief.id} />
         ))}
       </Flexbox>
+      <DocumentPreviewModal />
+      <TopicChatDrawer />
     </GroupBlock>
   );
 });

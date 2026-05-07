@@ -110,7 +110,7 @@ export const useChatListActionsBar = ({
       export: {
         icon: DownloadIcon,
         key: 'export',
-        label: '导出为 PDF',
+        label: 'Export as PDF',
       },
       regenerate: {
         disabled: isRegenerating,

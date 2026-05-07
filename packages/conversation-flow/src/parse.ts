@@ -63,6 +63,7 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
     'inputCitationTokens',
     'inputImageTokens',
     'inputTextTokens',
+    'inputVideoTokens',
     'inputToolTokens',
     'inputWriteCacheTokens',
     'latency',

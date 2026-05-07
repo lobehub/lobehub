@@ -9,7 +9,7 @@ import {
 class CloudSandboxService {
   /**
    * Call a cloud sandbox tool
-   * @param toolName - The name of the tool to call (e.g., 'runCommand', 'writeLocalFile')
+   * @param toolName - The name of the tool to call (e.g., 'runCommand', 'writeFile')
    * @param params - The parameters for the tool
    * @param context - Session context containing topicId and optional userId for isolation
    */

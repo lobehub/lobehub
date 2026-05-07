@@ -1,5 +1,5 @@
-import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -24,6 +24,397 @@ import { createLogger } from '@/utils/logger';
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:GitCtr');
+
+interface DirtyEntry {
+  filePath: string;
+  status: GitFileDiffStatus;
+}
+
+interface DiffBlock {
+  isBinary: boolean;
+  patch: string;
+  /** Destination path (or source path for deleted files). */
+  path: string;
+}
+
+/**
+ * Split the output of `git diff HEAD --` into one block per file. Each block
+ * starts at a `^diff --git ` line and runs to just before the next one (or
+ * EOF). Path comes from the `+++ b/<path>` line, falling back to `--- a/<path>`
+ * when the destination is `/dev/null` (deletion). Quoted paths (spaces /
+ * non-ASCII when `core.quotepath` is on) are minimally de-escaped.
+ */
+const splitBulkDiff = (diffText: string): DiffBlock[] => {
+  if (!diffText) return [];
+  const blocks: DiffBlock[] = [];
+  const headerRe = /^diff --git /gm;
+  const starts: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = headerRe.exec(diffText)) !== null) starts.push(m.index);
+  for (let i = 0; i < starts.length; i++) {
+    const start = starts[i];
+    const end = i + 1 < starts.length ? starts[i + 1] : diffText.length;
+    const block = diffText.slice(start, end);
+    const filePath = extractPathFromDiffBlock(block);
+    if (!filePath) continue;
+    blocks.push({
+      isBinary: /^Binary files .* differ$/m.test(block),
+      path: filePath,
+      patch: block,
+    });
+  }
+  return blocks;
+};
+
+/**
+ * Pull the file path out of a per-file diff block. Looks at the `+++ b/<path>`
+ * line first (covers add/modify); falls back to `--- a/<path>` for deletes
+ * where `+++` is `/dev/null`; final fallback is the `diff --git a/x b/y`
+ * header line.
+ */
+const extractPathFromDiffBlock = (block: string): string | null => {
+  let plusPath: string | null = null;
+  let minusPath: string | null = null;
+  for (const line of block.split('\n')) {
+    if (line.startsWith('+++ ')) {
+      plusPath = parseDiffPathLine(line.slice(4), 'b/');
+    } else if (line.startsWith('--- ')) {
+      minusPath = parseDiffPathLine(line.slice(4), 'a/');
+    }
+    // The file headers always come before the first hunk / binary marker;
+    // bail once we hit either to avoid scanning huge diff bodies.
+    if (line.startsWith('@@') || line.startsWith('Binary files ')) break;
+  }
+  if (plusPath) return plusPath;
+  if (minusPath) return minusPath;
+  // Last-resort: parse the `diff --git a/x b/y` header itself.
+  const header = block.split('\n', 1)[0];
+  const match = /^diff --git a\/.+? b\/(.+)$/.exec(header);
+  return match ? match[1] : null;
+};
+
+/**
+ * Strip the `a/` or `b/` prefix off a `+++` / `---` line, drop the optional
+ * trailing tab+timestamp, and de-quote git's C-style escaping. Returns null
+ * for `/dev/null` (which means the other side of the diff is the real path).
+ */
+const parseDiffPathLine = (raw: string, prefix: 'a/' | 'b/'): string | null => {
+  const tabIdx = raw.indexOf('\t');
+  let p = tabIdx >= 0 ? raw.slice(0, tabIdx) : raw;
+  if (p === '/dev/null') return null;
+  // Quoted form: "b/path with spaces"
+  if (p.startsWith('"') && p.endsWith('"')) {
+    p = dequoteGitPath(p.slice(1, -1));
+  }
+  return p.startsWith(prefix) ? p.slice(prefix.length) : p;
+};
+
+export const dequoteGitPath = (s: string): string =>
+  s.replaceAll(/\\(["\\trn]|[0-7]{3})/g, (_, esc: string) => {
+    if (esc === '"') return '"';
+    if (esc === '\\') return '\\';
+    if (esc === 't') return '\t';
+    if (esc === 'r') return '\r';
+    if (esc === 'n') return '\n';
+    return String.fromCodePoint(Number.parseInt(esc, 8));
+  });
+
+/**
+ * Inverse of {@link dequoteGitPath} — returns either `<prefix><path>` (when
+ * no escaping is needed) or git's C-style quoted form `"<prefix><escaped>"`
+ * (when the path contains TAB / LF / CR / quote / backslash / control bytes).
+ * The prefix lives *inside* the quotes so the output matches what real `git
+ * diff` would emit, e.g. `"a/file\twith tab.txt"` rather than `a/"file\twith
+ * tab.txt"`. Plain spaces are not quoted (git tolerates them; the trailing
+ * ` b/<path>` marker on the diff header is enough to delimit the source).
+ */
+// eslint-disable-next-line no-control-regex
+const NEEDS_QUOTING = /["\\\x00-\x1F\x7F]/;
+export const quoteGitPath = (prefix: 'a/' | 'b/', filePath: string): string => {
+  const combined = prefix + filePath;
+  if (!NEEDS_QUOTING.test(combined)) return combined;
+  let out = '"';
+  for (const ch of combined) {
+    if (ch === '\\') out += '\\\\';
+    else if (ch === '"') out += '\\"';
+    else if (ch === '\t') out += '\\t';
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\r') out += '\\r';
+    else {
+      const code = ch.codePointAt(0)!;
+      if (code < 0x20 || code === 0x7f) {
+        out += '\\' + code.toString(8).padStart(3, '0');
+      } else {
+        out += ch;
+      }
+    }
+  }
+  return out + '"';
+};
+
+/** Walk a patch counting `+`/`-` lines while skipping `+++`/`---` headers. */
+const countAddDel = (patch: string): { additions: number; deletions: number } => {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) additions++;
+    else if (line.startsWith('-')) deletions++;
+  }
+  return { additions, deletions };
+};
+
+const emptyPatch = (entry: DirtyEntry): GitWorkingTreePatch => ({
+  additions: 0,
+  deletions: 0,
+  filePath: entry.filePath,
+  isBinary: false,
+  patch: '',
+  status: entry.status,
+  truncated: false,
+});
+
+const buildTrackedPatch = (
+  entry: DirtyEntry,
+  block: DiffBlock,
+  maxBytes: number,
+): GitWorkingTreePatch => {
+  if (block.isBinary) {
+    return { ...emptyPatch(entry), isBinary: true };
+  }
+  if (block.patch.length > maxBytes) {
+    return { ...emptyPatch(entry), truncated: true };
+  }
+  const { additions, deletions } = countAddDel(block.patch);
+  return {
+    additions,
+    deletions,
+    filePath: entry.filePath,
+    isBinary: false,
+    patch: block.patch,
+    status: entry.status,
+    truncated: false,
+  };
+};
+
+/**
+ * Build a synthetic add-only patch for an untracked file by reading it from
+ * disk — replaces the per-file `git diff --no-index /dev/null <file>` fork.
+ * Binary detection uses a NUL-byte sniff over the first 8 KB (matches what
+ * git itself does internally).
+ */
+const readUntrackedAsPatch = async (
+  cwd: string,
+  entry: DirtyEntry,
+  maxBytes: number,
+): Promise<GitWorkingTreePatch> => {
+  const absolute = path.resolve(cwd, entry.filePath);
+  let size: number;
+  try {
+    const s = await stat(absolute);
+    if (!s.isFile()) return emptyPatch(entry);
+    size = s.size;
+  } catch (error: any) {
+    logger.debug('[readUntrackedAsPatch] stat failed', {
+      filePath: entry.filePath,
+      message: error?.message,
+    });
+    return emptyPatch(entry);
+  }
+  // Pre-quote so the path is C-style escaped wherever it lands in the synthetic
+  // patch — raw `entry.filePath` interpolation would emit malformed `diff --git`
+  // / `+++` lines for filenames containing TAB / LF / quote / backslash.
+  const aPath = quoteGitPath('a/', entry.filePath);
+  const bPath = quoteGitPath('b/', entry.filePath);
+  if (size === 0) {
+    return {
+      ...emptyPatch(entry),
+      patch:
+        [
+          `diff --git ${aPath} ${bPath}`,
+          'new file mode 100644',
+          '--- /dev/null',
+          `+++ ${bPath}`,
+        ].join('\n') + '\n',
+    };
+  }
+  // Cap the synthesized patch by *file* size, not patch size — a 200 KB file
+  // produces a ~200 KB patch (one `+` per line). Close enough.
+  if (size > maxBytes) {
+    return { ...emptyPatch(entry), truncated: true };
+  }
+  let buf: Buffer;
+  try {
+    buf = await readFile(absolute);
+  } catch (error: any) {
+    logger.debug('[readUntrackedAsPatch] read failed', {
+      filePath: entry.filePath,
+      message: error?.message,
+    });
+    return emptyPatch(entry);
+  }
+  const sniffEnd = Math.min(buf.length, 8192);
+  for (let i = 0; i < sniffEnd; i++) {
+    if (buf[i] === 0) return { ...emptyPatch(entry), isBinary: true };
+  }
+  const text = buf.toString('utf8');
+  // text.split('\n') leaves a trailing '' when the file ends with '\n';
+  // exclude it so the hunk header line count matches git's own output.
+  const rawLines = text.split('\n');
+  const trailingEmpty = rawLines.length > 0 && rawLines.at(-1) === '';
+  const lineCount = trailingEmpty ? rawLines.length - 1 : rawLines.length;
+  if (lineCount === 0) {
+    return { ...emptyPatch(entry), patch: '' };
+  }
+  const body = rawLines
+    .slice(0, lineCount)
+    .map((line) => '+' + line)
+    .join('\n');
+  // Mirror `git diff --no-index`'s "no newline at end of file" footer when the
+  // source had no trailing newline — keeps PatchDiff's hunk parser happy.
+  const noNewlineFooter = trailingEmpty ? '' : '\n\\ No newline at end of file';
+  const patch =
+    [
+      `diff --git ${aPath} ${bPath}`,
+      'new file mode 100644',
+      '--- /dev/null',
+      `+++ ${bPath}`,
+      `@@ -0,0 +1,${lineCount} @@`,
+      body,
+    ].join('\n') +
+    noNewlineFooter +
+    '\n';
+  return {
+    additions: lineCount,
+    deletions: 0,
+    filePath: entry.filePath,
+    isBinary: false,
+    patch,
+    status: entry.status,
+    truncated: false,
+  };
+};
+
+/**
+ * Stream a git invocation's stdout via `spawn` instead of `execFile`'s
+ * fixed-size buffer. Replaces the bulk-diff caller's old 64 MB `maxBuffer`
+ * cap — pipe-buffer-sized chunks accumulate in memory until the process
+ * exits, with no hard ceiling. SIGTERM on timeout. Resolves with the full
+ * stdout string; rejects with an Error carrying `stderr` and `partialStdout`
+ * fields so callers can salvage partial output (or fall back) on failure.
+ */
+const runGitCaptureStream = (cwd: string, args: string[], timeoutMs: number): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd });
+    const stdoutChunks: Buffer[] = [];
+    let stderrBuf = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, timeoutMs);
+    child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrBuf += chunk.toString('utf8');
+    });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      reject(Object.assign(err, { stderr: stderrBuf }));
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+      if (timedOut) {
+        const err: any = new Error('git command timed out');
+        err.stderr = stderrBuf;
+        err.partialStdout = stdout;
+        return reject(err);
+      }
+      // `git diff HEAD` (without --exit-code) exits 0 even when there are
+      // diffs; non-zero is therefore a real error.
+      if (code !== 0) {
+        const err: any = new Error(`git exited with code ${code}`);
+        err.code = code;
+        err.stderr = stderrBuf;
+        err.partialStdout = stdout;
+        return reject(err);
+      }
+      resolve(stdout);
+    });
+  });
+
+/**
+ * Last-resort per-file diff for tracked entries the bulk diff didn't cover —
+ * either because the bulk command failed entirely or because git emitted no
+ * patch for a path the status step listed (rare race with concurrent writes).
+ * Mirrors the original per-file behavior so individual files keep their
+ * patches even when the bulk fast-path is unavailable.
+ */
+const fetchTrackedPatchPerFile = async (
+  cwd: string,
+  entry: DirtyEntry,
+  maxBytes: number,
+): Promise<GitWorkingTreePatch> => {
+  const execFileAsync = promisify(execFile);
+  let text: string;
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-c', 'core.quotepath=off', 'diff', '--no-color', 'HEAD', '--', entry.filePath],
+      {
+        cwd,
+        encoding: 'utf8',
+        maxBuffer: maxBytes * 4,
+        timeout: 10_000,
+      },
+    );
+    text = stdout as string;
+  } catch (error: any) {
+    logger.debug('[fetchTrackedPatchPerFile] diff failed', {
+      filePath: entry.filePath,
+      stderr: error?.stderr?.toString?.() ?? error?.stderr,
+    });
+    return emptyPatch(entry);
+  }
+  if (text.length > maxBytes) return { ...emptyPatch(entry), truncated: true };
+  if (/^Binary files .* differ$/m.test(text)) return { ...emptyPatch(entry), isBinary: true };
+  if (!text) return emptyPatch(entry);
+  const { additions, deletions } = countAddDel(text);
+  return {
+    additions,
+    deletions,
+    filePath: entry.filePath,
+    isBinary: false,
+    patch: text,
+    status: entry.status,
+    truncated: false,
+  };
+};
+
+/**
+ * Bounded `Promise.all` — runs at most `limit` async tasks at a time. Used
+ * for the per-file fallback so we cap fork pressure at a small constant
+ * instead of replaying the original 200-parallel `git diff` storm.
+ */
+const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const results: R[] = Array.from({ length: items.length });
+  let cursor = 0;
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const idx = cursor++;
+        if (idx >= items.length) return;
+        results[idx] = await fn(items[idx]);
+      }
+    }),
+  );
+  return results;
+};
 
 export default class GitController extends ControllerModule {
   static override readonly groupName = 'git';
@@ -266,14 +657,18 @@ export default class GitController extends ControllerModule {
 
   /**
    * Pull every dirty file's unified diff in one shot — one IPC call returns
-   * the patches the renderer needs to render `<PatchDiff />` per file. We do
-   * the per-file `git diff` invocations in parallel inside this method so
-   * the renderer doesn't have to fan out N IPC round trips.
+   * the patches the renderer needs to render `<PatchDiff />` per file.
    *
-   * Tracked changes (modified / deleted / staged-A) come from
-   * `git diff HEAD -- <file>`; pure untracked files come from
-   * `git diff --no-index /dev/null <file>` (which exits with code 1 when
-   * there are differences — that's success, not failure).
+   * Tracked changes (modified / deleted / staged-A) all come from a *single*
+   * `git diff HEAD --` invocation that we split per-file in JS — fork-bombing
+   * the main process with N parallel `git diff` subprocesses was costing us
+   * ~5–10ms × N in fork overhead plus `.git/index` lock contention, and the
+   * libuv worker pool stayed busy while other IPC handlers queued. One
+   * subprocess instead of N keeps the freeze invisible.
+   *
+   * Untracked files are read directly with `fs.readFile` and a synthetic
+   * `--- /dev/null / +++ b/<path>` patch is built in Node — no `git diff`
+   * subprocess at all.
    *
    * Per-file patches are capped at 256 KB; oversized or binary entries get an
    * empty `patch` string and a flag the renderer can use for a placeholder.
@@ -291,7 +686,7 @@ export default class GitController extends ControllerModule {
 
     // Step 1 — classify every dirty path. Mirrors getGitWorkingTreeFiles but
     // also distinguishes untracked (`??`) from staged-add (`A`) so we can pick
-    // the right diff command per entry.
+    // the right path (git diff vs raw read) per entry.
     const entries: Entry[] = [];
     try {
       const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
@@ -330,100 +725,70 @@ export default class GitController extends ControllerModule {
       return { patches: [] };
     }
 
-    // Walk the patch line-by-line counting `+`/`-` payload lines while
-    // skipping the `+++ b/...` / `--- a/...` headers (they look like
-    // additions/deletions but aren't). Cheap enough to do inline per file —
-    // each patch is capped at MAX_PATCH_BYTES.
-    const countAddDel = (patch: string): { additions: number; deletions: number } => {
-      let additions = 0;
-      let deletions = 0;
-      for (const line of patch.split('\n')) {
-        if (line.startsWith('+++') || line.startsWith('---')) continue;
-        if (line.startsWith('+')) additions++;
-        else if (line.startsWith('-')) deletions++;
+    // Step 2a — single bulk `git diff HEAD` for every tracked dirty path,
+    // then split per-file in JS. We pass paths explicitly (not all) so a
+    // huge unrelated working tree doesn't pull extra patches into the
+    // stream. Output is streamed via spawn so there's no maxBuffer ceiling
+    // — even a multi-hundred-MB combined diff lands intact, and any partial
+    // output recovered from a failed run still feeds the per-file fallback.
+    const trackedEntries = entries.filter((e) => !e.isUntracked);
+    const trackedByPath = new Map(trackedEntries.map((e) => [e.filePath, e]));
+    const trackedPatches = new Map<string, GitWorkingTreePatch>();
+    if (trackedEntries.length > 0) {
+      let bulkDiff = '';
+      try {
+        bulkDiff = await runGitCaptureStream(
+          dirPath,
+          [
+            '-c',
+            'core.quotepath=off',
+            'diff',
+            '--no-color',
+            'HEAD',
+            '--',
+            ...trackedEntries.map((e) => e.filePath),
+          ],
+          30_000,
+        );
+      } catch (error: any) {
+        logger.warn('[getGitWorkingTreePatches] bulk diff failed; per-file fallback', {
+          cwd: dirPath,
+          stderr: error?.stderr?.toString?.() ?? error?.stderr,
+        });
+        // Salvage any patches that did stream through before the failure —
+        // the per-file fallback below only retries the stragglers.
+        if (typeof error?.partialStdout === 'string') bulkDiff = error.partialStdout;
       }
-      return { additions, deletions };
-    };
+      for (const block of splitBulkDiff(bulkDiff)) {
+        const entry = trackedByPath.get(block.path);
+        if (!entry) continue;
+        trackedPatches.set(entry.filePath, buildTrackedPatch(entry, block, MAX_PATCH_BYTES));
+      }
+      // Anything the bulk diff didn't cover (bulk crashed, race-with-write,
+      // or git emitted no patch for a path status flagged dirty) gets a
+      // per-file retry. Concurrency-capped to avoid the original fork storm.
+      const stragglers = trackedEntries.filter((e) => !trackedPatches.has(e.filePath));
+      if (stragglers.length > 0) {
+        const recovered = await mapWithConcurrency(stragglers, 8, (entry) =>
+          fetchTrackedPatchPerFile(dirPath, entry, MAX_PATCH_BYTES),
+        );
+        for (const patch of recovered) trackedPatches.set(patch.filePath, patch);
+      }
+    }
 
-    // Step 2 — per-file diff in parallel. `--no-index` exits 1 when there's a
-    // diff (which is the expected outcome for untracked files), so we have to
-    // pull stdout off the rejected error rather than letting it throw.
-    const patches = await Promise.all(
-      entries.map(async ({ filePath, isUntracked, status }): Promise<GitWorkingTreePatch> => {
-        const args = isUntracked
-          ? ['diff', '--no-color', '--no-index', '/dev/null', filePath]
-          : ['diff', '--no-color', 'HEAD', '--', filePath];
-
-        let text: string;
-        try {
-          const { stdout } = await execFileAsync('git', args, {
-            cwd: dirPath,
-            encoding: 'utf8',
-            maxBuffer: MAX_PATCH_BYTES * 4,
-            timeout: 10_000,
-          });
-          text = stdout as string;
-        } catch (error: any) {
-          if (error?.stdout == null) {
-            logger.debug('[getGitWorkingTreePatches] diff failed', {
-              filePath,
-              status,
-              stderr: error?.stderr?.toString?.() ?? error?.stderr,
-            });
-            return {
-              additions: 0,
-              deletions: 0,
-              filePath,
-              isBinary: false,
-              patch: '',
-              status,
-              truncated: false,
-            };
-          }
-          text = error.stdout.toString();
-        }
-
-        if (text.length > MAX_PATCH_BYTES) {
-          return {
-            additions: 0,
-            deletions: 0,
-            filePath,
-            isBinary: false,
-            patch: '',
-            status,
-            truncated: true,
-          };
-        }
-        if (/^Binary files .* differ$/m.test(text)) {
-          return {
-            additions: 0,
-            deletions: 0,
-            filePath,
-            isBinary: true,
-            patch: '',
-            status,
-            truncated: false,
-          };
-        }
-        const { additions, deletions } = countAddDel(text);
-        return {
-          additions,
-          deletions,
-          filePath,
-          isBinary: false,
-          patch: text,
-          status,
-          truncated: false,
-        };
-      }),
+    // Step 2b — read untracked files directly in Node. fs.readFile is bounded
+    // by libuv's thread pool (4 by default) so unbounded Promise.all is fine.
+    const untrackedEntries = entries.filter((e) => e.isUntracked);
+    const untrackedPatches = await Promise.all(
+      untrackedEntries.map((entry) => readUntrackedAsPatch(dirPath, entry, MAX_PATCH_BYTES)),
     );
 
-    // Re-bucket so the UI sees added → modified → deleted (matches the
-    // working-tree popover order).
+    // Step 3 — combine + sort to match the working-tree popover order.
     const order: Record<GitFileDiffStatus, number> = { added: 0, modified: 1, deleted: 2 };
-    patches.sort((a, b) => order[a.status] - order[b.status]);
+    const allPatches: GitWorkingTreePatch[] = [...trackedPatches.values(), ...untrackedPatches];
+    allPatches.sort((a, b) => order[a.status] - order[b.status]);
 
-    return { patches };
+    return { patches: allPatches };
   }
 
   /**

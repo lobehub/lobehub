@@ -14,6 +14,7 @@ import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-bu
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
 import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/executor';
+import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/executor';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 import { taskExecutor } from '@lobechat/builtin-tool-task/executor';
@@ -157,6 +158,7 @@ registerExecutors([
   activatorExecutor,
   topicReferenceExecutor,
   userInteractionExecutor,
+  lobeAgentExecutor,
   webOnboardingExecutor,
   webBrowsing,
 ]);
