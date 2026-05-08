@@ -714,20 +714,6 @@
       "when": 1778164638645,
       "tag": "0101_add_messenger_tables",
       "breakpoints": true
-    },
-    {
-      "idx": 102,
-      "version": "7",
-      "when": 1777659783540,
-      "tag": "0102_messenger_account_links_tenant_id",
-      "breakpoints": true
-    },
-    {
-      "idx": 103,
-      "version": "7",
-      "when": 1777998470434,
-      "tag": "0103_add_system_bot_providers",
-      "breakpoints": true
     }
   ],
   "version": "6"
