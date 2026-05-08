@@ -203,8 +203,10 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
                         onClick={() => toggle(tpl.id)}
                         onKeyDown={(event) => handleCardKeyDown(event, tpl.id)}
                       >
-                        <Avatar avatar={avatar} shape="square" size={36} />
-                        <div className={styles.cardTitle}>{tpl.title}</div>
+                        <div className={styles.cardHeader}>
+                          <Avatar avatar={avatar} shape="square" size={36} />
+                          <div className={styles.cardTitle}>{tpl.title}</div>
+                        </div>
                         {tpl.description && (
                           <div className={styles.cardDescription}>{tpl.description}</div>
                         )}
