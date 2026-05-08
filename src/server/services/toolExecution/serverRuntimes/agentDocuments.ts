@@ -4,11 +4,7 @@ import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-doc
 
 import { TaskModel } from '@/database/models/task';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
-import {
-  emitToolOutcomeSafely,
-  resolveToolOutcomeScope,
-} from '@/server/services/agentSignal/procedure';
-import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
+import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -33,39 +29,22 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       summary: string;
       toolAction: string;
     }) => {
-      const { scope, scopeKey } = resolveToolOutcomeScope({
+      await emitAgentDocumentToolOutcomeSafely({
+        agentDocumentId: input.agentDocumentId,
         agentId: input.agentId ?? context.agentId,
-        taskId: context.taskId,
-        topicId: context.topicId,
-        userId,
-      });
-
-      await emitToolOutcomeSafely({
         apiName: input.apiName,
-        context: { agentId: input.agentId ?? context.agentId, userId },
-        domainKey: 'document:agent-document',
         errorReason: input.errorReason,
-        identifier: AgentDocumentsIdentifier,
-        intentClass: input.hintIsSkill ? 'hinted_skill_document' : 'explicit_persistence',
+        hintIsSkill: input.hintIsSkill,
         messageId: context.messageId,
         operationId: context.operationId,
-        policyStateStore: redisPolicyStateStore,
-        relatedObjects: input.agentDocumentId
-          ? [
-              {
-                objectId: input.agentDocumentId,
-                objectType: 'agent-document',
-                relation: input.relation,
-              },
-            ]
-          : undefined,
-        scope,
-        scopeKey,
+        relation: input.relation,
         status: input.status,
         summary: input.summary,
-        ttlSeconds: 7 * 24 * 60 * 60,
+        taskId: context.taskId,
         toolAction: input.toolAction,
         toolCallId: context.toolCallId,
+        topicId: context.topicId,
+        userId,
       });
     };
 

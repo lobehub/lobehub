@@ -110,10 +110,33 @@ const normalizeClientRuntimeCompleteStatus = (
   return undefined;
 };
 
-const findCompletionAssistantMessageId = (messages: UIChatMessage[], parentMessageId: string) => {
-  return messages.findLast(
-    (message) => message.role === 'assistant' && message.parentId === parentMessageId,
-  )?.id;
+const findCompletionAssistantMessageId = (
+  messages: UIChatMessage[],
+  parentMessageId: string,
+  parentMessageType: 'user' | 'assistant' | 'tool',
+) => {
+  const messagesById = new Map(messages.map((message) => [message.id, message]));
+  const parentMessage = messagesById.get(parentMessageId);
+  const isDescendantOfParent = (message: UIChatMessage) => {
+    let currentParentId = message.parentId;
+    const visited = new Set<string>();
+
+    while (currentParentId && !visited.has(currentParentId)) {
+      if (currentParentId === parentMessageId) return true;
+      visited.add(currentParentId);
+      currentParentId = messagesById.get(currentParentId)?.parentId;
+    }
+
+    return false;
+  };
+
+  return (
+    messages.findLast((message) => message.role === 'assistant' && isDescendantOfParent(message))
+      ?.id ??
+    (parentMessageType === 'assistant' && parentMessage?.role === 'assistant'
+      ? parentMessage.id
+      : undefined)
+  );
 };
 
 /**
@@ -614,7 +637,13 @@ export class StreamingExecutorActionImpl {
 
     const emitRuntimeCompleteSource = () => {
       const finalMessages = this.#get().messagesMap[messageKey] || [];
-      const assistantMessageId = findCompletionAssistantMessageId(finalMessages, parentMessageId);
+      const assistantMessageId =
+        findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
+        findCompletionAssistantMessageId(
+          this.#get().dbMessagesMap[messageKey] || [],
+          parentMessageId,
+          parentMessageType,
+        );
       const operationStatus = this.#get().operations[operationId]?.status;
 
       void emitClientAgentSignalSourceEvent({

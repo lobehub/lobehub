@@ -678,6 +678,27 @@ export const createAgentExecutors = (context: {
 
       // Get context from operation
       const opContext = getOperationContext();
+      // Get assistant message to derive the same-turn source user message when the root
+      // runtime operation is anchored to the assistant message.
+      const latestMessages = context.get().dbMessagesMap[context.messageKey] || [];
+      const existingToolMessage = payload.skipCreateToolMessage
+        ? latestMessages.find((m) => m.id === payload.parentMessageId)
+        : undefined;
+      const assistantMessage =
+        latestMessages.find((m) => m.id === payload.parentMessageId && m.role === 'assistant') ??
+        (existingToolMessage?.parentId
+          ? latestMessages.find(
+              (m) => m.id === existingToolMessage.parentId && m.role === 'assistant',
+            )
+          : undefined) ??
+        (opContext.messageId
+          ? latestMessages.find((m) => m.id === opContext.messageId && m.role === 'assistant')
+          : undefined) ??
+        latestMessages.findLast((m) => m.role === 'assistant');
+      const sourceMessageId =
+        opContext.sourceMessageId ??
+        assistantMessage?.parentId ??
+        (opContext.messageId !== assistantMessage?.id ? opContext.messageId : undefined);
 
       // ============ Create toolCalling operation (top-level) ============
       const { operationId: toolOperationId } = context.get().startOperation({
@@ -686,6 +707,7 @@ export const createAgentExecutors = (context: {
           agentId: opContext.agentId!,
           groupId: opContext.groupId,
           scope: opContext.scope,
+          sourceMessageId,
           topicId: opContext.topicId,
           threadId: opContext.threadId,
           viewedTask: opContext.viewedTask,
@@ -700,24 +722,17 @@ export const createAgentExecutors = (context: {
       });
 
       try {
-        // Get assistant message to extract groupId
-        const latestMessages = context.get().dbMessagesMap[context.messageKey] || [];
-        // Find the last assistant message (should be created by call_llm)
-        const assistantMessage = latestMessages.findLast((m) => m.role === 'assistant');
-
         let toolMessageId: string;
 
         if (payload.skipCreateToolMessage) {
           // Reuse existing tool message (resumption mode)
           toolMessageId = payload.parentMessageId;
-          // Check if tool message already exists (e.g., from human approval flow)
-          const existingToolMessage = latestMessages.find((m) => m.id === toolMessageId)!;
 
           log(
             '[%s][call_tool] Resuming with existing tool message: %s (status: %s)',
             sessionLogId,
             toolMessageId,
-            existingToolMessage.pluginIntervention?.status,
+            existingToolMessage?.pluginIntervention?.status,
           );
         } else {
           // Create new tool message (normal mode)

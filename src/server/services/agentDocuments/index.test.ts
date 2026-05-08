@@ -18,6 +18,7 @@ import { AgentDocumentsService } from './index';
 const headlessEditorMocks = vi.hoisted(() => ({
   applyLiteXML: vi.fn(),
   applyLiteXMLBatch: vi.fn(),
+  throwHydrateEditorData: false,
 }));
 
 vi.mock('@/database/models/agentDocuments', () => ({
@@ -72,6 +73,9 @@ vi.mock('@lobehub/editor/headless', () => ({
         markdown,
       })),
       hydrateEditorData: vi.fn(() => {
+        if (headlessEditorMocks.throwHydrateEditorData) {
+          throw new Error('stale editor data');
+        }
         markdown = 'projected';
       }),
       hydrateMarkdown: vi.fn((content: string) => {
@@ -128,6 +132,7 @@ describe('AgentDocumentsService', () => {
     (DocumentService as any).mockImplementation(() => mockDocumentService);
     (SkillResourceService as any).mockImplementation(() => mockSkillResourceService);
     (TopicDocumentModel as any).mockImplementation(() => mockTopicDocumentModel);
+    headlessEditorMocks.throwHydrateEditorData = false;
     vi.mocked(buildDocumentFilename).mockImplementation((title: string) => title);
     vi.mocked(extractMarkdownH1Title).mockImplementation((content: string) => ({ content }));
   });
@@ -375,6 +380,35 @@ describe('AgentDocumentsService', () => {
         editorData: { root: { children: [] } },
         id: 'agent-doc-1',
         litexml: '<p id="node-1">content</p>',
+        title: 'Doc',
+      });
+    });
+
+    it('should return markdown content when editor data hydration fails', async () => {
+      headlessEditorMocks.throwHydrateEditorData = true;
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        content: 'fallback content',
+        editorData: { root: { children: [{ text: 'stale' }], type: 'root' } },
+        id: 'agent-doc-1',
+        title: 'Doc',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById('agent-doc-1', 'agent-1');
+
+      // ROOT CAUSE:
+      //
+      // Some persisted editorData can be stale for the current Lexical schema.
+      // The decision agent reads snapshots through getDocumentSnapshotById, so
+      // throwing here would abort hinted document skill analysis.
+      //
+      // We fixed this by returning the markdown column as the readable fallback.
+      expect(result).toEqual({
+        agentId: 'agent-1',
+        content: 'fallback content',
+        editorData: { root: { children: [{ text: 'stale' }], type: 'root' } },
+        id: 'agent-doc-1',
         title: 'Doc',
       });
     });

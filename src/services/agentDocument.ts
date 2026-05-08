@@ -39,6 +39,19 @@ const getAgentDocumentId = (value: unknown) => getStringField(value, 'id');
 
 const getDocumentId = (value: unknown) => getStringField(value, 'documentId');
 
+interface AgentDocumentToolContext {
+  messageId: string;
+  operationId?: string;
+  taskId?: string | null;
+  toolCallId: string;
+  topicId?: string;
+}
+
+interface AgentDocumentToolTriggerInput {
+  toolContext?: AgentDocumentToolContext;
+  trigger?: 'tool';
+}
+
 class AgentDocumentService {
   getTemplates = async () => {
     return lambdaClient.agentDocument.getTemplates.query();
@@ -75,12 +88,14 @@ class AgentDocumentService {
     return result;
   };
 
-  createDocument = async (params: {
-    agentId: string;
-    content: string;
-    hintIsSkill?: boolean;
-    title: string;
-  }) => {
+  createDocument = async (
+    params: {
+      agentId: string;
+      content: string;
+      hintIsSkill?: boolean;
+      title: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.createDocument.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: getAgentDocumentId(result),
@@ -92,13 +107,15 @@ class AgentDocumentService {
     return result;
   };
 
-  createForTopic = async (params: {
-    agentId: string;
-    content: string;
-    hintIsSkill?: boolean;
-    title: string;
-    topicId: string;
-  }) => {
+  createForTopic = async (
+    params: {
+      agentId: string;
+      content: string;
+      hintIsSkill?: boolean;
+      title: string;
+      topicId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.createForTopic.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: getAgentDocumentId(result),
