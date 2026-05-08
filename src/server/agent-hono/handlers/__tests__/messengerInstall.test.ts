@@ -1,10 +1,11 @@
 // @vitest-environment node
+import type { Context } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '@/auth';
 import { issueOAuthState } from '@/server/services/messenger/oauth/stateStore';
 
-import { GET } from './route';
+import { messengerInstall } from '../messengerInstall';
 
 vi.mock('@/auth', () => ({
   auth: {
@@ -43,8 +44,17 @@ const VALID_DISCORD_CONFIG = {
   publicKey: 'pubkey',
 };
 
-const buildRequest = (path: string): Request => new Request(`https://app.example.com${path}`);
-const ctx = (platform: string) => ({ params: Promise.resolve({ platform }) });
+const buildContext = (platform: string, path: string): Context => {
+  const raw = new Request(`https://app.example.com${path}`);
+  return {
+    json: (b: any, status = 200) => Response.json(b, { status }),
+    req: {
+      param: (name: string) => (name === 'platform' ? platform : undefined),
+      raw,
+      url: raw.url,
+    },
+  } as any;
+};
 
 beforeEach(() => {
   vi.mocked(auth.api.getSession).mockResolvedValue({
@@ -60,15 +70,19 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/agent/messenger/[platform]/install', () => {
+describe('GET /api/agent/messenger/:platform/install', () => {
   describe('platform routing', () => {
     it('404s for an unknown platform', async () => {
-      const res = await GET(buildRequest('/api/agent/messenger/unknown/install'), ctx('unknown'));
+      const res = await messengerInstall(
+        buildContext('unknown', '/api/agent/messenger/unknown/install'),
+      );
       expect(res.status).toBe(404);
     });
 
     it('404s for a known platform that has no OAuth adapter (telegram)', async () => {
-      const res = await GET(buildRequest('/api/agent/messenger/telegram/install'), ctx('telegram'));
+      const res = await messengerInstall(
+        buildContext('telegram', '/api/agent/messenger/telegram/install'),
+      );
       expect(res.status).toBe(404);
     });
   });
@@ -77,7 +91,9 @@ describe('GET /api/agent/messenger/[platform]/install', () => {
     it('redirects unauthenticated users to /signin with callbackUrl', async () => {
       vi.mocked(auth.api.getSession).mockResolvedValue(null);
 
-      const res = await GET(buildRequest('/api/agent/messenger/slack/install'), ctx('slack'));
+      const res = await messengerInstall(
+        buildContext('slack', '/api/agent/messenger/slack/install'),
+      );
       expect(res.status).toBe(302);
       const parsed = new URL(res.headers.get('location')!);
       expect(parsed.pathname).toBe('/signin');
@@ -87,13 +103,17 @@ describe('GET /api/agent/messenger/[platform]/install', () => {
     it('returns 503 when Slack OAuth env is not configured', async () => {
       vi.mocked(getMessengerSlackConfig).mockResolvedValue(null);
 
-      const res = await GET(buildRequest('/api/agent/messenger/slack/install'), ctx('slack'));
+      const res = await messengerInstall(
+        buildContext('slack', '/api/agent/messenger/slack/install'),
+      );
       expect(res.status).toBe(503);
       expect(await res.text()).toMatch(/Slack messenger is not configured/);
     });
 
     it('issues a state token bound to the LobeHub user and 302s to Slack authorize', async () => {
-      const res = await GET(buildRequest('/api/agent/messenger/slack/install'), ctx('slack'));
+      const res = await messengerInstall(
+        buildContext('slack', '/api/agent/messenger/slack/install'),
+      );
       expect(res.status).toBe(302);
 
       expect(issueOAuthState).toHaveBeenCalledWith({
@@ -113,9 +133,8 @@ describe('GET /api/agent/messenger/[platform]/install', () => {
     });
 
     it('forwards returnTo into the state payload when provided', async () => {
-      await GET(
-        buildRequest('/api/agent/messenger/slack/install?returnTo=/settings/messenger'),
-        ctx('slack'),
+      await messengerInstall(
+        buildContext('slack', '/api/agent/messenger/slack/install?returnTo=/settings/messenger'),
       );
       expect(issueOAuthState).toHaveBeenCalledWith({
         lobeUserId: 'lobe-user-1',
@@ -131,13 +150,17 @@ describe('GET /api/agent/messenger/[platform]/install', () => {
         clientSecret: undefined,
       });
 
-      const res = await GET(buildRequest('/api/agent/messenger/discord/install'), ctx('discord'));
+      const res = await messengerInstall(
+        buildContext('discord', '/api/agent/messenger/discord/install'),
+      );
       expect(res.status).toBe(503);
       expect(await res.text()).toMatch(/Discord messenger is not configured/);
     });
 
     it('302s to discord.com authorize with bot scope and permissions', async () => {
-      const res = await GET(buildRequest('/api/agent/messenger/discord/install'), ctx('discord'));
+      const res = await messengerInstall(
+        buildContext('discord', '/api/agent/messenger/discord/install'),
+      );
       expect(res.status).toBe(302);
       const parsed = new URL(res.headers.get('location')!);
       expect(parsed.origin + parsed.pathname).toBe('https://discord.com/api/oauth2/authorize');

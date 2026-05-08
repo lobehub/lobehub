@@ -1,4 +1,5 @@
 import debug from 'debug';
+import type { Context } from 'hono';
 
 import { auth } from '@/auth';
 import { appEnv } from '@/envs/app';
@@ -23,11 +24,13 @@ const log = debug('lobe-server:messenger:install');
  * public Marketplace deep link, so the install row is bound to a real user
  * end-to-end.
  */
-export const GET = async (
-  req: Request,
-  { params }: { params: Promise<{ platform: string }> },
-): Promise<Response> => {
-  const { platform } = await params;
+export async function messengerInstall(c: Context): Promise<Response> {
+  const platform = c.req.param('platform');
+  if (!platform) {
+    return c.json({ error: 'platform is required' }, 400);
+  }
+
+  const req = c.req.raw;
   const url = new URL(req.url);
 
   // 1. Platform definition must exist and expose an OAuth adapter.
@@ -84,4 +87,4 @@ export const GET = async (
 
   log('install: redirecting user=%s to %s authorize', session.user.id, platform);
   return Response.redirect(authorizeUrl, 302);
-};
+}
