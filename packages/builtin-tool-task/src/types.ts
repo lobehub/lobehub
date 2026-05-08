@@ -1,6 +1,9 @@
 import type { TaskStatus } from '@lobechat/types';
 
 export const TaskApiName = {
+  /** Add a comment to a task */
+  addTaskComment: 'addTaskComment',
+
   /** Create a new task, optionally as a subtask of another task */
   createTask: 'createTask',
 
@@ -10,7 +13,10 @@ export const TaskApiName = {
   /** Delete a task */
   deleteTask: 'deleteTask',
 
-  /** Edit a task's name, description, instruction, priority, or dependencies */
+  /** Delete a task comment */
+  deleteTaskComment: 'deleteTaskComment',
+
+  /** Edit a task's name, description, instruction, priority, parent, or dependencies */
   editTask: 'editTask',
 
   /** List tasks with optional filters */
@@ -21,6 +27,9 @@ export const TaskApiName = {
 
   /** Trigger async runs for multiple tasks in one call */
   runTasks: 'runTasks',
+
+  /** Update a task comment */
+  updateTaskComment: 'updateTaskComment',
 
   /** Update a task's status (e.g. complete, cancel) */
   updateTaskStatus: 'updateTaskStatus',
@@ -97,6 +106,38 @@ export interface ViewTaskState {
   success: boolean;
 }
 
+// ==================== task comments ====================
+
+export interface AddTaskCommentParams {
+  content: string;
+  identifier?: string;
+}
+
+export interface AddTaskCommentState {
+  commentId?: string;
+  identifier: string;
+  success: boolean;
+}
+
+export interface UpdateTaskCommentParams {
+  commentId: string;
+  content: string;
+}
+
+export interface UpdateTaskCommentState {
+  commentId: string;
+  success: boolean;
+}
+
+export interface DeleteTaskCommentParams {
+  commentId: string;
+}
+
+export interface DeleteTaskCommentState {
+  commentId: string;
+  success: boolean;
+}
+
 // ==================== editTask ====================
 
 export interface EditTaskParams {
@@ -106,6 +147,7 @@ export interface EditTaskParams {
   identifier: string;
   instruction?: string;
   name?: string;
+  parentIdentifier?: string | null;
   priority?: number;
   removeDependencies?: string[];
 }

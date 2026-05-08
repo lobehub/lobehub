@@ -131,6 +131,21 @@ export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, Edit
       });
     }
 
+    if (params.parentIdentifier !== undefined) {
+      segments.push({
+        content:
+          params.parentIdentifier === null ? (
+            <span className={styles.chip}>{t('builtins.lobe-task.edit.parentClear')}</span>
+          ) : (
+            <>
+              <span className={styles.label}>{t('builtins.lobe-task.edit.parent')}</span>
+              <span className={styles.chip}>{params.parentIdentifier}</span>
+            </>
+          ),
+        key: 'parent',
+      });
+    }
+
     if (params.assigneeAgentId !== undefined) {
       segments.push({
         content:

@@ -98,6 +98,33 @@ export const createTaskRuntime = ({
   };
 
   return {
+    addTaskComment: async (args: { content: string; identifier?: string }) => {
+      const id = args.identifier?.trim() || taskId;
+      if (!id) {
+        return {
+          content: 'No task identifier provided and no current task context.',
+          success: false,
+        };
+      }
+
+      try {
+        const result = await taskCaller.addComment({
+          authorAgentId: agentId,
+          content: args.content,
+          id,
+        });
+
+        return {
+          content: `Comment added to task ${id}.`,
+          success: true,
+          state: { commentId: result.data.id, identifier: id, success: true },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to add task comment';
+        return { content: `Failed to add task comment: ${message}`, success: false };
+      }
+    },
+
     createTask: async (args: CreateTaskArgs) => {
       const result = await createTaskImpl(args);
       const { identifier: _identifier, ...rest } = result;
@@ -156,6 +183,20 @@ export const createTaskRuntime = ({
       };
     },
 
+    deleteTaskComment: async (args: { commentId: string }) => {
+      try {
+        await taskCaller.deleteComment({ commentId: args.commentId });
+        return {
+          content: `Comment ${args.commentId} deleted.`,
+          success: true,
+          state: { commentId: args.commentId, success: true },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete task comment';
+        return { content: `Failed to delete task comment: ${message}`, success: false };
+      }
+    },
+
     editTask: async (args: {
       addDependencies?: string[];
       assigneeAgentId?: string | null;
@@ -163,6 +204,7 @@ export const createTaskRuntime = ({
       identifier: string;
       instruction?: string;
       name?: string;
+      parentIdentifier?: string | null;
       priority?: number;
       removeDependencies?: string[];
     }) => {
@@ -193,6 +235,11 @@ export const createTaskRuntime = ({
       if (args.description !== undefined) {
         updateData.description = args.description;
         changes.push('description updated');
+      }
+      if (args.parentIdentifier !== undefined) {
+        const parentIdentifier = args.parentIdentifier?.trim() || null;
+        updateData.parentTaskId = parentIdentifier;
+        changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
       }
       if (args.priority !== undefined) {
         updateData.priority = args.priority;
@@ -342,6 +389,20 @@ export const createTaskRuntime = ({
         content: [header, ...lines].join('\n'),
         success: failed === 0,
       };
+    },
+
+    updateTaskComment: async (args: { commentId: string; content: string }) => {
+      try {
+        await taskCaller.updateComment({ commentId: args.commentId, content: args.content });
+        return {
+          content: `Comment ${args.commentId} updated.`,
+          success: true,
+          state: { commentId: args.commentId, success: true },
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to update task comment';
+        return { content: `Failed to update task comment: ${message}`, success: false };
+      }
     },
 
     updateTaskStatus: async (args: { error?: string; identifier?: string; status: TaskStatus }) => {

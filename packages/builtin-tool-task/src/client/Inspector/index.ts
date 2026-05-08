@@ -8,6 +8,11 @@ import { EditTaskInspector } from './EditTask';
 import { ListTasksInspector } from './ListTasks';
 import { RunTaskInspector } from './RunTask';
 import { RunTasksInspector } from './RunTasks';
+import {
+  AddTaskCommentInspector,
+  DeleteTaskCommentInspector,
+  UpdateTaskCommentInspector,
+} from './TaskComment';
 import { UpdateTaskStatusInspector } from './UpdateTaskStatus';
 import { ViewTaskInspector } from './ViewTask';
 
@@ -18,13 +23,16 @@ import { ViewTaskInspector } from './ViewTask';
  * in the conversation UI for the lobe-task built-in tool.
  */
 export const TaskInspectors: Record<string, BuiltinInspector> = {
+  [TaskApiName.addTaskComment]: AddTaskCommentInspector as BuiltinInspector,
   [TaskApiName.createTask]: CreateTaskInspector as BuiltinInspector,
   [TaskApiName.createTasks]: CreateTasksInspector as BuiltinInspector,
   [TaskApiName.deleteTask]: DeleteTaskInspector as BuiltinInspector,
+  [TaskApiName.deleteTaskComment]: DeleteTaskCommentInspector as BuiltinInspector,
   [TaskApiName.editTask]: EditTaskInspector as BuiltinInspector,
   [TaskApiName.listTasks]: ListTasksInspector as BuiltinInspector,
   [TaskApiName.runTask]: RunTaskInspector as BuiltinInspector,
   [TaskApiName.runTasks]: RunTasksInspector as BuiltinInspector,
+  [TaskApiName.updateTaskComment]: UpdateTaskCommentInspector as BuiltinInspector,
   [TaskApiName.updateTaskStatus]: UpdateTaskStatusInspector as BuiltinInspector,
   [TaskApiName.viewTask]: ViewTaskInspector as BuiltinInspector,
 };
@@ -36,5 +44,10 @@ export { EditTaskInspector } from './EditTask';
 export { ListTasksInspector } from './ListTasks';
 export { RunTaskInspector } from './RunTask';
 export { RunTasksInspector } from './RunTasks';
+export {
+  AddTaskCommentInspector,
+  DeleteTaskCommentInspector,
+  UpdateTaskCommentInspector,
+} from './TaskComment';
 export { UpdateTaskStatusInspector } from './UpdateTaskStatus';
 export { ViewTaskInspector } from './ViewTask';

@@ -60,6 +60,7 @@ const updateSchema = z.object({
   heartbeatTimeout: z.number().min(1).nullable().optional(),
   instruction: z.string().optional(),
   name: z.string().optional(),
+  parentTaskId: z.string().nullable().optional(),
   priority: z.number().min(0).max(4).optional(),
   schedulePattern: z.string().nullable().optional(),
   scheduleTimezone: z.string().nullable().optional(),
@@ -111,6 +112,32 @@ async function assertAssigneeAgentBelongsToUser(
       message: 'Assignee agent not found',
     });
   }
+}
+
+async function resolveSafeParentTaskId(
+  model: TaskModel,
+  taskId: string,
+  parentTaskId: string | null,
+): Promise<string | null> {
+  if (parentTaskId === null) return null;
+
+  const parent = await resolveOrThrow(model, parentTaskId);
+  if (parent.id === taskId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Task cannot be parented to itself',
+    });
+  }
+
+  const descendants = await model.findAllDescendants(taskId);
+  if (descendants.some((task) => task.id === parent.id)) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Task cannot be parented to its own descendant',
+    });
+  }
+
+  return parent.id;
 }
 
 export const taskRouter = router({
@@ -170,6 +197,7 @@ export const taskRouter = router({
   addComment: taskProcedure
     .input(
       z.object({
+        authorAgentId: z.string().optional(),
         briefId: z.string().optional(),
         content: z.string().min(1),
         id: z.string(),
@@ -180,8 +208,10 @@ export const taskRouter = router({
       try {
         const model = ctx.taskModel;
         const task = await resolveOrThrow(model, input.id);
+        await assertAssigneeAgentBelongsToUser(ctx.agentModel, input.authorAgentId);
         const comment = await model.addComment({
-          authorUserId: ctx.userId,
+          authorAgentId: input.authorAgentId,
+          authorUserId: input.authorAgentId ? undefined : ctx.userId,
           briefId: input.briefId,
           content: input.content,
           taskId: task.id,
@@ -945,12 +975,18 @@ export const taskRouter = router({
     }),
 
   update: taskProcedure.input(idInput.merge(updateSchema)).mutation(async ({ input, ctx }) => {
-    const { id, ...data } = input;
+    const { id, parentTaskId, ...data } = input;
     try {
       const model = ctx.taskModel;
       await assertAssigneeAgentBelongsToUser(ctx.agentModel, data.assigneeAgentId);
       const resolved = await resolveOrThrow(model, id);
-      const task = await model.update(resolved.id, data);
+      const resolvedParentTaskId =
+        parentTaskId === undefined
+          ? undefined
+          : await resolveSafeParentTaskId(model, resolved.id, parentTaskId);
+      const updateData =
+        parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
+      const task = await model.update(resolved.id, updateData);
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {
