@@ -171,6 +171,8 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     );
 
     useEffect(() => {
+      if (!analytics) return;
+
       const node = cardRef.current;
       if (!node) return;
 
@@ -208,7 +210,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       observer.observe(node);
 
       return () => observer.disconnect();
-    }, [getCurrentCardStateProperties, template.id, trackCardEvent, userId]);
+    }, [analytics, getCurrentCardStateProperties, template.id, trackCardEvent, userId]);
 
     const scheduleText = useMemo(() => {
       const parsed = parseCronPattern(template.cronPattern);

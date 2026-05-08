@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SkillConnectionResult, UseSkillConnectionResult } from './useSkillConnection';
 
 const mocks = vi.hoisted(() => ({
+  analyticsEnabled: true,
   analyticsTrack: vi.fn(() => Promise.resolve()),
   createCronJob: vi.fn(),
   errorMessage: vi.fn(),
@@ -141,9 +142,11 @@ vi.mock('@/store/user', () => ({
 
 vi.mock('@lobehub/analytics/react', () => ({
   useAnalytics: () => ({
-    analytics: {
-      track: mocks.analyticsTrack,
-    },
+    analytics: mocks.analyticsEnabled
+      ? {
+          track: mocks.analyticsTrack,
+        }
+      : undefined,
   }),
 }));
 
@@ -234,7 +237,9 @@ const triggerIntersection = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   sessionStorage.clear();
+  mocks.analyticsEnabled = true;
   mocks.inboxAgentId = 'inbox-agent-1';
+  mocks.intersectionCallback = undefined;
   mocks.userId = 'user-1';
   mocks.requiredConnection = makeConnection();
   mocks.optionalConnection = makeConnection();
@@ -259,6 +264,47 @@ afterEach(() => {
 });
 
 describe('TaskTemplateCard analytics', () => {
+  it('does not mark an impression as tracked before analytics is ready', () => {
+    mocks.analyticsEnabled = false;
+    const { rerender } = render(
+      <TaskTemplateCard
+        position={0}
+        recommendationBatchId="batch-1"
+        template={makeTemplate()}
+        userInterestCount={1}
+        onCreated={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    expect(mocks.intersectionCallback).toBeUndefined();
+    expect(
+      Object.keys(sessionStorage).some((key) => key.startsWith('task-template-impression:')),
+    ).toBe(false);
+
+    mocks.analyticsEnabled = true;
+    rerender(
+      <TaskTemplateCard
+        position={0}
+        recommendationBatchId="batch-1"
+        template={makeTemplate()}
+        userInterestCount={1}
+        onCreated={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    triggerIntersection();
+
+    expect(mocks.analyticsTrack).toHaveBeenCalledWith({
+      name: 'task_template_card_impression',
+      properties: expect.objectContaining({
+        spm: 'home.task_templates.card_impression',
+        template_id: 'template-a',
+      }),
+    });
+  });
+
   it('tracks a card impression once per session storage key', () => {
     renderCard();
 
