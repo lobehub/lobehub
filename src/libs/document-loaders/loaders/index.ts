@@ -1,15 +1,6 @@
 import { SUPPORT_TEXT_LIST } from '../file';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../splitter';
 import { type DocumentChunk, type FileLoaderType } from '../types';
-import { CodeLoader } from './code';
-import { CsVLoader } from './csv';
-import { DocxLoader } from './docx';
-import { EPubLoader } from './epub';
-import { LatexLoader } from './latex';
-import { MarkdownLoader } from './markdown';
-import { PdfLoader } from './pdf';
-import { PPTXLoader } from './pptx';
-import { TextLoader } from './txt';
 
 class DocumentLoaderError extends Error {
   constructor(message: string) {
@@ -28,39 +19,48 @@ export class ChunkingLoader {
 
       switch (type) {
         case 'code': {
+          const { CodeLoader } = await import('./code');
           const ext = filename.split('.').pop();
           return await CodeLoader(txt, ext!);
         }
 
         case 'ppt': {
+          const { PPTXLoader } = await import('./pptx');
           return await PPTXLoader(fileBlob);
         }
 
         case 'latex': {
+          const { LatexLoader } = await import('./latex');
           return await LatexLoader(txt);
         }
 
         case 'pdf': {
+          const { PdfLoader } = await import('./pdf');
           return await PdfLoader(fileBlob);
         }
 
         case 'markdown': {
+          const { MarkdownLoader } = await import('./markdown');
           return await MarkdownLoader(txt);
         }
 
         case 'doc': {
+          const { DocxLoader } = await import('./docx');
           return await DocxLoader(fileBlob);
         }
 
         case 'text': {
+          const { TextLoader } = await import('./txt');
           return await TextLoader(txt);
         }
 
         case 'csv': {
+          const { CsVLoader } = await import('./csv');
           return await CsVLoader(fileBlob);
         }
 
         case 'epub': {
+          const { EPubLoader } = await import('./epub');
           return await EPubLoader(content);
         }
 

@@ -3,6 +3,11 @@ import { defineConfig } from './src/libs/next/config/define-config';
 const isVercel = !!process.env.VERCEL_ENV;
 
 const vercelConfig = {
+  experimental: {
+    // Keep Turbopack within the 8 GB Vercel build envelope.
+    // The limit is in bytes.
+    turbopackMemoryLimit: 4_500_000_000,
+  },
   // Vercel serverless optimization: exclude musl binaries from all routes
   // Vercel uses Amazon Linux (glibc), not Alpine Linux (musl)
   // This saves ~45MB (29MB canvas-musl + 16MB sharp-musl) per serverless function
