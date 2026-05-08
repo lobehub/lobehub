@@ -33,16 +33,13 @@ const needsOnboarding = (s: Pick<UserStore, 'agentOnboarding' | 'onboarding'>) =
 };
 
 /**
- * Whether the shared-prefix steps (Welcome+Privacy, Language) have been completed.
+ * Whether the shared-prefix steps have been completed.
  *
- * Derives from the RAW stored `responseLanguage` only — the flow guarantees step 1
- * (telemetry) precedes step 2 (language), so a stored responseLanguage implies
- * both steps were completed.
- *
- * `telemetry` cannot be used as a signal: DEFAULT_COMMON_SETTINGS sets it to `true`,
- * and setSettings strips fields equal to defaults from `s.settings`, so accepting
- * the default leaves `telemetry` undefined in raw stored settings. `responseLanguage`
- * has no default, so any explicit choice is preserved.
+ * Only `responseLanguage` is checked: completing the shared prefix is
+ * marked by writing it on step 2. Telemetry can't be used as a signal
+ * because `setSettings` strips fields that match the default
+ * (DEFAULT_COMMON_SETTINGS.telemetry === true), so a user who keeps
+ * the default-on choice never persists telemetry to s.settings.
  */
 const commonStepsCompleted = (s: Pick<UserStore, 'settings'>) =>
   s.settings?.general?.responseLanguage !== undefined;

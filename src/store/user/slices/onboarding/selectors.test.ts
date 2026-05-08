@@ -237,9 +237,17 @@ describe('onboardingSelectors', () => {
       expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
     });
 
-    it('returns false when responseLanguage is missing even if telemetry is stored', () => {
+    it('returns true even when telemetry is missing (telemetry is not part of derivation)', () => {
       const store = {
-        settings: { general: { telemetry: false } },
+        settings: { general: { responseLanguage: 'en-US' } },
+      } as unknown as UserStore;
+
+      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
+    });
+
+    it('returns false when responseLanguage is missing', () => {
+      const store = {
+        settings: { general: { telemetry: true } },
       } as unknown as UserStore;
 
       expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
