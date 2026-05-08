@@ -388,7 +388,7 @@ describe('feedbackActionPlanner', () => {
       },
     });
     const signal = createDomainSignal({
-      message: '不错，厉害，这个流程可以保留下来吗？',
+      message: 'Nice work. Can we keep this workflow?',
       messageId: 'msg_skill_defer',
       satisfactionResult: 'satisfied',
       signalId: 'sig_skill_defer',
@@ -401,7 +401,7 @@ describe('feedbackActionPlanner', () => {
       target: 'skill',
     });
     assignSourcePayload(signal, {
-      message: '不错，厉害，这个流程可以保留下来吗？',
+      message: 'Nice work. Can we keep this workflow?',
       messageId: 'msg_skill_defer',
       trigger: 'client.runtime.start',
     });
@@ -460,7 +460,7 @@ describe('feedbackActionPlanner', () => {
       markerReader: { shouldSuppress: vi.fn().mockResolvedValue(false) },
     });
     const signal = createDomainSignal({
-      message: '不错，厉害，这个流程可以保留下来吗？',
+      message: 'Nice work. Can we keep this workflow?',
       messageId: 'msg_skill_complete',
       satisfactionResult: 'satisfied',
       signalId: 'sig_skill_complete',
@@ -472,7 +472,7 @@ describe('feedbackActionPlanner', () => {
       target: 'skill',
     });
     assignSourcePayload(signal, {
-      message: '不错，厉害，这个流程可以保留下来吗？',
+      message: 'Nice work. Can we keep this workflow?',
       messageId: 'msg_skill_complete',
       trigger: 'client.runtime.complete',
     });

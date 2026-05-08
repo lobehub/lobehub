@@ -68,12 +68,12 @@ describe('skillIntent classifier', () => {
     };
 
     const ruleResult = classifySkillIntentByRules({
-      message: '不错，厉害，这个流程可以保留下来吗？',
+      message: 'Nice work. Can we keep this workflow?',
       serializedContext: 'topic=youtube-comment-workflow',
     });
     const result = await classifySkillIntent(
       {
-        message: '不错，厉害，这个流程可以保留下来吗？',
+        message: 'Nice work. Can we keep this workflow?',
         serializedContext: 'topic=youtube-comment-workflow',
       },
       { fallback },
@@ -81,7 +81,7 @@ describe('skillIntent classifier', () => {
 
     expect(ruleResult).toBeUndefined();
     expect(fallback.classify).toHaveBeenCalledWith({
-      message: '不错，厉害，这个流程可以保留下来吗？',
+      message: 'Nice work. Can we keep this workflow?',
       serializedContext: 'topic=youtube-comment-workflow',
       topicLabel: 'youtube-comment-workflow',
     });
@@ -242,7 +242,7 @@ describe('skillIntent classifier', () => {
 
     const result = await classifySkillIntent(
       {
-        message: '不错，厉害。',
+        message: 'Nice work.',
         serializedContext: 'topic=youtube-comment-workflow',
       },
       {

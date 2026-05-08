@@ -620,7 +620,7 @@ describe('defineSkillManagementActionHandler', () => {
           evidence: [{ cue: 'completion', excerpt: 'assistant completed' }],
           feedbackHint: 'satisfied',
           idempotencyKey: 'source_1:skill:msg_1',
-          message: '不错，厉害，这个流程可以保留下来吗？',
+          message: 'Nice work. Can we keep this workflow?',
           messageId: 'msg_1',
           reason: 'completion-triggered skill feedback',
           serializedContext: '{"surface":"chat"}',
@@ -632,7 +632,7 @@ describe('defineSkillManagementActionHandler', () => {
         },
         source: {
           payload: {
-            message: '不错，厉害，这个流程可以保留下来吗？',
+            message: 'Nice work. Can we keep this workflow?',
             messageId: 'msg_1',
             trigger: 'client.runtime.complete',
           },

@@ -51,7 +51,7 @@ describe('resolveClientRuntimeStartFeedbackSource', () => {
     await db.insert(users).values({ id: userId });
     await db.insert(topics).values({ id: 'topic_1', title: 'Workflow Topic', userId });
     await db.insert(messages).values({
-      content: '不错，厉害，这个流程可以保留下来吗？',
+      content: 'Nice work. Can we keep this workflow?',
       id: messageId,
       role: 'user',
       topicId: 'topic_1',
@@ -81,7 +81,7 @@ describe('resolveClientRuntimeStartFeedbackSource', () => {
     expect(result.source?.sourceId).toBe(messageId);
     expect(result.source?.payload).toMatchObject({
       agentId: 'agent_1',
-      message: '不错，厉害，这个流程可以保留下来吗？',
+      message: 'Nice work. Can we keep this workflow?',
       messageId,
       topicId: 'topic_1',
       trigger: 'client.runtime.start',

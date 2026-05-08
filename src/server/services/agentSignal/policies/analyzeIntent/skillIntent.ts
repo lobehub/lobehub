@@ -15,8 +15,6 @@ import type {
 import type {
   AgentSignalClassifierErrorSummary,
   AgentSignalSkillIntentClassification,
-  AgentSignalSkillIntentExplicitness,
-  AgentSignalSkillIntentRoute,
 } from '../types';
 
 const log = debug('lobe-server:agent-signal:skill-intent:agent');
@@ -99,32 +97,6 @@ const SkillIntentGenerateObjectSchema = {
   strict: true,
 } satisfies GenerateObjectSchema;
 
-const generateObjectRoles = ['assistant', 'system', 'user'] as const;
-
-const isGenerateObjectRole = (
-  role: string,
-): role is GenerateObjectPayload['messages'][number]['role'] => {
-  return generateObjectRoles.includes(role as (typeof generateObjectRoles)[number]);
-};
-
-const compactText = (value: string | undefined, maxLength = 1800): string | undefined => {
-  if (!value) return undefined;
-  if (value.length <= maxLength) return value;
-
-  return `${value.slice(0, maxLength)}...`;
-};
-
-const getTopicLabel = (serializedContext: string | undefined): string | undefined => {
-  if (!serializedContext) return undefined;
-
-  const topicMatch = /topic=([^;\n<]+)/i.exec(serializedContext);
-  return topicMatch?.[1];
-};
-
-const readRecord = (value: unknown): Record<string, unknown> | undefined => {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-};
-
 const redactErrorText = (value: string, maxLength = 480): string => {
   const redacted = value
     .replaceAll(/(bearer\s+)[\w.-]+/gi, '$1[redacted-token]')
@@ -133,29 +105,6 @@ const redactErrorText = (value: string, maxLength = 480): string => {
     .replaceAll(/\bsk-[\w-]{8,}\b/gi, '[redacted-key]');
 
   return redacted.length <= maxLength ? redacted : `${redacted.slice(0, maxLength)}...`;
-};
-
-const readErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-
-  const record = readRecord(error);
-  const message = record?.message;
-  if (typeof message === 'string') return message;
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-};
-
-const readErrorName = (error: unknown): string | undefined => {
-  if (error instanceof Error) return error.name;
-
-  const record = readRecord(error);
-  const name = record?.name ?? record?.errorType ?? record?.code;
-  return typeof name === 'string' ? name : undefined;
 };
 
 /**
@@ -168,37 +117,45 @@ const readErrorName = (error: unknown): string | undefined => {
  * - `{ name: "ProviderError", message: "invalid key: [redacted-key]" }`
  */
 const normalizeClassifierError = (error: unknown): AgentSignalClassifierErrorSummary => {
+  const readRecord = (value: unknown): Record<string, unknown> | undefined => {
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+  };
+  const readMessage = (value: unknown): string => {
+    if (value instanceof Error) return value.message;
+    if (typeof value === 'string') return value;
+
+    const message = readRecord(value)?.message;
+    if (typeof message === 'string') return message;
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+  const readName = (value: unknown): string | undefined => {
+    if (value instanceof Error) return value.name;
+
+    const record = readRecord(value);
+    const name = record?.name ?? record?.errorType ?? record?.code;
+    return typeof name === 'string' ? name : undefined;
+  };
   const record = readRecord(error);
   const cause = error instanceof Error ? error.cause : record?.cause;
+  const name = readName(error);
 
   return {
-    ...(cause === undefined ? {} : { cause: redactErrorText(readErrorMessage(cause)) }),
-    message: redactErrorText(readErrorMessage(error)),
-    ...(readErrorName(error) ? { name: readErrorName(error) } : {}),
+    ...(cause === undefined ? {} : { cause: redactErrorText(readMessage(cause)) }),
+    message: redactErrorText(readMessage(error)),
+    ...(name ? { name } : {}),
   };
 };
-
-const createClassification = (
-  explicitness: AgentSignalSkillIntentExplicitness,
-  route: AgentSignalSkillIntentRoute,
-  reason: string,
-  confidence: number,
-  actionIntent?: AgentSignalSkillIntentClassification['actionIntent'],
-  classifierError?: AgentSignalClassifierErrorSummary,
-): AgentSignalSkillIntentClassification => ({
-  ...(actionIntent ? { actionIntent } : {}),
-  ...(classifierError ? { classifierError } : {}),
-  confidence,
-  explicitness,
-  reason,
-  route,
-});
 
 /**
  * Classifies skill intent only when structural evidence is decisive.
  *
  * Before:
- * - "不错，厉害，这个流程可以保留下来吗？"
+ * - "Nice work. Can we keep this workflow?"
  * - "This workflow should become our reusable template."
  *
  * After:
@@ -247,21 +204,24 @@ export const classifySkillIntent = async (
   if (ruleResult) return ruleResult;
 
   if (!options.fallback) {
-    return createClassification(
-      'weak_positive',
-      'accumulate',
-      'insufficient-evidence',
-      0.35,
-      'maintain',
-    );
+    return {
+      actionIntent: 'maintain',
+      confidence: 0.35,
+      explicitness: 'weak_positive',
+      reason: 'insufficient-evidence',
+      route: 'accumulate',
+    };
   }
 
   try {
+    const topicLabel =
+      input.topicLabel ?? /topic=([^;\n<]+)/i.exec(input.serializedContext ?? '')?.[1];
+
     return SkillIntentClassificationSchema.parse(
       await options.fallback.classify({
         message: input.message,
         serializedContext: input.serializedContext,
-        topicLabel: input.topicLabel ?? getTopicLabel(input.serializedContext),
+        topicLabel,
       }),
     );
   } catch (error) {
@@ -275,14 +235,14 @@ export const classifySkillIntent = async (
       stage: 'skill-intent',
     });
 
-    return createClassification(
-      'weak_positive',
-      'accumulate',
-      'insufficient-evidence',
-      0.35,
-      'maintain',
+    return {
+      actionIntent: 'maintain',
       classifierError,
-    );
+      confidence: 0.35,
+      explicitness: 'weak_positive',
+      reason: 'insufficient-evidence',
+      route: 'accumulate',
+    };
   }
 };
 
@@ -293,18 +253,6 @@ export interface SkillIntentClassifierAgentModelConfig {
   model: string;
   provider: string;
 }
-
-const normalizeGenerateObjectMessages = (
-  messages: GenerateObjectPayload['messages'],
-): GenerateObjectPayload['messages'] => {
-  return messages.map((message) => {
-    if (!isGenerateObjectRole(message.role)) {
-      throw new TypeError(`Unsupported skill-intent classifier message role: ${message.role}`);
-    }
-
-    return message;
-  });
-};
 
 const createSkillIntentClassifierMessages = (
   input: SkillIntentClassifierInput,
@@ -317,7 +265,10 @@ const createSkillIntentClassifierMessages = (
   {
     content: JSON.stringify({
       message: input.message,
-      serializedContext: compactText(input.serializedContext),
+      serializedContext:
+        input.serializedContext && input.serializedContext.length > 1800
+          ? `${input.serializedContext.slice(0, 1800)}...`
+          : input.serializedContext,
       topicLabel: input.topicLabel,
     }),
     role: 'user',
@@ -384,7 +335,7 @@ export class SkillIntentClassifierAgentService implements SkillIntentClassifierS
 
     const result = await modelRuntime.generateObject(
       {
-        messages: normalizeGenerateObjectMessages(createSkillIntentClassifierMessages(input)),
+        messages: createSkillIntentClassifierMessages(input),
         model: this.modelConfig.model,
         schema: SkillIntentGenerateObjectSchema,
       },
