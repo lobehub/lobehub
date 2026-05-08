@@ -134,7 +134,6 @@ export const briefRouter = router({
     try {
       const service = new BriefService(ctx.serverDB, ctx.userId);
       const data = await service.listUnresolved();
-
       return { data, success: true };
     } catch (error) {
       console.error('[brief:listUnresolved]', error);

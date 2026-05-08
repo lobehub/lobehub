@@ -38,6 +38,7 @@ describe('BriefService', () => {
   const mockBriefModel = {
     list: vi.fn(),
     listUnresolved: vi.fn(),
+    listUnresolvedEnriched: vi.fn(),
     resolve: vi.fn(),
   };
 
@@ -101,7 +102,7 @@ describe('BriefService', () => {
         { avatar: '🔧', backgroundColor: null, id: 'agent-c', title: 'Agent C' },
       ]);
 
-      const result = await service.enrichBriefsWithAgents(briefs);
+      const result = await service.enrichBriefsWithAgents(briefs, { includeTreeAgents: true });
 
       expect(result[0].agent).toEqual({
         avatar: '🤖',
@@ -191,7 +192,7 @@ describe('BriefService', () => {
         },
       ]);
 
-      const result = await service.enrichBriefsWithAgents(briefs);
+      const result = await service.enrichBriefsWithAgents(briefs, { includeTreeAgents: true });
 
       expect(result[0].agents).toEqual([
         {
@@ -224,9 +225,36 @@ describe('BriefService', () => {
         { avatar: '🧠', backgroundColor: '#fff', id: 'agent-b', title: 'Agent B' },
       ]);
 
-      const result = await service.enrichBriefsWithAgents(briefs);
+      const result = await service.enrichBriefsWithAgents(briefs, { includeTreeAgents: true });
 
       expect(result[0].agents.map((agent) => agent.id)).toEqual(['agent-a', 'agent-b']);
+    });
+
+    it('should default to skipping the task-tree CTE and return empty agents[]', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: 'agent-a', id: 'b1', taskId: 'task-1', title: 'Brief 1' },
+      ] as any[];
+
+      mockTaskModel.findByIds.mockResolvedValue([{ id: 'task-1', status: 'scheduled' }]);
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: '🤖', backgroundColor: null, id: 'agent-a', title: 'Agent A' },
+      ]);
+
+      const result = await service.enrichBriefsWithAgents(briefs);
+
+      expect(result[0].agent).toEqual({
+        avatar: '🤖',
+        backgroundColor: null,
+        id: 'agent-a',
+        title: 'Agent A',
+      });
+      expect(result[0].taskStatus).toBe('scheduled');
+      expect(result[0].agents).toEqual([]);
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+      // direct-agent ids are passed straight through, no need to wait on the CTE.
+      expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(['agent-a']);
     });
   });
 
@@ -318,18 +346,47 @@ describe('BriefService', () => {
   });
 
   describe('listUnresolved', () => {
-    it('should return enriched unresolved briefs', async () => {
+    it('should map joined rows into BriefWithAgent without re-fetching', async () => {
       const service = new BriefService(db, userId);
 
-      mockBriefModel.listUnresolved.mockResolvedValue([
-        { agentId: null, id: 'b1', taskId: null, title: 'Unresolved' },
+      mockBriefModel.listUnresolvedEnriched.mockResolvedValue([
+        {
+          agentAvatar: null,
+          agentBackgroundColor: null,
+          agentRowId: null,
+          agentTitle: null,
+          brief: { agentId: null, id: 'b1', taskId: null, title: 'Solo' },
+          taskStatus: null,
+        },
+        {
+          agentAvatar: '🤖',
+          agentBackgroundColor: '#fff',
+          agentRowId: 'agent-a',
+          agentTitle: 'Agent A',
+          brief: { agentId: 'agent-a', id: 'b2', taskId: 'task-1', title: 'With Task' },
+          taskStatus: 'scheduled',
+        },
       ]);
 
       const result = await service.listUnresolved();
 
-      expect(result).toHaveLength(1);
-      expect(result[0].agent).toBeNull();
-      expect(mockBriefModel.listUnresolved).toHaveBeenCalled();
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        agent: null,
+        agents: [],
+        id: 'b1',
+        taskStatus: null,
+      });
+      expect(result[1]).toMatchObject({
+        agent: { avatar: '🤖', backgroundColor: '#fff', id: 'agent-a', title: 'Agent A' },
+        agents: [],
+        id: 'b2',
+        taskStatus: 'scheduled',
+      });
+      // No follow-up enrichment SQLs.
+      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+      expect(mockAgentModel.getAgentAvatarsByIds).not.toHaveBeenCalled();
     });
   });
 

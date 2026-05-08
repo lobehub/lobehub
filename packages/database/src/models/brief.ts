@@ -1,8 +1,18 @@
 import { and, desc, eq, isNull, notInArray, sql } from 'drizzle-orm';
 
+import { agents } from '../schemas/agent';
 import type { BriefItem, NewBrief } from '../schemas/task';
-import { briefs } from '../schemas/task';
+import { briefs, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
+
+export interface UnresolvedBriefRow {
+  agentAvatar: string | null;
+  agentBackgroundColor: string | null;
+  agentRowId: string | null;
+  agentTitle: string | null;
+  brief: BriefItem;
+  taskStatus: string | null;
+}
 
 export class BriefModel {
   private readonly userId: string;
@@ -69,6 +79,38 @@ export class BriefModel {
     return this.db
       .select()
       .from(briefs)
+      .where(and(eq(briefs.userId, this.userId), isNull(briefs.resolvedAt)))
+      .orderBy(
+        sql`CASE
+          WHEN ${briefs.priority} = 'urgent' THEN 0
+          WHEN ${briefs.priority} = 'normal' THEN 1
+          ELSE 2
+        END`,
+        desc(briefs.createdAt),
+      )
+      .limit(limit);
+  }
+
+  /**
+   * Same shape as {@link listUnresolved} but joins the producing agent and
+   * the parent task in a single SQL — saves one round trip vs. fetching
+   * briefs first and then enriching client-side. Used by the home Daily
+   * Brief surface where every brief renders `agent` + `taskStatus`.
+   */
+  async listUnresolvedEnriched(options?: { limit?: number }): Promise<UnresolvedBriefRow[]> {
+    const { limit = 20 } = options ?? {};
+    return this.db
+      .select({
+        agentAvatar: agents.avatar,
+        agentBackgroundColor: agents.backgroundColor,
+        agentRowId: agents.id,
+        agentTitle: agents.title,
+        brief: briefs,
+        taskStatus: tasks.status,
+      })
+      .from(briefs)
+      .leftJoin(agents, eq(briefs.agentId, agents.id))
+      .leftJoin(tasks, eq(briefs.taskId, tasks.id))
       .where(and(eq(briefs.userId, this.userId), isNull(briefs.resolvedAt)))
       .orderBy(
         sql`CASE

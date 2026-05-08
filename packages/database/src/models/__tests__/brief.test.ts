@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users } from '../../schemas';
+import { agents, tasks, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { BriefModel } from '../brief';
 
@@ -174,6 +174,87 @@ describe('BriefModel', () => {
 
       const unresolved = await model.listUnresolved({ limit: 2 });
       expect(unresolved).toHaveLength(2);
+    });
+  });
+
+  describe('listUnresolvedEnriched', () => {
+    it('should join the producing agent and parent task status in one query', async () => {
+      await serverDB.insert(agents).values({
+        avatar: '🤖',
+        backgroundColor: '#fff',
+        id: 'agent-x',
+        title: 'Agent X',
+        userId,
+      });
+      await serverDB.insert(tasks).values({
+        createdByUserId: userId,
+        id: 'task-x',
+        identifier: 'TASK-X',
+        instruction: 'do work',
+        name: 'Task X',
+        seq: 1,
+        status: 'paused',
+      });
+
+      const model = new BriefModel(serverDB, userId);
+      await model.create({
+        agentId: 'agent-x',
+        priority: 'urgent',
+        summary: 'Has agent + task',
+        taskId: 'task-x',
+        title: 'Joined',
+        type: 'decision',
+      });
+      await model.create({
+        priority: 'info',
+        summary: 'Bare brief',
+        title: 'No agent',
+        type: 'insight',
+      });
+
+      const rows = await model.listUnresolvedEnriched();
+      expect(rows).toHaveLength(2);
+
+      const joined = rows.find((r) => r.brief.title === 'Joined')!;
+      expect(joined.agentRowId).toBe('agent-x');
+      expect(joined.agentAvatar).toBe('🤖');
+      expect(joined.agentTitle).toBe('Agent X');
+      expect(joined.taskStatus).toBe('paused');
+
+      const bare = rows.find((r) => r.brief.title === 'No agent')!;
+      expect(bare.agentRowId).toBeNull();
+      expect(bare.taskStatus).toBeNull();
+    });
+
+    it('should still return briefs whose producing agent has been deleted', async () => {
+      const model = new BriefModel(serverDB, userId);
+      // agentId points at a row that doesn't exist — LEFT JOIN should keep
+      // the brief and surface null agent fields rather than dropping it.
+      await model.create({
+        agentId: 'agent-ghost',
+        summary: 'Producer gone',
+        title: 'Ghost',
+        type: 'result',
+      });
+
+      const rows = await model.listUnresolvedEnriched();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].brief.title).toBe('Ghost');
+      expect(rows[0].agentRowId).toBeNull();
+      expect(rows[0].agentAvatar).toBeNull();
+    });
+
+    it('should respect the default cap of 20 and a caller-provided limit', async () => {
+      const model = new BriefModel(serverDB, userId);
+      for (let i = 0; i < 25; i++) {
+        await model.create({ summary: `S${i}`, title: `Brief ${i}`, type: 'insight' });
+      }
+
+      const capped = await model.listUnresolvedEnriched();
+      expect(capped).toHaveLength(20);
+
+      const trimmed = await model.listUnresolvedEnriched({ limit: 3 });
+      expect(trimmed).toHaveLength(3);
     });
   });
 
