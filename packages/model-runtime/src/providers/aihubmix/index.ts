@@ -25,9 +25,19 @@ export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.AiHubMix,
   models: async ({ client }) => {
     try {
-      const modelsPage = (await client.models.list()) as any;
-      const modelList: AiHubMixModelCard[] = modelsPage.data || [];
-
+      // AiHubMix exposes two model list endpoints:
+      // - https://api.aihubmix.com/v1/models  — returns per-user-group list only (~256 models)
+      // - https://aihubmix.com/api/v1/models  — returns the complete model catalog (800+)
+      // Use the full endpoint so users can access all available models.
+      const response = await fetch('https://aihubmix.com/api/v1/models', {
+        headers: {
+          Authorization: `Bearer ${(client as any).apiKey}`,
+          'APP-Code': 'LobeHub',
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const json = (await response.json()) as any;
+      const modelList: AiHubMixModelCard[] = json.data || [];
       return await processMultiProviderModelList(modelList, 'aihubmix');
     } catch (error) {
       console.warn(
