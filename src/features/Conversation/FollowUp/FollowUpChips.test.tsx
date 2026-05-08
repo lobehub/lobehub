@@ -24,7 +24,10 @@ const CHILD_MSG = 'msg-1-child-answer';
 const TOPIC = 'topic-1';
 const OTHER_TOPIC = 'topic-2';
 
-const sendMessageMock = vi.fn();
+const updateInputMessageMock = vi.fn();
+const editorSetDocumentMock = vi.fn();
+const editorFocusMock = vi.fn();
+const editorMock = { focus: editorFocusMock, setDocument: editorSetDocumentMock };
 let isGeneratingMock = false;
 let displayMessagesMock: Array<{ children?: Array<{ id: string }>; id: string }> = [];
 
@@ -32,16 +35,19 @@ vi.mock('@/features/Conversation', () => ({
   useConversationStore: (selector: any) =>
     selector({
       displayMessages: displayMessagesMock,
+      editor: editorMock,
       operationState: {
         getMessageOperationState: () => ({ isGenerating: isGeneratingMock }),
       },
-      sendMessage: sendMessageMock,
+      updateInputMessage: updateInputMessageMock,
     }),
 }));
 
 describe('<FollowUpChips />', () => {
   beforeEach(() => {
-    sendMessageMock.mockReset();
+    updateInputMessageMock.mockReset();
+    editorSetDocumentMock.mockReset();
+    editorFocusMock.mockReset();
     isGeneratingMock = false;
     displayMessagesMock = [{ id: MSG }];
     useFollowUpActionStore.getState().reset();
@@ -122,7 +128,7 @@ describe('<FollowUpChips />', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('calls sendMessage and consume on click', () => {
+  it('fills the input and consumes on click instead of sending', () => {
     useFollowUpActionStore.setState({
       chips: [{ label: 'go', message: 'go ahead' }],
       messageId: MSG,
@@ -131,7 +137,9 @@ describe('<FollowUpChips />', () => {
     });
     render(<FollowUpChips messageId={MSG} topicId={TOPIC} />);
     fireEvent.click(screen.getByRole('button', { name: 'go' }));
-    expect(sendMessageMock).toHaveBeenCalledWith({ message: 'go ahead' });
+    expect(updateInputMessageMock).toHaveBeenCalledWith('go ahead');
+    expect(editorSetDocumentMock).toHaveBeenCalledWith('text', 'go ahead');
+    expect(editorFocusMock).toHaveBeenCalled();
     // consume() resets state to idle:
     expect(useFollowUpActionStore.getState().status).toBe('idle');
   });
