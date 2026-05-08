@@ -2,7 +2,8 @@
  * @see https://github.com/lobehub/lobe-chat/discussions/6563
  */
 import type { GoogleGenAIOptions } from '@google/genai';
-import type { ChatModelCard, AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType } from '@lobechat/types';
+import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { ClientOptions } from 'openai';
 import type OpenAI from 'openai';
