@@ -314,7 +314,7 @@ describe('createTaskRuntime', () => {
         update: vi.fn().mockResolvedValue({}),
       };
       const taskService = {} as any;
-      const taskCaller = { update: vi.fn().mockResolvedValue({}) };
+      const taskCaller = { update: vi.fn().mockResolvedValue({}) } as any;
       return { agentModel, taskCaller, taskModel, taskService };
     };
 
