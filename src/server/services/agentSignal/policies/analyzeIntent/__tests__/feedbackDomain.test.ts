@@ -484,8 +484,9 @@ describe('feedbackDomainJudge', () => {
           expect.objectContaining({
             payload: expect.objectContaining({
               skillActionIntent: 'maintain',
+              skillIntentConfidence: 0.35,
               skillIntentExplicitness: 'weak_positive',
-              skillIntentReason: 'generic positive feedback without durable future-use instruction',
+              skillIntentReason: 'insufficient-evidence',
               skillRoute: 'accumulate',
               target: 'skill',
             }),

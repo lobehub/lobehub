@@ -33,6 +33,7 @@ import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
+import { type OperationStatus } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import {
   notifyDesktopHumanApprovalRequired,
@@ -84,6 +85,36 @@ const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
   hasImages: messages.some((message) => message.role === 'user' && !!message.imageList?.length),
   hasVideos: messages.some((message) => message.role === 'user' && !!message.videoList?.length),
 });
+
+/**
+ * Normalizes AgentRuntime terminal status into client runtime completion status.
+ *
+ * Before:
+ * - "done"
+ * - "waiting_for_human"
+ *
+ * After:
+ * - "completed"
+ * - "cancelled"
+ */
+const normalizeClientRuntimeCompleteStatus = (
+  runtimeStatus: AgentState['status'],
+  operationStatus?: OperationStatus,
+): 'cancelled' | 'completed' | 'failed' | undefined => {
+  if (operationStatus === 'cancelled') return 'cancelled';
+  if (operationStatus === 'failed') return 'failed';
+  if (runtimeStatus === 'waiting_for_human') return 'cancelled';
+  if (operationStatus === 'completed') return 'completed';
+  if (runtimeStatus === 'done') return 'completed';
+  if (runtimeStatus === 'error' || runtimeStatus === 'interrupted') return 'failed';
+  return undefined;
+};
+
+const findCompletionAssistantMessageId = (messages: UIChatMessage[], parentMessageId: string) => {
+  return messages.findLast(
+    (message) => message.role === 'assistant' && message.parentId === parentMessageId,
+  )?.id;
+};
 
 /**
  * Core streaming execution actions for AI chat
@@ -581,6 +612,25 @@ export class StreamingExecutorActionImpl {
     // Compute contextKey for message queue (per-context, not per-operation)
     const contextKey = messageKey;
 
+    const emitRuntimeCompleteSource = () => {
+      const finalMessages = this.#get().messagesMap[messageKey] || [];
+      const assistantMessageId = findCompletionAssistantMessageId(finalMessages, parentMessageId);
+      const operationStatus = this.#get().operations[operationId]?.status;
+
+      void emitClientAgentSignalSourceEvent({
+        payload: {
+          agentId,
+          assistantMessageId,
+          operationId,
+          status: normalizeClientRuntimeCompleteStatus(state.status, operationStatus),
+          threadId: threadId ?? undefined,
+          topicId: topicId ?? undefined,
+        },
+        sourceId: `${operationId}:client:complete`,
+        sourceType: 'client.runtime.complete',
+      });
+    };
+
     // Execute the agent runtime loop
     let stepCount = 0;
     while (state.status !== 'done' && state.status !== 'error') {
@@ -788,6 +838,8 @@ export class StreamingExecutorActionImpl {
           this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
         }
 
+        emitRuntimeCompleteSource();
+
         const execContext = { ...context };
         const mergedContent = merged.content;
         // Rebuild UploadFileItem-shaped objects from the queued file previews so
@@ -851,17 +903,7 @@ export class StreamingExecutorActionImpl {
     }
 
     log('[executeClientAgent] completed');
-    void emitClientAgentSignalSourceEvent({
-      payload: {
-        agentId,
-        operationId,
-        status: state.status,
-        threadId: threadId ?? undefined,
-        topicId: topicId ?? undefined,
-      },
-      sourceId: `${operationId}:client:complete`,
-      sourceType: 'client.runtime.complete',
-    });
+    emitRuntimeCompleteSource();
 
     // Desktop notification (if not in tools calling mode)
     if (isDesktop) {

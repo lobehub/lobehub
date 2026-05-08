@@ -178,6 +178,14 @@ function createDomainSignal(
   }
 }
 
+const assignSourcePayload = (
+  signal: DomainSignalVariantByTarget[SupportedTask4DomainTarget],
+  payload: Record<string, unknown>,
+) => {
+  const source = signal.source as { payload?: Record<string, unknown> };
+  source.payload = source.payload ? { ...source.payload, ...payload } : { ...payload };
+};
+
 describe('feedbackActionPlanner', () => {
   /**
    * @example
@@ -326,16 +334,17 @@ describe('feedbackActionPlanner', () => {
 
   it('plans skill-management actions for skill domain signals', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
-    const skillResult = await handler.handle(
-      createDomainSignal({
-        message: 'This successful workflow should become a reusable skill.',
-        messageId: 'msg_2',
-        signalId: 'sig_2',
-        sourceId: 'source_2',
-        target: 'skill',
-      }),
-      context,
-    );
+    const signal = createDomainSignal({
+      message: 'This successful workflow should become a reusable skill.',
+      messageId: 'msg_2',
+      signalId: 'sig_2',
+      sourceId: 'source_2',
+      target: 'skill',
+    });
+    assignSourcePayload(signal, {
+      trigger: 'client.runtime.complete',
+    });
+    const skillResult = await handler.handle(signal, context);
 
     expect(skillResult).toEqual(
       expect.objectContaining({
@@ -353,6 +362,125 @@ describe('feedbackActionPlanner', () => {
         status: 'dispatch',
       }),
     );
+  });
+
+  /**
+   * @example
+   * User-stage direct skill intent is saved as a deferred candidate until completion evidence arrives.
+   */
+  it('defers direct skill decisions from normal user-message sources', async () => {
+    const store = createStore();
+    const procedure = createProcedurePolicyOptions({
+      now: () => 123,
+      policyStateStore: store,
+      ttlSeconds: 3600,
+    });
+    const writeCandidate = vi.spyOn(procedure.procedureState.skillCandidates!, 'write');
+    const skillActions = { prepare: vi.fn() };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      procedure: {
+        now: () => 123,
+        procedureState: procedure.procedureState,
+      },
+    });
+    const signal = createDomainSignal({
+      message: '不错，厉害，这个流程可以保留下来吗？',
+      messageId: 'msg_skill_defer',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_defer',
+      skillActionIntent: 'create',
+      skillIntentConfidence: 0.88,
+      skillIntentExplicitness: 'implicit_strong_learning',
+      skillIntentReason: 'User asked to preserve this workflow.',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_defer',
+      target: 'skill',
+    });
+    assignSourcePayload(signal, {
+      message: '不错，厉害，这个流程可以保留下来吗？',
+      messageId: 'msg_skill_defer',
+      trigger: 'client.runtime.start',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({
+      concluded: { reason: 'skill mutation deferred until client.runtime.complete' },
+      status: 'conclude',
+    });
+    expect(skillActions.prepare).not.toHaveBeenCalled();
+    expect(writeCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionIntent: 'create',
+        confidence: 0.88,
+        createdAt: 123,
+        explicitness: 'implicit_strong_learning',
+        feedbackMessageId: 'msg_skill_defer',
+        reason: 'User asked to preserve this workflow.',
+        route: 'direct_decision',
+        scopeKey: 'topic:thread_1',
+        sourceId: 'source_skill_defer',
+      }),
+    );
+    await expect(
+      procedure.procedureState.skillCandidates!.read({
+        scopeKey: 'topic:thread_1',
+        sourceId: 'source_skill_defer',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        feedbackMessageId: 'msg_skill_defer',
+        route: 'direct_decision',
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * Completion-triggered direct skill intent is allowed to mutate skills.
+   */
+  it('dispatches direct skill decisions from completion-triggered user feedback', async () => {
+    const action = {
+      actionId: 'action_1',
+      actionType: 'action.skill-management.handle' as const,
+      payload: {},
+    };
+    const skillActions = {
+      prepare: vi.fn(() => ({ action, reason: 'completion evidence', risk: 'low' as const })),
+    };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      markerReader: { shouldSuppress: vi.fn().mockResolvedValue(false) },
+    });
+    const signal = createDomainSignal({
+      message: '不错，厉害，这个流程可以保留下来吗？',
+      messageId: 'msg_skill_complete',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_complete',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'implicit_strong_learning',
+      skillIntentReason: 'Completion has final evidence.',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_complete',
+      target: 'skill',
+    });
+    assignSourcePayload(signal, {
+      message: '不错，厉害，这个流程可以保留下来吗？',
+      messageId: 'msg_skill_complete',
+      trigger: 'client.runtime.complete',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({ actions: [action], status: 'dispatch' });
+    expect(skillActions.prepare).toHaveBeenCalledWith(signal);
   });
 
   it('does not directly handle satisfied skill domain signals', async () => {
@@ -378,21 +506,22 @@ describe('feedbackActionPlanner', () => {
    */
   it('plans direct skill-management actions for satisfied explicit skill intent', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
-    const result = await handler.handle(
-      createDomainSignal({
-        message:
-          'The SKILL.md draft from the chat agent is usable. Convert it into a real skills/bundle.',
-        messageId: 'msg_skill_convert',
-        satisfactionResult: 'satisfied',
-        signalId: 'sig_skill_convert',
-        skillActionIntent: 'create',
-        skillIntentExplicitness: 'explicit_action',
-        skillRoute: 'direct_decision',
-        sourceId: 'source_skill_convert',
-        target: 'skill',
-      }),
-      context,
-    );
+    const signal = createDomainSignal({
+      message:
+        'The SKILL.md draft from the chat agent is usable. Convert it into a real skills/bundle.',
+      messageId: 'msg_skill_convert',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_convert',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'explicit_action',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_convert',
+      target: 'skill',
+    });
+    assignSourcePayload(signal, {
+      trigger: 'client.runtime.complete',
+    });
+    const result = await handler.handle(signal, context);
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -416,20 +545,21 @@ describe('feedbackActionPlanner', () => {
    */
   it('plans direct skill-management actions for implicit strong learning intent', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
-    const result = await handler.handle(
-      createDomainSignal({
-        message: 'For future database migration reviews, follow the checklist from earlier.',
-        messageId: 'msg_skill_implicit',
-        satisfactionResult: 'satisfied',
-        signalId: 'sig_skill_implicit',
-        skillActionIntent: 'create',
-        skillIntentExplicitness: 'implicit_strong_learning',
-        skillRoute: 'direct_decision',
-        sourceId: 'source_skill_implicit',
-        target: 'skill',
-      }),
-      context,
-    );
+    const signal = createDomainSignal({
+      message: 'For future database migration reviews, follow the checklist from earlier.',
+      messageId: 'msg_skill_implicit',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_implicit',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'implicit_strong_learning',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_implicit',
+      target: 'skill',
+    });
+    assignSourcePayload(signal, {
+      trigger: 'client.runtime.complete',
+    });
+    const result = await handler.handle(signal, context);
 
     expect(result).toEqual(
       expect.objectContaining({

@@ -1,3 +1,4 @@
+import type { DeferredSkillCandidate } from '../policies/analyzeIntent/skillCandidate';
 import type { ProcedureAccumulatorScoreResult } from '../procedure/accumulators/procedure';
 import type { AgentSignalProcedureInspectionSnapshot } from '../procedure/inspector';
 import type { ProcedureMarkerKeyInput } from '../procedure/keys';
@@ -74,5 +75,15 @@ export interface ProcedureStateService {
   records: {
     /** Writes one compact procedure record field. */
     write: (record: AgentSignalProcedureRecord) => Promise<void>;
+  };
+  /** Deferred skill-candidate operations between user and completion analysis stages. */
+  skillCandidates?: {
+    /** Reads one deferred skill candidate by source id. */
+    read: (input: {
+      scopeKey: string;
+      sourceId: string;
+    }) => Promise<DeferredSkillCandidate | undefined>;
+    /** Writes one deferred skill candidate with facade-owned expiry semantics. */
+    write: (candidate: DeferredSkillCandidate) => Promise<void>;
   };
 }

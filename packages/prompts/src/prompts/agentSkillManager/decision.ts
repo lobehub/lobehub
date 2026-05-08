@@ -62,6 +62,10 @@ Rules:
 - No-op for generic praise, style preferences, memory-like facts, or insufficient context.
 - Reject when the user asked for document-only behavior, forbids skill conversion, or same-turn document evidence makes skill mutation unsafe.
 - Use read-only tools to inspect same-turn document outcomes before guessing from document names or content shape.
+- Treat same-turn document outcomes with hintIsSkill:true as strong evidence, not automatic authorization.
+- For hinted ordinary documents, prefer create/register candidates unless exactly one existing managed skill is the target.
+- Use refine only with one resolved targetSkillRefs entry; use consolidate only with multiple resolved targetSkillRefs entries.
+- Do not force refine or consolidate without targetSkillRefs.
 - Do not infer skill intent from a filename, title, or SKILL.md-shaped content alone.
 - Do not author SKILL.md content, YAML frontmatter, or file-operation patches in this decision.
 - Prefer patch/refine over duplicate creation.

@@ -1,4 +1,8 @@
 import {
+  readDeferredSkillCandidate,
+  writeDeferredSkillCandidate,
+} from '../policies/analyzeIntent/skillCandidate';
+import {
   appendAndScoreProcedureAccumulatorRecord,
   appendProcedureAccumulatorRecord,
 } from '../procedure/accumulators/procedure';
@@ -13,6 +17,10 @@ import { appendProcedureReceipt } from '../procedure/receipt';
 import { writeProcedureRecordField } from '../procedure/record';
 import type { AgentSignalPolicyStateStore } from '../store/types';
 import type { ProcedureStateService } from './types';
+
+type ProcedureStateServiceWithSkillCandidates = ProcedureStateService & {
+  skillCandidates: NonNullable<ProcedureStateService['skillCandidates']>;
+};
 
 /**
  * Input for creating the procedure state facade.
@@ -41,7 +49,7 @@ export interface CreateProcedureStateServiceInput {
  */
 export const createProcedureStateService = (
   input: CreateProcedureStateServiceInput,
-): ProcedureStateService => {
+): ProcedureStateServiceWithSkillCandidates => {
   const now = input.now ?? (() => Date.now());
   const inspector = new AgentSignalProcedureInspector(input.policyStateStore);
 
@@ -56,6 +64,15 @@ export const createProcedureStateService = (
     },
     inspect: {
       scope: (scopeKey) => inspector.inspectScope(scopeKey),
+    },
+    skillCandidates: {
+      read: (candidateInput) => readDeferredSkillCandidate(input.policyStateStore, candidateInput),
+      write: (candidate) =>
+        writeDeferredSkillCandidate(input.policyStateStore, {
+          candidate,
+          scopeKey: candidate.scopeKey,
+          ttlSeconds: input.ttlSeconds,
+        }),
     },
     markers: {
       shouldSuppress: async (markerInput) => {

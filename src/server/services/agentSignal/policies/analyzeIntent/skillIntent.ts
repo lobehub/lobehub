@@ -37,6 +37,35 @@ const SkillIntentClassificationSchema = z
     reason: z.string(),
     route: z.enum(['direct_decision', 'accumulate', 'non_skill']),
   })
+  .superRefine((value, context) => {
+    if (value.explicitness === 'weak_positive' && value.route !== 'accumulate') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Weak-positive skill intent must accumulate instead of mutating skills directly.',
+        path: ['route'],
+      });
+    }
+
+    if (value.explicitness === 'non_skill_preference' && value.route !== 'non_skill') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Non-skill preferences must use the non_skill route.',
+        path: ['route'],
+      });
+    }
+
+    if (
+      value.route === 'direct_decision' &&
+      value.explicitness !== 'explicit_action' &&
+      value.explicitness !== 'implicit_strong_learning'
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Direct skill decisions require explicit action or implicit strong learning.',
+        path: ['explicitness'],
+      });
+    }
+  })
   .transform(({ actionIntent, ...value }) => ({
     ...value,
     ...(actionIntent ? { actionIntent } : {}),
@@ -149,40 +178,6 @@ const normalizeClassifierError = (error: unknown): AgentSignalClassifierErrorSum
   };
 };
 
-const hasSkillArtifactReference = (message: string) => {
-  return /skill|技能|workflow|工作流|procedure|流程|checklist|检查清单/i.test(message);
-};
-
-const hasConversionVerb = (message: string) => {
-  return /create|convert|turn into|make into|做成|变成|变为|转换|转成|沉淀|固化|整理成/i.test(
-    message,
-  );
-};
-
-const hasRefineVerb = (message: string) => {
-  return /update|refine|补上|补充|加入|加上|更新|完善|改进|扩展/i.test(message);
-};
-
-const hasMergeVerb = (message: string) => {
-  return /merge|consolidate|combine|deduplicate|合并|整合|去重/i.test(message);
-};
-
-const hasFutureProcedureReuse = (message: string) => {
-  return /(?:以后|之后|下次|每次|遇到).*(?:[按照来]|沿用|复用|参考|执行)|(?:future|next time|going forward|later).*(?:follow|reuse|use|apply|run)/i.test(
-    message,
-  );
-};
-
-const hasGenericPositive = (message: string) => {
-  return /有帮助|不错|挺好|清楚|works well|helpful|good/i.test(message);
-};
-
-const hasNegativePreference = (message: string) => {
-  return /不适合|别这么做|不要.*做|以后.*别|以后.*不要|not suitable|do not do this|don't do this|avoid this/i.test(
-    message,
-  );
-};
-
 const createClassification = (
   explicitness: AgentSignalSkillIntentExplicitness,
   route: AgentSignalSkillIntentRoute,
@@ -200,91 +195,29 @@ const createClassification = (
 });
 
 /**
- * Classifies obvious skill intent with conservative deterministic rules.
+ * Classifies skill intent only when structural evidence is decisive.
  *
  * Before:
- * - "Convert the SKILL.md draft into a real skills/bundle."
- * - "This explanation is quite helpful."
+ * - "不错，厉害，这个流程可以保留下来吗？"
+ * - "This workflow should become our reusable template."
  *
  * After:
- * - `{ explicitness: "explicit_action", route: "direct_decision" }`
- * - `{ explicitness: "weak_positive", route: "accumulate" }`
+ * - `undefined`
+ * - `undefined`
  */
 export const classifySkillIntentByRules = (
-  input: SkillIntentClassifierInput,
+  _input: SkillIntentClassifierInput,
 ): AgentSignalSkillIntentClassification | undefined => {
-  const message = input.message.trim();
-
-  if (hasNegativePreference(message) && !hasSkillArtifactReference(message)) {
-    return createClassification(
-      'non_skill_preference',
-      'non_skill',
-      'negative future preference belongs outside skill management',
-      0.82,
-      'noop',
-    );
-  }
-
-  if (hasSkillArtifactReference(message) && hasMergeVerb(message)) {
-    return createClassification(
-      'explicit_action',
-      'direct_decision',
-      'explicit skill consolidation request',
-      0.9,
-      'consolidate',
-    );
-  }
-
-  if (/[\w-]+-skill/i.test(message) && hasRefineVerb(message)) {
-    return createClassification(
-      'explicit_action',
-      'direct_decision',
-      'explicit named skill refinement request',
-      0.9,
-      'refine',
-    );
-  }
-
-  if (hasSkillArtifactReference(message) && hasRefineVerb(message)) {
-    return createClassification(
-      'explicit_action',
-      'direct_decision',
-      'explicit skill refinement request',
-      0.88,
-      'refine',
-    );
-  }
-
-  if (hasSkillArtifactReference(message) && hasConversionVerb(message)) {
-    return createClassification(
-      'explicit_action',
-      'direct_decision',
-      'explicit skill artifact conversion request',
-      0.92,
-      'create',
-    );
-  }
-
-  if (hasGenericPositive(message) && !hasFutureProcedureReuse(message)) {
-    return createClassification(
-      'weak_positive',
-      'accumulate',
-      'generic positive feedback without durable future-use instruction',
-      0.78,
-      'maintain',
-    );
-  }
-
   return undefined;
 };
 
 /**
- * Options for resolving skill intent after deterministic rules.
+ * Options for resolving skill intent after structural rules and semantic fallback.
  */
 export interface ClassifySkillIntentOptions {
   /** Diagnostics sink for fallback classifier failures. */
   diagnostics?: ClassifierDiagnosticsService;
-  /** Optional classifier used when deterministic rules are intentionally inconclusive. */
+  /** Optional classifier used when structural rules are inconclusive. */
   fallback?: SkillIntentClassifierService;
   /** Runtime scope key for diagnostics. */
   scopeKey?: string;
@@ -293,7 +226,7 @@ export interface ClassifySkillIntentOptions {
 }
 
 /**
- * Resolves skill intent using rules first and a small fallback classifier second.
+ * Resolves skill intent using structural rules first and a semantic classifier second.
  *
  * Use when:
  * - Domain routing selected `skill`
@@ -304,7 +237,7 @@ export interface ClassifySkillIntentOptions {
  * - `input.serializedContext` is compact same-turn evidence, not full documents
  *
  * Returns:
- * - A safe classification. Fallback failures become weak-positive accumulation.
+ * - A safe classification. Semantic fallback failures become weak-positive accumulation.
  */
 export const classifySkillIntent = async (
   input: SkillIntentClassifierInput,
@@ -345,7 +278,7 @@ export const classifySkillIntent = async (
     return createClassification(
       'weak_positive',
       'accumulate',
-      'classifier-fallback-failed',
+      'insufficient-evidence',
       0.35,
       'maintain',
       classifierError,
@@ -378,7 +311,7 @@ const createSkillIntentClassifierMessages = (
 ): GenerateObjectPayload['messages'] => [
   {
     content:
-      'Classify skill intent for Agent Signal. Return direct_decision only for explicit skill actions or implicit strong future-use procedural learning. Return accumulate for generic praise or weak approval. Return non_skill for user preference that does not belong to skill management. Do not author skills.',
+      'Classify skill intent for Agent Signal using semantic meaning and structured evidence. Return direct_decision only for explicit skill actions or implicit strong future-use procedural learning. Return accumulate for generic praise or weak approval. Return non_skill for user preference that does not belong to skill management. Do not author skills.',
     role: 'system',
   },
   {
@@ -392,10 +325,10 @@ const createSkillIntentClassifierMessages = (
 ];
 
 /**
- * Model-backed skill-intent classifier for ambiguous skill-domain feedback.
+ * Model-backed skill-intent classifier for skill-domain feedback.
  *
  * Use when:
- * - Deterministic rules cannot safely classify the skill-domain feedback
+ * - Structural evidence cannot safely classify the skill-domain feedback
  * - A small no-document-content model decision is acceptable
  *
  * Expects:
@@ -427,7 +360,7 @@ export class SkillIntentClassifierAgentService implements SkillIntentClassifierS
    * Classifies one ambiguous skill-domain feedback message.
    *
    * Use when:
-   * - Rule classification returned no confident decision
+   * - Structural classification returned no confident decision
    * - Runtime policy wiring provided model dependencies
    *
    * Expects:
