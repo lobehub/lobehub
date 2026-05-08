@@ -314,7 +314,7 @@ describe('createTaskRuntime', () => {
         update: vi.fn().mockResolvedValue({}),
       };
       const taskService = {} as any;
-      const taskCaller = {} as any;
+      const taskCaller = { update: vi.fn().mockResolvedValue({}) };
       return { agentModel, taskCaller, taskModel, taskService };
     };
 
@@ -338,6 +338,7 @@ describe('createTaskRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.content).toBe('Assignee agent not found: agt-other-user');
       expect(deps.taskModel.update).not.toHaveBeenCalled();
+      expect(deps.taskCaller.update).not.toHaveBeenCalled();
     });
 
     it('allows clearing assigneeAgentId without ownership lookup', async () => {
@@ -358,10 +359,14 @@ describe('createTaskRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(deps.agentModel.existsById).not.toHaveBeenCalled();
-      expect(deps.taskModel.update).toHaveBeenCalledWith('task-1', { assigneeAgentId: null });
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({
+        assigneeAgentId: null,
+        id: 'task-1',
+      });
+      expect(deps.taskModel.update).not.toHaveBeenCalled();
     });
 
-    it('passes parentIdentifier through as parentTaskId for router-side validation', async () => {
+    it('delegates parentIdentifier to router update for resolution and safety validation', async () => {
       const deps = makeDeps();
 
       const runtime = createTaskRuntime({
@@ -378,7 +383,8 @@ describe('createTaskRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(deps.taskModel.update).toHaveBeenCalledWith('task-1', { parentTaskId: 'T-43' });
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({ id: 'task-1', parentTaskId: 'T-43' });
+      expect(deps.taskModel.update).not.toHaveBeenCalled();
       expect(result.content).toContain('parent → T-43');
     });
 
@@ -399,7 +405,8 @@ describe('createTaskRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(deps.taskModel.update).toHaveBeenCalledWith('task-1', { parentTaskId: null });
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({ id: 'task-1', parentTaskId: null });
+      expect(deps.taskModel.update).not.toHaveBeenCalled();
       expect(result.content).toContain('parent cleared');
     });
   });

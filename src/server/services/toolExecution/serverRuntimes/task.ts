@@ -211,7 +211,14 @@ export const createTaskRuntime = ({
       const task = await taskModel.resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
-      const updateData: Record<string, any> = {};
+      const updateData: {
+        assigneeAgentId?: string | null;
+        description?: string;
+        instruction?: string;
+        name?: string;
+        parentTaskId?: string | null;
+        priority?: number;
+      } = {};
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
 
@@ -247,7 +254,7 @@ export const createTaskRuntime = ({
       }
 
       if (Object.keys(updateData).length > 0) {
-        ops.push(taskModel.update(task.id, updateData));
+        ops.push(taskCaller.update({ id: task.id, ...updateData }));
       }
 
       const applyDeps = async (
