@@ -19,11 +19,14 @@ export type AgentSignalReceiptView = Awaited<
 export const useAgentSignalReceipts = (input: {
   agentId?: string | null;
   enabled?: boolean;
+  pollingSignal?: string | null;
   topicId?: string | null;
 }) => {
   // TODO: Migrate Agent Signal receipt visibility to a dedicated product capability flag.
   const shouldFetch = input.enabled === true && Boolean(input.agentId && input.topicId);
   const scopeKey = shouldFetch ? `${input.agentId}:${input.topicId}` : undefined;
+  const pollingKey = shouldFetch ? `${scopeKey}:${input.pollingSignal ?? ''}` : undefined;
+  const pollingKeyRef = useRef<string | undefined>(undefined);
   const scopeKeyRef = useRef<string | undefined>(undefined);
   const latestCreatedAtRef = useRef<number | undefined>(undefined);
   const pollingRef = useRef<{ emptyRefreshes: number; startedAt?: number }>({ emptyRefreshes: 0 });
@@ -32,11 +35,15 @@ export const useAgentSignalReceipts = (input: {
   if (scopeKeyRef.current !== scopeKey) {
     scopeKeyRef.current = scopeKey;
     latestCreatedAtRef.current = undefined;
+    receiptsRef.current = [];
+  }
+
+  if (pollingKeyRef.current !== pollingKey) {
+    pollingKeyRef.current = pollingKey;
     pollingRef.current = {
       emptyRefreshes: 0,
       ...(shouldFetch ? { startedAt: Date.now() } : {}),
     };
-    receiptsRef.current = [];
   }
 
   const { data, isLoading } = useSWR(

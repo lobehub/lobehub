@@ -166,4 +166,41 @@ describe('useAgentSignalReceipts', () => {
     });
     expect(agentSignalService.listReceipts).toHaveBeenCalledTimes(callsAtTimeout);
   });
+
+  it('restarts the polling window when new work starts in the same topic scope', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(0));
+    vi.mocked(agentSignalService.listReceipts).mockResolvedValue({
+      cursor: undefined,
+      receipts: [],
+    });
+
+    const { rerender } = renderHook(
+      ({ pollingSignal }) =>
+        useAgentSignalReceipts({
+          agentId: 'agent-1',
+          enabled: true,
+          pollingSignal,
+          topicId: 'topic-1',
+        }),
+      { initialProps: { pollingSignal: 'assistant-1' }, wrapper },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+    });
+    const callsAtTimeout = vi.mocked(agentSignalService.listReceipts).mock.calls.length;
+
+    vi.setSystemTime(new Date(5 * 60_000));
+    rerender({ pollingSignal: 'assistant-2' });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(agentSignalService.listReceipts).toHaveBeenCalledTimes(callsAtTimeout + 1);
+  });
 });
