@@ -32,7 +32,18 @@ const needsOnboarding = (s: Pick<UserStore, 'agentOnboarding' | 'onboarding'>) =
   );
 };
 
+/**
+ * Whether the shared-prefix steps (Welcome+Language, Privacy) have been completed.
+ * Reads RAW stored settings (s.settings), not the default-merged currentSettings,
+ * so unset users are correctly distinguished from users who explicitly chose.
+ */
+const commonStepsCompleted = (s: Pick<UserStore, 'settings'>) => {
+  const general = s.settings?.general;
+  return general?.responseLanguage !== undefined && general?.telemetry !== undefined;
+};
+
 export const onboardingSelectors = {
+  commonStepsCompleted,
   currentStep,
   finishedAt,
   isFinished,

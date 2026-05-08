@@ -23,10 +23,10 @@ describe('onboardingSelectors', () => {
       const store = {
         ...initialOnboardingState,
         localOnboardingStep: undefined,
-        onboarding: { currentStep: 4, version: CURRENT_ONBOARDING_VERSION },
+        onboarding: { currentStep: 2, version: CURRENT_ONBOARDING_VERSION },
       } as unknown as UserStore;
 
-      expect(onboardingSelectors.currentStep(store)).toBe(4);
+      expect(onboardingSelectors.currentStep(store)).toBe(2);
     });
 
     it('should return 1 when both localOnboardingStep and onboarding.currentStep are undefined', () => {
@@ -217,6 +217,52 @@ describe('onboardingSelectors', () => {
       } as Pick<UserStore, 'onboarding'>;
 
       expect(onboardingSelectors.needsOnboarding(store)).toBe(true);
+    });
+  });
+
+  describe('commonStepsCompleted', () => {
+    it('returns true when both responseLanguage and telemetry are explicitly stored', () => {
+      const store = {
+        settings: { general: { responseLanguage: 'en-US', telemetry: false } },
+      } as unknown as UserStore;
+
+      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
+    });
+
+    it('returns true when responseLanguage is empty string (explicit auto-detect choice)', () => {
+      const store = {
+        settings: { general: { responseLanguage: '', telemetry: true } },
+      } as unknown as UserStore;
+
+      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
+    });
+
+    it('returns false when responseLanguage is missing', () => {
+      const store = {
+        settings: { general: { telemetry: true } },
+      } as unknown as UserStore;
+
+      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
+    });
+
+    it('returns false when telemetry is missing', () => {
+      const store = {
+        settings: { general: { responseLanguage: 'en-US' } },
+      } as unknown as UserStore;
+
+      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
+    });
+
+    it('returns false when general is missing entirely', () => {
+      const store = { settings: {} } as unknown as UserStore;
+
+      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
+    });
+
+    it('returns false for a fresh user with empty settings', () => {
+      const store = { settings: undefined } as unknown as UserStore;
+
+      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
     });
   });
 });
