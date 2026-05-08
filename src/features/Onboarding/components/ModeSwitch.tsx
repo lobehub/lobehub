@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_ONBOARDING_ENABLED } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
@@ -79,7 +80,9 @@ const ModeSwitch = memo<ModeSwitchProps>(({ actions, className, showLabel = fals
   }, [location.pathname]);
 
   const options = useMemo(() => {
-    if (isDesktop || !serverConfigInit || !enableAgentOnboarding) return [];
+    if (!AGENT_ONBOARDING_ENABLED || isDesktop || !serverConfigInit || !enableAgentOnboarding) {
+      return [];
+    }
 
     return [
       { label: t('agent.modeSwitch.agent'), value: 'agent' as const },
@@ -112,8 +115,8 @@ const ModeSwitch = memo<ModeSwitchProps>(({ actions, className, showLabel = fals
 
   return (
     <Flexbox
-      style={style}
       className={cx(styles.anchor, showLabel && !collapsed && styles.anchorWithLabel, className)}
+      style={style}
     >
       {showLabel && segmented && !collapsed && (
         <Text style={{ paddingInline: 4 }} type={'secondary'}>

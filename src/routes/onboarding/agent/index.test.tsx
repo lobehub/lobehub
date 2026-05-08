@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface RenderAgentRouteOptions {
+  agentOnboardingEnabled?: boolean;
   commonStepsCompleted?: boolean;
   desktop?: boolean;
   enabled: boolean;
@@ -11,6 +12,7 @@ interface RenderAgentRouteOptions {
 }
 
 const renderAgentRoute = async ({
+  agentOnboardingEnabled = true,
   commonStepsCompleted = true,
   desktop = false,
   enabled,
@@ -18,6 +20,9 @@ const renderAgentRoute = async ({
   serverConfigInit = true,
 }: RenderAgentRouteOptions) => {
   vi.resetModules();
+  vi.doMock('@lobechat/business-const', () => ({
+    AGENT_ONBOARDING_ENABLED: agentOnboardingEnabled,
+  }));
   vi.doMock('@lobechat/const', () => ({
     isDesktop: desktop,
   }));
@@ -66,6 +71,7 @@ const renderAgentRoute = async ({
 };
 
 afterEach(() => {
+  vi.doUnmock('@lobechat/business-const');
   vi.doUnmock('@lobechat/const');
   vi.doUnmock('@/components/Loading/BrandTextLoading');
   vi.doUnmock('@/features/Onboarding/Agent');
@@ -109,5 +115,11 @@ describe('AgentOnboardingRoute', () => {
     await renderAgentRoute({ commonStepsCompleted: false, enabled: true });
 
     expect(screen.getByText('Common onboarding')).toBeInTheDocument();
+  });
+
+  it('redirects to classic when AGENT_ONBOARDING_ENABLED master switch is off', async () => {
+    await renderAgentRoute({ agentOnboardingEnabled: false, enabled: true });
+
+    expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
   });
 });

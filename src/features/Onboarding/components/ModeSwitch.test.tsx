@@ -7,8 +7,15 @@ import ModeSwitch from './ModeSwitch';
 
 const mockConfig = vi.hoisted(() => ({
   agentOnboardingEnabled: true,
+  agentOnboardingMasterEnabled: true,
   desktop: false,
   serverConfigInit: true,
+}));
+
+vi.mock('@lobechat/business-const', () => ({
+  get AGENT_ONBOARDING_ENABLED() {
+    return mockConfig.agentOnboardingMasterEnabled;
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -26,6 +33,7 @@ vi.mock('react-i18next', () => ({
 
 interface RenderModeSwitchOptions {
   actions?: ReactNode;
+  agentOnboardingMasterEnabled?: boolean;
   desktop?: boolean;
   enabled: boolean;
   entry?: string;
@@ -57,6 +65,7 @@ vi.mock('@/store/serverConfig', () => ({
 
 const renderModeSwitch = ({
   actions,
+  agentOnboardingMasterEnabled = true,
   desktop = false,
   enabled,
   entry = '/onboarding/agent',
@@ -64,6 +73,7 @@ const renderModeSwitch = ({
   showLabel,
 }: RenderModeSwitchOptions) => {
   mockConfig.agentOnboardingEnabled = enabled;
+  mockConfig.agentOnboardingMasterEnabled = agentOnboardingMasterEnabled;
   mockConfig.desktop = desktop;
   mockConfig.serverConfigInit = serverConfigInit;
 
@@ -77,6 +87,7 @@ const renderModeSwitch = ({
 afterEach(() => {
   cleanup();
   mockConfig.agentOnboardingEnabled = true;
+  mockConfig.agentOnboardingMasterEnabled = true;
   mockConfig.desktop = false;
   mockConfig.serverConfigInit = true;
 });
@@ -131,6 +142,13 @@ describe('ModeSwitch', () => {
 
   it('does not render the switch on desktop builds', () => {
     renderModeSwitch({ desktop: true, enabled: true });
+
+    expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
+  });
+
+  it('hides the switch when AGENT_ONBOARDING_ENABLED master switch is off', () => {
+    renderModeSwitch({ agentOnboardingMasterEnabled: false, enabled: true });
 
     expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();

@@ -1,3 +1,4 @@
+import { AGENT_ONBOARDING_ENABLED } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { memo } from 'react';
 import { Navigate } from 'react-router-dom';
@@ -14,7 +15,9 @@ const AgentOnboardingRoute = memo(() => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const commonStepsCompleted = useUserStore(onboardingSelectors.commonStepsCompleted);
 
-  if (isDesktop) {
+  // Master switch precedes every other gate: when the agent flow is disabled
+  // at build time, this route is unreachable regardless of runtime config.
+  if (!AGENT_ONBOARDING_ENABLED || isDesktop) {
     return <Navigate replace to="/onboarding/classic" />;
   }
 
