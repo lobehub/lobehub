@@ -17,13 +17,34 @@ const anthropicBaseURL = 'https://api.deepseek.com/anthropic';
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
 describe('LobeDeepSeekAI', () => {
-  const resolveRouter = async (baseURL?: string) => {
-    const runtime = new LobeDeepSeekAI({
+  const createRuntime = ({
+    baseURL,
+    sdkType,
+  }: {
+    baseURL?: string;
+    sdkType?: string;
+  } = {}) =>
+    new LobeDeepSeekAI({
       apiKey: 'test',
       ...(baseURL ? { baseURL } : {}),
+      ...(sdkType ? { sdkType } : {}),
     });
 
+  const resolveRouter = async (baseURL?: string, sdkType?: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+
     return (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
+  };
+
+  const resolveFirstRouterOption = async (baseURL: string, sdkType: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
+    const router = await (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
+    const routerOptions = (runtime as any).normalizeRouterOptions(router);
+
+    return {
+      option: routerOptions[0],
+      router,
+    };
   };
 
   describe('RouterRuntime baseURL routing', () => {
@@ -60,6 +81,50 @@ describe('LobeDeepSeekAI', () => {
 
       expect(router.apiType).toBe('deepseek');
       expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should route to Anthropic format when sdkType is anthropic', async () => {
+      const router = await resolveRouter('https://aihubmix.com/v1/messages', 'anthropic');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('anthropic-compatible');
+    });
+
+    it('should normalize /v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://aihubmix.com/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe('https://aihubmix.com');
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe('https://aihubmix.com');
+    });
+
+    it('should normalize /anthropic/v1/messages before creating an Anthropic SDK runtime', async () => {
+      const { option } = await resolveFirstRouterOption(
+        'https://api.deepseek.com/anthropic/v1/messages',
+        'anthropic',
+      );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
+
+      expect(option.baseURL).toBe(anthropicBaseURL);
+      expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
+      expect((runtime as any).baseURL).toBe(anthropicBaseURL);
+    });
+
+    it('should let sdkType override legacy baseURL suffix routing', async () => {
+      const router = await resolveRouter(anthropicBaseURL, 'openai');
+
+      expect(router.apiType).toBe('deepseek');
+      expect(router.id).toBe('openai-compatible');
+    });
+
+    it('should reject unsupported sdkType values', async () => {
+      await expect(resolveRouter(defaultOpenAIBaseURL, 'invalid')).rejects.toThrow(
+        'Unsupported DeepSeek sdkType: invalid',
+      );
     });
   });
 });

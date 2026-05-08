@@ -12,14 +12,18 @@ const EMOJI_THINKING = '💭';
 const DEFAULT_CHAR_LIMIT = 1800;
 
 export function splitMessage(text: string, limit = DEFAULT_CHAR_LIMIT): string[] {
-  if (text.length <= limit) return [text];
+  if (text.length <= limit) {
+    // Whitespace-only input would be rejected by Telegram as "message text is empty",
+    // so drop it here rather than letting downstream make a guaranteed-failing API call.
+    return text.trim() ? [text] : [];
+  }
 
   const chunks: string[] = [];
   let remaining = text;
 
   while (remaining.length > 0) {
     if (remaining.length <= limit) {
-      chunks.push(remaining);
+      if (remaining.trim()) chunks.push(remaining);
       break;
     }
 
@@ -30,7 +34,11 @@ export function splitMessage(text: string, limit = DEFAULT_CHAR_LIMIT): string[]
     // Hard cut
     if (splitAt <= 0) splitAt = limit;
 
-    chunks.push(remaining.slice(0, splitAt));
+    const chunk = remaining.slice(0, splitAt);
+    // A boundary near the start (e.g. text begins with "\n\n") can produce a
+    // whitespace-only chunk; emitting it would trigger Telegram's empty-text
+    // 400 and silently drop the rest of the reply.
+    if (chunk.trim()) chunks.push(chunk);
     remaining = remaining.slice(splitAt).replace(/^\n+/, '');
   }
 

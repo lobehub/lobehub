@@ -625,5 +625,21 @@ describe('replyTemplate', () => {
       const text = 'chunk1\n\nchunk2\n\nchunk3';
       expect(splitMessage(text, 10)).toEqual(['chunk1', 'chunk2', 'chunk3']);
     });
+
+    it('should drop empty input rather than emitting a single empty chunk', () => {
+      // Telegram rejects empty/whitespace-only sendMessage as
+      // "message text is empty" — splitMessage must not produce one.
+      expect(splitMessage('', 100)).toEqual([]);
+      expect(splitMessage('   ', 100)).toEqual([]);
+      expect(splitMessage('\n\n\n', 100)).toEqual([]);
+    });
+
+    it('should drop whitespace-only chunks at boundaries', () => {
+      // Leading "\n\n" with a tight limit used to produce ["\n", ...] —
+      // a single newline is treated as empty by Telegram.
+      const chunks = splitMessage('\n\nAAAAAA', 3);
+      for (const c of chunks) expect(c.trim().length).toBeGreaterThan(0);
+      expect(chunks.join('')).toContain('AAA');
+    });
   });
 });

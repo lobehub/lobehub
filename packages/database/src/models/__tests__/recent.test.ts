@@ -63,7 +63,7 @@ describe('RecentModel', () => {
 
       const result = await recentModel.queryRecent();
       expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject({ id: 'topic-mine', type: 'topic' });
+      expect(result[0]).toMatchObject({ id: 'topic-mine', type: 'topic', status: null });
     });
 
     describe('topics arm', () => {
@@ -242,6 +242,7 @@ describe('RecentModel', () => {
 
         const result = await recentModel.queryRecent();
         expect(result.map((r) => r.id)).toEqual(['doc-api']);
+        expect(result[0].status).toBeNull();
       });
 
       it('excludes file uploads (sourceType "file")', async () => {
@@ -362,7 +363,34 @@ describe('RecentModel', () => {
           title: 'Active Task',
           routeId: 'agent-assignee',
           routeGroupId: null,
+          status: 'running',
         });
+      });
+
+      it('surfaces task status so home can render the icon without a second task.detail call', async () => {
+        await serverDB.insert(tasks).values([
+          {
+            id: 'task-paused',
+            createdByUserId: userId,
+            identifier: 'T-P',
+            status: 'paused',
+            updatedAt: minutesAgo(2),
+            ...baseTaskFields,
+          },
+          {
+            id: 'task-pending',
+            createdByUserId: userId,
+            identifier: 'T-Q',
+            status: 'pending',
+            updatedAt: minutesAgo(1),
+            ...baseTaskFields,
+          },
+        ]);
+
+        const result = await recentModel.queryRecent();
+        const byId = Object.fromEntries(result.map((r) => [r.id, r.status]));
+        expect(byId['task-paused']).toBe('paused');
+        expect(byId['task-pending']).toBe('pending');
       });
 
       it('excludes completed and canceled tasks', async () => {

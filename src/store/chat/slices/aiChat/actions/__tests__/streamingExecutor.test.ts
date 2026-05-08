@@ -1,3 +1,4 @@
+import type { AgentState } from '@lobechat/agent-runtime';
 import * as agentRuntime from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
@@ -11,6 +12,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
 import { useChatStore } from '../../../../store';
+import { messageMapKey } from '../../../../utils/messageMapKey';
 import {
   createMockAgentConfig,
   createMockChatConfig,
@@ -22,6 +24,37 @@ import {
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
 const serverConfigMock = vi.hoisted(() => ({ enableVisualUnderstanding: false }));
+const agentSignalBridgeMock = vi.hoisted(() => ({
+  emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.hoisted(() => {
+  // NOTICE:
+  // Ensure store modules see a full Storage-compatible localStorage during import.
+  // Vitest can provide a partial localStorage object when invoked with an empty
+  // `--localstorage-file`, which breaks packages/utils/src/localStorage.ts at collection time.
+  // Source/context: matches the focused store test setup pattern in src/services/chat/chat.test.ts.
+  // Removal condition: safe to delete when Vitest setup guarantees getItem/setItem before imports.
+  const storage = new Map<string, string>();
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      key: (index: number) => Array.from(storage.keys())[index] ?? null,
+      get length() {
+        return storage.size;
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+    },
+  });
+});
 
 interface AgentRuntimeStepContext {
   agent: {
@@ -39,8 +72,40 @@ const getCreatedAgentCompressionConfig = (stepSpy: { mock: { contexts: unknown[]
   return runtime.agent.config.compressionConfig;
 };
 
+const createMockRuntimeState = (operationId: string, status: AgentState['status']): AgentState => ({
+  status,
+  operationId,
+  messages: [],
+  maxSteps: 10,
+  stepCount: 1,
+  createdAt: new Date().toISOString(),
+  lastModified: new Date().toISOString(),
+  toolManifestMap: {},
+  userInterventionConfig: { approvalMode: 'manual', allowList: [] },
+  usage: {
+    llm: { apiCalls: 1, processingTimeMs: 100, tokens: { input: 10, output: 20, total: 30 } },
+    tools: { byTool: [], totalCalls: 0, totalTimeMs: 0 },
+    humanInteraction: {
+      approvalRequests: 0,
+      promptRequests: 0,
+      selectRequests: 0,
+      totalWaitingTimeMs: 0,
+    },
+  },
+  cost: {
+    calculatedAt: new Date().toISOString(),
+    currency: 'USD',
+    total: 0,
+    llm: { byModel: [], currency: 'USD', total: 0 },
+    tools: { byTool: [], currency: 'USD', total: 0 },
+  },
+});
+
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
+vi.mock('@/store/chat/slices/aiChat/actions/agentSignalBridge', () => ({
+  emitClientAgentSignalSourceEvent: agentSignalBridgeMock.emitClientAgentSignalSourceEvent,
+}));
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: () => ({
     serverConfig: { enableVisualUnderstanding: serverConfigMock.enableVisualUnderstanding },
@@ -52,6 +117,15 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 
 const realExecAgentRuntime = useChatStore.getState().executeClientAgent;
+const realCreateAgentState = useChatStore.getState().internal_createAgentState;
+
+const mockInternalCreateAgentState = (value: ReturnType<typeof realCreateAgentState>) => {
+  act(() => {
+    useChatStore.setState({
+      internal_createAgentState: vi.fn<typeof realCreateAgentState>().mockReturnValue(value),
+    });
+  });
+};
 
 beforeEach(() => {
   resetTestEnvironment();
@@ -63,6 +137,7 @@ beforeEach(() => {
     useChatStore.setState({
       refreshMessages: vi.fn(),
       executeClientAgent: vi.fn(),
+      internal_createAgentState: realCreateAgentState,
     });
   });
 });
@@ -486,7 +561,7 @@ describe('StreamingExecutor actions', () => {
       });
 
       // Create operation manually to register callbacks
-      let operationId: string;
+      let operationId!: string;
       const afterCompletionCallback1 = vi.fn();
       const afterCompletionCallback2 = vi.fn();
 
@@ -587,7 +662,7 @@ describe('StreamingExecutor actions', () => {
         plugins: [],
       });
 
-      let operationId: string;
+      let operationId!: string;
       const errorCallback = vi.fn().mockRejectedValue(new Error('Callback error'));
       const successCallback = vi.fn();
 
@@ -693,7 +768,7 @@ describe('StreamingExecutor actions', () => {
         plugins: [],
       });
 
-      let operationId: string;
+      let operationId!: string;
 
       act(() => {
         const res = result.current.startOperation({
@@ -1589,6 +1664,292 @@ describe('StreamingExecutor actions', () => {
   });
 
   describe('operation status handling', () => {
+    it('emits client.runtime.complete with the latest assistant message id', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          executeClientAgent: realExecAgentRuntime,
+        });
+      });
+
+      let operationId!: string;
+
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        });
+        operationId = res.operationId;
+      });
+
+      const finalMessages = [
+        createMockMessage({
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+        }),
+        createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          parentId: TEST_IDS.USER_MESSAGE_ID,
+          role: 'assistant',
+        }),
+      ];
+
+      act(() => {
+        useChatStore.setState((state) => ({
+          messagesMap: {
+            ...state.messagesMap,
+            [messageMapKey({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID })]:
+              finalMessages,
+          },
+        }));
+      });
+
+      mockInternalCreateAgentState({
+        state: createMockRuntimeState(operationId!, 'done'),
+        context: {
+          phase: 'init',
+          payload: { model: 'gpt-4o-mini', provider: 'openai' },
+          session: {
+            sessionId: TEST_IDS.SESSION_ID,
+            messageCount: 0,
+            status: 'done',
+            stepCount: 1,
+          },
+        },
+        agentConfig: createMockResolvedAgentConfig(),
+      });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+          operationId: operationId!,
+        });
+      });
+
+      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId,
+            status: 'completed',
+          }),
+          sourceId: `${operationId}:client:complete`,
+          sourceType: 'client.runtime.complete',
+        }),
+      );
+    });
+
+    it('does not attach an unrelated assistant message id to client.runtime.complete', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          executeClientAgent: realExecAgentRuntime,
+        });
+      });
+
+      let operationId!: string;
+
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        });
+        operationId = res.operationId;
+      });
+
+      act(() => {
+        useChatStore.setState((state) => ({
+          messagesMap: {
+            ...state.messagesMap,
+            [messageMapKey({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID })]: [
+              createMockMessage({
+                id: TEST_IDS.USER_MESSAGE_ID,
+                role: 'user',
+              }),
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                parentId: 'different-user-message',
+                role: 'assistant',
+              }),
+            ],
+          },
+        }));
+      });
+
+      mockInternalCreateAgentState({
+        state: createMockRuntimeState(operationId!, 'done'),
+        context: {
+          phase: 'init',
+          payload: { model: 'gpt-4o-mini', provider: 'openai' },
+          session: {
+            sessionId: TEST_IDS.SESSION_ID,
+            messageCount: 0,
+            status: 'done',
+            stepCount: 1,
+          },
+        },
+        agentConfig: createMockResolvedAgentConfig(),
+      });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+          operationId: operationId!,
+        });
+      });
+
+      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            assistantMessageId: undefined,
+            operationId,
+            status: 'completed',
+          }),
+          sourceId: `${operationId}:client:complete`,
+          sourceType: 'client.runtime.complete',
+        }),
+      );
+    });
+
+    it('emits client.runtime.complete before returning for queued follow-up messages', async () => {
+      vi.useFakeTimers();
+
+      const { result } = renderHook(() => useChatStore());
+      const contextKey = messageMapKey({
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+
+      act(() => {
+        useChatStore.setState({
+          executeClientAgent: realExecAgentRuntime,
+          queuedMessages: {
+            [contextKey]: [
+              {
+                content: 'queued follow-up',
+                createdAt: Date.now(),
+                id: 'queued-message-1',
+                interruptMode: 'soft',
+              },
+            ],
+          },
+        });
+      });
+
+      let operationId!: string;
+
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        });
+        operationId = res.operationId;
+      });
+
+      mockInternalCreateAgentState({
+        state: createMockRuntimeState(operationId!, 'done'),
+        context: {
+          phase: 'init',
+          payload: { model: 'gpt-4o-mini', provider: 'openai' },
+          session: {
+            sessionId: TEST_IDS.SESSION_ID,
+            messageCount: 0,
+            status: 'done',
+            stepCount: 1,
+          },
+        },
+        agentConfig: createMockResolvedAgentConfig(),
+      });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+          operationId: operationId!,
+        });
+      });
+
+      vi.useRealTimers();
+
+      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            operationId,
+            status: 'completed',
+          }),
+          sourceId: `${operationId}:client:complete`,
+          sourceType: 'client.runtime.complete',
+        }),
+      );
+    });
+
+    it('emits cancelled client.runtime.complete when operation status is cancelled', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          executeClientAgent: realExecAgentRuntime,
+        });
+      });
+
+      let operationId!: string;
+
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        });
+        operationId = res.operationId;
+        result.current.cancelOperation(operationId, 'user_cancelled');
+      });
+
+      mockInternalCreateAgentState({
+        state: createMockRuntimeState(operationId!, 'done'),
+        context: {
+          phase: 'init',
+          payload: { model: 'gpt-4o-mini', provider: 'openai' },
+          session: {
+            sessionId: TEST_IDS.SESSION_ID,
+            messageCount: 0,
+            status: 'done',
+            stepCount: 1,
+          },
+        },
+        agentConfig: createMockResolvedAgentConfig(),
+      });
+
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+          operationId: operationId!,
+        });
+      });
+
+      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            operationId,
+            status: 'cancelled',
+          }),
+          sourceId: `${operationId}:client:complete`,
+          sourceType: 'client.runtime.complete',
+        }),
+      );
+    });
+
     it('should complete operation when state is waiting_for_human', async () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -1607,7 +1968,7 @@ describe('StreamingExecutor actions', () => {
         plugins: [],
       });
 
-      let operationId: string;
+      let operationId!: string;
 
       act(() => {
         const res = result.current.startOperation({
@@ -1618,39 +1979,8 @@ describe('StreamingExecutor actions', () => {
       });
 
       // Mock internal_createAgentState to return waiting_for_human status
-      vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
-        state: {
-          status: 'waiting_for_human' as const,
-          operationId: operationId!,
-          messages: [],
-          maxSteps: 10,
-          stepCount: 1,
-          createdAt: new Date().toISOString(),
-          lastModified: new Date().toISOString(),
-          toolManifestMap: {},
-          userInterventionConfig: { approvalMode: 'manual', allowList: [] },
-          usage: {
-            llm: {
-              apiCalls: 1,
-              processingTimeMs: 100,
-              tokens: { input: 10, output: 20, total: 30 },
-            },
-            tools: { byTool: [], totalCalls: 0, totalTimeMs: 0 },
-            humanInteraction: {
-              approvalRequests: 1,
-              promptRequests: 0,
-              selectRequests: 0,
-              totalWaitingTimeMs: 0,
-            },
-          },
-          cost: {
-            calculatedAt: new Date().toISOString(),
-            currency: 'USD',
-            total: 0,
-            llm: { byModel: [], currency: 'USD', total: 0 },
-            tools: { byTool: [], currency: 'USD', total: 0 },
-          },
-        },
+      mockInternalCreateAgentState({
+        state: createMockRuntimeState(operationId!, 'waiting_for_human'),
         context: {
           phase: 'init',
           payload: { model: 'gpt-4o-mini', provider: 'openai' },
@@ -1662,6 +1992,11 @@ describe('StreamingExecutor actions', () => {
           },
         },
         agentConfig: createMockResolvedAgentConfig(),
+      });
+      vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step').mockResolvedValue({
+        events: [],
+        newState: createMockRuntimeState(operationId!, 'waiting_for_human'),
+        nextContext: undefined,
       });
 
       await act(async () => {
@@ -1682,6 +2017,16 @@ describe('StreamingExecutor actions', () => {
       // 1. User can see the tool intervention UI without loading indicator
       // 2. A new operation will be created when user approves/rejects
       expect(result.current.operations[operationId!].status).toBe('completed');
+      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            operationId,
+            status: 'cancelled',
+          }),
+          sourceId: `${operationId}:client:complete`,
+          sourceType: 'client.runtime.complete',
+        }),
+      );
     });
 
     it('should fail operation when state is error', async () => {

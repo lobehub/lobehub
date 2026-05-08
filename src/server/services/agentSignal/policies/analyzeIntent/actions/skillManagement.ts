@@ -56,10 +56,12 @@ import type {
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
 import { createSkillManagementService } from '../../../services/maintenance/skill';
+import type { ProcedureStateService } from '../../../services/types';
 import { hasAppliedActionIdempotency, markAppliedActionIdempotency } from '../../actionIdempotency';
 import type { ActionSkillManagementHandle, AgentSignalFeedbackEvidence } from '../../types';
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../types';
 import { createFeedbackActionPlannerSignalHandler } from '../feedbackAction';
+import type { DeferredSkillCandidate } from '../skillCandidate';
 
 export interface SkillManagementCandidateSkill {
   id: string;
@@ -141,6 +143,8 @@ export interface SkillManagementActionInput {
 
 export interface SkillManagementActionHandlerOptions {
   db: LobeChatDatabase;
+  /** Optional procedure state used to read user-stage skill candidates. */
+  procedureState?: Pick<ProcedureStateService, 'skillCandidates'>;
   selfIterationEnabled: boolean;
   skillCandidateSkillsFactory?: (input: {
     agentId: string;
@@ -155,6 +159,7 @@ export interface SkillManagementActionHandlerOptions {
 
 export interface SkillDecisionDocumentOutcome {
   agentDocumentId: string;
+  hintIsSkill?: boolean;
   relation?: string;
   summary?: string;
 }
@@ -171,6 +176,7 @@ export interface SkillDecisionDocumentSnapshot {
   content?: string;
   documentId?: string;
   filename?: string;
+  metadata?: Record<string, unknown>;
   title?: string;
 }
 
@@ -203,6 +209,71 @@ export interface SkillDecisionToolset {
  */
 export const isAgentDocumentRelatedObject = (object: { objectType: string }) =>
   object.objectType === 'agent-document';
+
+/**
+ * Reads the agent-signal skill hint from an agent-document snapshot.
+ *
+ * Use when:
+ * - Same-turn document evidence may include document creation intent.
+ * - Decision agents need a high-context hint without treating malformed metadata as evidence.
+ *
+ * Expects:
+ * - Metadata may be absent, malformed, or intentionally set to false.
+ *
+ * Returns:
+ * - `true` or `false` only when the metadata explicitly stores a boolean hint.
+ * - `undefined` when the hint is absent or malformed.
+ */
+export const readAgentSignalHintIsSkill = (metadata: unknown): boolean | undefined => {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+
+  const agentSignal = (metadata as Record<string, unknown>).agentSignal;
+  if (!agentSignal || typeof agentSignal !== 'object') return undefined;
+
+  const hintIsSkill = (agentSignal as Record<string, unknown>).hintIsSkill;
+  return typeof hintIsSkill === 'boolean' ? hintIsSkill : undefined;
+};
+
+const createDeferredSkillCandidateEvidence = (
+  candidate: DeferredSkillCandidate | undefined,
+): AgentSignalFeedbackEvidence[] => {
+  if (!candidate) return [];
+
+  return [
+    {
+      cue: 'deferred_skill_candidate',
+      excerpt: `${candidate.explicitness}/${candidate.route}/${candidate.actionIntent ?? 'none'}: ${
+        candidate.reason ?? 'deferred skill intent'
+      }`,
+    },
+  ];
+};
+
+const readDeferredSkillCandidateForAction = async (
+  options: SkillManagementActionHandlerOptions,
+  action: ActionSkillManagementHandle,
+  context: RuntimeProcessorContext,
+) => {
+  const reader = options.procedureState?.skillCandidates?.read;
+  if (!reader) return undefined;
+
+  const messageId = action.payload.messageId;
+  if (messageId) {
+    const candidate = await reader({
+      scopeKey: context.scopeKey,
+      sourceId: messageId,
+    });
+    if (candidate) return candidate;
+  }
+
+  const sourceId = action.source?.sourceId;
+  if (!sourceId || sourceId === messageId) return undefined;
+
+  return reader({
+    scopeKey: context.scopeKey,
+    sourceId,
+  });
+};
 
 export interface SkillManagementAgentModelConfig {
   model: string;
@@ -905,8 +976,7 @@ const createDefaultSkillDecisionToolset = (
       if (!scopeKey) return [];
 
       const snapshot = await inspector.inspectScope(scopeKey);
-
-      return snapshot.receipts
+      const outcomes = snapshot.receipts
         .filter((receipt) => receipt.domainKey.startsWith('document:'))
         .filter((receipt) => !messageId || receipt.messageId === messageId)
         .flatMap((receipt) =>
@@ -916,6 +986,20 @@ const createDefaultSkillDecisionToolset = (
             summary: receipt.summary,
           })),
         );
+
+      return Promise.all(
+        outcomes.map(async (outcome) => {
+          const document = await agentDocumentsService.getDocumentSnapshotById(
+            outcome.agentDocumentId,
+          );
+          const hintIsSkill = readAgentSignalHintIsSkill(document?.metadata);
+
+          return {
+            ...outcome,
+            ...(hintIsSkill === undefined ? {} : { hintIsSkill }),
+          };
+        }),
+      );
     },
     readDocument: async ({ agentDocumentId }) => {
       const snapshot = await agentDocumentsService.getDocumentSnapshotById(agentDocumentId);
@@ -926,6 +1010,7 @@ const createDefaultSkillDecisionToolset = (
         content: snapshot.content,
         documentId: snapshot.documentId,
         filename: snapshot.filename,
+        metadata: snapshot.metadata ?? undefined,
         title: snapshot.title,
       };
     },
@@ -1607,10 +1692,15 @@ export const handleSkillManagementAction = async (
     }
 
     const candidateSkills = await resolveSkillDecisionCandidates(options, action.payload.agentId);
+    const deferredCandidate = await readDeferredSkillCandidateForAction(options, action, context);
+    const evidence = [
+      ...(action.payload.evidence ?? []),
+      ...createDeferredSkillCandidateEvidence(deferredCandidate),
+    ];
     const runnerInput = {
       agentId: action.payload.agentId,
       ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
-      evidence: action.payload.evidence,
+      ...(evidence.length > 0 ? { evidence } : {}),
       feedbackHint: action.payload.feedbackHint,
       message,
       messageId: action.payload.messageId,
@@ -1623,7 +1713,7 @@ export const handleSkillManagementAction = async (
       payload: {
         agentId: action.payload.agentId,
         ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
-        evidence: action.payload.evidence,
+        ...(evidence.length > 0 ? { evidence } : {}),
         feedbackMessage: message,
         messageId: action.payload.messageId,
         scopeKey: context.scopeKey,

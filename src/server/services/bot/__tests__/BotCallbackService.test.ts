@@ -442,6 +442,79 @@ describe('BotCallbackService', () => {
       await expect(service.handleCallback(body)).resolves.toBeUndefined();
     });
 
+    it('should fall back to createMessage when editMessage fails on completion', async () => {
+      mockEditMessage.mockRejectedValueOnce(
+        new Error("Telegram API editMessageText failed: 400 Bad Request: can't parse entities"),
+      );
+
+      const body = makeBody({
+        lastAssistantContent: 'The actual answer the user needs.',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      // Reply must reach the user via createMessage fallback
+      expect(mockCreateMessage).toHaveBeenCalledWith(
+        expect.stringContaining('The actual answer the user needs.'),
+      );
+    });
+
+    it('should fall back to createMessage when error-state edit fails', async () => {
+      mockEditMessage.mockRejectedValueOnce(new Error('message to edit not found'));
+
+      const body = makeBody({
+        operationId: 'op-fallback-1',
+        reason: 'error',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockCreateMessage).toHaveBeenCalledWith(expect.stringContaining('op-fallback-1'));
+    });
+
+    it('should skip send when lastAssistantContent is whitespace-only', async () => {
+      const body = makeBody({
+        // Whitespace passes the original `!lastAssistantContent` check but
+        // collapses to empty downstream — Telegram would reject with
+        // "message text is empty" and silently drop the reply.
+        lastAssistantContent: '   \n\n   ',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('should still send subsequent chunks when one chunk fails mid-stream', async () => {
+      // Default 1800-char limit -> long content splits into multiple chunks.
+      const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000) + '\n\n' + 'C'.repeat(2000);
+
+      // First follow-up chunk rejects; remaining chunks should still be attempted.
+      mockCreateMessage.mockRejectedValueOnce(
+        new Error('Telegram API sendMessage failed: 429 Too Many Requests'),
+      );
+
+      const body = makeBody({
+        lastAssistantContent: longContent,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledTimes(1);
+      // The loop must keep going past the rejected chunk — at least 2 createMessage
+      // calls are expected (one rejected, one or more after it).
+      expect(mockCreateMessage.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
     it('should not throw when sending interrupted message fails', async () => {
       mockCreateMessage.mockRejectedValueOnce(new Error('Send failed'));
 

@@ -63,6 +63,7 @@ type DomainSignalInput<TTarget extends SupportedTask4DomainTarget> = {
   signalId: string;
   sourceId: string;
   target: TTarget;
+  trigger?: string;
 };
 
 function createDomainSignal(input: DomainSignalInput<'memory'>): SignalFeedbackDomainMemory;
@@ -102,6 +103,7 @@ function createDomainSignal(
           reason: 'test-domain-signal',
           satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
           target: 'memory',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.memory',
@@ -124,6 +126,7 @@ function createDomainSignal(
           reason: 'test-domain-signal',
           satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
           target: 'none',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.none',
@@ -146,6 +149,7 @@ function createDomainSignal(
           reason: 'test-domain-signal',
           satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
           target: 'prompt',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.prompt',
@@ -169,6 +173,7 @@ function createDomainSignal(
           skillIntentReason: input.skillIntentReason,
           skillRoute: input.skillRoute,
           target: 'skill',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.skill',
@@ -326,16 +331,15 @@ describe('feedbackActionPlanner', () => {
 
   it('plans skill-management actions for skill domain signals', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
-    const skillResult = await handler.handle(
-      createDomainSignal({
-        message: 'This successful workflow should become a reusable skill.',
-        messageId: 'msg_2',
-        signalId: 'sig_2',
-        sourceId: 'source_2',
-        target: 'skill',
-      }),
-      context,
-    );
+    const signal = createDomainSignal({
+      message: 'This successful workflow should become a reusable skill.',
+      messageId: 'msg_2',
+      signalId: 'sig_2',
+      sourceId: 'source_2',
+      target: 'skill',
+      trigger: 'client.runtime.complete',
+    });
+    const skillResult = await handler.handle(signal, context);
 
     expect(skillResult).toEqual(
       expect.objectContaining({
@@ -353,6 +357,157 @@ describe('feedbackActionPlanner', () => {
         status: 'dispatch',
       }),
     );
+  });
+
+  /**
+   * @example
+   * User-stage direct skill intent is saved as a deferred candidate until completion evidence arrives.
+   */
+  it('defers direct skill decisions from normal user-message sources', async () => {
+    const store = createStore();
+    const procedure = createProcedurePolicyOptions({
+      now: () => 123,
+      policyStateStore: store,
+      ttlSeconds: 3600,
+    });
+    const writeCandidate = vi.spyOn(procedure.procedureState.skillCandidates!, 'write');
+    const skillActions = { prepare: vi.fn() };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      procedure: {
+        now: () => 123,
+        procedureState: procedure.procedureState,
+      },
+    });
+    const signal = createDomainSignal({
+      message: 'Nice work. Can we keep this workflow?',
+      messageId: 'msg_skill_defer',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_defer',
+      skillActionIntent: 'create',
+      skillIntentConfidence: 0.88,
+      skillIntentExplicitness: 'implicit_strong_learning',
+      skillIntentReason: 'User asked to preserve this workflow.',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_defer',
+      target: 'skill',
+      trigger: 'client.runtime.start',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({
+      concluded: { reason: 'skill mutation deferred until client.runtime.complete' },
+      status: 'conclude',
+    });
+    expect(skillActions.prepare).not.toHaveBeenCalled();
+    expect(writeCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionIntent: 'create',
+        confidence: 0.88,
+        createdAt: 123,
+        explicitness: 'implicit_strong_learning',
+        feedbackMessageId: 'msg_skill_defer',
+        reason: 'User asked to preserve this workflow.',
+        route: 'direct_decision',
+        scopeKey: 'topic:thread_1',
+        sourceId: 'source_skill_defer',
+      }),
+    );
+    await expect(
+      procedure.procedureState.skillCandidates!.read({
+        scopeKey: 'topic:thread_1',
+        sourceId: 'source_skill_defer',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        feedbackMessageId: 'msg_skill_defer',
+        route: 'direct_decision',
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * Completion-triggered direct skill intent is allowed to mutate skills.
+   */
+  it('dispatches direct skill decisions from completion-triggered user feedback', async () => {
+    const action = {
+      actionId: 'action_1',
+      actionType: 'action.skill-management.handle' as const,
+      payload: {},
+    };
+    const skillActions = {
+      prepare: vi.fn(() => ({ action, reason: 'completion evidence', risk: 'low' as const })),
+    };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      markerReader: { shouldSuppress: vi.fn().mockResolvedValue(false) },
+    });
+    const signal = createDomainSignal({
+      message: 'Nice work. Can we keep this workflow?',
+      messageId: 'msg_skill_complete',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_complete',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'implicit_strong_learning',
+      skillIntentReason: 'Completion has final evidence.',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_complete',
+      target: 'skill',
+      trigger: 'client.runtime.complete',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({ actions: [action], status: 'dispatch' });
+    expect(skillActions.prepare).toHaveBeenCalledWith(signal);
+  });
+
+  /**
+   * @example
+   * Server-side user-message sources have no client completion event to resume deferred mutations.
+   */
+  it('dispatches direct skill decisions from server-side user feedback', async () => {
+    const action = {
+      actionId: 'action_server',
+      actionType: 'action.skill-management.handle' as const,
+      payload: {},
+    };
+    const skillActions = {
+      prepare: vi.fn(() => ({ action, reason: 'server-side feedback', risk: 'low' as const })),
+    };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      markerReader: { shouldSuppress: vi.fn().mockResolvedValue(false) },
+    });
+    const signal = createDomainSignal({
+      message: '把刚才的 YouTube 评论区分析流程保存为 skill。',
+      messageId: 'msg_skill_server',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_server',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'explicit_action',
+      skillIntentReason: 'Server-side agent has no client completion event.',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_server',
+      target: 'skill',
+      trigger: 'chat',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({ actions: [action], status: 'dispatch' });
+    expect(skillActions.prepare).toHaveBeenCalledWith(signal);
   });
 
   it('does not directly handle satisfied skill domain signals', async () => {
@@ -378,21 +533,20 @@ describe('feedbackActionPlanner', () => {
    */
   it('plans direct skill-management actions for satisfied explicit skill intent', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
-    const result = await handler.handle(
-      createDomainSignal({
-        message:
-          'The SKILL.md draft from the chat agent is usable. Convert it into a real skills/bundle.',
-        messageId: 'msg_skill_convert',
-        satisfactionResult: 'satisfied',
-        signalId: 'sig_skill_convert',
-        skillActionIntent: 'create',
-        skillIntentExplicitness: 'explicit_action',
-        skillRoute: 'direct_decision',
-        sourceId: 'source_skill_convert',
-        target: 'skill',
-      }),
-      context,
-    );
+    const signal = createDomainSignal({
+      message:
+        'The SKILL.md draft from the chat agent is usable. Convert it into a real skills/bundle.',
+      messageId: 'msg_skill_convert',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_convert',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'explicit_action',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_convert',
+      target: 'skill',
+      trigger: 'client.runtime.complete',
+    });
+    const result = await handler.handle(signal, context);
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -416,20 +570,19 @@ describe('feedbackActionPlanner', () => {
    */
   it('plans direct skill-management actions for implicit strong learning intent', async () => {
     const handler = createFeedbackActionPlannerSignalHandler();
-    const result = await handler.handle(
-      createDomainSignal({
-        message: 'For future database migration reviews, follow the checklist from earlier.',
-        messageId: 'msg_skill_implicit',
-        satisfactionResult: 'satisfied',
-        signalId: 'sig_skill_implicit',
-        skillActionIntent: 'create',
-        skillIntentExplicitness: 'implicit_strong_learning',
-        skillRoute: 'direct_decision',
-        sourceId: 'source_skill_implicit',
-        target: 'skill',
-      }),
-      context,
-    );
+    const signal = createDomainSignal({
+      message: 'For future database migration reviews, follow the checklist from earlier.',
+      messageId: 'msg_skill_implicit',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_implicit',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'implicit_strong_learning',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_implicit',
+      target: 'skill',
+      trigger: 'client.runtime.complete',
+    });
+    const result = await handler.handle(signal, context);
 
     expect(result).toEqual(
       expect.objectContaining({

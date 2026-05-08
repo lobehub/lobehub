@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type { AgentSignalSourceEvent, SourceAgentUserMessage } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES, createSourceEvent } from '@lobechat/agent-signal/source';
+import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { agents, messages, threads, topics, users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,7 +37,7 @@ const createPolicyStateStore = (): AgentSignalPolicyStateStore => {
 };
 
 describe('runAgentSignalWorkflow', () => {
-  it('bridges client.runtime.start into agent.user.message with serialized root-topic context', async () => {
+  it('hydrates client.runtime.start into agent.user.message with serialized root-topic context', async () => {
     const db = await getTestDB();
     const userId = `eval_${uuid()}`;
     const topicId = `topic_${uuid()}`;
@@ -205,6 +206,7 @@ describe('runAgentSignalWorkflow', () => {
             operationId: `op_${uuid()}`,
             parentMessageId,
             parentMessageType: 'user',
+            serializedContext: 'malicious client supplied context',
             topicId,
           },
           scopeKey: `topic:${topicId}`,
@@ -241,6 +243,9 @@ describe('runAgentSignalWorkflow', () => {
     expect(capturedSourceEvent?.sourceType).toBe('agent.user.message');
     expect(capturedSourceEvent?.payload.serializedContext).toContain('<feedback_analysis_context>');
     expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
+      'malicious client supplied context',
+    );
+    expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
       'Old question that should be truncated from the serialized context.',
     );
     expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
@@ -256,6 +261,311 @@ describe('runAgentSignalWorkflow', () => {
       'Future assistant reply that should be excluded from the anchored root context.',
     );
   }, 10_000);
+
+  it('records hydration skipped diagnostics in workflow snapshots', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const agentId = `agent_${uuid()}`;
+    const saveSnapshot = vi.fn().mockResolvedValue(undefined);
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn(),
+      removePartial: vi.fn(),
+      save: saveSnapshot,
+      savePartial: vi.fn(),
+    } satisfies ISnapshotStore;
+
+    await db.insert(users).values({ id: userId });
+
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async () => undefined,
+    );
+
+    await runAgentSignalWorkflow(
+      createWorkflowContext({
+        agentId,
+        sourceEvent: {
+          payload: {
+            agentId,
+            operationId: `op_${uuid()}`,
+            parentMessageId: `msg_${uuid()}`,
+            parentMessageType: 'assistant',
+            topicId: 'topic_1',
+          },
+          scopeKey: 'topic:topic_1',
+          sourceId: 'client:start:assistant-parent',
+          sourceType: 'client.runtime.start',
+          timestamp: Date.now(),
+        },
+        userId,
+      }),
+      {
+        createSnapshotStore: () => snapshotStore,
+        executeSourceEvent,
+        getDb: async () => db,
+      },
+    );
+
+    expect(saveSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: [
+          expect.objectContaining({
+            context: expect.objectContaining({
+              payload: expect.objectContaining({
+                hydration: expect.objectContaining({
+                  kind: 'client.runtime.start',
+                  reason: 'non-user-parent',
+                  status: 'skipped',
+                }),
+              }),
+            }),
+            events: [
+              expect.objectContaining({
+                data: expect.objectContaining({
+                  hydrationKind: 'client.runtime.start',
+                  hydrationReason: 'non-user-parent',
+                  hydrationStatus: 'skipped',
+                }),
+                type: 'agent_signal.workflow.hydration',
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('hydrates client.runtime.complete into paired user feedback with assistant-bound serialized context', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const topicId = `topic_${uuid()}`;
+    const userMessageId = `msg_${uuid()}`;
+    const assistantMessageId = `msg_${uuid()}`;
+    const baseTimestamp = new Date('2026-01-03T00:00:00.000Z').getTime();
+    let capturedSourceEvent:
+      | AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage>
+      | undefined;
+
+    await db.insert(users).values({ id: userId });
+
+    const [agent] = await db
+      .insert(agents)
+      .values({
+        model: 'gpt-4o-mini',
+        plugins: [],
+        provider: 'openai',
+        systemRole: '',
+        title: 'Completion Workflow Agent',
+        userId,
+      })
+      .returning();
+
+    await db.insert(topics).values({
+      id: topicId,
+      title: 'Completion Topic',
+      userId,
+    });
+
+    await db.insert(messages).values([
+      {
+        agentId: agent.id,
+        content: 'Please keep this exact workflow as a reusable skill.',
+        createdAt: new Date(baseTimestamp + 1_000),
+        id: userMessageId,
+        role: 'user',
+        topicId,
+        userId,
+      },
+      {
+        agentId: agent.id,
+        content: 'I created the reusable workflow and attached the result.',
+        createdAt: new Date(baseTimestamp + 2_000),
+        id: assistantMessageId,
+        parentId: userMessageId,
+        role: 'assistant',
+        topicId,
+        updatedAt: new Date(baseTimestamp + 5_000),
+        userId,
+      },
+      {
+        agentId: agent.id,
+        content: 'Same-turn document outcome that must be visible after the user parent.',
+        createdAt: new Date(baseTimestamp + 3_000),
+        id: `msg_${uuid()}`,
+        role: 'document',
+        topicId,
+        userId,
+      },
+      {
+        agentId: agent.id,
+        content: 'Same-turn tool outcome that must be visible after the user parent.',
+        createdAt: new Date(baseTimestamp + 4_000),
+        id: `msg_${uuid()}`,
+        role: 'tool',
+        topicId,
+        userId,
+      },
+      {
+        agentId: agent.id,
+        content: 'Later message that must be excluded from completion-bound context.',
+        createdAt: new Date(baseTimestamp + 6_000),
+        id: `msg_${uuid()}`,
+        role: 'user',
+        topicId,
+        userId,
+      },
+    ]);
+
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async (sourceEvent) => {
+        capturedSourceEvent = sourceEvent as AgentSignalSourceEvent<
+          typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage
+        >;
+        return undefined;
+      },
+    );
+
+    const result = await runAgentSignalWorkflow(
+      createWorkflowContext({
+        agentId: agent.id,
+        sourceEvent: {
+          payload: {
+            agentId: agent.id,
+            assistantMessageId,
+            operationId: 'op_completion_hydration',
+            serializedContext: 'client context must not be trusted',
+            status: 'completed',
+            topicId,
+          },
+          scopeKey: `topic:${topicId}`,
+          sourceId: 'op_completion_hydration:client:complete',
+          sourceType: 'client.runtime.complete',
+          timestamp: Date.now(),
+        },
+        userId,
+      }),
+      {
+        executeSourceEvent,
+        getDb: async () => db,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        sourceId: `${assistantMessageId}:completion:${userMessageId}`,
+        success: true,
+      }),
+    );
+    expect(executeSourceEvent).toHaveBeenCalledTimes(1);
+    expect(capturedSourceEvent?.sourceType).toBe('agent.user.message');
+    expect(capturedSourceEvent?.payload.trigger).toBe('client.runtime.complete');
+    expect(capturedSourceEvent?.payload.messageId).toBe(userMessageId);
+    expect(capturedSourceEvent?.payload.serializedContext).toContain(
+      'Please keep this exact workflow as a reusable skill.',
+    );
+    expect(capturedSourceEvent?.payload.serializedContext).toContain(
+      'I created the reusable workflow and attached the result.',
+    );
+    expect(capturedSourceEvent?.payload.serializedContext).toContain(
+      'Same-turn document outcome that must be visible after the user parent.',
+    );
+    expect(capturedSourceEvent?.payload.serializedContext).toContain(
+      'Same-turn tool outcome that must be visible after the user parent.',
+    );
+    expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
+      'client context must not be trusted',
+    );
+    expect(capturedSourceEvent?.payload.serializedContext).not.toContain(
+      'Later message that must be excluded from completion-bound context.',
+    );
+  });
+
+  it('skips cancelled client.runtime.complete hydration and records diagnostics without hydrated feedback', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const agentId = `agent_${uuid()}`;
+    const topicId = `topic_${uuid()}`;
+    const saveSnapshot = vi.fn().mockResolvedValue(undefined);
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn(),
+      removePartial: vi.fn(),
+      save: saveSnapshot,
+      savePartial: vi.fn(),
+    } satisfies ISnapshotStore;
+    let capturedSourceEvent: AgentSignalSourceEvent | undefined;
+
+    await db.insert(users).values({ id: userId });
+
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async (sourceEvent) => {
+        capturedSourceEvent = sourceEvent;
+        return undefined;
+      },
+    );
+
+    await runAgentSignalWorkflow(
+      createWorkflowContext({
+        agentId,
+        sourceEvent: {
+          payload: {
+            agentId,
+            assistantMessageId: `msg_${uuid()}`,
+            operationId: 'op_cancelled_completion',
+            status: 'cancelled',
+            topicId,
+          },
+          scopeKey: `topic:${topicId}`,
+          sourceId: 'op_cancelled_completion:client:complete',
+          sourceType: 'client.runtime.complete',
+          timestamp: Date.now(),
+        },
+        userId,
+      }),
+      {
+        createSnapshotStore: () => snapshotStore,
+        executeSourceEvent,
+        getDb: async () => db,
+      },
+    );
+
+    expect(executeSourceEvent).toHaveBeenCalledTimes(1);
+    expect(capturedSourceEvent?.sourceType).toBe('client.runtime.complete');
+    expect(capturedSourceEvent?.sourceId).toBe('op_cancelled_completion:client:complete');
+    expect(saveSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: [
+          expect.objectContaining({
+            context: expect.objectContaining({
+              payload: expect.objectContaining({
+                hydration: {
+                  kind: 'client.runtime.complete',
+                  reason: 'non-completed-status',
+                  status: 'skipped',
+                },
+              }),
+            }),
+            events: [
+              expect.objectContaining({
+                data: expect.objectContaining({
+                  hydrationKind: 'client.runtime.complete',
+                  hydrationReason: 'non-completed-status',
+                  hydrationStatus: 'skipped',
+                }),
+                type: 'agent_signal.workflow.hydration',
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+  });
 
   it('assembles serializedContext from the matching thread before executing a threaded source event', async () => {
     const db = await getTestDB();
