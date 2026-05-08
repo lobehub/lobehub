@@ -64,7 +64,7 @@ afterEach(() => {
 
 describe('nightlyReviewScheduleService', () => {
   describe('dispatchNightlyReviewRequests', () => {
-    it('enqueues Shanghai user nightly review sources with local day window', async () => {
+    it('enqueues Shanghai user nightly review sources with previous full local day window', async () => {
       const deps = createDeps(new Date('2026-05-03T18:30:00.000Z'));
       const service = createNightlyReviewScheduleService(deps);
 
@@ -74,20 +74,20 @@ describe('nightlyReviewScheduleService', () => {
       expect(deps.listActiveAgentTargets).toHaveBeenCalledWith({
         limit: undefined,
         userId: 'user-1',
-        windowEnd: new Date('2026-05-03T18:30:00.000Z'),
-        windowStart: new Date('2026-05-03T16:00:00.000Z'),
+        windowEnd: new Date('2026-05-03T16:00:00.000Z'),
+        windowStart: new Date('2026-05-02T16:00:00.000Z'),
       });
       expect(deps.enqueueSource).toHaveBeenCalledWith({
         payload: {
           agentId: 'agent-1',
-          localDate: '2026-05-04',
+          localDate: '2026-05-03',
           requestedAt: '2026-05-03T18:30:00.000Z',
-          reviewWindowEnd: '2026-05-03T18:30:00.000Z',
-          reviewWindowStart: '2026-05-03T16:00:00.000Z',
+          reviewWindowEnd: '2026-05-03T16:00:00.000Z',
+          reviewWindowStart: '2026-05-02T16:00:00.000Z',
           timezone: 'Asia/Shanghai',
           userId: 'user-1',
         },
-        sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+        sourceId: 'nightly-review:user-1:agent-1:2026-05-03',
         sourceType: 'agent.nightly_review.requested',
         timestamp: new Date('2026-05-03T18:30:00.000Z').getTime(),
       });
@@ -124,11 +124,12 @@ describe('nightlyReviewScheduleService', () => {
           Partial<AgentSignalSourceEventInput<'agent.nightly_review.requested'>>
         >({
           payload: expect.objectContaining({
-            localDate: '2026-05-04',
-            reviewWindowStart: '2026-05-04T00:00:00.000Z',
+            localDate: '2026-05-03',
+            reviewWindowEnd: '2026-05-04T00:00:00.000Z',
+            reviewWindowStart: '2026-05-03T00:00:00.000Z',
             timezone: 'UTC',
           }),
-          sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+          sourceId: 'nightly-review:user-1:agent-1:2026-05-03',
         }),
       );
     });
@@ -182,21 +183,21 @@ describe('nightlyReviewScheduleService', () => {
       });
       expect(mocks.listActiveAgentTargets).toHaveBeenCalledWith('user-1', {
         limit: 3,
-        windowEnd: new Date('2026-05-03T18:30:00.000Z'),
-        windowStart: new Date('2026-05-03T16:00:00.000Z'),
+        windowEnd: new Date('2026-05-03T16:00:00.000Z'),
+        windowStart: new Date('2026-05-02T16:00:00.000Z'),
       });
       expect(mocks.enqueueAgentSignalSourceEvent).toHaveBeenCalledWith(
         {
           payload: {
             agentId: 'agent-1',
-            localDate: '2026-05-04',
+            localDate: '2026-05-03',
             requestedAt: '2026-05-03T18:30:00.000Z',
-            reviewWindowEnd: '2026-05-03T18:30:00.000Z',
-            reviewWindowStart: '2026-05-03T16:00:00.000Z',
+            reviewWindowEnd: '2026-05-03T16:00:00.000Z',
+            reviewWindowStart: '2026-05-02T16:00:00.000Z',
             timezone: 'Asia/Shanghai',
             userId: 'user-1',
           },
-          sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+          sourceId: 'nightly-review:user-1:agent-1:2026-05-03',
           sourceType: 'agent.nightly_review.requested',
           timestamp: new Date('2026-05-03T18:30:00.000Z').getTime(),
         },

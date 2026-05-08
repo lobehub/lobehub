@@ -128,6 +128,7 @@ export interface NightlyReviewScheduleService {
 
 interface LocalNightWindow {
   localDate: string;
+  reviewWindowEnd: Date;
   reviewWindowStart: Date;
   timezone: string;
   withinWindow: boolean;
@@ -149,12 +150,14 @@ const resolveTimezone = (timezone: string | null | undefined): string => {
 const getLocalNightWindow = (now: Date, timezone: string | null | undefined): LocalNightWindow => {
   const resolvedTimezone = resolveTimezone(timezone);
   const localNow = dayjs(now).tz(resolvedTimezone);
-  const localDate = localNow.format('YYYY-MM-DD');
+  const reviewDate = localNow.subtract(1, 'day').format('YYYY-MM-DD');
+  const localDayStart = dayjs.tz(localNow.format('YYYY-MM-DD'), resolvedTimezone).startOf('day');
   const localHour = localNow.hour();
 
   return {
-    localDate,
-    reviewWindowStart: dayjs.tz(localDate, resolvedTimezone).startOf('day').toDate(),
+    localDate: reviewDate,
+    reviewWindowEnd: localDayStart.toDate(),
+    reviewWindowStart: localDayStart.subtract(1, 'day').toDate(),
     timezone: resolvedTimezone,
     withinWindow:
       localHour >= NIGHT_WINDOW_START_HOUR && localHour < NIGHT_WINDOW_END_HOUR_EXCLUSIVE,
@@ -212,7 +215,7 @@ export const createNightlyReviewScheduleService = (
               const targets = await adapters.listActiveAgentTargets({
                 limit: options.targetLimit,
                 userId: user.id,
-                windowEnd: now,
+                windowEnd: localWindow.reviewWindowEnd,
                 windowStart: localWindow.reviewWindowStart,
               });
 
@@ -224,7 +227,7 @@ export const createNightlyReviewScheduleService = (
                     agentId: target.agentId,
                     localDate: localWindow.localDate,
                     requestedAt: now.toISOString(),
-                    reviewWindowEnd: now.toISOString(),
+                    reviewWindowEnd: localWindow.reviewWindowEnd.toISOString(),
                     reviewWindowStart: localWindow.reviewWindowStart.toISOString(),
                     timezone: localWindow.timezone,
                     userId: user.id,
