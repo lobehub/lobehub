@@ -1,11 +1,11 @@
 'use client';
 
 import { Button, Icon, Text } from '@lobehub/ui';
-import { Form, Input } from 'antd';
+import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AuthCard } from '../../../../../features/AuthCard';
@@ -20,9 +20,17 @@ const BetterAuthSignUpForm = () => {
   const { t } = useTranslation('auth');
   const searchParams = useSearchParams();
 
+  const emailInputRef = useRef<InputRef>(null);
+  const passwordInputRef = useRef<InputRef>(null);
+
   useEffect(() => {
     const email = searchParams.get('email');
-    if (email) form.setFieldsValue({ email });
+    if (email) {
+      form.setFieldsValue({ email });
+      passwordInputRef.current?.focus();
+    } else {
+      emailInputRef.current?.focus();
+    }
   }, [searchParams, form]);
 
   const footer = (
@@ -58,6 +66,7 @@ const BetterAuthSignUpForm = () => {
         >
           <Input
             placeholder={t('betterAuth.signup.emailPlaceholder')}
+            ref={emailInputRef}
             size="large"
             prefix={
               <Icon
@@ -88,6 +97,7 @@ const BetterAuthSignUpForm = () => {
         >
           <Input.Password
             placeholder={t('betterAuth.signup.passwordPlaceholder')}
+            ref={passwordInputRef}
             size="large"
             prefix={
               <Icon
