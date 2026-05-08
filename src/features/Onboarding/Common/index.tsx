@@ -2,8 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { memo, useCallback } from 'react';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import OnboardingContainer from '@/routes/onboarding/_layout';
@@ -20,15 +20,16 @@ const CommonOnboardingPage = memo(() => {
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const step: 1 | 2 = searchParams.get('step') === '2' ? 2 : 1;
 
   const goNextFromTelemetry = useCallback(() => {
-    setStep(2);
-  }, []);
+    setSearchParams({ step: '2' }, { replace: true });
+  }, [setSearchParams]);
 
   const goBackFromLanguage = useCallback(() => {
-    setStep(1);
-  }, []);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   const finishCommon = useCallback(() => {
     // No-op: completion of step 2 writes responseLanguage, which flips
