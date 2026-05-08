@@ -270,12 +270,8 @@ export default class GatewayConnectionService extends ServiceModule {
       return;
     }
 
-    // Ack immediately so the gateway doesn't time out, then spawn in background.
-    client.sendAgentRunAck({ operationId: request.operationId, status: 'accepted' });
-
-    this.agentRunHandler(request).catch((err) => {
-      logger.error('Agent run handler failed:', err instanceof Error ? err.message : String(err));
-    });
+    const result = await this.agentRunHandler(request);
+    client.sendAgentRunAck({ operationId: request.operationId, ...result });
   };
 
   // ─── Tool Call Routing ───

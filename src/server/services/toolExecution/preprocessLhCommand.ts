@@ -32,9 +32,7 @@ export const preprocessLhCommand = async (
   try {
     const jwt = await signUserJWT(userId);
 
-    // const serverUrl = appEnv.APP_URL;
-
-    const serverUrl = 'airfare-leone-text-taxation.trycloudflare.com';
+    const serverUrl = appEnv.APP_URL;
 
     const envPrefix = `LOBEHUB_JWT=${jwt} LOBEHUB_SERVER=${serverUrl}`;
 
