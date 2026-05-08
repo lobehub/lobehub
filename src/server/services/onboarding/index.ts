@@ -266,13 +266,28 @@ export class OnboardingService {
   };
 
   private ensureWelcomeMessage = async (topicId: string, agentId: string) => {
-    const existingMessages = await this.messageModel.query({ agentId, pageSize: 1, topicId });
+    // Pull the first two messages so we can tell "only welcome exists" from
+    // "user has already replied". If a user reply exists we leave the welcome
+    // untouched (it's part of conversation history). If only the welcome
+    // exists we keep it aligned with the user's current responseLanguage —
+    // a stale welcome from a prior locale would otherwise persist forever.
+    const existingMessages = await this.messageModel.query({ agentId, pageSize: 2, topicId });
 
-    if (existingMessages.length > 0) return;
+    if (existingMessages.length > 1) return;
+
+    const content = await this.getWelcomeMessageContent();
+
+    if (existingMessages.length === 1) {
+      const existing = existingMessages[0];
+      if (existing.role === 'assistant' && existing.content !== content) {
+        await this.messageModel.update(existing.id, { content });
+      }
+      return;
+    }
 
     await this.messageModel.create({
       agentId,
-      content: await this.getWelcomeMessageContent(),
+      content,
       role: 'assistant',
       topicId,
     });
