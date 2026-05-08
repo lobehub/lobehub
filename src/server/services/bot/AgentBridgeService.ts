@@ -1014,6 +1014,11 @@ export class AgentBridgeService {
 
     let { progressMessage } = opts;
     let operationStartTime = 0;
+    // Tracks the last markdown body written to `progressMessage` so we can
+    // skip redundant edits. Telegram rejects edits with identical content
+    // ("message is not modified"), and the final reply often matches the
+    // last streamed progress frame.
+    let lastProgressText: string | undefined;
 
     const stopGatewayTyping = () => {
       if (gatewayConnectionId && botContext?.platformThreadId) {
@@ -1095,8 +1100,11 @@ export class AgentBridgeService {
                 // the markdown body.
                 const progressBody = client?.formatReply?.(msgBody, stats) ?? msgBody;
 
+                if (progressBody === lastProgressText) return;
+
                 try {
                   progressMessage = await progressMessage.edit({ markdown: progressBody });
+                  lastProgressText = progressBody;
                 } catch (error) {
                   log('executeWithCallback[local]: failed to edit progress message: %O', error);
                 }
@@ -1187,7 +1195,10 @@ export class AgentBridgeService {
 
                     try {
                       if (progressMessage) {
-                        await progressMessage.edit({ markdown: chunks[0] });
+                        if (chunks[0] !== lastProgressText) {
+                          await progressMessage.edit({ markdown: chunks[0] });
+                          lastProgressText = chunks[0];
+                        }
                         for (let i = 1; i < chunks.length; i++) {
                           await thread.post({ markdown: chunks[i] });
                         }

@@ -11,7 +11,10 @@ import {
   isMessengerPlatformEnabled,
   type MessengerPlatform,
 } from '@/config/messenger';
-import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
+import {
+  MessengerAccountLinkConflictError,
+  MessengerAccountLinkModel,
+} from '@/database/models/messengerAccountLink';
 import type { DecryptedMessengerInstallation } from '@/database/models/messengerInstallation';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { agents, users } from '@/database/schemas';
@@ -263,13 +266,27 @@ export const messengerRouter = router({
         });
       }
 
-      const link = await ctx.messengerLinkModel.upsertForPlatform({
-        activeAgentId: agentRow.id,
-        platform: payload.platform,
-        platformUserId: payload.platformUserId,
-        platformUsername: payload.platformUsername ?? null,
-        tenantId: payload.tenantId ?? '',
-      });
+      let link;
+      try {
+        link = await ctx.messengerLinkModel.upsertForPlatform({
+          activeAgentId: agentRow.id,
+          platform: payload.platform,
+          platformUserId: payload.platformUserId,
+          platformUsername: payload.platformUsername ?? null,
+          tenantId: payload.tenantId ?? '',
+        });
+      } catch (error) {
+        // Race backstop: the IM identity got bound to another LobeHub user
+        // between the pre-check above and the upsert. Re-surface as the same
+        // friendly 409 the verify-im UI already knows how to render.
+        if (error instanceof MessengerAccountLinkConflictError) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'verify.error.alreadyLinkedToOther',
+          });
+        }
+        throw error;
+      }
 
       // Best-effort confirmation back to the IM platform.
       void notifyLinkSuccess(payload.platform, {
