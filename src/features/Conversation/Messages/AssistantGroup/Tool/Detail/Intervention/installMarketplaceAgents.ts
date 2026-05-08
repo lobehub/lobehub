@@ -54,6 +54,7 @@ export const installMarketplaceAgents = async (
     }
 
     const summaryBase: InstallMarketplaceAgentSummary = {
+      avatar: marketAgent.avatar,
       category: marketAgent.category,
       description: marketAgent.description || marketAgent.summary,
       skipped: false,

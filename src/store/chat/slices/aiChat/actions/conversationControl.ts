@@ -315,7 +315,11 @@ export class ConversationControlActionImpl {
     toolMessageId: string,
     response: Record<string, unknown>,
     context?: ConversationContext,
-    options?: { createUserMessage?: boolean; toolResultContent?: string },
+    options?: {
+      createUserMessage?: boolean;
+      pluginState?: Record<string, unknown>;
+      toolResultContent?: string;
+    },
   ): Promise<void> => {
     const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
@@ -358,6 +362,14 @@ export class ConversationControlActionImpl {
       undefined,
       optimisticContext,
     );
+
+    if (options?.pluginState) {
+      await this.#get().optimisticUpdatePluginState(
+        toolMessageId,
+        options.pluginState,
+        optimisticContext,
+      );
+    }
 
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
 

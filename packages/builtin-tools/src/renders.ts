@@ -35,6 +35,10 @@ import {
   WebBrowsingRenders,
 } from '@lobechat/builtin-tool-web-browsing/client';
 import {
+  AgentMarketplaceManifest,
+  AgentMarketplaceRenders,
+} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/client';
+import {
   WebOnboardingManifest,
   WebOnboardingRenders,
 } from '@lobechat/builtin-tool-web-onboarding/client';
@@ -59,6 +63,7 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
   [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
   [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
+  [AgentMarketplaceManifest.identifier]: AgentMarketplaceRenders as Record<string, BuiltinRender>,
   [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
   [CloudSandboxManifest.identifier]: CloudSandboxRenders as Record<string, BuiltinRender>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderRenders as Record<string, BuiltinRender>,

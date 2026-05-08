@@ -866,6 +866,8 @@ export default {
   'workflow.toolDisplayName.runCommand': 'Ran a command',
   'workflow.toolDisplayName.saveUserQuestion': 'Recorded info',
   'workflow.toolDisplayName.search': 'Searched the web',
+  'workflow.toolDisplayName.showAgentMarketplace': 'Assembled agent team',
+  'workflow.toolDisplayName.submitAgentPick': 'Picked agents',
   'workflow.toolDisplayName.searchAgent': 'Searched agents',
   'workflow.toolDisplayName.searchKnowledgeBase': 'Searched knowledge base',
   'workflow.toolDisplayName.searchLocalFiles': 'Searched files',
