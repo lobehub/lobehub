@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface RenderAgentRouteOptions {
-  agentOnboardingEnabled?: boolean;
+  AGENT_ONBOARDING_ENABLED?: boolean;
   commonStepsCompleted?: boolean;
   desktop?: boolean;
   enabled: boolean;
@@ -12,7 +12,7 @@ interface RenderAgentRouteOptions {
 }
 
 const renderAgentRoute = async ({
-  agentOnboardingEnabled = true,
+  AGENT_ONBOARDING_ENABLED = true,
   commonStepsCompleted = true,
   desktop = false,
   enabled,
@@ -21,7 +21,7 @@ const renderAgentRoute = async ({
 }: RenderAgentRouteOptions) => {
   vi.resetModules();
   vi.doMock('@lobechat/business-const', () => ({
-    AGENT_ONBOARDING_ENABLED: agentOnboardingEnabled,
+    AGENT_ONBOARDING_ENABLED,
   }));
   vi.doMock('@lobechat/const', () => ({
     isDesktop: desktop,
@@ -118,7 +118,7 @@ describe('AgentOnboardingRoute', () => {
   });
 
   it('redirects to classic when AGENT_ONBOARDING_ENABLED master switch is off', async () => {
-    await renderAgentRoute({ agentOnboardingEnabled: false, enabled: true });
+    await renderAgentRoute({ AGENT_ONBOARDING_ENABLED: false, enabled: true });
 
     expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
   });

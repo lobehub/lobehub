@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface RenderOptions {
-  agentOnboardingEnabled?: boolean;
+  AGENT_ONBOARDING_ENABLED?: boolean;
   commonStepsCompleted: boolean;
   desktop?: boolean;
   enableAgentOnboarding?: boolean;
@@ -15,7 +15,7 @@ interface RenderOptions {
 }
 
 const renderCommon = async ({
-  agentOnboardingEnabled = true,
+  AGENT_ONBOARDING_ENABLED = true,
   commonStepsCompleted,
   desktop = false,
   enableAgentOnboarding = true,
@@ -29,7 +29,7 @@ const renderCommon = async ({
   vi.resetModules();
 
   vi.doMock('@lobechat/business-const', () => ({
-    AGENT_ONBOARDING_ENABLED: agentOnboardingEnabled,
+    AGENT_ONBOARDING_ENABLED,
   }));
   vi.doMock('@lobechat/const', () => ({ isDesktop: desktop }));
   vi.doMock('@/components/Loading/BrandTextLoading', () => ({
@@ -127,7 +127,7 @@ describe('CommonOnboardingPage', () => {
 
   it('redirects to /onboarding/classic when AGENT_ONBOARDING_ENABLED master switch is off', async () => {
     await renderCommon({
-      agentOnboardingEnabled: false,
+      AGENT_ONBOARDING_ENABLED: false,
       commonStepsCompleted: true,
       enableAgentOnboarding: true,
     });
