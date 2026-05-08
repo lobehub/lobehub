@@ -1,3 +1,3 @@
-import MessengerVerifyPage from '@/features/MessengerVerify';
+import MessengerVerifyPage from '@/features/Messenger/Verify';
 
 export default MessengerVerifyPage;
