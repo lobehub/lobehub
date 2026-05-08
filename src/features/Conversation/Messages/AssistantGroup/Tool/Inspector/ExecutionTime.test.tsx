@@ -63,6 +63,29 @@ describe('ExecutionTime', () => {
     expect(screen.getByText('3.5s')).toBeTruthy();
   });
 
+  it('clears the cached start time when an active timer stays unmounted', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+
+    const { unmount } = render(<ExecutionTime isExecuting timerKey="tool-active-unmount" />);
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(screen.getByText('1.5s')).toBeTruthy();
+
+    unmount();
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    render(<ExecutionTime isExecuting timerKey="tool-active-unmount" />);
+
+    expect(screen.getByText('0ms')).toBeTruthy();
+  });
+
   it('clears the cached start time when execution stops', () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);

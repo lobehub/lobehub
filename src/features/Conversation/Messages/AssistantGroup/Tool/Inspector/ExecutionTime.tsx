@@ -8,7 +8,28 @@ interface ExecutionTimeProps {
 }
 
 const UPDATE_INTERVAL_MS = 100;
+const START_TIME_CACHE_TTL_MS = 60_000;
 const executionStartTimeCache = new Map<string, number>();
+const executionStartTimeCleanupTimers = new Map<string, number>();
+
+const clearExecutionStartTimeCleanup = (timerKey: string) => {
+  const cleanupTimer = executionStartTimeCleanupTimers.get(timerKey);
+  if (cleanupTimer === undefined) return;
+
+  window.clearTimeout(cleanupTimer);
+  executionStartTimeCleanupTimers.delete(timerKey);
+};
+
+const scheduleExecutionStartTimeCleanup = (timerKey: string) => {
+  clearExecutionStartTimeCleanup(timerKey);
+
+  const cleanupTimer = window.setTimeout(() => {
+    executionStartTimeCache.delete(timerKey);
+    executionStartTimeCleanupTimers.delete(timerKey);
+  }, START_TIME_CACHE_TTL_MS);
+
+  executionStartTimeCleanupTimers.set(timerKey, cleanupTimer);
+};
 
 const formatElapsedTime = (ms: number): string => {
   if (ms < 1000) return `${ms}ms`;
@@ -25,10 +46,13 @@ const ExecutionTime = memo<ExecutionTimeProps>(({ isExecuting, startTime, timerK
 
   useEffect(() => {
     if (!isExecuting) {
+      clearExecutionStartTimeCleanup(timerKey);
       executionStartTimeCache.delete(timerKey);
       setElapsed(0);
       return;
     }
+
+    clearExecutionStartTimeCleanup(timerKey);
 
     const resolvedStartTime = startTime ?? executionStartTimeCache.get(timerKey) ?? Date.now();
     executionStartTimeCache.set(timerKey, resolvedStartTime);
@@ -42,6 +66,7 @@ const ExecutionTime = memo<ExecutionTimeProps>(({ isExecuting, startTime, timerK
 
     return () => {
       window.clearInterval(interval);
+      scheduleExecutionStartTimeCleanup(timerKey);
     };
   }, [isExecuting, startTime, timerKey]);
 
