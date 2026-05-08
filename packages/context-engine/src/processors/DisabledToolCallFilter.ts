@@ -32,6 +32,20 @@ const isDisabledToolName = (name: string | undefined, disabledToolIdentifiers: S
   return false;
 };
 
+const getDisabledToolCallIds = (message: Message, disabledToolIdentifiers: Set<string>) => {
+  const ids = new Set<string>();
+
+  if (!Array.isArray(message.tools)) return ids;
+
+  for (const tool of message.tools) {
+    if (disabledToolIdentifiers.has(String(tool?.identifier ?? '')) && tool?.id) {
+      ids.add(String(tool.id));
+    }
+  }
+
+  return ids;
+};
+
 /**
  * Removes historical tool calls for tools that are not valid in the current runtime scope.
  *
@@ -92,10 +106,13 @@ export class DisabledToolCallFilter extends BaseProcessor {
 
   private filterAssistantMessage(message: Message, disabledToolIdentifiers: Set<string>): Message {
     let nextMessage = message;
+    const disabledToolCallIds = getDisabledToolCallIds(message, disabledToolIdentifiers);
 
     if (Array.isArray(message.tool_calls)) {
       const toolCalls = message.tool_calls.filter(
-        (toolCall) => !isDisabledToolName(toolCall?.function?.name, disabledToolIdentifiers),
+        (toolCall) =>
+          !disabledToolCallIds.has(String(toolCall?.id ?? '')) &&
+          !isDisabledToolName(toolCall?.function?.name, disabledToolIdentifiers),
       );
 
       if (toolCalls.length !== message.tool_calls.length) {

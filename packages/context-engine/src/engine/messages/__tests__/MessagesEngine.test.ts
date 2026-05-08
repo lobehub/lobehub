@@ -700,6 +700,60 @@ Document content here.
         filteredToolCalls: 1,
       });
     });
+
+    it('should remove disabled tool calls after provider-safe name hashing', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Open the page',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: 'msg-2',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'open_page',
+              arguments: '{}',
+              id: 'call_1',
+              identifier: '@browser/use',
+              type: 'mcp',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: 'Opened the page.',
+          createdAt: Date.now(),
+          id: 'msg-3',
+          role: 'tool',
+          tool_call_id: 'call_1',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        messages,
+        toolsConfig: {
+          disabledToolIdentifiers: ['@browser/use'],
+          tools: [],
+        },
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages.some((m) => m.role === 'tool')).toBe(false);
+      expect(result.messages.some((m) => JSON.stringify(m).includes('MD5HASH_'))).toBe(false);
+      expect(result.metadata.disabledToolCallFilter).toEqual({
+        filteredAssistantMessages: 1,
+        filteredToolCalls: 1,
+      });
+    });
   });
 
   describe('Page Selections', () => {
