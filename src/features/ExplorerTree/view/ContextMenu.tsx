@@ -9,7 +9,7 @@ type AntdItem = NonNullable<MenuProps['items']>[number];
 // active before the menu opened, which makes the rename input invisible.
 const wrapItem = (item: AntdItem): ContextMenuItem => {
   if (!item || typeof item !== 'object') return item as ContextMenuItem;
-  const next = { ...(item as Record<string, unknown>) };
+  const next = { ...(item as unknown as Record<string, unknown>) };
   if ('children' in item && Array.isArray((item as { children?: unknown }).children)) {
     next.children = (item as { children: AntdItem[] }).children.map((child) => wrapItem(child));
   }
@@ -19,7 +19,7 @@ const wrapItem = (item: AntdItem): ContextMenuItem => {
       requestAnimationFrame(() => original(...args));
     };
   }
-  return next as ContextMenuItem;
+  return next as unknown as ContextMenuItem;
 };
 
 export const openExplorerContextMenu = (items: MenuProps['items']) => {
