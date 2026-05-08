@@ -20,7 +20,7 @@ jobs:
       - name: 2. Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 3. Setup Bun (新增步骤：安装 Bun 环境)
         uses: oven-sh/setup-bun@v2
