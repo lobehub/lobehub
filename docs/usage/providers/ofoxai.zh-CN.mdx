@@ -1,0 +1,46 @@
+---
+title: 在 LobeHub 中使用 OfoxAI
+description: 学习如何在 LobeHub 中配置和使用您的 OfoxAI API Key，通过统一网关访问 100+ 大模型。
+tags:
+  - LobeHub
+  - OfoxAI
+  - API Key
+  - Web UI
+  - LLM 网关
+---
+
+# 在 LobeHub 中使用 OfoxAI
+
+[OfoxAI](https://ofox.ai) 是一个统一的大语言模型 API 网关，通过单个 API Key 即可访问 100+ 模型——包括 OpenAI GPT、Anthropic Claude、Google Gemini、DeepSeek、Qwen、Mistral 和 Llama 等。它兼容 OpenAI、Anthropic 和 Gemini 协议，无需修改客户端代码即可在不同模型之间切换。
+
+本文将指导您如何在 LobeHub 中使用 OfoxAI。
+
+<Steps>
+  ### 步骤一：获取 OfoxAI API Key
+
+  - 访问 [OfoxAI 控制台](https://app.ofox.ai/auth) 注册或登录账号。
+  - 进入仪表盘的 **API Keys** 页面。
+  - 点击 **Create Key**，复制并妥善保存生成的密钥（仅显示一次）。
+
+  ### 步骤二：在 LobeHub 中配置 OfoxAI
+
+  - 打开 LobeHub 的 **设置** 面板。
+  - 在 **语言模型** 中找到 **OfoxAI** 设置项。
+  - 启用 OfoxAI，并粘贴上一步获取的 API Key。
+  - 默认 API 地址为 `https://api.ofox.ai/v1`，无需修改。
+
+  ### 步骤三：选择模型并开始对话
+
+  - 在模型选择器中选择 OfoxAI 提供的模型，例如 `gpt-4o`、`claude-sonnet-4-20250514`、`gemini-2.5-pro`、`deepseek-v3` 等。
+  - 开始对话。流式输出、工具调用（底层模型支持时）、图片输入均开箱即用。
+
+  <Callout type={'info'}>
+    OfoxAI 提供免费额度可供试用，超出后按 token 计费。中国大陆用户默认通过香港加速线路访问。完整模型列表与价格见 [docs.ofox.ai](https://docs.ofox.ai)。
+  </Callout>
+
+  <Callout type={'warning'}>
+    请妥善保管您的 API Key。一旦丢失只能重新生成。
+  </Callout>
+</Steps>
+
+至此，您已可以在 LobeHub 中使用 OfoxAI 提供的各种模型进行对话与交互。
