@@ -32,7 +32,7 @@ export function sanitizeBm25Query(query: string, options: SanitizeBm25QueryOptio
     // Keep `<` and `>` in this escape set. Angle-bracket wrapped tokens can be
     // interpreted as range-query boundaries by the BM25 parser and may trigger
     // parse failures when the boundary contains multiple terms.
-    .map((word) => word.replaceAll(/[+&|!(){}[\]^"~*?:\\/<>]/g, '\\$&'))
+    .map((word) => word.replaceAll(/[+&|!(){}[\]^"`~*?:\\/<>]/g, '\\$&'))
     .filter(Boolean);
 
   if (terms.length === 0) throw new Error('Query is empty after sanitization');
