@@ -201,6 +201,11 @@ const AgentOnboardingPage = memo(() => {
   const assistantTurnSettledHandler =
     onboardingFinished || viewingHistoricalTopic ? undefined : handleAssistantTurnSettled;
 
+  const conversationHooks = useMemo(
+    () => (onboardingFinished ? undefined : { onBeforeSendMessage: composedOnBeforeSendMessage }),
+    [onboardingFinished, composedOnBeforeSendMessage],
+  );
+
   if (error) {
     return (
       <OnboardingContainer>
@@ -232,14 +237,8 @@ const AgentOnboardingPage = memo(() => {
         <OnboardingConversationProvider
           agentId={onboardingAgentId}
           frozen={onboardingFinished}
+          hooks={conversationHooks}
           topicId={effectiveTopicId}
-          hooks={
-            onboardingFinished
-              ? undefined
-              : {
-                  onBeforeSendMessage: composedOnBeforeSendMessage,
-                }
-          }
         >
           <ErrorBoundary fallbackRender={() => null}>
             <AgentOnboardingConversation

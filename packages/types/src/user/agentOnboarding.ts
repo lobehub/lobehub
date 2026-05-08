@@ -5,7 +5,6 @@ export const SAVE_USER_QUESTION_FIELDS = [
   'agentName',
   'fullName',
   'interests',
-  'responseLanguage',
 ] as const;
 
 export const AGENT_ONBOARDING_STRUCTURED_FIELDS = SAVE_USER_QUESTION_FIELDS;
@@ -19,7 +18,6 @@ export const AGENT_ONBOARDING_NODES = [
   'workStyle',
   'workContext',
   'painPoints',
-  'responseLanguage',
   'summary',
 ] as const;
 
@@ -30,7 +28,6 @@ export interface SaveUserQuestionInput {
   agentName?: string;
   fullName?: string;
   interests?: string[];
-  responseLanguage?: string;
 }
 
 export interface UserOnboardingAgentIdentity {
@@ -167,7 +164,6 @@ export interface UserAgentOnboardingUpdate {
 export interface UserAgentOnboardingDraft {
   agentIdentity?: Partial<UserOnboardingAgentIdentity>;
   painPoints?: Partial<UserOnboardingDimensionPainPoints>;
-  responseLanguage?: string;
   userIdentity?: Partial<UserOnboardingDimensionIdentity>;
   workContext?: Partial<UserOnboardingDimensionWorkContext>;
   workStyle?: Partial<UserOnboardingDimensionWorkStyle>;
@@ -200,7 +196,6 @@ export const SaveUserQuestionInputSchema = z
     agentName: OptionalTrimmedNonEmptyStringSchema,
     fullName: OptionalTrimmedNonEmptyStringSchema,
     interests: OptionalTrimmedNonEmptyStringArraySchema,
-    responseLanguage: OptionalTrimmedNonEmptyStringSchema,
   })
   .strict();
 

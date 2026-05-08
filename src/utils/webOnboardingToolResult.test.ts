@@ -7,15 +7,15 @@ import { describe, expect, it } from 'vitest';
 describe('web onboarding tool result helpers', () => {
   it('keeps tool action content message-first', () => {
     const result = createWebOnboardingToolResult({
-      content: 'Saved interests and response language.',
-      savedFields: ['interests', 'responseLanguage'],
+      content: 'Saved full name and interests.',
+      savedFields: ['fullName', 'interests'],
       success: true,
     });
 
-    expect(result.content).toBe('Saved interests and response language.');
+    expect(result.content).toBe('Saved full name and interests.');
     expect(result.state).toEqual({
       isError: false,
-      savedFields: ['interests', 'responseLanguage'],
+      savedFields: ['fullName', 'interests'],
       success: true,
     });
     expect(result.content.trim().startsWith('{')).toBe(false);
