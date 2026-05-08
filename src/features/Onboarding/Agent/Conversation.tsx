@@ -12,7 +12,6 @@ import {
   MessageItem,
   useConversationStore,
 } from '@/features/Conversation';
-import FollowUpChips from '@/features/Conversation/FollowUp/FollowUpChips';
 import { dataSelectors, messageStateSelectors } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { OnboardingPhase } from '@/types/user';
@@ -151,20 +150,14 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
 
     const itemContent = (index: number, id: string) => {
       const isLatestItem = displayMessages.length === index + 1;
-      const message = displayMessages[index];
-      const showFollowUp =
-        isLatestItem && !!message && assistantLikeRoles.has(message.role) && !!topicId;
 
       return (
-        <Flexbox>
-          <MessageItem
-            defaultWorkflowExpandLevel="collapsed"
-            id={id}
-            index={index}
-            isLatestItem={isLatestItem}
-          />
-          {showFollowUp && <FollowUpChips messageId={id} topicId={topicId!} />}
-        </Flexbox>
+        <MessageItem
+          defaultWorkflowExpandLevel="collapsed"
+          id={id}
+          index={index}
+          isLatestItem={isLatestItem}
+        />
       );
     };
 

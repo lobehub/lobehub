@@ -141,6 +141,7 @@ const GroupMessage = memo<GroupMessageProps>(
       <ChatItem
         showTitle
         avatar={avatar}
+        id={id}
         placement={'left'}
         time={createdAt}
         actions={
