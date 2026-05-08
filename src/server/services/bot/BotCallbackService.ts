@@ -18,7 +18,7 @@ import {
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
-  renderError,
+  renderAgentError,
   renderFinalReply,
   renderStepProgress,
   renderStopped,
@@ -36,6 +36,7 @@ export interface BotCallbackBody {
   duration?: number;
   elapsedMs?: number;
   errorMessage?: string;
+  errorType?: string;
   executionTimeMs?: number;
   /** Hook ID from HookDispatcher (e.g. 'bot-step-progress', 'bot-completion') */
   hookId?: string;
@@ -241,15 +242,17 @@ export class BotCallbackService {
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
-    const { reason, lastAssistantContent, errorMessage, operationId } = body;
+    const { reason, lastAssistantContent, errorMessage, errorType, operationId } = body;
 
     if (reason === 'error') {
       log(
-        'handleCompletion: agent run failed, operationId=%s, errorMessage=%s',
+        'handleCompletion: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
         operationId,
+        errorType,
         errorMessage,
       );
-      const errorText = renderError(operationId, replyLocale);
+      const errorBody = renderAgentError(errorType, operationId, replyLocale);
+      const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       try {
         if (canEdit && progressMessageId) {
           await messenger.editMessage(progressMessageId, errorText);

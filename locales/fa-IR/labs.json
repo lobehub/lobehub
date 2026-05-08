@@ -9,5 +9,7 @@
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
+  "features.messenger.desc": "با عوامل خود از طریق تلگرام (و سایر پیام‌رسان‌ها) از طریق ربات مشترک LobeHub صحبت کنید. یک تب پیام‌رسان در تنظیمات اضافه می‌کند برای اتصال حساب شما و انتخاب اینکه کدام عامل پیام‌ها را دریافت کند.",
+  "features.messenger.title": "پیام‌رسان",
   "title": "آزمایشگاه‌ها"
 }

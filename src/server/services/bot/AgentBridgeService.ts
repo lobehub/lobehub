@@ -24,6 +24,7 @@ import {
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import {
+  renderAgentError,
   renderError,
   renderErrorWithDetails,
   renderFinalReply,
@@ -349,9 +350,11 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
-    const errorContent = stopped
-      ? renderStopped(errorMessage, replyLocale)
-      : renderError(operationId, replyLocale);
+    const errorContent = {
+      markdown: stopped
+        ? renderStopped(errorMessage, replyLocale)
+        : renderError(operationId, replyLocale),
+    };
 
     if (progressMessage) {
       try {
@@ -461,9 +464,10 @@ export class AgentBridgeService {
           log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
         }
       } catch (error) {
-        log('handleMention error: %O', error);
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleMention error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post(renderError(undefined, replyLocale));
+          await thread.post({ markdown: renderError(operationId, replyLocale) });
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -601,9 +605,12 @@ export class AgentBridgeService {
           return this.handleMention(thread, message, opts);
         }
 
-        log('handleSubscribedMessage error: %O', error);
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleSubscribedMessage error: operationId=%s, %O', operationId, error);
         try {
-          await thread.post(renderErrorWithDetails(errMsg, replyLocale));
+          await thread.post({
+            markdown: renderErrorWithDetails(errMsg, replyLocale, operationId),
+          });
         } catch (postError) {
           log('handleSubscribedMessage: failed to post error message: %O', postError);
         }
@@ -1007,6 +1014,11 @@ export class AgentBridgeService {
 
     let { progressMessage } = opts;
     let operationStartTime = 0;
+    // Tracks the last markdown body written to `progressMessage` so we can
+    // skip redundant edits. Telegram rejects edits with identical content
+    // ("message is not modified"), and the final reply often matches the
+    // last streamed progress frame.
+    let lastProgressText: string | undefined;
 
     const stopGatewayTyping = () => {
       if (gatewayConnectionId && botContext?.platformThreadId) {
@@ -1079,11 +1091,20 @@ export class AgentBridgeService {
                   totalCost: event.totalCost ?? 0,
                   totalTokens: event.totalTokens ?? 0,
                 };
-                const formatted = client?.formatMarkdown?.(msgBody) ?? msgBody;
-                const progressText = client?.formatReply?.(formatted, stats) ?? formatted;
+                // Local mode goes through the Chat SDK adapter, which only
+                // applies the platform's markdown parse_mode when the message
+                // is `{ markdown }`. Pre-converting via `formatMarkdown` (HTML
+                // for Telegram, mrkdwn for Slack, …) would land in a plain
+                // string branch and render literal `**` / `<b>`. `formatReply`
+                // only appends a plain stats line, so it composes cleanly with
+                // the markdown body.
+                const progressBody = client?.formatReply?.(msgBody, stats) ?? msgBody;
+
+                if (progressBody === lastProgressText) return;
 
                 try {
-                  progressMessage = await progressMessage.edit(progressText);
+                  progressMessage = await progressMessage.edit({ markdown: progressBody });
+                  lastProgressText = progressBody;
                 } catch (error) {
                   log('executeWithCallback[local]: failed to edit progress message: %O', error);
                 }
@@ -1107,28 +1128,43 @@ export class AgentBridgeService {
                 if (reason === 'error') {
                   const errorMsg = event.errorMessage || 'Agent execution failed';
                   log(
-                    'onComplete: agent run failed, operationId=%s, errorMessage=%s',
+                    'onComplete: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
                     event.operationId,
+                    event.errorType,
                     errorMsg,
                   );
                   try {
-                    const errorText = renderError(event.operationId, replyLocale);
+                    const errorBody = renderAgentError(
+                      event.errorType,
+                      event.operationId,
+                      replyLocale,
+                    );
+                    // Wrap in `{ markdown }` so the Chat SDK adapter sets the
+                    // platform's markdown parse_mode (e.g. Telegram `Markdown`,
+                    // Slack `mrkdwn`) and converts the body. Plain strings are
+                    // sent without parse_mode and would render literal `**`.
                     if (progressMessage) {
-                      await progressMessage.edit(errorText);
+                      await progressMessage.edit({ markdown: errorBody });
                     } else {
-                      await thread.post(errorText);
+                      await thread.post({ markdown: errorBody });
                     }
                   } catch {
                     // ignore send failure
                   }
-                  reject(new Error(errorMsg));
+                  // Resolve (not reject) — the friendly error has already been
+                  // posted to the user. Rejecting would bubble up to the outer
+                  // try/catch in handleMention and cause a duplicate generic
+                  // "Agent Execution Failed" message on top of the friendly one.
+                  resolve({ reply: '', topicId: resolvedTopicId });
                   return;
                 }
 
                 if (reason === 'interrupted') {
                   if (progressMessage) {
                     try {
-                      await progressMessage.edit(renderStopped(undefined, replyLocale));
+                      await progressMessage.edit({
+                        markdown: renderStopped(undefined, replyLocale),
+                      });
                     } catch {
                       // ignore edit failure
                     }
@@ -1149,21 +1185,26 @@ export class AgentBridgeService {
                       totalCost: event.cost ?? 0,
                       totalTokens: event.totalTokens ?? 0,
                     };
-                    const formattedBody = client?.formatMarkdown?.(replyBody) ?? replyBody;
-                    const finalText =
-                      client?.formatReply?.(formattedBody, replyStats) ?? formattedBody;
+                    // See progress-handler note above: keep the body as
+                    // markdown and let the Chat SDK adapter render it with the
+                    // platform's parse_mode. `formatReply` only appends a
+                    // plain-text stats line.
+                    const finalText = client?.formatReply?.(replyBody, replyStats) ?? replyBody;
 
                     const chunks = splitMessage(finalText, charLimit);
 
                     try {
                       if (progressMessage) {
-                        await progressMessage.edit(chunks[0]);
+                        if (chunks[0] !== lastProgressText) {
+                          await progressMessage.edit({ markdown: chunks[0] });
+                          lastProgressText = chunks[0];
+                        }
                         for (let i = 1; i < chunks.length; i++) {
-                          await thread.post(chunks[i]);
+                          await thread.post({ markdown: chunks[i] });
                         }
                       } else {
                         for (const chunk of chunks) {
-                          await thread.post(chunk);
+                          await thread.post({ markdown: chunk });
                         }
                       }
                     } catch (error) {
@@ -1241,7 +1282,9 @@ export class AgentBridgeService {
 
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderError(result.operationId, replyLocale));
+                await progressMessage.edit({
+                  markdown: renderError(result.operationId, replyLocale),
+                });
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
               }
@@ -1279,7 +1322,9 @@ export class AgentBridgeService {
           if (isAbortError(error)) {
             if (progressMessage) {
               try {
-                await progressMessage.edit(renderStopped(error.message, replyLocale));
+                await progressMessage.edit({
+                  markdown: renderStopped(error.message, replyLocale),
+                });
               } catch (editError) {
                 log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
               }
@@ -1301,9 +1346,17 @@ export class AgentBridgeService {
             return;
           }
 
+          // If execAgent rejected after the operation was registered (e.g. an
+          // error inside the resolved-then path), the operationId may already
+          // have been stashed in activeOperations — surface it so the failure
+          // is traceable instead of opaque.
+          const fallbackOperationId = AgentBridgeService.activeOperations.get(thread.id);
+
           if (progressMessage) {
             try {
-              await progressMessage.edit(renderError(undefined, replyLocale));
+              await progressMessage.edit({
+                markdown: renderError(fallbackOperationId, replyLocale),
+              });
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);
             }

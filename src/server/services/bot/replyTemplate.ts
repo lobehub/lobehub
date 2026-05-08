@@ -222,7 +222,14 @@ type SystemStrings = {
   dmRejectedAllowlist: string;
   dmRejectedDisabled: string;
   error: string;
-  errorWithDetails: (details: string) => string;
+  errorExceededContextWindow: string;
+  errorInvalidProviderAPIKey: string;
+  errorLocationNotSupported: string;
+  errorModelNotFound: string;
+  errorNoAvailableProvider: string;
+  errorPermissionDenied: string;
+  errorQuotaLimitReached: string;
+  errorWithDetails: (details: string, operationId?: string) => string;
   errorWithId: (operationId: string) => string;
   groupRejectedAllowlist: string;
   groupRejectedDisabled: string;
@@ -263,8 +270,24 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     dmRejectedDisabled:
       "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
     error: '**Agent Execution Failed**',
-    errorWithDetails: (details) =>
-      `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
+    errorExceededContextWindow:
+      "**Context window exceeded.**\nThe conversation is too long for this model. Send `/new` to start a fresh topic, or switch to a model with a larger context window in the agent's settings.",
+    errorInvalidProviderAPIKey:
+      "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
+    errorLocationNotSupported:
+      "**Region not supported.**\nThe configured model provider isn't available from this server's region. Please switch to a different provider or model in the agent's settings.",
+    errorModelNotFound:
+      "**Model not found.**\nThe configured model isn't available — it may have been removed or renamed. Please pick a different model in the agent's settings.",
+    errorNoAvailableProvider:
+      "**No model provider configured.**\nThis bot's agent has no available model provider — please add an API key and enable a provider in the agent's settings, then try again.",
+    errorPermissionDenied:
+      "**Permission denied by the model provider.**\nThe API key doesn't have access to the requested model or operation. Please check the key's permissions, or switch to a model your account is authorized to use.",
+    errorQuotaLimitReached:
+      "**Provider quota exhausted.**\nThe configured model provider is out of quota or rate-limited. Please wait a moment and try again, top up the account, or switch to a different provider in the agent's settings.",
+    errorWithDetails: (details, operationId) =>
+      operationId
+        ? `**Agent Execution Failed**\nOperation ID: \`${operationId}\`\nDetails:\n\`\`\`\n${details}\n\`\`\``
+        : `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent Execution Failed**\nOperation ID: \`${operationId}\``,
     groupRejectedAllowlist:
       "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
@@ -296,7 +319,24 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     dmRejectedAllowlist: '抱歉，您没有私信该机器人的权限。如需访问请联系机器人管理员。',
     dmRejectedDisabled: '该机器人不接受私信。请在共享频道或群组里 @它来联系。',
     error: '**Agent 执行失败**',
-    errorWithDetails: (details) => `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
+    errorExceededContextWindow:
+      '**上下文已超出模型上限**\n当前对话长度超过了该模型的上下文窗口。可以发送 `/new` 开启新话题，或在 Agent 设置中切换到上下文更大的模型后重试。',
+    errorInvalidProviderAPIKey:
+      '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
+    errorLocationNotSupported:
+      '**当前区域不被支持**\n所配置的模型 Provider 不允许从该服务器所在区域访问。请在 Agent 设置中切换到其他 Provider 或模型。',
+    errorModelNotFound:
+      '**未找到对应模型**\n所配置的模型不可用，可能已下线或更名。请在 Agent 设置中选择其他模型后重试。',
+    errorNoAvailableProvider:
+      '**未配置可用的模型 Provider**\n该机器人的 Agent 当前没有可用的模型 Provider，请在 Agent 设置中添加 API Key 并启用一个 Provider 后重试。',
+    errorPermissionDenied:
+      '**模型 Provider 拒绝访问**\nAPI Key 没有访问该模型或操作的权限。请检查 Key 的权限范围，或在 Agent 设置中切换到当前账户已授权的模型。',
+    errorQuotaLimitReached:
+      '**Provider 配额已用尽**\n所配置的模型 Provider 已达到配额上限或被限流。请稍后重试、为账户充值，或在 Agent 设置中切换到其他 Provider。',
+    errorWithDetails: (details, operationId) =>
+      operationId
+        ? `**Agent 执行失败**\nOperation ID: \`${operationId}\`\n详细信息：\n\`\`\`\n${details}\n\`\`\``
+        : `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
     errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
     groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
     groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
@@ -318,6 +358,55 @@ export function renderError(operationId?: string, lng?: BotReplyLocale): string 
   return operationId ? strings.errorWithId(operationId) : strings.error;
 }
 
+/**
+ * Map known `AgentRuntimeError` codes to the `SystemStrings` field that
+ * carries the friendly, actionable copy for that failure mode. Codes not in
+ * this map fall back to the generic `Operation ID` template — opaque enough
+ * not to leak internal error strings, but still traceable in logs.
+ *
+ * When adding a new code: extend `SystemStrings`, drop the copy into both the
+ * `en-US` and `zh-CN` dictionaries, then add the mapping here.
+ */
+const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
+  ExceededContextWindow: 'errorExceededContextWindow',
+  InsufficientQuota: 'errorQuotaLimitReached',
+  InvalidProviderAPIKey: 'errorInvalidProviderAPIKey',
+  LocationNotSupportError: 'errorLocationNotSupported',
+  ModelNotFound: 'errorModelNotFound',
+  NoAvailableProvider: 'errorNoAvailableProvider',
+  PermissionDenied: 'errorPermissionDenied',
+  QuotaLimitReached: 'errorQuotaLimitReached',
+};
+
+/**
+ * Render an agent-execution failure for the user. Switches on the stable
+ * `errorType` code (from `AgentRuntimeError.chat`) to surface a friendly,
+ * actionable message for known failure modes.
+ *
+ * For unknown error codes — or when `errorType` is missing — falls back to
+ * the legacy `Operation ID` template.
+ */
+export function renderAgentError(
+  errorType: string | undefined,
+  operationId: string | undefined,
+  lng?: BotReplyLocale,
+): string {
+  const strings = getSystemStrings(lng);
+
+  const stringKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
+  if (stringKey) {
+    const value = strings[stringKey];
+    if (typeof value === 'string') {
+      // Append the operationId as a traceable footer so operators can still
+      // grep logs for the failure even when the user-facing copy is a
+      // friendly, actionable message rather than the raw "Operation ID" line.
+      return operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
+    }
+  }
+
+  return operationId ? strings.errorWithId(operationId) : strings.error;
+}
+
 export function renderStopped(message?: string, lng?: BotReplyLocale): string {
   return message ?? getSystemStrings(lng).stoppedDefault;
 }
@@ -327,8 +416,12 @@ export function renderStopped(message?: string, lng?: BotReplyLocale): string {
  * message verbatim (typically for stale-topic or FK violations where the raw
  * detail helps the operator diagnose the failure).
  */
-export function renderErrorWithDetails(details: string, lng?: BotReplyLocale): string {
-  return getSystemStrings(lng).errorWithDetails(details);
+export function renderErrorWithDetails(
+  details: string,
+  lng?: BotReplyLocale,
+  operationId?: string,
+): string {
+  return getSystemStrings(lng).errorWithDetails(details, operationId);
 }
 
 /**

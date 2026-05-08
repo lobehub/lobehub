@@ -1746,6 +1746,7 @@ export class AgentRuntimeService {
         duration,
         errorDetail: state?.error,
         errorMessage: this.extractErrorMessage?.(state?.error) || String(state?.error || ''),
+        errorType: this.extractErrorType?.(state?.error),
         finalState: state,
         lastAssistantContent,
         llmCalls: state?.usage?.llm?.apiCalls,
@@ -1892,6 +1893,23 @@ export class AgentRuntimeService {
     // Fallback to message or type
     if (error.message && error.message !== 'error') return error.message;
     if (error.type || error.errorType) return String(error.type || error.errorType);
+
+    return undefined;
+  }
+
+  /**
+   * Extract a stable error code (e.g. `NoAvailableProvider`,
+   * `InvalidProviderAPIKey`) from the agent state error object. Used by
+   * downstream consumers (bot reply rendering, observability) to dispatch on
+   * the error kind without pattern-matching free-form messages.
+   */
+  private extractErrorType(error: any): string | undefined {
+    if (!error) return undefined;
+
+    // ChatCompletionErrorPayload / ChatMessageError both expose the code as
+    // `errorType` or `type` at the top level.
+    const errorType = error.errorType || error.type;
+    if (errorType) return String(errorType);
 
     return undefined;
   }

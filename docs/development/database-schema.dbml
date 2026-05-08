@@ -868,6 +868,48 @@ table messages_files {
   }
 }
 
+table messenger_account_links {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  platform varchar(50) [not null]
+  tenant_id varchar(255) [not null, default: '']
+  platform_user_id varchar(255) [not null]
+  platform_username text
+  active_agent_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (platform, tenant_id, platform_user_id) [name: 'messenger_account_links_platform_tenant_user_unique', unique]
+    (user_id, platform, tenant_id) [name: 'messenger_account_links_user_platform_tenant_unique', unique]
+    active_agent_id [name: 'messenger_account_links_active_agent_idx']
+  }
+}
+
+table messenger_installations {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  platform varchar(50) [not null]
+  tenant_id varchar(255) [not null]
+  application_id varchar(255) [not null]
+  account_id varchar(255)
+  credentials text [not null]
+  metadata jsonb [not null, default: `{}`]
+  token_expires_at "timestamp with time zone"
+  installed_by_user_id text
+  installed_by_platform_user_id varchar(255)
+  revoked_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (platform, application_id, tenant_id) [name: 'messenger_installations_platform_app_tenant_unique', unique]
+    (platform, tenant_id) [name: 'messenger_installations_platform_tenant_idx']
+    token_expires_at [name: 'messenger_installations_token_expires_at_idx']
+  }
+}
+
 table nextauth_accounts {
   access_token text
   expires_at integer
@@ -1392,6 +1434,23 @@ table sessions {
     (id, user_id) [name: 'sessions_id_user_id_idx']
     (user_id, updated_at) [name: 'sessions_user_id_updated_at_idx']
     group_id [name: 'sessions_group_id_idx']
+  }
+}
+
+table system_bot_providers {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  platform varchar(50) [not null]
+  enabled boolean [not null, default: true]
+  credentials text [not null]
+  application_id varchar(255)
+  settings jsonb [not null, default: `{}`]
+  connection_mode varchar(20)
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    platform [name: 'system_bot_providers_platform_unique', unique]
   }
 }
 
@@ -1945,7 +2004,6 @@ table user_memory_persona_documents {
     user_id [name: 'user_persona_documents_user_id_index']
   }
 }
-
 
 ref: agent_skills.user_id - users.id
 

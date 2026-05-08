@@ -1,4 +1,4 @@
-import type { InstallMarketplaceAgentSummary } from '@lobechat/builtin-tool-agent-marketplace';
+import type { InstallMarketplaceAgentSummary } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { customAlphabet } from 'nanoid/non-secure';
 
 import { agentService } from '@/services/agent';

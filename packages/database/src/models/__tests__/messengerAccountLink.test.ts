@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { agents, messengerAccountLinks, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { MessengerAccountLinkModel } from '../messengerAccountLink';
+import {
+  MessengerAccountLinkConflictError,
+  MessengerAccountLinkModel,
+} from '../messengerAccountLink';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -62,6 +65,55 @@ describe('MessengerAccountLinkModel', () => {
       expect(linkA.id).not.toBe(linkB.id);
       expect(linkA.tenantId).toBe('T_ACME');
       expect(linkB.tenantId).toBe('T_BETA');
+    });
+
+    it('throws MessengerAccountLinkConflictError when the IM identity is owned by another user', async () => {
+      // userB already owns this Telegram identity.
+      await new MessengerAccountLinkModel(serverDB, userB).upsertForPlatform({
+        activeAgentId: agentB,
+        platform: 'telegram',
+        platformUserId: 'tg-shared',
+      });
+
+      const promise = new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'telegram',
+        platformUserId: 'tg-shared',
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
+      await expect(promise).rejects.toMatchObject({
+        code: 'MESSENGER_ACCOUNT_LINK_CONFLICT',
+        existingUserId: userB,
+      });
+
+      // userB's row must not have been mutated.
+      const stillUserB = await MessengerAccountLinkModel.findByPlatformUser(
+        serverDB,
+        'telegram',
+        'tg-shared',
+      );
+      expect(stillUserB?.userId).toBe(userB);
+    });
+
+    it('refreshes (does not duplicate) when the same user re-asserts the same IM identity', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const first = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'telegram',
+        platformUserId: 'tg-1',
+        platformUsername: '@old',
+      });
+      const second = await model.upsertForPlatform({
+        platform: 'telegram',
+        platformUserId: 'tg-1',
+        platformUsername: '@new',
+      });
+
+      expect(second.id).toBe(first.id);
+      expect(second.platformUsername).toBe('@new');
+      // activeAgentId stays since the second call didn't override it.
+      expect(second.activeAgentId).toBe(agentA);
     });
 
     it('overwrites the existing row when re-linking the same (platform, tenant)', async () => {

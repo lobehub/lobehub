@@ -11,6 +11,22 @@ import type { LobeChatDatabase } from '../type';
  */
 const GLOBAL_TENANT_ID = '';
 
+/**
+ * Thrown by `upsertForPlatform` when the IM identity is already bound to a
+ * different LobeHub user. Callers (e.g. the messenger router) should surface
+ * a friendly 409 — never let the underlying DB unique-index error escape.
+ */
+export class MessengerAccountLinkConflictError extends Error {
+  readonly code = 'MESSENGER_ACCOUNT_LINK_CONFLICT' as const;
+  readonly existingUserId: string;
+
+  constructor(existingUserId: string, message?: string) {
+    super(message ?? 'IM identity is already linked to another LobeHub user');
+    this.name = 'MessengerAccountLinkConflictError';
+    this.existingUserId = existingUserId;
+  }
+}
+
 export class MessengerAccountLinkModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -33,24 +49,60 @@ export class MessengerAccountLinkModel {
    * defaults to the empty string, which collapses the new 3-column index
    * back to the original `(user, platform)` semantic.
    *
+   * Resolution order is `(platform, tenant, platformUserId)` first, then
+   * `(user, platform, tenant)` — so we never let the
+   * `messenger_account_links_platform_tenant_user_unique` constraint surface
+   * as an opaque DB error when the IM identity is already owned by another
+   * LobeHub user; we throw `MessengerAccountLinkConflictError` instead.
+   *
    * Returns the resulting link row.
    */
   upsertForPlatform = async (
     params: Omit<NewMessengerAccountLink, 'userId' | 'id'>,
   ): Promise<MessengerAccountLinkItem> => {
     const tenantId = params.tenantId ?? GLOBAL_TENANT_ID;
-    const existing = await this.findByPlatform(params.platform, tenantId);
 
-    if (existing) {
+    // Resolve by IM identity first. If the row exists and belongs to another
+    // user, refuse — the caller (router) should already have surfaced a
+    // friendly 409, this is the defensive backstop.
+    const byIdentity = await MessengerAccountLinkModel.findByPlatformUser(
+      this.db,
+      params.platform,
+      params.platformUserId,
+      tenantId,
+    );
+
+    if (byIdentity) {
+      if (byIdentity.userId !== this.userId) {
+        throw new MessengerAccountLinkConflictError(byIdentity.userId);
+      }
       const [updated] = await this.db
         .update(messengerAccountLinks)
         .set({
-          activeAgentId: params.activeAgentId ?? existing.activeAgentId,
+          activeAgentId: params.activeAgentId ?? byIdentity.activeAgentId,
+          platformUsername: params.platformUsername ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(messengerAccountLinks.id, byIdentity.id))
+        .returning();
+      return updated;
+    }
+
+    // IM identity is unbound. If the user already has a row for this
+    // `(platform, tenant)` (e.g. they previously linked a different account),
+    // overwrite it with the new platformUserId.
+    const existingForUser = await this.findByPlatform(params.platform, tenantId);
+
+    if (existingForUser) {
+      const [updated] = await this.db
+        .update(messengerAccountLinks)
+        .set({
+          activeAgentId: params.activeAgentId ?? existingForUser.activeAgentId,
           platformUserId: params.platformUserId,
           platformUsername: params.platformUsername ?? null,
           updatedAt: new Date(),
         })
-        .where(eq(messengerAccountLinks.id, existing.id))
+        .where(eq(messengerAccountLinks.id, existingForUser.id))
         .returning();
       return updated;
     }

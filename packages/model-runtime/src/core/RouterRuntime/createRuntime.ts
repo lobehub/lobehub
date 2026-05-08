@@ -2,6 +2,7 @@
  * @see https://github.com/lobehub/lobe-chat/discussions/6563
  */
 import type { GoogleGenAIOptions } from '@google/genai';
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { ClientOptions } from 'openai';
@@ -30,6 +31,7 @@ import type {
   ILobeAgentRuntimeErrorType,
   TextToSpeechPayload,
 } from '../../types';
+import { AgentRuntimeError } from '../../utils/createError';
 import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
@@ -209,7 +211,11 @@ export const createRouterRuntime = ({
           : this._routers;
 
       if (resolvedRouters.length === 0) {
-        throw new Error('empty providers');
+        throw AgentRuntimeError.chat({
+          error: { message: 'empty providers' },
+          errorType: AgentRuntimeErrorType.NoAvailableProvider,
+          provider: this._id,
+        });
       }
 
       return resolvedRouters;

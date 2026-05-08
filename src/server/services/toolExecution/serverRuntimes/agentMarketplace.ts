@@ -1,5 +1,5 @@
-import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-agent-marketplace';
-import { AgentMarketplaceExecutionRuntime } from '@lobechat/builtin-tool-agent-marketplace/executionRuntime';
+import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import { AgentMarketplaceExecutionRuntime } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/executionRuntime';
 
 import { type ServerRuntimeRegistration } from './types';
 

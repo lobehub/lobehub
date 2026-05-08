@@ -46,6 +46,7 @@ import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
 import { marketRouter } from './market';
 import { messageRouter } from './message';
+import { messengerRouter } from './messenger';
 import { notebookRouter } from './notebook';
 import { notificationRouter } from './notification';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
@@ -106,6 +107,7 @@ export const lambdaRouter = router({
   knowledgeBase: knowledgeBaseRouter,
   market: marketRouter,
   message: messageRouter,
+  messenger: messengerRouter,
   notebook: notebookRouter,
   notification: notificationRouter,
   oauthDeviceFlow: oauthDeviceFlowRouter,

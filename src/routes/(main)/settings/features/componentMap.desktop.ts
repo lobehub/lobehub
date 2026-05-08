@@ -13,6 +13,7 @@ import Appearance from '../appearance';
 import Creds from '../creds';
 import Hotkey from '../hotkey';
 import Memory from '../memory';
+import Messenger from '../messenger';
 import Profile from '../profile';
 import Provider from '../provider';
 import Proxy from '../proxy';
@@ -29,6 +30,7 @@ export const componentMap = {
   [SettingsTabs.Provider]: Provider,
   [SettingsTabs.ServiceModel]: ServiceModel,
   [SettingsTabs.Memory]: Memory,
+  [SettingsTabs.Messenger]: Messenger,
   [SettingsTabs.Notification]: Notification,
   [SettingsTabs.About]: About,
   [SettingsTabs.Hotkey]: Hotkey,

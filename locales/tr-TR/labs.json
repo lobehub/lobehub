@@ -9,5 +9,7 @@
   "features.groupChat.title": "Grup Sohbeti (Çoklu Temsilci)",
   "features.inputMarkdown.desc": "Girdi alanında Markdown biçimlendirmesini (kalın metin, kod blokları, tablolar vb.) gerçek zamanlı olarak görüntüleyin.",
   "features.inputMarkdown.title": "Girdi Markdown Görüntüleme",
+  "features.messenger.desc": "Telegram (ve diğer mesajlaşma uygulamaları) üzerinden LobeHub botu aracılığıyla ajanlarınızla konuşun. Hesabınızı bağlamak ve hangi ajanın mesajları alacağını seçmek için Ayarlar'da bir Mesajlaşma sekmesi ekler.",
+  "features.messenger.title": "Mesajlaşma",
   "title": "Deneysel Özellikler"
 }

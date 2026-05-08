@@ -25,6 +25,28 @@ export class TelegramApi {
     return { message_id: data.result.message_id };
   }
 
+  /**
+   * Send a message with a single inline-keyboard URL button. Used by the
+   * Messenger link flow to surface a "Link Account" CTA that opens the
+   * verify-im page in the user's browser.
+   */
+  async sendMessageWithUrlButton(
+    chatId: string | number,
+    text: string,
+    button: { text: string; url: string },
+  ): Promise<{ message_id: number }> {
+    log('sendMessageWithUrlButton: chatId=%s', chatId);
+    const data = await this.call('sendMessage', {
+      chat_id: chatId,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[{ text: button.text, url: button.url }]],
+      },
+      text: this.truncateText(text),
+    });
+    return { message_id: data.result.message_id };
+  }
+
   async editMessageText(chatId: string | number, messageId: number, text: string): Promise<void> {
     log('editMessageText: chatId=%s, messageId=%s', chatId, messageId);
     try {
@@ -39,6 +61,64 @@ export class TelegramApi {
       if (error?.message?.includes('message is not modified')) return;
       throw error;
     }
+  }
+
+  /**
+   * Send a message with inline-keyboard callback buttons. Each button carries
+   * `callback_data` (≤ 64 bytes) which the bot receives back via webhook
+   * `callback_query` when the user taps it.
+   */
+  async sendMessageWithCallbackKeyboard(
+    chatId: string | number,
+    text: string,
+    keyboard: Array<Array<{ callback_data: string; text: string }>>,
+  ): Promise<{ message_id: number }> {
+    log('sendMessageWithCallbackKeyboard: chatId=%s', chatId);
+    const data = await this.call('sendMessage', {
+      chat_id: chatId,
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard },
+      text: this.truncateText(text),
+    });
+    return { message_id: data.result.message_id };
+  }
+
+  /**
+   * Replace an existing message's text + inline keyboard. Used to re-render a
+   * picker after one of its options is selected (e.g. agent switch).
+   */
+  async editMessageWithCallbackKeyboard(
+    chatId: string | number,
+    messageId: number,
+    text: string,
+    keyboard: Array<Array<{ callback_data: string; text: string }>>,
+  ): Promise<void> {
+    log('editMessageWithCallbackKeyboard: chatId=%s, messageId=%s', chatId, messageId);
+    try {
+      await this.call('editMessageText', {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard },
+        text: this.truncateText(text),
+      });
+    } catch (error: any) {
+      if (error?.message?.includes('message is not modified')) return;
+      throw error;
+    }
+  }
+
+  /**
+   * Acknowledge a callback_query update. Telegram requires this within 30s of
+   * the user tapping a button, otherwise the loading spinner on the button
+   * stays forever. Pass `text` to show a toast notification to the user.
+   */
+  async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
+    log('answerCallbackQuery: id=%s', callbackQueryId);
+    await this.call('answerCallbackQuery', {
+      callback_query_id: callbackQueryId,
+      ...(text ? { text } : {}),
+    });
   }
 
   async sendChatAction(chatId: string | number, action = 'typing'): Promise<void> {

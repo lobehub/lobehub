@@ -3,7 +3,9 @@ import debug from 'debug';
 import {
   ApplicationCommandOptionType,
   ApplicationCommandType,
+  ButtonStyle,
   ChannelType,
+  ComponentType,
   type RESTGetAPIChannelMessageReactionUsersResult,
   type RESTGetAPIChannelMessageResult,
   type RESTGetAPIChannelMessagesResult,
@@ -16,6 +18,61 @@ import {
   type RESTPostAPIChannelThreadsResult,
   Routes,
 } from 'discord-api-types/v10';
+
+/**
+ * Generic shape for a button rendered into a Discord ActionRow.
+ *
+ * Defined locally rather than re-exporting `discord-api-types` shapes so
+ * callers stay one level above Discord's `ButtonStyle` enum (the messenger
+ * picker only cares about "active" vs "default" — Discord-style mapping
+ * happens inside `buildButtonComponents`).
+ */
+export interface DiscordButtonSpec {
+  customId: string;
+  /** When true, the button renders in Discord's primary (blue) style. */
+  isPrimary?: boolean;
+  label: string;
+}
+
+/** Discord caps each ActionRow at 5 buttons and each message at 5 ActionRows = 25 buttons. */
+const DISCORD_MAX_BUTTONS_PER_ROW = 5;
+const DISCORD_MAX_BUTTONS_PER_MESSAGE = 25;
+
+const buildButtonComponents = (
+  buttons: DiscordButtonSpec[],
+): Array<{
+  components: Array<{
+    custom_id: string;
+    label: string;
+    style: ButtonStyle;
+    type: ComponentType.Button;
+  }>;
+  type: ComponentType.ActionRow;
+}> => {
+  const truncated = buttons.slice(0, DISCORD_MAX_BUTTONS_PER_MESSAGE);
+  const rows: Array<{
+    components: Array<{
+      custom_id: string;
+      label: string;
+      style: ButtonStyle;
+      type: ComponentType.Button;
+    }>;
+    type: ComponentType.ActionRow;
+  }> = [];
+  for (let i = 0; i < truncated.length; i += DISCORD_MAX_BUTTONS_PER_ROW) {
+    rows.push({
+      components: truncated.slice(i, i + DISCORD_MAX_BUTTONS_PER_ROW).map((btn) => ({
+        custom_id: btn.customId,
+        // Discord caps button labels at 80 chars; longer agent names get truncated.
+        label: btn.label.length > 80 ? `${btn.label.slice(0, 77)}...` : btn.label,
+        style: btn.isPrimary ? ButtonStyle.Primary : ButtonStyle.Secondary,
+        type: ComponentType.Button,
+      })),
+      type: ComponentType.ActionRow,
+    });
+  }
+  return rows;
+};
 
 const log = debug('bot-platform:discord:client');
 
@@ -68,6 +125,54 @@ export class DiscordApi {
     })) as RESTPostAPIChannelMessageResult;
 
     return { id: data.id };
+  }
+
+  /**
+   * Post a message containing a grid of interactive buttons (Discord ActionRow
+   * + Button components). Used by the messenger's agent picker so the user
+   * can switch the active agent with a tap.
+   *
+   * Returns the message id so callers can later edit the picker in place via
+   * {@link editMessageWithButtons} when the underlying state changes.
+   */
+  async createMessageWithButtons(
+    channelId: string,
+    content: string,
+    buttons: DiscordButtonSpec[],
+  ): Promise<{ id: string }> {
+    log('createMessageWithButtons: channel=%s, buttons=%d', channelId, buttons.length);
+    const data = (await this.rest.post(Routes.channelMessages(channelId), {
+      body: {
+        components: buildButtonComponents(buttons),
+        content,
+      },
+    })) as RESTPostAPIChannelMessageResult;
+    return { id: data.id };
+  }
+
+  /**
+   * Replace an existing message's content + button grid in place. Mirrors
+   * Slack's `chat.update` flow used to re-render the picker after a button
+   * is tapped so the new "active" marker shows up without spamming the chat.
+   */
+  async editMessageWithButtons(
+    channelId: string,
+    messageId: string,
+    content: string,
+    buttons: DiscordButtonSpec[],
+  ): Promise<void> {
+    log(
+      'editMessageWithButtons: channel=%s, message=%s, buttons=%d',
+      channelId,
+      messageId,
+      buttons.length,
+    );
+    await this.rest.patch(Routes.channelMessage(channelId, messageId), {
+      body: {
+        components: buildButtonComponents(buttons),
+        content,
+      },
+    });
   }
 
   // ==================== Message Operations ====================

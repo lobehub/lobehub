@@ -983,6 +983,7 @@ When I am ___, I need ___
   'tab.manualFill': 'Manually Fill In',
   'tab.manualFill.desc': 'Configure a custom MCP skill manually',
   'tab.memory': 'Memory',
+  'tab.messenger': 'Messenger',
   'tab.notification': 'Notifications',
   'tab.profile': 'My Account',
   'tab.provider': 'Provider',
