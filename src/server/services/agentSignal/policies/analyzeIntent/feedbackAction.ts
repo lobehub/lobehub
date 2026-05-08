@@ -110,12 +110,8 @@ const isAccumulatingSkillSignal = (
   );
 };
 
-const isCompletionTriggeredSkillMutationAllowed = (signal: FeedbackDomainSignal) => {
-  const payload = (signal.source as { payload?: unknown } | undefined)?.payload;
-  if (!payload || typeof payload !== 'object') return false;
-  if (!('trigger' in payload)) return false;
-
-  return payload.trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete;
+const shouldDeferSkillMutationUntilClientCompletion = (signal: FeedbackDomainSignal) => {
+  return signal.payload.trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart;
 };
 
 const createDeferredSkillCandidate = (
@@ -352,7 +348,7 @@ export const createFeedbackActionPlannerSignalHandler = (
       }
 
       if (isDirectSkillDecisionSignal(signal)) {
-        if (!isCompletionTriggeredSkillMutationAllowed(signal)) {
+        if (shouldDeferSkillMutationUntilClientCompletion(signal)) {
           await options.procedure?.procedureState?.skillCandidates?.write(
             createDeferredSkillCandidate(signal, procedureContext),
           );

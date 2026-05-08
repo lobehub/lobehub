@@ -63,6 +63,7 @@ type DomainSignalInput<TTarget extends SupportedTask4DomainTarget> = {
   signalId: string;
   sourceId: string;
   target: TTarget;
+  trigger?: string;
 };
 
 function createDomainSignal(input: DomainSignalInput<'memory'>): SignalFeedbackDomainMemory;
@@ -102,6 +103,7 @@ function createDomainSignal(
           reason: 'test-domain-signal',
           satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
           target: 'memory',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.memory',
@@ -124,6 +126,7 @@ function createDomainSignal(
           reason: 'test-domain-signal',
           satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
           target: 'none',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.none',
@@ -146,6 +149,7 @@ function createDomainSignal(
           reason: 'test-domain-signal',
           satisfactionResult: input.satisfactionResult ?? 'not_satisfied',
           target: 'prompt',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.prompt',
@@ -169,6 +173,7 @@ function createDomainSignal(
           skillIntentReason: input.skillIntentReason,
           skillRoute: input.skillRoute,
           target: 'skill',
+          trigger: input.trigger,
         },
         signalId: input.signalId,
         signalType: 'signal.feedback.domain.skill',
@@ -177,14 +182,6 @@ function createDomainSignal(
     }
   }
 }
-
-const assignSourcePayload = (
-  signal: DomainSignalVariantByTarget[SupportedTask4DomainTarget],
-  payload: Record<string, unknown>,
-) => {
-  const source = signal.source as { payload?: Record<string, unknown> };
-  source.payload = source.payload ? { ...source.payload, ...payload } : { ...payload };
-};
 
 describe('feedbackActionPlanner', () => {
   /**
@@ -340,8 +337,6 @@ describe('feedbackActionPlanner', () => {
       signalId: 'sig_2',
       sourceId: 'source_2',
       target: 'skill',
-    });
-    assignSourcePayload(signal, {
       trigger: 'client.runtime.complete',
     });
     const skillResult = await handler.handle(signal, context);
@@ -399,10 +394,6 @@ describe('feedbackActionPlanner', () => {
       skillRoute: 'direct_decision',
       sourceId: 'source_skill_defer',
       target: 'skill',
-    });
-    assignSourcePayload(signal, {
-      message: 'Nice work. Can we keep this workflow?',
-      messageId: 'msg_skill_defer',
       trigger: 'client.runtime.start',
     });
 
@@ -470,11 +461,47 @@ describe('feedbackActionPlanner', () => {
       skillRoute: 'direct_decision',
       sourceId: 'source_skill_complete',
       target: 'skill',
-    });
-    assignSourcePayload(signal, {
-      message: 'Nice work. Can we keep this workflow?',
-      messageId: 'msg_skill_complete',
       trigger: 'client.runtime.complete',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({ actions: [action], status: 'dispatch' });
+    expect(skillActions.prepare).toHaveBeenCalledWith(signal);
+  });
+
+  /**
+   * @example
+   * Server-side user-message sources have no client completion event to resume deferred mutations.
+   */
+  it('dispatches direct skill decisions from server-side user feedback', async () => {
+    const action = {
+      actionId: 'action_server',
+      actionType: 'action.skill-management.handle' as const,
+      payload: {},
+    };
+    const skillActions = {
+      prepare: vi.fn(() => ({ action, reason: 'server-side feedback', risk: 'low' as const })),
+    };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      markerReader: { shouldSuppress: vi.fn().mockResolvedValue(false) },
+    });
+    const signal = createDomainSignal({
+      message: '把刚才的 YouTube 评论区分析流程保存为 skill。',
+      messageId: 'msg_skill_server',
+      satisfactionResult: 'satisfied',
+      signalId: 'sig_skill_server',
+      skillActionIntent: 'create',
+      skillIntentExplicitness: 'explicit_action',
+      skillIntentReason: 'Server-side agent has no client completion event.',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_server',
+      target: 'skill',
+      trigger: 'chat',
     });
 
     const result = await handler.handle(signal, context);
@@ -517,8 +544,6 @@ describe('feedbackActionPlanner', () => {
       skillRoute: 'direct_decision',
       sourceId: 'source_skill_convert',
       target: 'skill',
-    });
-    assignSourcePayload(signal, {
       trigger: 'client.runtime.complete',
     });
     const result = await handler.handle(signal, context);
@@ -555,8 +580,6 @@ describe('feedbackActionPlanner', () => {
       skillRoute: 'direct_decision',
       sourceId: 'source_skill_implicit',
       target: 'skill',
-    });
-    assignSourcePayload(signal, {
       trigger: 'client.runtime.complete',
     });
     const result = await handler.handle(signal, context);

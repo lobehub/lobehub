@@ -154,6 +154,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     sourceHints?: AgentSignalFeedbackSourceHints;
     target: 'memory';
     topicId?: string;
+    /** Source event trigger copied from the original feedback input when available. */
+    trigger?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainNone]: {
     agentId?: string;
@@ -168,6 +170,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     sourceHints?: AgentSignalFeedbackSourceHints;
     target: 'none';
     topicId?: string;
+    /** Source event trigger copied from the original feedback input when available. */
+    trigger?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainPrompt]: {
     agentId?: string;
@@ -182,6 +186,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     sourceHints?: AgentSignalFeedbackSourceHints;
     target: 'prompt';
     topicId?: string;
+    /** Source event trigger copied from the original feedback input when available. */
+    trigger?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainSkill]: {
     agentId?: string;
@@ -202,6 +208,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     sourceHints?: AgentSignalFeedbackSourceHints;
     target: 'skill';
     topicId?: string;
+    /** Source event trigger copied from the original feedback input when available. */
+    trigger?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackSatisfaction]: {
     agentId?: string;
@@ -214,6 +222,8 @@ export interface AgentSignalPolicySignalPayloadMap {
     serializedContext?: string;
     sourceHints?: AgentSignalFeedbackSourceHints;
     topicId?: string;
+    /** Source event trigger copied from the original feedback input when available. */
+    trigger?: string;
   };
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.nudgeMemoryConditionMatched]: {
     agentId?: string;
