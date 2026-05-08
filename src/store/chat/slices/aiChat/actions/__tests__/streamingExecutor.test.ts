@@ -28,32 +28,18 @@ const agentSignalBridgeMock = vi.hoisted(() => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.hoisted(() => {
-  // NOTICE:
-  // Ensure store modules see a full Storage-compatible localStorage during import.
-  // Vitest can provide a partial localStorage object when invoked with an empty
-  // `--localstorage-file`, which breaks packages/utils/src/localStorage.ts at collection time.
-  // Source/context: matches the focused store test setup pattern in src/services/chat/chat.test.ts.
-  // Removal condition: safe to delete when Vitest setup guarantees getItem/setItem before imports.
-  const storage = new Map<string, string>();
+vi.mock('@/utils/localStorage', () => {
+  class AsyncLocalStorage<State> {
+    async getFromLocalStorage(): Promise<State> {
+      return {} as State;
+    }
 
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      clear: () => storage.clear(),
-      getItem: (key: string) => storage.get(key) ?? null,
-      key: (index: number) => Array.from(storage.keys())[index] ?? null,
-      get length() {
-        return storage.size;
-      },
-      removeItem: (key: string) => {
-        storage.delete(key);
-      },
-      setItem: (key: string, value: string) => {
-        storage.set(key, value);
-      },
-    },
-  });
+    async saveToLocalStorage(): Promise<void> {
+      return undefined;
+    }
+  }
+
+  return { AsyncLocalStorage };
 });
 
 interface AgentRuntimeStepContext {
