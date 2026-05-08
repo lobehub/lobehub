@@ -1,4 +1,3 @@
-import type { TaskStatus } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
@@ -11,7 +10,6 @@ import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { usePrefetchPage } from '@/hooks/usePrefetchPage';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { type RecentItem } from '@/server/routers/lambda/recent';
-import { useTaskStore } from '@/store/task';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
@@ -26,14 +24,6 @@ const RecentListItem = memo<RecentItem>((item) => {
   const [editing, setEditing] = useState(false);
   const prefetchAgent = usePrefetchAgent();
   const prefetchPage = usePrefetchPage();
-  const taskKey = type === 'task' ? id : undefined;
-  // Prefer the live task store entry (kept fresh by detail-page mutations) over
-  // the recent.getAll snapshot, so returning from the detail page reflects the
-  // latest status without waiting for the next poll.
-  const liveTaskStatus = useTaskStore((s) =>
-    taskKey ? (s.taskDetailMap[taskKey]?.status as TaskStatus | undefined) : undefined,
-  );
-  const taskStatus = liveTaskStatus ?? status;
 
   const toggleEditing = useCallback((visible?: boolean) => {
     setEditing(!!visible);
@@ -68,7 +58,7 @@ const RecentListItem = memo<RecentItem>((item) => {
         }
         icon={(() => {
           if (type === 'task') {
-            return <TaskStatusIcon size={16} status={taskStatus ?? 'backlog'} />;
+            return <TaskStatusIcon size={16} status={status ?? 'backlog'} />;
           }
 
           if (type === 'topic' && metadata?.bot?.platform) {
