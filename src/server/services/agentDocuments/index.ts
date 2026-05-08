@@ -106,32 +106,27 @@ export class AgentDocumentsService {
   }
 
   private async attachLiteXML(doc: AgentDocument): Promise<AgentDocumentWithLiteXML> {
-    try {
-      const snapshot = await exportEditorDataSnapshot({
-        editorData: doc.editorData,
+    const snapshot = await exportEditorDataSnapshot({
+      editorData: doc.editorData,
+      fallbackContent: doc.content,
+      litexml: true,
+    });
+
+    // Hydration of stale editorData (older Lexical schemas) can silently fail
+    // and leave the editor empty. When that happens, hydrate from the markdown
+    // column directly so readDocument never returns an empty doc for a row that
+    // actually has content.
+    if (snapshot.content.trim().length === 0 && doc.content.trim().length > 0) {
+      const fromMarkdown = await exportEditorDataSnapshot({
+        editorData: undefined,
         fallbackContent: doc.content,
         litexml: true,
       });
-
-      // Hydration of stale editorData (older Lexical schemas) can silently fail
-      // and leave the editor empty. When that happens, hydrate from the markdown
-      // column directly so readDocument never returns an empty doc for a row that
-      // actually has content.
-      if (snapshot.content.trim().length === 0 && doc.content.trim().length > 0) {
-        const fromMarkdown = await exportEditorDataSnapshot({
-          editorData: undefined,
-          fallbackContent: doc.content,
-          litexml: true,
-        });
-        const content = fromMarkdown.content.trim().length > 0 ? fromMarkdown.content : doc.content;
-        return { ...doc, content, litexml: fromMarkdown.litexml };
-      }
-
-      return { ...doc, content: snapshot.content, litexml: snapshot.litexml };
-    } catch (error) {
-      console.error('[AgentDocumentsService] Failed to attach LiteXML snapshot:', error);
-      return { ...doc, content: doc.content };
+      const content = fromMarkdown.content.trim().length > 0 ? fromMarkdown.content : doc.content;
+      return { ...doc, content, litexml: fromMarkdown.litexml };
     }
+
+    return { ...doc, content: snapshot.content, litexml: snapshot.litexml };
   }
 
   private async createWithUniqueFilename(
