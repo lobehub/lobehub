@@ -1,9 +1,14 @@
 import { Text } from '@lobehub/ui';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 interface ExecutionTimeProps {
   isExecuting: boolean;
+  startTime?: number;
+  timerKey: string;
 }
+
+const UPDATE_INTERVAL_MS = 100;
+const executionStartTimeCache = new Map<string, number>();
 
 const formatElapsedTime = (ms: number): string => {
   if (ms < 1000) return `${ms}ms`;
@@ -15,35 +20,30 @@ const formatElapsedTime = (ms: number): string => {
   return `${minutes.toFixed(1)}min`;
 };
 
-const ExecutionTime = memo<ExecutionTimeProps>(({ isExecuting }) => {
+const ExecutionTime = memo<ExecutionTimeProps>(({ isExecuting, startTime, timerKey }) => {
   const [elapsed, setElapsed] = useState(0);
-  const startTimeRef = useRef(Date.now());
-  const rafRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef(0);
 
   useEffect(() => {
     if (!isExecuting) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      executionStartTimeCache.delete(timerKey);
+      setElapsed(0);
       return;
     }
 
-    startTimeRef.current = Date.now();
-    setElapsed(0);
+    const resolvedStartTime = startTime ?? executionStartTimeCache.get(timerKey) ?? Date.now();
+    executionStartTimeCache.set(timerKey, resolvedStartTime);
 
-    const update = (timestamp: number) => {
-      if (timestamp - lastUpdateRef.current >= 100) {
-        setElapsed(Date.now() - startTimeRef.current);
-        lastUpdateRef.current = timestamp;
-      }
-      rafRef.current = requestAnimationFrame(update);
+    const update = () => {
+      setElapsed(Math.max(0, Date.now() - resolvedStartTime));
     };
 
-    rafRef.current = requestAnimationFrame(update);
+    update();
+    const interval = window.setInterval(update, UPDATE_INTERVAL_MS);
 
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      window.clearInterval(interval);
     };
-  }, [isExecuting]);
+  }, [isExecuting, startTime, timerKey]);
 
   if (!isExecuting) return null;
 

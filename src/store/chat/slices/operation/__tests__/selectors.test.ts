@@ -509,6 +509,73 @@ describe('Operation Selectors', () => {
     });
   });
 
+  describe('getRunningToolCallStartTime', () => {
+    it('should prefer the running executeToolCall start time', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        const parentOpId = result.current.startOperation({
+          type: 'toolCalling',
+          context: { agentId: 'session1', messageId: 'assistant_msg' },
+          metadata: { startTime: 1000, tool_call_id: 'tool-1' },
+        }).operationId;
+
+        result.current.startOperation({
+          type: 'executeToolCall',
+          context: { agentId: 'session1', messageId: 'tool_msg' },
+          metadata: { startTime: 1500, tool_call_id: 'tool-1' },
+          parentOperationId: parentOpId,
+        });
+
+        result.current.startOperation({
+          type: 'toolCalling',
+          context: { agentId: 'session1', messageId: 'assistant_msg' },
+          metadata: { startTime: 900, tool_call_id: 'tool-2' },
+        });
+      });
+
+      expect(operationSelectors.getRunningToolCallStartTime('tool-1')(result.current)).toBe(1500);
+    });
+
+    it('should fall back to the running toolCalling start time when execution has not started', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.startOperation({
+          type: 'toolCalling',
+          context: { agentId: 'session1', messageId: 'assistant_msg' },
+          metadata: { startTime: 1000, tool_call_id: 'tool-1' },
+        });
+      });
+
+      expect(operationSelectors.getRunningToolCallStartTime('tool-1')(result.current)).toBe(1000);
+    });
+
+    it('should ignore completed and unrelated tool operations', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        const completedOpId = result.current.startOperation({
+          type: 'toolCalling',
+          context: { agentId: 'session1', messageId: 'assistant_msg' },
+          metadata: { startTime: 1000, tool_call_id: 'tool-1' },
+        }).operationId;
+
+        result.current.completeOperation(completedOpId);
+
+        result.current.startOperation({
+          type: 'createToolMessage',
+          context: { agentId: 'session1', messageId: 'tool_msg' },
+          metadata: { startTime: 1200, tool_call_id: 'tool-1' },
+        });
+      });
+
+      expect(operationSelectors.getRunningToolCallStartTime('tool-1')(result.current)).toBe(
+        undefined,
+      );
+    });
+  });
+
   describe('isAgentRunning', () => {
     it('should return false when no operations exist', () => {
       const { result } = renderHook(() => useChatStore());
