@@ -7,11 +7,7 @@ import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 
 import { staticStyle } from './staticStyle';
 
-interface WelcomeProps {
-  content: string;
-}
-
-const Welcome = memo<WelcomeProps>(({ content }) => {
+const Welcome = memo(() => {
   const { t } = useTranslation('onboarding');
 
   const guids = [
@@ -54,7 +50,7 @@ const Welcome = memo<WelcomeProps>(({ content }) => {
         />
         <Divider dashed style={{ margin: 0 }} />
         <Markdown fontSize={16} variant={'chat'}>
-          {content}
+          {t('agent.welcome')}
         </Markdown>
         <Grid>
           {guids.map((item, i) => (

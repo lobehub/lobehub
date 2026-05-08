@@ -266,7 +266,7 @@ describe('OnboardingService', () => {
     expect(context.finished).toBe(false);
   });
 
-  it('creates a topic and welcome message during onboarding bootstrap', async () => {
+  it('creates a topic during onboarding bootstrap without persisting a welcome message', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-17T08:00:00.000Z'));
 
@@ -276,7 +276,9 @@ describe('OnboardingService', () => {
     expect(result.topicId).toBe('topic-1');
     expect(result.agentOnboarding.activeTopicId).toBe('topic-1');
     expect(result.feedbackSubmitted).toBe(false);
-    expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+    // The welcome is rendered client-side from i18n, so the bootstrap
+    // must NOT seed an assistant message into the topic.
+    expect(mockMessageModel.create).not.toHaveBeenCalled();
     expect(persistedTopics['topic-1']?.metadata?.onboardingSession).toEqual({
       lastActiveAt: '2026-04-17T08:00:00.000Z',
       phase: 'agent_identity',
