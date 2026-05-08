@@ -80,7 +80,7 @@ export const ErrorState = memo<ErrorStateProps>(
           <Icon color={cssVar.colorTextDescription} icon={ImageOffIcon} size={24} />
           <Text strong align={'center'} type={'secondary'}>
             {isProviderContentModerationError
-              ? tError('response.ProviderContentModeration')
+              ? errorMessage || tError('response.ProviderContentModeration')
               : t('generation.status.failed')}
           </Text>
           {generation.task.error && !isProviderContentModerationError && (
