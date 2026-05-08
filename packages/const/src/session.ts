@@ -1,5 +1,4 @@
 import type { LobeAgentSession, LobeGroupSession } from '@lobechat/types';
-import { LobeSessionType } from '@lobechat/types';
 
 import { DEFAULT_AGENT_META, DEFAULT_INBOX_AVATAR } from './meta';
 import { DEFAULT_AGENT_CONFIG } from './settings';
@@ -9,13 +8,16 @@ export const INBOX_SESSION_ID = 'inbox';
 
 export const WELCOME_GUIDE_CHAT_ID = 'welcome';
 
+const DEFAULT_AGENT_SESSION_TYPE = 'agent' as LobeAgentSession['type'];
+const DEFAULT_GROUP_SESSION_TYPE = 'group' as LobeGroupSession['type'];
+
 export const DEFAULT_AGENT_LOBE_SESSION: LobeAgentSession = {
   config: DEFAULT_AGENT_CONFIG,
   createdAt: new Date(),
   id: '',
   meta: DEFAULT_AGENT_META,
   model: DEFAULT_AGENT_CONFIG.model,
-  type: LobeSessionType.Agent,
+  type: DEFAULT_AGENT_SESSION_TYPE,
   updatedAt: new Date(),
 };
 
@@ -24,7 +26,7 @@ export const DEFAULT_GROUP_LOBE_SESSION: LobeGroupSession = {
   id: '',
   members: [],
   meta: DEFAULT_AGENT_META,
-  type: LobeSessionType.Group,
+  type: DEFAULT_GROUP_SESSION_TYPE,
   updatedAt: new Date(),
 };
 

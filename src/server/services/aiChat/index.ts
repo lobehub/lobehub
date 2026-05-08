@@ -26,14 +26,24 @@ export class AiChatService {
     pageSize?: number;
     sessionId?: string;
     threadId?: string;
+    topicFilter?: {
+      excludeStatuses?: string[];
+      excludeTriggers?: string[];
+      includeTriggers?: string[];
+    };
     topicId?: string;
   }) {
+    const { topicFilter, ...messageParams } = params;
     const [messages, topics] = await Promise.all([
-      this.messageModel.query(params, {
+      this.messageModel.query(messageParams, {
         postProcessUrl: (path) => this.fileService.getFullFileUrl(path),
       }),
       params.includeTopic
-        ? this.topicModel.query({ agentId: params.agentId, groupId: params.groupId })
+        ? this.topicModel.query({
+            agentId: params.agentId,
+            groupId: params.groupId,
+            ...topicFilter,
+          })
         : undefined,
     ]);
 

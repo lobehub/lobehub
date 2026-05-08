@@ -24,13 +24,13 @@ interface SingletonPortalProps {
   index: number;
 }
 
-const AssistantActionsRenderer: FC<SingletonPortalProps> = ({ id, index }) => {
+const AssistantActionsRenderer: FC<SingletonPortalProps> = ({ id }) => {
   const actionsConfig = useConversationStore((s) => s.actionsBar?.assistant);
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
 
   if (!item) return null;
 
-  return <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />;
+  return <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />;
 };
 
 const UserActionsRenderer: FC<SingletonPortalProps> = ({ id }) => {

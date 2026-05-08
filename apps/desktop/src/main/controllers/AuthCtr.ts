@@ -12,6 +12,7 @@ import { BrowserWindow, shell } from 'electron';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
+import { netFetch } from '@/utils/net-fetch';
 
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -360,10 +361,10 @@ export default class AuthCtr extends ControllerModule {
 
       logger.debug(`Polling for credentials: ${url.toString()}`);
 
-      // Send HTTP request directly
+      // Use Electron net.fetch to respect system CA store (self-signed/private CA certs)
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       appendVercelCookie(headers);
-      const response = await fetch(url.toString(), { headers, method: 'GET' });
+      const response = await netFetch(url.toString(), { headers, method: 'GET' });
 
       // Check response status
       if (response.status === 404) {
@@ -481,7 +482,7 @@ export default class AuthCtr extends ControllerModule {
         'Content-Type': 'application/x-www-form-urlencoded',
       };
       appendVercelCookie(tokenHeaders);
-      const response = await fetch(tokenUrl.toString(), {
+      const response = await netFetch(tokenUrl.toString(), {
         body,
         headers: tokenHeaders,
         method: 'POST',

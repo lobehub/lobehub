@@ -16,7 +16,7 @@ export function registerMessageCommand(program: Command) {
     .option('--topic-id <id>', 'Filter by topic ID')
     .option('--agent-id <id>', 'Filter by agent ID')
     .option('-L, --limit <n>', 'Page size', '30')
-    .option('--page <n>', 'Page number', '1')
+    .option('-P, --page <n>', 'Page number', '1')
     .option('--user', 'Only show user messages')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
@@ -32,7 +32,9 @@ export function registerMessageCommand(program: Command) {
 
         const hasFilter = options.topicId || options.agentId;
         const pageSize = options.limit ? Number.parseInt(options.limit, 10) : undefined;
-        const current = options.page ? Number.parseInt(options.page, 10) : undefined;
+        const current = options.page
+          ? Math.max(Number.parseInt(options.page, 10) - 1, 0)
+          : undefined;
 
         let items: any[];
 

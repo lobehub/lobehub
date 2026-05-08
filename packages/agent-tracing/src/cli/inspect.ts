@@ -1,8 +1,15 @@
 import type { Command } from 'commander';
 
 import { FileSnapshotStore } from '../store/file-store';
+import {
+  buildRemoteUrl,
+  isOperationId,
+  loadBaseUrl,
+  RemoteSnapshotStore,
+} from '../store/remote-store';
 import type { ExecutionSnapshot, StepSnapshot } from '../types';
 import {
+  renderAgentSignal,
   renderDiff,
   renderEnvContext,
   renderMemory,
@@ -83,6 +90,7 @@ export function registerInspectCommand(program: Command) {
     .option('-d, --diff <n>', 'Diff against step N (use with -r or --env)')
     .option('-T, --payload-tools', 'List available tools registered in LLM payload')
     .option('-M, --memory', 'Show full user memory content (default step 0)')
+    .option('-S, --agent-signal', 'Show local agent-signal chain analysis')
     .option(
       '-p, --payload',
       'Show context engine input overview (knowledge, memory, capabilities, etc.)',
@@ -92,6 +100,7 @@ export function registerInspectCommand(program: Command) {
       async (
         traceId: string | undefined,
         opts: {
+          agentSignal?: boolean;
           context?: boolean;
           diff?: string;
           env?: boolean;
@@ -112,6 +121,35 @@ export function registerInspectCommand(program: Command) {
 
         if (traceId && isUrl(traceId)) {
           snapshot = await fetchSnapshotFromUrl(traceId);
+        } else if (traceId && isOperationId(traceId)) {
+          // Try local store first, then fetch from remote
+          const fileStore = new FileSnapshotStore();
+          snapshot = await fileStore.get(traceId);
+          if (!snapshot) {
+            const remoteStore = new RemoteSnapshotStore();
+            const cached = await remoteStore.getCached(traceId);
+            if (cached) {
+              snapshot = cached;
+              console.error(`✓ Loaded from cache: _remote/${traceId}.json`);
+            } else {
+              const baseUrl = await loadBaseUrl();
+              if (!baseUrl) {
+                console.error(
+                  'Remote fetch requires TRACING_BASE_URL.\n' +
+                    'Set it via:\n' +
+                    '  1. Environment variable: export TRACING_BASE_URL=https://...\n' +
+                    '  2. File: .agent-tracing/.env with TRACING_BASE_URL=https://...',
+                );
+                process.exit(1);
+              }
+              const url = buildRemoteUrl(baseUrl, traceId);
+              if (!url) {
+                console.error(`Failed to parse operation ID: ${traceId}`);
+                process.exit(1);
+              }
+              snapshot = await remoteStore.fetch(url, traceId);
+            }
+          }
         } else {
           const store = new FileSnapshotStore();
           snapshot = traceId ? await store.get(traceId) : await store.getLatest();
@@ -124,6 +162,16 @@ export function registerInspectCommand(program: Command) {
               : 'No snapshots found. Run an agent operation first.',
           );
           process.exit(1);
+        }
+
+        if (opts.agentSignal) {
+          if (opts.json) {
+            const { analyzeAgentSignal } = await import('../viewer/agentSignal');
+            console.log(JSON.stringify(analyzeAgentSignal(snapshot), null, 2));
+          } else {
+            console.log(renderAgentSignal(snapshot));
+          }
+          return;
         }
 
         const stepIndex = opts.step !== undefined ? Number.parseInt(opts.step, 10) : undefined;

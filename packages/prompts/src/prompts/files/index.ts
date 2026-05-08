@@ -12,10 +12,12 @@ export const filesPrompts = ({
   fileList,
   videoList,
   addUrl = true,
+  messageId,
 }: {
   addUrl?: boolean;
   fileList?: ChatFileItem[];
   imageList?: ChatImageItem[];
+  messageId?: string;
   videoList?: ChatVideoItem[];
 }) => {
   const hasImages = (imageList || []).length > 0;
@@ -25,9 +27,9 @@ export const filesPrompts = ({
   if (!hasImages && !hasFiles && !hasVideos) return '';
 
   const contentParts = [
-    hasImages ? imagesPrompts(imageList!, addUrl) : '',
+    hasImages ? imagesPrompts(imageList!, addUrl, messageId) : '',
     hasFiles ? filePrompts(fileList!, addUrl) : '',
-    hasVideos ? videosPrompts(videoList!, addUrl) : '',
+    hasVideos ? videosPrompts(videoList!, addUrl, messageId) : '',
   ].filter(Boolean);
 
   const prompt = `<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->

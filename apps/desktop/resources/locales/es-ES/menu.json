@@ -71,6 +71,7 @@
   "macOS.services": "Servicios",
   "macOS.unhide": "Mostrar todo",
   "tray.open": "Abrir {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Salir",
   "tray.show": "Mostrar {{appName}}",
   "view.forceReload": "Recargar forzosamente",

@@ -1,7 +1,36 @@
 import type { AIChatModelCard } from '../types/aiModel';
 
-// https://platform.moonshot.cn/docs/pricing/chat
+// https://platform.kimi.com/docs/pricing/chat
 const moonshotChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      "Kimi K2.6 is Kimi's latest and most capable model, delivering stronger long-horizon coding, instruction following, and self-correction while supporting text, image, and video inputs plus chat and agent tasks.",
+    displayName: 'Kimi K2.6',
+    enabled: true,
+    id: 'kimi-k2.6',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-20',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -14,7 +43,6 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Kimi K2.5 is Kimi\'s most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, "thinking" and "non-thinking" modes, and both conversational and agent tasks.',
     displayName: 'Kimi K2.5',
-    enabled: true,
     id: 'kimi-k2.5',
     maxOutput: 32_768,
     pricing: {
@@ -127,7 +155,6 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
     displayName: 'Kimi K2 Turbo Preview',
-    enabled: true,
     id: 'kimi-k2-turbo-preview',
     pricing: {
       currency: 'CNY',

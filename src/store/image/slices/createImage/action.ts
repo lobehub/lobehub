@@ -1,5 +1,7 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
+import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
+import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { imageService } from '@/services/image';
 import { type StoreSetter } from '@/store/types';
@@ -105,6 +107,10 @@ export class CreateImageActionImpl {
         false,
         'createImage/clearPrompt',
       );
+    } catch (error) {
+      handleGenerationPromptModerationError(error);
+      handleLobeHubModelDeprecatedError(error);
+      throw error;
     } finally {
       // 8. Reset all creating states
       if (isNewTopic) {
@@ -149,6 +155,10 @@ export class CreateImageActionImpl {
 
       // 3. Refresh generation batches to show the real data
       await store.refreshGenerationBatches();
+    } catch (error) {
+      handleGenerationPromptModerationError(error);
+      handleLobeHubModelDeprecatedError(error);
+      throw error;
     } finally {
       this.#set({ isCreating: false }, false, 'recreateImage/endCreateImage');
     }

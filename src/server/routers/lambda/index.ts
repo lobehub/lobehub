@@ -5,6 +5,7 @@ import { accountDeletionRouter } from '@/business/server/lambda-routers/accountD
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
+import { taskTemplateRouter } from '@/business/server/lambda-routers/taskTemplate';
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
@@ -15,6 +16,8 @@ import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
 import { agentGroupRouter } from './agentGroup';
+import { agentNotifyRouter } from './agentNotify';
+import { agentSignalRouter } from './agentSignal';
 import { agentSkillsRouter } from './agentSkills';
 import { aiAgentRouter } from './aiAgent';
 import { aiChatRouter } from './aiChat';
@@ -23,6 +26,7 @@ import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
+import { changelogRouter } from './changelog';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
 import { configRouter } from './config';
@@ -30,6 +34,7 @@ import { deviceRouter } from './device';
 import { documentRouter } from './document';
 import { exporterRouter } from './exporter';
 import { fileRouter } from './file';
+import { followUpActionRouter } from './followUpAction';
 import { generationRouter } from './generation';
 import { generationBatchRouter } from './generationBatch';
 import { generationTopicRouter } from './generationTopic';
@@ -46,6 +51,7 @@ import { notificationRouter } from './notification';
 import { oauthDeviceFlowRouter } from './oauthDeviceFlow';
 import { pluginRouter } from './plugin';
 import { ragEvalRouter } from './ragEval';
+import { recentRouter } from './recent';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
@@ -63,13 +69,16 @@ import { videoRouter } from './video';
 export const lambdaRouter = router({
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
+  agentNotify: agentNotifyRouter,
   botMessage: botMessageRouter,
   agentCronJob: agentCronJobRouter,
   agentDocument: agentDocumentRouter,
   agentEval: agentEvalRouter,
   agentEvalExternal: agentEvalExternalRouter,
   agentSkills: agentSkillsRouter,
+  agentSignal: agentSignalRouter,
   task: taskRouter,
+  changelog: changelogRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
@@ -83,6 +92,7 @@ export const lambdaRouter = router({
   document: documentRouter,
   exporter: exporterRouter,
   file: fileRouter,
+  followUpAction: followUpActionRouter,
   generation: generationRouter,
   generationBatch: generationBatchRouter,
   generationTopic: generationTopicRouter,
@@ -101,6 +111,7 @@ export const lambdaRouter = router({
   oauthDeviceFlow: oauthDeviceFlowRouter,
   plugin: pluginRouter,
   ragEval: ragEvalRouter,
+  recent: recentRouter,
   search: searchRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
@@ -117,6 +128,7 @@ export const lambdaRouter = router({
   referral: referralRouter,
   spend: spendRouter,
   subscription: subscriptionRouter,
+  taskTemplate: taskTemplateRouter,
   topUp: topUpRouter,
 });
 

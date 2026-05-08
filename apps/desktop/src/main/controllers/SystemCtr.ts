@@ -2,10 +2,11 @@ import process from 'node:process';
 
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
-import { macOS } from 'electron-is';
+import * as electronIs from 'electron-is';
 import { pathExists, readdir } from 'fs-extra';
 
 import { legacyLocalDbDir } from '@/const/dir';
+import { detectRepoType } from '@/utils/git';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -102,7 +103,7 @@ export default class SystemController extends ControllerModule {
       return 'granted';
     }
 
-    if (!macOS()) {
+    if (!electronIs.macOS()) {
       logger.info('[FullDiskAccess] Not macOS, returning granted');
       return 'granted';
     }
@@ -169,7 +170,7 @@ export default class SystemController extends ControllerModule {
   async selectFolder(payload?: {
     defaultPath?: string;
     title?: string;
-  }): Promise<string | undefined> {
+  }): Promise<{ path: string; repoType?: 'git' | 'github' } | undefined> {
     const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
 
     const result = await dialog.showOpenDialog(mainWindow!, {
@@ -182,7 +183,10 @@ export default class SystemController extends ControllerModule {
       return undefined;
     }
 
-    return result.filePaths[0];
+    const folderPath = result.filePaths[0];
+    const repoType = await detectRepoType(folderPath);
+
+    return { path: folderPath, repoType };
   }
 
   @IpcMethod()

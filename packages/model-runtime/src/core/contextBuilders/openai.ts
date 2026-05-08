@@ -1,4 +1,5 @@
 import { imageUrlToBase64, videoUrlToBase64 } from '@lobechat/utils';
+import { Buffer } from 'buffer.js';
 import type OpenAI from 'openai';
 import { toFile } from 'openai';
 
@@ -212,6 +213,13 @@ export const convertOpenAIResponseInputs = async (
                   }
                   return { ...c, type: 'input_text' };
                 }
+
+                // Responses API only accepts output_text/refusal inside assistant history.
+                // Multimodal parts are valid as model inputs, not as previous assistant outputs.
+                if (message.role === 'assistant') {
+                  return undefined;
+                }
+
                 if (c.type === 'video_url') {
                   const video = await convertMessageContent(c, options);
                   if (!('video_url' in video) || !video.video_url?.url) {
@@ -236,12 +244,18 @@ export const convertOpenAIResponseInputs = async (
               }),
             );
 
+      const content =
+        typeof processedContent === 'string'
+          ? processedContent
+          : processedContent.filter((m) => m !== undefined);
+
+      if (message.role === 'assistant' && Array.isArray(content) && content.length === 0) {
+        return items;
+      }
+
       const item = {
         ...message,
-        content:
-          typeof processedContent === 'string'
-            ? processedContent
-            : processedContent.filter((m) => m !== undefined),
+        content,
       } as OpenAI.Responses.ResponseInputItem;
 
       // remove reasoning field from the message item

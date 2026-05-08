@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { Type as SchemaType } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -289,6 +288,44 @@ describe('google contextBuilders', () => {
       });
     });
 
+    it('recovers functionCall.args from element[0] when arguments parse to an array', async () => {
+      // LOBE-8201 — same defense as Anthropic: prefer partial recovery from
+      // element[0] over total loss when malformed JSON parses to an array.
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const message = {
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: '[{"content":"a"},{"content":"b"}]',
+              name: 'writeLocalFile',
+            },
+            id: 'call_array',
+            type: 'function',
+          },
+        ],
+      } as OpenAIChatMessage;
+
+      const converted = await buildGoogleMessage(message);
+
+      expect(converted).toEqual({
+        parts: [
+          {
+            functionCall: { args: { content: 'a' }, name: 'writeLocalFile' },
+          },
+        ],
+        role: 'model',
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('functionCall.args recovered from array'),
+        expect.objectContaining({
+          arrayLength: 2,
+          name: 'writeLocalFile',
+        }),
+      );
+      consoleWarnSpy.mockRestore();
+    });
+
     it('should correctly convert function call message with thoughtSignature', async () => {
       const message = {
         role: 'assistant',
@@ -351,7 +388,7 @@ describe('google contextBuilders', () => {
               {
                 function: {
                   arguments: '{"query":"杭州天气","searchEngines":["google"]}',
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 id: 'call_001',
                 type: 'function',
@@ -360,7 +397,7 @@ describe('google contextBuilders', () => {
           },
           {
             content: 'Tool execution was aborted by user.',
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             role: 'tool',
             tool_call_id: 'call_001',
           },
@@ -371,7 +408,7 @@ describe('google contextBuilders', () => {
               {
                 function: {
                   arguments: '{"query":"杭州 天气","searchEngines":["bing"]}',
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 id: 'call_002',
                 type: 'function',
@@ -380,7 +417,7 @@ describe('google contextBuilders', () => {
           },
           {
             content: 'no result',
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             role: 'tool',
             tool_call_id: 'call_002',
           },
@@ -407,7 +444,7 @@ describe('google contextBuilders', () => {
               {
                 functionCall: {
                   args: { query: '杭州天气', searchEngines: ['google'] },
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
               },
@@ -418,7 +455,7 @@ describe('google contextBuilders', () => {
             parts: [
               {
                 functionResponse: {
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                   response: { result: 'Tool execution was aborted by user.' },
                 },
               },
@@ -430,7 +467,7 @@ describe('google contextBuilders', () => {
               {
                 functionCall: {
                   args: { query: '杭州 天气', searchEngines: ['bing'] },
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
               },
@@ -441,7 +478,7 @@ describe('google contextBuilders', () => {
             parts: [
               {
                 functionResponse: {
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                   response: { result: 'no result' },
                 },
               },
@@ -465,7 +502,7 @@ describe('google contextBuilders', () => {
               {
                 function: {
                   arguments: '{"query":"杭州天气","searchEngines":["google"]}',
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 id: 'call_001',
                 thoughtSignature: existingSignature,
@@ -475,7 +512,7 @@ describe('google contextBuilders', () => {
           },
           {
             content: 'Tool result',
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             role: 'tool',
             tool_call_id: 'call_001',
           },
@@ -493,7 +530,7 @@ describe('google contextBuilders', () => {
               {
                 functionCall: {
                   args: { query: '杭州天气', searchEngines: ['google'] },
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 // Should keep existing thoughtSignature, not add magic signature
                 thoughtSignature: existingSignature,
@@ -505,7 +542,7 @@ describe('google contextBuilders', () => {
             parts: [
               {
                 functionResponse: {
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                   response: { result: 'Tool result' },
                 },
               },
@@ -645,7 +682,7 @@ describe('google contextBuilders', () => {
               {
                 function: {
                   arguments: '{"query":"杭州天气","searchEngines":["google"]}',
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 id: 'call_001',
                 type: 'function',
@@ -654,7 +691,7 @@ describe('google contextBuilders', () => {
           },
           {
             content: 'Tool execution was aborted by user.',
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             role: 'tool',
             tool_call_id: 'call_001',
           },
@@ -685,7 +722,7 @@ describe('google contextBuilders', () => {
               {
                 functionCall: {
                   args: { query: '杭州天气', searchEngines: ['google'] },
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                 },
                 // No thoughtSignature should be added when last message is user text
               },
@@ -696,7 +733,7 @@ describe('google contextBuilders', () => {
             parts: [
               {
                 functionResponse: {
-                  name: 'lobe-web-browsing____search____builtin',
+                  name: 'lobe-web-browsing____search',
                   response: { result: 'Tool execution was aborted by user.' },
                 },
               },
@@ -1081,7 +1118,7 @@ describe('google contextBuilders', () => {
   });
 
   describe('buildGoogleTool', () => {
-    it('should correctly convert ChatCompletionTool to FunctionDeclaration', () => {
+    it('should use parametersJsonSchema to pass standard JSON Schema directly', () => {
       const tool: ChatCompletionTool = {
         function: {
           description: 'A test tool',
@@ -1103,19 +1140,20 @@ describe('google contextBuilders', () => {
       expect(result).toEqual({
         description: 'A test tool',
         name: 'testTool',
-        parameters: {
-          description: undefined,
+        parametersJsonSchema: {
           properties: {
             param1: { type: 'string' },
             param2: { type: 'number' },
           },
           required: ['param1'],
-          type: SchemaType.OBJECT,
+          type: 'object',
         },
       });
+      // Should not have the old parameters field
+      expect(result.parameters).toBeUndefined();
     });
 
-    it('should handle tools with empty parameters', () => {
+    it('should handle tools with empty parameters using dummy property', () => {
       const tool: ChatCompletionTool = {
         function: {
           description: 'A simple function with no parameters',
@@ -1130,28 +1168,31 @@ describe('google contextBuilders', () => {
 
       const result = buildGoogleTool(tool);
 
-      // Should use dummy property for empty parameters
       expect(result).toEqual({
         description: 'A simple function with no parameters',
         name: 'simple_function',
-        parameters: {
-          description: undefined,
-          properties: { dummy: { type: 'string' } },
-          required: undefined,
-          type: SchemaType.OBJECT,
-        },
+        parametersJsonSchema: { type: 'object', properties: { dummy: { type: 'string' } } },
       });
     });
 
-    it('should preserve parameter description', () => {
+    it('should pass through $ref without needing to resolve', () => {
       const tool: ChatCompletionTool = {
         function: {
-          description: 'A test tool',
-          name: 'testTool',
+          description: 'A tool with $ref',
+          name: 'refTool',
           parameters: {
-            description: 'Test parameters',
+            definitions: {
+              timeIntent: {
+                properties: {
+                  selector: { enum: ['today', 'yesterday', 'month'], type: 'string' },
+                },
+                required: ['selector'],
+                type: 'object',
+              },
+            },
             properties: {
-              param1: { type: 'string' },
+              query: { type: 'string' },
+              timeIntent: { $ref: '#/definitions/timeIntent' },
             },
             type: 'object',
           },
@@ -1161,23 +1202,42 @@ describe('google contextBuilders', () => {
 
       const result = buildGoogleTool(tool);
 
-      expect(result.parameters?.description).toBe('Test parameters');
+      // $ref should be passed through as-is via parametersJsonSchema
+      expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
     });
 
-    it('should convert const to enum for Google compatibility', () => {
+    it('should pass through nullable types without sanitization', () => {
       const tool: ChatCompletionTool = {
         function: {
-          description: 'A tool with const values',
+          description: 'A tool with nullable enum',
+          name: 'nullableTool',
+          parameters: {
+            properties: {
+              status: {
+                enum: ['active', 'inactive', null],
+                type: ['string', 'null'],
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // nullable types and null enum values should be passed through as-is
+      expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
+    });
+
+    it('should pass through const values without conversion', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with const',
           name: 'constTool',
           parameters: {
             properties: {
               action: { const: 'insert', type: 'string' },
-              nested: {
-                properties: {
-                  operation: { const: 'create', type: 'string' },
-                },
-                type: 'object',
-              },
             },
             type: 'object',
           },
@@ -1187,188 +1247,8 @@ describe('google contextBuilders', () => {
 
       const result = buildGoogleTool(tool);
 
-      // const should be converted to enum with single value
-      expect(result.parameters?.properties).toEqual({
-        action: { enum: ['insert'], type: 'string' },
-        nested: {
-          properties: {
-            operation: { enum: ['create'], type: 'string' },
-          },
-          type: 'object',
-        },
-      });
-    });
-
-    it('should handle oneOf with const values (like page-agent modifyNodes)', () => {
-      const tool: ChatCompletionTool = {
-        function: {
-          description: 'Modify nodes operation',
-          name: 'modifyNodes',
-          parameters: {
-            properties: {
-              operations: {
-                items: {
-                  oneOf: [
-                    {
-                      properties: {
-                        action: { const: 'insert', type: 'string' },
-                        beforeId: { type: 'string' },
-                      },
-                      type: 'object',
-                    },
-                    {
-                      properties: {
-                        action: { const: 'modify', type: 'string' },
-                        content: { type: 'string' },
-                      },
-                      type: 'object',
-                    },
-                  ],
-                },
-                type: 'array',
-              },
-            },
-            type: 'object',
-          },
-        },
-        type: 'function',
-      };
-
-      const result = buildGoogleTool(tool);
-
-      // All const values in nested oneOf should be converted to enum
-      const operations = result.parameters?.properties?.operations as any;
-      expect(operations.items.oneOf[0].properties.action).toEqual({
-        enum: ['insert'],
-        type: 'string',
-      });
-      expect(operations.items.oneOf[1].properties.action).toEqual({
-        enum: ['modify'],
-        type: 'string',
-      });
-    });
-
-    it('should filter null values from enum arrays for Google compatibility', () => {
-      const tool: ChatCompletionTool = {
-        function: {
-          description: 'A tool with enum containing null',
-          name: 'enumTool',
-          parameters: {
-            properties: {
-              memoryType: {
-                enum: ['short_term', 'long_term', null, 'working'],
-                type: 'string',
-              },
-              nested: {
-                properties: {
-                  status: {
-                    enum: [null, 'active', 'inactive', null],
-                    type: 'string',
-                  },
-                },
-                type: 'object',
-              },
-            },
-            type: 'object',
-          },
-        },
-        type: 'function',
-      };
-
-      const result = buildGoogleTool(tool);
-
-      // null values should be filtered from enum arrays
-      expect(result.parameters?.properties).toEqual({
-        memoryType: {
-          enum: ['short_term', 'long_term', 'working'],
-          type: 'string',
-        },
-        nested: {
-          properties: {
-            status: {
-              enum: ['active', 'inactive'],
-              type: 'string',
-            },
-          },
-          type: 'object',
-        },
-      });
-    });
-
-    it('should handle enum with only null values', () => {
-      const tool: ChatCompletionTool = {
-        function: {
-          description: 'A tool with enum containing only null',
-          name: 'nullEnumTool',
-          parameters: {
-            properties: {
-              value: {
-                enum: [null],
-                type: 'string',
-              },
-            },
-            type: 'object',
-          },
-        },
-        type: 'function',
-      };
-
-      const result = buildGoogleTool(tool);
-
-      // When enum only contains null, the enum property should be removed
-      expect(result.parameters?.properties?.value).toEqual({
-        type: 'string',
-      });
-    });
-
-    it('should strip unsupported JSON Schema keywords like examples and default', () => {
-      const tool: ChatCompletionTool = {
-        function: {
-          description: 'A tool with unsupported schema keywords',
-          name: 'mcp_tool',
-          parameters: {
-            properties: {
-              query: {
-                default: 'hello',
-                description: 'Search query',
-                examples: ['weather in London', 'latest news'],
-                type: 'string',
-              },
-              nested: {
-                properties: {
-                  format: {
-                    $comment: 'internal note',
-                    examples: ['json', 'xml'],
-                    type: 'string',
-                  },
-                },
-                type: 'object',
-              },
-            },
-            type: 'object',
-          },
-        },
-        type: 'function',
-      };
-
-      const result = buildGoogleTool(tool);
-
-      // examples, default should be stripped; $comment is silently ignored by the API
-      expect(result.parameters?.properties).toEqual({
-        query: {
-          description: 'Search query',
-          type: 'string',
-        },
-        nested: {
-          properties: {
-            format: {
-              $comment: 'internal note',
-              type: 'string',
-            },
-          },
-          type: 'object',
-        },
-      });
+      // const should be passed through as-is
+      expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
     });
   });
 
@@ -1404,14 +1284,13 @@ describe('google contextBuilders', () => {
       expect(googleTools![0].functionDeclarations![0]).toEqual({
         description: 'A test tool',
         name: 'testTool',
-        parameters: {
-          description: undefined,
+        parametersJsonSchema: {
           properties: {
             param1: { type: 'string' },
             param2: { type: 'number' },
           },
           required: ['param1'],
-          type: SchemaType.OBJECT,
+          type: 'object',
         },
       });
     });
@@ -1462,7 +1341,7 @@ describe('google contextBuilders', () => {
         {
           function: {
             description: 'Search the web',
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             parameters: {
               properties: { query: { type: 'string' } },
               required: ['query'],
@@ -1486,7 +1365,7 @@ describe('google contextBuilders', () => {
         {
           function: {
             description: 'Search the web (duplicate)',
-            name: 'lobe-web-browsing____search____builtin',
+            name: 'lobe-web-browsing____search',
             parameters: {
               properties: { query: { type: 'string' } },
               required: ['query'],
@@ -1501,9 +1380,7 @@ describe('google contextBuilders', () => {
 
       expect(googleTools).toHaveLength(1);
       expect(googleTools![0].functionDeclarations).toHaveLength(2);
-      expect(googleTools![0].functionDeclarations![0].name).toBe(
-        'lobe-web-browsing____search____builtin',
-      );
+      expect(googleTools![0].functionDeclarations![0].name).toBe('lobe-web-browsing____search');
       expect(googleTools![0].functionDeclarations![0].description).toBe('Search the web');
       expect(googleTools![0].functionDeclarations![1].name).toBe('get_weather');
     });

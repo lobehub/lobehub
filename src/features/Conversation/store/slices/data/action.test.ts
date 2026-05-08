@@ -1,4 +1,4 @@
-import { type UIChatMessage } from '@lobechat/types';
+import type { UIChatMessage } from '@lobechat/types';
 import { act, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -346,6 +346,53 @@ describe('DataSlice', () => {
 
       const notFound = dataSelectors.getDisplayMessageById('nonexistent')(store.getState());
       expect(notFound).toBeUndefined();
+    });
+
+    it('getBlockContent should find assistant blocks in compressed messages', () => {
+      const store = createTestStore();
+
+      store.getState().replaceMessages([
+        {
+          id: 'compressed-group',
+          content: '',
+          role: 'compressedGroup',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          compressedMessages: [
+            {
+              id: 'compressed-assistant',
+              content: 'Compressed assistant content',
+              role: 'assistant',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+            {
+              id: 'compressed-assistant-group',
+              content: '',
+              role: 'assistantGroup',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              children: [
+                {
+                  id: 'compressed-block',
+                  content: 'Compressed block content',
+                  tools: [{ id: 'compressed-tool' }],
+                },
+              ],
+            },
+          ],
+        },
+      ] as any);
+
+      expect(dataSelectors.getBlockContent('compressed-assistant')(store.getState())).toBe(
+        'Compressed assistant content',
+      );
+      expect(dataSelectors.getBlockContent('compressed-block')(store.getState())).toBe(
+        'Compressed block content',
+      );
+      expect(dataSelectors.getToolsInBlock('compressed-block')(store.getState())).toEqual([
+        { id: 'compressed-tool' },
+      ]);
     });
 
     it('getDbMessageById should find message from dbMessages', () => {
@@ -756,6 +803,100 @@ describe('DataSlice', () => {
             topicId: 'test-topic',
           }),
         );
+      });
+    });
+
+    it('should preserve newer local message state when fetched data is stale', async () => {
+      const localError = {
+        body: { message: 'Codex CLI was not found' },
+        message: 'Codex CLI was not found',
+        type: 'AgentRuntimeError',
+      } as any;
+
+      vi.mocked(messageService.getMessages).mockResolvedValue([
+        {
+          id: 'msg-1',
+          content: '',
+          role: 'assistant',
+          createdAt: 1000,
+          updatedAt: 1000,
+        },
+      ]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+
+      store.setState({
+        dbMessages: [
+          {
+            id: 'msg-1',
+            content: '',
+            error: localError,
+            role: 'assistant',
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+        ],
+      } as any);
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages[0].error).toEqual(localError);
+        expect(store.getState().dbMessages[0].updatedAt).toBe(2000);
+      });
+    });
+
+    it('should accept fetched message state when server data is newer', async () => {
+      vi.mocked(messageService.getMessages).mockResolvedValue([
+        {
+          id: 'msg-1',
+          content: '',
+          error: {
+            body: { message: 'Persisted error' },
+            message: 'Persisted error',
+            type: 'AgentRuntimeError',
+          } as any,
+          role: 'assistant',
+          createdAt: 1000,
+          updatedAt: 3000,
+        },
+      ]);
+
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
+      });
+
+      store.setState({
+        dbMessages: [
+          {
+            id: 'msg-1',
+            content: '',
+            role: 'assistant',
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+        ],
+      } as any);
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: 'test-topic',
+        threadId: null,
+      });
+
+      await waitFor(() => {
+        expect(store.getState().dbMessages[0].error).toEqual({
+          body: { message: 'Persisted error' },
+          message: 'Persisted error',
+          type: 'AgentRuntimeError',
+        });
+        expect(store.getState().dbMessages[0].updatedAt).toBe(3000);
       });
     });
   });

@@ -7,13 +7,13 @@ export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
 export type ChatResponseFormat =
   | { type: 'json_object' }
   | {
-    json_schema: {
-      name: string;
-      schema: Record<string, any>;
-      strict?: boolean;
+      json_schema: {
+        name: string;
+        schema: Record<string, any>;
+        strict?: boolean;
+      };
+      type: 'json_schema';
     };
-    type: 'json_schema';
-  };
 
 interface UserMessageContentPartThinking {
   signature: string;
@@ -61,7 +61,11 @@ export interface OpenAIChatMessage {
  */
 export interface ChatStreamPayload {
   apiMode?: 'chatCompletion' | 'responses';
-  effort?: 'low' | 'medium' | 'high' | 'max';
+  /**
+   * @title Provider deployment name
+   */
+  deploymentName?: string;
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /**
    * Enable context caching
    */
@@ -221,6 +225,13 @@ export interface ChatCompletionTool {
 
 export interface OnFinishData {
   error?: any;
+  /**
+   * The terminal finishReason emitted by the provider in the `stop` SSE chunk
+   * (e.g. Google: STOP / SAFETY / RECITATION / MAX_TOKENS; OpenAI: stop / length;
+   * Anthropic: end_turn / max_tokens / tool_use). Used to detect "soft interrupts"
+   * where the provider returns empty content with a non-normal finishReason.
+   */
+  finishReason?: string;
   grounding?: any;
   speed?: ModelPerformance;
   text: string;

@@ -1,5 +1,6 @@
 import { Avatar, Icon } from '@lobehub/ui';
-import { Bot, MessageSquareText, Users } from 'lucide-react';
+import { SkillsIcon } from '@lobehub/ui/icons';
+import { Bot, MessageSquareText, Users, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { useChatStore } from '@/store/chat';
@@ -11,6 +12,8 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore } from '../store';
+import { useInstalledSkillsAndTools } from './ActionTag/useInstalledSkillsAndTools';
+import MentionItemIcon from './MentionItemIcon';
 import type { MentionCategory } from './MentionMenu/types';
 
 const MAX_AGENT_ITEMS = 20;
@@ -31,6 +34,8 @@ export const useMentionCategories = (): MentionCategory[] => {
 
   const externalMentionItems = useChatInputStore((s) => s.mentionItems);
   const isGroupChat = !!externalMentionItems;
+
+  const enabledSkills = useInstalledSkillsAndTools();
 
   return useMemo(() => {
     const categories: MentionCategory[] = [];
@@ -117,6 +122,56 @@ export const useMentionCategories = (): MentionCategory[] => {
       }
     }
 
+    // --- Skills ---
+    const skillItems = enabledSkills.filter((s) => s.category === 'skill');
+    if (skillItems.length > 0) {
+      categories.push({
+        id: 'skill',
+        icon: <Icon icon={SkillsIcon} size={16} />,
+        items: skillItems.map((item) => ({
+          icon: <MentionItemIcon avatar={item.icon} category={'skill'} label={item.label} />,
+          key: `skill-${item.type}`,
+          label: item.label,
+          metadata: {
+            actionCategory: item.category,
+            actionType: item.type,
+            timestamp: 0,
+            type: 'skill' as const,
+          },
+        })),
+        label: 'Skills',
+      });
+    }
+
+    // --- Tools ---
+    const toolItems = enabledSkills.filter((s) => s.category === 'tool');
+    if (toolItems.length > 0) {
+      categories.push({
+        id: 'tool',
+        icon: <Icon icon={Wrench} size={16} />,
+        items: toolItems.map((item) => ({
+          icon: <MentionItemIcon avatar={item.icon} category={'tool'} label={item.label} />,
+          key: `tool-${item.type}`,
+          label: item.label,
+          metadata: {
+            actionCategory: item.category,
+            actionType: item.type,
+            timestamp: 0,
+            type: 'tool' as const,
+          },
+        })),
+        label: 'Tools',
+      });
+    }
+
     return categories;
-  }, [allAgents, currentAgentId, topics, activeTopicId, isGroupChat, externalMentionItems]);
+  }, [
+    allAgents,
+    currentAgentId,
+    topics,
+    activeTopicId,
+    isGroupChat,
+    externalMentionItems,
+    enabledSkills,
+  ]);
 };

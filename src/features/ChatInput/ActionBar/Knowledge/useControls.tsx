@@ -13,10 +13,10 @@ import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
 export const useControls = ({
-  setModalOpen,
+  openAttachKnowledgeModal,
   setUpdating,
 }: {
-  setModalOpen: (open: boolean) => void;
+  openAttachKnowledgeModal: () => void;
   setUpdating: (updating: boolean) => void;
 }) => {
   const { t } = useTranslation('chat');
@@ -85,7 +85,7 @@ export const useControls = ({
       key: 'knowledge-base-store',
       label: t('knowledgeBase.viewMore'),
       onClick: () => {
-        setModalOpen(true);
+        openAttachKnowledgeModal();
       },
     },
   ];

@@ -1,9 +1,11 @@
 import { type ReactNode } from 'react';
 
 import { appEnv } from '@/envs/app';
+import AnalyticsRSCProvider from '@/layout/AnalyticsRSCProvider';
 import AuthProvider from '@/layout/AuthProvider';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import StyleRegistry from '@/layout/GlobalProvider/StyleRegistry';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { getServerAuthConfig } from '@/server/globalConfig/getServerAuthConfig';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
@@ -19,6 +21,7 @@ interface AuthGlobalProviderProps {
 const AuthGlobalProvider = async ({ children, variants }: AuthGlobalProviderProps) => {
   const { locale, isMobile } = RouteVariants.deserializeVariants(variants);
   const serverConfig = getServerAuthConfig();
+  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig();
 
   return (
     <StyleRegistry>
@@ -26,11 +29,14 @@ const AuthGlobalProvider = async ({ children, variants }: AuthGlobalProviderProp
         <NextThemeProvider>
           <AuthThemeLite globalCDN={appEnv.CDN_USE_GLOBAL}>
             <AuthServerConfigProvider
+              featureFlags={featureFlags}
               isMobile={isMobile}
               segmentVariants={variants}
               serverConfig={serverConfig}
             >
-              <AuthProvider>{children}</AuthProvider>
+              <AnalyticsRSCProvider>
+                <AuthProvider>{children}</AuthProvider>
+              </AnalyticsRSCProvider>
             </AuthServerConfigProvider>
           </AuthThemeLite>
         </NextThemeProvider>

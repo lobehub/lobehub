@@ -1254,6 +1254,14 @@ describe('AgentModel', () => {
         expect(result?.slug).toBe('page-agent');
         expect(result?.virtual).toBe(true);
       });
+
+      it('should create task-agent builtin agent', async () => {
+        const result = await agentModel.getBuiltinAgent('task-agent');
+
+        expect(result).toBeDefined();
+        expect(result?.slug).toBe('task-agent');
+        expect(result?.virtual).toBe(true);
+      });
     });
   });
 
@@ -1881,6 +1889,31 @@ describe('AgentModel', () => {
     it('should return early for non-existent agent', async () => {
       const result = await agentModel.updateConfig('non-existent-id', { title: 'New' });
       expect(result).toBeUndefined();
+    });
+
+    it('should merge nested chatConfig fields without replacing the whole object', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableHistoryCount: true, historyCount: 10 },
+          title: 'Chat Config Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        chatConfig: { enableReasoning: true } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.chatConfig).toEqual({
+        enableHistoryCount: true,
+        enableReasoning: true,
+        historyCount: 10,
+      });
     });
 
     it('should delete params field when value is undefined', async () => {

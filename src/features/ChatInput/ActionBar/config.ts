@@ -5,6 +5,7 @@ import Memory from './Memory';
 import Mention from './Mention';
 import Model from './Model';
 import Params from './Params';
+import PromptTransform from './PromptTransform';
 import SaveTopic from './SaveTopic';
 import Search from './Search';
 import STT from './STT';
@@ -24,6 +25,7 @@ export const actionMap = {
   model: Model,
   params: Params,
   portalToken: PortalToken,
+  promptTransform: PromptTransform,
   saveTopic: SaveTopic,
   search: Search,
   stt: STT,

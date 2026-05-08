@@ -1,7 +1,8 @@
-import { type ChatModelCard } from '@lobechat/types';
-import { type AIBaseModelCard, type AiModelSettings, type ExtendParamsType } from 'model-bank';
+import type { ChatModelCard } from '@lobechat/types';
+import type { AIBaseModelCard, AiModelSettings, AiModelType, ExtendParamsType } from 'model-bank';
+import { AiModelTypeSchema } from 'model-bank';
 
-import { type ModelProviderKey } from '../types';
+import type { ModelProviderKey } from '../types';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -30,18 +31,18 @@ export const MODEL_LIST_CONFIGS = {
     visionKeywords: [],
   },
   deepseek: {
-    functionCallKeywords: ['v3', 'r1', 'deepseek-chat'],
-    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.'],
+    functionCallKeywords: ['v3', 'v4', 'r1', 'deepseek-chat'],
+    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.', 'v4'],
     visionKeywords: ['ocr'],
   },
   google: {
     excludeKeywords: ['tts'],
-    functionCallKeywords: ['gemini', '!-image-'],
+    functionCallKeywords: ['gemini', '!-image-', 'gemma-4'],
     imageOutputKeywords: ['-image-'],
-    reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-'],
-    searchKeywords: ['-search', '!-image-'],
+    reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-', 'gemma-4'],
+    searchKeywords: ['-search', '!-image-', 'gemma-4'],
     videoKeywords: ['-2.5-', '!-image-', '-3-'],
-    visionKeywords: ['gemini', 'learnlm'],
+    visionKeywords: ['gemini', 'learnlm', 'gemma-4'],
   },
   inclusionai: {
     functionCallKeywords: ['ling-'],
@@ -129,7 +130,9 @@ export const MODEL_LIST_CONFIGS = {
     excludeKeywords: ['tts'],
     functionCallKeywords: ['mimo'],
     reasoningKeywords: ['mimo'],
-    visionKeywords: ['omni'],
+    // mimo-v2.5 (non-pro) is natively omni-modal; match the exact id
+    // without also catching mimo-v2.5-pro, which is text-only.
+    visionKeywords: ['omni', 're:^mimo-v2\\.5$'],
   },
   zeroone: {
     functionCallKeywords: ['fc'],
@@ -147,7 +150,7 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   anthropic: ['claude'],
   comfyui: ['comfyui/'], // ComfyUI models detection - all ComfyUI models have comfyui/ prefix
   deepseek: ['deepseek'],
-  google: ['gemini', 'imagen'],
+  google: ['gemini', 'imagen', 'gemma'],
   inclusionai: ['ling-', 'ming-', 'ring-'],
   llama: ['llama', 'llava'],
   longcat: ['longcat'],
@@ -189,6 +192,20 @@ export const IMAGE_MODEL_KEYWORDS = [
 
 // Embedding model keyword configuration
 export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
+
+const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
+
+const normalizeModelType = (value: unknown): AiModelType | undefined => {
+  if (typeof value !== 'string') return undefined;
+
+  const normalized = value.toLowerCase() as AiModelType;
+
+  if (AI_MODEL_TYPE_SET.has(normalized)) {
+    return normalized;
+  }
+
+  return undefined;
+};
 
 /**
  * Detect whether a keyword list matches a model ID (supports multiple matching patterns)
@@ -482,8 +499,9 @@ const processModelCard = (
   } = config;
 
   const isExcludedModel = isKeywordListMatch(model.id.toLowerCase(), excludeKeywords);
+  const normalizedModelType = normalizeModelType(model.type);
   const modelType =
-    model.type ||
+    normalizedModelType ||
     knownModel?.type ||
     (isKeywordListMatch(
       model.id.toLowerCase(),

@@ -1,4 +1,3 @@
- 
 import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
@@ -290,7 +289,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
       return this.processFilePaths(limitedFiles, options, 'fast-glob');
     } catch (error) {
       logger.error('fast-glob search failed:', error);
-      throw new Error(`File search failed: ${(error as Error).message}`);
+      throw new Error(`File search failed: ${(error as Error).message}`, { cause: error });
     }
   }
 
@@ -336,7 +335,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
    * @returns Glob results
    */
   private async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || process.cwd();
+    const searchPath = params.scope || os.homedir() || process.cwd();
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -391,7 +390,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
    * @returns Glob results
    */
   private async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || process.cwd();
+    const searchPath = params.scope || os.homedir() || process.cwd();
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });

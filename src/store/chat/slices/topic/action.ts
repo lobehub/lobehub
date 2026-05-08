@@ -70,6 +70,12 @@ export class ChatTopicActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
 
+  // Monotonic token for switchTopic. Each call increments it and captures a
+  // local copy; after awaited work, a mismatch means a newer switch has
+  // started and our continuation is stale — drop it rather than let it
+  // clobber the newer topic (see LOBE-7785).
+  #switchTopicEpoch = 0;
+
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
@@ -234,6 +240,20 @@ export class ChatTopicActionImpl {
     });
   };
 
+  markTopicCompleted = async (id: string): Promise<void> => {
+    await this.#get().internal_updateTopic(id, {
+      completedAt: new Date(),
+      status: 'completed',
+    });
+  };
+
+  unmarkTopicCompleted = async (id: string): Promise<void> => {
+    await this.#get().internal_updateTopic(id, {
+      completedAt: null,
+      status: 'active',
+    });
+  };
+
   favoriteTopic = async (id: string, favorite: boolean): Promise<void> => {
     const { activeAgentId } = this.#get();
     await this.#get().internal_updateTopic(id, { favorite });
@@ -303,12 +323,14 @@ export class ChatTopicActionImpl {
     enable: boolean,
     {
       agentId,
+      excludeStatuses,
       excludeTriggers,
       groupId,
       pageSize: customPageSize,
       isInbox,
     }: {
       agentId?: string;
+      excludeStatuses?: string[];
       excludeTriggers?: string[];
       groupId?: string;
       isInbox?: boolean;
@@ -318,6 +340,8 @@ export class ChatTopicActionImpl {
     const pageSize = customPageSize || 20;
     const effectiveExcludeTriggers =
       excludeTriggers && excludeTriggers.length > 0 ? excludeTriggers : undefined;
+    const effectiveExcludeStatuses =
+      excludeStatuses && excludeStatuses.length > 0 ? excludeStatuses : undefined;
     // Use topicMapKey to generate the container key for topic data map
     const containerKey = topicMapKey({ agentId, groupId });
     const hasValidContainer = !!(groupId || agentId);
@@ -331,6 +355,7 @@ export class ChatTopicActionImpl {
               isInbox,
               pageSize,
               ...(effectiveExcludeTriggers ? { excludeTriggers: effectiveExcludeTriggers } : {}),
+              ...(effectiveExcludeStatuses ? { excludeStatuses: effectiveExcludeStatuses } : {}),
             },
           ]
         : null,
@@ -353,6 +378,7 @@ export class ChatTopicActionImpl {
         const result = await topicService.getTopics({
           agentId,
           current: 0,
+          excludeStatuses: effectiveExcludeStatuses,
           excludeTriggers: effectiveExcludeTriggers,
           groupId,
           isInbox,
@@ -380,6 +406,7 @@ export class ChatTopicActionImpl {
             currentData.currentPage > 0 &&
             currentData.pageSize === pageSize &&
             Boolean(currentData.isInbox) === Boolean(isInbox) &&
+            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
             isEqual(currentData.excludeTriggers, effectiveExcludeTriggers);
 
           const nextItems = isRefreshingExpandedList
@@ -400,7 +427,9 @@ export class ChatTopicActionImpl {
           if (
             currentData &&
             isEqual(nextItems, currentData.items) &&
-            currentData.total === totalCount
+            currentData.total === totalCount &&
+            isEqual(currentData.excludeStatuses, effectiveExcludeStatuses) &&
+            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers)
           ) {
             return;
           }
@@ -411,6 +440,7 @@ export class ChatTopicActionImpl {
                 ...this.#get().topicDataMap,
                 [containerKey]: {
                   currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
+                  excludeStatuses: effectiveExcludeStatuses,
                   excludeTriggers: effectiveExcludeTriggers,
                   hasMore,
                   isInbox: Boolean(isInbox),
@@ -454,9 +484,11 @@ export class ChatTopicActionImpl {
     try {
       const pageSize = useGlobalStore.getState().status.topicPageSize || 20;
       const excludeTriggers = currentData?.excludeTriggers;
+      const excludeStatuses = currentData?.excludeStatuses;
       const result = await topicService.getTopics({
         agentId: activeAgentId,
         current: nextPage,
+        excludeStatuses,
         excludeTriggers,
         groupId: activeGroupId,
         pageSize,
@@ -472,6 +504,7 @@ export class ChatTopicActionImpl {
             ...this.#get().topicDataMap,
             [key]: {
               currentPage: nextPage,
+              excludeStatuses,
               excludeTriggers,
               hasMore,
               isInbox: currentData?.isInbox,
@@ -527,6 +560,7 @@ export class ChatTopicActionImpl {
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
+    const epoch = ++this.#switchTopicEpoch;
 
     const { activeAgentId, activeGroupId } = this.#get();
 
@@ -536,6 +570,10 @@ export class ChatTopicActionImpl {
     // This prevents stale data from previous conversations showing up
     // Note: Use == null to match both null and undefined
     const shouldClearNewKey = !id || opts.clearNewKey;
+
+    if (shouldClearNewKey) {
+      this.#get().clearPortalStack();
+    }
 
     if (shouldClearNewKey && activeAgentId) {
       // Determine scope: use explicit scope from options, or infer from activeGroupId
@@ -558,19 +596,28 @@ export class ChatTopicActionImpl {
       n('toggleTopic'),
     );
 
-    if (id) {
-      this.#get().clearUnreadCompletedTopic(id);
+    if (activeAgentId) {
+      this.#get().clearUnreadCompletedTopic(activeAgentId, id ?? null);
     }
 
     if (opts.skipRefreshMessage) return;
+
+    // Yield a microtask so any switchTopic calls queued behind us can run
+    // their sync bodies (and bump #switchTopicEpoch) before we commit to a
+    // refresh. On the other side of the yield, an epoch mismatch means a
+    // newer switch has taken over — skip the redundant SWR mutate.
+    await Promise.resolve();
+    if (epoch !== this.#switchTopicEpoch) return;
+
     await this.#get().refreshMessages();
   };
 
   removeSessionTopics = async (): Promise<void> => {
-    const { switchTopic, activeAgentId, refreshTopic } = this.#get();
+    const { switchTopic, activeAgentId, refreshTopic, clearUnreadCompletedAgent } = this.#get();
     if (!activeAgentId) return;
 
     await topicService.removeTopicsByAgentId(activeAgentId);
+    clearUnreadCompletedAgent(activeAgentId);
     await refreshTopic();
 
     // switch to default topic
@@ -578,7 +625,7 @@ export class ChatTopicActionImpl {
   };
 
   removeGroupTopics = async (groupId: string): Promise<void> => {
-    const { switchTopic, refreshTopic } = this.#get();
+    const { switchTopic, refreshTopic, purgeUnreadTopics } = this.#get();
 
     // Get topics for this specific group from the topic map using topicMapKey
     const key = topicMapKey({ groupId });
@@ -587,6 +634,7 @@ export class ChatTopicActionImpl {
 
     if (topicIds.length > 0) {
       await topicService.batchRemoveTopics(topicIds);
+      purgeUnreadTopics(topicIds);
     }
 
     await refreshTopic();
@@ -599,17 +647,26 @@ export class ChatTopicActionImpl {
     const { refreshTopic } = this.#get();
 
     await topicService.removeAllTopic();
+    this.#set({ unreadCompletedTopicsByAgent: {} }, false, n('removeAllTopics/clearUnread'));
     await refreshTopic();
   };
 
   removeTopic = async (id: string): Promise<void> => {
-    const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = this.#get();
+    const {
+      activeAgentId,
+      activeGroupId,
+      activeTopicId,
+      switchTopic,
+      refreshTopic,
+      purgeUnreadTopics,
+    } = this.#get();
     // Allow deletion when either agentId or groupId is active
     if (!activeAgentId && !activeGroupId) return;
 
     // remove topic
     await topicService.removeTopic(id);
     this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeTopic');
+    purgeUnreadTopics([id]);
     await refreshTopic();
 
     // switch back to default topic
@@ -617,10 +674,12 @@ export class ChatTopicActionImpl {
   };
 
   removeUnstarredTopic = async (): Promise<void> => {
-    const { refreshTopic, switchTopic } = this.#get();
+    const { refreshTopic, switchTopic, purgeUnreadTopics } = this.#get();
     const topics = topicSelectors.currentUnFavTopics(this.#get());
+    const topicIds = topics.map((t) => t.id);
 
-    await topicService.batchRemoveTopics(topics.map((t) => t.id));
+    await topicService.batchRemoveTopics(topicIds);
+    purgeUnreadTopics(topicIds);
     await refreshTopic();
 
     // Switch to default topic
@@ -640,7 +699,11 @@ export class ChatTopicActionImpl {
     // Key format: [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
     const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     await mutate(
-      (key) => Array.isArray(key) && key[0] === SWR_USE_FETCH_TOPIC && key[1] === containerKey,
+      (key) =>
+        Array.isArray(key) &&
+        key[0] === SWR_USE_FETCH_TOPIC &&
+        typeof key[1] === 'string' &&
+        key[1] === containerKey,
     );
   };
 
@@ -742,6 +805,8 @@ export class ChatTopicActionImpl {
           ...this.#get().topicDataMap,
           [key]: {
             currentPage,
+            excludeStatuses: currentData?.excludeStatuses,
+            excludeTriggers: currentData?.excludeTriggers,
             hasMore: total > nextItems.length,
             isInbox: currentData?.isInbox,
             isExpandingPageSize: false,

@@ -77,6 +77,48 @@ describe('topic command', () => {
         expect.objectContaining({ agentId: 'a1' }),
       );
     });
+
+    it('should keep first page on the backend default offset', async () => {
+      mockTrpcClient.topic.getTopics.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'list', '--agent-id', 'a1', '-L', '200']);
+
+      expect(mockTrpcClient.topic.getTopics.query).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', pageSize: 200 }),
+      );
+    });
+
+    it('should convert page 2 to current 1', async () => {
+      mockTrpcClient.topic.getTopics.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'topic',
+        'list',
+        '--agent-id',
+        'a1',
+        '--page',
+        '2',
+      ]);
+
+      expect(mockTrpcClient.topic.getTopics.query).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', current: 1 }),
+      );
+    });
+
+    it('should support the short page flag', async () => {
+      mockTrpcClient.topic.getTopics.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'list', '--agent-id', 'a1', '-P', '2']);
+
+      expect(mockTrpcClient.topic.getTopics.query).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', current: 1 }),
+      );
+    });
   });
 
   describe('search', () => {

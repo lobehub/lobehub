@@ -36,6 +36,8 @@ export async function createWenxinImage(
 
     if (model.startsWith('musesteamer')) {
       endpoint = `${baseURL}/musesteamer/images/generations`;
+    } else if (model.startsWith('ernie-image')) {
+      endpoint = `${baseURL}/ernie-image/images/generations`;
     } else {
       if (images) {
         endpoint = `${baseURL}/images/edits`;
@@ -56,6 +58,8 @@ export async function createWenxinImage(
           : {}),
       ...(params.steps !== undefined && { steps: params.steps }),
       ...(model === 'ernie-irag-edit' && { feature: 'variation' }),
+      ...(params.promptExtend && { prompt_extend: params.promptExtend }),
+      ...(params.watermark && { watermark: params.watermark }),
     };
 
     const response = await fetch(endpoint, {
@@ -71,7 +75,9 @@ export async function createWenxinImage(
       let errorData;
       try {
         errorData = await response.json();
-      } catch {}
+      } catch (error) {
+        void error;
+      }
 
       const errorMessage =
         typeof errorData?.error === 'string'

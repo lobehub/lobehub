@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-// 模拟 App 及其依赖项
+// Mock App and its dependencies
 const mockToggleVisible = vi.fn();
 const mockLoadUrl = vi.fn();
 const mockShow = vi.fn();
@@ -30,6 +30,7 @@ const mockMinimizeWindow = vi.fn();
 const mockMaximizeWindow = vi.fn();
 const mockIsWindowMaximized = vi.fn();
 const mockRetrieveByIdentifier = vi.fn();
+const mockStartSession = vi.fn();
 const testSenderIdentifierString: string = 'test-window-event-id';
 
 const mockGetIdentifierByWebContents = vi.fn(() => testSenderIdentifierString);
@@ -66,6 +67,9 @@ const mockApp = {
       },
     ),
   },
+  screenCaptureManager: {
+    startSession: mockStartSession,
+  },
 } as unknown as App;
 
 describe('BrowserWindowsCtr', () => {
@@ -78,10 +82,21 @@ describe('BrowserWindowsCtr', () => {
   });
 
   describe('toggleMainWindow', () => {
-    it('should get the main window and toggle its visibility', async () => {
-      await browserWindowsCtr.toggleMainWindow();
+    it('should toggle the main window visibility', () => {
+      browserWindowsCtr.toggleMainWindow();
+
       expect(mockGetMainWindow).toHaveBeenCalled();
       expect(mockToggleVisible).toHaveBeenCalled();
+      expect(mockStartSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('openQuickComposer', () => {
+    it('should start the quick composer session', async () => {
+      await browserWindowsCtr.openQuickComposer();
+      expect(mockStartSession).toHaveBeenCalled();
+      expect(mockGetMainWindow).not.toHaveBeenCalled();
+      expect(mockToggleVisible).not.toHaveBeenCalled();
     });
   });
 

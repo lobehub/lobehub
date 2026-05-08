@@ -2,6 +2,200 @@
 
 # Changelog
 
+### [Version 2.1.56](https://github.com/lobehub/lobe-chat/compare/v2.1.55...v2.1.56)
+
+<sup>Released on **2026-05-01**</sup>
+
+#### 👷 Build System
+
+- **database**: add `metadata` and `trigger` to `briefs` table.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **database**: add `metadata` and `trigger` to `briefs` table, closes [#14354](https://github.com/lobehub/lobe-chat/issues/14354) ([86a23b5](https://github.com/lobehub/lobe-chat/commit/86a23b5))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.55](https://github.com/lobehub/lobe-chat/compare/v2.1.54...v2.1.55)
+
+<sup>Released on **2026-04-29**</sup>
+
+#### 🐛 Bug Fixes
+
+- **chat**: preserve topics across cold route sends.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **chat**: preserve topics across cold route sends, closes [#14284](https://github.com/lobehub/lobe-chat/issues/14284) ([b8fe675](https://github.com/lobehub/lobe-chat/commit/b8fe675))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.54](https://github.com/lobehub/lobe-chat/compare/v2.1.53...v2.1.54)
+
+<sup>Released on **2026-04-27**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: clear stale topic when switching agents from a topic route.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: clear stale topic when switching agents from a topic route, closes [#14231](https://github.com/lobehub/lobe-chat/issues/14231) ([deeb97a](https://github.com/lobehub/lobe-chat/commit/deeb97a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.52](https://github.com/lobehub/lobe-chat/compare/v2.1.51...v2.1.52)
+
+<sup>Released on **2026-04-20**</sup>
+
+#### 👷 Build System
+
+- **database**: add topic status and tasks automation mode.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **database**: add topic status and tasks automation mode, closes [#13994](https://github.com/lobehub/lobe-chat/issues/13994) ([3bcd581](https://github.com/lobehub/lobe-chat/commit/3bcd581))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.1.51](https://github.com/lobehub/lobe-chat/compare/v0.0.0-nightly.pr13850.8503...v2.1.51)
+
+<sup>Released on **2026-04-16**</sup>
+
+#### 👷 Build System
+
+- **database**: add document history schema.
+- **database**: add document history schema.
+
+#### 🐛 Bug Fixes
+
+- **misc**: fix minify cli.
+- **misc**: recent delete.
+- **deps**: pin @react-pdf/image to 3.0.4 to avoid privatized @react-pdf/svg.
+- **database**: enforce document history ownership and pagination.
+
+#### ✨ Features
+
+- **database**: add document history table and update related models.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **database**: add document history schema, closes [#13789](https://github.com/lobehub/lobe-chat/issues/13789) ([c1174d3](https://github.com/lobehub/lobe-chat/commit/c1174d3))
+- **database**: add document history schema ([e3eef04](https://github.com/lobehub/lobe-chat/commit/e3eef04))
+
+#### What's fixed
+
+- **misc**: fix minify cli, closes [#13888](https://github.com/lobehub/lobe-chat/issues/13888) ([cb4ad01](https://github.com/lobehub/lobe-chat/commit/cb4ad01))
+- **misc**: recent delete, closes [#13878](https://github.com/lobehub/lobe-chat/issues/13878) ([85227cf](https://github.com/lobehub/lobe-chat/commit/85227cf))
+- **deps**: pin @react-pdf/image to 3.0.4 to avoid privatized @react-pdf/svg ([d526b40](https://github.com/lobehub/lobe-chat/commit/d526b40))
+- **database**: enforce document history ownership and pagination ([b9c4b87](https://github.com/lobehub/lobe-chat/commit/b9c4b87))
+
+#### What's improved
+
+- **database**: add document history table and update related models ([64fc6d4](https://github.com/lobehub/lobe-chat/commit/64fc6d4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.1.50](https://github.com/lobehub/lobe-chat/compare/v2.1.49...v2.1.50)
+
+<sup>Released on **2026-04-16**</sup>
+
+#### 👷 Build System
+
+- **database**: add document history schema.
+- **database**: add document history schema.
+
+#### 🐛 Bug Fixes
+
+- **deps**: pin @react-pdf/image to 3.0.4 to avoid privatized @react-pdf/svg.
+- **database**: enforce document history ownership and pagination.
+
+#### ✨ Features
+
+- **database**: add document history table and update related models.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **database**: add document history schema, closes [#13789](https://github.com/lobehub/lobe-chat/issues/13789) ([c1174d3](https://github.com/lobehub/lobe-chat/commit/c1174d3))
+- **database**: add document history schema ([e3eef04](https://github.com/lobehub/lobe-chat/commit/e3eef04))
+
+#### What's fixed
+
+- **deps**: pin @react-pdf/image to 3.0.4 to avoid privatized @react-pdf/svg ([d526b40](https://github.com/lobehub/lobe-chat/commit/d526b40))
+- **database**: enforce document history ownership and pagination ([b9c4b87](https://github.com/lobehub/lobe-chat/commit/b9c4b87))
+
+#### What's improved
+
+- **database**: add document history table and update related models ([64fc6d4](https://github.com/lobehub/lobe-chat/commit/64fc6d4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.45](https://github.com/lobehub/lobe-chat/compare/v2.1.44...v2.1.45)
 
 <sup>Released on **2026-03-26**</sup>

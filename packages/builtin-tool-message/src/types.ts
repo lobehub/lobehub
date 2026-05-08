@@ -442,6 +442,11 @@ export interface CreateBotParams {
   credentials: Record<string, string>;
   /** Target platform */
   platform: string;
+  /**
+   * Optional initial settings (DM policy, allowlist, server/user IDs, etc.).
+   * Same shape as `UpdateBotParams.settings`. Omit to use schema defaults.
+   */
+  settings?: Record<string, unknown>;
 }
 
 export interface CreateBotState {

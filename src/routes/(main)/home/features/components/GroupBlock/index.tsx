@@ -15,6 +15,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   action: css`
     opacity: 0;
     transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
+
+    button {
+      color: ${cssVar.colorTextSecondary};
+    }
   `,
   actionVisible: css`
     opacity: 1;

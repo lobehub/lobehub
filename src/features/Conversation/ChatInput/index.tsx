@@ -5,7 +5,7 @@ import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
 import { Alert, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ActionKeys } from '@/features/ChatInput';
@@ -20,8 +20,34 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
-import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../store';
+import TodoProgress from '../TodoProgress';
 import QueueTray from './QueueTray';
+import { getConversationChatInputUiState } from './utils';
+
+/** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
+const MAX_CONTEXT_MESSAGES = 25;
+
+const useGetMessages = () => {
+  const storeApi = useConversationStoreApi();
+  return useCallback(
+    () =>
+      dataSelectors
+        .dbMessages(storeApi.getState())
+        .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
+        .slice(-MAX_CONTEXT_MESSAGES)
+        .map((m) => ({
+          content: typeof m.content === 'string' ? m.content : '',
+          role: m.role as 'user' | 'assistant' | 'system',
+        })),
+    [storeApi],
+  );
+};
 
 export interface ChatInputProps {
   /**
@@ -37,6 +63,24 @@ export interface ChatInputProps {
    * Use this to add custom UI like error alerts, MessageFromUrl, etc.
    */
   children?: ReactNode;
+  /**
+   * Suppress the followUp placeholder variant (e.g. onboarding has no
+   * follow-up design). When true, placeholder stays in default variant.
+   */
+  disableFollowUpVariant?: boolean;
+  /**
+   * Disable the @ mention trigger and its placeholder hint
+   */
+  disableMention?: boolean;
+  /**
+   * Disable enqueuing follow-up messages while the agent is streaming.
+   * Hides the QueueTray and gates handleSend so Enter does not enqueue.
+   */
+  disableQueue?: boolean;
+  /**
+   * Disable the / slash command trigger
+   */
+  disableSlash?: boolean;
   /**
    * Extra action items to append to the ActionBar
    */
@@ -61,6 +105,11 @@ export interface ChatInputProps {
    * Right action buttons configuration
    */
   rightActions?: ActionKeys[];
+  /**
+   * Custom node to render in place of the default RuntimeConfig bar
+   * (Local/Cloud/Approval). When provided, replaces the default bar.
+   */
+  runtimeConfigSlot?: ReactNode;
   /**
    * Custom content to render before the SendArea (right side of action bar)
    */
@@ -93,12 +142,17 @@ const ChatInput = memo<ChatInputProps>(
   ({
     actionBarStyle,
     allowExpand,
+    disableFollowUpVariant,
+    disableMention,
+    disableQueue,
+    disableSlash,
     leftActions = [],
     leftContent,
     rightActions = [],
     children,
     extraActionItems,
     mentionItems,
+    runtimeConfigSlot,
     sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
@@ -107,6 +161,8 @@ const ChatInput = memo<ChatInputProps>(
     skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
+
+    const getMessages = useGetMessages();
 
     // ConversationStore state
     const context = useConversationStore((s) => s.context);
@@ -118,6 +174,24 @@ const ChatInput = memo<ChatInputProps>(
     ]);
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
+    const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
+
+    // Observe the floating overlay's height (TodoProgress + QueueTray) and
+    // publish it so the ChatList container can reserve matching bottom
+    // padding — keeps the overlay floating without occluding chat content.
+    const overlayRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+      const node = overlayRef.current;
+      if (!node) return;
+      const observer = new ResizeObserver(([entry]) => {
+        setChatInputOverlayHeight(Math.round(entry.contentRect.height));
+      });
+      observer.observe(node);
+      return () => {
+        observer.disconnect();
+        setChatInputOverlayHeight(0);
+      };
+    }, [setChatInputOverlayHeight]);
 
     // Loading state from ConversationStore (bridged from ChatStore)
     const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
@@ -152,8 +226,15 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    // Input stays enabled during agent execution — messages are queued
-    const disabled = isInputEmpty || isUploadingFiles;
+    const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
+      disableFollowUpVariant,
+      isInputEmpty,
+      isInputLoading,
+    });
+    // Input stays enabled during agent execution — messages are queued.
+    // When disableQueue is set (e.g. onboarding), block sending while loading.
+    const disabled = isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading);
+    const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
@@ -165,6 +246,10 @@ const ChatInput = memo<ChatInputProps>(
         const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
 
         if (currentIsUploading) return;
+
+        // Onboarding-style surfaces opt out of message queuing — pressing Enter
+        // while the agent is streaming should be a no-op rather than enqueue.
+        if (disableQueue && isInputLoading) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
@@ -190,19 +275,22 @@ const ChatInput = memo<ChatInputProps>(
         // Fire and forget - send with captured message
         await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [sendMessage],
+      [sendMessage, disableQueue, isInputLoading],
     );
 
     const sendButtonProps: SendButtonProps = {
       disabled,
-      generating: isInputLoading,
+      generating: showStopButton,
       onStop: stopGenerating,
       ...customSendButtonProps,
+      ...(shouldUsePlainSendButton
+        ? { shape: customSendButtonProps?.shape ?? 'round' }
+        : undefined),
     };
 
     const defaultContent = (
       <WideScreenContainer
-        style={skipScrollMarginWithList ? { marginTop: -12, position: 'relative' } : undefined}
+        style={{ position: 'relative', ...(skipScrollMarginWithList ? { marginTop: -12 } : null) }}
       >
         {hasPendingInterventions ? (
           <InterventionBar interventions={pendingInterventions} />
@@ -218,25 +306,27 @@ const ChatInput = memo<ChatInputProps>(
                 />
               </Flexbox>
             )}
-            {hasQueuedMessages && (
-              <Flexbox
-                paddingInline={12}
-                style={{
-                  position: 'absolute',
-                  zIndex: 10,
-                  bottom: '100%',
-                  left: 12,
-                  right: 12,
-                }}
-              >
-                <QueueTray />
-              </Flexbox>
-            )}
+            <Flexbox
+              paddingInline={12}
+              ref={overlayRef}
+              style={{
+                bottom: '100%',
+                left: 12,
+                position: 'absolute',
+                right: 12,
+                zIndex: 10,
+              }}
+            >
+              {!disableQueue && hasQueuedMessages && <QueueTray />}
+              <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
+            </Flexbox>
             <DesktopChatInput
               actionBarStyle={actionBarStyle}
               borderRadius={12}
               extraActionItems={extraActionItems}
               leftContent={leftContent}
+              placeholderVariant={placeholderVariant}
+              runtimeConfigSlot={runtimeConfigSlot}
               sendAreaPrefix={sendAreaPrefix}
               showRuntimeConfig={showRuntimeConfig}
             />
@@ -249,11 +339,14 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        disableMention={disableMention}
+        disableSlash={disableSlash}
+        getMessages={getMessages}
         leftActions={leftActions}
         mentionItems={mentionItems}
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
-        sendMenu={sendMenu}
+        sendMenu={showSendMenu ? sendMenu : undefined}
         slashPlacement="top"
         chatInputEditorRef={(instance) => {
           if (instance) {

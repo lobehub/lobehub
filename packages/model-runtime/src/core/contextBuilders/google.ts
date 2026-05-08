@@ -4,7 +4,6 @@ import type {
   Part,
   Tool as GoogleFunctionCallTool,
 } from '@google/genai';
-import { Type as SchemaType } from '@google/genai';
 import { imageUrlToBase64 } from '@lobechat/utils';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
@@ -123,13 +122,49 @@ export const buildGoogleMessage = async (
   // Handle assistant messages with tool_calls
   if (!!message.tool_calls) {
     return {
-      parts: message.tool_calls.map<Part>((tool) => ({
-        functionCall: {
-          args: safeParseJSON(tool.function.arguments)!,
-          name: tool.function.name,
-        },
-        thoughtSignature: tool.thoughtSignature,
-      })),
+      parts: message.tool_calls.map<Part>((tool) => {
+        const parsed = safeParseJSON(tool.function.arguments);
+        // Gemini's functionCall.args requires a plain object, same constraint
+        // as Anthropic's tool_use.input. See anthropic.ts for the full
+        // recovery rationale.
+        let args: Record<string, unknown> = {};
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          args = parsed as Record<string, unknown>;
+        } else if (
+          Array.isArray(parsed) &&
+          parsed.length > 0 &&
+          parsed[0] &&
+          typeof parsed[0] === 'object' &&
+          !Array.isArray(parsed[0])
+        ) {
+          args = parsed[0] as Record<string, unknown>;
+          console.warn(
+            '[google] functionCall.args recovered from array — parsed arguments was wrapped in []',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              arrayLength: parsed.length,
+              name: tool.function.name,
+            },
+          );
+        } else if (parsed !== undefined) {
+          console.warn(
+            '[google] functionCall.args fallback to {} — parsed arguments is not a plain object',
+            {
+              argumentsLength: tool.function.arguments?.length,
+              name: tool.function.name,
+              parsedType: Array.isArray(parsed)
+                ? 'array'
+                : parsed === null
+                  ? 'null'
+                  : typeof parsed,
+            },
+          );
+        }
+        return {
+          functionCall: { args, name: tool.function.name },
+          thoughtSignature: tool.thoughtSignature,
+        };
+      }),
       role: 'model',
     };
   }
@@ -249,81 +284,25 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 };
 
 /**
- * JSON Schema keywords that cause Google GenAI / Vertex AI SDK validation errors.
- * Other unsupported keywords are silently ignored by the API, so only strip these.
- */
-const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default']);
-
-/**
- * Sanitize JSON Schema for Google GenAI compatibility
- * Google's API doesn't support certain JSON Schema keywords like 'const'
- * This function recursively processes the schema and converts unsupported keywords
- */
-const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, any> => {
-  if (!schema || typeof schema !== 'object') return schema;
-
-  // Handle arrays
-  if (Array.isArray(schema)) {
-    return schema.map((item) => sanitizeSchemaForGoogle(item));
-  }
-
-  const result: Record<string, any> = {};
-
-  for (const [key, value] of Object.entries(schema)) {
-    // Strip unsupported JSON Schema keywords (e.g. examples, default, $schema)
-    if (UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
-
-    // Convert 'const' to 'enum' with single value (Google doesn't support 'const')
-    if (key === 'const') {
-      result['enum'] = [value];
-      continue;
-    }
-
-    // Filter null values from enum arrays (Google doesn't support null in enum)
-    if (key === 'enum' && Array.isArray(value)) {
-      const filteredEnum = value.filter((item) => item !== null);
-      // Only set enum if there are remaining values after filtering
-      if (filteredEnum.length > 0) {
-        result[key] = filteredEnum;
-      }
-      continue;
-    }
-
-    // Recursively process nested objects
-    if (value && typeof value === 'object') {
-      result[key] = sanitizeSchemaForGoogle(value);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
-};
-
-/**
- * Convert ChatCompletionTool to Google FunctionDeclaration
+ * Convert ChatCompletionTool to Google FunctionDeclaration.
+ * Uses `parametersJsonSchema` to pass standard JSON Schema directly,
+ * avoiding Google's restrictive Schema subset (no $ref, nullable, const, etc.).
  */
 export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration => {
   const functionDeclaration = tool.function;
   const parameters = functionDeclaration.parameters;
-  // refs: https://github.com/lobehub/lobe-chat/pull/5002
-  const rawProperties =
-    parameters?.properties && Object.keys(parameters.properties).length > 0
-      ? parameters.properties
-      : { dummy: { type: 'string' } }; // dummy property to avoid empty object
 
-  // Sanitize properties to remove unsupported JSON Schema keywords for Google
-  const properties = sanitizeSchemaForGoogle(rawProperties);
+  // refs: https://github.com/lobehub/lobe-chat/pull/5002
+  const hasProperties = parameters?.properties && Object.keys(parameters.properties).length > 0;
+
+  const jsonSchema = hasProperties
+    ? parameters
+    : { type: 'object', properties: { dummy: { type: 'string' } } };
 
   return {
     description: functionDeclaration.description,
     name: functionDeclaration.name,
-    parameters: {
-      description: parameters?.description,
-      properties,
-      required: parameters?.required,
-      type: SchemaType.OBJECT,
-    },
+    parametersJsonSchema: jsonSchema,
   };
 };
 

@@ -11,7 +11,6 @@ import {
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
-import { type PluginGatewayService } from '../pluginGateway';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError } from './errorClassification';
 import {
@@ -25,7 +24,6 @@ const log = debug('lobe-server:tool-execution-service');
 interface ToolExecutionServiceDeps {
   builtinToolsExecutor: BuiltinToolsExecutor;
   mcpService: MCPService;
-  pluginGatewayService: PluginGatewayService;
 }
 
 const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
@@ -62,16 +60,10 @@ const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
 export class ToolExecutionService {
   private builtinToolsExecutor: BuiltinToolsExecutor;
   private mcpService: MCPService;
-  private pluginGatewayService: PluginGatewayService;
 
-  constructor({
-    mcpService,
-    pluginGatewayService,
-    builtinToolsExecutor,
-  }: ToolExecutionServiceDeps) {
+  constructor({ mcpService, builtinToolsExecutor }: ToolExecutionServiceDeps) {
     this.builtinToolsExecutor = builtinToolsExecutor;
     this.mcpService = mcpService;
-    this.pluginGatewayService = pluginGatewayService;
   }
 
   async executeTool(
@@ -87,19 +79,14 @@ export class ToolExecutionService {
       const typeStr = type as string;
       let data: ToolExecutionResult;
       switch (typeStr) {
-        case 'builtin': {
-          data = await this.builtinToolsExecutor.execute(payload, context);
-          break;
-        }
-
         case 'mcp': {
           data = await this.executeMCPTool(payload, context);
           break;
         }
 
+        case 'builtin':
         default: {
-          data = await this.pluginGatewayService.execute(payload, context);
-
+          data = await this.builtinToolsExecutor.execute(payload, context);
           break;
         }
       }

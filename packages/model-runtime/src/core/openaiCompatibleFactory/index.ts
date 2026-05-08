@@ -31,6 +31,7 @@ import type {
   CreateVideoResponse,
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
+  PollVideoStatusResult,
 } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugResponse, debugStream } from '../../utils/debugStream';
@@ -38,7 +39,9 @@ import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
+import { isAccountDeactivatedError } from '../../utils/isAccountDeactivatedError';
 import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
+import { isInsufficientQuotaError } from '../../utils/isInsufficientQuotaError';
 import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { StreamingResponse } from '../../utils/response';
@@ -50,8 +53,11 @@ import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';
 import { createOpenAICompatibleImage } from './createImage';
+import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 
+export type { PollVideoStatusResult };
+export * from './createVideo';
 export * from './nonStreamToStream';
 
 // the model contains the following keywords is not a chat model, so we should filter them out
@@ -169,6 +175,10 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     payload: HandleCreateVideoWebhookPayload,
     options: CreateVideoOptions,
   ) => Promise<HandleCreateVideoWebhookResult>;
+  handlePollVideoStatus?: (
+    inferenceId: string,
+    options: CreateVideoOptions,
+  ) => Promise<PollVideoStatusResult>;
   models?:
     | ((params: { client: OpenAI }) => Promise<ChatModelCard[]>)
     | {
@@ -197,6 +207,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   createImage: customCreateImage,
   createVideo: customCreateVideo,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
+  handlePollVideoStatus: customHandlePollVideoStatus,
   generateObject: generateObjectConfig,
 }: OpenAICompatibleFactoryOptions<T>) => {
   const ErrorType = {
@@ -573,12 +584,22 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async createVideo(payload: CreateVideoPayload) {
-      if (!customCreateVideo) {
-        throw new Error('createVideo is not supported by this provider');
+      const log = debug(`${this.logPrefix}:createVideo`);
+
+      if (customCreateVideo) {
+        log('using custom createVideo implementation');
+        return customCreateVideo(payload, {
+          ...this._options,
+          apiKey: this._options.apiKey!,
+          provider,
+        });
       }
-      return customCreateVideo(payload, {
+
+      log('using default createOpenAICompatibleVideo');
+      return createOpenAICompatibleVideo(payload, {
         ...this._options,
         apiKey: this._options.apiKey!,
+        baseURL: this._options.baseURL || '',
         provider,
       });
     }
@@ -590,6 +611,27 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return customHandleCreateVideoWebhook(payload, {
         ...this._options,
         apiKey: this._options.apiKey!,
+        provider,
+      });
+    }
+
+    async handlePollVideoStatus(inferenceId: string): Promise<PollVideoStatusResult> {
+      const log = debug(`${this.logPrefix}:handlePollVideoStatus`);
+
+      if (customHandlePollVideoStatus) {
+        log('using custom handlePollVideoStatus implementation');
+        return customHandlePollVideoStatus(inferenceId, {
+          ...this._options,
+          apiKey: this._options.apiKey!,
+          provider,
+        });
+      }
+
+      log('using default pollOpenAICompatibleVideoStatus');
+      return pollOpenAICompatibleVideoStatus(inferenceId, {
+        ...this._options,
+        apiKey: this._options.apiKey!,
+        baseURL: this._options.baseURL || '',
         provider,
       });
     }
@@ -759,8 +801,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
               input: messages,
               model,
               text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
-              user: options?.user,
-            },
+              // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+              safety_identifier: options?.user,
+            } as any,
             { headers: options?.headers, signal: options?.signal },
           );
 
@@ -921,21 +964,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         }
       }
 
-      const { errorResult, RuntimeError } = handleOpenAIError(error);
+      const { errorResult, RuntimeError, message } = handleOpenAIError(error);
 
       log('error code: %s, message: %s', errorResult.code, errorResult.message);
-
-      // Check for "Insufficient Balance" in error message
-      const errorMessage = errorResult.error?.message || errorResult.message;
-      if (errorMessage?.includes('Insufficient Balance')) {
-        log('insufficient balance error detected in message');
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.InsufficientQuota,
-          provider: this.id,
-        });
-      }
 
       switch (errorResult.code) {
         case 'insufficient_quota': {
@@ -944,6 +975,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             endpoint: desensitizedEndpoint,
             error: errorResult,
             errorType: AgentRuntimeErrorType.InsufficientQuota,
+            message,
             provider: this.id,
           });
         }
@@ -954,6 +986,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             endpoint: desensitizedEndpoint,
             error: errorResult,
             errorType: AgentRuntimeErrorType.ModelNotFound,
+            message,
             provider: this.id,
           });
         }
@@ -966,18 +999,43 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             endpoint: desensitizedEndpoint,
             error: errorResult,
             errorType: AgentRuntimeErrorType.ExceededContextWindow,
+            message,
             provider: this.id,
           });
         }
       }
 
       const errorMsg = errorResult.error?.message || errorResult.message;
+
+      if (isAccountDeactivatedError(errorMsg)) {
+        log('account deactivated error detected from message');
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.AccountDeactivated,
+          message,
+          provider: this.id,
+        });
+      }
+
+      if (isInsufficientQuotaError(errorMsg)) {
+        log('insufficient quota error detected from message');
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: errorResult,
+          errorType: AgentRuntimeErrorType.InsufficientQuota,
+          message,
+          provider: this.id,
+        });
+      }
+
       if (isExceededContextWindowError(errorMsg)) {
         log('context length exceeded detected from message');
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          message,
           provider: this.id,
         });
       }
@@ -988,6 +1046,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          message,
           provider: this.id,
         });
       }
@@ -997,6 +1056,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         endpoint: desensitizedEndpoint,
         error: errorResult,
         errorType: RuntimeError || ErrorType.bizError,
+        message,
         provider: this.id,
       });
     }
@@ -1049,7 +1109,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         store: false,
         stream: !isStreaming ? undefined : isStreaming,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
-        user: options?.user,
+        // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+        safety_identifier: options?.user,
         // Sanitize sampling params for Responses API path
         ...resolveModelSamplingParameters(res.model, res, {
           normalizeTemperature: false,
@@ -1174,8 +1235,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             model,
             tool_choice: 'required',
             tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
-            user: options?.user,
-          },
+            // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+            safety_identifier: options?.user,
+          } as any,
           { headers: options?.headers, signal: options?.signal },
         );
 

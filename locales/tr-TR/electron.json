@@ -35,6 +35,7 @@
   "navigation.recentView": "Son görüntülemeler",
   "navigation.resources": "Kaynaklar",
   "navigation.settings": "Ayarlar",
+  "navigation.tasks": "Görevler",
   "navigation.unpin": "Sabitlemeyi kaldır",
   "notification.finishChatGeneration": "Yapay zeka mesaj oluşturma tamamlandı",
   "proxy.auth": "Kimlik Doğrulama Gerekli",
@@ -106,6 +107,9 @@
   "tab.closeLeftTabs": "Soldaki Sekmeleri Kapat",
   "tab.closeOtherTabs": "Diğer Sekmeleri Kapat",
   "tab.closeRightTabs": "Sağdaki Sekmeleri Kapat",
+  "tab.newTab": "Yeni Sekme",
+  "tab.running": "Aracı çalışıyor",
+  "tab.unread": "Yeni mesaj",
   "updater.checkingUpdate": "Güncellemeler kontrol ediliyor",
   "updater.checkingUpdateDesc": "Sürüm bilgileri alınıyor...",
   "updater.downloadNewVersion": "Yeni sürümü indir",
@@ -133,5 +137,7 @@
   "window.close": "Pencereyi kapat",
   "window.maximize": "Pencereyi büyüt",
   "window.minimize": "Pencereyi küçült",
-  "window.restore": "Pencereyi geri yükle"
+  "window.pinToTop": "Üste sabitle",
+  "window.restore": "Pencereyi geri yükle",
+  "window.unpinFromTop": "Üstten kaldır"
 }

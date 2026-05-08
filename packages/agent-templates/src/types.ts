@@ -38,6 +38,7 @@ export enum DocumentLoadFormat {
 export enum PolicyLoad {
   ALWAYS = 'always',
   DISABLED = 'disabled',
+  PROGRESSIVE = 'progressive',
 }
 
 /**

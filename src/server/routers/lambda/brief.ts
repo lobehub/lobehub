@@ -33,7 +33,15 @@ const listSchema = z.object({
 export const briefRouter = router({
   create: briefProcedure.input(createSchema).mutation(async ({ input, ctx }) => {
     try {
-      const createData = { ...input };
+      const { artifacts, ...rest } = input;
+      // Legacy clients pass artifacts as a flat doc-id list; the storage shape
+      // is the structured `BriefArtifacts` object. Adapt at the boundary.
+      const createData: Parameters<BriefModel['create']>[0] = {
+        ...rest,
+        artifacts: artifacts?.length
+          ? { documents: artifacts.map((id) => ({ id, kind: null, title: null })) }
+          : undefined,
+      };
 
       // Resolve taskId if it's an identifier
       if (createData.taskId) {
@@ -166,8 +174,8 @@ export const briefRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const model = new BriefModel(ctx.serverDB, ctx.userId);
-        const brief = await model.resolve(input.id, {
+        const service = new BriefService(ctx.serverDB, ctx.userId);
+        const brief = await service.resolve(input.id, {
           action: input.action,
           comment: input.comment,
         });

@@ -105,7 +105,7 @@ describe('InternalEditor', () => {
 
       // Find the Editor component's container
       const editorContainer = container.querySelector('[data-lexical-editor]')?.closest('div');
-      // The style should include paddingBottom: 64 (default) merged with custom styles
+      // The style should include paddingBottom: 32 (default) merged with custom styles
       expect(editorContainer).toBeTruthy();
     });
   });

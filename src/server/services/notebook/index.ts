@@ -1,7 +1,9 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 
+import type { AgentDocumentSourceType } from '@/database/models/agentDocuments/types';
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { DocumentService } from '@/server/services/document';
 
 interface DocumentServiceResult {
   content: string | null;
@@ -28,7 +30,7 @@ const toServiceResult = (doc: {
   fileType: string;
   id: string;
   source: string;
-  sourceType: 'api' | 'file' | 'web' | 'topic';
+  sourceType: AgentDocumentSourceType;
   title: string | null;
   totalCharCount: number;
   updatedAt: Date;
@@ -39,17 +41,19 @@ const toServiceResult = (doc: {
   fileType: doc.fileType,
   id: doc.id,
   source: doc.source,
-  sourceType: doc.sourceType === 'topic' ? 'api' : doc.sourceType,
+  sourceType: doc.sourceType === 'file' || doc.sourceType === 'web' ? doc.sourceType : 'api',
   title: doc.title,
   totalCharCount: doc.totalCharCount,
   updatedAt: doc.updatedAt,
 });
 
 export class NotebookRuntimeService {
+  private documentService: DocumentService;
   private documentModel: DocumentModel;
   private topicDocumentModel: TopicDocumentModel;
 
   constructor(options: NotebookRuntimeServiceOptions) {
+    this.documentService = new DocumentService(options.serverDB, options.userId);
     this.documentModel = new DocumentModel(options.serverDB, options.userId);
     this.topicDocumentModel = new TopicDocumentModel(options.serverDB, options.userId);
   }
@@ -73,7 +77,7 @@ export class NotebookRuntimeService {
 
   deleteDocument = async (id: string): Promise<void> => {
     await this.topicDocumentModel.deleteByDocumentId(id);
-    await this.documentModel.delete(id);
+    await this.documentService.deleteDocument(id);
   };
 
   getDocument = async (id: string): Promise<DocumentServiceResult | undefined> => {

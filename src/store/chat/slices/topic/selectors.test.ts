@@ -1,4 +1,3 @@
-import { TopicDisplayMode } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
 
@@ -414,13 +413,10 @@ describe('topicSelectors', () => {
         activeAgentId: 'test',
       });
 
-    it('should group by createdAt when displayMode is ByCreatedTime', () => {
+    it('should group by createdAt when sortBy is createdAt', () => {
       const state = createStateWithTopics(topicsWithDifferentTimes);
 
-      const grouped = topicSelectors.groupedTopicsForSidebar(
-        20,
-        TopicDisplayMode.ByCreatedTime,
-      )(state);
+      const grouped = topicSelectors.groupedTopicsForSidebar(20, 'createdAt')(state);
 
       // "Old but active" was created last year, so it should be in a separate group from "New and active"
       expect(grouped.length).toBeGreaterThanOrEqual(2);
@@ -430,13 +426,10 @@ describe('topicSelectors', () => {
       expect(groupIds).toContain(dayjs(lastYear).year().toString());
     });
 
-    it('should group by updatedAt when displayMode is ByUpdatedTime', () => {
+    it('should group by updatedAt when sortBy is updatedAt', () => {
       const state = createStateWithTopics(topicsWithDifferentTimes);
 
-      const grouped = topicSelectors.groupedTopicsForSidebar(
-        20,
-        TopicDisplayMode.ByUpdatedTime,
-      )(state);
+      const grouped = topicSelectors.groupedTopicsForSidebar(20, 'updatedAt')(state);
 
       // Both topics have updatedAt = now, so they should be in the same group
       expect(grouped).toHaveLength(1);
@@ -447,10 +440,7 @@ describe('topicSelectors', () => {
     it('should return empty array when no topics exist', () => {
       const state = merge(initialStore, { activeAgentId: 'test' });
 
-      const grouped = topicSelectors.groupedTopicsForSidebar(
-        20,
-        TopicDisplayMode.ByUpdatedTime,
-      )(state);
+      const grouped = topicSelectors.groupedTopicsForSidebar(20, 'updatedAt')(state);
 
       expect(grouped).toEqual([]);
     });
@@ -466,10 +456,7 @@ describe('topicSelectors', () => {
 
       const state = createStateWithTopics(manyTopics);
 
-      const grouped = topicSelectors.groupedTopicsForSidebar(
-        3,
-        TopicDisplayMode.ByUpdatedTime,
-      )(state);
+      const grouped = topicSelectors.groupedTopicsForSidebar(3, 'updatedAt')(state);
 
       const totalChildren = grouped.reduce((sum, g) => sum + g.children.length, 0);
       expect(totalChildren).toBe(3);

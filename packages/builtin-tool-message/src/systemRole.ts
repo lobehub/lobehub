@@ -13,13 +13,42 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 <bot_management>
 1. **listPlatforms** — List all supported platforms and their required credential fields
 2. **listBots** — List configured bots for the current agent (with runtime status)
-3. **getBotDetail** — Get detailed info about a specific bot
-4. **createBot** — Create a new bot integration (requires agentId, platform, applicationId, credentials)
-5. **updateBot** — Update bot credentials or settings
+3. **getBotDetail** — Get detailed info about a specific bot (returns \`settings\` — read this BEFORE \`updateBot\` for any field-level edit)
+4. **createBot** — Create a new bot integration (requires agentId, platform, applicationId, credentials; optional initial settings)
+5. **updateBot** — Update bot credentials or access-policy settings (DM policy, allowlists, owner userId, etc.)
 6. **deleteBot** — Remove a bot integration
 7. **toggleBot** — Enable or disable a bot
 8. **connectBot** — Start a bot (establish connection to the platform)
 </bot_management>
+
+<access_policies>
+The bot's \`settings\` JSON column controls **who can talk to the bot** on every platform. Use \`updateBot({ botId, settings: {...} })\` to change any of the keys below. Settings is **partial-update at the key level** (untouched keys preserved), but **arrays are overwrite-replace** (see read-modify-write below).
+
+**dmPolicy** — gate inbound 1:1 DMs:
+- \`open\` (default): anyone can DM the bot
+- \`allowlist\`: only users in \`allowFrom\` can DM (fails closed when list is empty)
+- \`pairing\`: same as allowlist, but a non-listed sender receives a one-time code; the owner runs \`/approve <code>\` in their own DM to add the applicant. **Requires \`settings.userId\`** (owner's platform user ID) — without it the validator rejects the save.
+- \`disabled\`: ignore all DMs
+
+Typical asks → action:
+- "lock my bot down so only I can DM" → \`updateBot({ settings: { dmPolicy: 'pairing', userId: '<owner platform ID>' } })\`
+- "let anyone DM again" → \`updateBot({ settings: { dmPolicy: 'open' } })\`
+- "stop accepting DMs for now" → \`updateBot({ settings: { dmPolicy: 'disabled' } })\`
+
+**allowFrom** — global user-ID allowlist, format \`[{ id, name? }]\`. When non-empty, applies to **every** inbound surface (DM, group, threads), regardless of dmPolicy/groupPolicy. The runtime only matches \`id\`; \`name\` is an operator-facing label so the human can recognise the entry months later — always include a name when you have one (display name, handle, etc.).
+
+**groupPolicy** + **groupAllowFrom** — same shape but for group/channel/thread traffic. \`groupAllowFrom\` items are channel/group/thread IDs (e.g. Discord channel IDs from "Copy Channel ID"), not user IDs.
+
+**Read-modify-write for allowFrom and groupAllowFrom (CRITICAL):**
+Both arrays are written as a whole — passing \`{ allowFrom: [{ id: 'X' }] }\` REPLACES the entire list, not appends. To add or remove a single entry:
+1. Call \`getBotDetail(botId)\` and read \`settings.allowFrom\` (it may be missing — treat as \`[]\`).
+2. Mutate the array locally (\`push\` to add, \`filter\` to remove). Preserve every existing \`{ id, name }\` you didn't intend to touch.
+3. Call \`updateBot({ botId, settings: { allowFrom: [...newArray] } })\`.
+
+Skipping step 1 will silently wipe other entries. Same workflow applies to \`groupAllowFrom\`.
+
+**Validation behaviour:** the server validates settings before persisting and returns \`updateBot error: <field>: <reason>\` when something fails (e.g. \`userId: Pairing policy requires the owner's Platform User ID.\`). Surface that message to the user and ask for the missing value rather than retrying blindly.
+</access_policies>
 
 <messaging_capabilities>
 1. **sendDirectMessage** — Send a private/direct message to a user by their platform user ID (auto-creates DM channel)

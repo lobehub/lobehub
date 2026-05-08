@@ -12,8 +12,31 @@ import { type Store as ConversationStore } from '../../action';
 import { type MessageDispatch } from './reducer';
 import { messagesReducer } from './reducer';
 import { dataSelectors } from './selectors';
+import { stabilizeReferences } from './stabilizeReferences';
 
 const log = debug('lobe-render:features:Conversation');
+
+const mergeFetchedMessagesWithLocalState = (
+  fetchedMessages: UIChatMessage[],
+  localMessages: UIChatMessage[],
+): UIChatMessage[] => {
+  if (localMessages.length === 0 || fetchedMessages.length === 0) return fetchedMessages;
+
+  const localById = new Map(localMessages.map((message) => [message.id, message]));
+  let changed = false;
+
+  const mergedMessages = fetchedMessages.map((message) => {
+    const localMessage = localById.get(message.id);
+
+    if (!localMessage) return message;
+    if (localMessage.updatedAt <= message.updatedAt) return message;
+
+    changed = true;
+    return localMessage;
+  });
+
+  return changed ? mergedMessages : fetchedMessages;
+};
 
 /**
  * Data Actions
@@ -84,7 +107,7 @@ export const dataSlice: StateCreator<
         metadata: { ...newDisplayMessages[index].metadata, ...payload.value },
       };
 
-      set({ displayMessages: newDisplayMessages }, false, {
+      set({ displayMessages: stabilizeReferences(displayMessages, newDisplayMessages) }, false, {
         payload,
         type: `dispatchMessage/${payload.type}`,
       });
@@ -104,16 +127,19 @@ export const dataSlice: StateCreator<
 
     // Re-parse for display order and grouping
     const { flatList } = parse(newDbMessages);
+    // parse() rebuilds every message/block/tool reference, so pin unchanged
+    // subtrees back to their previous identity to preserve memo bailouts.
+    const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
     log(
       '[dispatchMessage] updated | contextKey=%s | prevCount=%d | newCount=%d | displayCount=%d',
       contextKey,
       dbMessages.length,
       newDbMessages.length,
-      flatList.length,
+      stableFlatList.length,
     );
 
-    set({ dbMessages: newDbMessages, displayMessages: flatList }, false, {
+    set({ dbMessages: newDbMessages, displayMessages: stableFlatList }, false, {
       payload,
       type: `dispatchMessage/${payload.type}`,
     });
@@ -128,17 +154,18 @@ export const dataSlice: StateCreator<
 
     // Parse messages using conversation-flow
     const { flatList } = parse(messages);
+    const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
     log(
       '[replaceMessages] | contextKey=%s | prevCount=%d | newCount=%d | displayCount=%d | messageIds=%o',
       contextKey,
       prevDbMessages.length,
       messages.length,
-      flatList.length,
+      stableFlatList.length,
       messages.slice(0, 5).map((m) => m.id),
     );
 
-    set({ dbMessages: messages, displayMessages: flatList }, false, 'replaceMessages');
+    set({ dbMessages: messages, displayMessages: stableFlatList }, false, 'replaceMessages');
 
     // Sync changes to external store (ChatStore)
     get().onMessagesChange?.(messages, get().context);
@@ -184,30 +211,32 @@ export const dataSlice: StateCreator<
           if (!context.topicId) return;
 
           const prevDbMessages = get().dbMessages;
+          const mergedMessages = mergeFetchedMessagesWithLocalState(data, prevDbMessages);
           const storeContextKey = messageMapKey(get().context);
 
           // Parse messages using conversation-flow
-          const { flatList } = parse(data);
+          const { flatList } = parse(mergedMessages);
+          const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
 
           log(
             '[useFetchMessages] onData | requestContextKey=%s | storeContextKey=%s | prevCount=%d | fetchedCount=%d | displayCount=%d | messageIds=%o',
             contextKey,
             storeContextKey,
             prevDbMessages.length,
-            data.length,
-            flatList.length,
-            data.slice(0, 5).map((m) => m.id),
+            mergedMessages.length,
+            stableFlatList.length,
+            mergedMessages.slice(0, 5).map((m) => m.id),
           );
 
           set({
-            dbMessages: data,
-            displayMessages: flatList,
+            dbMessages: mergedMessages,
+            displayMessages: stableFlatList,
             messagesInit: true,
           });
 
           // Call onMessagesChange callback with the request context (not current context)
           // This ensures data is stored to the correct topic even if user switched topics
-          get().onMessagesChange?.(data, context);
+          get().onMessagesChange?.(mergedMessages, context);
         },
       },
     );

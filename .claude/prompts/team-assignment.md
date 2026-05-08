@@ -2,15 +2,14 @@
 
 ## Quick Reference by Name
 
-- **@arvinxx**: Last resort only, mention for priority:high issues, tool calling , mcp
+- **@arvinxx**: General/uncategorized issues (default assignee), priority:high issues, tool calling, mcp, database
 - **@canisminor1990**: Design, UI components, editor, markdown rendering
-- **@tjx666**: Image/video generation, vision, cloud version, documentation, TTS, auth, login/register
-- **@ONLY-yours**: Performance, streaming, settings, general bugs, web platform, marketplace
-- **@Innei**: Knowledge base, files (KB-related), group chat
-- **@nekomeowww**: Memory, backend, deployment, DevOps
+- **@tjx666**: Model providers and configuration, new model additions, image/video generation, vision, cloud version, documentation, TTS, auth, login/register, database
+- **@ONLY-yours**: Performance, streaming, settings, web platform, marketplace, agent builder, schedule task
+- **@Innei**: Knowledge base, files (KB-related), group chat, Electron, desktop client, build system
+- **@nekomeowww**: Memory, backend, deployment, DevOps, database
 - **@sudongyuer**: Mobile app (React Native)
-- **@sxjeru**: Model providers and configuration
-- **@rdmclin2**: Team workspace
+- **@rdmclin2**: Team workspace, IM and bot integration
 - **@tcmonster**: Subscription, refund, recharge, business cooperation
 
 Quick reference for assigning issues based on labels.
@@ -21,14 +20,14 @@ Quick reference for assigning issues based on labels.
 
 | Label            | Owner   | Notes                                        |
 | ---------------- | ------- | -------------------------------------------- |
-| All `provider:*` | @sxjeru | Model configuration and provider integration |
+| All `provider:*` | @tjx666 | Model configuration and provider integration |
 
 ### Platform Labels (platform:\*)
 
 | Label              | Owner       | Notes                                  |
 | ------------------ | ----------- | -------------------------------------- |
 | `platform:mobile`  | @sudongyuer | React Native mobile app                |
-| `platform:desktop` | @ONLY-yours | Electron desktop client (general)      |
+| `platform:desktop` | @Innei      | Electron desktop client, build system  |
 | `platform:web`     | @ONLY-yours | Web platform (unless specific feature) |
 
 ### Feature Labels (feature:\*)
@@ -60,6 +59,9 @@ Quick reference for assigning issues based on labels.
 | `feature:group-chat`     | @arvinxx        | Group chat functionality                                                |
 | `feature:memory`         | @nekomeowww     | Memory feature                                                          |
 | `feature:team-workspace` | @rdmclin2       | Team workspace application                                              |
+| `feature:im-integration` | @rdmclin2       | IM and bot integration (Slack, Discord, etc.)                           |
+| `feature:agent-builder`  | @ONLY-yours     | Agent builder                                                           |
+| `feature:schedule-task`  | @ONLY-yours     | Schedule task                                                           |
 | `feature:subscription`   | @tcmonster      | Subscription and billing                                                |
 | `feature:refund`         | @tcmonster      | Refund requests                                                         |
 | `feature:recharge`       | @tcmonster      | Recharge and payment                                                    |
@@ -97,11 +99,10 @@ Quick reference for assigning issues based on labels.
 
 1. **Specific feature owner** - e.g., `feature:knowledge-base` → @RiverTwilight
 2. **Platform owner** - e.g., `platform:mobile` → @sudongyuer
-3. **Provider owner** - e.g., `provider:*` → @sxjeru
+3. **Provider owner** - e.g., `provider:*` → @tjx666
 4. **Component owner** - e.g., 💄 Design → @canisminor1990
 5. **Infrastructure owner** - e.g., `deployment:*` → @nekomeowww
-6. **General maintainer** - @ONLY-yours for general bugs/issues
-7. **Last resort** - @arvinxx (only if no clear owner)
+6. **Default assignee** - @arvinxx for general/uncategorized issues
 
 ### Special Cases
 
@@ -118,25 +119,24 @@ Quick reference for assigning issues based on labels.
 
 **No clear owner:**
 
-- Assign to @ONLY-yours for general issues
-- Only mention @arvinxx if critical and truly unclear
+- Assign to @arvinxx for general issues
 
 ## Comment Templates
 
 **Single owner:**
 
-```
+```plaintext
 @username - This is a [feature/component] issue. Please take a look.
 ```
 
 **Multiple owners:**
 
-```
+```plaintext
 @primary @secondary - This involves [features]. Please coordinate.
 ```
 
 **High priority:**
 
-```
+```plaintext
 @owner @arvinxx - High priority [feature] issue.
 ```

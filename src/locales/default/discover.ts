@@ -855,11 +855,6 @@ export default {
 
   'publishedTime': 'Published',
 
-  'time.formatOtherYear': 'MMM D, YYYY',
-  'time.formatThisYear': 'MMM D',
-  'time.today': 'Today',
-  'time.yesterday': 'Yesterday',
-
   'search.placeholder': 'Search by name, description, or keywords...',
 
   'search.result': '{{count}} results about <highlight>{{keyword}}</highlight>',
@@ -1146,6 +1141,10 @@ export default {
   'user.myProfile': 'My Profile',
 
   'user.noAgents': 'This user hasn’t published any Agents yet',
+
+  'user.noAgents.ownerDescription': 'Create your first Agent and share it with the Community.',
+
+  'user.noAgents.title': 'No Agents yet',
 
   'user.noFavoriteAgents': 'No saved Agents yet',
 

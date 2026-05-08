@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
+import { hookDispatcher } from '../hooks';
 
 // Mock all heavy dependencies to isolate executeStep logic
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'http://localhost:3010' } }));
@@ -29,9 +30,6 @@ vi.mock('@/server/modules/AgentRuntime/RuntimeExecutors', () => ({
   createRuntimeExecutors: vi.fn(() => ({})),
 }));
 vi.mock('@/server/services/mcp', () => ({ mcpService: {} }));
-vi.mock('@/server/services/pluginGateway', () => ({
-  PluginGatewayService: vi.fn().mockImplementation(() => ({})),
-}));
 vi.mock('@/server/services/queue', () => ({
   QueueService: vi.fn().mockImplementation(() => ({
     getImpl: vi.fn(() => ({})),
@@ -84,7 +82,7 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     });
   }
 
-  it('should call onComplete callback when skipping interrupted operation', async () => {
+  it('should dispatch onComplete hook when skipping interrupted operation', async () => {
     const service = createService();
 
     const coordinator = (service as any).coordinator;
@@ -94,8 +92,7 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
       lastModified: new Date().toISOString(),
     });
 
-    const onComplete = vi.fn();
-    service.registerStepCallbacks('op-123', { onComplete });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
     await service.executeStep({
       operationId: 'op-123',
@@ -103,14 +100,20 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
       context: { phase: 'user_input' } as any,
     });
 
-    expect(onComplete).toHaveBeenCalledWith({
-      finalState: expect.objectContaining({ status: 'interrupted' }),
-      operationId: 'op-123',
-      reason: 'interrupted',
-    });
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-123',
+      'onComplete',
+      expect.objectContaining({
+        operationId: 'op-123',
+        reason: 'interrupted',
+      }),
+      undefined,
+    );
+
+    dispatchSpy.mockRestore();
   });
 
-  it('should call onComplete with reason "done" when skipping done operation', async () => {
+  it('should dispatch onComplete hook with reason "done" when skipping done operation', async () => {
     const service = createService();
 
     const coordinator = (service as any).coordinator;
@@ -120,8 +123,7 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
       lastModified: new Date().toISOString(),
     });
 
-    const onComplete = vi.fn();
-    service.registerStepCallbacks('op-456', { onComplete });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
     await service.executeStep({
       operationId: 'op-456',
@@ -129,14 +131,20 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
       context: { phase: 'user_input' } as any,
     });
 
-    expect(onComplete).toHaveBeenCalledWith({
-      finalState: expect.objectContaining({ status: 'done' }),
-      operationId: 'op-456',
-      reason: 'done',
-    });
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-456',
+      'onComplete',
+      expect.objectContaining({
+        operationId: 'op-456',
+        reason: 'done',
+      }),
+      undefined,
+    );
+
+    dispatchSpy.mockRestore();
   });
 
-  it('should unregister callbacks after onComplete is called on early exit', async () => {
+  it('should unregister hooks after onComplete is dispatched on early exit', async () => {
     const service = createService();
 
     const coordinator = (service as any).coordinator;
@@ -146,8 +154,8 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
       lastModified: new Date().toISOString(),
     });
 
-    const onComplete = vi.fn();
-    service.registerStepCallbacks('op-789', { onComplete });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister');
 
     await service.executeStep({
       operationId: 'op-789',
@@ -155,8 +163,11 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
       context: { phase: 'user_input' } as any,
     });
 
-    // Callbacks should be unregistered after onComplete
-    expect(service.getStepCallbacks('op-789')).toBeUndefined();
+    // Hooks should be unregistered after completion dispatch
+    expect(unregisterSpy).toHaveBeenCalledWith('op-789');
+
+    dispatchSpy.mockRestore();
+    unregisterSpy.mockRestore();
   });
 
   it('should NOT skip step when operation status is "running"', async () => {
@@ -304,7 +315,7 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
     return service;
   };
 
-  it('should still call onComplete when Redis fails in catch block (ECONNRESET scenario)', async () => {
+  it('should still dispatch onComplete hooks when Redis fails in catch block (ECONNRESET scenario)', async () => {
     const service = createService();
     const coordinator = (service as any).coordinator;
     const streamManager = (service as any).streamManager;
@@ -339,10 +350,9 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
     // saveAgentState fails (Redis is down)
     coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('Redis ECONNRESET'));
 
-    const onComplete = vi.fn();
-    service.registerStepCallbacks('op-redis-fail', { onComplete });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
-    // executeStep re-throws the original error after running callbacks
+    // executeStep re-throws the original error after running hooks
     await expect(
       service.executeStep({
         operationId: 'op-redis-fail',
@@ -351,16 +361,21 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
       }),
     ).rejects.toThrow();
 
-    // onComplete MUST be called even when Redis is completely down
-    expect(onComplete).toHaveBeenCalledWith(
+    // onComplete hooks MUST be dispatched even when Redis is completely down
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-redis-fail',
+      'onComplete',
       expect.objectContaining({
         operationId: 'op-redis-fail',
         reason: 'error',
       }),
+      undefined,
     );
+
+    dispatchSpy.mockRestore();
   });
 
-  it('should still trigger completion webhook when Redis fails in catch block', async () => {
+  it('should still dispatch onError hooks when Redis fails in catch block', async () => {
     const service = createService();
     const coordinator = (service as any).coordinator;
     const streamManager = (service as any).streamManager;
@@ -391,12 +406,9 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
 
     coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('Redis ECONNRESET'));
 
-    // Spy on triggerCompletionWebhook
-    const triggerSpy = vi
-      .spyOn(service as any, 'triggerCompletionWebhook')
-      .mockResolvedValue(undefined);
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
-    // executeStep re-throws the original error after running callbacks
+    // executeStep re-throws the original error after running hooks
     await expect(
       service.executeStep({
         operationId: 'op-redis-webhook',
@@ -405,12 +417,18 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
       }),
     ).rejects.toThrow();
 
-    // Completion webhook MUST be triggered even when Redis is down
-    expect(triggerSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'error' }),
+    // Both onComplete and onError hooks MUST be dispatched when reason is error
+    expect(dispatchSpy).toHaveBeenCalledWith(
       'op-redis-webhook',
-      'error',
+      'onError',
+      expect.objectContaining({
+        operationId: 'op-redis-webhook',
+        reason: 'error',
+      }),
+      undefined,
     );
+
+    dispatchSpy.mockRestore();
   });
 
   it('should include stepCount in fallback error state when state reload fails', async () => {
@@ -514,15 +532,23 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
 
     coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
 
-    const stateWithWebhook = {
+    const stateWithHooks = {
       status: 'running',
       stepCount: 5,
       lastModified: new Date().toISOString(),
-      metadata: { completionWebhook: 'https://example.com/webhook' },
+      metadata: {
+        _hooks: [
+          {
+            id: 'test-hook',
+            type: 'onComplete',
+            webhook: { url: 'https://example.com/webhook' },
+          },
+        ],
+      },
     };
 
-    // loadAgentState always succeeds (returns state with webhook metadata)
-    coordinator.loadAgentState = vi.fn().mockResolvedValue(stateWithWebhook);
+    // loadAgentState always succeeds (returns state with hook metadata)
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(stateWithHooks);
 
     // saveAgentState fails (write-only Redis failure)
     coordinator.saveAgentState = vi.fn().mockRejectedValue(new Error('Redis write failed'));
@@ -535,8 +561,7 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
       return Promise.reject(new Error('Redis ECONNRESET'));
     });
 
-    const onComplete = vi.fn();
-    service.registerStepCallbacks('op-save-fail', { onComplete });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
     await expect(
       service.executeStep({
@@ -546,18 +571,330 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
       }),
     ).rejects.toThrow();
 
-    // onComplete must receive the full state with metadata (not a minimal fallback)
-    expect(onComplete).toHaveBeenCalledWith(
+    // onComplete hooks must be dispatched with the full state including metadata
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-save-fail',
+      'onComplete',
       expect.objectContaining({
+        operationId: 'op-save-fail',
+        reason: 'error',
         finalState: expect.objectContaining({
           metadata: expect.objectContaining({
-            completionWebhook: 'https://example.com/webhook',
+            _hooks: expect.arrayContaining([
+              expect.objectContaining({
+                id: 'test-hook',
+                webhook: { url: 'https://example.com/webhook' },
+              }),
+            ]),
           }),
           status: 'error',
         }),
-        operationId: 'op-save-fail',
-        reason: 'error',
       }),
+      expect.anything(),
     );
+
+    dispatchSpy.mockRestore();
+  });
+});
+
+describe('AgentRuntimeService.executeStep - error-path snapshot finalize (LOBE-8533)', () => {
+  it('finalizes a snapshot with completionReason=error and a synthetic failed step when the executor throws', async () => {
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      // A partial WITH steps already recorded — simulates a tool dispatch
+      // that succeeded for several prior steps before persist-fatal hit.
+      loadPartial: vi.fn().mockResolvedValue({
+        startedAt: 1_777_960_000_000,
+        steps: [
+          {
+            stepIndex: 0,
+            stepType: 'call_llm',
+            startedAt: 1_777_960_000_000,
+            completedAt: 1_777_960_001_000,
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 100,
+          },
+        ],
+      }),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+
+    // First load returns a running state to enter step execution; second
+    // load (in the catch) returns the same so finalStateWithError carries
+    // metadata.
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      status: 'running',
+      stepCount: 1,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    // Force the runtime.step path to throw — simulates markPersistFatal
+    // bubbling up from RuntimeExecutors.
+    const persistFatal = new Error('parent message missing');
+    (persistFatal as any).errorType = 'ConversationParentMissing';
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(persistFatal) },
+    });
+
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'tool_use' } as any,
+        operationId: 'op-fatal-1',
+        stepIndex: 1,
+      }),
+    ).rejects.toThrow();
+
+    // The op MUST land in the canonical S3 path with completionReason=error
+    expect(snapshotStore.save).toHaveBeenCalledTimes(1);
+    const saved = snapshotStore.save.mock.calls[0][0];
+    expect(saved).toMatchObject({
+      agentId: 'agt-1',
+      completionReason: 'error',
+      operationId: 'op-fatal-1',
+      topicId: 'tpc-1',
+      userId: 'user-1',
+    });
+    expect(saved.error).toMatchObject({ type: 'ConversationParentMissing' });
+
+    // The failing step must be appended so the snapshot's step count tracks
+    // the assistant message that triggered the failed call (otherwise the
+    // partial would lag by one and the dangling tool_use would still look
+    // unattributed).
+    const failedStep = saved.steps.find((s: any) => s.stepIndex === 1);
+    expect(failedStep).toBeDefined();
+    expect(failedStep.events?.[0]).toMatchObject({ type: 'error' });
+
+    expect(snapshotStore.removePartial).toHaveBeenCalledWith('op-fatal-1');
+
+    dispatchSpy.mockRestore();
+  });
+
+  it('skips finalize when there is no partial (op never recorded a step)', async () => {
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn().mockResolvedValue(null),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: {},
+      status: 'running',
+      stepCount: 0,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(new Error('boom')) },
+    });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'user_input' } as any,
+        operationId: 'op-no-partial',
+        stepIndex: 0,
+      }),
+    ).rejects.toThrow();
+
+    // No partial -> nothing to finalize. Don't write an empty snapshot.
+    expect(snapshotStore.save).not.toHaveBeenCalled();
+    expect(snapshotStore.removePartial).not.toHaveBeenCalled();
+
+    dispatchSpy.mockRestore();
+  });
+
+  it('reports totalSteps from the finalized step array, not stepCount, on the error path', async () => {
+    // Partial has step 0 from a prior successful step. The catch path will
+    // synthesize step 1 for the failure. After finalize, partial.steps.length
+    // is 2 — but Redis-loaded stepCount is still 1 (last completed step
+    // before failure). The snapshot must report 2.
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn().mockResolvedValue({
+        startedAt: 1_777_960_000_000,
+        steps: [
+          {
+            stepIndex: 0,
+            stepType: 'call_llm',
+            startedAt: 1_777_960_000_000,
+            completedAt: 1_777_960_001_000,
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 100,
+          },
+        ],
+      }),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      status: 'running',
+      stepCount: 1,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(new Error('boom')) },
+    });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'tool_use' } as any,
+        operationId: 'op-totalsteps',
+        stepIndex: 1,
+      }),
+    ).rejects.toThrow();
+
+    expect(snapshotStore.save).toHaveBeenCalledTimes(1);
+    const saved = snapshotStore.save.mock.calls[0][0];
+    expect(saved.steps).toHaveLength(2);
+    expect(saved.totalSteps).toBe(2);
+
+    dispatchSpy.mockRestore();
+  });
+
+  it('does not duplicate a step when the failing index was already appended to the partial', async () => {
+    // Simulates: success-path append wrote stepIndex=1 to the partial during
+    // a prior attempt, then a later failure (e.g. queue scheduling threw)
+    // sent the operation into a retry whose catch path synthesizes the same
+    // stepIndex. The error event must be merged into the existing record
+    // instead of pushing a duplicate that corrupts ordering and metrics.
+    const snapshotStore = {
+      get: vi.fn(),
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn().mockResolvedValue({
+        startedAt: 1_777_960_000_000,
+        steps: [
+          {
+            stepIndex: 0,
+            stepType: 'call_llm',
+            startedAt: 1_777_960_000_000,
+            completedAt: 1_777_960_001_000,
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 100,
+          },
+          {
+            stepIndex: 1,
+            stepType: 'call_tool',
+            startedAt: 1_777_960_002_000,
+            completedAt: 1_777_960_003_000,
+            events: [{ type: 'done' }],
+            executionTimeMs: 1000,
+            totalCost: 0,
+            totalTokens: 50,
+          },
+        ],
+      }),
+      removePartial: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
+      savePartial: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      snapshotStore: snapshotStore as any,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.releaseStepLock = vi.fn().mockResolvedValue(undefined);
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    // stepCount=1 so the layer-2 early-exit guard (stepCount > stepIndex) does
+    // not skip this attempt — we want the catch path to run.
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      status: 'running',
+      stepCount: 1,
+    });
+    coordinator.saveAgentState = vi.fn().mockResolvedValue(undefined);
+
+    vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({
+      runtime: { step: vi.fn().mockRejectedValue(new Error('queue down')) },
+    });
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
+
+    await expect(
+      service.executeStep({
+        context: { phase: 'tool_use' } as any,
+        operationId: 'op-dedup',
+        stepIndex: 1,
+      }),
+    ).rejects.toThrow();
+
+    expect(snapshotStore.save).toHaveBeenCalledTimes(1);
+    const saved = snapshotStore.save.mock.calls[0][0];
+
+    // Exactly one step per index — no duplicates from the synthetic append.
+    expect(saved.steps).toHaveLength(2);
+    expect(saved.steps.map((s: any) => s.stepIndex)).toEqual([0, 1]);
+
+    // The original stepIndex=1 record is preserved, with the error event
+    // appended after the existing 'done' event.
+    const merged = saved.steps.find((s: any) => s.stepIndex === 1);
+    expect(merged.events).toHaveLength(2);
+    expect(merged.events[0]).toMatchObject({ type: 'done' });
+    expect(merged.events[1]).toMatchObject({ type: 'error' });
+
+    dispatchSpy.mockRestore();
   });
 });

@@ -3,7 +3,7 @@ import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { type API } from '@lobechat/prompts';
 import { apiPrompt, toolPrompt } from '@lobechat/prompts';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { type IEditor } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { Icon, Image } from '@lobehub/ui';
@@ -41,7 +41,7 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
 
 const toolNameResolver = new ToolNameResolver();
 
-const buildApiList = (identifier: string, manifest?: LobeChatPluginManifest): API[] => {
+const buildApiList = (identifier: string, manifest?: ToolManifest): API[] => {
   if (!manifest?.api) return [];
 
   return manifest.api.map((api) => ({
@@ -58,7 +58,7 @@ const hydrateSystemRole = (systemRole?: string) => {
 
 const resolveInstructions = (
   metadata: MentionMetadata,
-  manifest?: LobeChatPluginManifest,
+  manifest?: ToolManifest,
   fallbackDesc?: string,
 ) => {
   if (metadata.instructions) return metadata.instructions;
@@ -70,7 +70,7 @@ const resolveInstructions = (
 
 const resolveApiName = (
   metadata: MentionMetadata,
-  manifest: LobeChatPluginManifest | undefined,
+  manifest: ToolManifest | undefined,
   pluginId?: string,
   fallbackLabel?: string,
 ) => {
@@ -93,7 +93,7 @@ const resolveApiName = (
 
 const resolveApiDescription = (
   metadata: MentionMetadata,
-  manifest: LobeChatPluginManifest | undefined,
+  manifest: ToolManifest | undefined,
   pluginId: string | undefined,
   apiName?: string,
 ) => {

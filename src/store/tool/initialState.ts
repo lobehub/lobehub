@@ -10,12 +10,10 @@ import {
   type LobehubSkillStoreState,
 } from './slices/lobehubSkillStore/initialState';
 import { initialMCPStoreState, type MCPStoreState } from './slices/mcpStore/initialState';
-import { initialPluginStoreState, type PluginStoreState } from './slices/oldStore/initialState';
 import { initialPluginState, type PluginState } from './slices/plugin/initialState';
 
 export type ToolStoreState = PluginState &
   CustomPluginState &
-  PluginStoreState &
   BuiltinToolState &
   MCPStoreState &
   KlavisStoreState &
@@ -25,7 +23,6 @@ export type ToolStoreState = PluginState &
 export const initialState: ToolStoreState = {
   ...initialPluginState,
   ...initialCustomPluginState,
-  ...initialPluginStoreState,
   ...initialBuiltinToolState,
   ...initialMCPStoreState,
   ...initialKlavisStoreState,

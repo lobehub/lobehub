@@ -11,13 +11,8 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
-export enum TopicDisplayMode {
-  ByCreatedTime = 'byTime',
-  ByUpdatedTime = 'byUpdatedTime',
-  Flat = 'flat',
-  // AscMessages = 'ascMessages',
-  // DescMessages = 'descMessages',
-}
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat';
+export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 export interface GroupedTopic {
   children: ChatTopic[];
@@ -40,19 +35,86 @@ export interface ChatTopicBotContext {
   platformThreadId: string;
 }
 
+export interface OnboardingFeedbackEntry {
+  comment?: string;
+  rating: 'good' | 'bad';
+  submittedAt: string;
+}
+
+export interface OnboardingAgentMarketplacePickSnapshot {
+  categoryHints: string[];
+  installedAgentIds?: string[];
+  requestId: string;
+  resolvedAt: string;
+  selectedTemplateIds?: string[];
+  skippedAgentIds?: string[];
+  skipReason?: string;
+  status: 'cancelled' | 'skipped' | 'submitted';
+}
+
+export interface OnboardingSessionSnapshot {
+  agentIdentityCompletedAt?: string;
+  agentMarketplacePick?: OnboardingAgentMarketplacePickSnapshot;
+  discoveryCompletedAt?: string;
+  finalAgentNames?: string[];
+  finishedAt?: string;
+  lastActiveAt: string;
+  phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
+  startedAt: string;
+  userIdentityCompletedAt?: string;
+  version: number;
+}
+
 export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
+  boundDeviceId?: string;
   /**
    * Cron job ID that triggered this topic creation (if created by scheduled task)
    */
   cronJobId?: string;
+  /**
+   * Persistent session id for a heterogeneous agent.
+   * Saved after each turn so the next message in the same topic can resume
+   * the conversation (e.g. Claude Code CLI uses `--resume <sessionId>`).
+   *
+   * Two write paths share this field:
+   *
+   *   - **Desktop renderer** writes from `executeHeterogeneousAgent` after
+   *     the local CLI process finishes. Resume is gated on `workingDirectory`
+   *     equality because CC stores sessions per-cwd under
+   *     `~/.claude/projects/<encoded-cwd>/`.
+   *   - **Cloud server** writes from `aiAgent.heteroFinish` (and from in-stream
+   *     terminal events) when the sandbox CLI run completes. The sandbox
+   *     mounts a stable cwd, so server-side resume does not check
+   *     `workingDirectory`.
+   */
+  heteroSessionId?: string;
   model?: string;
+  /**
+   * Free-form feedback collected after agent onboarding completion.
+   * Comment text is stored only here (not analytics) and is length-capped server-side.
+   */
+  onboardingFeedback?: OnboardingFeedbackEntry;
+  onboardingSession?: OnboardingSessionSnapshot;
   provider?: string;
+  /**
+   * Currently running Gateway operation on this topic.
+   * Set when agent execution starts, cleared when it completes/fails.
+   * Used to reconnect WebSocket after page reload.
+   */
+  runningOperation?: {
+    assistantMessageId: string;
+    operationId: string;
+    scope?: string;
+    threadId?: string | null;
+  } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
-   * Local System working directory (desktop only)
-   * Priority is higher than Agent-level settings
+   * Topic-level working directory (desktop only).
+   * Priority is higher than Agent-level settings. Also serves as the
+   * binding cwd for a CC session — written on first CC execution and
+   * checked on subsequent turns to decide whether `--resume` is safe.
    */
   workingDirectory?: string;
 }
@@ -63,11 +125,15 @@ export interface ChatTopicSummary {
   provider: string;
 }
 
+export type ChatTopicStatus = 'active' | 'completed' | 'archived';
+
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
+  completedAt?: Date | null;
   favorite?: boolean;
   historySummary?: string;
   metadata?: ChatTopicMetadata;
   sessionId?: string;
+  status?: ChatTopicStatus | null;
   title: string;
   trigger?: string | null;
 }
@@ -114,13 +180,19 @@ export interface CreateTopicParams {
   messages?: string[];
   sessionId?: string | null;
   title: string;
+  trigger?: string;
 }
 
 export interface QueryTopicParams {
   agentId?: string | null;
   current?: number;
   /**
+   * Exclude topics by status (e.g. ['completed'])
+   */
+  excludeStatuses?: string[];
+  /**
    * Exclude topics by trigger types (e.g. ['cron'])
+   * Ignored when includeTriggers is provided.
    */
   excludeTriggers?: string[];
   /**
@@ -128,11 +200,20 @@ export interface QueryTopicParams {
    */
   groupId?: string | null;
   /**
+   * Include only topics whose trigger matches one of these values.
+   * Takes precedence over excludeTriggers when provided.
+   */
+  includeTriggers?: string[];
+  /**
    * Whether this is an inbox agent query.
    * When true, also includes legacy inbox topics (sessionId IS NULL AND groupId IS NULL AND agentId IS NULL)
    */
   isInbox?: boolean;
   pageSize?: number;
+  /**
+   * Include only topics matching the given trigger types (positive filter)
+   */
+  triggers?: string[];
 }
 
 /**

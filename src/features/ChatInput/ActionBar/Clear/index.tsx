@@ -1,3 +1,4 @@
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { Popconfirm } from 'antd';
 import { Eraser } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -8,7 +9,6 @@ import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { HotkeyEnum } from '@/types/hotkey';
 
 import Action from '../components/Action';
 

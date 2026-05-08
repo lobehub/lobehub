@@ -1,4 +1,4 @@
-import { extname, join } from 'node:path';
+import path from 'node:path';
 
 import { pathExistsSync } from 'fs-extra';
 
@@ -12,8 +12,10 @@ import { RendererProtocolManager } from './RendererProtocolManager';
 const logger = createLogger('core:RendererUrlManager');
 
 // Vite build with root=monorepo preserves input path structure,
-// so index.html ends up at apps/desktop/index.html in outDir.
-const SPA_ENTRY_HTML = join(rendererDir, 'apps', 'desktop', 'index.html');
+// so index.html / overlay.html / popup.html end up under apps/desktop/ in outDir.
+const SPA_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'index.html');
+const OVERLAY_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'overlay.html');
+const POPUP_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'popup.html');
 
 export class RendererUrlManager {
   private readonly rendererProtocolManager: RendererProtocolManager;
@@ -61,23 +63,36 @@ export class RendererUrlManager {
    */
   buildRendererUrl(path: string): string {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    return `${this.rendererLoadedUrl}${cleanPath}`;
+    const normalizedBase = this.rendererLoadedUrl.replace(/\/+$/, '');
+
+    return `${normalizedBase}${cleanPath}`;
   }
 
   /**
    * Resolve renderer file path in production.
-   * Static assets map directly; all routes fall back to index.html (SPA).
+   * Static assets map directly; /overlay routes fall back to overlay.html;
+   * popup routes go to popup.html; all other routes fall back to index.html (SPA).
    */
   resolveRendererFilePath = async (url: URL): Promise<string | null> => {
     const pathname = url.pathname;
 
     // Static assets: direct file mapping
-    if (pathname.startsWith('/assets/') || extname(pathname)) {
-      const filePath = join(rendererDir, pathname);
+    if (pathname.startsWith('/assets/') || path.extname(pathname)) {
+      const filePath = path.join(rendererDir, pathname);
       return pathExistsSync(filePath) ? filePath : null;
     }
 
-    // All routes fallback to index.html (SPA)
+    // Overlay entry (separate MPA page)
+    if (pathname === '/overlay' || pathname === '/overlay.html') {
+      return OVERLAY_ENTRY_HTML;
+    }
+
+    // Topic popup window has its own SPA bundle.
+    if (pathname === '/popup' || pathname.startsWith('/popup/')) {
+      return POPUP_ENTRY_HTML;
+    }
+
+    // All other routes fallback to index.html (SPA)
     return SPA_ENTRY_HTML;
   };
 

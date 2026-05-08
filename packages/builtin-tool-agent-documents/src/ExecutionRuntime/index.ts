@@ -3,26 +3,43 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import type {
   CopyDocumentArgs,
   CreateDocumentArgs,
-  EditDocumentArgs,
   ListDocumentsArgs,
+  ModifyDocumentNodesArgs,
   ReadDocumentArgs,
-  ReadDocumentByFilenameArgs,
   RemoveDocumentArgs,
   RenameDocumentArgs,
+  ReplaceDocumentContentArgs,
   UpdateLoadRuleArgs,
-  UpsertDocumentByFilenameArgs,
 } from '../types';
 
 interface AgentDocumentRecord {
   content?: string;
+  /**
+   * The underlying `documents` table id. Used for portal rendering
+   * (opening the document in the shared EditorCanvas), which must resolve
+   * the row in `documents` — distinct from `id` which is the
+   * `agentDocuments` association row id.
+   */
+  documentId?: string;
   filename?: string;
+  /**
+   * The `agentDocuments` association row id. This is what the LLM receives
+   * and uses for subsequent operations (read/edit/remove/...).
+   */
   id: string;
+  litexml?: string;
   title?: string;
 }
 
 interface AgentDocumentOperationContext {
   agentId?: string | null;
+  currentDocumentId?: string | null;
+  scope?: string | null;
+  topicId?: string | null;
 }
+
+const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN';
+const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
 
 export interface AgentDocumentsRuntimeService {
   copyDocument: (
@@ -35,9 +52,10 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  editDocument: (
-    params: EditDocumentArgs & {
+  createTopicDocument: (
+    params: CreateDocumentArgs & {
       agentId: string;
+      topicId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
   listDocuments: (
@@ -45,13 +63,19 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord[]>;
-  readDocument: (
-    params: ReadDocumentArgs & {
+  listTopicDocuments: (
+    params: ListDocumentsArgs & {
+      agentId: string;
+      topicId: string;
+    },
+  ) => Promise<AgentDocumentRecord[]>;
+  modifyNodes: (
+    params: ModifyDocumentNodesArgs & {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  readDocumentByFilename: (
-    params: ReadDocumentByFilenameArgs & {
+  readDocument: (
+    params: ReadDocumentArgs & {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
@@ -65,13 +89,13 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  updateLoadRule: (
-    params: UpdateLoadRuleArgs & {
+  replaceDocumentContent: (
+    params: ReplaceDocumentContentArgs & {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
-  upsertDocumentByFilename: (
-    params: UpsertDocumentByFilenameArgs & {
+  updateLoadRule: (
+    params: UpdateLoadRuleArgs & {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
@@ -85,8 +109,59 @@ export class AgentDocumentsExecutionRuntime {
     return context.agentId;
   }
 
+  private getCurrentDocumentId(context?: AgentDocumentOperationContext) {
+    if (context?.scope !== 'page') return;
+    return context.currentDocumentId ?? undefined;
+  }
+
+  private resolveTopicId(context?: AgentDocumentOperationContext) {
+    if (!context?.topicId) return;
+    return context.topicId;
+  }
+
+  private buildCurrentPageDocumentWriteBlockedResult(apiName: string): BuiltinServerRuntimeOutput {
+    const message =
+      `Cannot use lobe-agent-documents.${apiName} on the current page document ` +
+      `while page scope is active. Use lobe-page-agent so the open editor shows a diff node ` +
+      `for review instead of writing directly to the database.`;
+
+    return {
+      content: message,
+      error: {
+        code: CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE,
+        kind: 'replan',
+        message,
+        type: CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE,
+      },
+      success: false,
+    };
+  }
+
+  private isCurrentPageDocument(
+    doc: AgentDocumentRecord | undefined,
+    context?: AgentDocumentOperationContext,
+  ) {
+    const currentDocumentId = this.getCurrentDocumentId(context);
+    if (!currentDocumentId || !doc?.documentId) return false;
+
+    return doc.documentId === currentDocumentId;
+  }
+
+  private formatDocumentReadContent(
+    doc: AgentDocumentRecord,
+    format: 'xml' | 'markdown' | 'both' = 'xml',
+  ) {
+    const markdown = doc.content || '';
+    const xml = doc.litexml || '';
+
+    if (format === 'markdown') return markdown;
+    if (format === 'both') return JSON.stringify({ markdown, xml });
+
+    return xml || markdown;
+  }
+
   async listDocuments(
-    _args: ListDocumentsArgs,
+    args: ListDocumentsArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
     const agentId = this.resolveAgentId(context);
@@ -97,8 +172,21 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const docs = await this.service.listDocuments({ agentId });
+    const target = args.target ?? 'agent';
+    const topicId = this.resolveTopicId(context);
+    if (target === 'currentTopic' && !topicId) {
+      return {
+        content: 'Cannot list current topic documents without topicId context.',
+        success: false,
+      };
+    }
+
+    const docs =
+      target === 'currentTopic'
+        ? await this.service.listTopicDocuments({ agentId, target, topicId: topicId! })
+        : await this.service.listDocuments({ agentId, target });
     const list = docs.map((d) => ({
+      ...(d.documentId ? { documentId: d.documentId } : {}),
       filename: d.filename ?? d.title ?? '',
       id: d.id,
       title: d.title,
@@ -107,50 +195,6 @@ export class AgentDocumentsExecutionRuntime {
     return {
       content: JSON.stringify(list),
       state: { documents: list },
-      success: true,
-    };
-  }
-
-  async readDocumentByFilename(
-    args: ReadDocumentByFilenameArgs,
-    context?: AgentDocumentOperationContext,
-  ): Promise<BuiltinServerRuntimeOutput> {
-    const agentId = this.resolveAgentId(context);
-    if (!agentId) {
-      return {
-        content: 'Cannot read agent document without agentId context.',
-        success: false,
-      };
-    }
-
-    const doc = await this.service.readDocumentByFilename({ ...args, agentId });
-    if (!doc) return { content: `Document not found: ${args.filename}`, success: false };
-
-    return {
-      content: doc.content || '',
-      state: { content: doc.content, filename: args.filename, id: doc.id, title: doc.title },
-      success: true,
-    };
-  }
-
-  async upsertDocumentByFilename(
-    args: UpsertDocumentByFilenameArgs,
-    context?: AgentDocumentOperationContext,
-  ): Promise<BuiltinServerRuntimeOutput> {
-    const agentId = this.resolveAgentId(context);
-    if (!agentId) {
-      return {
-        content: 'Cannot upsert agent document without agentId context.',
-        success: false,
-      };
-    }
-
-    const doc = await this.service.upsertDocumentByFilename({ ...args, agentId });
-    if (!doc) return { content: `Failed to upsert document: ${args.filename}`, success: false };
-
-    return {
-      content: `Upserted document "${args.filename}" (${doc.id}).`,
-      state: { filename: args.filename, id: doc.id },
       success: true,
     };
   }
@@ -167,12 +211,24 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const created = await this.service.createDocument({ ...args, agentId });
+    const target = args.target ?? 'agent';
+    const topicId = this.resolveTopicId(context);
+    if (target === 'currentTopic' && !topicId) {
+      return {
+        content: 'Cannot create current topic document without topicId context.',
+        success: false,
+      };
+    }
+
+    const created =
+      target === 'currentTopic'
+        ? await this.service.createTopicDocument({ ...args, agentId, topicId: topicId! })
+        : await this.service.createDocument({ ...args, agentId });
     if (!created) return { content: 'Failed to create agent document.', success: false };
 
     return {
       content: `Created document "${created.title || args.title}" (${created.id}).`,
-      state: { documentId: created.id },
+      state: { agentDocumentId: created.id, documentId: created.documentId },
       success: true,
     };
   }
@@ -192,31 +248,84 @@ export class AgentDocumentsExecutionRuntime {
     const doc = await this.service.readDocument({ ...args, agentId });
     if (!doc) return { content: `Document not found: ${args.id}`, success: false };
 
+    const format = args.format ?? 'xml';
+
     return {
-      content: doc.content || '',
-      state: { content: doc.content, id: doc.id, title: doc.title },
+      content: this.formatDocumentReadContent(doc, format),
+      state: { content: doc.content, id: doc.id, title: doc.title, xml: doc.litexml },
       success: true,
     };
   }
 
-  async editDocument(
-    args: EditDocumentArgs,
+  async replaceDocumentContent(
+    args: ReplaceDocumentContentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
-        content: 'Cannot edit agent document without agentId context.',
+        content: 'Cannot replace agent document content without agentId context.',
         success: false,
       };
     }
 
-    const doc = await this.service.editDocument({ ...args, agentId });
-    if (!doc) return { content: `Document not found: ${args.id}`, success: false };
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+
+    if (this.isCurrentPageDocument(existing, context)) {
+      return this.buildCurrentPageDocumentWriteBlockedResult('replaceDocumentContent');
+    }
+
+    const doc = await this.service.replaceDocumentContent({ ...args, agentId });
+    if (!doc) return { content: `Failed to update document ${args.id}.`, success: false };
 
     return {
       content: `Updated document ${args.id}.`,
       state: { id: args.id, updated: true },
+      success: true,
+    };
+  }
+
+  async modifyNodes(
+    args: ModifyDocumentNodesArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot modify agent document nodes without agentId context.',
+        success: false,
+      };
+    }
+
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+
+    if (this.isCurrentPageDocument(existing, context)) {
+      return this.buildCurrentPageDocumentWriteBlockedResult('modifyNodes');
+    }
+
+    const operations = Array.isArray(args.operations) ? args.operations : [];
+    if (operations.length === 0) {
+      return { content: 'No operations provided.', success: false };
+    }
+
+    const updated = await this.service.modifyNodes({ agentId, id: args.id, operations });
+    if (!updated) return { content: `Failed to modify document ${args.id}.`, success: false };
+
+    const results = operations.map((operation) => ({
+      action: operation.action,
+      success: true,
+    }));
+
+    return {
+      content: `Modified document ${args.id}. Applied ${results.length} operation(s).`,
+      state: {
+        id: args.id,
+        results,
+        successCount: results.length,
+        totalCount: results.length,
+      },
       success: true,
     };
   }
@@ -255,8 +364,15 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
+    const existing = await this.service.readDocument({ agentId, id: args.id });
+    if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+
+    if (this.isCurrentPageDocument(existing, context)) {
+      return this.buildCurrentPageDocumentWriteBlockedResult('renameDocument');
+    }
+
     const doc = await this.service.renameDocument({ ...args, agentId });
-    if (!doc) return { content: `Document not found: ${args.id}`, success: false };
+    if (!doc) return { content: `Failed to rename document ${args.id}.`, success: false };
 
     return {
       content: `Renamed document ${args.id} to "${args.newTitle}".`,

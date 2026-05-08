@@ -24,8 +24,11 @@ declare global {
     __LOBE_STORES?: Record<string, () => unknown>;
     __SERVER_CONFIG__: SPAServerConfig | undefined;
     lobeEnv?: {
+      chromeVersion?: string;
       darwinMajorVersion?: number;
+      electronVersion?: string;
       isMacTahoe?: boolean;
+      nodeVersion?: string;
       platform?: NodeJS.Platform;
     };
   }

@@ -1,11 +1,11 @@
 /**
- * 集成测试通用设置
+ * Common integration test setup
  */
 import { type LobeChatDatabase } from '@/database/type';
 import { uuid } from '@/utils/uuid';
 
 /**
- * 创建测试上下文
+ * Create test context
  */
 export const createTestContext = (userId?: string) => ({
   jwtPayload: { userId: userId || uuid() },
@@ -13,7 +13,7 @@ export const createTestContext = (userId?: string) => ({
 });
 
 /**
- * 创建测试用户
+ * Create test user
  */
 export const createTestUser = async (serverDB: LobeChatDatabase, userId?: string) => {
   const id = userId || uuid();
@@ -25,7 +25,7 @@ export const createTestUser = async (serverDB: LobeChatDatabase, userId?: string
 };
 
 /**
- * 创建测试 Agent
+ * Create test Agent
  */
 export const createTestAgent = async (
   serverDB: LobeChatDatabase,
@@ -41,7 +41,7 @@ export const createTestAgent = async (
 };
 
 /**
- * 创建测试 Topic
+ * Create test Topic
  */
 export const createTestTopic = async (
   serverDB: LobeChatDatabase,
@@ -57,12 +57,12 @@ export const createTestTopic = async (
 };
 
 /**
- * 清理测试用户及其所有关联数据
+ * Clean up test user and all associated data
  */
 export const cleanupTestUser = async (serverDB: LobeChatDatabase, userId: string) => {
   const { users } = await import('@/database/schemas');
   const { eq } = await import('drizzle-orm');
 
-  // 由于外键级联删除，只需删除用户即可
+  // Due to foreign key cascade deletion, only the user needs to be deleted
   await serverDB.delete(users).where(eq(users.id, userId));
 };

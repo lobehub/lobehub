@@ -8,6 +8,7 @@ import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useSessionStore } from '@/store/session';
@@ -673,6 +674,62 @@ describe('topic action', () => {
         expect(topicData.items).toEqual(refreshedTopics);
       });
     });
+
+    it('should reset expanded pagination when excludeStatuses changes for the same agent', async () => {
+      const agentId = 'status-filtered-agent';
+      const pageSize = 20;
+      const currentTopics = Array.from({ length: 40 }, (_, index) => ({
+        id: `topic-${index + 1}`,
+        title: `Topic ${index + 1}`,
+      })) as ChatTopic[];
+      const refreshedTopics = Array.from({ length: 20 }, (_, index) => ({
+        id: `active-topic-${index + 1}`,
+        title: `Active Topic ${index + 1}`,
+      }));
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [topicMapKey({ agentId })]: {
+              currentPage: 1,
+              excludeStatuses: ['completed', 'archived'],
+              hasMore: true,
+              isInbox: false,
+              items: currentTopics,
+              pageSize,
+              total: 60,
+            },
+          },
+        });
+      });
+
+      (topicService.getTopics as Mock).mockResolvedValue({
+        items: refreshedTopics,
+        total: 20,
+      });
+
+      const useFetchTopics = useChatStore.getState().useFetchTopics;
+      const swrResponse = renderHook(() =>
+        useFetchTopics(true, { agentId, excludeStatuses: ['completed'], pageSize }),
+      );
+
+      await waitFor(() => {
+        expect(swrResponse.result.current.data).toEqual({ items: refreshedTopics, total: 20 });
+      });
+
+      await waitFor(() => {
+        const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
+
+        expect(topicData).toMatchObject({
+          currentPage: 0,
+          excludeStatuses: ['completed'],
+          hasMore: false,
+          total: 20,
+        });
+        expect(topicData.items).toEqual(refreshedTopics);
+      });
+    });
   });
   describe('useSearchTopics', () => {
     it('should search topics with the given keywords', async () => {
@@ -766,6 +823,8 @@ describe('topic action', () => {
           messagesMap: {
             [newKey]: [{ id: 'msg-1' }, { id: 'msg-2' }] as any,
           },
+          portalStack: [{ type: PortalViewType.Home }],
+          showPortal: true,
         });
       });
 
@@ -789,6 +848,8 @@ describe('topic action', () => {
 
       // Verify activeTopicId is now null
       expect(useChatStore.getState().activeTopicId).toBeNull();
+      expect(useChatStore.getState().portalStack).toEqual([]);
+      expect(useChatStore.getState().showPortal).toBe(false);
     });
 
     it('should clear new key data when switching to null (group scope)', async () => {
@@ -943,6 +1004,23 @@ describe('topic action', () => {
 
       // Verify activeTopicId is set to the new topic
       expect(useChatStore.getState().activeTopicId).toBe('new-created-topic-id');
+    });
+
+    it('should skip refreshMessages for superseded overlapping switches', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const refreshSpy = vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
+
+      // Fire two overlapping switches: the sync body of both runs before
+      // either yields, so by the microtask boundary the second has already
+      // bumped the epoch and the first should bail out before fetching.
+      await act(async () => {
+        const p1 = result.current.switchTopic('topic-a');
+        const p2 = result.current.switchTopic('topic-b');
+        await Promise.all([p1, p2]);
+      });
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      expect(useChatStore.getState().activeTopicId).toBe('topic-b');
     });
   });
   describe('removeSessionTopics', () => {
@@ -1352,6 +1430,46 @@ describe('topic action', () => {
 
       expect(getMessagesSpy).toHaveBeenCalledWith({ agentId: activeAgentId, topicId });
       expect(summaryTopicTitleSpy).toHaveBeenCalledWith(topicId, messages);
+    });
+  });
+
+  describe('internal_updateTopics', () => {
+    it('should preserve excludeStatuses/excludeTriggers from existing topicDataMap entry', () => {
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      // Seed the entry as the SWR onData handler would, with filter fields.
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              excludeStatuses: ['completed'],
+              excludeTriggers: ['cron', 'eval'],
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [{ id: 'topic-1', title: 'old' } as ChatTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      // Simulate the post-sendMessage write-back which previously dropped filters.
+      act(() => {
+        result.current.internal_updateTopics(agentId, {
+          items: [{ id: 'topic-2', title: 'new' } as ChatTopic],
+          pageSize: 20,
+          total: 2,
+        });
+      });
+
+      const next = useChatStore.getState().topicDataMap[key];
+      expect(next.excludeStatuses).toEqual(['completed']);
+      expect(next.excludeTriggers).toEqual(['cron', 'eval']);
+      expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
     });
   });
 });

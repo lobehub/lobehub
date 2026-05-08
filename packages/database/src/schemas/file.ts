@@ -22,6 +22,8 @@ import { accessedAt, createdAt, timestamps } from './_helpers';
 import { asyncTasks } from './asyncTask';
 import { users } from './user';
 
+export const DOCUMENT_FOLDER_TYPE = 'custom/folder';
+
 export const globalFiles = pgTable(
   'global_files',
   {
@@ -72,7 +74,9 @@ export const documents = pgTable(
     pages: jsonb('pages').$type<LobeDocumentPage[]>(),
 
     // Source type
-    sourceType: text('source_type', { enum: ['file', 'web', 'api', 'topic'] }).notNull(),
+    sourceType: text('source_type', {
+      enum: ['file', 'web', 'api', 'topic', 'agent', 'agent-signal'],
+    }).notNull(),
     source: text('source').notNull(), // File path or web URL
 
     // Associated file (optional)

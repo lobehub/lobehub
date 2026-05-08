@@ -86,6 +86,7 @@ describe('LobeOpenAI', () => {
               status: 400,
             },
             errorType: 'ProviderBizError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }
@@ -124,6 +125,7 @@ describe('LobeOpenAI', () => {
               cause: { message: 'api is undefined' },
             },
             errorType: 'ProviderBizError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }
@@ -158,6 +160,7 @@ describe('LobeOpenAI', () => {
               cause: { message: 'api is undefined' },
             },
             errorType: 'ProviderBizError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }
@@ -185,6 +188,7 @@ describe('LobeOpenAI', () => {
               name: genericError.name,
             },
             errorType: 'AgentRuntimeError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }
@@ -267,6 +271,20 @@ describe('LobeOpenAI', () => {
       expect(instance['client'].responses.create).toHaveBeenCalled();
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
       expect(createCall.model).toBe('o1-pro');
+    });
+
+    it('should use responses API for gpt-5.5', async () => {
+      const payload = {
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'gpt-5.5',
+        temperature: 0.7,
+      };
+
+      await instance.chat(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalled();
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.model).toBe('gpt-5.5');
     });
 
     it('should use responses API when enabledSearch is true', async () => {

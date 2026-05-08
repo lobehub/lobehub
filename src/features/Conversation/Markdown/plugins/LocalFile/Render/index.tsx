@@ -3,6 +3,7 @@ import React, { memo } from 'react';
 
 import { LocalFile } from '@/features/LocalFile';
 
+import { useConversationStore } from '../../../../store';
 import { type MarkdownElementProps } from '../../type';
 
 interface LocalFileProps {
@@ -14,6 +15,7 @@ interface LocalFileProps {
 const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   // Extract properties from node.properties
   const { name, path, isDirectory } = node?.properties || {};
+  const isSharePage = useConversationStore((s) => !!s.context.topicShareId);
 
   if (!name || !path) {
     // If required properties are missing, render an error or null
@@ -24,7 +26,7 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   // isDirectory may be true (from plugin) or undefined; ensure it is a boolean
   const isDir = isDirectory === true;
 
-  return <LocalFile isDirectory={isDir} name={name} path={path} />;
+  return <LocalFile isDirectory={isDir} name={name} path={path} readonly={isSharePage} />;
 }, isEqual);
 
 export default Render;

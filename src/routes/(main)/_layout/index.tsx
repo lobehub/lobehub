@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
@@ -14,6 +15,9 @@ import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
+import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
+import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
+import OverlaySnapshotPublisher from '@/features/Electron/ScreenCapture/OverlaySnapshotPublisher';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanel from '@/features/NavPanel';
@@ -24,7 +28,6 @@ import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { HotkeyScopeEnum } from '@/types/hotkey';
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';
@@ -52,6 +55,9 @@ const Layout: FC = () => {
         {isDesktop && <DesktopAutoOidcOnFirstOpen />}
         {isDesktop && <DesktopNavigationBridge />}
         {isDesktop && <DesktopFileMenuBridge />}
+        {isDesktop && <OverlaySnapshotPublisher />}
+        {isDesktop && <OverlayCaptureUploader />}
+        {isDesktop && <OverlayMessageDispatcher />}
         {showCloudPromotion && <CloudBanner />}
       </Suspense>
       {isDesktop && <AuthRequiredModal />}

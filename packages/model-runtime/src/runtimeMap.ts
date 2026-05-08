@@ -46,6 +46,8 @@ import { LobeNvidiaAI } from './providers/nvidia';
 import { LobeOllamaAI } from './providers/ollama';
 import { LobeOllamaCloudAI } from './providers/ollamacloud';
 import { LobeOpenAI } from './providers/openai';
+import { LobeOpenCodeCodingPlanAI } from './providers/opencodeCodingPlan';
+import { LobeOpenCodeZenAI } from './providers/opencodeZen';
 import { LobeOpenRouterAI } from './providers/openrouter';
 import { LobePerplexityAI } from './providers/perplexity';
 import { LobePPIOAI } from './providers/ppio';
@@ -59,6 +61,7 @@ import { LobeSiliconCloudAI } from './providers/siliconcloud';
 import { LobeSparkAI } from './providers/spark';
 import { LobeStepfunAI } from './providers/stepfun';
 import { LobeStraicoAI } from './providers/straico';
+import { LobeStreamLakeAI } from './providers/streamlake';
 import { LobeTaichuAI } from './providers/taichu';
 import { LobeTencentCloudAI } from './providers/tencentcloud';
 import { LobeTogetherAI } from './providers/togetherai';
@@ -124,6 +127,8 @@ export const providerRuntimeMap = {
   nvidia: LobeNvidiaAI,
   ollama: LobeOllamaAI,
   ollamacloud: LobeOllamaCloudAI,
+  opencodecodingplan: LobeOpenCodeCodingPlanAI,
+  opencodezen: LobeOpenCodeZenAI,
   openai: LobeOpenAI,
   openrouter: LobeOpenRouterAI,
   perplexity: LobePerplexityAI,
@@ -139,6 +144,7 @@ export const providerRuntimeMap = {
   spark: LobeSparkAI,
   stepfun: LobeStepfunAI,
   straico: LobeStraicoAI,
+  streamlake: LobeStreamLakeAI,
   taichu: LobeTaichuAI,
   tencentcloud: LobeTencentCloudAI,
   togetherai: LobeTogetherAI,

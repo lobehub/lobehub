@@ -3,6 +3,7 @@ import type { FileContent, KnowledgeBaseInfo, PageContentContext } from '@lobech
 import type {
   RuntimeInitialContext,
   RuntimeSelectedSkill,
+  RuntimeSelectedTool,
   RuntimeStepContext,
 } from '@lobechat/types';
 
@@ -19,6 +20,7 @@ import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilder
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
 import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
+import type { OnboardingContext } from '../../providers/OnboardingContextInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
@@ -52,6 +54,8 @@ export interface KnowledgeConfig {
  * Tools configuration
  */
 export interface ToolsConfig {
+  /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
+  disabledToolIdentifiers?: string[];
   /** Tool manifests with systemRole and API definitions */
   manifests?: LobeToolManifest[];
   /** Enabled tool IDs (kept for compatibility) */
@@ -251,6 +255,8 @@ export interface MessagesEngineParams {
   skillsConfig?: SkillsConfig;
   /** Skills explicitly selected by the user for the current request */
   selectedSkills?: RuntimeSelectedSkill[];
+  /** Tools explicitly selected by the user for the current request */
+  selectedTools?: RuntimeSelectedTool[];
 
   // ========== Tool Discovery ==========
   /** Tool Discovery configuration (available tools for dynamic activation) */
@@ -273,6 +279,8 @@ export interface MessagesEngineParams {
   discordContext?: DiscordContext;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  /** Onboarding context for injecting phase guidance and documents */
+  onboardingContext?: OnboardingContext;
   /** Agent Management context */
   agentManagementContext?: AgentManagementContext;
   /** Agent group configuration for multi-agent scenarios */

@@ -3,6 +3,9 @@
 import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorContent';
+import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
+import { useDocumentStore } from '@/store/document';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
 import { type PublicState } from './store';
@@ -55,7 +58,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // Initialize meta (title/emoji) with dirty tracking
     useEffect(() => {
       initMeta(title, emoji);
-    }, [pageId, title, emoji]);
+    }, [pageId, title, emoji, initMeta]);
 
     // Connect editor to page agent runtime
     useEffect(() => {
@@ -75,10 +78,31 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
       pageAgentRuntime.setCurrentDocId(pageId);
       pageAgentRuntime.setTitleHandlers(storeApi.getState().setTitle, titleGetter);
+      pageAgentRuntime.setBeforeMutateHandler(() => {
+        const editor = storeApi.getState().editor;
+        const editorData = editor?.getDocument('json');
+
+        if (!hasMeaningfulEditorContent(editorData)) {
+          return;
+        }
+
+        documentHistoryQueueService.enqueueEditorSnapshot({
+          documentId: pageId,
+          editor,
+        });
+      });
+      pageAgentRuntime.setAfterMutateHandler(async () => {
+        if (!pageId) return;
+
+        await useDocumentStore.getState().commitEditorMutation(pageId, { saveSource: 'llm_call' });
+      });
 
       return () => {
         pageAgentRuntime.setCurrentDocId(undefined);
+        pageAgentRuntime.setAfterMutateHandler(null);
         pageAgentRuntime.setTitleHandlers(null, null);
+        pageAgentRuntime.setBeforeMutateHandler(null);
+        void documentHistoryQueueService.flush();
       };
     }, [pageId, storeApi]);
 

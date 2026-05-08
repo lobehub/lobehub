@@ -12,16 +12,29 @@ import WriteFile from './WriteFile';
 
 /**
  * Local System Intervention Components Registry
+ *
+ * Register each component under both the new short API name and the legacy
+ * long name so old DB messages keep rendering after the rename.
  */
 export const LocalSystemInterventions = {
-  [LocalSystemApiName.editLocalFile]: EditLocalFile,
-  [LocalSystemApiName.globLocalFiles]: GlobLocalFiles,
+  [LocalSystemApiName.editFile]: EditLocalFile,
+  [LocalSystemApiName.globFiles]: GlobLocalFiles,
   [LocalSystemApiName.grepContent]: GrepContent,
-  [LocalSystemApiName.listLocalFiles]: ListLocalFiles,
-  [LocalSystemApiName.moveLocalFiles]: MoveLocalFiles,
-  [LocalSystemApiName.readLocalFile]: ReadLocalFile,
-  [LocalSystemApiName.renameLocalFile]: RenameLocalFile,
+  [LocalSystemApiName.listFiles]: ListLocalFiles,
+  [LocalSystemApiName.moveFiles]: MoveLocalFiles,
+  [LocalSystemApiName.readFile]: ReadLocalFile,
   [LocalSystemApiName.runCommand]: RunCommand,
-  [LocalSystemApiName.searchLocalFiles]: SearchLocalFiles,
-  [LocalSystemApiName.writeLocalFile]: WriteFile,
+  [LocalSystemApiName.searchFiles]: SearchLocalFiles,
+  [LocalSystemApiName.writeFile]: WriteFile,
+  // Legacy aliases — keep these so historical messages keep rendering.
+  // `renameLocalFile` is kept here even though the new tool surface no longer
+  // exposes a rename API (rename is now done via `moveFiles`).
+  editLocalFile: EditLocalFile,
+  globLocalFiles: GlobLocalFiles,
+  listLocalFiles: ListLocalFiles,
+  moveLocalFiles: MoveLocalFiles,
+  readLocalFile: ReadLocalFile,
+  renameLocalFile: RenameLocalFile,
+  searchLocalFiles: SearchLocalFiles,
+  writeLocalFile: WriteFile,
 };

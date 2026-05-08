@@ -1,7 +1,13 @@
+import {
+  type ActivateToolsParams,
+  ActivatorApiName,
+  LobeActivatorIdentifier,
+} from '@lobechat/builtin-tool-activator';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { safeParseJSON } from '@lobechat/utils';
-import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronRight, Edit3Icon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -31,10 +37,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       color: ${cssVar.colorTextSecondary};
     }
-  `,
-  avatar: css`
-    font-size: 16px;
-    line-height: 1;
   `,
   description: css`
     padding-block: 8px;
@@ -75,6 +77,28 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
 
     const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
     const argCount = typeof parsedArgs === 'object' ? Object.keys(parsedArgs).length : 0;
+    const requestedToolIdentifiers = useMemo(() => {
+      if (identifier !== LobeActivatorIdentifier || apiName !== ActivatorApiName.activateTools) {
+        return [];
+      }
+
+      const identifiers = (parsedArgs as ActivateToolsParams | undefined)?.identifiers;
+      if (!Array.isArray(identifiers)) return [];
+
+      return identifiers.filter(
+        (item): item is string => typeof item === 'string' && !!item.trim(),
+      );
+    }, [apiName, identifier, parsedArgs]);
+    const requestedToolNames = useToolStore(
+      (s) =>
+        requestedToolIdentifiers.map((toolIdentifier) => {
+          const meta = toolSelectors.getMetaById(toolIdentifier)(s);
+          return pluginHelpers.getPluginTitle(meta) ?? meta?.title ?? toolIdentifier;
+        }),
+      isEqual,
+    );
+    const actionTitleSuffix =
+      requestedToolNames.length > 0 ? ` (${requestedToolNames.join(', ')})` : '';
 
     const handleCancel = useCallback(() => {
       setIsEditing(false);
@@ -125,9 +149,18 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
     return (
       <Flexbox gap={4}>
         <Flexbox horizontal align="center" className={styles.description} gap={6}>
-          {pluginMeta?.avatar && <span className={styles.avatar}>{pluginMeta.avatar}</span>}
+          {pluginMeta?.avatar && (
+            <Avatar
+              avatar={pluginMeta.avatar}
+              shape={'square'}
+              size={16}
+              style={{ flex: 'none' }}
+              title={toolTitle}
+            />
+          )}
           <span>
             {toolTitle} → {actionTitle}
+            {actionTitleSuffix}
           </span>
         </Flexbox>
 

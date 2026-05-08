@@ -37,7 +37,7 @@ const InboxButton = memo(() => {
 
   return (
     <>
-      <Badge count={unreadCount} offset={[-4, 4]} size="small">
+      <Badge dot={unreadCount > 0} offset={[-6, 6]} size="small">
         <ActionIcon
           icon={BellIcon}
           size={DESKTOP_HEADER_ICON_SIZE}

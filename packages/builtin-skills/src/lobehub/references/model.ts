@@ -13,10 +13,26 @@ Manage AI models for providers.
 - \`lh model batch-toggle <ids...> --provider <p> [--enable|--disable]\` - Batch toggle
 - \`lh model clear --provider <p> [--remote] [--yes]\` - Clear all models for provider
 
+## Model Types
+
+The \`--type\` filter accepts the following values:
+
+| Type | Description |
+|------|-------------|
+| \`chat\` | Text chat / LLM models |
+| \`embedding\` | Text embedding models |
+| \`tts\` | Text-to-speech models |
+| \`stt\` | Speech-to-text models |
+| \`image\` | Image generation models |
+| \`video\` | Video generation models |
+| \`text2music\` | Music generation models |
+| \`realtime\` | Realtime audio/video models |
+
 ## Tips
 
 - Models belong to providers; always specify \`--provider\` when needed
-- Use \`--type\` to filter by model type (chat, embedding, etc.)
+- \`lh model list\` without \`--type\` returns all model types; use \`--type video\` (or the relevant type) to narrow results when looking for non-chat models
+- Use \`--enabled\` to filter only active models
 `;
 
 export default content;

@@ -1,4 +1,5 @@
 import { agentPlugin } from './agentPlugin';
+import { agentTopicPagePlugin } from './agentTopicPagePlugin';
 import { agentTopicPlugin } from './agentTopicPlugin';
 import { communityPlugin } from './communityPlugin';
 import { groupPlugin } from './groupPlugin';
@@ -17,6 +18,7 @@ export * from './types';
 export const loadAllRecentlyViewedPlugins = () => {
   pluginRegistry.register([
     agentPlugin,
+    agentTopicPagePlugin,
     agentTopicPlugin,
     communityPlugin,
     groupPlugin,
@@ -26,6 +28,6 @@ export const loadAllRecentlyViewedPlugins = () => {
     memoryPlugin,
     pagePlugin,
     resourcePlugin,
-    settingsPlugin,
   ]);
+  pluginRegistry.register([settingsPlugin]);
 };

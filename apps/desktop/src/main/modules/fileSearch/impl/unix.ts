@@ -1,4 +1,3 @@
- 
 import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
@@ -191,7 +190,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     logger.debug('Performing find search', { keywords: options.keywords, searchDir });
 
     try {
-      const args: string[] = [searchDir, 
+      const args: string[] = [
+        searchDir,
         '-maxdepth',
         '10',
         '-type',
@@ -207,7 +207,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         '*/*cache*/*',
         ')',
         '-prune',
-        '-o'];
+        '-o',
+      ];
 
       // Limit depth and exclude common directories
 
@@ -280,7 +281,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
       return this.processFilePaths(limitedFiles, options, 'fast-glob');
     } catch (error) {
       logger.error('fast-glob search failed:', error);
-      throw new Error(`File search failed: ${(error as Error).message}`);
+      throw new Error(`File search failed: ${(error as Error).message}`, { cause: error });
     }
   }
 
@@ -336,7 +337,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
    * @returns Glob results
    */
   protected async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || process.cwd();
+    const searchPath = params.scope || os.homedir() || process.cwd();
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -392,7 +393,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
    * @returns Glob results
    */
   protected async globWithFind(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || process.cwd();
+    const searchPath = params.scope || os.homedir() || process.cwd();
     const logPrefix = `[glob:find: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting find glob`, { searchPath });
@@ -454,7 +455,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
    * @returns Glob results
    */
   protected async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.scope || process.cwd();
+    const searchPath = params.scope || os.homedir() || process.cwd();
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });

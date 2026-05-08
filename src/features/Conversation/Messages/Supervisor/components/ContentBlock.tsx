@@ -31,10 +31,10 @@ const ContentBlock = memo<ContentBlockProps>(
         {showReasoning && <Reasoning {...reasoning} id={id} />}
 
         {/* Content - markdown text */}
-        <MessageContent content={content} hasTools={hasTools} id={id} />
+        <MessageContent id={id} />
 
         {/* Tools */}
-        {hasTools && <Tools disableEditing={disableEditing} messageId={id} tools={tools} />}
+        {hasTools && <Tools disableEditing={disableEditing} messageId={id} />}
       </Flexbox>
     );
   },

@@ -1,4 +1,5 @@
-import { type PartialDeep } from 'type-fest';
+import type { AgentContextDocument } from '@lobechat/context-engine';
+import type { PartialDeep } from 'type-fest';
 
 import { type AgentSettingsInstance } from '@/features/AgentSetting';
 import { type AgentItem } from '@/types/agent';
@@ -9,6 +10,7 @@ export type SaveStatus = 'idle' | 'saving' | 'saved';
 
 export interface AgentSliceState {
   activeAgentId?: string;
+  agentDocumentsMap: Record<string, AgentContextDocument[]>;
   agentMap: Record<string, PartialDeep<AgentItem>>;
   agentSettingInstance?: AgentSettingsInstance | null;
   /**
@@ -42,6 +44,7 @@ export interface AgentSliceState {
 }
 
 export const initialAgentSliceState: AgentSliceState = {
+  agentDocumentsMap: {},
   agentMap: {},
   isAgentPinned: false,
   lastUpdatedTime: null,

@@ -314,7 +314,7 @@ export const fileRouter = router({
         resultItems.push({
           ...item,
           editorData: null,
-          url: getFileProxyUrl(item.id),
+          url: getFileProxyUrl(item.fileId || item.id),
           ...status,
         } as FileListItem);
       } else {
@@ -423,7 +423,7 @@ export const fileRouter = router({
     }),
 
   recentFiles: fileProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Query recent items and filter for files only (exclude documents/pages)
@@ -475,7 +475,7 @@ export const fileRouter = router({
           embeddingStatus: embeddingTask?.status as AsyncTaskStatus,
           finishEmbedding: embeddingTask?.status === AsyncTaskStatus.Success,
           sourceType: 'file' as const,
-          url: getFileProxyUrl(item.id),
+          url: getFileProxyUrl(item.fileId || item.id),
         } as FileListItem);
       }
 
@@ -483,7 +483,7 @@ export const fileRouter = router({
     }),
 
   recentPages: fileProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Query recent items and filter for pages (documents) only, exclude folders
@@ -556,11 +556,13 @@ export const fileRouter = router({
     .input(
       z.object({
         id: z.string(),
+        metadata: z.record(z.string(), z.any()).optional(),
+        name: z.string().optional(),
         parentId: z.string().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, parentId } = input;
+      const { id, metadata, name, parentId } = input;
 
       // Resolve parentId if it's a slug (otherwise use as-is)
       let resolvedParentId: string | null | undefined = parentId;
@@ -571,7 +573,23 @@ export const fileRouter = router({
         }
       }
 
-      await ctx.fileModel.update(id, { parentId: resolvedParentId });
+      const updates: Parameters<typeof ctx.fileModel.update>[1] = {};
+
+      if (metadata !== undefined) {
+        updates.metadata = metadata;
+      }
+
+      if (name !== undefined) {
+        updates.name = name;
+      }
+
+      if (parentId !== undefined) {
+        updates.parentId = resolvedParentId;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await ctx.fileModel.update(id, updates);
+      }
 
       return { success: true };
     }),

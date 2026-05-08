@@ -6,7 +6,7 @@ import { documents } from '../../schemas';
 import type { NewAgent } from '../../schemas/agent';
 import { agents } from '../../schemas/agent';
 import type { NewFile } from '../../schemas/file';
-import { files } from '../../schemas/file';
+import { files, knowledgeBases } from '../../schemas/file';
 import { messages } from '../../schemas/message';
 import type { NewTopic } from '../../schemas/topic';
 import { topics } from '../../schemas/topic';
@@ -539,7 +539,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       ]);
     });
 
-    it('should boost current agent topics in relevance', async () => {
+    it('should only return topics of the current agent when agentId is provided', async () => {
       const results = await searchRepo.search({
         agentId: testAgentId,
         query: 'testing',
@@ -547,45 +547,101 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
 
       const topicResults = results.filter((r) => r.type === 'topic');
 
-      // Current agent's topics should have better relevance (0.5-0.7)
-      const currentAgentTopics = topicResults.filter(
-        (t) => t.type === 'topic' && t.agentId === testAgentId,
-      );
-      const otherTopics = topicResults.filter(
-        (t) => t.type === 'topic' && t.agentId !== testAgentId,
-      );
-
-      expect(currentAgentTopics.length).toBeGreaterThan(0);
-      expect(otherTopics.length).toBeGreaterThan(0);
-
-      // Current agent topics should have lower relevance scores (higher priority)
-      currentAgentTopics.forEach((topic) => {
-        expect(topic.relevance).toBeLessThan(1);
-      });
-
-      otherTopics.forEach((topic) => {
-        expect(topic.relevance).toBeGreaterThanOrEqual(1);
+      expect(topicResults.length).toBeGreaterThan(0);
+      topicResults.forEach((topic) => {
+        if (topic.type === 'topic') {
+          expect(topic.agentId).toBe(testAgentId);
+        }
       });
     });
 
-    it('should show all user topics but rank current agent topics first', async () => {
+    it('should include topics from all agents when agentId is not provided', async () => {
       const results = await searchRepo.search({
-        agentId: testAgentId,
         query: 'testing',
       });
 
       const topicResults = results.filter((r) => r.type === 'topic');
-
-      // Should include topics from all agents (current, other, and no agent)
       const agentIds = new Set(topicResults.map((t) => (t.type === 'topic' ? t.agentId : null)));
+
       expect(agentIds.has(testAgentId)).toBe(true);
       expect(agentIds.has(otherAgentId)).toBe(true);
-      expect(agentIds.has(null)).toBe(true);
+    });
 
-      // First results should be from current agent
-      expect(topicResults[0].type).toBe('topic');
-      if (topicResults[0].type === 'topic') {
-        expect(topicResults[0].agentId).toBe(testAgentId);
+    it('should populate agent metadata on topic results', async () => {
+      // Add avatar/background to an existing agent so we can assert join output
+      const [decoratedAgent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🤖',
+          backgroundColor: '#123456',
+          slug: 'decorated-agent',
+          title: 'Decorated Agent',
+          userId,
+        })
+        .returning();
+
+      await serverDB.insert(topics).values({
+        agentId: decoratedAgent.id,
+        title: 'Testing Decorated Agent',
+        userId,
+      });
+
+      const results = await searchRepo.search({ query: 'decorated' });
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const decoratedTopic = topicResults.find(
+        (t) => t.type === 'topic' && t.agentId === decoratedAgent.id,
+      );
+
+      expect(decoratedTopic).toBeDefined();
+      if (decoratedTopic && decoratedTopic.type === 'topic') {
+        expect(decoratedTopic.agent).toEqual({
+          avatar: '🤖',
+          backgroundColor: '#123456',
+          title: 'Decorated Agent',
+        });
+      }
+
+      // Topic without an agent should have a null agent field
+      const orphanTopic = topicResults.find((t) => t.type === 'topic' && t.agentId === null);
+      if (orphanTopic && orphanTopic.type === 'topic') {
+        expect(orphanTopic.agent).toBeNull();
+      }
+    });
+
+    it('should not leak agent metadata when topic.agentId points to another user', async () => {
+      // Foreign agent owned by a different user
+      const [foreignAgent] = await serverDB
+        .insert(agents)
+        .values({
+          avatar: '🕵️',
+          backgroundColor: '#abcdef',
+          slug: 'foreign-agent',
+          title: 'Foreign Agent',
+          userId: otherUserId,
+        })
+        .returning();
+
+      // Topic owned by the current user but carrying the foreign agent id —
+      // simulates state reachable via crafted/migrated rows (e.g. topic
+      // creation persists input.agentId even when resolveContext fails).
+      await serverDB.insert(topics).values({
+        agentId: foreignAgent.id,
+        title: 'Cross-tenant probe',
+        userId,
+      });
+
+      const results = await searchRepo.search({ query: 'cross-tenant' });
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const probeTopic = topicResults.find(
+        (t) => t.type === 'topic' && t.title === 'Cross-tenant probe',
+      );
+
+      expect(probeTopic).toBeDefined();
+      if (probeTopic && probeTopic.type === 'topic') {
+        // The raw agentId is preserved (used for navigation), but no
+        // foreign agent metadata is surfaced to the renderer.
+        expect(probeTopic.agentId).toBe(foreignAgent.id);
+        expect(probeTopic.agent).toBeNull();
       }
     });
 
@@ -652,14 +708,13 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expect(topicResults.length).toBeLessThanOrEqual(3);
     });
 
-    it('should not boost topics when agentId is not provided', async () => {
+    it('should return topics with normal relevance range (1-3) when agentId is not provided', async () => {
       const results = await searchRepo.search({
         query: 'testing',
       });
 
       const topicResults = results.filter((r) => r.type === 'topic');
 
-      // All topics should have normal relevance (1-3)
       topicResults.forEach((topic) => {
         expect(topic.relevance).toBeGreaterThanOrEqual(1);
         expect(topic.relevance).toBeLessThanOrEqual(3);
@@ -793,6 +848,124 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expect(page.relevance).toBeGreaterThan(0);
       expect(page.createdAt).toBeInstanceOf(Date);
       expect(page.updatedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('searchKnowledgeBaseDocuments', () => {
+    const kbA = 'kb-search-a';
+    const kbB = 'kb-search-b';
+
+    beforeEach(async () => {
+      // Create two KBs for the test user + one for the other user
+      await serverDB.insert(knowledgeBases).values([
+        { id: kbA, name: 'Knowledge Base A', userId },
+        { id: kbB, name: 'Knowledge Base B', userId },
+        { id: 'kb-other-1', name: 'Other User KB', userId: otherUserId },
+      ]);
+
+      // Documents in KB-A
+      await serverDB.insert(documents).values([
+        {
+          content:
+            'Machine learning algorithms can be supervised, unsupervised, or reinforcement-based. ' +
+            'Common supervised methods include linear regression, decision trees, and neural networks.',
+          fileType: 'custom/document',
+          filename: 'ml-overview.md',
+          knowledgeBaseId: kbA,
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Machine Learning Overview',
+          totalCharCount: 200,
+          totalLineCount: 5,
+          userId,
+        },
+        {
+          content: 'Documentation about cooking — completely unrelated topic.',
+          fileType: 'custom/document',
+          filename: 'cooking.md',
+          knowledgeBaseId: kbA,
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Cooking Notes',
+          totalCharCount: 50,
+          totalLineCount: 2,
+          userId,
+        },
+        // Document in KB-B (must NOT be returned when searching KB-A)
+        {
+          content:
+            'This document is in a different knowledge base and should not match KB-A scope.',
+          fileType: 'custom/document',
+          filename: 'ml-other-kb.md',
+          knowledgeBaseId: kbB,
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Machine Learning in KB-B',
+          totalCharCount: 100,
+          totalLineCount: 3,
+          userId,
+        },
+        // Document for other user (cross-user isolation check)
+        {
+          content: 'Machine learning notes from another user.',
+          fileType: 'custom/document',
+          filename: 'ml-other-user.md',
+          knowledgeBaseId: 'kb-other-1',
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Other user ML notes',
+          totalCharCount: 50,
+          totalLineCount: 2,
+          userId: otherUserId,
+        },
+      ]);
+    });
+
+    it('should return [] for empty query', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('', [kbA]);
+      expect(results).toEqual([]);
+    });
+
+    it('should return [] when no knowledgeBaseIds provided', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', []);
+      expect(results).toEqual([]);
+    });
+
+    it('should match documents within KB scope by content', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      expect(results.length).toBeGreaterThan(0);
+      // Should hit ML overview, not cooking
+      expect(results.some((r) => r.title === 'Machine Learning Overview')).toBe(true);
+      expect(results.every((r) => r.knowledgeBaseId === kbA)).toBe(true);
+    });
+
+    it('should respect KB scope (KB-A query does not return KB-B docs)', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      expect(results.every((r) => r.title !== 'Machine Learning in KB-B')).toBe(true);
+    });
+
+    it('should isolate across users', async () => {
+      // Searching with otherUserId's KB should not leak to current user
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [
+        'kb-other-1',
+      ]);
+      // Current user (`userId`) does not own kb-other-1, so query against it returns []
+      expect(results).toEqual([]);
+    });
+
+    it('should produce snippet ≤ 300 characters', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      results.forEach((r) => {
+        expect(r.snippet.length).toBeLessThanOrEqual(303); // 300 + '...' suffix
+      });
+    });
+
+    it('should produce relevance in [1, 3] range', async () => {
+      const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
+      results.forEach((r) => {
+        expect(r.relevance).toBeGreaterThanOrEqual(1);
+        expect(r.relevance).toBeLessThanOrEqual(3);
+      });
     });
   });
 

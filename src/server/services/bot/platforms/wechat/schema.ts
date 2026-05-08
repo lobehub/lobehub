@@ -1,5 +1,6 @@
 import { MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
+import { displayToolCallsField } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -19,9 +20,10 @@ export const schema: FieldSchema[] = [
       },
       {
         key: 'concurrency',
-        default: 'debounce',
+        default: 'queue',
         description: 'channel.concurrencyHint',
         enum: ['queue', 'debounce'],
+        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
         enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
         label: 'channel.concurrency',
         type: 'string',
@@ -43,6 +45,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      displayToolCallsField,
     ],
     type: 'object',
   },

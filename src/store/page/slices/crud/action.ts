@@ -2,6 +2,7 @@ import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
+import { documentSWRKeys } from '@/services/document/swrKeys';
 import { type StoreSetter } from '@/store/types';
 import { type LobeDocument } from '@/types/document';
 import { DocumentSourceType } from '@/types/document';
@@ -325,11 +326,6 @@ export class CrudActionImpl {
     // Queue background sync to DB
     try {
       await documentService.updateDocument({
-        content: updatedPage.content || '',
-        editorData:
-          typeof updatedPage.editorData === 'string'
-            ? updatedPage.editorData
-            : JSON.stringify(updatedPage.editorData || {}),
         id: pageId,
         metadata: updatedPage.metadata || {},
         parentId: updatedPage.parentId || undefined,
@@ -350,7 +346,7 @@ export class CrudActionImpl {
   };
 
   useFetchPageDetail = (pageId: string | undefined): SWRResponse<LobeDocument | null> => {
-    const swrKey = pageId ? ['pageDetail', pageId] : null;
+    const swrKey = pageId ? documentSWRKeys.pageDetail(pageId) : null;
 
     return useClientDataSWRWithSync<LobeDocument | null>(
       swrKey,

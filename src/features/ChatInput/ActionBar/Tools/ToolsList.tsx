@@ -1,9 +1,11 @@
 import type { ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { ReactNode } from 'react';
-import { Fragment, isValidElement, memo } from 'react';
+import { Fragment, isValidElement, memo, useCallback, useState } from 'react';
+
+import { useScrollSignal } from './ScrollSignalContext';
 
 export const toolsListStyles = createStaticStyles(({ css }) => ({
   groupLabel: css`
@@ -49,6 +51,12 @@ interface ToolItemData {
   key?: string;
   label?: ReactNode;
   onClick?: () => void;
+  /**
+   * Optional rich content shown in a hover popover for this row.
+   * When set, the row is wrapped with a Popover triggered on hover, similar
+   * to the model selector's detail popover.
+   */
+  popoverContent?: ReactNode;
   type?: 'group' | 'divider';
 }
 
@@ -61,6 +69,16 @@ const DividerItem = memo<{ index: number }>(({ index }) => (
 ));
 
 const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }) => {
+  const [open, setOpen] = useState(false);
+
+  // Close hover popover whenever the surrounding list scrolls — avoids the
+  // detail panel hovering in mid-air after its anchor row has moved away.
+  useScrollSignal(
+    useCallback(() => {
+      setOpen(false);
+    }, []),
+  );
+
   const iconNode = item.icon ? (
     isValidElement(item.icon) ? (
       item.icon
@@ -69,7 +87,7 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
     )
   ) : null;
 
-  return (
+  const row = (
     <div
       className={toolsListStyles.item}
       key={item.key || `item-${index}`}
@@ -81,6 +99,23 @@ const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }
       <div className={toolsListStyles.itemContent}>{item.label}</div>
       {item.extra}
     </div>
+  );
+
+  if (!item.popoverContent) return row;
+
+  return (
+    <Popover
+      arrow={false}
+      content={item.popoverContent}
+      mouseEnterDelay={0.3}
+      open={open}
+      placement={'rightTop'}
+      positionerProps={{ sideOffset: 8 }}
+      styles={{ content: { padding: 0 } }}
+      onOpenChange={setOpen}
+    >
+      {row}
+    </Popover>
   );
 });
 

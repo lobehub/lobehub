@@ -170,6 +170,26 @@ export interface LocalSearchFilesParams {
   sortDirection?: 'asc' | 'desc';
 }
 
+export interface ProjectFileIndexEntry {
+  isDirectory: boolean;
+  name: string;
+  path: string;
+  relativePath: string;
+}
+
+export interface ProjectFileIndexParams {
+  /** Working directory used to resolve the project root. Defaults to Electron process cwd. */
+  scope?: string;
+}
+
+export interface ProjectFileIndexResult {
+  entries: ProjectFileIndexEntry[];
+  indexedAt: string;
+  root: string;
+  source: 'git' | 'glob';
+  totalCount: number;
+}
+
 export interface OpenLocalFileParams {
   path: string;
 }
@@ -184,6 +204,8 @@ export interface RunCommandParams {
   command: string;
   cwd?: string;
   description?: string;
+  /** Merged into the child process environment (after `process.env`). */
+  env?: Record<string, string>;
   run_in_background?: boolean;
   timeout?: number;
 }

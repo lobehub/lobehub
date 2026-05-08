@@ -85,8 +85,10 @@ export const aiChatRouter = router({
           agentId: input.agentId,
           groupId: input.groupId,
           messages: input.newTopic.topicMessageIds,
+          metadata: input.newTopic.metadata,
           sessionId,
           title: input.newTopic.title,
+          trigger: input.newTopic.trigger,
         });
         topicId = topicItem.id;
         isCreateNewTopic = true;
@@ -149,9 +151,15 @@ export const aiChatRouter = router({
       log('creating user message with content length: %d', input.newUserMessage.content.length);
 
       // Build user message metadata with pageSelections if present
-      const userMessageMetadata = input.newUserMessage.pageSelections?.length
-        ? { pageSelections: input.newUserMessage.pageSelections }
-        : undefined;
+      const userMessageMetadata =
+        input.newUserMessage.metadata || input.newUserMessage.pageSelections?.length
+          ? {
+              ...input.newUserMessage.metadata,
+              ...(input.newUserMessage.pageSelections?.length
+                ? { pageSelections: input.newUserMessage.pageSelections }
+                : undefined),
+            }
+          : undefined;
 
       const userMessageItem = await ctx.messageModel.create({
         agentId: input.agentId,
@@ -200,6 +208,7 @@ export const aiChatRouter = router({
         includeTopic: isCreateNewTopic,
         sessionId,
         threadId,
+        topicFilter: input.topicFilter,
         topicId,
       });
 

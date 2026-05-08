@@ -408,6 +408,16 @@ export class AiInfraRepos {
     // Not modifying search settings here doesn't affect usage, but done for data consistency on get
     let mergedModel = mergeArrayById(defaultModels, aiModels) as AiProviderModelListItem[];
 
+    // Model type (chat/video/image/embedding/tts/stt) should always come from builtin config,
+    // because remote-fetched models from provider API (e.g. OpenAI /v1/models) don't return
+    // a type field, causing them to fallback to 'chat' and get saved to DB with wrong type.
+    // e.g. sora-2 is a video model but gets stored as 'chat' after "Fetch models".
+    const builtinTypeMap = new Map(defaultModels.map((m) => [m.id, m.type]));
+    for (const m of mergedModel) {
+      const builtinType = builtinTypeMap.get(m.id);
+      if (builtinType) m.type = builtinType;
+    }
+
     // Filter out DB residual models that are no longer in the builtin list for branding provider
     if (providerId === BRANDING_PROVIDER) {
       const builtinIds = new Set(defaultModels.map((m) => m.id));

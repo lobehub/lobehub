@@ -6,11 +6,32 @@ import { type SessionGroupItem } from '@/types/session';
 import { type ChatTopic } from '@/types/topic';
 
 import {
+  type CachedPageData,
   type PageParamsMap,
   type PageReference,
   type PageType,
   type ResolvedPageData,
 } from '../types';
+
+// ======== New Tab Action ======== //
+
+/**
+ * Descriptor returned by a plugin to enable the TabBar "+" button
+ * for a given active reference.
+ */
+export interface NewTabAction {
+  /**
+   * Produce a new PageReference (plus optional cached display data) for
+   * a fresh tab in the same context as the active tab. Return null to
+   * cancel the creation (e.g. missing prerequisites).
+   */
+  onCreate: () => Promise<NewTabActionResult | null>;
+}
+
+export interface NewTabActionResult {
+  cached?: CachedPageData;
+  reference: PageReference;
+}
 
 // ======== Plugin Context ======== //
 
@@ -51,6 +72,12 @@ export interface BaseRecentlyViewedPlugin {
    * Check if the underlying data exists
    */
   checkExists: (reference: PageReference, ctx: PluginContext) => boolean;
+
+  /**
+   * Build a "new tab" action for the TabBar "+" button. Return null to
+   * hide the button when this plugin's reference is active.
+   */
+  createNewTabAction?: (reference: PageReference, ctx: PluginContext) => NewTabAction | null;
 
   /**
    * Generate unique ID from reference params
@@ -109,6 +136,12 @@ export interface RecentlyViewedPlugin<T extends PageType = PageType> {
    * Used to filter out stale entries
    */
   checkExists: (reference: PageReference<T>, ctx: PluginContext) => boolean;
+
+  /**
+   * Build a "new tab" action for the TabBar "+" button. Return null to
+   * hide the button when this plugin's reference is active.
+   */
+  createNewTabAction?: (reference: PageReference<T>, ctx: PluginContext) => NewTabAction | null;
 
   /**
    * Generate unique ID from reference params

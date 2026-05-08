@@ -11,6 +11,8 @@ import {
   users,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { MessageGroupType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -259,6 +261,46 @@ describe('MessageService Integration Tests', () => {
       expect(result.success).toBe(true);
       expect(result.messages).toHaveLength(1);
       expect(result.messages![0].content).toBe('updated content');
+    });
+
+    it('should persist message errors and return them in queried messages', async () => {
+      const messageService = new MessageService(serverDB, userId);
+
+      await serverDB.insert(agents).values({ id: 'agent-1', userId });
+      await serverDB.insert(sessions).values({ id: 'session-1', userId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: 'agent-1', sessionId: 'session-1', userId });
+      await serverDB.insert(topics).values({ id: 'topic-1', userId, sessionId: 'session-1' });
+
+      await serverDB.insert(messages).values({
+        id: 'msg-err-1',
+        userId,
+        agentId: 'agent-1',
+        topicId: 'topic-1',
+        role: 'assistant',
+        content: '',
+      });
+
+      const messageError = {
+        body: {
+          agentType: 'claude-code',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          message: 'Failed to authenticate. API Error: 401',
+        },
+        message: 'Failed to authenticate. API Error: 401',
+        type: AgentRuntimeErrorType.AgentRuntimeError,
+      };
+
+      const result = await messageService.updateMessage(
+        'msg-err-1',
+        { error: messageError },
+        { agentId: 'agent-1', topicId: 'topic-1' },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages![0].error).toEqual(messageError);
     });
   });
 

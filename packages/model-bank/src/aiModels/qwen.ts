@@ -1,8 +1,38 @@
-import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
+import {
+  type AIChatModelCard,
+  type AIImageModelCard,
+  type AIVideoModelCard,
+} from '../types/aiModel';
 
 // https://help.aliyun.com/zh/model-studio/models?spm=a2c4g.11186623
 
 const qwenChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi-K2.6 is a large language model launched by Moonshot AI, with excellent coding and tool calling capabilities. Service deployment is only supported in mainland China.',
+    displayName: 'Kimi K2.6',
+    id: 'kimi-k2.6',
+    maxOutput: 98_304,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 6.5 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-21',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -186,6 +216,56 @@ const qwenChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4 Flash is the cost-efficient member of the V4 family with a 1M context window and hybrid thinking. Thinking mode is on by default and can be toggled via the `thinking` parameter; non-thinking mode is optimized for latency-sensitive workflows.',
+    displayName: 'DeepSeek V4 Flash',
+    id: 'deepseek-v4-flash',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4 Pro is the flagship of the V4 family, optimized for high-intensity reasoning, agentic workflows, and long-horizon planning. Thinking mode is on by default and can be toggled via the `thinking` parameter.',
+    displayName: 'DeepSeek V4 Pro',
+    id: 'deepseek-v4-pro',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
     contextWindowTokens: 131_072,
     description:
       'deepseek-v3.2 introduces sparse attention mechanism, aiming to improve training and inference efficiency when processing long texts, priced lower than deepseek-v3.1.',
@@ -201,6 +281,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -225,6 +306,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -249,6 +331,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -298,6 +381,52 @@ const qwenChatModels: AIChatModelCard[] = [
     releasedAt: '2025-07-17',
     settings: {
       searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 202_745,
+    description:
+      'The GLM series is a hybrid reasoning model from Zhipu AI built for agents, with thinking and non-thinking modes. GLM-5.1 is the latest flagship variant for long-horizon agentic engineering and complex development workflows.',
+    displayName: 'GLM-5.1',
+    id: 'glm-5.1',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 6,
+              '[0.032, infinity]': 8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 24,
+              '[0.032, infinity]': 28,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-14',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -796,6 +925,60 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
+      'Qwen3.6 27B is an open-source dense model with strong performance in reasoning, coding, and general capabilities. It supports thinking mode by default, offering balanced performance and efficiency.',
+    displayName: 'Qwen3.6-27B',
+    id: 'qwen3.6-27b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'The Qwen3.6 35B-A3B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse Mixture-of-Experts (MoE) design, achieving higher inference efficiency. Compared to the 3.5-35B-A3B model, it delivers significant improvements in agentic coding capabilities, mathematical reasoning, code reasoning, spatial intelligence, as well as object localization and target detection.',
+    displayName: 'Qwen3.6-35B-A3B',
+    id: 'qwen3.6-35b-a3b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-16',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
       'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
     displayName: 'Qwen3.5-397B-A17B',
     id: 'qwen3.5-397b-a17b',
@@ -832,7 +1015,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-16',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -881,7 +1064,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-24',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -930,7 +1113,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-24',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -979,7 +1162,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-24',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -1359,12 +1542,70 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'qwen3.6-flash', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.6 native vision-language Flash model delivers significantly improved performance compared to the 3.5-Flash version. This model focuses on enhancing agentic coding capabilities (substantially outperforming its predecessor across multiple code-agent benchmarks), as well as improving mathematical reasoning and code reasoning abilities. On the vision side, it shows notable gains in spatial intelligence, with particularly strong improvements in object localization and target detection.',
+    displayName: 'Qwen3.6 Flash',
+    enabled: true,
+    id: 'qwen3.6-flash',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.2, upTo: 0.256 },
+            { rate: 4.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 7.2, upTo: 0.256 },
+            { rate: 28.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.2 * 0.2, upTo: 0.256 },
+            { rate: 4.8 * 0.2, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-16',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'qwen3.5-flash', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
-    description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
+    description:
+      'The Qwen3.5 native vision-language Flash model is built on a hybrid architecture that combines a linear attention mechanism with a sparse Mixture-of-Experts (MoE) design, achieving higher inference efficiency. Compared to the 3 series, it delivers substantial improvements in both pure text and multimodal performance. It also offers fast response times, balancing inference speed and overall capability.',
     displayName: 'Qwen3.5 Flash',
-    enabled: true,
     id: 'qwen3.5-flash',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -1507,13 +1748,173 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'qwen3.6-plus', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen 3.6-Plus introduces major upgrades in coding capabilities, with a focus on Agentic Coding and front-end development, significantly enhancing the Vibe Coding experience. Its reasoning ability across general scenarios has been further improved. In terms of multimodality, capabilities such as universal recognition, OCR, and object localization have been substantially enhanced. It also fixes known issues from the Qwen 3.5-Plus release. Usage remains the same as Qwen 3.5-Plus.',
+    displayName: 'Qwen3.6 Plus',
+    enabled: true,
+    id: 'qwen3.6-plus',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2 * 0.1,
+              '[0.256, infinity]': 8 * 0.1,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2 * 1.25,
+              '[0.256, infinity]': 8 * 1.25,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2,
+              '[0.256, infinity]': 8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 12,
+              '[0.256, infinity]': 48,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-02',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'qwen3.5-plus-2026-04-20', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen 3.5 is a native vision-language Plus model. Compared to the February 15 snapshot, this version delivers substantial improvements in agentic coding capabilities and significantly faster inference speed. Its knowledge, reasoning, and long-context abilities remain at a high level, meeting the demands of complex agent tasks. It is well-suited for coding agents, production workflows, and high-throughput scenarios. This version corresponds to the April 20, 2026 snapshot.',
+    displayName: 'Qwen3.5 Plus 2026-04-20',
+    id: 'qwen3.5-plus-2026-04-20',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8 * 0.1,
+              '[0.128, 0.256]': 2 * 0.1,
+              '[0.256, infinity]': 4 * 0.1,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8 * 1.25,
+              '[0.128, 0.256]': 2 * 1.25,
+              '[0.256, infinity]': 4 * 1.25,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8,
+              '[0.128, 0.256]': 2,
+              '[0.256, infinity]': 4,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 4.8,
+              '[0.128, 0.256]': 12,
+              '[0.256, infinity]': 24,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-22',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'qwen3.5-plus', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description:
       'Qwen3.5 Plus supports text, image, and video input. Its performance on pure text tasks is comparable to Qwen3 Max, with better performance and lower cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.5 Plus',
-    enabled: true,
     id: 'qwen3.5-plus',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -1657,13 +2058,77 @@ const qwenChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
+      deploymentName: 'qwen3.6-max-preview', // Supports context caching
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'The largest closed-source model in the Qwen3.6 series. It delivers stronger world knowledge, instruction following, and agentic coding performance for complex tasks. It is text-only, supports thinking mode by default, explicit caching, and function calling.',
+    displayName: 'Qwen3.6 Max Preview',
+    enabled: true,
+    id: 'qwen3.6-max-preview',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 9 * 0.2,
+              '[0.128, infinity]': 15 * 0.2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 9,
+              '[0.128, infinity]': 15,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 54,
+              '[0.128, infinity]': 90,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-18',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
       deploymentName: 'qwen3-max', // Supports context caching
     },
     contextWindowTokens: 262_144,
     description:
       'Qwen3 Max models deliver large gains over the 2.5 series in general ability, Chinese/English understanding, complex instruction following, subjective open tasks, multilingual ability, and tool use, with fewer hallucinations. The latest qwen3-max improves agentic programming and tool use over qwen3-max-preview. This release reaches field SOTA and targets more complex agent needs.',
     displayName: 'Qwen3 Max',
-    enabled: true,
     id: 'qwen3-max',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -1855,43 +2320,11 @@ const qwenChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, 0.256]': 2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'audioInput', rate: 4.96, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, infinity]': 2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'imageInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 9.6,
-              '[0.128, 0.256]': 24,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 53, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 213, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -1919,43 +2352,11 @@ const qwenChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.2,
-              '[0.128, 0.256]': 0.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'audioInput', rate: 1.24, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.2,
-              '[0.128, infinity]': 0.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'imageInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 4,
-              '[0.128, 0.256]': 16,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 13.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 72, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -1988,6 +2389,7 @@ const qwenChatModels: AIChatModelCard[] = [
         { name: 'audioInput', rate: 15.8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'imageInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 6.9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 62.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-04',
@@ -2744,6 +3146,9 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-05-28',
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -2766,6 +3171,9 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-01-27',
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -2905,6 +3313,7 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2916,8 +3325,8 @@ const qwenImageModels: AIImageModelCard[] = [
   {
     description:
       'The Qwen-Image-2.0 series full-version model integrates image generation and image editing into a unified capability. It supports more professional text rendering with up to 1k token instruction capacity, delivers more delicate and realistic visual textures, enables fine-grained depiction of realistic scenes, and demonstrates stronger semantic alignment with prompts. The full-version model provides the strongest text rendering capability and the highest level of realism within the 2.0 series.',
-    displayName: 'Qwen Image 2.0 Pro',
-    id: 'qwen-image-2.0-pro',
+    displayName: 'Qwen Image 2.0 Pro 2026-04-22',
+    id: 'qwen-image-2.0-pro-2026-04-22',
     enabled: true,
     organization: 'Qwen',
     parameters: {
@@ -2930,6 +3339,34 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-04-22',
+    type: 'image',
+  },
+  {
+    description:
+      'The Qwen-Image-2.0 series full-version model integrates image generation and image editing into a unified capability. It supports more professional text rendering with up to 1k token instruction capacity, delivers more delicate and realistic visual textures, enables fine-grained depiction of realistic scenes, and demonstrates stronger semantic alignment with prompts. The full-version model provides the strongest text rendering capability and the highest level of realism within the 2.0 series.',
+    displayName: 'Qwen Image 2.0 Pro',
+    id: 'qwen-image-2.0-pro',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1024, max: 4096, min: 256, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2955,6 +3392,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2968,7 +3407,6 @@ const qwenImageModels: AIImageModelCard[] = [
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Max',
     id: 'qwen-image-edit-max',
-    enabled: true,
     organization: 'Qwen',
     parameters: {
       height: { default: 1536, max: 2048, min: 512, step: 1 },
@@ -2980,6 +3418,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2992,7 +3432,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Plus',
-    enabled: true,
     id: 'qwen-image-edit-plus',
     organization: 'Qwen',
     parameters: {
@@ -3005,6 +3444,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3017,7 +3458,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
     displayName: 'Qwen Image Edit',
-    enabled: true,
     id: 'qwen-image-edit',
     organization: 'Qwen',
     parameters: {
@@ -3028,6 +3468,8 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '',
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3040,7 +3482,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Generation Model (Max series) delivers enhanced realism and visual naturalness compared with the Plus series, effectively reducing AI-generated artifacts, and demonstrating outstanding performance in human appearance, texture details, and text rendering.',
     displayName: 'Qwen Image Max',
-    enabled: true,
     id: 'qwen-image-max',
     organization: 'Qwen',
     parameters: {
@@ -3052,6 +3493,8 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1664x928',
         enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3064,7 +3507,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'It supports a wide range of artistic styles and is particularly proficient at rendering complex text within images, enabling integrated image–text layout design.',
     displayName: 'Qwen Image Plus',
-    enabled: true,
     id: 'qwen-image-plus',
     organization: 'Qwen',
     parameters: {
@@ -3076,6 +3518,8 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1664x928',
         enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3088,7 +3532,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
     displayName: 'Qwen Image',
-    enabled: true,
     id: 'qwen-image',
     organization: 'Qwen',
     parameters: {
@@ -3100,12 +3543,66 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1328x1328',
         enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
       units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-08-13',
+    type: 'image',
+  },
+  {
+    description: 'Wanxiang 2.7 Image Professional Edition, supports 4K high-definition output.',
+    displayName: 'Wanxiang2.7 Image Pro',
+    enabled: true,
+    id: 'wan2.7-image-pro',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 2048, max: 11_585, min: 271, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 2048, max: 11_585, min: 271, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-04-01',
+    type: 'image',
+  },
+  {
+    description: 'Wanxiang 2.7 Image, faster image generation speed.',
+    displayName: 'Wanxiang2.7 Image',
+    enabled: true,
+    id: 'wan2.7-image',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 2048, max: 5792, min: 271, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 2048, max: 5792, min: 271, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-04-01',
     type: 'image',
   },
   {
@@ -3124,6 +3621,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2880, min: 640, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3146,6 +3645,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2880, min: 640, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3169,6 +3670,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2560, min: 384, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3190,6 +3693,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2880, min: 640, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3211,6 +3716,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3232,6 +3739,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3253,6 +3762,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3274,6 +3785,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3295,6 +3808,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3325,162 +3840,1684 @@ const qwenImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'FLUX.1 [schnell] is the most advanced open-source few-step model, surpassing similar competitors and even strong non-distilled models like Midjourney v6.0 and DALL-E 3 (HD). It is finely tuned to preserve pretraining diversity, significantly improving visual quality, instruction following, size/aspect variation, font handling, and output diversity.',
-    displayName: 'FLUX.1 [schnell]',
-    id: 'flux-schnell',
+      'Supports up to 10 reference images, allowing you to lock subjects, elements, and color tones to ensure consistent style. Combines style transfer, portrait/character referencing, multi-image fusion, and localized inpainting for flexible control. Delivers realistic portrait details, with overall visuals that are delicate and richly layered, featuring cinematic color and atmosphere.',
+    displayName: 'Kling V3 Image Generation',
+    enabled: true,
+    id: 'kling/kling-v3-image-generation',
     organization: 'Qwen',
     parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      imageUrl: {
+        default: '',
+      },
       prompt: {
         default: '',
       },
-      seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: ['512x1024', '768x512', '768x1024', '1024x576', '576x1024', '1024x1024'],
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
       },
-      steps: { default: 4, max: 12, min: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2024-08-07',
+    releasedAt: '2026-03-26',
     type: 'image',
   },
   {
     description:
-      'FLUX.1 [dev] is an open-weights distilled model for non-commercial use. It keeps near-pro image quality and instruction following while running more efficiently, using resources better than same-size standard models.',
-    displayName: 'FLUX.1 [dev]',
-    id: 'flux-dev',
+      'Unlock cinematic storytelling visuals with new series image generation and direct 2K/4K output. Deeply analyzes audiovisual elements in prompts to precisely execute creative instructions. Supports flexible multi-reference inputs and comprehensive quality upgrades, ideal for storyboards, narrative concept art, and scene design.',
+    displayName: 'Kling V3 Omni Image Generation',
+    enabled: true,
+    id: 'kling/kling-v3-omni-image-generation',
     organization: 'Qwen',
     parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      imageUrls: {
+        default: [],
+      },
       prompt: {
         default: '',
       },
-      seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: ['512x1024', '768x512', '768x1024', '1024x576', '576x1024', '1024x1024'],
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k', '4k'],
       },
-      steps: { default: 50, max: 50, min: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2024-08-07',
-    type: 'image',
-  },
-  {
-    description:
-      'FLUX.1 [merged] combines the deep features explored in "DEV" with the high-speed advantages of "Schnell", extending performance limits and broadening applications.',
-    displayName: 'FLUX.1 [merged]',
-    id: 'flux-merged',
-    organization: 'Qwen',
-    parameters: {
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: ['512x1024', '768x512', '768x1024', '1024x576', '576x1024', '1024x1024'],
-      },
-      steps: { default: 30, max: 30, min: 1 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-08-22',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-3.5-large is an 800M-parameter MMDiT text-to-image model with excellent quality and prompt alignment, supporting 1-megapixel images and efficient runs on consumer hardware.',
-    displayName: 'StableDiffusion 3.5 Large',
-    id: 'stable-diffusion-3.5-large',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 1024, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 40, max: 500, min: 1 },
-      width: { default: 1024, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-10-25',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-3.5-large-turbo applies adversarial diffusion distillation (ADD) to stable-diffusion-3.5-large for faster speed.',
-    displayName: 'StableDiffusion 3.5 Large Turbo',
-    id: 'stable-diffusion-3.5-large-turbo',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 1024, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 40, max: 500, min: 1 },
-      width: { default: 1024, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-10-25',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-xl brings major improvements over v1.5 and matches top open text-to-image results. Improvements include a 3x larger UNet backbone, a refinement module for better image quality, and more efficient training techniques.',
-    displayName: 'StableDiffusion xl',
-    id: 'stable-diffusion-xl',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 1024, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 50, max: 500, min: 1 },
-      width: { default: 1024, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-04-09',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-v1.5 is initialized from the v1.2 checkpoint and fine-tuned for 595k steps on "laion-aesthetics v2 5+" at 512x512 resolution, reducing text conditioning by 10% to improve classifier-free guidance sampling.',
-    displayName: 'StableDiffusion v1.5',
-    id: 'stable-diffusion-v1.5',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 512, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 50, max: 500, min: 1 },
-      width: { default: 512, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-04-09',
+    releasedAt: '2026-03-26',
     type: 'image',
   },
 ];
 
-export const allModels = [...qwenChatModels, ...qwenImageModels];
+const qwenVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'HappyHorse-1.0-I2V supports text-to-video generation, delivering highly faithful dynamic visuals. It can accurately understand textual semantics and produce high-quality videos that are smooth, natural, and rich in detail.',
+    displayName: 'HappyHorse-1.0-I2V',
+    enabled: true,
+    id: 'happyhorse-1.0-i2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 3 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-22',
+    type: 'video',
+  },
+  {
+    description:
+      'HappyHorse-1.0-R2V supports reference-based video generation, offering more stable subject and scene consistency. It supports up to 9 reference images, accurately preserves creative intent, and delivers enhanced expressive capability.',
+    displayName: 'HappyHorse-1.0-R2V',
+    enabled: true,
+    id: 'happyhorse-1.0-r2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 10, min: 3 },
+      imageUrls: {
+        default: [],
+        maxCount: 9,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-26',
+    type: 'video',
+  },
+  {
+    description:
+      'HappyHorse-1.0-T2V supports text-to-video generation, delivering highly faithful dynamic visuals. It can accurately understand textual semantics and produce high-quality videos that are smooth, natural, and rich in detail.',
+    displayName: 'HappyHorse-1.0-T2V',
+    enabled: true,
+    id: 'happyhorse-1.0-t2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 3 },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-21',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Image-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Combined with more dynamic and rhythmically driven shot transitions, it achieves stronger overall performance and storytelling.',
+    displayName: 'Wan2.7 I2V 2026-04-25',
+    enabled: true,
+    id: 'wan2.7-i2v-2026-04-25',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-26',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Image-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Combined with more dynamic and rhythmically driven shot transitions, it achieves stronger overall performance and storytelling.',
+    displayName: 'Wan2.7 I2V',
+    id: 'wan2.7-i2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Reference-to-Video offers more stable references for characters, props, and scenes. It supports up to 5 mixed reference images or videos, along with audio tone referencing. Combined with upgraded core capabilities, it delivers stronger performance and expressive power.',
+    displayName: 'Wan2.7 R2V',
+    enabled: true,
+    id: 'wan2.7-r2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 10, min: 2 },
+      imageUrls: {
+        default: [],
+        maxCount: 5,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Text-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Enhanced with more dynamic and rhythmically driven shot transitions, it achieves stronger overall acting and storytelling performance.',
+    displayName: 'Wan2.7 T2V 2026-04-25',
+    enabled: true,
+    id: 'wan2.7-t2v-2026-04-25',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 2 },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-26',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Text-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Enhanced with more dynamic and rhythmically driven shot transitions, it achieves stronger overall acting and storytelling performance.',
+    displayName: 'Wan2.7 T2V',
+    id: 'wan2.7-t2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 2 },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.6 introduces multi-shot narrative capabilities, while also supporting automatic voiceover generation and the ability to incorporate custom audio files.',
+    displayName: 'Wan2.6 I2V Flash',
+    id: 'wan2.6-i2v-flash',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-17',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.6 introduces multi-shot narrative capabilities, while also supporting automatic voiceover generation and the ability to incorporate custom audio files.',
+    displayName: 'Wan2.6 I2V',
+    id: 'wan2.6-i2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-12-16',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.6 Reference-to-Video – Flash offers faster generation and better cost performance. It supports referencing specific characters or any objects, accurately maintaining consistency in appearance and voice, and enables multi-character reference for co-performance.',
+    displayName: 'Wan2.6 R2V Flash',
+    id: 'wan2.6-r2v-flash',
+    parameters: {
+      duration: { default: 5, max: 10, min: 2 },
+      generateAudio: { default: true },
+      imageUrls: {
+        default: [],
+        maxCount: 5,
+      },
+      prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1088x832',
+          '832x1088',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1632x1248',
+          '1248x1632',
+        ],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-12-16',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.6 Reference-to-Video supports referencing specific characters or any objects, accurately maintaining consistency in appearance and voice, and enabling multi-character reference for co-performance. Note: When using videos as references, the input video will also be counted toward the cost. Please refer to the model pricing documentation for details.',
+    displayName: 'Wan2.6 R2V',
+    id: 'wan2.6-r2v',
+    parameters: {
+      duration: { default: 5, max: 10, min: 2 },
+      imageUrls: {
+        default: [],
+        maxCount: 5,
+      },
+      prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1088x832',
+          '832x1088',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1632x1248',
+          '1248x1632',
+        ],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-12-16',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.6 introduces multi-shot narrative capabilities, while also supporting automatic voiceover generation and the ability to incorporate custom audio files.',
+    displayName: 'Wan2.6 T2V',
+    id: 'wan2.6-t2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1088x832',
+          '832x1088',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1632x1248',
+          '1248x1632',
+        ],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-12-16',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.5 Preview supports automatic voiceover generation and the ability to incorporate custom audio files.',
+    displayName: 'Wan2.5 I2V Preview',
+    id: 'wan2.5-i2v-preview',
+    parameters: {
+      imageUrl: {
+        default: null,
+      },
+      duration: { default: 5, enum: [5, 10] },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['480P', '720P', '1080P'],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-09-23',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.5 Preview supports automatic voiceover generation and the ability to incorporate custom audio files.',
+    displayName: 'Wan2.5 T2V Preview',
+    id: 'wan2.5-t2v-preview',
+    parameters: {
+      duration: { default: 5, enum: [5, 10] },
+      prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '848x480',
+          '480x832',
+          '624x624',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1088x832',
+          '832x1088',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1632x1248',
+          '1248x1632',
+        ],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-09-23',
+    type: 'video',
+  },
+  {
+    description: 'Wanxiang 2.2 Speed Edition',
+    displayName: 'Wan2.2 KF2V Flash',
+    id: 'wan2.2-kf2v-flash',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['480P', '720P', '1080P'],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-09-12',
+    type: 'video',
+  },
+  {
+    description: 'Wanxiang 2.2 Plus Edition',
+    displayName: 'Wan2.2 KF2V Plus',
+    id: 'wan2.2-kf2v-plus',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-09-12',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.2 Speed Edition delivers ultra-fast generation, with more accurate prompt understanding and camera control. It maintains consistency of visual elements while significantly improving overall stability and success rate.',
+    displayName: 'Wan2.2 I2V Flash',
+    id: 'wan2.2-i2v-flash',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['480P', '720P', '1080P'],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-08-11',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.2 Pro Edition offers more accurate prompt understanding and controllable camera movements. It maintains consistency of visual elements while significantly improving stability and success rate, and generates richer, more detailed content.',
+    displayName: 'Wan2.2 I2V Plus',
+    id: 'wan2.2-i2v-plus',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['480P', '1080P'],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-07-28',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.2 Pro Edition provides more accurate prompt understanding, delivers stable and smooth motion generation, and produces richer, more detailed visuals.',
+    displayName: 'Wan2.2 T2V Plus',
+    id: 'wan2.2-t2v-plus',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '848x480',
+          '480x832',
+          '624x624',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1632x1248',
+          '1248x1632',
+        ],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-07-28',
+    type: 'video',
+  },
+  {
+    description: 'Wanxiang 2.1 Speed Edition offers high cost-performance.',
+    displayName: 'Wanxiang2.1 I2V Turbo',
+    id: 'wanx2.1-i2v-turbo',
+    parameters: {
+      duration: { default: 5, enum: [3, 4, 5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['480P', '720P'],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-02-25',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.1 Pro Edition delivers more visually refined and higher-quality imagery.',
+    displayName: 'Wanxiang2.1 I2V Plus',
+    id: 'wanx2.1-i2v-plus',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-01-17',
+    type: 'video',
+  },
+  {
+    description: 'Wanxiang 2.1 Speed Edition offers excellent cost-performance.',
+    displayName: 'Wanxiang2.1 T2V Turbo',
+    id: 'wanx2.1-t2v-turbo',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      prompt: { default: '' },
+      size: {
+        default: '1280x720',
+        enum: [
+          '848x480',
+          '480x832',
+          '624x624',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1088x832',
+          '832x1088',
+        ],
+      },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-01-08',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.1 Pro Edition delivers richer visual texture and higher-quality imagery.',
+    displayName: 'Wanxiang2.1 T2V Plus',
+    id: 'wanx2.1-t2v-plus',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      size: {
+        default: '1280x720',
+        enum: ['1280x720', '720x1280', '960x960', '1088x832', '832x1088'],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-01-08',
+    type: 'video',
+  },
+  {
+    description:
+      'Intelligent storyboarding understands scene transitions within scripts, automatically arranging camera positions and shot types. A native multimodal framework ensures audiovisual consistency. Removes duration constraints, enabling more flexible multi-shot storytelling.',
+    displayName: 'Kling V3 Video Generation',
+    enabled: true,
+    id: 'kling/kling-v3-video-generation',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      duration: { default: 5, max: 12, min: 3 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080p',
+        enum: ['720p', '1080p'],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.9, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'New “All-in-One Reference” feature supports 3–8 second videos or multiple images to anchor character elements. Can match original audio and lip movements for authentic character representation. Enhances video consistency and dynamic expression. Supports audiovisual synchronization and intelligent storyboarding.',
+    displayName: 'Kling V3 Omni Video Generation',
+    enabled: true,
+    id: 'kling/kling-v3-omni-video-generation',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      duration: { default: 5, max: 12, min: 3 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrls: {
+        default: [],
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080p',
+        enum: ['720p', '1080p'],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.9, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Enter a text prompt to generate video. ViduQ3-Pro text-to-video is a flagship-level audio-visual native model. Supports up to 16 seconds of synchronized audio-visual generation, allowing free multi-shot switching while precisely controlling pacing, emotion, and narrative continuity. With a leading parameter scale, it delivers exceptional image quality, character consistency, and emotional expression, meeting cinematic standards. Ideal for professional production scenarios such as advertising (e-commerce, TVC, performance campaigns), animated series, live-action drama, and games.',
+    displayName: 'Vidu Q3 Pro Text-to-Video',
+    enabled: true,
+    id: 'vidu/viduq3-pro_text2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x528',
+          '528x960',
+          '720x720',
+          '816x608',
+          '608x816',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1104x816',
+          '816x1104',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1674x1238',
+          '1238x1674',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.78125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Enter a text prompt to generate video. ViduQ3-Turbo text-to-video is a high-performance accelerated model. It offers extremely fast generation while maintaining high-quality visuals and dynamic expression, excelling in action scenes, emotional rendering, and semantic understanding. Cost-effective and well-suited for casual entertainment scenarios such as social media images, AI companions, and special effects assets.',
+    displayName: 'Vidu Q3 Turbo Text-to-Video',
+    id: 'vidu/viduq3-turbo_text2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x528',
+          '528x960',
+          '720x720',
+          '816x608',
+          '608x816',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1104x816',
+          '816x1104',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1674x1238',
+          '1238x1674',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Enter a text prompt to generate video. ViduQ2 text-to-video is a model designed for precise instruction adherence and nuanced emotion capture. It offers outstanding narrative control, accurately interpreting and expressing micro-expression changes; features rich cinematic language, smooth camera movements, and strong visual tension. Widely applicable to film and animation, advertising and e-commerce, short dramas, and cultural tourism industries.',
+    displayName: 'Vidu Q2 Turbo Text-to-Video',
+    id: 'vidu/viduq2_text2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x528',
+          '528x960',
+          '720x720',
+          '816x608',
+          '608x816',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1104x816',
+          '816x1104',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1674x1238',
+          '1238x1674',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.21875, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ3-Pro image-to-video is a flagship-level audio-visual native model. It supports up to 16 seconds of synchronized audio-visual generation, enabling free multi-shot switching while precisely controlling pacing, emotion, and narrative continuity. With a leading parameter scale, it delivers exceptional image quality, character consistency, and emotional expression, meeting cinematic standards. Ideal for professional production scenarios such as advertising (e-commerce, TVC, performance campaigns), animated series, live-action drama, and games.',
+    displayName: 'Vidu Q3 Pro Image-to-Video',
+    enabled: true,
+    id: 'vidu/viduq3-pro_img2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.78125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ3-Turbo image-to-video is a high-performance accelerated model. It offers extremely fast generation while maintaining high-quality visuals and dynamic expression, excelling in action scenes, emotional rendering, and semantic understanding. Cost-effective and ideal for casual entertainment scenarios such as social media images, AI companions, and special effects assets.',
+    displayName: 'Vidu Q3 Turbo Image-to-Video',
+    id: 'vidu/viduq3-turbo_img2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ2-Pro image-to-video is the world’s first “Everything Can Be Referenced” video model. It supports six reference dimensions—effects, expressions, textures, actions, characters, and scenes—enabling fully evolved video editing. Through controllable addition, deletion, and modification, it achieves fine-grained video editing, designed as a production-grade creation engine for animated series, short dramas, and film production.',
+    displayName: 'Vidu Q2 Pro Image-to-Video',
+    id: 'vidu/viduq2-pro_img2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.34375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ2-Turbo image-to-video is an ultra-fast generation engine. A 5-second 720P video can be generated in as little as 19 seconds, and a 5-second 1080P video in about 27 seconds. Character actions and expressions are natural and realistic, delivering strong authenticity and excellent performance in high-dynamic scenes such as action sequences, with wide-ranging motion.',
+    displayName: 'Vidu Q2 Turbo Image-to-Video',
+    id: 'vidu/viduq2-turbo_img2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.25, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ3-Pro keyframe-to-video is a flagship-level audio-visual native model. It supports up to 16 seconds of synchronized audio-visual generation, enabling free multi-shot switching while precisely controlling pacing, emotion, and narrative continuity. With a leading parameter scale, it delivers exceptional image quality, character consistency, and emotional expression, meeting cinematic standards. Ideal for professional production scenarios such as advertising (e-commerce, TVC, performance campaigns), animated series, live-action drama, and games.',
+    displayName: 'Vidu Q3 Pro Start-to-End Video',
+    enabled: true,
+    id: 'vidu/viduq3-pro_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.78125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ3-Turbo keyframe-to-video is a high-performance accelerated model. It delivers extremely fast generation while maintaining high-quality visuals and dynamic expression, excelling in action scenes, emotional rendering, and semantic understanding. Cost-effective and ideal for casual entertainment scenarios such as social media images, AI companions, and special effects assets.',
+    displayName: 'Vidu Q3 Turbo Start-to-End Video',
+    id: 'vidu/viduq3-turbo_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ2-Pro keyframe-to-video is the world’s first “Everything Can Be Referenced” video model. It supports six reference dimensions—effects, expressions, textures, actions, characters, and scenes—enabling fully evolved video editing. Through controllable addition, deletion, and modification, it achieves fine-grained video editing, designed as a production-grade creation engine for animated series, short dramas, and film production.',
+    displayName: 'Vidu Q2 Pro Start-to-End Video',
+    id: 'vidu/viduq2-pro_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.34375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ2-Turbo keyframe-to-video is an ultra-fast generation engine. A 5-second 720P video can be produced in as little as 19 seconds, and a 5-second 1080P video in about 27 seconds. Character actions and expressions are natural and realistic, with strong authenticity, excelling in high-dynamic scenes such as action sequences, and supporting wide-ranging motion.',
+    displayName: 'Vidu Q2 Turbo Start-to-End Video',
+    id: 'vidu/viduq2-turbo_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.25, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input reference videos, images, and a text description to generate video. ViduQ2-Pro reference-to-video is the world’s first “Everything Can Be Referenced” video model. It supports six reference dimensions—effects, expressions, textures, actions, characters, and scenes—enabling fully evolved video editing. Through controllable addition, deletion, and modification, it achieves fine-grained video editing, designed as a production-grade creation engine for animated series, short dramas, and film production.',
+    displayName: 'Vidu Q2 Pro Reference-to-Video',
+    id: 'vidu/viduq2-pro_reference2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrls: {
+        default: [],
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x540',
+          '720x540',
+          '540x540',
+          '540x720',
+          '540x960',
+          '1280x720',
+          '960x720',
+          '720x720',
+          '720x960',
+          '720x1280',
+          '1920x1080',
+          '1440x1080',
+          '1080x1080',
+          '1080x1440',
+          '1080x1920',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.3125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input reference images along with a text description to generate video. ViduQ2 reference-to-video is a model designed for precise instruction adherence and nuanced emotion capture. It offers outstanding narrative control, accurately interpreting and expressing micro-expression changes; features rich cinematic language, smooth camera movements, and strong visual tension. Widely applicable to film and animation, advertising and e-commerce, short dramas, and cultural tourism industries.',
+    displayName: 'Vidu Q2 Reference-to-Video',
+    id: 'vidu/viduq2_reference2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrls: {
+        default: [],
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x540',
+          '720x540',
+          '540x540',
+          '540x720',
+          '540x960',
+          '1280x720',
+          '960x720',
+          '720x720',
+          '720x960',
+          '720x1280',
+          '1920x1080',
+          '1440x1080',
+          '1080x1080',
+          '1080x1440',
+          '1080x1920',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.28125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its t2v (text-to-video) capability enables precise control over video generation through prompts, accurately reproducing various cinematic language techniques such as push, pull, pan, tilt, and tracking shots, with smooth camera movements and well-controlled perspective transitions. The model supports up to 15-second video generation, includes music with direct video output, and supports multiple languages.',
+    displayName: 'PixVerse C1 T2V',
+    enabled: true,
+    id: 'pixverse/pixverse-c1-t2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '640x432',
+          '432x640',
+          '640x288',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1024x688',
+          '688x1024',
+          '1024x448',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1200x800',
+          '800x1200',
+          '1280x560',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+          '1776x1184',
+          '1184x1776',
+          '1920x832',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
+    type: 'video',
+  },
+  {
+    description:
+      'V6 is PixVerse’s new model launched at the end of March 2026. Its t2v (text-to-video) model allows precise control of video visuals through prompts, accurately reproducing various cinematic techniques. Camera movements such as push, pull, pan, tilt, tracking, and follow are smooth and natural, with precise and controllable perspective switching. It supports up to 15-second videos, direct output of music and video, and multiple languages.',
+    displayName: 'PixVerse V6 T2V',
+    enabled: true,
+    id: 'pixverse/pixverse-v6-t2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '640x432',
+          '432x640',
+          '640x288',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1024x688',
+          '688x1024',
+          '1024x448',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1200x800',
+          '800x1200',
+          '1280x560',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+          '1776x1184',
+          '1184x1776',
+          '1920x832',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-03-30',
+    type: 'video',
+  },
+  {
+    description:
+      'Input a text description to generate high-quality videos with second-level speed and precise semantic alignment, supporting multiple styles. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly improves image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are enhanced in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further raising overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 T2V',
+    id: 'pixverse/pixverse-v5.6-t2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its it2v (image-to-video) capability not only provides prompt controllability similar to t2v (text-to-video), but also preserves the color, saturation, scenes, and character features of reference images with high fidelity. Compared to V6, it offers enhanced prompt interpretation, stronger creativity, and delivers fight choreography and visual effects (such as spells) closer to professional cinematic standards. The model supports up to 15-second video generation, includes music with direct video output, and supports multiple languages. It is particularly well-suited for short-duration shots such as single-person close-ups, monologues, freeze-frame or slow-motion sequences, and transitional establishing shots.',
+    displayName: 'PixVerse C1 IT2V',
+    enabled: true,
+    id: 'pixverse/pixverse-c1-it2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
+    type: 'video',
+  },
+  {
+    description:
+      'V6 is PixVerse’s new model launched at the end of March 2026. Its it2v (image-to-video) model ranks second globally. In addition to the prompt-control capabilities of t2v (text-to-video), it2v can accurately reproduce the colors, saturation, scenes, and character features of reference images, delivering stronger character emotions and high-speed motion performance. It supports up to 15-second videos, direct output of music and video, and multiple languages. Ideal for scenarios such as e-commerce product close-ups, advertising promos, and simulated C4D modeling to showcase product structures, with one-click direct output.',
+    displayName: 'PixVerse V6 IT2V',
+    enabled: true,
+    id: 'pixverse/pixverse-v6-it2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-03-30',
+    type: 'video',
+  },
+  {
+    description:
+      'Upload any image to freely customize the story, pacing, and style, generating vivid and coherent videos. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly enhances image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are improved in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further elevating overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 IT2V',
+    id: 'pixverse/pixverse-v5.6-it2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its kf2v (keyframe-to-video) capability enables smooth and natural transitions between any two input images. The model supports up to 15-second video generation, includes music with direct video output, and supports multiple languages.',
+    displayName: 'PixVerse C1 KF2V',
+    enabled: true,
+    id: 'pixverse/pixverse-c1-kf2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
+    type: 'video',
+  },
+  {
+    description:
+      'V6 is PixVerse’s new model launched at the end of March 2026. Its kf2v (keyframe-to-video) model can seamlessly connect any two images, producing smoother and more natural video transitions. It supports up to 15-second videos, direct output of music and video, and multiple languages.',
+    displayName: 'PixVerse V6 KF2V',
+    enabled: true,
+    id: 'pixverse/pixverse-v6-kf2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-03-30',
+    type: 'video',
+  },
+  {
+    description:
+      'Achieve seamless transitions between any two images, creating smoother and more natural scene changes with visually striking effects. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly improves image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are enhanced in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further elevating overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 KF2V',
+    id: 'pixverse/pixverse-v5.6-kf2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its r2v (reference-to-video) capability supports inputting 2–7 images, intelligently blending multiple subjects while retaining prompt controllability similar to t2v (text-to-video), as well as the consistency and creativity of it2v (image-to-video). It delivers fight choreography and visual effects (e.g., spells and action sequences) closer to professional cinematic standards. The model supports up to 15-second video generation, includes music with direct video output, and handles multiple languages. It is well-suited for complex scenes such as multi-character group shots, dialogues, and interactions, particularly in medium and wide shots. If a single multi-panel storyboard image is provided (supporting up to a 9-panel grid), it can generate a continuous multi-shot video sequence in one click.',
+    displayName: 'PixVerse C1 R2V',
+    id: 'pixverse/pixverse-c1-r2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      imageUrls: {
+        default: [],
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '640x432',
+          '432x640',
+          '640x288',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1024x688',
+          '688x1024',
+          '1024x448',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1200x800',
+          '800x1200',
+          '1280x560',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+          '1776x1184',
+          '1184x1776',
+          '1920x832',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
+    type: 'video',
+  },
+  {
+    description:
+      'Input 2–7 images to intelligently merge different subjects while maintaining unified style and coordinated motion, easily building rich narrative scenes and enhancing content controllability and creative freedom. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly improves image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are enhanced in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further elevating overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 R2V',
+    id: 'pixverse/pixverse-v5.6-r2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      generateAudio: { default: true },
+      imageUrls: {
+        default: [],
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+];
+
+export const allModels = [...qwenChatModels, ...qwenImageModels, ...qwenVideoModels];
 
 export default allModels;

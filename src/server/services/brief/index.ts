@@ -1,3 +1,5 @@
+import type { TaskStatus } from '@lobechat/types';
+
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
@@ -11,42 +13,79 @@ export interface AgentAvatarInfo {
   title: string | null;
 }
 
-export type BriefWithAgents = BriefItem & { agents: AgentAvatarInfo[] };
+export type BriefWithAgent = BriefItem & {
+  /** Avatar of the agent that produced this brief; `null` when the brief has no `agentId` or the agent has been deleted. */
+  agent: AgentAvatarInfo | null;
+  /** Agents related to this brief, ordered with the direct producing agent before task-tree agents. */
+  agents: AgentAvatarInfo[];
+  /** Parent task's runtime status — `scheduled` marks a task parked between automated runs. */
+  taskStatus: TaskStatus | null;
+};
 
 export class BriefService {
   private agentModel: AgentModel;
   private briefModel: BriefModel;
+  private db: LobeChatDatabase;
   private taskModel: TaskModel;
+  private userId: string;
 
   constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
+    this.userId = userId;
     this.agentModel = new AgentModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
     this.taskModel = new TaskModel(db, userId);
   }
 
-  async enrichBriefsWithAgents(briefs: BriefItem[]): Promise<BriefWithAgents[]> {
-    const taskIds = briefs.map((b) => b.taskId).filter((id): id is string => id !== null);
-
-    if (taskIds.length === 0) {
-      return briefs.map((brief) => ({ ...brief, agents: [] }));
+  async enrichBriefsWithAgents(briefs: BriefItem[]): Promise<BriefWithAgent[]> {
+    const taskIds = [...new Set(briefs.map((b) => b.taskId).filter((id): id is string => !!id))];
+    const directAgentIds = [
+      ...new Set(briefs.map((b) => b.agentId).filter((id): id is string => !!id)),
+    ];
+    if (taskIds.length === 0 && directAgentIds.length === 0) {
+      return briefs.map((brief) => ({ ...brief, agent: null, agents: [], taskStatus: null }));
     }
 
-    const taskAgentIdsMap = await this.taskModel.getTreeAgentIdsForTaskIds(taskIds);
+    const emptyTreeAgentIdsByTaskId: Record<string, string[]> = {};
+    const [taskRows, treeAgentIdsByTaskId] = await Promise.all([
+      taskIds.length > 0 ? this.taskModel.findByIds(taskIds) : Promise.resolve([]),
+      taskIds.length > 0
+        ? this.taskModel.getTreeAgentIdsForTaskIds(taskIds)
+        : Promise.resolve(emptyTreeAgentIdsByTaskId),
+    ]);
 
-    const allAgentIds = [...new Set(Object.values(taskAgentIdsMap).flat())];
-    let agentMap: Record<string, AgentAvatarInfo> = {};
+    const agentIds = [
+      ...new Set([...directAgentIds, ...Object.values(treeAgentIdsByTaskId).flat()]),
+    ];
+    const agentList =
+      agentIds.length > 0 ? await this.agentModel.getAgentAvatarsByIds(agentIds) : [];
+    const taskStatusMap = Object.fromEntries(
+      taskRows.map((t) => [t.id, (t.status as TaskStatus) ?? null]),
+    );
+    const agentMap: Record<string, AgentAvatarInfo> = Object.fromEntries(
+      agentList.map((a) => [a.id, a]),
+    );
 
-    if (allAgentIds.length > 0) {
-      const agentList = await this.agentModel.getAgentAvatarsByIds(allAgentIds);
-      agentMap = Object.fromEntries(agentList.map((a) => [a.id, a]));
-    }
+    return briefs.map((brief) => {
+      const briefAgentIds = new Set<string>();
+      if (brief.agentId) {
+        briefAgentIds.add(brief.agentId);
+      }
+      if (brief.taskId) {
+        for (const agentId of treeAgentIdsByTaskId[brief.taskId] ?? []) {
+          briefAgentIds.add(agentId);
+        }
+      }
 
-    return briefs.map((brief) => ({
-      ...brief,
-      agents: (brief.taskId ? taskAgentIdsMap[brief.taskId] || [] : [])
-        .map((id) => agentMap[id])
-        .filter(Boolean),
-    }));
+      return {
+        ...brief,
+        agent: brief.agentId ? (agentMap[brief.agentId] ?? null) : null,
+        agents: [...briefAgentIds]
+          .map((agentId) => agentMap[agentId])
+          .filter((agent): agent is AgentAvatarInfo => Boolean(agent)),
+        taskStatus: brief.taskId ? (taskStatusMap[brief.taskId] ?? null) : null,
+      };
+    });
   }
 
   async list(options?: { limit?: number; offset?: number; type?: string }) {
@@ -58,5 +97,53 @@ export class BriefService {
   async listUnresolved() {
     const items = await this.briefModel.listUnresolved();
     return this.enrichBriefsWithAgents(items);
+  }
+
+  /**
+   * Resolve a brief and propagate accept signals to the task lifecycle.
+   *
+   * Terminal accept rule: `approve` on a `result` brief completes the task. The
+   * `result` type is the only brief that carries terminal-deliverable semantics
+   * — the agent's `result` brief is a *proposal* of completion that the user
+   * accepts here (and the review max-iterations force-pass also surfaces a
+   * `result` brief for the same reason).
+   *
+   * `decision` briefs are non-terminal checkpoints (mid-execution approvals
+   * like "should I proceed with X?") — approving them must NOT move the task to
+   * `completed`, otherwise resume/continue flows break. Other actions
+   * (feedback / retry / acknowledge) likewise do not transition task status
+   * here; retry triggers re-execution via a separate flow.
+   *
+   * Tasks parked at `status === 'scheduled'` are also exempt: that status means
+   * the task is between automated runs (heartbeat or schedule), so approving
+   * one occurrence's `result` brief is a UI dismissal, not a lifecycle
+   * terminal — the next tick must still surface. Discriminating on the runtime
+   * `status` (rather than `automationMode`) also means a manual run of a
+   * recurring task — which leaves the task in `scheduled` between runs — is
+   * handled the same way.
+   */
+  async resolve(
+    id: string,
+    options?: { action?: string; comment?: string },
+  ): Promise<BriefItem | null> {
+    const brief = await this.briefModel.resolve(id, options);
+    if (!brief) return null;
+
+    if (options?.action === 'approve' && brief.taskId && brief.type === 'result') {
+      const task = await this.taskModel.findById(brief.taskId);
+      if (task && task.status !== 'scheduled') {
+        await this.taskModel.updateStatus(brief.taskId, 'completed', { error: null });
+        // Cascade to downstream tasks whose dependencies are now satisfied.
+        // Without this, dependents stay in `backlog` until the user manually
+        // triggers them — defeating the point of the dependency edge.
+        // Lazy-loaded to avoid pulling ModelRuntime into BriefService's
+        // import graph (TaskRunner → TaskLifecycle → ModelRuntime).
+        const { TaskRunnerService } = await import('@/server/services/taskRunner');
+        const runner = new TaskRunnerService(this.db, this.userId);
+        await runner.cascadeOnCompletion(brief.taskId);
+      }
+    }
+
+    return brief;
   }
 }

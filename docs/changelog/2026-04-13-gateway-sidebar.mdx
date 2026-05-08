@@ -1,0 +1,33 @@
+---
+title: Agent Gateway & Customizable Sidebar
+description: >-
+  Server-side agent execution via Gateway mode, customizable sidebar layout,
+  agent workspace with document management, and new model support.
+tags:
+  - Gateway
+  - Sidebar
+  - Agent Workspace
+  - Task Manager
+---
+
+# Agent Gateway & Customizable Sidebar
+
+This release focuses on making everyday Agent work more stable and easier to manage.
+
+Agents can now run on the server through Gateway mode and stream results over WebSocket. When you switch topics or hit a short disconnect, sessions reconnect and resume more smoothly, so long-running execution is less likely to break.
+
+Navigation is now easier to shape around your own habits. You can choose which items appear in the sidebar, reorder them in a dedicated customization modal, and use a stronger Recents experience with search, rename, and quick actions.
+
+Document and task workflows are now more centralized. A dedicated right-side workspace gives you one place to browse, rename, delete, and review history for Agent documents. Running tasks move into an isolated task manager view with independent topic state, so your main conversations stay focused.
+
+This update also improves several high-frequency input and tooling actions. You can rewrite or translate prompts directly in chat input before sending, capture screen content with an overlay picker and attach it in one step, and use LobeHub CLI from desktop with one-click install to your system `PATH`.
+
+On model coverage, this release adds Zhipu GLM-5.1, Seedance 2.0 video generation, and the StreamLake provider.
+
+## Improvements and fixes
+
+- Desktop now uses Electron native `fetch` for more reliable remote requests.
+- Optimistic loading states reduce streaming flicker while the assistant is thinking.
+- Agent detail pages now load correctly after refresh instead of staying in a spinner state.
+- Error classification now gives clearer messages for insufficient balance and deactivated accounts.
+- Fixed a context engine crash path caused by non-string content in document injection.

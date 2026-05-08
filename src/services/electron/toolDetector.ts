@@ -1,4 +1,10 @@
-import { type ToolCategory, type ToolInfo, type ToolStatus } from '@lobechat/electron-client-ipc';
+import {
+  type ClaudeAuthStatus,
+  type DetectHeterogeneousAgentCommandParams,
+  type ToolCategory,
+  type ToolInfo,
+  type ToolStatus,
+} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -8,6 +14,12 @@ class ToolDetectorService {
    */
   detectTool = async (name: string, force = false): Promise<ToolStatus> => {
     return ensureElectronIpc().toolDetector.detectTool(name, force);
+  };
+
+  detectHeterogeneousAgentCommand = async (
+    params: DetectHeterogeneousAgentCommandParams,
+  ): Promise<ToolStatus> => {
+    return ensureElectronIpc().toolDetector.detectHeterogeneousAgentCommand(params);
   };
 
   /**
@@ -74,6 +86,13 @@ class ToolDetectorService {
    */
   getToolsInCategory = (category: ToolCategory): ToolInfo[] => {
     return ensureElectronIpc().toolDetector.getToolsInCategory(category);
+  };
+
+  /**
+   * Get Claude Code CLI auth/account status
+   */
+  getClaudeAuthStatus = async (command = 'claude'): Promise<ClaudeAuthStatus | null> => {
+    return ensureElectronIpc().toolDetector.getClaudeAuthStatus(command);
   };
 }
 

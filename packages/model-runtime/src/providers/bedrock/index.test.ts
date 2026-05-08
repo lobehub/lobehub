@@ -193,6 +193,115 @@ describe('LobeBedrockAI', () => {
         expect(result).toBeInstanceOf(Response);
       });
 
+      it('should drop assistant prefill for Claude Opus 4.7', async () => {
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+        await instance.chat({
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: 'Partial assistant draft', role: 'assistant' },
+          ],
+          model: 'global.anthropic.claude-opus-4-7',
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        const body = JSON.parse(commandInput.body);
+
+        expect(body.messages).toEqual([
+          {
+            content: 'Continue this answer',
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should convert Claude assistant reasoning signatures to thinking content', async () => {
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: 'Here is my response.',
+              model: 'claude-opus-4-7',
+              reasoning: {
+                content: 'Let me think about this...',
+                signature: 'EuYBCkQYAiJAHnHRJG4nPBrdTlo6CmXoyE8WYoQ=',
+              },
+              role: 'assistant',
+            } as any,
+            { content: 'Continue', role: 'user' },
+          ],
+          model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        const body = JSON.parse(commandInput.body);
+
+        expect(body.messages[1]).toEqual({
+          content: [
+            {
+              signature: 'EuYBCkQYAiJAHnHRJG4nPBrdTlo6CmXoyE8WYoQ=',
+              thinking: 'Let me think about this...',
+              type: 'thinking',
+            },
+            { text: 'Here is my response.', type: 'text' },
+          ],
+          role: 'assistant',
+        });
+      });
+
+      it('should not convert non-Claude reasoning signatures to thinking content', async () => {
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: 'Here is my response.',
+              model: 'deepseek-v4-pro',
+              provider: 'lobehub',
+              reasoning: {
+                content: 'DeepSeek reasoning',
+                signature: '340acffe-0000-4000-8000-000000000000',
+              },
+              role: 'assistant',
+            } as any,
+            { content: 'Continue', role: 'user' },
+          ],
+          model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        const body = JSON.parse(commandInput.body);
+
+        expect(body.messages[1]).toEqual({
+          content: 'Here is my response.',
+          role: 'assistant',
+        });
+      });
+
       it('should handle system prompt correctly', async () => {
         // Arrange
         const mockStream = new ReadableStream({

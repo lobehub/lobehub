@@ -45,8 +45,18 @@ describe('aiModelSelectors', () => {
           functionCall: true,
           vision: true,
           reasoning: true,
+          imageOutput: true,
         },
         contextWindowTokens: 4000,
+        settings: {
+          disabledParams: ['temperature', 'top_p'],
+          extendParamOptions: {
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          },
+        },
         type: 'chat',
       },
       {
@@ -207,6 +217,20 @@ describe('aiModelSelectors', () => {
         false,
       );
     });
+
+    it('should check image output support', () => {
+      expect(aiModelSelectors.isModelSupportImageOutput('model1', 'provider1')(mockState)).toBe(
+        true,
+      );
+      // Missing ability defaults to false via `|| false` coercion.
+      expect(aiModelSelectors.isModelSupportImageOutput('model4', 'provider2')(mockState)).toBe(
+        false,
+      );
+      // Unknown model returns false instead of throwing.
+      expect(aiModelSelectors.isModelSupportImageOutput('missing', 'provider1')(mockState)).toBe(
+        false,
+      );
+    });
   });
 
   describe('context window checks', () => {
@@ -225,6 +249,44 @@ describe('aiModelSelectors', () => {
       );
       expect(
         aiModelSelectors.modelContextWindowTokens('model4', 'provider2')(mockState),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('modelDisabledParams', () => {
+    it('should return disabledParams when declared on the model card', () => {
+      expect(aiModelSelectors.modelDisabledParams('model1', 'provider1')(mockState)).toEqual([
+        'temperature',
+        'top_p',
+      ]);
+    });
+
+    it('should return undefined when the model has no settings', () => {
+      expect(
+        aiModelSelectors.modelDisabledParams('model4', 'provider2')(mockState),
+      ).toBeUndefined();
+    });
+
+    it('should return undefined for an unknown model', () => {
+      expect(
+        aiModelSelectors.modelDisabledParams('missing', 'provider1')(mockState),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('modelExtendParamOptions', () => {
+    it('should return extendParamOptions when declared on the model card', () => {
+      expect(aiModelSelectors.modelExtendParamOptions('model1', 'provider1')(mockState)).toEqual({
+        enableReasoning: {
+          defaultValue: true,
+          includeBudget: false,
+        },
+      });
+    });
+
+    it('should return undefined when the model has no settings', () => {
+      expect(
+        aiModelSelectors.modelExtendParamOptions('model4', 'provider2')(mockState),
       ).toBeUndefined();
     });
   });

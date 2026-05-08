@@ -28,9 +28,21 @@ jobs:
             ✅ @{{ author }}
 
             This issue is closed, If you have any questions, you can comment and reply.
+      - name: Checkout repository
+        if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
+        uses: actions/checkout@v4
+
+      - name: Check if PR author is maintainer
+        if: github.event.pull_request.merged == true
+        id: maintainer-check
+        run: |
+          if [ -f .github/maintainers.txt ] && grep -qx "${{ github.event.pull_request.user.login }}" .github/maintainers.txt; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Auto Comment on Pull Request Merged
         uses: actions-cool/pr-welcome@main
-        if: github.event.pull_request.merged == true
+        if: github.event.pull_request.merged == true && steps.maintainer-check.outputs.skip != 'true'
         with:
           token: ${{ secrets.GH_TOKEN }}
           comment: |

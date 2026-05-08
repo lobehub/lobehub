@@ -63,7 +63,12 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "claude-sonnet-4-6",
     "provider": "anthropic",
   },
-  "queryRewrite": {
+  "inputCompletion": {
+    "enabled": false,
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
+  "promptRewrite": {
     "enabled": true,
     "model": "gpt-5.4-mini",
     "provider": "openai",
@@ -104,7 +109,6 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "enableCompressHistory": true,
       "enableContextCompression": true,
       "enableHistoryCount": false,
-      "enableReasoning": false,
       "enableStreaming": true,
       "historyCount": 20,
       "reasoningBudgetToken": 1024,
@@ -149,7 +153,6 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "enableCompressHistory": true,
     "enableContextCompression": true,
     "enableHistoryCount": false,
-    "enableReasoning": false,
     "enableStreaming": true,
     "historyCount": 20,
     "reasoningBudgetToken": 1024,

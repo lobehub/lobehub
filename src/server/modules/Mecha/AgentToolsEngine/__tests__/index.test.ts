@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -209,6 +210,40 @@ describe('createServerAgentToolsEngine', () => {
     });
 
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
+  });
+
+  it('should enable VisualUnderstanding when injected into runtime plugins', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [LobeAgentManifest.identifier] },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [LobeAgentManifest.identifier],
+    });
+
+    expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
+  });
+
+  it('should not enable VisualUnderstanding by default', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: { plugins: [] },
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      toolIds: [],
+    });
+
+    expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
   });
 
   it('should enable KnowledgeBase when hasEnabledKnowledgeBases is true', () => {
@@ -475,6 +510,51 @@ describe('createServerAgentToolsEngine', () => {
 
       expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
     });
+
+    it('should disable RemoteDevice in bot conversations when no device auto-activated', () => {
+      // Bot callers (Telegram/Discord/Slack) have no client-executor, so the
+      // legacy rule would auto-enable RemoteDevice, and its systemRole would
+      // hijack the Activator and tell the model to ask the user to open the
+      // desktop app — blocking cloud-tool discovery (e.g. Klavis Gmail).
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        deviceContext: { gatewayConfigured: true },
+        isBotConversation: true,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+
+    it('should still enable RemoteDevice in bot conversations when a device is auto-activated', () => {
+      // When a device is bound / auto-activated for the bot topic, LocalSystem
+      // takes over the remote proxy anyway — so RemoteDevice stays disabled
+      // (its usual rule), not due to isBotConversation.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [RemoteDeviceManifest.identifier] },
+        deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        isBotConversation: true,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
   });
 
   describe('LocalSystem + RemoteDevice interaction', () => {
@@ -506,6 +586,119 @@ describe('createServerAgentToolsEngine', () => {
           plugins: [LocalSystemManifest.identifier, RemoteDeviceManifest.identifier],
         },
         deviceContext: { gatewayConfigured: true, deviceOnline: true, autoActivated: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier, RemoteDeviceManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
+      expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
+    });
+  });
+
+  describe('clientRuntime === "desktop" (Phase 6.4)', () => {
+    it('enables LocalSystem when caller is desktop, regardless of device-proxy config', () => {
+      // The Agent Gateway WS used to push `tool_execute` is orthogonal to
+      // the legacy device-proxy. A desktop Electron caller is already the
+      // execution target — no device-proxy prerequisite required.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        clientRuntime: 'desktop',
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
+    });
+
+    it('respects agent-level runtimeMode opt-out for desktop callers', () => {
+      // User has configured the agent to NOT use local runtime on desktop.
+      // Even though the caller is a desktop client, local-system stays off.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: {
+          chatConfig: {
+            runtimeEnv: { runtimeMode: { desktop: 'none' } },
+          },
+          plugins: [LocalSystemManifest.identifier],
+        },
+        clientRuntime: 'desktop',
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+    });
+
+    it('can suppress only LocalSystem while preserving the rest of tool discovery', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier, WebBrowsingManifest.identifier] },
+        clientRuntime: 'desktop',
+        disableLocalSystem: true,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [LocalSystemManifest.identifier, WebBrowsingManifest.identifier],
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+      expect(result.enabledToolIds).toContain(WebBrowsingManifest.identifier);
+    });
+
+    it('does not enable LocalSystem for web callers even when gateway is configured', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        clientRuntime: 'web',
+        deviceContext: { gatewayConfigured: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+    });
+
+    it('suppresses RemoteDevice when caller is a desktop client', () => {
+      // Even when device-proxy is configured, a desktop caller has local IPC
+      // so the proxy is redundant. Otherwise the LLM might pick RemoteDevice
+      // first (via `listOnlineDevices` / `activateDevice`) and route tool calls
+      // to a *different* registered device instead of back to the caller.
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: {
+          plugins: [LocalSystemManifest.identifier, RemoteDeviceManifest.identifier],
+        },
+        clientRuntime: 'desktop',
+        deviceContext: { gatewayConfigured: true },
         model: 'gpt-4',
         provider: 'openai',
       });

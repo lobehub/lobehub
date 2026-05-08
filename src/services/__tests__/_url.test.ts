@@ -6,7 +6,6 @@ describe('API_ENDPOINTS', () => {
   it('should return correct basePath URLs', () => {
     expect(API_ENDPOINTS.oauth).toBe('/api/auth');
     expect(API_ENDPOINTS.proxy).toBe('/webapi/proxy');
-    expect(API_ENDPOINTS.gateway).toBe('/webapi/plugin/gateway');
     expect(API_ENDPOINTS.trace).toBe('/webapi/trace');
     expect(API_ENDPOINTS.stt).toBe('/webapi/stt/openai');
     expect(API_ENDPOINTS.edge).toBe('/webapi/tts/edge');

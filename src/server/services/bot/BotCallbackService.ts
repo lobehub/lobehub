@@ -5,11 +5,18 @@ import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
-import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
-import { platformRegistry } from './platforms';
+import type { BotReplyLocale, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
+import {
+  getBotReplyLocale,
+  getStepReactionEmoji,
+  platformRegistry,
+  resolveBotProviderConfig,
+} from './platforms';
+import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
   renderError,
   renderFinalReply,
@@ -30,10 +37,15 @@ export interface BotCallbackBody {
   elapsedMs?: number;
   errorMessage?: string;
   executionTimeMs?: number;
+  /** Hook ID from HookDispatcher (e.g. 'bot-step-progress', 'bot-completion') */
+  hookId?: string;
+  /** Hook type from HookDispatcher (e.g. 'afterStep', 'onComplete') */
+  hookType?: string;
   lastAssistantContent?: string;
   lastLLMContent?: string;
   lastToolsCalling?: any;
   llmCalls?: number;
+  operationId?: string;
   platformThreadId: string;
   progressMessageId?: string;
   reason?: string;
@@ -41,6 +53,8 @@ export interface BotCallbackBody {
   shouldContinue?: boolean;
   stepType?: 'call_llm' | 'call_tool';
   thinking?: boolean;
+  /** Thread name from the platform (e.g. Discord thread title) */
+  threadName?: string;
   toolCalls?: number;
   toolsCalling?: any;
   toolsResult?: any;
@@ -70,7 +84,7 @@ export class BotCallbackService {
     const { type, applicationId, platformThreadId, progressMessageId } = body;
     const platform = platformThreadId.split(':')[0];
 
-    const { client, messenger, charLimit } = await this.createMessenger(
+    const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger(
       platform,
       applicationId,
       platformThreadId,
@@ -78,21 +92,36 @@ export class BotCallbackService {
 
     const entry = platformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
+    const replyLocale = getBotReplyLocale(platform);
 
     if (type === 'step') {
-      if (canEdit && progressMessageId) {
-        await this.handleStep(body, messenger, progressMessageId, client);
+      if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
+        await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
+      }
+      // Swap the user-message reaction to match the current step type (tool
+      // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
+      // the progress-message edit and the reaction are separate UX channels.
+      await this.swapStepReaction(body, client, platform);
+      // Only renew typing when more steps are expected. The final step
+      // (shouldContinue=false) may arrive after the completion callback
+      // via async delivery (QStash), which would restart typing after stop.
+      if (body.shouldContinue) {
+        this.renewGatewayTyping(connectionId, platformThreadId);
       }
     } else if (type === 'completion') {
+      // Stop typing on the gateway
+      this.stopGatewayTyping(connectionId, platformThreadId);
+
       await this.handleCompletion(
         body,
         messenger,
         progressMessageId ?? '',
         client,
+        replyLocale,
         charLimit,
         canEdit,
       );
-      await this.removeEyesReaction(body, client, platformThreadId);
+      await this.clearStepReaction(body, client, platform);
       // Clear the active thread tracker so the thread can accept new messages.
       // In queue mode, the bridge handler's finally block skips this cleanup
       // to keep the thread marked active while the agent runs on the job queue.
@@ -105,7 +134,13 @@ export class BotCallbackService {
     platform: string,
     applicationId: string,
     platformThreadId: string,
-  ): Promise<{ charLimit?: number; messenger: PlatformMessenger; client: PlatformClient }> {
+  ): Promise<{
+    charLimit?: number;
+    connectionId: string;
+    client: PlatformClient;
+    messenger: PlatformMessenger;
+    settings: Record<string, unknown>;
+  }> {
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
       this.db,
       platform,
@@ -129,22 +164,19 @@ export class BotCallbackService {
       throw new Error(`Unsupported platform: ${platform}`);
     }
 
-    const settings = (row as any).settings as Record<string, unknown> | undefined;
-    const charLimit = (settings?.charLimit as number) || undefined;
-
-    const config: BotProviderConfig = {
+    const { config, settings } = resolveBotProviderConfig(entry, {
       applicationId,
       credentials,
-      platform,
-      settings: settings || {},
-    };
+      settings: (row as any).settings as Record<string, unknown> | undefined,
+    });
+    const charLimit = (settings.charLimit as number) || undefined;
 
     const client = entry.clientFactory.createClient(config, {
       redisClient: getAgentRuntimeRedisClient() as any,
     });
     const messenger = client.getMessenger(platformThreadId);
 
-    return { charLimit, messenger, client };
+    return { charLimit, connectionId: row.id, messenger, client, settings };
   }
 
   private async handleStep(
@@ -152,27 +184,31 @@ export class BotCallbackService {
     messenger: PlatformMessenger,
     progressMessageId: string,
     client: PlatformClient,
+    replyLocale: BotReplyLocale,
   ): Promise<void> {
     if (!body.shouldContinue) return;
 
-    const msgBody = renderStepProgress({
-      content: body.content,
-      elapsedMs: body.elapsedMs,
-      executionTimeMs: body.executionTimeMs ?? 0,
-      lastContent: body.lastLLMContent,
-      lastToolsCalling: body.lastToolsCalling,
-      reasoning: body.reasoning,
-      stepType: body.stepType ?? ('call_llm' as const),
-      thinking: body.thinking ?? false,
-      toolsCalling: body.toolsCalling,
-      toolsResult: body.toolsResult,
-      totalCost: body.totalCost ?? 0,
-      totalInputTokens: body.totalInputTokens ?? 0,
-      totalOutputTokens: body.totalOutputTokens ?? 0,
-      totalSteps: body.totalSteps ?? 0,
-      totalTokens: body.totalTokens ?? 0,
-      totalToolCalls: body.totalToolCalls,
-    });
+    const msgBody = renderStepProgress(
+      {
+        content: body.content,
+        elapsedMs: body.elapsedMs,
+        executionTimeMs: body.executionTimeMs ?? 0,
+        lastContent: body.lastLLMContent,
+        lastToolsCalling: body.lastToolsCalling,
+        reasoning: body.reasoning,
+        stepType: body.stepType ?? ('call_llm' as const),
+        thinking: body.thinking ?? false,
+        toolsCalling: body.toolsCalling,
+        toolsResult: body.toolsResult,
+        totalCost: body.totalCost ?? 0,
+        totalInputTokens: body.totalInputTokens ?? 0,
+        totalOutputTokens: body.totalOutputTokens ?? 0,
+        totalSteps: body.totalSteps ?? 0,
+        totalTokens: body.totalTokens ?? 0,
+        totalToolCalls: body.totalToolCalls,
+      },
+      replyLocale,
+    );
 
     const stats: UsageStats = {
       elapsedMs: body.elapsedMs,
@@ -189,7 +225,7 @@ export class BotCallbackService {
     try {
       await messenger.editMessage(progressMessageId, progressText);
       if (!isLlmFinalResponse) {
-        await messenger.triggerTyping();
+        await messenger.triggerTyping?.();
       }
     } catch (error) {
       log('handleStep: failed to edit progress message: %O', error);
@@ -201,13 +237,19 @@ export class BotCallbackService {
     messenger: PlatformMessenger,
     progressMessageId: string,
     client: PlatformClient,
+    replyLocale: BotReplyLocale,
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
-    const { reason, lastAssistantContent, errorMessage } = body;
+    const { reason, lastAssistantContent, errorMessage, operationId } = body;
 
     if (reason === 'error') {
-      const errorText = renderError(errorMessage || 'Agent execution failed');
+      log(
+        'handleCompletion: agent run failed, operationId=%s, errorMessage=%s',
+        operationId,
+        errorMessage,
+      );
+      const errorText = renderError(operationId, replyLocale);
       try {
         if (canEdit && progressMessageId) {
           await messenger.editMessage(progressMessageId, errorText);
@@ -221,7 +263,7 @@ export class BotCallbackService {
     }
 
     if (reason === 'interrupted') {
-      const stoppedText = renderStopped(errorMessage || 'Execution stopped.');
+      const stoppedText = renderStopped(errorMessage, replyLocale);
       try {
         await messenger.createMessage(stoppedText);
       } catch (error) {
@@ -266,29 +308,98 @@ export class BotCallbackService {
     }
   }
 
-  private async removeEyesReaction(
+  /**
+   * Swap the user-message reaction to match the current step type. Reads the
+   * previous emoji from Redis so the remove-then-add sequence ends with only
+   * one bot reaction visible. If Redis is unavailable, best-effort adds the
+   * new emoji — there's nothing to remove and falling back to "stack on each
+   * step" is strictly better than leaking nothing.
+   */
+  private async swapStepReaction(
     body: BotCallbackBody,
     client: PlatformClient,
-    platformThreadId: string,
+    platform: string,
   ): Promise<void> {
-    const { userMessageId } = body;
+    const { userMessageId, applicationId, platformThreadId } = body;
     if (!userMessageId) return;
 
-    // Thread-starter messages may live in the parent channel (e.g. Discord),
-    // so resolve the correct thread ID before obtaining the messenger.
+    const desiredEmoji = getStepReactionEmoji(body.stepType, body.toolsCalling);
     const reactionThreadId =
       client.resolveReactionThreadId?.(platformThreadId, userMessageId) ?? platformThreadId;
     const messenger = client.getMessenger(reactionThreadId);
 
+    const previous = await getReactionState(platform, applicationId, userMessageId);
+    if (previous?.emoji === desiredEmoji) return;
+
     try {
-      await messenger.removeReaction(userMessageId, '👀');
+      await messenger.replaceReaction?.(userMessageId, previous?.emoji ?? null, desiredEmoji);
     } catch (error) {
-      log('removeEyesReaction: failed: %O', error);
+      log('swapStepReaction: failed: %O', error);
     }
+
+    await saveReactionState(platform, applicationId, userMessageId, {
+      emoji: desiredEmoji,
+      reactionThreadId,
+    });
+  }
+
+  /**
+   * Remove whatever emoji was last applied to the user message and clear the
+   * tracking state. Falls back to the legacy `👀` when no state is recorded
+   * so pre-feature runs (or runs against a Redis-less setup) still clean up.
+   */
+  private async clearStepReaction(
+    body: BotCallbackBody,
+    client: PlatformClient,
+    platform: string,
+  ): Promise<void> {
+    const { userMessageId, applicationId, platformThreadId } = body;
+    if (!userMessageId) return;
+
+    const state = await getReactionState(platform, applicationId, userMessageId);
+    const emoji = state?.emoji ?? '👀';
+
+    // Thread-starter messages may live in the parent channel (e.g. Discord),
+    // so resolve the correct thread ID before obtaining the messenger.
+    const reactionThreadId =
+      state?.reactionThreadId ??
+      client.resolveReactionThreadId?.(platformThreadId, userMessageId) ??
+      platformThreadId;
+    const messenger = client.getMessenger(reactionThreadId);
+
+    try {
+      await messenger.replaceReaction?.(userMessageId, emoji, null);
+    } catch (error) {
+      log('clearStepReaction: failed: %O', error);
+    }
+
+    await clearReactionState(platform, applicationId, userMessageId);
+  }
+
+  /**
+   * Renew typing on the message-gateway. Each POST resets the 30s auto-stop timeout.
+   * Fire-and-forget — typing is best-effort.
+   */
+  private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
+    const client = getMessageGatewayClient();
+    if (!client.isEnabled) return;
+
+    client.startTyping(connectionId, platformThreadId).catch((err) => {
+      log('renewGatewayTyping failed: %O', err);
+    });
+  }
+
+  private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
+    const client = getMessageGatewayClient();
+    if (!client.isEnabled) return;
+
+    client.stopTyping(connectionId, platformThreadId).catch((err) => {
+      log('stopGatewayTyping failed: %O', err);
+    });
   }
 
   private summarizeTopicTitle(body: BotCallbackBody, messenger: PlatformMessenger): void {
-    const { reason, topicId, userId, userPrompt, lastAssistantContent } = body;
+    const { reason, topicId, userId, userPrompt, lastAssistantContent, threadName } = body;
     if (
       reason === 'error' ||
       reason === 'interrupted' ||
@@ -297,6 +408,21 @@ export class BotCallbackService {
       !userPrompt ||
       !lastAssistantContent
     ) {
+      return;
+    }
+
+    // Thread already has a user-set name — use it as topic title, skip LLM generation
+    if (threadName) {
+      const topicModel = new TopicModel(this.db, userId);
+      topicModel
+        .findById(topicId)
+        .then(async (topic) => {
+          if (topic?.title) return;
+          await topicModel.update(topicId, { title: threadName });
+        })
+        .catch((error) => {
+          log('summarizeTopicTitle: failed to set thread name as topic title: %O', error);
+        });
       return;
     }
 

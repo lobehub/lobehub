@@ -1,5 +1,9 @@
-export const handleAnthropicError = (error: any) => {
-  let errorResult: any = error;
+export const handleAnthropicError = (error: any): { errorResult: any; message?: string } => {
+  if (!error) {
+    return { errorResult: { message: 'Unknown error' }, message: 'Unknown error' };
+  }
+
+  let errorResult: any;
 
   if (error.error) {
     errorResult = error.error;
@@ -11,5 +15,5 @@ export const handleAnthropicError = (error: any) => {
     errorResult = { headers: error.headers, stack: error.stack, status: error.status };
   }
 
-  return { errorResult };
+  return { errorResult, message: error.message || errorResult?.message };
 };

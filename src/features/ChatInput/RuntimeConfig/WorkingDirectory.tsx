@@ -1,8 +1,10 @@
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, Divider, Input, Space, Switch } from 'antd';
-import { FolderOpen } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { Github } from '@lobehub/icons';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { CheckIcon, FolderIcon, FolderOpenIcon, GitBranchIcon, XIcon } from 'lucide-react';
+import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
@@ -11,160 +13,269 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
+import { addRecentDir, getRecentDirs, type RecentDirEntry, removeRecentDir } from './recentDirs';
+import { useRepoType } from './useRepoType';
+
+const styles = createStaticStyles(({ css }) => ({
+  chooseFolderItem: css`
+    cursor: pointer;
+
+    padding-block: 8px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
+
+    transition: background-color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  dirItem: css`
+    cursor: pointer;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    transition: background-color 0.2s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  dirItemActive: css`
+    background: ${cssVar.colorFillTertiary};
+  `,
+  dirName: css`
+    font-size: 13px;
+    font-weight: 500;
+    color: ${cssVar.colorText};
+  `,
+  dirPath: css`
+    overflow: hidden;
+
+    font-size: 11px;
+    color: ${cssVar.colorTextDescription};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  removeBtn: css`
+    cursor: pointer;
+
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextQuaternary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  scrollContainer: css`
+    overflow-y: auto;
+    max-height: 360px;
+  `,
+  sectionTitle: css`
+    padding-block: 6px 2px;
+    padding-inline: 8px;
+
+    font-size: 11px;
+    font-weight: 500;
+    color: ${cssVar.colorTextQuaternary};
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  `,
+}));
+
+const renderDirIcon = (repoType?: 'git' | 'github'): ReactNode => {
+  const iconStyle = { color: cssVar.colorTextTertiary, flex: 'none' as const };
+  if (repoType === 'github') return <Github size={16} style={iconStyle} />;
+  return (
+    <Icon icon={repoType === 'git' ? GitBranchIcon : FolderIcon} size={16} style={iconStyle} />
+  );
+};
+
+// Backfills `repoType` for entries cached before detection supported submodule /
+// worktree layouts — `useRepoType` probes and updates the recents cache.
+const RecentDirIcon = memo<{ entry: RecentDirEntry }>(({ entry }) => {
+  const probed = useRepoType(entry.path);
+  return <>{renderDirIcon(entry.repoType ?? probed)}</>;
+});
+
+RecentDirIcon.displayName = 'RecentDirIcon';
+
 interface WorkingDirectoryContentProps {
   agentId: string;
   onClose?: () => void;
 }
 
 const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, onClose }) => {
-  const { t } = useTranslation('plugin');
+  const { t } = useTranslation(['plugin', 'chat']);
 
-  // Get current values
   const agentWorkingDirectory = useAgentStore((s) =>
     agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s),
   );
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const effectiveDir = topicWorkingDirectory || agentWorkingDirectory;
 
-  // Actions
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const activeTopic = useChatStore((s) =>
+    s.activeTopicId ? topicSelectors.getTopicById(s.activeTopicId)(s) : undefined,
+  );
   const updateAgentRuntimeEnvConfig = useAgentStore((s) => s.updateAgentRuntimeEnvConfigById);
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
-  // Local state for editing
-  const [agentDir, setAgentDir] = useState(agentWorkingDirectory || '');
-  const [topicDir, setTopicDir] = useState(topicWorkingDirectory || '');
-  const [useTopicOverride, setUseTopicOverride] = useState(!!topicWorkingDirectory);
-  const [loading, setLoading] = useState(false);
+  const [recentDirs, setRecentDirs] = useState(getRecentDirs);
 
-  const handleSelectAgentFolder = useCallback(async () => {
-    if (!isDesktop) return;
-    const folder = await electronSystemService.selectFolder({
-      defaultPath: agentDir || undefined,
-      title: t('localSystem.workingDirectory.selectFolder'),
-    });
-    if (folder) setAgentDir(folder);
-  }, [agentDir, t]);
+  const displayDirs = useMemo(() => {
+    const dirs = [...recentDirs];
+    if (effectiveDir && !dirs.some((d) => d.path === effectiveDir)) {
+      dirs.unshift({ path: effectiveDir });
+    }
+    return dirs;
+  }, [recentDirs, effectiveDir]);
 
-  const handleSelectTopicFolder = useCallback(async () => {
-    if (!isDesktop) return;
-    const folder = await electronSystemService.selectFolder({
-      defaultPath: topicDir || undefined,
-      title: t('localSystem.workingDirectory.selectFolder'),
-    });
-    if (folder) setTopicDir(folder);
-  }, [topicDir, t]);
+  const selectDir = useCallback(
+    async (entry: RecentDirEntry) => {
+      const newPath = entry.path;
+      // Scope of the write: once a topic is active, changing cwd updates the
+      // topic's own binding (each topic is a CC session pinned to a dir).
+      // Only when there's no topic yet (blank conversation) do we touch the
+      // agent-level default so the next new topic inherits it.
+      const commit = async () => {
+        if (activeTopicId) {
+          await updateTopicMetadata(activeTopicId, { workingDirectory: newPath });
+        } else {
+          await updateAgentRuntimeEnvConfig(agentId, { workingDirectory: newPath });
+        }
+        setRecentDirs(addRecentDir(entry));
+        onClose?.();
+      };
 
-  const handleSave = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Save agent working directory
-      await updateAgentRuntimeEnvConfig(agentId, {
-        workingDirectory: agentDir || undefined,
-      });
+      // CC sessions are pinned per-cwd under `~/.claude/projects/<encoded-cwd>/`.
+      // Changing the topic's cwd makes `--resume` fail, so we warn before the
+      // implicit session reset.
+      const priorSessionId = activeTopic?.metadata?.heteroSessionId;
+      const priorCwd = activeTopic?.metadata?.workingDirectory;
+      const wouldResetSession = !!priorSessionId && !!priorCwd && priorCwd !== newPath;
 
-      // Save topic working directory if override is enabled
-      if (activeTopicId && useTopicOverride) {
-        await updateTopicMetadata(activeTopicId, {
-          workingDirectory: topicDir || undefined,
+      if (wouldResetSession) {
+        confirmModal({
+          cancelText: t('heteroAgent.switchCwd.cancel', { ns: 'chat' }),
+          content: t('heteroAgent.switchCwd.content', { ns: 'chat' }),
+          okText: t('heteroAgent.switchCwd.ok', { ns: 'chat' }),
+          onOk: commit,
+          title: t('heteroAgent.switchCwd.title', { ns: 'chat' }),
         });
-      } else if (activeTopicId && !useTopicOverride && topicWorkingDirectory) {
-        // Clear topic override if disabled
-        await updateTopicMetadata(activeTopicId, {
-          workingDirectory: undefined,
-        });
+        return;
       }
 
-      onClose?.();
-    } finally {
-      setLoading(false);
+      await commit();
+    },
+    [
+      activeTopicId,
+      activeTopic,
+      agentId,
+      t,
+      updateAgentRuntimeEnvConfig,
+      updateTopicMetadata,
+      onClose,
+    ],
+  );
+
+  const handleChooseFolder = useCallback(async () => {
+    if (!isDesktop) return;
+    const result = await electronSystemService.selectFolder({
+      defaultPath: effectiveDir || undefined,
+      title: t('localSystem.workingDirectory.selectFolder'),
+    });
+    if (result) {
+      await selectDir({ path: result.path, repoType: result.repoType });
     }
-  }, [
-    agentId,
-    agentDir,
-    activeTopicId,
-    useTopicOverride,
-    topicDir,
-    topicWorkingDirectory,
-    updateAgentRuntimeEnvConfig,
-    updateTopicMetadata,
-    onClose,
-  ]);
+  }, [effectiveDir, t, selectDir]);
+
+  const handleRemoveRecent = useCallback((e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    setRecentDirs(removeRecentDir(path));
+  }, []);
+
+  const getDirName = (path: string) => path.split('/').findLast(Boolean) || path;
 
   return (
-    <Flexbox gap={12} style={{ maxWidth: 600, minWidth: 320 }}>
-      <Flexbox gap={4}>
-        <Text style={{ fontSize: 12 }} type="secondary">
-          {t('localSystem.workingDirectory.agentLevel')}
-        </Text>
-        <Flexbox horizontal gap={8}>
-          <Input
-            placeholder={t('localSystem.workingDirectory.placeholder')}
-            size="small"
-            style={{ flex: 1, fontSize: 12 }}
-            value={agentDir}
-            variant={'filled'}
-            onChange={(e) => setAgentDir(e.target.value)}
-          />
-          {isDesktop && (
-            <Button size="small" type={'text'} onClick={handleSelectAgentFolder}>
-              <Icon icon={FolderOpen} size={14} />
-            </Button>
-          )}
-        </Flexbox>
-      </Flexbox>
-
-      {activeTopicId && (
-        <>
-          <Divider style={{ margin: 0 }} />
-
+    <Flexbox gap={4} style={{ minWidth: 280 }}>
+      <div className={styles.sectionTitle}>{t('localSystem.workingDirectory.recent')}</div>
+      <div className={styles.scrollContainer}>
+        {displayDirs.length === 0 ? (
           <Flexbox
-            horizontal
-            align="center"
-            gap={8}
-            style={{ cursor: 'pointer' }}
-            onClick={() => {
-              setUseTopicOverride(!useTopicOverride);
-            }}
+            align={'center'}
+            justify={'center'}
+            style={{ color: cssVar.colorTextQuaternary, fontSize: 12, padding: '12px 8px' }}
           >
-            <Switch checked={useTopicOverride} size="small" onChange={setUseTopicOverride} />
-            <Text style={{ fontSize: 12 }}>{t('localSystem.workingDirectory.topicOverride')}</Text>
+            {t('localSystem.workingDirectory.noRecent')}
           </Flexbox>
-
-          {useTopicOverride && (
-            <Flexbox gap={4}>
-              <Text style={{ fontSize: 12 }} type="secondary">
-                {t('localSystem.workingDirectory.topicLevel')}
-              </Text>
-              <Flexbox horizontal gap={8}>
-                <Input
-                  placeholder={t('localSystem.workingDirectory.placeholder')}
-                  size="small"
-                  style={{ flex: 1, fontSize: 12 }}
-                  value={topicDir}
-                  variant={'filled'}
-                  onChange={(e) => setTopicDir(e.target.value)}
-                />
-                {isDesktop && (
-                  <Button size="small" type={'text'} onClick={handleSelectTopicFolder}>
-                    <Icon icon={FolderOpen} size={14} />
-                  </Button>
+        ) : (
+          displayDirs.map((entry) => {
+            const isActive = entry.path === effectiveDir;
+            return (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={`${styles.dirItem} ${isActive ? styles.dirItemActive : ''}`}
+                gap={8}
+                key={entry.path}
+                onClick={() => selectDir(entry)}
+              >
+                <RecentDirIcon entry={entry} />
+                <Flexbox flex={1} style={{ minWidth: 0 }}>
+                  <div className={styles.dirName}>{getDirName(entry.path)}</div>
+                  <div className={styles.dirPath}>{entry.path}</div>
+                </Flexbox>
+                {isActive ? (
+                  <Icon
+                    icon={CheckIcon}
+                    size={16}
+                    style={{ color: cssVar.colorSuccess, flex: 'none' }}
+                  />
+                ) : (
+                  <div
+                    className={styles.removeBtn}
+                    title={t('localSystem.workingDirectory.removeRecent')}
+                    onClick={(e) => handleRemoveRecent(e, entry.path)}
+                  >
+                    <Icon icon={XIcon} size={12} />
+                  </div>
                 )}
               </Flexbox>
-            </Flexbox>
-          )}
-        </>
-      )}
+            );
+          })
+        )}
+      </div>
 
-      <Flexbox horizontal justify="flex-end">
-        <Space>
-          <Button size="small" onClick={onClose}>
-            {t('cancel', { ns: 'common' })}
-          </Button>
-          <Button loading={loading} size="small" type="primary" onClick={handleSave}>
-            {t('save', { ns: 'common' })}
-          </Button>
-        </Space>
-      </Flexbox>
+      {isDesktop && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.chooseFolderItem}
+          gap={8}
+          onClick={handleChooseFolder}
+        >
+          <Icon icon={FolderOpenIcon} size={14} />
+          <span>{t('localSystem.workingDirectory.chooseDifferentFolder')}</span>
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });

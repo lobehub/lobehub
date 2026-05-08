@@ -4,6 +4,7 @@ import { createAgentStateManager, createStreamEventManager, isRedisAvailable } f
 
 const {
   MockAgentStateManager,
+  MockGatewayStreamNotifier,
   MockStreamEventManager,
   mockAppEnv,
   mockGetAgentRuntimeRedisClient,
@@ -11,8 +12,16 @@ const {
   mockInMemoryStreamEventManager,
 } = vi.hoisted(() => ({
   MockAgentStateManager: vi.fn(() => ({ kind: 'redis-state-manager' })),
+  MockGatewayStreamNotifier: vi.fn((inner: any, url: string, token: string) => ({
+    inner,
+    kind: 'gateway-stream-notifier',
+    token,
+    url,
+  })),
   MockStreamEventManager: vi.fn(() => ({ kind: 'redis-stream-event-manager' })),
   mockAppEnv: {
+    AGENT_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,
+    AGENT_GATEWAY_URL: 'https://agent-gateway.lobehub.com',
     enableQueueAgentRuntime: false,
   },
   mockGetAgentRuntimeRedisClient: vi.fn(),
@@ -42,6 +51,10 @@ vi.mock('../AgentStateManager', () => ({
 
 vi.mock('../StreamEventManager', () => ({
   StreamEventManager: MockStreamEventManager,
+}));
+
+vi.mock('../GatewayStreamNotifier', () => ({
+  GatewayStreamNotifier: MockGatewayStreamNotifier,
 }));
 
 describe('AgentRuntime factory', () => {
@@ -89,6 +102,11 @@ describe('AgentRuntime factory', () => {
   });
 
   describe('createStreamEventManager', () => {
+    beforeEach(() => {
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = undefined;
+      mockAppEnv.AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';
+    });
+
     it('prefers Redis-backed streams when Redis is available in local mode', () => {
       mockGetAgentRuntimeRedisClient.mockReturnValue({ ping: vi.fn() });
 
@@ -107,6 +125,47 @@ describe('AgentRuntime factory', () => {
       expect(() => createStreamEventManager()).toThrow(
         'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
       );
+    });
+
+    it('wraps with GatewayStreamNotifier when AGENT_GATEWAY_SERVICE_TOKEN is set', () => {
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+      mockGetAgentRuntimeRedisClient.mockReturnValue({ ping: vi.fn() });
+
+      const result = createStreamEventManager() as any;
+
+      expect(result.kind).toBe('gateway-stream-notifier');
+      expect(result.inner).toEqual({ kind: 'redis-stream-event-manager' });
+      expect(result.token).toBe('my-token');
+      expect(result.url).toBe('https://agent-gateway.lobehub.com');
+    });
+
+    it('uses custom AGENT_GATEWAY_URL when set', () => {
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+      mockAppEnv.AGENT_GATEWAY_URL = 'https://custom-gateway.example.com';
+      mockGetAgentRuntimeRedisClient.mockReturnValue({ ping: vi.fn() });
+
+      const result = createStreamEventManager() as any;
+
+      expect(result.kind).toBe('gateway-stream-notifier');
+      expect(result.url).toBe('https://custom-gateway.example.com');
+    });
+
+    it('wraps in-memory manager with gateway when no Redis', () => {
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+
+      const result = createStreamEventManager() as any;
+
+      expect(result.kind).toBe('gateway-stream-notifier');
+      expect(result.inner).toBe(mockInMemoryStreamEventManager);
+    });
+
+    it('does not wrap when AGENT_GATEWAY_SERVICE_TOKEN is not set', () => {
+      mockGetAgentRuntimeRedisClient.mockReturnValue({ ping: vi.fn() });
+
+      const result = createStreamEventManager() as any;
+
+      expect(result.kind).toBe('redis-stream-event-manager');
+      expect(MockGatewayStreamNotifier).not.toHaveBeenCalled();
     });
   });
 });

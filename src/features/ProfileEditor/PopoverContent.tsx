@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { ScrollSignalProvider } from '@/features/ChatInput/ActionBar/Tools/ScrollSignalContext';
 import ToolsList, { toolsListStyles } from '@/features/ChatInput/ActionBar/Tools/ToolsList';
 
 import Empty from './Empty';
@@ -69,13 +70,13 @@ const PopoverContent = memo<PopoverContentProps>(
             onChange={(v) => onTabChange(v as TabType)}
           />
         </div>
-        <div className={styles.scroller} style={{ flex: 1 }}>
+        <ScrollSignalProvider className={styles.scroller} style={{ flex: 1 }}>
           {activeTab === 'installed' && installedTabItems.length === 0 ? (
             <Empty />
           ) : (
             <ToolsList items={currentItems} />
           )}
-        </div>
+        </ScrollSignalProvider>
         <div className={styles.footer}>
           <div className={toolsListStyles.item} role="button" tabIndex={0} onClick={onOpenStore}>
             <div className={toolsListStyles.itemIcon}>

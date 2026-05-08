@@ -1,7 +1,8 @@
 import { Users } from 'lucide-react';
 
 import { type GroupTopicParams, type PageReference, type ResolvedPageData } from '../types';
-import { type PluginContext, type RecentlyViewedPlugin } from './types';
+import { buildGroupNewTopicAction } from './newTabHelpers';
+import { type NewTabAction, type PluginContext, type RecentlyViewedPlugin } from './types';
 import { createPageReference } from './types';
 
 const GROUP_PATH_REGEX = /^\/group\/([^/?]+)$/;
@@ -14,6 +15,13 @@ export const groupTopicPlugin: RecentlyViewedPlugin<'group-topic'> = {
 
     // Both group and topic must exist
     return group !== undefined && topic !== undefined;
+  },
+
+  createNewTabAction(
+    reference: PageReference<'group-topic'>,
+    ctx: PluginContext,
+  ): NewTabAction | null {
+    return buildGroupNewTopicAction(reference.params.groupId, ctx);
   },
 
   generateId(reference: PageReference<'group-topic'>): string {

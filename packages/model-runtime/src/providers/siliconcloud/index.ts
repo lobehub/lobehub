@@ -6,6 +6,7 @@ import type { ChatCompletionErrorPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { createSiliconCloudImage } from './createImage';
+import { createSiliconCloudVideo } from './createVideo';
 
 export interface SiliconCloudModelCard {
   id: string;
@@ -68,7 +69,7 @@ export const params = {
         return {
           error: status,
           errorType: AgentRuntimeErrorType.ProviderBizError,
-          message: '请检查 API Key 余额是否充足,或者是否在用未实名的 API Key 访问需要实名的模型。',
+          message: 'Please check if your API Key balance is sufficient, or if you are using an unverified API Key to access models that require verification.',
         };
       }
 
@@ -119,6 +120,14 @@ export const params = {
     fetch: siliconFetch,
   },
   createImage: createSiliconCloudImage,
+  createVideo: createSiliconCloudVideo,
+  handlePollVideoStatus: async (inferenceId, options) => {
+    const { pollSiliconCloudVideoStatus } = await import('./createVideo');
+    return pollSiliconCloudVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_SILICONCLOUD_CHAT_COMPLETION === '1',
   },

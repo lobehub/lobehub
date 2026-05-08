@@ -5,7 +5,7 @@ import { type RuntimeStepContext } from '../stepContext';
 import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 
-interface Meta {
+export interface Meta {
   /**
    * avatar
    * @desc Avatar of the plugin
@@ -35,7 +35,7 @@ interface Meta {
   title: string;
 }
 
-const MetaSchema = z.object({
+export const MetaSchema = z.object({
   avatar: z.string().optional(),
   description: z.string().optional(),
   readme: z.string().optional(),
@@ -178,6 +178,19 @@ export interface BuiltinToolManifest {
   api: LobeChatPluginApi[];
 
   /**
+   * Supported execution environments for this tool.
+   * - `'client'`: dispatched to the client via Agent Gateway WebSocket
+   *   (requires Electron / desktop runtime). For tools that depend on
+   *   local resources (filesystem, EditorRuntime, stdio MCP, etc.).
+   * - `'server'`: executed server-side by ToolExecutionService.
+   *
+   * When both are present, the server picks based on `clientRuntime`:
+   * desktop callers get `'client'` dispatch; web callers get `'server'`.
+   * When omitted, defaults to server-only execution.
+   */
+  executors?: ('client' | 'server')[];
+
+  /**
    * Tool-level default human intervention policy
    * This policy applies to all APIs that don't specify their own policy
    *
@@ -204,6 +217,7 @@ export interface BuiltinToolManifest {
 
 export const BuiltinToolManifestSchema = z.object({
   api: z.array(LobeChatPluginApiSchema),
+  executors: z.array(z.enum(['client', 'server'])).optional(),
   humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   identifier: z.string(),
   meta: MetaSchema,
@@ -321,8 +335,8 @@ export interface BuiltinInterventionProps<Arguments = any> {
   onInteractionAction?: (
     action:
       | { type: 'submit'; payload: Record<string, unknown> }
-      | { type: 'skip'; reason?: string }
-      | { type: 'cancel' },
+      | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
+      | { type: 'cancel'; payload?: Record<string, unknown> },
   ) => Promise<void>;
   /**
    * Register a callback to be called before approval
@@ -392,6 +406,12 @@ export interface BuiltinToolContext {
   agentId?: string;
 
   /**
+   * The current page document ID when the conversation is scoped to an open editor
+   * Uses the underlying `documents.id`, not tool-specific association IDs
+   */
+  documentId?: string | null;
+
+  /**
    * The current group ID (only available in group chat context)
    * Used by group management tools to access group member information
    */
@@ -433,9 +453,19 @@ export interface BuiltinToolContext {
   registerAfterCompletion?: (callback: AfterCompletionCallback) => void;
 
   /**
+   * Conversation scope captured when the operation was created
+   */
+  scope?: string | null;
+
+  /**
    * AbortSignal for cancellation detection
    */
   signal?: AbortSignal;
+
+  /**
+   * The source user message ID for tools that need to inspect the current turn.
+   */
+  sourceMessageId?: string;
 
   /**
    * Step context computed at the beginning of each step
@@ -443,6 +473,11 @@ export interface BuiltinToolContext {
    * Computed by AgentRuntime and passed to Tool Executors
    */
   stepContext?: RuntimeStepContext;
+
+  /**
+   * Current task identifier or database id when the conversation is scoped to a task detail page.
+   */
+  taskId?: string | null;
 
   /**
    * The current topic ID (only available when operating within a topic)

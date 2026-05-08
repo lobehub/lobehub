@@ -1,11 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
 import { useTheme } from 'antd-style';
-import { type FC, type ReactNode } from 'react';
-import { Activity, useEffect, useMemo, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 
 import { useIsDark } from '@/hooks/useIsDark';
-import { useHomeStore } from '@/store/home';
 
 import HomeAgentIdSync from './HomeAgentIdSync';
 import RecentHydration from './RecentHydration';
@@ -19,16 +17,10 @@ interface LayoutProps {
 const Layout: FC<LayoutProps> = ({ children }) => {
   const isDarkMode = useIsDark();
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   const isHomeRoute = pathname === '/';
   const [hasActivated, setHasActivated] = useState(isHomeRoute);
-  const setNavigate = useHomeStore((s) => s.setNavigate);
   const content = children ?? <Outlet />;
-
-  useEffect(() => {
-    setNavigate(navigate);
-  }, [navigate, setNavigate]);
 
   useEffect(() => {
     if (isHomeRoute) setHasActivated(true);

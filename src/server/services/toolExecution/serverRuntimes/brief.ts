@@ -8,10 +8,12 @@ import { TaskModel } from '@/database/models/task';
 import { type ServerRuntimeRegistration } from './types';
 
 const createBriefRuntime = ({
+  agentId,
   briefModel,
   taskId,
   taskModel,
 }: {
+  agentId?: string;
   briefModel: BriefModel;
   taskId?: string;
   taskModel: TaskModel;
@@ -23,10 +25,15 @@ const createBriefRuntime = ({
     title: string;
     type: string;
   }) => {
-    const actions = args.actions || DEFAULT_BRIEF_ACTIONS[args.type] || [];
+    // 'result' briefs are terminal — the UI hardcodes a single approve action
+    // and routes it through BriefService.resolve to complete the task. Custom
+    // actions on result briefs would be ignored, so reject them at the source.
+    const actions =
+      args.type === 'result' ? null : args.actions || DEFAULT_BRIEF_ACTIONS[args.type] || [];
 
     const brief = await briefModel.create({
       actions,
+      agentId,
       priority: args.priority || 'info',
       summary: args.summary,
       taskId,
@@ -52,6 +59,7 @@ const createBriefRuntime = ({
     }
 
     await briefModel.create({
+      agentId,
       priority: 'normal',
       summary: args.reason,
       taskId,
@@ -72,7 +80,12 @@ export const briefRuntime: ServerRuntimeRegistration = {
     const briefModel = new BriefModel(context.serverDB, context.userId);
     const taskModel = new TaskModel(context.serverDB, context.userId);
 
-    return createBriefRuntime({ briefModel, taskId: context.taskId, taskModel });
+    return createBriefRuntime({
+      agentId: context.agentId,
+      briefModel,
+      taskId: context.taskId,
+      taskModel,
+    });
   },
   identifier: BriefIdentifier,
 };

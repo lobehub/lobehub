@@ -7,6 +7,7 @@ import {
 import { cloudModelIdMapping } from '@lobechat/business-const';
 import { ModelProvider } from 'model-bank';
 
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
@@ -30,6 +31,7 @@ import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
 import { StreamingResponse } from '../../utils/response';
+import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -172,7 +174,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     } = payload;
     const inputStartAt = Date.now();
     const system_message = messages.find((m) => m.role === 'system');
-    const user_messages = messages.filter((m) => m.role !== 'system');
+    const user_messages = normalizeClaudeThinkingHistoryMessages(
+      messages.filter((m) => m.role !== 'system'),
+    );
     // Filter out empty/whitespace-only system prompts — Anthropic API rejects them
     const systemPromptText =
       typeof system_message?.content === 'string' && system_message.content.trim()
@@ -204,8 +208,10 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
 
-    // Claude 4.6 models do not support assistant turn prefill
-    if (model.includes('-4-6') && postMessages.at(-1)?.role === 'assistant') {
+    if (
+      shouldDropUnsupportedClaudeAssistantPrefill(model) &&
+      postMessages.at(-1)?.role === 'assistant'
+    ) {
       postMessages.pop();
     }
 

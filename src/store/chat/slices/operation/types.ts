@@ -1,4 +1,4 @@
-import { type ConversationContext } from '@lobechat/types';
+import type { ConversationContext, MessageMetadata, UploadFileItem } from '@lobechat/types';
 
 /**
  * Operation Type Definitions
@@ -18,6 +18,8 @@ export type OperationType =
   // === AI generation ===
   | 'execAgentRuntime' // Execute agent runtime (client-side, entire agent runtime execution)
   | 'execServerAgentRuntime' // Execute server agent runtime (server-side, e.g., Group Chat)
+  | 'execHeterogeneousAgent'
+  | 'subagentThread' // Per-spawn subagent Thread context (child of execHeterogeneousAgent); carries thread-scoped ConversationContext so dispatches resolve to the Thread's messagesMap bucket. NOT in AI_RUNTIME_OPERATION_TYPES — it's a context container, not an independent loading state.
   | 'createAssistantMessage' // Create assistant message (sub-operation of execAgentRuntime)
   // === LLM execution (sub-operations) ===
   | 'callLLM' // Call LLM streaming response (sub-operation of execAgentRuntime)
@@ -185,14 +187,54 @@ export interface Operation {
 }
 
 /**
+ * Per-file preview metadata snapshotted at enqueue time so the queue tray can
+ * render thumbnails and the resumed sendMessage can rebuild the optimistic
+ * imageList/videoList without relying on the global chat upload store (which
+ * is cleared as soon as the user submits).
+ */
+export interface QueuedFile {
+  id: string;
+  /** MIME type, e.g. `image/png`, `video/mp4`, `application/pdf` */
+  mimeType: string;
+  name: string;
+  /** Preview URL — S3 URL for uploaded files, blob/base64 for in-memory items */
+  url: string;
+}
+
+/**
+ * Rebuild `UploadFileItem`-shaped objects from queued previews so the resumed
+ * `sendMessage` can derive imageList/videoList AND so we can repopulate
+ * `chatUploadFileList` when the user edits a queued message. The synthesized
+ * `File` carries only `name` + `type` (zero bytes) — the consumers we hit only
+ * read `file.name`, `file.type`, plus the URL fields we set below.
+ *
+ * We mirror the snapshotted `url` into both `fileUrl` and `previewUrl`: the
+ * optimistic-message path uses the `fileUrl || base64Url || previewUrl` fallback
+ * chain, while the desktop chat-input file preview only reads `previewUrl`.
+ */
+export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
+  files.map((f) => ({
+    id: f.id,
+    file: new File([], f.name, { type: f.mimeType }),
+    fileUrl: f.url || undefined,
+    previewUrl: f.url || undefined,
+    status: 'success',
+  }));
+
+/**
  * Queued message waiting to be injected into agent runtime
  */
 export interface QueuedMessage {
   content: string;
   createdAt: number;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
   files?: string[];
+  /** Snapshot of file previews (id, name, mime, url) for tray rendering and optimistic resume */
+  filesPreview?: QueuedFile[];
   id: string;
   interruptMode: 'soft' | 'hard';
+  metadata?: MessageMetadata;
 }
 
 /**
@@ -200,8 +242,86 @@ export interface QueuedMessage {
  */
 export interface MergedQueuedMessage {
   content: string;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any>;
   files: string[];
+  filesPreview: QueuedFile[];
+  metadata?: MessageMetadata;
 }
+
+const createTextNode = (text: string) => ({
+  detail: 0,
+  format: 0,
+  mode: 'normal',
+  style: '',
+  text,
+  type: 'text',
+  version: 1,
+});
+
+const createParagraphNode = (text = '') => ({
+  children: text ? [createTextNode(text)] : [],
+  direction: 'ltr',
+  format: '',
+  indent: 0,
+  type: 'paragraph',
+  version: 1,
+});
+
+const createEditorDataFromContent = (content: string): Record<string, any> | undefined => {
+  if (!content) return undefined;
+
+  return {
+    root: {
+      children: content.split('\n').map((line) => createParagraphNode(line)),
+      direction: 'ltr',
+      format: '',
+      indent: 0,
+      type: 'root',
+      version: 1,
+    },
+  };
+};
+
+const normalizeQueuedEditorData = (message: QueuedMessage): Record<string, any> | undefined => {
+  if (message.editorData?.root) return message.editorData;
+
+  return createEditorDataFromContent(message.content);
+};
+
+const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> | undefined => {
+  const mergedChildren: any[] = [];
+  let baseRoot: Record<string, any> | undefined;
+
+  for (const message of messages) {
+    const editorData = normalizeQueuedEditorData(message);
+    const root = editorData?.root;
+    const children = root?.children;
+
+    if (!Array.isArray(children) || children.length === 0) continue;
+
+    if (!baseRoot) {
+      baseRoot = structuredClone(root);
+    }
+
+    if (mergedChildren.length > 0) {
+      mergedChildren.push(createParagraphNode());
+    }
+
+    mergedChildren.push(...structuredClone(children));
+  }
+
+  if (mergedChildren.length === 0) return undefined;
+
+  return {
+    root: {
+      ...baseRoot,
+      children: mergedChildren,
+      type: 'root',
+      version: baseRoot?.version ?? 1,
+    },
+  };
+};
 
 /**
  * Merge multiple queued messages into a single message.
@@ -209,9 +329,31 @@ export interface MergedQueuedMessage {
  */
 export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMessage => {
   const sorted = [...messages].sort((a, b) => a.createdAt - b.createdAt);
+  const metadata = sorted.reduce<MessageMetadata | undefined>((acc, message) => {
+    if (!message.metadata) return acc;
+    const localSystemToolSnapshots = [
+      ...(acc?.localSystemToolSnapshots ?? []),
+      ...(message.metadata.localSystemToolSnapshots ?? []),
+    ];
+    const pageSelections = [
+      ...(acc?.pageSelections ?? []),
+      ...(message.metadata.pageSelections ?? []),
+    ];
+
+    return {
+      ...acc,
+      ...message.metadata,
+      ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
+      ...(pageSelections.length ? { pageSelections } : undefined),
+    };
+  }, undefined);
+
   return {
     content: sorted.map((m) => m.content).join('\n\n'),
+    editorData: mergeQueuedEditorData(sorted),
     files: sorted.flatMap((m) => m.files ?? []),
+    filesPreview: sorted.flatMap((m) => m.filesPreview ?? []),
+    metadata,
   };
 };
 
@@ -236,10 +378,12 @@ export interface OperationFilter {
  *
  * Includes:
  * - execAgentRuntime: Client-side agent execution (single chat)
+ * - execHeterogeneousAgent: Heterogeneous agent execution (Claude Code CLI, etc.)
  * - execServerAgentRuntime: Server-side agent execution (Group Chat)
  */
 export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
   'execAgentRuntime',
+  'execHeterogeneousAgent',
   'execServerAgentRuntime',
 ];
 

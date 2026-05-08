@@ -7,7 +7,7 @@ import { type NextRequest } from 'next/server';
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
-import { authEnv, LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
+import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
@@ -64,7 +64,6 @@ export interface OIDCAuth {
 }
 
 export interface AuthContext {
-  authorizationHeader?: string | null;
   clientIp?: string | null;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
@@ -81,7 +80,6 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
-  authorizationHeader?: string | null;
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
@@ -93,7 +91,6 @@ export const createContextInner = async (params?: {
   const responseHeaders = new Headers();
 
   return {
-    authorizationHeader: params?.authorizationHeader,
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
@@ -118,7 +115,6 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
     return createContextInner({
-      authorizationHeader: request.headers.get(LOBE_CHAT_AUTH_HEADER),
       userId: process.env.MOCK_DEV_USER_ID,
     });
   }
@@ -126,7 +122,6 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   log('createLambdaContext called for request');
   // for API-response caching see https://trpc.io/docs/v11/caching
 
-  const authorization = request.headers.get(LOBE_CHAT_AUTH_HEADER);
   const userAgent = request.headers.get('user-agent') || undefined;
   const clientIp = extractClientIp(request);
 
@@ -139,12 +134,10 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   log('marketAccessToken from cookie:', marketAccessToken ? '[HIDDEN]' : 'undefined');
   const commonContext = {
-    authorizationHeader: authorization,
     clientIp,
     marketAccessToken,
     userAgent,
   };
-  log('LobeChat Authorization header: %s', authorization ? 'exists' : 'not found');
 
   const apiKeyToken = request.headers.get(LOBE_CHAT_API_KEY_HEADER)?.trim();
   log('X-API-Key header: %s', apiKeyToken ? 'exists' : 'not found');

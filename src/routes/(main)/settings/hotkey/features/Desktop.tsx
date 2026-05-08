@@ -8,7 +8,7 @@ import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HOTKEYS_REGISTRATION } from '@/const/hotkeys';
+import { DESKTOP_HOTKEYS_REGISTRATION } from '@/const/desktopGlobalShortcuts';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useElectronStore } from '@/store/electron';

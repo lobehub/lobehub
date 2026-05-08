@@ -1,6 +1,7 @@
+import type { DesktopHotkeyId } from '@lobechat/types';
+
 import type { App } from '@/core/App';
 import { IoCContainer } from '@/core/infrastructure/IoCContainer';
-import type { ShortcutActionType } from '@/shortcuts';
 import { IpcService } from '@/utils/ipc';
 
 const shortcutDecorator = (name: string) => (target: any, methodName: string, descriptor?: any) => {
@@ -15,7 +16,9 @@ const shortcutDecorator = (name: string) => (target: any, methodName: string, de
 /**
  *  shortcut inject decorator
  */
-export const shortcut = (method: ShortcutActionType) => shortcutDecorator(method);
+type DesktopHotkeyIdCompatible = DesktopHotkeyId | 'quickComposer';
+
+export const shortcut = (method: DesktopHotkeyIdCompatible) => shortcutDecorator(method);
 
 const protocolDecorator =
   (urlType: string, action: string) => (target: any, methodName: string, descriptor?: any) => {

@@ -1,9 +1,3 @@
-# Promptfoo results and cache
-promptfoo-results.json
-results/
-.promptfoo/
-*.promptfoo.cache
-
 # Node modules
 node_modules/
 

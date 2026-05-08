@@ -4,6 +4,14 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 const alias = {
+  // Downstream workspaces sometimes pnpm-override @lobechat/business-* packages to
+  // internal implementations whose source files import alias paths that only exist
+  // in the outer workspace, causing vite import-analysis to fail when running tests
+  // from this repo. Pin the package to the local stub so tests here stay hermetic.
+  '@lobechat/business-model-runtime': resolve(
+    __dirname,
+    './packages/business/model-runtime/src/index.ts',
+  ),
   '@emoji-mart/data': resolve(__dirname, './tests/mocks/emojiMartData.ts'),
   '@emoji-mart/react': resolve(__dirname, './tests/mocks/emojiMartReact.tsx'),
   '@/database/_deprecated': resolve(__dirname, './src/database/_deprecated'),

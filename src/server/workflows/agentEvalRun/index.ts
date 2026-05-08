@@ -13,6 +13,8 @@ const WORKFLOW_PATHS = {
   onThreadComplete: '/api/workflows/agent-eval-run/on-thread-complete',
   onTrajectoryComplete: '/api/workflows/agent-eval-run/on-trajectory-complete',
   paginateTestCases: '/api/workflows/agent-eval-run/paginate-test-cases',
+  resumeAgentTrajectory: '/api/workflows/agent-eval-run/resume-agent-trajectory',
+  resumeThreadTrajectory: '/api/workflows/agent-eval-run/resume-thread-trajectory',
   runAgentTrajectory: '/api/workflows/agent-eval-run/run-agent-trajectory',
   runBenchmark: '/api/workflows/agent-eval-run/run-benchmark',
   runThreadTrajectory: '/api/workflows/agent-eval-run/run-thread-trajectory',
@@ -45,6 +47,18 @@ export interface RunAgentTrajectoryPayload {
   userId: string;
 }
 
+export interface ResumeAgentTrajectoryPayload {
+  appContext: { topicId: string };
+  envPrompt?: string;
+  maxSteps?: number;
+  parentMessageId: string;
+  runId: string;
+  targetAgentId?: string;
+  testCaseId: string;
+  topicId: string;
+  userId: string;
+}
+
 export interface FinalizeRunPayload {
   runId: string;
   userId: string;
@@ -69,6 +83,19 @@ export interface OnTrajectoryCompletePayload {
 
 export interface RunThreadTrajectoryPayload {
   runId: string;
+  testCaseId: string;
+  threadId: string;
+  topicId: string;
+  userId: string;
+}
+
+export interface ResumeThreadTrajectoryPayload {
+  appContext: { threadId: string; topicId: string };
+  envPrompt?: string;
+  maxSteps?: number;
+  parentMessageId: string;
+  runId: string;
+  targetAgentId?: string;
   testCaseId: string;
   threadId: string;
   topicId: string;
@@ -153,12 +180,39 @@ export class AgentEvalRunWorkflow {
   }
 
   /**
+   * Trigger workflow to resume a single agent trajectory
+   */
+  static triggerResumeAgentTrajectory(payload: ResumeAgentTrajectoryPayload) {
+    const url = getWorkflowUrl(WORKFLOW_PATHS.resumeAgentTrajectory);
+    log(
+      'Triggering resume-agent-trajectory workflow: run=%s, testCase=%s',
+      payload.runId,
+      payload.testCaseId,
+    );
+    return workflowClient.trigger({ body: payload, url });
+  }
+
+  /**
    * Trigger workflow to run a single thread trajectory (for pass@k)
    */
   static triggerRunThreadTrajectory(payload: RunThreadTrajectoryPayload) {
     const url = getWorkflowUrl(WORKFLOW_PATHS.runThreadTrajectory);
     log(
       'Triggering run-thread-trajectory workflow: run=%s, testCase=%s, thread=%s',
+      payload.runId,
+      payload.testCaseId,
+      payload.threadId,
+    );
+    return workflowClient.trigger({ body: payload, url });
+  }
+
+  /**
+   * Trigger workflow to resume a single thread trajectory (for pass@k)
+   */
+  static triggerResumeThreadTrajectory(payload: ResumeThreadTrajectoryPayload) {
+    const url = getWorkflowUrl(WORKFLOW_PATHS.resumeThreadTrajectory);
+    log(
+      'Triggering resume-thread-trajectory workflow: run=%s, testCase=%s, thread=%s',
       payload.runId,
       payload.testCaseId,
       payload.threadId,

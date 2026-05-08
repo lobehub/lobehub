@@ -1,9 +1,19 @@
 import { randomBytes } from 'node:crypto';
 
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import { isLobeHubModelAvailable } from 'model-bank/lobehub';
+import { after } from 'next/server';
 import { z } from 'zod';
 
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
 import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
@@ -15,17 +25,16 @@ import {
   type NewGeneration,
   type NewGenerationBatch,
 } from '@/database/schemas';
+import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-  AsyncTaskType,
-} from '@/types/asyncTask';
+import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
+import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
+
+import { createVideoTaskSubmitError } from './error';
 
 const log = debug('lobe-video:lambda');
 
@@ -64,6 +73,19 @@ export const videoRouter = router({
   createVideo: videoProcedure.input(createVideoInputSchema).mutation(async ({ input, ctx }) => {
     const { userId, serverDB, asyncTaskModel, fileService } = ctx;
     const { generationTopicId, provider, model, params } = input;
+
+    const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+
+    // Reject lobehub model ids that are no longer in the model bank so callers get a
+    // clear error instead of an opaque downstream failure when the resolved channel
+    // model is no longer in the model bank.
+    if (provider === BRANDING_PROVIDER && !isLobeHubModelAvailable(resolvedModelId, 'video')) {
+      throw new TRPCError({
+        cause: { data: { modelType: 'video', requestedModel: model } },
+        code: 'BAD_REQUEST',
+        message: ChatErrorType.LobeHubModelDeprecated,
+      });
+    }
 
     log('Starting video creation process, input: %O', input);
 
@@ -141,9 +163,10 @@ export const videoRouter = router({
 
     // Step 1: Atomically create all database records in a transaction
     const {
+      asyncTaskCreatedAt,
+      asyncTaskId,
       batch: createdBatch,
       generation: createdGeneration,
-      asyncTaskId,
     } = await serverDB.transaction(async (tx) => {
       log('Starting database transaction for video generation');
 
@@ -191,6 +214,7 @@ export const videoRouter = router({
         .where(and(eq(generations.id, generation.id), eq(generations.userId, userId)));
 
       return {
+        asyncTaskCreatedAt: asyncTask.createdAt,
         asyncTaskId: asyncTask.id,
         batch,
         generation,
@@ -207,27 +231,78 @@ export const videoRouter = router({
       const callbackUrl = `${callbackBaseUrl}/api/webhooks/video/${provider}?token=${webhookToken}`;
       log('Using callback URL: %s', callbackUrl);
 
-      const response = await modelRuntime.createVideo({
-        callbackUrl,
-        model,
-        params: generationParams,
-      });
+      const response = await modelRuntime.createVideo(
+        {
+          callbackUrl,
+          model: resolvedModelId,
+          params: generationParams,
+        },
+        { metadata: { trigger: RequestTrigger.Video } },
+      );
 
       log('Video task submitted successfully, inferenceId: %s', response?.inferenceId);
 
-      // Update asyncTask with inferenceId and set status to Processing
-      await asyncTaskModel.update(asyncTaskId, {
-        inferenceId: response?.inferenceId,
-        status: AsyncTaskStatus.Processing,
-      });
+      // Determine async strategy based on response:
+      // - useWebhook: provider registered a callback URL, wait for webhook
+      // - otherwise: use background polling to check status
+      const useWebhook = response && 'useWebhook' in response && response.useWebhook;
+
+      if (useWebhook) {
+        // Webhook-based provider (e.g. Volcengine): wait for callback
+        log('Webhook-based provider detected, waiting for callback');
+
+        await asyncTaskModel.update(asyncTaskId, {
+          inferenceId: response?.inferenceId,
+          status: AsyncTaskStatus.Processing,
+        });
+      } else if (response) {
+        // Polling-based provider (e.g. OpenAI Sora): use background polling
+        log(
+          'Polling-based provider detected (inferenceId only), using after() for background polling',
+        );
+
+        await asyncTaskModel.update(asyncTaskId, {
+          inferenceId: response.inferenceId,
+          status: AsyncTaskStatus.Processing,
+        });
+
+        after(async () => {
+          log('After() hook executing background video polling for task: %s', asyncTaskId);
+
+          try {
+            const db = await getServerDB();
+
+            await processBackgroundVideoPolling(db, {
+              asyncTaskCreatedAt,
+              asyncTaskId,
+              generationBatchId: createdBatch.id,
+              generationId: createdGeneration.id,
+              generationTopicId,
+              inferenceId: response.inferenceId,
+              model,
+              prechargeResult,
+              provider,
+              userId,
+            });
+
+            log('Background video polling completed for task: %s', asyncTaskId);
+          } catch (error) {
+            console.error('[video] Background polling failed:', error);
+          }
+        });
+
+        log('After() hook registered for background video polling: %s', asyncTaskId);
+      }
     } catch (e) {
       console.error('Failed to submit video generation task:', e);
 
+      const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+        error: e,
+        provider,
+        userId,
+      });
       await asyncTaskModel.update(asyncTaskId, {
-        error: new AsyncTaskError(
-          AsyncTaskErrorType.TaskTriggerError,
-          'Failed to submit video task: ' + (e instanceof Error ? e.message : 'Unknown error'),
-        ),
+        error: createVideoTaskSubmitError(e, providerContentPolicyMessage),
         status: AsyncTaskStatus.Error,
       });
 
@@ -238,10 +313,14 @@ export const videoRouter = router({
             metadata: {
               asyncTaskId,
               generationBatchId: createdBatch.id,
-              modelId: model,
               topicId: generationTopicId,
+              ...buildMappedBusinessModelFields({
+                provider,
+                requestedModelId: resolvedModelId === model ? undefined : model,
+                resolvedModelId,
+              }),
             },
-            model,
+            model: resolvedModelId,
             prechargeResult,
             provider,
             userId,

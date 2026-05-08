@@ -779,6 +779,55 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
+  it('should drop assistant image content for Responses API input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            image_url: { url: 'data:image/jpeg;base64,abc123' },
+            type: 'image_url',
+          },
+        ],
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([]);
+  });
+
+  it('should keep assistant text and drop unsupported assistant media for Responses API input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            text: 'Here is the generated image.',
+            type: 'text',
+          },
+          {
+            image_url: { url: 'data:image/jpeg;base64,abc123' },
+            type: 'image_url',
+          },
+          {
+            video_url: { url: 'data:video/mp4;base64,def456' },
+            type: 'video_url',
+          },
+        ],
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        content: [{ text: 'Here is the generated image.', type: 'output_text' }],
+        role: 'assistant',
+      },
+    ]);
+  });
+
   it('should pass forceVideoBase64 to convertMessageContent in video_url branch', async () => {
     process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
 

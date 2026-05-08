@@ -25,6 +25,28 @@ export interface CloudflareModelCard {
   };
 }
 
+/**
+ * Walks common upstream error shapes (Error, { message }, { error: { message } },
+ * { error: { error: { message } } }, strings, { status }) and returns the most
+ * informative human-readable string available. Returns undefined when nothing
+ * useful can be recovered, letting the caller decide on a fallback.
+ */
+function extractProviderErrorMessage(err: unknown): string | undefined {
+  if (err === null || err === undefined) return undefined;
+  if (typeof err === 'string') return err || undefined;
+  if (err instanceof Error) return err.message;
+  if (typeof err !== 'object') return String(err);
+
+  const obj = err as Record<string, unknown>;
+  if (typeof obj.message === 'string' && obj.message) return obj.message;
+  if (obj.error !== undefined) {
+    const inner = extractProviderErrorMessage(obj.error);
+    if (inner) return inner;
+  }
+  if (typeof obj.status === 'number') return `HTTP ${obj.status}`;
+  return undefined;
+}
+
 export interface LobeCloudflareParams {
   apiKey?: string;
   baseURLOrAccountID?: string;
@@ -56,62 +78,75 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
   }
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions): Promise<Response> {
-    try {
-      // Remove internal apiMode parameter to prevent sending to Cloudflare API
+    // Remove internal apiMode parameter to prevent sending to Cloudflare API
+    const { model, tools, apiMode: _, ...restPayload } = payload;
+    const functions = tools?.map((tool) => tool.function);
+    const headers = options?.headers || {};
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    const url = new URL(model, this.baseURL);
+    const desensitizedEndpoint = desensitizeCloudflareUrl(url.toString());
 
-      const { model, tools, apiMode: _, ...restPayload } = payload;
-      const functions = tools?.map((tool) => tool.function);
-      const headers = options?.headers || {};
-      if (this.apiKey) {
-        headers['Authorization'] = `Bearer ${this.apiKey}`;
-      }
-      const url = new URL(model, this.baseURL);
-      const response = await fetch(url, {
+    let response: Response;
+    try {
+      response = await fetch(url, {
         body: JSON.stringify({ tools: functions, ...restPayload }),
         headers: { 'Content-Type': 'application/json', ...headers },
         method: 'POST',
         signal: options?.signal,
       });
-
-      const desensitizedEndpoint = desensitizeCloudflareUrl(url.toString());
-
-      switch (response.status) {
-        case 400: {
-          throw AgentRuntimeError.chat({
-            endpoint: desensitizedEndpoint,
-            error: response,
-            errorType: AgentRuntimeErrorType.ProviderBizError,
-            provider: ModelProvider.Cloudflare,
-          });
-        }
-      }
-
-      // Only tee when debugging
-      let responseBody: ReadableStream;
-      if (process.env.DEBUG_CLOUDFLARE_CHAT_COMPLETION === '1') {
-        const [prod, useForDebug] = response.body!.tee();
-        debugStream(useForDebug).catch();
-        responseBody = prod;
-      } else {
-        responseBody = response.body!;
-      }
-
-      return StreamingResponse(
-        responseBody
-          .pipeThrough(new TransformStream(new CloudflareStreamTransformer()))
-          .pipeThrough(createCallbacksTransformer(options?.callback)),
-        { headers: options?.headers },
-      );
     } catch (error) {
-      const desensitizedEndpoint = desensitizeCloudflareUrl(this.baseURL);
-
       throw AgentRuntimeError.chat({
-        endpoint: desensitizedEndpoint,
+        endpoint: desensitizeCloudflareUrl(this.baseURL),
         error: error as any,
         errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: extractProviderErrorMessage(error) ?? 'Cloudflare API request failed',
         provider: ModelProvider.Cloudflare,
       });
     }
+
+    if (response.status === 400) {
+      const bodyText = await response.text().catch(() => '');
+      let parsedBody: unknown = bodyText;
+      if (bodyText) {
+        try {
+          parsedBody = JSON.parse(bodyText);
+        } catch {
+          // keep raw text
+        }
+      }
+      throw AgentRuntimeError.chat({
+        endpoint: desensitizedEndpoint,
+        error:
+          parsedBody && typeof parsedBody === 'object'
+            ? parsedBody
+            : { body: bodyText, status: 400 },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message:
+          extractProviderErrorMessage(parsedBody) ||
+          bodyText ||
+          'Cloudflare API returned 400 Bad Request',
+        provider: ModelProvider.Cloudflare,
+      });
+    }
+
+    // Only tee when debugging
+    let responseBody: ReadableStream;
+    if (process.env.DEBUG_CLOUDFLARE_CHAT_COMPLETION === '1') {
+      const [prod, useForDebug] = response.body!.tee();
+      debugStream(useForDebug).catch();
+      responseBody = prod;
+    } else {
+      responseBody = response.body!;
+    }
+
+    return StreamingResponse(
+      responseBody
+        .pipeThrough(new TransformStream(new CloudflareStreamTransformer()))
+        .pipeThrough(createCallbacksTransformer(options?.callback)),
+      { headers: options?.headers },
+    );
   }
 
   async models(): Promise<ChatModelCard[]> {

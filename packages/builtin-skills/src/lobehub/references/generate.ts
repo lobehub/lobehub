@@ -6,11 +6,11 @@ Generate text, images, videos, and audio. Alias: \`lh generate\`.
 
 - \`lh gen text <prompt> [-m <model>] [-p <provider>] [--stream] [--temperature <t>]\` - Generate text
 - \`lh gen image <prompt> [-m <model>] [-n <count>] [--width <w>] [--height <h>]\` - Generate image
-- \`lh gen video <prompt> [-m <model>] [--aspect-ratio <r>] [--duration <d>]\` - Generate video
+- \`lh gen video <prompt> -m <model> -p <provider> [--aspect-ratio <r>] [--duration <d>] [--resolution <res>]\` - Generate video
 - \`lh gen tts <text> [-o <output>] [--voice <v>] [--speed <s>]\` - Text-to-speech
 - \`lh gen asr <audioFile> [--model <m>] [--language <l>]\` - Speech-to-text
-- \`lh gen status <generationId> <taskId>\` - Check generation task status
-- \`lh gen download <generationId> <taskId> [-o <output>]\` - Wait and download result
+- \`lh gen status <generationId> <asyncTaskId>\` - Check generation task status
+- \`lh gen download <generationId> <asyncTaskId> [-o <output>]\` - Wait and download result
 - \`lh gen list\` - List generation topics
 
 ## Tips
@@ -18,6 +18,57 @@ Generate text, images, videos, and audio. Alias: \`lh generate\`.
 - Image/video generation is async; use \`status\` or \`download\` to get results
 - \`--stream\` for text generation outputs tokens as they arrive
 - \`--pipe\` for text generation outputs only the raw text (no formatting)
+
+## Finding Available Video / Image Models
+
+Before generating, always look up the correct model ID with \`lh model list\`:
+
+\`\`\`bash
+# List all video models for the lobehub provider
+lh model list lobehub --type video
+
+# List only enabled video models
+lh model list lobehub --type video --enabled
+
+# List image generation models
+lh model list lobehub --type image
+\`\`\`
+
+Use the \`id\` field from the output as the \`-m\` argument. Model IDs for video/image are
+**not** the same as human-readable display names — always use the exact \`id\` field.
+
+Example:
+\`\`\`bash
+# ✅ Correct — use the id from lh model list
+lh gen video "a cat riding a skateboard" -p lobehub -m dreamina-seedance-2-0-260128
+
+# ❌ Wrong — guessed slugs will fail with no_valid_channel_error
+lh gen video "a cat riding a skateboard" -p lobehub -m seedance-2.0
+\`\`\`
+
+## ⚠️ asyncTaskId vs generationId
+
+\`gen status\` and \`gen download\` require TWO different IDs:
+
+- \`<generationId>\` — prefixed with \`gen_\`, e.g. \`gen_abc123\`
+- \`<asyncTaskId>\` — a UUID printed after \`→ Task\` in the \`gen image\` / \`gen video\` output,
+  e.g. \`7ad0eb13-e9a5-4403-8070-1f7fe95b2f95\`
+
+Passing \`gen_xxx\` as \`<asyncTaskId>\` will cause a server error. Always use the UUID.
+
+Example output from \`lh gen video\`:
+\`\`\`
+✓ Video generation started
+  Batch ID: gb_xxx
+  Generation gen_abc123 → Task 7ad0eb13-e9a5-4403-8070-1f7fe95b2f95
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ← this is asyncTaskId
+\`\`\`
+
+Correct usage:
+\`\`\`bash
+lh gen status gen_abc123 7ad0eb13-e9a5-4403-8070-1f7fe95b2f95
+lh gen download gen_abc123 7ad0eb13-e9a5-4403-8070-1f7fe95b2f95 -o result.mp4
+\`\`\`
 `;
 
 export default content;

@@ -11,9 +11,30 @@ const stepfunChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 256_000,
     description:
+      'Built on Step 3.5 Flash and optimized for high-frequency agent scenarios, it further improves token efficiency and inference speed while retaining flagship-level reasoning and tool-calling capabilities. It also supports switching to a low-reasoning mode to reduce resource consumption. Additionally, targeted optimizations have been made to enhance compatibility with coding tasks and agent frameworks.',
+    displayName: 'Step 3.5 Flash 2603',
+    enabled: true,
+    id: 'step-3.5-flash-2603',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
       'Stepfun’s flagship language reasoning model.This model has top-notch reasoning capabilities and fast and reliable execution capabilities.Able to decompose and plan complex tasks, call tools quickly and reliably to perform tasks, and be competent in various complex tasks such as logical reasoning, mathematics, software engineering, and in-depth research.',
     displayName: 'Step 3.5 Flash',
-    enabled: true,
     id: 'step-3.5-flash',
     pricing: {
       currency: 'CNY',
@@ -321,14 +342,39 @@ const stepfunChatModels: AIChatModelCard[] = [
 ];
 
 const stepfunImageModels: AIImageModelCard[] = [
-  // https://platform.stepfun.com/docs/llm/image
+  {
+    description:
+      'A lightweight editing model from Stepfun’s latest iteration that supports both text-to-image generation and image editing within a single model. Despite having fewer than 6 billion parameters, it achieves state-of-the-art performance at its scale, rivaling open-source models in the 12B–20B parameter range across tiers. Each editing task takes only 1–2 seconds, redefining the experience of real-time interactive image editing.',
+    displayName: 'Step Image Edit 2',
+    enabled: true,
+    id: 'step-image-edit-2',
+    parameters: {
+      cfg: { default: 1, max: 10, min: 1, step: 0.1 },
+      imageUrl: { default: null },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      size: {
+        default: '1024x1024',
+        enum: ['1024x1024', '768x1360', '896x1184', '1360x768', '1184x896'],
+      },
+      steps: { default: 8, max: 50, min: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.02, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-04-28',
+    type: 'image',
+  },
   {
     description:
       'A new-generation StepFun image model focused on image generation, producing high-quality images from text prompts. It delivers more realistic texture and stronger Chinese/English text rendering.',
     displayName: 'Step 2X Large',
-    enabled: true,
     id: 'step-2x-large',
     parameters: {
+      cfg: { default: 7.5, max: 10, min: 1, step: 0.1 },
       prompt: {
         default: '',
       },
@@ -353,6 +399,8 @@ const stepfunImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'step-1x-medium',
     parameters: {
+      cfg: { default: 7.5, max: 10, min: 1, step: 0.1 },
+      imageUrl: { default: null },
       prompt: {
         default: '',
       },
@@ -377,6 +425,7 @@ const stepfunImageModels: AIImageModelCard[] = [
     enabled: true,
     id: 'step-1x-edit',
     parameters: {
+      cfg: { default: 6, max: 10, min: 1, step: 0.1 },
       imageUrl: { default: null },
       prompt: {
         default: '',

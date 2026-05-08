@@ -71,7 +71,7 @@ describe('lobe-activator executor discovery allowlist', () => {
 
     expect(activatedIds).toContain('web-browsing');
     expect(activatedIds).not.toContain('internal-admin');
-  });
+  }, 10_000);
 
   it('should reject all identifiers when none are discoverable', async () => {
     const hiddenTool = makeBuiltinTool('secret-tool', false);

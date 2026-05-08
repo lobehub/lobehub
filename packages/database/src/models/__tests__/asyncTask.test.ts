@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import type { UserMemoryExtractionMetadata } from '@lobechat/types';
-import { AsyncTaskStatus, AsyncTaskType } from '@lobechat/types';
+import {
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  AsyncTaskType,
+} from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -154,6 +159,37 @@ describe('AsyncTaskModel', () => {
       expect(secondMetadata?.progress?.completedTopics).toBe(2);
       expect(task?.status).toBe(AsyncTaskStatus.Success);
     });
+
+    it('should preserve error status and error payload when progress reaches total after failure', async () => {
+      const error = new AsyncTaskError(AsyncTaskErrorType.ServerError, 'Extraction failed');
+
+      const { id } = await serverDB
+        .insert(asyncTasks)
+        .values({
+          error,
+          metadata: {
+            progress: {
+              completedTopics: 1,
+              totalTopics: 2,
+            },
+            source: 'chat_topic',
+          },
+          status: AsyncTaskStatus.Error,
+          type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
+          userId,
+        })
+        .returning()
+        .then((res) => res[0]);
+
+      await asyncTaskModel.incrementUserMemoryExtractionProgress(id);
+
+      const task = await serverDB.query.asyncTasks.findFirst({ where: eq(asyncTasks.id, id) });
+      const metadata = task?.metadata as UserMemoryExtractionMetadata | undefined;
+
+      expect(metadata?.progress?.completedTopics).toBe(2);
+      expect(task?.status).toBe(AsyncTaskStatus.Error);
+      expect(task?.error).toEqual(error);
+    });
   });
 
   describe('findActiveByType', () => {
@@ -279,6 +315,88 @@ describe('AsyncTaskModel', () => {
       expect(updatedTask?.error).toBeNull();
     });
   });
+
+  describe('isUserMemoryExtractionCancellationRequested', () => {
+    it('should return true when cancellation is requested for current user memory extraction task', async () => {
+      const [task] = await serverDB
+        .insert(asyncTasks)
+        .values({
+          metadata: {
+            control: {
+              cancelRequestedAt: new Date().toISOString(),
+            },
+            progress: {
+              completedTopics: 0,
+              totalTopics: 1,
+            },
+            source: 'chat_topic',
+          },
+          status: AsyncTaskStatus.Processing,
+          type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
+          userId,
+        })
+        .returning();
+
+      const requested = await asyncTaskModel.isUserMemoryExtractionCancellationRequested(task.id);
+
+      expect(requested).toBe(true);
+    });
+
+    it('should return false when task is not user memory extraction type', async () => {
+      const [task] = await serverDB
+        .insert(asyncTasks)
+        .values({
+          metadata: {
+            control: {
+              cancelRequestedAt: new Date().toISOString(),
+            },
+            progress: {
+              completedTopics: 0,
+              totalTopics: 1,
+            },
+            source: 'chat_topic',
+          },
+          status: AsyncTaskStatus.Processing,
+          type: AsyncTaskType.Chunking,
+          userId,
+        })
+        .returning();
+
+      const requested = await asyncTaskModel.isUserMemoryExtractionCancellationRequested(task.id);
+
+      expect(requested).toBe(false);
+    });
+
+    it('should return false when task belongs to another user', async () => {
+      const otherUserId = 'other-user-for-cancel-test';
+      await serverDB.insert(users).values([{ id: otherUserId }]);
+
+      const [task] = await serverDB
+        .insert(asyncTasks)
+        .values({
+          metadata: {
+            control: {
+              cancelRequestedAt: new Date().toISOString(),
+            },
+            progress: {
+              completedTopics: 0,
+              totalTopics: 1,
+            },
+            source: 'chat_topic',
+          },
+          status: AsyncTaskStatus.Processing,
+          type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
+          userId: otherUserId,
+        })
+        .returning();
+
+      const requested = await asyncTaskModel.isUserMemoryExtractionCancellationRequested(task.id);
+
+      expect(requested).toBe(false);
+
+      await serverDB.delete(users).where(eq(users.id, otherUserId));
+    });
+  });
 });
 
 describe('initUserMemoryExtractionMetadata', () => {
@@ -286,6 +404,7 @@ describe('initUserMemoryExtractionMetadata', () => {
     const result = initUserMemoryExtractionMetadata(undefined);
 
     expect(result).toEqual({
+      control: undefined,
       progress: {
         completedTopics: 0,
         totalTopics: null,
@@ -299,6 +418,7 @@ describe('initUserMemoryExtractionMetadata', () => {
     const result = initUserMemoryExtractionMetadata();
 
     expect(result).toEqual({
+      control: undefined,
       progress: {
         completedTopics: 0,
         totalTopics: null,
@@ -318,6 +438,7 @@ describe('initUserMemoryExtractionMetadata', () => {
     });
 
     expect(result).toEqual({
+      control: undefined,
       progress: {
         completedTopics: 5,
         totalTopics: 10,
@@ -339,6 +460,7 @@ describe('initUserMemoryExtractionMetadata', () => {
     });
 
     expect(result).toEqual({
+      control: undefined,
       progress: {
         completedTopics: 3,
         totalTopics: 7,

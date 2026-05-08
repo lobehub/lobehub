@@ -44,7 +44,7 @@ interface PublishedTimeProps {
   template?: string;
 }
 const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, template }) => {
-  const { t } = useTranslation('discover');
+  const { t } = useTranslation('common');
   const time = formatDate(date, t as (key: string) => string, template);
 
   return (

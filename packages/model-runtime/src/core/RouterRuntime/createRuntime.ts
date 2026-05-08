@@ -2,7 +2,7 @@
  * @see https://github.com/lobehub/lobe-chat/discussions/6563
  */
 import type { GoogleGenAIOptions } from '@google/genai';
-import { AgentRuntimeErrorType, type ChatModelCard } from '@lobechat/types';
+import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { ClientOptions } from 'openai';
 import type OpenAI from 'openai';
@@ -15,8 +15,10 @@ import type {
   ChatMethodOptions,
   ChatStreamCallbacks,
   ChatStreamPayload,
+  CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
+  CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResponse,
   EmbeddingsOptions,
@@ -28,6 +30,7 @@ import type {
   ILobeAgentRuntimeErrorType,
   TextToSpeechPayload,
 } from '../../types';
+import { isNonRetryableRequestError } from '../../utils/isNonRetryableRequestError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -162,6 +165,12 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     ) => ChatStreamPayload;
   };
   routers: Routers;
+  shouldStopFallback?: (params: {
+    error: unknown;
+    metadata?: Record<string, unknown>;
+    model: string;
+    optionIndex: number;
+  }) => boolean | Promise<boolean>;
 }
 
 export const createRouterRuntime = ({
@@ -187,7 +196,7 @@ export const createRouterRuntime = ({
       // Save configuration without creating runtimes
       this._routers = routers;
       this._params = params;
-      this._id = id;
+      this._id = options.id ?? id;
     }
 
     /**
@@ -254,7 +263,11 @@ export const createRouterRuntime = ({
     }> {
       const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
       const resolvedApiType = optionApiType ?? router.apiType;
-      const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
+      const finalOptions = {
+        ...this._params,
+        ...this._options,
+        ...optionOverrides,
+      };
 
       /**
        * Vertex AI uses GoogleGenAI credentials flow rather than API keys.
@@ -392,12 +405,27 @@ export const createRouterRuntime = ({
               log('onRouteAttempt callback error: %O', e);
             });
 
-          // Non-retryable errors: the request itself is invalid, retrying with another channel won't help
-          if (
-            (error as ChatCompletionErrorPayload)?.errorType ===
-            AgentRuntimeErrorType.ExceededContextWindow
-          ) {
+          if (isNonRetryableRequestError(error)) {
             throw error;
+          }
+
+          try {
+            const shouldStopFallback = await params.shouldStopFallback?.({
+              error,
+              metadata,
+              model,
+              optionIndex: index,
+            });
+
+            if (shouldStopFallback) {
+              throw error;
+            }
+          } catch (fallbackError) {
+            if (fallbackError === error) {
+              throw error;
+            }
+
+            log('shouldStopFallback callback error: %O', fallbackError);
           }
 
           if (attempt < totalOptions) {
@@ -430,32 +458,23 @@ export const createRouterRuntime = ({
 
     async models() {
       const resolvedRouters = await this.resolveRouters();
-      const runtimes = await Promise.all(
-        resolvedRouters.map(async (router) => {
-          const routerOptions = this.normalizeRouterOptions(router);
-          const { id: resolvedApiType, runtime } = await this.createRuntimeFromOption(
-            router,
-            routerOptions[0],
-          );
+      const matchedRouter = this._options.baseURL
+        ? (resolvedRouters.find((router) => router.baseURLPattern?.test(this._options.baseURL!)) ??
+          resolvedRouters.at(-1)!)
+        : resolvedRouters.at(-1)!;
+      const routerOptions = this.normalizeRouterOptions(matchedRouter);
+      const { runtime } = await this.createRuntimeFromOption(matchedRouter, routerOptions[0]);
 
-          return {
-            id: resolvedApiType,
-            models: router.models,
-            runtime,
-          };
-        }),
-      );
-
-      if (modelsOption && typeof modelsOption === 'function') {
-        // If it's a functional configuration, use the last runtime's client to call the function
-        const lastRuntime = runtimes.at(-1)?.runtime;
-        if (lastRuntime && 'client' in lastRuntime) {
-          const modelList = await modelsOption({ client: (lastRuntime as any).client });
-          return await postProcessModelList(modelList);
-        }
+      if (
+        modelsOption &&
+        typeof modelsOption === 'function' && // Use the same baseURL-matched runtime as chat routing for provider model discovery.
+        'client' in runtime
+      ) {
+        const modelList = await modelsOption({ client: (runtime as any).client });
+        return await postProcessModelList(modelList);
       }
 
-      return runtimes.at(-1)?.runtime.models?.();
+      return runtime.models?.();
     }
 
     /**
@@ -482,12 +501,20 @@ export const createRouterRuntime = ({
       }
     }
 
-    async createImage(payload: CreateImagePayload) {
-      return this.runWithFallback(payload.model, (runtime) => runtime.createImage!(payload));
+    async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.createImage!(payload),
+        options?.metadata,
+      );
     }
 
-    async createVideo(payload: CreateVideoPayload) {
-      return this.runWithFallback(payload.model, (runtime) => runtime.createVideo!(payload));
+    async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.createVideo!(payload),
+        options?.metadata,
+      );
     }
 
     async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {

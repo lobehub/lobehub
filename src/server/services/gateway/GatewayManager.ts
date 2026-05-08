@@ -6,10 +6,10 @@ import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis'
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   type BotPlatformRuntimeContext,
-  type BotProviderConfig,
   buildRuntimeKey,
   type PlatformClient,
   type PlatformDefinition,
+  resolveBotProviderConfig,
 } from '@/server/services/bot/platforms';
 
 const log = debug('lobe-server:bot-gateway');
@@ -200,12 +200,7 @@ export class GatewayManager {
       return null;
     }
 
-    const config: BotProviderConfig = {
-      applicationId: provider.applicationId,
-      credentials: provider.credentials,
-      platform,
-      settings: (provider.settings as Record<string, unknown>) || {},
-    };
+    const { config } = resolveBotProviderConfig(def, provider);
 
     const context: BotPlatformRuntimeContext = {
       appUrl: process.env.APP_URL,

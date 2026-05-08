@@ -1,3 +1,4 @@
+import type { AgentContextDocument } from '@lobechat/context-engine';
 import { type UIChatMessage } from '@lobechat/types';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
@@ -24,16 +25,24 @@ class AgentRuntimeService {
     const agentStoreState = getAgentStoreState();
     const agentConfig = agentSelectors.currentAgentConfig(agentStoreState);
     const chatConfig = agentChatConfigSelectors.currentChatConfig(agentStoreState);
+    let agentDocuments: AgentContextDocument[] | undefined = agentSelectors.getAgentDocumentsById(
+      agentStoreState.activeAgentId || '',
+    )(agentStoreState);
+
+    if (agentStoreState.activeAgentId && agentDocuments === undefined) {
+      try {
+        agentDocuments = await agentStoreState.ensureAgentDocuments(agentStoreState.activeAgentId);
+      } catch (error) {
+        console.error('[AgentRuntimeService] Failed to ensure agent documents:', error);
+      }
+    }
 
     const modelRuntimeConfig = {
       model: agentConfig.model,
       provider: agentConfig.provider!,
     };
 
-    const toolsEngine = createAgentToolsEngine({
-      model: agentConfig.model,
-      provider: agentConfig.provider!,
-    });
+    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig);
 
     const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({
       model: agentConfig.model,
@@ -43,6 +52,7 @@ class AgentRuntimeService {
 
     // Apply context engineering with preprocessing configuration
     const llmMessages = await contextEngineering({
+      agentDocuments,
       agentId: agentStoreState.activeAgentId,
       enableHistoryCount: agentChatConfigSelectors.enableHistoryCount(agentStoreState),
       // historyCount is number of history messages; add 1 for current user message

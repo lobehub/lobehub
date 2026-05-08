@@ -2,10 +2,33 @@ import { type UIChatMessage } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as isCanUseFCModule from '@/helpers/isCanUseFC';
+import { agentDocumentService } from '@/services/agentDocument';
 
 import * as helpers from '../helper';
 import { contextEngineering } from './contextEngineering';
 import * as memoryManager from './memoryManager';
+
+vi.hoisted(() => {
+  const storage = new Map<string, string>();
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      key: (index: number) => Array.from(storage.keys())[index] ?? null,
+      get length() {
+        return storage.size;
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+    },
+  });
+});
 
 // Mock VARIABLE_GENERATORS
 vi.mock('@/helpers/parserPlaceholder', () => ({
@@ -14,6 +37,12 @@ vi.mock('@/helpers/parserPlaceholder', () => ({
     time: () => '14:30:45',
     username: () => 'TestUser',
     random: () => '12345',
+  },
+}));
+
+vi.mock('@/services/agentDocument', () => ({
+  agentDocumentService: {
+    getDocuments: vi.fn(),
   },
 }));
 
@@ -48,6 +77,51 @@ const getCurrentDateContent = () => {
 };
 
 describe('contextEngineering', () => {
+  it('should not fetch agent documents implicitly when agentId is provided', async () => {
+    const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+    await contextEngineering({
+      agentId: 'agent-1',
+      messages,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
+  });
+
+  it('should use provided agent documents without fetching', async () => {
+    const messages = [{ content: 'Summarize the setup', role: 'user' }] as UIChatMessage[];
+
+    const output = await contextEngineering({
+      agentDocuments: [
+        {
+          content: 'Project setup steps',
+          filename: 'setup.md',
+          id: 'doc-1',
+          title: 'Setup',
+        },
+      ],
+      agentId: 'agent-1',
+      messages,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
+    const documentsMessage = output.find(
+      (message) =>
+        message.role === 'user' &&
+        typeof message.content === 'string' &&
+        message.content.includes('Project setup steps'),
+    );
+
+    expect(documentsMessage).toEqual({
+      content: expect.stringContaining('Project setup steps'),
+      role: 'user',
+    });
+  });
+
   describe('handle with files content in server mode', () => {
     it('should includes files', async () => {
       isServerMode = true;
@@ -107,12 +181,12 @@ describe('contextEngineering', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="ttt.png" url="http://example.com/xxx0asd-dsd.png"></image>
+<image ref="image_1" name="ttt.png"></image>
 </images>
 <files>
 <files_docstring>here are user upload files you can refer to</files_docstring>
-<file id="file1" name="abc.png" type="plain/txt" size="100000" url="http://abc.com/abc.txt"></file>
-<file id="file_oKMve9qySLMI" name="2402.16667v1.pdf" type="undefined" size="11256078" url="https://xxx.com/ppp/480497/5826c2b8-fde0-4de1-a54b-a224d5e3d898.pdf"></file>
+<file id="file1" name="abc.png" type="plain/txt" size="100000"></file>
+<file id="file_oKMve9qySLMI" name="2402.16667v1.pdf" type="undefined" size="11256078"></file>
 </files>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -164,7 +238,12 @@ describe('contextEngineering', () => {
         {
           content: [
             {
+              // Vision disabled: the image is surfaced in the file-context
+              // block AND appended as a textual placeholder so the target
+              // model still sees that an image was sent (see LOBE-7214).
               text: `Hello
+
+[image omitted: not supported by this model]
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
 <context.instruction>following part contains context information injected by the system. Please follow these instructions:
@@ -175,7 +254,7 @@ describe('contextEngineering', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image name="abc.png" url="http://example.com/image.jpg"></image>
+<image ref="image_1" name="abc.png"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -295,14 +374,14 @@ describe('contextEngineering', () => {
     expect(Object.keys(systemMessage!).length).toEqual(2);
   });
 
-  it('should strip raw action tags from user messages before sending to model', async () => {
+  it('should preserve normalized skill and tool tags in user messages before sending to model', async () => {
     vi.spyOn(isCanUseFCModule, 'isCanUseFC').mockReturnValue(true);
 
     const messages: UIChatMessage[] = [
       {
         role: 'user',
         content:
-          '<action type="grep" category="skill" /> <action type="lobe-notebook" category="tool" /> hi',
+          '<skill name="grep" label="Grep" /> <tool name="lobe-notebook" label="Notebook" /> hi',
         createdAt: Date.now(),
         id: 'selected-skill-user',
         updatedAt: Date.now(),
@@ -321,8 +400,8 @@ describe('contextEngineering', () => {
     });
     expect(result[1].role).toBe('user');
     expect(result[1].content).toContain('hi');
-    expect(result[1].content).not.toContain('<action type="grep" category="skill" />');
-    expect(result[1].content).not.toContain('<action type="lobe-notebook" category="tool" />');
+    expect(result[1].content).toContain('<skill name="grep" label="Grep" />');
+    expect(result[1].content).toContain('<tool name="lobe-notebook" label="Notebook" />');
   });
 
   describe('getAssistantContent', () => {

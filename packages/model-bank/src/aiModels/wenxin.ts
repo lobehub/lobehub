@@ -1,4 +1,4 @@
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 // https://cloud.baidu.com/doc/qianfan/s/rmh4stp0j
 
@@ -13,9 +13,58 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
+      'ERNIE 5.0, the new-generation model in the ERNIE series, is a natively multimodal large model. It adopts a unified multimodal modeling approach, jointly modeling text, images, audio, and video to deliver comprehensive multimodal capabilities. Its foundational abilities have been significantly upgraded, achieving strong performance on benchmark evaluations. It particularly excels in multimodal understanding, instruction following, creative writing, factual accuracy, agent planning, and tool utilization.',
+    displayName: 'ERNIE 5.0',
+    enabled: true,
+    id: 'ernie-5.0',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 6,
+              '[0.032, 0.128]': 10,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 24,
+              '[0.032, 0.128]': 40,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-03-05',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
       'Wenxin 5.0 Thinking is a native full-modal flagship model with unified text, image, audio, and video modeling. It delivers broad capability upgrades for complex QA, creation, and agent scenarios.',
     displayName: 'ERNIE 5.0 Thinking',
-    enabled: true,
     id: 'ernie-5.0-thinking-latest',
     maxOutput: 65_536,
     pricing: {
@@ -110,10 +159,10 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'ERNIE 4.5 Turbo 128K is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
-    displayName: 'ERNIE 4.5 Turbo 128K',
+      'ERNIE 4.5 Turbo 20260402 is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
+    displayName: 'ERNIE 4.5 Turbo 20260402',
     enabled: true,
-    id: 'ernie-4.5-turbo-128k',
+    id: 'ernie-4.5-turbo-20260402',
     maxOutput: 12_288,
     pricing: {
       currency: 'CNY',
@@ -135,9 +184,9 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'ERNIE 4.5 Turbo 128K preview with release-level capabilities, suitable for integration and canary testing.',
-    displayName: 'ERNIE 4.5 Turbo 128K Preview',
-    id: 'ernie-4.5-turbo-128k-preview',
+      'ERNIE 4.5 Turbo 128K is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
+    displayName: 'ERNIE 4.5 Turbo 128K',
+    id: 'ernie-4.5-turbo-128k',
     maxOutput: 12_288,
     pricing: {
       currency: 'CNY',
@@ -146,6 +195,9 @@ const wenxinChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
+    },
+    settings: {
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -232,22 +284,6 @@ const wenxinChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     description:
-      'ERNIE Character 8K is a persona dialogue model for IP character building and long-term companionship chat.',
-    displayName: 'ERNIE Character 8K',
-    id: 'ernie-char-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
       'ERNIE Character Fiction 8K is a persona model for novels and plot creation, suited for long-form story generation.',
     displayName: 'ERNIE Character Fiction 8K',
     id: 'ernie-char-fiction-8k',
@@ -306,75 +342,6 @@ const wenxinChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      search: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'ERNIE 4.5 21B A3B is an open-source large-parameter model with stronger understanding and generation.',
-    displayName: 'ERNIE 4.5 21B A3B',
-    id: 'ernie-4.5-21b-a3b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'ERNIE-4.5-21B-A3B-Thinking is a text MoE (Mixture-of-Experts) post-trained model with a total of 21B parameters and 3B active parameters, offering significantly enhanced reasoning quality and depth.',
-    displayName: 'ERNIE 4.5 21B A3B Thinking',
-    id: 'ernie-4.5-21b-a3b-thinking',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'ERNIE 4.5 VL 28B A3B is an open-source multimodal model for image-text understanding and reasoning.',
-    displayName: 'ERNIE 4.5 VL 28B A3B',
-    id: 'ernie-4.5-vl-28b-a3b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
     },
     type: 'chat',
   },
@@ -442,30 +409,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'ERNIE 4.5 Turbo VL Preview is a multimodal preview model for image-text understanding and generation, suitable for visual QA and content comprehension.',
-    displayName: 'ERNIE 4.5 Turbo VL Preview',
-    id: 'ernie-4.5-turbo-vl-preview',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
       'ERNIE 4.5 Turbo VL is a mature multimodal model for production image-text understanding and recognition.',
     displayName: 'ERNIE 4.5 Turbo VL',
     id: 'ernie-4.5-turbo-vl',
@@ -498,30 +441,6 @@ const wenxinChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
       ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'ERNIE 4.5 Turbo VL 32K Preview is a 32K multimodal preview for evaluating long-context vision ability.',
-    displayName: 'ERNIE 4.5 Turbo VL 32K Preview',
-    id: 'ernie-4.5-turbo-vl-32k-preview',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
     },
     type: 'chat',
   },
@@ -746,25 +665,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Qianfan Llama VL 8B is a Llama-based multimodal model for general image-text understanding.',
-    displayName: 'Qianfan Llama VL 8B',
-    id: 'qianfan-llama-vl-8b',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1069,26 +969,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 16_384,
-    description:
-      'Qwen2.5 VL 7B Instruct is a lightweight multimodal model balancing deployment cost and recognition ability.',
-    displayName: 'Qwen2.5 VL 7B Instruct',
-    id: 'qwen2.5-vl-7b-instruct',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -1480,26 +1360,6 @@ const wenxinChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'QWQ-32B is a large open-source reasoning model, suitable as a reasoning core for agents.',
-    displayName: 'QWQ 32B',
-    id: 'qwq-32b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -1727,22 +1587,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    contextWindowTokens: 32_768,
-    description:
-      'Qwen2.5 7B Instruct is a mature open-source instruct model for multi-scenario chat and generation.',
-    displayName: 'Qwen2.5 7B Instruct',
-    id: 'qwen2.5-7b-instruct',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
 ];
 
 const wenxinImageModels: AIImageModelCard[] = [
@@ -1772,6 +1616,7 @@ const wenxinImageModels: AIImageModelCard[] = [
           '1104x1472',
         ],
       },
+      promptExtend: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1781,9 +1626,30 @@ const wenxinImageModels: AIImageModelCard[] = [
   },
   {
     description:
+      'ERNIE-Image is an 8B-parameter text-to-image model developed by Baidu. It ranks among the top on multiple benchmarks, achieving a tied first place in SuperCLUE in China and leading in the open-source track.',
+    displayName: 'ERNIE Image Turbo',
+    enabled: true,
+    id: 'ernie-image-turbo',
+    parameters: {
+      prompt: {
+        default: '',
+      },
+      size: {
+        default: '1024x1024',
+        enum: ['1024x1024', '848x1264', '768x1376', '896x1200', '1264x848', '1376x768', '1200x896'],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.11, strategy: 'fixed', unit: 'image' }],
+    },
+    type: 'image',
+  },
+  {
+    description:
       'ERNIE iRAG is an image retrieval-augmented generation model for image search, image-text retrieval, and content generation.',
     displayName: 'ERNIE iRAG',
-    enabled: true,
     id: 'irag-1.0',
     parameters: {
       height: { default: 1024, max: 2048, min: 512, step: 1 },
@@ -1791,6 +1657,7 @@ const wenxinImageModels: AIImageModelCard[] = [
         default: '',
       },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1803,7 +1670,6 @@ const wenxinImageModels: AIImageModelCard[] = [
     description:
       'ERNIE iRAG Edit is an image editing model supporting erasing, repainting, and variant generation.',
     displayName: 'ERNIE iRAG Edit',
-    enabled: true,
     id: 'ernie-irag-edit',
     parameters: {
       height: { default: 1024, max: 2048, min: 512, step: 1 },
@@ -1812,6 +1678,7 @@ const wenxinImageModels: AIImageModelCard[] = [
         default: '',
       },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1834,6 +1701,8 @@ const wenxinImageModels: AIImageModelCard[] = [
       seed: { default: null },
       steps: { default: 25, max: 50, min: 1 },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1855,6 +1724,8 @@ const wenxinImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1876,6 +1747,7 @@ const wenxinImageModels: AIImageModelCard[] = [
       seed: { default: null },
       steps: { default: 25, max: 50, min: 1 },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1886,6 +1758,113 @@ const wenxinImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...wenxinChatModels, ...wenxinImageModels];
+const wenxinVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Supports 5s and 10s 720P dynamic video generation with sound. Enables multi-person conversational audio-visual creation, with synchronized sound and visuals, cinematic-quality imagery, and master-level camera movements.',
+    displayName: 'MuseSteamer 2.0 Turbo I2V Audio',
+    enabled: true,
+    id: 'musesteamer-2.0-turbo-i2v-audio',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Supports 5-second 720P silent dynamic video generation, featuring cinematic-quality visuals, complex camera movements, and realistic character emotions and actions.',
+    displayName: 'MuseSteamer 2.0 Turbo I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-turbo-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.4, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Based on Turbo, supports 1080P dynamic video generation, offering higher visual quality and enhanced video expressiveness.',
+    displayName: 'MuseSteamer 2.0 Pro I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-pro-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Compared to Turbo, it offers superior performance with excellent cost-effectiveness.',
+    displayName: 'MuseSteamer 2.0 Lite I2V',
+    enabled: true,
+    id: 'musesteamer-2.0-lite-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'The Baidu MuseSteamer Air video generation model performs well in subject consistency, physical realism, camera movement effects, and generation speed. It supports 5-second 720P silent dynamic video generation, delivering cinematic-quality visuals, fast generation, and excellent cost-effectiveness.',
+    displayName: 'MuseSteamer Air I2V',
+    id: 'musesteamer-air-i2v',
+    parameters: {
+      duration: { default: 5, enum: [5] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+];
+
+export const allModels = [...wenxinChatModels, ...wenxinImageModels, ...wenxinVideoModels];
 
 export default allModels;

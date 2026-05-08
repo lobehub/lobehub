@@ -16,6 +16,7 @@ vi.mock('@/services/plugin', () => ({
     createCustomPlugin: vi.fn(),
     uninstallPlugin: vi.fn(),
     updatePluginManifest: vi.fn(),
+    getInstalledPlugins: vi.fn().mockResolvedValue([]),
   },
 }));
 

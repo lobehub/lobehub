@@ -35,7 +35,7 @@ export interface NavLayout {
 export const useNavLayout = (): NavLayout => {
   const { t } = useTranslation('common');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const { showMarket, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
+  const { showMarket, hideGitHub, enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
 
   const topNavItems = useMemo(
     () =>
@@ -53,18 +53,38 @@ export const useNavLayout = (): NavLayout => {
           url: '/',
         },
         {
+          hidden: !enableAgentTask,
+          icon: getRouteById('tasks')!.icon,
+          key: SidebarTabKey.Tasks,
+          title: t('tab.tasks'),
+          url: '/tasks',
+        },
+        {
           icon: getRouteById('page')!.icon,
           key: SidebarTabKey.Pages,
           title: t('tab.pages'),
           url: '/page',
         },
       ] as NavItem[],
-    [t, toggleCommandMenu],
+    [t, toggleCommandMenu, enableAgentTask],
   );
 
   const bottomMenuItems = useMemo(
     () =>
       [
+        {
+          icon: getRouteById('image')!.icon,
+          key: SidebarTabKey.Image,
+          title: t('tab.generation'),
+          url: '/image',
+        },
+        {
+          hidden: !showMarket,
+          icon: getRouteById('community')!.icon,
+          key: SidebarTabKey.Community,
+          title: t('tab.community'),
+          url: '/community',
+        },
         {
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
@@ -72,11 +92,10 @@ export const useNavLayout = (): NavLayout => {
           url: '/resource',
         },
         {
-          hidden: !showMarket,
-          icon: getRouteById('community')!.icon,
-          key: SidebarTabKey.Community,
-          title: t('tab.marketplace'),
-          url: '/community',
+          icon: getRouteById('memory')!.icon,
+          key: SidebarTabKey.Memory,
+          title: t('tab.memory'),
+          url: '/memory',
         },
       ] as NavItem[],
     [t, showMarket],

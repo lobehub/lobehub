@@ -176,6 +176,21 @@ class AgentEvalService {
     return lambdaClient.agentEval.retryRunCase.mutate({ runId, testCaseId });
   }
 
+  async resumeRunCase(runId: string, testCaseId: string, threadId?: string) {
+    return lambdaClient.agentEval.resumeRunCase.mutate({ runId, testCaseId, threadId });
+  }
+
+  async batchResumeRunCases(
+    runId: string,
+    targets: Array<{ testCaseId: string; threadId?: string }>,
+  ) {
+    return lambdaClient.agentEval.batchResumeRunCases.mutate({ runId, targets });
+  }
+
+  async getResumableCases(runId: string) {
+    return lambdaClient.agentEval.getResumableCases.query({ runId });
+  }
+
   async updateRun(params: {
     config?: EvalRunInputConfig;
     datasetId?: string;

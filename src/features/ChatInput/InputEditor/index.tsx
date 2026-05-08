@@ -1,29 +1,43 @@
 import { isDesktop } from '@lobechat/const';
-import { HotkeyEnum, KeyEnum } from '@lobechat/types';
-import { isCommandPressed } from '@lobechat/utils';
-import { INSERT_MENTION_COMMAND, ReactMathPlugin } from '@lobehub/editor';
+import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import { chainInputCompletion, escapeXmlAttr } from '@lobechat/prompts';
+import { isCommandPressed, merge } from '@lobechat/utils';
+import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
 import Fuse from 'fuse.js';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { KEY_ESCAPE_COMMAND } from 'lexical';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { chatService } from '@/services/chat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
+import {
+  labPreferSelectors,
+  preferenceSelectors,
+  settingsSelectors,
+  systemAgentSelectors,
+} from '@/store/user/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore, useStoreApi } from '../store';
-import { useSlashActionItems } from './ActionTag';
+import {
+  INSERT_ACTION_TAG_COMMAND,
+  type InsertActionTagPayload,
+  useSlashActionItems,
+} from './ActionTag';
 import { createMentionMenu } from './MentionMenu';
 import type { MentionMenuState } from './MentionMenu/types';
-import Placeholder from './Placeholder';
+import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
+import { useLocalFileMention } from './useLocalFileMention';
 import { useMentionCategories } from './useMentionCategories';
 
 const className = cx(css`
@@ -32,16 +46,30 @@ const className = cx(css`
   }
 `);
 
-const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
-  const [editor, slashMenuRef, send, updateMarkdownContent, expand, slashPlacement] =
-    useChatInputStore((s) => [
-      s.editor,
-      s.slashMenuRef,
-      s.handleSendButton,
-      s.updateMarkdownContent,
-      s.expand,
-      s.slashPlacement ?? 'top',
-    ]);
+const InputEditor = memo<{
+  defaultRows?: number;
+  placeholder?: ReactNode;
+  placeholderVariant?: PlaceholderVariant;
+}>(({ defaultRows = 2, placeholder, placeholderVariant }) => {
+  const [
+    editor,
+    slashMenuRef,
+    send,
+    updateMarkdownContent,
+    expand,
+    slashPlacement,
+    disableMention,
+    disableSlash,
+  ] = useChatInputStore((s) => [
+    s.editor,
+    s.slashMenuRef,
+    s.handleSendButton,
+    s.updateMarkdownContent,
+    s.expand,
+    s.slashPlacement ?? 'top',
+    s.disableMention,
+    s.disableSlash,
+  ]);
 
   const storeApi = useStoreApi();
   const state = useEditorState(editor);
@@ -57,6 +85,16 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
   const stateRef = useRef<MentionMenuState>({ isSearch: false, matchingString: '' });
   const categoriesRef = useRef(categories);
   categoriesRef.current = categories;
+
+  // Get agent's model info for vision support check and handle paste upload
+  const agentId = useAgentId();
+  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
+  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const heterogeneousType = useAgentStore(
+    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
+  );
+
+  const { enableLocalFileMention, searchLocalFiles } = useLocalFileMention();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
 
@@ -75,22 +113,28 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
     ) => {
       if (search?.matchingString) {
         stateRef.current = { isSearch: true, matchingString: search.matchingString };
-        return fuse.search(search.matchingString).map((r) => r.item);
+        const [localFileItems, mentionItems] = await Promise.all([
+          searchLocalFiles(search.matchingString),
+          Promise.resolve(fuse.search(search.matchingString).map((r) => r.item)),
+        ]);
+
+        return [...localFileItems, ...mentionItems];
       }
       stateRef.current = { isSearch: false, matchingString: '' };
       return [...allMentionItems];
     },
-    [allMentionItems, fuse],
+    [allMentionItems, fuse, searchLocalFiles],
   );
 
   const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
 
-  const enableMention = allMentionItems.length > 0;
-
-  // Get agent's model info for vision support check and handle paste upload
-  const agentId = useAgentId();
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
-  const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const enableMention = !disableMention && (allMentionItems.length > 0 || enableLocalFileMention);
+  const heterogeneousName = heterogeneousType
+    ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+    : undefined;
+  // Heterogeneous agents (e.g. Claude Code) don't yet support @-assigning to other agents
+  const showAgentAssignmentHint =
+    !disableMention && !heterogeneousName && categories.some((category) => category.id === 'agent');
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   // Listen to editor's paste event for file uploads
@@ -125,30 +169,155 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
     [slashActionItems],
   );
 
-  const richRenderProps = useMemo(
-    () =>
-      !enableRichRender
-        ? {
-            enablePasteMarkdown: false,
-            markdownOption: false,
-            plugins: CHAT_INPUT_EMBED_PLUGINS,
-          }
-        : {
-            plugins: createChatInputRichPlugins({
-              mathPlugin: Editor.withProps(ReactMathPlugin, {
-                renderComp: expand
-                  ? undefined
-                  : (props) => (
-                      <FloatMenu
-                        {...props}
-                        getPopupContainer={() => (slashMenuRef as any)?.current}
-                      />
-                    ),
-              }),
-            }),
+  // --- Auto-completion ---
+  const inputCompletionConfig = useUserStore(systemAgentSelectors.inputCompletion);
+  const isAutoCompleteEnabled = inputCompletionConfig.enabled;
+
+  const getMessagesRef = useRef(storeApi.getState().getMessages);
+  useEffect(() => {
+    return storeApi.subscribe((s) => {
+      getMessagesRef.current = s.getMessages;
+    });
+  }, [storeApi]);
+
+  const handleAutoComplete = useCallback(
+    async ({
+      abortSignal,
+      afterText,
+      input,
+    }: {
+      abortSignal: AbortSignal;
+      afterText: string;
+      editor: any;
+      input: string;
+      selectionType: string;
+    }): Promise<string | null> => {
+      // Skip autocomplete during IME composition (e.g. Chinese input method)
+      if (isComposingRef.current) return null;
+
+      if (!input.trim()) return null;
+
+      // Skip when cursor is not at end of paragraph — inserting a placeholder
+      // mid-text causes nested editor updates that freeze the input
+      if (afterText.trim()) return null;
+
+      const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
+        useUserStore.getState(),
+      );
+      const context = getMessagesRef.current?.();
+      const chainParams = chainInputCompletion(input, afterText, context);
+
+      const abortController = new AbortController();
+      abortSignal.addEventListener('abort', () => abortController.abort());
+
+      let result = '';
+
+      try {
+        await chatService.fetchPresetTaskResult({
+          abortController,
+          onMessageHandle: (chunk) => {
+            if (chunk.type === 'text') {
+              result += chunk.text;
+            }
           },
-    [enableRichRender, expand, slashMenuRef],
+          params: merge(config, chainParams),
+        });
+      } catch {
+        return null;
+      }
+
+      if (abortSignal.aborted) return null;
+
+      return result.trimEnd() || null;
+    },
+    [isComposingRef],
   );
+
+  const autoCompletePlugin = useMemo(
+    () =>
+      isAutoCompleteEnabled
+        ? Editor.withProps(ReactAutoCompletePlugin, {
+            delay: 600,
+            onAutoComplete: handleAutoComplete,
+          })
+        : null,
+    [isAutoCompleteEnabled, handleAutoComplete],
+  );
+
+  // --- Stable mentionOption & slashOption to prevent infinite re-render on paste ---
+  const mentionMarkdownWriter = useCallback((mention: any) => {
+    if (mention.metadata?.type === 'topic') {
+      return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
+    }
+    if (mention.metadata?.type === 'localFile') {
+      const name = escapeXmlAttr(String(mention.metadata.name ?? mention.label));
+      const path = escapeXmlAttr(String(mention.metadata.path ?? ''));
+      const isDirectory = mention.metadata.isDirectory ? ' isDirectory' : '';
+
+      return `<localFile name="${name}" path="${path}"${isDirectory} />`;
+    }
+    return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
+  }, []);
+
+  const mentionOnSelect = useCallback((editor: any, option: any) => {
+    if (option.metadata?.type === 'topic') {
+      editor.dispatchCommand(INSERT_REFER_TOPIC_COMMAND, {
+        topicId: option.metadata.topicId as string,
+        topicTitle: String(option.metadata.topicTitle ?? option.label),
+      });
+    } else if (option.metadata?.type === 'skill' || option.metadata?.type === 'tool') {
+      const payload: InsertActionTagPayload = {
+        category: option.metadata.actionCategory as 'skill' | 'tool',
+        label: String(option.label),
+        type: String(option.metadata.actionType),
+      };
+      editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+    } else {
+      editor.dispatchCommand(INSERT_MENTION_COMMAND, {
+        label: String(option.label),
+        metadata: option.metadata,
+      });
+    }
+  }, []);
+
+  const mentionOption = useMemo(
+    () =>
+      enableMention
+        ? {
+            items: mentionItemsFn,
+            markdownWriter: mentionMarkdownWriter,
+            maxLength: 50,
+            onSelect: mentionOnSelect,
+            renderComp: MentionMenuComp,
+          }
+        : undefined,
+    [enableMention, mentionItemsFn, mentionMarkdownWriter, mentionOnSelect, MentionMenuComp],
+  );
+
+  const slashOption = useMemo(
+    () => (disableSlash ? undefined : { items: slashItems }),
+    [disableSlash, slashItems],
+  );
+
+  const richRenderProps = useMemo(() => {
+    const basePlugins = !enableRichRender
+      ? CHAT_INPUT_EMBED_PLUGINS
+      : createChatInputRichPlugins({
+          mathPlugin: Editor.withProps(ReactMathPlugin, {
+            renderComp: expand
+              ? undefined
+              : (props) => (
+                  <FloatMenu {...props} getPopupContainer={() => (slashMenuRef as any)?.current} />
+                ),
+          }),
+        });
+
+    const plugins = autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
+
+    return !enableRichRender
+      ? { enablePasteMarkdown: false, markdownOption: false, plugins }
+      : { plugins };
+  }, [enableRichRender, expand, slashMenuRef, autoCompletePlugin]);
 
   return (
     <Editor
@@ -159,50 +328,39 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       editor={editor}
       {...{ slashPlacement }}
       {...richRenderProps}
-      placeholder={<Placeholder />}
+      mentionOption={mentionOption}
+      slashOption={slashOption}
       type={'text'}
       variant={'chat'}
-      mentionOption={
-        enableMention
-          ? {
-              items: mentionItemsFn,
-              markdownWriter: (mention) => {
-                if (mention.metadata?.type === 'topic') {
-                  return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
-                }
-                return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
-              },
-              maxLength: 50,
-              onSelect: (editor, option) => {
-                if (option.metadata?.type === 'topic') {
-                  editor.dispatchCommand(INSERT_REFER_TOPIC_COMMAND, {
-                    topicId: option.metadata.topicId as string,
-                    topicTitle: String(option.metadata.topicTitle ?? option.label),
-                  });
-                } else {
-                  editor.dispatchCommand(INSERT_MENTION_COMMAND, {
-                    label: String(option.label),
-                    metadata: option.metadata,
-                  });
-                }
-              },
-              renderComp: MentionMenuComp,
-            }
-          : undefined
+      placeholder={
+        placeholder ?? (
+          <Placeholder
+            heterogeneousName={heterogeneousName}
+            showAgentAssignmentHint={showAgentAssignmentHint}
+            variant={placeholderVariant}
+          />
+        )
       }
-      slashOption={{
-        items: slashItems,
-      }}
       style={{
         minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
       }}
       onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
-      onCompositionStart={({ event }) => compositionProps.onCompositionStart(event)}
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
       }}
       onChange={() => {
         updateMarkdownContent();
+      }}
+      onCompositionStart={({ event }) => {
+        compositionProps.onCompositionStart(event);
+        // Clear autocomplete placeholder nodes before IME composition starts —
+        // composing next to placeholder inline nodes freezes the editor.
+        if (isAutoCompleteEnabled) {
+          editor?.dispatchCommand(
+            KEY_ESCAPE_COMMAND,
+            new KeyboardEvent('keydown', { key: 'Escape' }),
+          );
+        }
       }}
       onContextMenu={async ({ event: e, editor }) => {
         if (isDesktop) {

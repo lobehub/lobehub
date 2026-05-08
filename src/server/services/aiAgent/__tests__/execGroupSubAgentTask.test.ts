@@ -25,6 +25,7 @@ vi.mock('@/database/models/thread', () => ({
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(() => ({
     getAgentConfig: vi.fn(),
+    queryAgents: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -85,6 +86,10 @@ vi.mock('@/server/services/klavis', () => ({
   KlavisService: vi.fn().mockImplementation(() => ({
     getKlavisManifests: vi.fn().mockResolvedValue([]),
   })),
+}));
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
 }));
 
 describe('AiAgentService.execSubAgentTask', () => {

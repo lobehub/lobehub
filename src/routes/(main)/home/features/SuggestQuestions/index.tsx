@@ -6,24 +6,19 @@ import { Lightbulb, RefreshCw } from 'lucide-react';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type StarterMode } from '@/store/home';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import GroupBlock from '../components/GroupBlock';
 import List from './List';
 import SuggestQuestionsSkeleton from './Skeleton';
 import { useRandomQuestions } from './useRandomQuestions';
 
-interface SuggestQuestionsProps {
-  mode: StarterMode;
-}
-
-const SuggestQuestions = memo<SuggestQuestionsProps>(({ mode }) => {
+const SuggestQuestions = memo(() => {
   const { t } = useTranslation('common');
-  const { questions, refresh } = useRandomQuestions(mode);
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
+  const { questions, refresh } = useRandomQuestions();
 
-  if (mode && !['agent', 'group', 'write'].includes(mode)) {
-    return null;
-  }
+  if (enableAgentTask) return null;
 
   return (
     <GroupBlock

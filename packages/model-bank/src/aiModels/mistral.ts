@@ -7,11 +7,36 @@ const mistralChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Mistral Medium 3.5 is a frontier-class multimodal model optimized for agentic and coding use cases, released as open weights under a Modified MIT license.',
+    displayName: 'Mistral Medium 3.5',
+    enabled: true,
+    id: 'mistral-medium-3.5',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-30',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
     },
     contextWindowTokens: 262_144,
     description:
       'Devstral 2 is an enterprise-level text model that excels at using tools to explore codebases, edit multiple files, and power software engineering agents.',
     displayName: 'Devstral 2',
+    enabled: true,
     id: 'devstral-2512',
     pricing: {
       units: [
@@ -48,7 +73,6 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Mistral Medium 3.1 delivers state-of-the-art performance at 8× lower cost and simplifies enterprise deployment.',
     displayName: 'Mistral Medium 3.1',
-    enabled: true,
     id: 'mistral-medium-2508',
     pricing: {
       units: [
@@ -130,6 +154,9 @@ const mistralChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-03-16',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -154,7 +181,7 @@ const mistralChatModels: AIChatModelCard[] = [
       functionCall: true,
       vision: true,
     },
-    contextWindowTokens: 256_000,
+    contextWindowTokens: 262_144,
     description:
       'Mistral Large 3, is a state-of-the-art, open-weight, general-purpose multimodal model with a granular Mixture-of-Experts architecture. It features 41B active parameters and 675B total parameters.',
     displayName: 'Mistral Large 3',

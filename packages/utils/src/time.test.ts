@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   daysAgo,
+  formatActivityTime,
   getYYYYmmddHHMMss,
   hoursAgo,
   isNewReleaseDate,
@@ -289,6 +290,47 @@ describe('time utilities', () => {
       const date = '2024-06-09'; // 6 days ago from 2024-06-15
       expect(isNewReleaseDate(date, 7)).toBe(true);
       expect(isNewReleaseDate(date, 5)).toBe(false);
+    });
+  });
+
+  describe('formatActivityTime', () => {
+    it('uses relative phrasing when the gap is below one day', () => {
+      const input = '2026-05-01T05:00:00Z';
+      const result = formatActivityTime(input, {
+        now: '2026-05-01T14:00:00Z',
+      });
+      expect(result.text).toMatch(/hours? ago/);
+      // title is rendered in local timezone — derive expected value the same
+      // way so the assertion stays correct regardless of the runner's TZ.
+      expect(result.title).toBe(dayjs(input).format('YYYY-MM-DD HH:mm:ss'));
+    });
+
+    it('switches to absolute date once the gap exceeds one day', () => {
+      const result = formatActivityTime('2026-04-29T10:00:00Z', {
+        now: '2026-05-01T10:00:00Z',
+      });
+      expect(result.text).toBe('Apr 29');
+    });
+
+    it('uses the cross-year format when the year differs', () => {
+      const result = formatActivityTime('2025-12-30T10:00:00Z', {
+        now: '2026-05-01T10:00:00Z',
+      });
+      expect(result.text).toBe('Dec 30, 2025');
+    });
+
+    it('honors custom locale format strings', () => {
+      const result = formatActivityTime('2026-04-29T10:00:00Z', {
+        formatOtherYear: 'YYYY年M月D日',
+        formatThisYear: 'M月D日',
+        now: '2026-05-01T10:00:00Z',
+      });
+      expect(result.text).toBe('4月29日');
+    });
+
+    it('returns empty strings for missing or invalid input', () => {
+      expect(formatActivityTime()).toEqual({ text: '', title: '' });
+      expect(formatActivityTime('not a date')).toEqual({ text: '', title: '' });
     });
   });
 });

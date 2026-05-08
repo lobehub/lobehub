@@ -79,7 +79,7 @@ export abstract class BaseProcessor implements ContextProcessor {
    * Check if message is empty
    */
   protected isEmptyMessage(message: string | undefined | null): boolean {
-    return !message || message.trim().length === 0;
+    return !message || typeof message !== 'string' || message.trim().length === 0;
   }
 
   protected markAsExecuted(context: PipelineContext): PipelineContext {

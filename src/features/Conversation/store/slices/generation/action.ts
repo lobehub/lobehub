@@ -2,13 +2,21 @@ import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-manageme
 import { type StateCreator } from 'zustand';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import {
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
 } from '@/store/chat/slices/aiChat/actions/commandBus';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import {
+  mergeAgentRuntimeInitialContexts,
+  resolveActiveTopicDocumentInitialContext,
+} from '@/store/chat/utils/activeTopicDocumentContext';
 
 import { type Store as ConversationStore } from '../../action';
 
@@ -209,6 +217,22 @@ export const generationSlice: StateCreator<
       if (shouldProceed === false) return;
     }
 
+    const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
+    const runtimeType = selectRuntimeType({
+      heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
+      isGatewayMode: chatStore.isGatewayModeEnabled(),
+    });
+
+    // TODO(LOBE-8519 follow-up): continue is currently only wired for the client
+    // runtime. Gateway / hetero continue both fall through to the client path
+    // here; a proper implementation needs runtime-specific resume semantics.
+    if (runtimeType !== 'client') {
+      console.warn(
+        `[continueGenerationMessage] runtime=${runtimeType} not yet supported; ` +
+          'falling through to client mode',
+      );
+    }
+
     // Create continue operation with ConversationStore context (includes groupId)
     const { operationId } = chatStore.startOperation({
       context: { ...context, messageId: displayMessageId },
@@ -217,7 +241,7 @@ export const generationSlice: StateCreator<
 
     try {
       // Execute agent runtime with full context from ConversationStore
-      await chatStore.internal_execAgentRuntime({
+      await chatStore.executeClientAgent({
         context,
         messages: displayMessages,
         parentMessageId: dbMessageId,
@@ -314,15 +338,18 @@ export const generationSlice: StateCreator<
     const { context, displayMessages, hooks } = get();
     const chatStore = useChatStore.getState();
 
-    // Check if already regenerating
-    const isRegenerating = chatStore.messageLoadingIds.includes(messageId);
+    // Check if already regenerating via operation system
+    const isRegenerating = operationSelectors.isMessageProcessing(messageId)(chatStore);
     if (isRegenerating) return;
 
     // Find the message in current conversation messages
     const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
     const item = displayMessages[currentIndex];
     if (!item) return;
-    const initialContext = buildRetryInitialContext(item.editorData);
+    const initialContext = mergeAgentRuntimeInitialContexts(
+      await resolveActiveTopicDocumentInitialContext(context),
+      buildRetryInitialContext(item.editorData),
+    );
 
     // Get context messages up to and including the target message
     const contextMessages = displayMessages.slice(0, currentIndex + 1);
@@ -348,13 +375,45 @@ export const generationSlice: StateCreator<
       // New branch index = current children count (since index is 0-based)
       const nextBranchIndex = childrenCount;
 
-      // Switch to a new branch (pass operationId for correct context in optimistic update)
+      // Switch to the new branch so the UI shows the incoming response immediately
       await chatStore.switchMessageBranch(messageId, nextBranchIndex, {
         operationId,
       });
 
+      const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
+      const runtimeType = selectRuntimeType({
+        heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
+        isGatewayMode: chatStore.isGatewayModeEnabled(),
+      });
+
+      // ── Gateway mode: trigger server-side regeneration ──
+      if (runtimeType === 'gateway') {
+        // Keep the regenerate operation running until the gateway session completes,
+        // so isMessageRegenerating stays true and duplicate clicks are blocked.
+        await chatStore.executeGatewayAgent({
+          context,
+          message: item.content,
+          onComplete: () => {
+            chatStore.completeOperation(operationId);
+            if (hooks.onRegenerateComplete) {
+              hooks.onRegenerateComplete(messageId);
+            }
+          },
+          parentMessageId: messageId,
+        });
+
+        return;
+      }
+
+      // ── Client mode: run agent locally ──
+      // TODO(LOBE-8519 follow-up): hetero regenerate is not yet implemented and
+      // currently falls through to client mode (silently uses the agent's underlying
+      // LLM instead of routing back through the heterogeneous CLI). Implementing it
+      // requires the same persistence + executeHeterogeneousAgent setup as
+      // sendMessage's hetero branch.
+
       // Execute agent runtime with full context from ConversationStore
-      await chatStore.internal_execAgentRuntime({
+      await chatStore.executeClientAgent({
         context,
         initialContext,
         messages: contextMessages,

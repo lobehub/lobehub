@@ -1,11 +1,9 @@
-import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
-import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
-import { NotebookIdentifier } from '@lobechat/builtin-tool-notebook';
-import { buildTaskRunPrompt } from '@lobechat/prompts';
-import type { TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
+import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import type { TaskListItem, TaskParticipant } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -14,13 +12,16 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { TaskService } from '@/server/services/task';
+import { TaskGraphService } from '@/server/services/taskGraph';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskReviewService } from '@/server/services/taskReview';
+import { TaskRunnerService } from '@/server/services/taskRunner';
 
 const taskProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
     ctx: {
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId),
       briefModel: new BriefModel(ctx.serverDB, ctx.userId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId),
@@ -39,6 +40,7 @@ const idInput = z.object({ id: z.string() });
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
   assigneeUserId: z.string().optional(),
+  createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
@@ -50,22 +52,27 @@ const createSchema = z.object({
 const updateSchema = z.object({
   assigneeAgentId: z.string().nullable().optional(),
   assigneeUserId: z.string().nullable().optional(),
+  automationMode: z.enum(['heartbeat', 'schedule']).nullable().optional(),
   config: z.record(z.unknown()).optional(),
   context: z.record(z.unknown()).optional(),
   description: z.string().optional(),
-  heartbeatInterval: z.number().min(1).optional(),
+  heartbeatInterval: z.number().min(0).optional(),
   heartbeatTimeout: z.number().min(1).nullable().optional(),
   instruction: z.string().optional(),
   name: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
+  schedulePattern: z.string().nullable().optional(),
+  scheduleTimezone: z.string().nullable().optional(),
 });
 
 const listSchema = z.object({
   assigneeAgentId: z.string().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
+  parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullable().optional(),
-  status: z.string().optional(),
+  priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
+  statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
 });
 
 const groupListSchema = z.object({
@@ -84,188 +91,26 @@ const groupListSchema = z.object({
   parentTaskId: z.string().nullable().optional(),
 });
 
-// Helper: build task prompt with handoff context from previous topics
-async function buildTaskPrompt(
-  task: Awaited<ReturnType<TaskModel['findById']>> & {},
-  ctx: {
-    briefModel: BriefModel;
-    taskModel: TaskModel;
-    taskTopicModel: TaskTopicModel;
-  },
-  extraPrompt?: string,
-): Promise<string> {
-  const { briefModel, taskModel, taskTopicModel } = ctx;
-
-  const [topics, briefs, comments, subtasks, dependencies, documents] = await Promise.all([
-    task.totalTopics && task.totalTopics > 0
-      ? taskTopicModel.findWithHandoff(task.id).catch(() => [])
-      : Promise.resolve([]),
-    briefModel.findByTaskId(task.id).catch(() => []),
-    taskModel.getComments(task.id).catch(() => []),
-    taskModel.findSubtasks(task.id).catch(() => []),
-    taskModel.getDependencies(task.id).catch(() => []),
-    taskModel
-      .getTreePinnedDocuments(task.id)
-      .catch((): WorkspaceData => ({ nodeMap: {}, tree: [] })),
-  ]);
-
-  // Batch-fetch dependencies for all subtasks to show blockedBy info
-  const subtaskIds = subtasks.map((s: any) => s.id);
-  const subtaskDeps =
-    subtaskIds.length > 0
-      ? await taskModel.getDependenciesByTaskIds(subtaskIds).catch(() => [])
-      : [];
-  // Build a map: subtaskId -> dependsOn identifier
-  const subtaskIdToIdentifier = new Map(subtasks.map((s: any) => [s.id, s.identifier]));
-  const subtaskDepMap = new Map<string, string>();
-  for (const dep of subtaskDeps as any[]) {
-    const depIdentifier = subtaskIdToIdentifier.get(dep.dependsOnId);
-    if (depIdentifier) subtaskDepMap.set(dep.taskId, depIdentifier);
-  }
-
-  // Resolve dependency task identifiers
-  const depTaskIds = [...new Set(dependencies.map((d: any) => d.dependsOnId))];
-  const depTasks = await taskModel.findByIds(depTaskIds);
-  const depIdToIdentifier = new Map(depTasks.map((t: any) => [t.id, t.identifier]));
-
-  // Resolve parent task context (identifier + sibling subtasks)
-  let parentIdentifier: string | null = null;
-  let parentTaskContext:
-    | {
-        identifier: string;
-        instruction: string;
-        name?: string | null;
-        subtasks?: Array<{
-          blockedBy?: string;
-          identifier: string;
-          name?: string | null;
-          priority?: number | null;
-          status: string;
-        }>;
-      }
-    | undefined;
-
-  if (task.parentTaskId) {
-    const parent = await taskModel.findById(task.parentTaskId);
-    parentIdentifier = parent?.identifier || null;
-    if (parent) {
-      const siblings = await taskModel.findSubtasks(task.parentTaskId).catch(() => []);
-      const siblingIds = siblings.map((s: any) => s.id);
-      const siblingDeps =
-        siblingIds.length > 0
-          ? await taskModel.getDependenciesByTaskIds(siblingIds).catch(() => [])
-          : [];
-      const siblingIdToIdentifier = new Map(siblings.map((s: any) => [s.id, s.identifier]));
-      const siblingDepMap = new Map<string, string>();
-      for (const dep of siblingDeps as any[]) {
-        const depId = siblingIdToIdentifier.get(dep.dependsOnId);
-        if (depId) siblingDepMap.set(dep.taskId, depId);
-      }
-
-      parentTaskContext = {
-        identifier: parent.identifier,
-        instruction: parent.instruction,
-        name: parent.name,
-        subtasks: siblings.map((s: any) => ({
-          blockedBy: siblingDepMap.get(s.id),
-          identifier: s.identifier,
-          name: s.name,
-          priority: s.priority,
-          status: s.status,
-        })),
-      };
-    }
-  }
-
-  return buildTaskRunPrompt({
-    activities: {
-      briefs: briefs.map((b: any) => ({
-        createdAt: b.createdAt,
-        id: b.id,
-        priority: b.priority,
-        resolvedAction: b.resolvedAction,
-        resolvedAt: b.resolvedAt,
-        resolvedComment: b.resolvedComment,
-        summary: b.summary,
-        title: b.title,
-        type: b.type,
-      })),
-      comments: comments.map((c: any) => ({
-        agentId: c.authorAgentId,
-        content: c.content,
-        createdAt: c.createdAt,
-        id: c.id,
-      })),
-      subtasks: subtasks.map((s: any) => ({
-        createdAt: s.createdAt,
-        id: s.id,
-        identifier: s.identifier,
-        name: s.name,
-        status: s.status,
-      })),
-      topics: (topics as any[]).map((t) => {
-        const handoff = t.handoff as TaskTopicHandoff | null;
-        return {
-          createdAt: t.createdAt,
-          handoff,
-          id: t.topicId || t.id,
-          seq: t.seq,
-          status: t.status,
-          title: handoff?.title || t.title,
-        };
-      }),
-    },
-    extraPrompt,
-    parentTask: parentTaskContext,
-    task: {
-      assigneeAgentId: task.assigneeAgentId,
-      dependencies: dependencies.map((d: any) => ({
-        dependsOn: depIdToIdentifier.get(d.dependsOnId) ?? d.dependsOnId,
-        type: d.type,
-      })),
-      description: task.description,
-      id: task.id,
-      identifier: task.identifier,
-      instruction: task.instruction,
-      name: task.name,
-      parentIdentifier,
-      priority: task.priority,
-      review: taskModel.getReviewConfig(task) as any,
-      status: task.status,
-      subtasks: subtasks.map((s: any) => ({
-        blockedBy: subtaskDepMap.get(s.id),
-        identifier: s.identifier,
-        name: s.name,
-        priority: s.priority,
-        status: s.status,
-      })),
-    },
-    workspace: documents.tree.map((rootNode) => {
-      const rootDoc = documents.nodeMap[rootNode.id];
-      return {
-        children: rootNode.children.map((child) => {
-          const childDoc = documents.nodeMap[child.id];
-          return {
-            createdAt: childDoc?.createdAt,
-            documentId: child.id,
-            size: childDoc?.charCount ?? undefined,
-            sourceTaskIdentifier: childDoc?.sourceTaskIdentifier ?? undefined,
-            title: childDoc?.title,
-          };
-        }),
-        createdAt: rootDoc?.createdAt,
-        documentId: rootNode.id,
-        title: rootDoc?.title,
-      };
-    }),
-  });
-}
-
 // Helper: resolve id/identifier and throw if not found
 async function resolveOrThrow(model: TaskModel, id: string) {
   const task = await model.resolve(id);
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
   return task;
+}
+
+async function assertAssigneeAgentBelongsToUser(
+  model: AgentModel,
+  assigneeAgentId?: string | null,
+) {
+  if (!assigneeAgentId) return;
+
+  const exists = await model.existsById(assigneeAgentId);
+  if (!exists) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Assignee agent not found',
+    });
+  }
 }
 
 export const taskRouter = router({
@@ -351,6 +196,46 @@ export const taskRouter = router({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to add comment',
+        });
+      }
+    }),
+
+  deleteComment: taskProcedure
+    .input(z.object({ commentId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const deleted = await ctx.taskModel.deleteComment(input.commentId);
+        if (!deleted) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        return { message: 'Comment deleted', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:deleteComment]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete comment',
+        });
+      }
+    }),
+
+  updateComment: taskProcedure
+    .input(z.object({ commentId: z.string(), content: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const comment = await ctx.taskModel.updateComment(input.commentId, input.content);
+        if (!comment) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        return { data: comment, message: 'Comment updated', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateComment]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update comment',
         });
       }
     }),
@@ -449,6 +334,7 @@ export const taskRouter = router({
   create: taskProcedure.input(createSchema).mutation(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
+      await assertAssigneeAgentBelongsToUser(ctx.agentModel, input.assigneeAgentId);
 
       // Resolve parentTaskId if it's an identifier
       const createData = { ...input };
@@ -462,10 +348,11 @@ export const taskRouter = router({
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:create]', error);
+      const causeMessage = error instanceof Error ? error.message : String(error);
       throw new TRPCError({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to create task',
+        message: causeMessage ? `Failed to create task: ${causeMessage}` : 'Failed to create task',
       });
     }
   }),
@@ -490,7 +377,7 @@ export const taskRouter = router({
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
       await model.delete(task.id);
-      return { message: 'Task deleted', success: true };
+      return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:delete]', error);
@@ -504,25 +391,7 @@ export const taskRouter = router({
 
   detail: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
-      const model = ctx.taskModel;
-      let task = await resolveOrThrow(model, input.id);
-
-      // Auto-detect heartbeat timeout for running tasks
-      if (task.status === 'running' && task.heartbeatTimeout && task.lastHeartbeatAt) {
-        const elapsed = (Date.now() - new Date(task.lastHeartbeatAt).getTime()) / 1000;
-        if (elapsed > task.heartbeatTimeout) {
-          await model.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
-          await ctx.taskTopicModel.timeoutRunning(task.id);
-          task = await resolveOrThrow(model, input.id);
-        }
-      }
-
-      // Clear stale heartbeat timeout error if task is no longer running
-      if (task.status !== 'running' && task.error === 'Heartbeat timeout') {
-        await model.update(task.id, { error: null });
-      }
-
-      const detail = await ctx.taskService.getTaskDetail(task.identifier);
+      const detail = await ctx.taskService.getTaskDetail(input.id);
       if (!detail) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       }
@@ -677,6 +546,7 @@ export const taskRouter = router({
           summary: `Task has been running without heartbeat update for more than ${task.heartbeatTimeout} seconds.`,
           taskId: task.id,
           title: `${task.identifier} heartbeat timeout`,
+          trigger: 'task',
           type: 'error',
         });
 
@@ -720,9 +590,53 @@ export const taskRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const result = await model.list(input);
-      return { data: result.tasks, success: true, total: result.total };
+      const { parentIdentifier, ...query } = input;
+      let parentTaskId = query.parentTaskId;
+
+      if (parentIdentifier) {
+        const parent = await model.resolve(parentIdentifier);
+        if (!parent) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: `Parent task not found: ${parentIdentifier}`,
+          });
+        }
+
+        parentTaskId = parent.id;
+      }
+
+      const result = await model.list({
+        ...query,
+        parentTaskId,
+      });
+
+      const assigneeIds = [
+        ...new Set(result.tasks.map((t) => t.assigneeAgentId).filter((id): id is string => !!id)),
+      ];
+      const agents =
+        assigneeIds.length > 0 ? await ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [];
+      const agentMap = new Map(agents.map((a) => [a.id, a]));
+
+      const data: TaskListItem[] = result.tasks.map((task) => {
+        const participants: TaskParticipant[] = [];
+        if (task.assigneeAgentId) {
+          const agent = agentMap.get(task.assigneeAgentId);
+          if (agent) {
+            participants.push({
+              avatar: agent.avatar,
+              backgroundColor: agent.backgroundColor,
+              id: agent.id,
+              title: agent.title ?? '',
+              type: 'agent',
+            });
+          }
+        }
+        return { ...task, participants };
+      });
+
+      return { data, success: true, total: result.total };
     } catch (error) {
+      if (error instanceof TRPCError) throw error;
       console.error('[task:list]', error);
       throw new TRPCError({
         cause: error,
@@ -742,163 +656,14 @@ export const taskRouter = router({
       ),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, prompt: extraPrompt, continueTopicId } = input;
       try {
-        const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, id);
-
-        // Ensure task has an assigned agent
-        if (!task.assigneeAgentId) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Task has no assigned agent. Use --agent when creating or edit the task.',
-          });
-        }
-
-        // Idempotency checks
-        const existingTopics = await ctx.taskTopicModel.findByTaskId(task.id);
-
-        if (continueTopicId) {
-          // If continuing a topic that's already running, reject
-          const target = existingTopics.find((t) => t.topicId === continueTopicId);
-          if (target?.status === 'running') {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message: `Topic ${continueTopicId} is already running.`,
-            });
-          }
-        } else {
-          // If there's already a running topic, reject creating a new one
-          const runningTopic = existingTopics.find((t) => t.status === 'running');
-          if (runningTopic) {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message: `Task already has a running topic (${runningTopic.topicId}). Cancel it first or use --continue.`,
-            });
-          }
-        }
-
-        // Auto-detect and clean up timed-out topics
-        if (task.lastHeartbeatAt && task.heartbeatTimeout) {
-          const elapsed = (Date.now() - new Date(task.lastHeartbeatAt).getTime()) / 1000;
-          if (elapsed > task.heartbeatTimeout) {
-            await ctx.taskTopicModel.timeoutRunning(task.id);
-          }
-        }
-
-        // Build prompt with handoff context from previous topics
-        const prompt = await buildTaskPrompt(task, ctx, extraPrompt);
-
-        // Update task status to running if not already, clear previous error
-        if (task.status !== 'running') {
-          await model.updateStatus(task.id, 'running', { error: null, startedAt: new Date() });
-        } else if (task.error) {
-          await model.update(task.id, { error: null });
-        }
-
-        // Call AiAgentService.execAgent
-        // assigneeAgentId can be either a raw agentId (agt_xxx) or a slug (inbox)
-        const agentRef = task.assigneeAgentId!;
-        const isSlug = !agentRef.startsWith('agt_');
-
-        const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
-        const taskId = task.id;
-        const taskIdentifier = task.identifier;
-        const { taskLifecycle } = ctx;
-        const db = ctx.serverDB;
-        const userId = ctx.userId;
-
-        // Task execution always injects: Task skill (auto-activated) + Notebook tool (for document output)
-        // Conditionally inject Brief tool based on checkpoint/review config
-        const checkpoint = model.getCheckpointConfig(task);
-        const reviewConfig = model.getReviewConfig(task);
-        const pluginIds = [TaskSkillIdentifier, NotebookIdentifier];
-        if (!reviewConfig?.enabled && checkpoint.onAgentRequest !== false) {
-          pluginIds.push(BriefIdentifier);
-        }
-
-        // Read per-task model/provider overrides from task.config
-        const taskConfig = (task.config ?? {}) as Record<string, unknown>;
-
-        const result = await aiAgentService.execAgent({
-          ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
-          additionalPluginIds: pluginIds,
-          ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
-          ...(typeof taskConfig.provider === 'string' && { provider: taskConfig.provider }),
-          hooks: [
-            {
-              handler: async (event) => {
-                await taskLifecycle.onTopicComplete({
-                  errorMessage: event.errorMessage,
-                  lastAssistantContent: event.lastAssistantContent,
-                  operationId: event.operationId,
-                  reason: event.reason || 'done',
-                  taskId,
-                  taskIdentifier,
-                  topicId: event.topicId,
-                });
-              },
-              id: 'task-on-complete',
-              type: 'onComplete' as const,
-              webhook: {
-                body: { taskId, userId },
-                url: '/api/workflows/task/on-topic-complete',
-              },
-            },
-          ],
-          prompt,
-          taskId: task.id,
-          title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
-          trigger: 'task',
-          userInterventionConfig: { approvalMode: 'headless' },
-          // Continue on existing topic if specified
-          ...(continueTopicId && { appContext: { topicId: continueTopicId } }),
+        const runner = new TaskRunnerService(ctx.serverDB, ctx.userId);
+        return await runner.runTask({
+          continueTopicId: input.continueTopicId,
+          extraPrompt: input.prompt,
+          taskId: input.id,
         });
-
-        // Update task topic count, current topic, and association
-        if (result.topicId) {
-          if (continueTopicId) {
-            // Continuing existing topic — update status and operationId
-            await ctx.taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
-            await ctx.taskTopicModel.updateOperationId(
-              task.id,
-              continueTopicId,
-              result.operationId,
-            );
-            await model.updateCurrentTopic(task.id, continueTopicId);
-          } else {
-            // New topic
-            await model.incrementTopicCount(task.id);
-            await model.updateCurrentTopic(task.id, result.topicId);
-            await ctx.taskTopicModel.add(task.id, result.topicId, {
-              operationId: result.operationId,
-              seq: (task.totalTopics || 0) + 1,
-            });
-          }
-        }
-
-        // Update heartbeat
-        await model.updateHeartbeat(task.id);
-
-        return {
-          ...result,
-          taskId: task.id,
-          taskIdentifier: task.identifier,
-        };
       } catch (error) {
-        // Rollback task status to paused on failure
-        try {
-          const model = ctx.taskModel;
-          const failedTask = await model.resolve(id);
-          if (failedTask && failedTask.status === 'running') {
-            await model.updateStatus(failedTask.id, 'paused', {
-              error: error instanceof Error ? error.message : 'Unknown error',
-            });
-          }
-        } catch {
-          // Rollback itself failed, ignore
-        }
-
         if (error instanceof TRPCError) throw error;
         console.error('[task:run]', error);
         throw new TRPCError({
@@ -1183,6 +948,7 @@ export const taskRouter = router({
     const { id, ...data } = input;
     try {
       const model = ctx.taskModel;
+      await assertAssigneeAgentBelongsToUser(ctx.agentModel, data.assigneeAgentId);
       const resolved = await resolveOrThrow(model, id);
       const task = await model.update(resolved.id, data);
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
@@ -1219,19 +985,130 @@ export const taskRouter = router({
       }
     }),
 
+  previewSubtaskLayers: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
+    try {
+      const parent = await resolveOrThrow(ctx.taskModel, input.id);
+      const graph = new TaskGraphService(ctx.serverDB, ctx.userId);
+      const { plan } = await graph.planForParent(parent.id);
+      return { data: plan, success: true };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:previewSubtaskLayers]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to plan subtask layers',
+      });
+    }
+  }),
+
+  runReadySubtasks: taskProcedure.input(idInput).mutation(async ({ input, ctx }) => {
+    try {
+      const parent = await resolveOrThrow(ctx.taskModel, input.id);
+      const graph = new TaskGraphService(ctx.serverDB, ctx.userId);
+      const { descendants, plan } = await graph.planForParent(parent.id);
+
+      if (plan.layers.length === 0) {
+        return {
+          data: {
+            kickedOff: [],
+            plan,
+            skipped: { reason: 'nothing-runnable' as const },
+          },
+          success: true,
+        };
+      }
+
+      // Layer 0 is the only wave we kick off here. Subsequent layers fire
+      // automatically through `TaskRunnerService.cascadeOnCompletion` as
+      // each upstream finishes.
+      const firstLayer = plan.layers[0];
+      const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
+      const runner = new TaskRunnerService(ctx.serverDB, ctx.userId);
+
+      const kickedOff: string[] = [];
+      const failed: { error: string; identifier: string }[] = [];
+
+      const settled = await Promise.allSettled(
+        firstLayer.map(async (identifier) => {
+          const id = identifierToId.get(identifier);
+          if (!id) throw new Error(`Subtask ${identifier} not found`);
+          await runner.runTask({ taskId: id });
+          return identifier;
+        }),
+      );
+
+      for (const [index, result] of settled.entries()) {
+        const identifier = firstLayer[index];
+        if (result.status === 'fulfilled') {
+          kickedOff.push(identifier);
+        } else {
+          const message =
+            result.reason instanceof Error ? result.reason.message : 'Failed to start task';
+          failed.push({ error: message, identifier });
+        }
+      }
+
+      return {
+        data: { failed, kickedOff, plan },
+        success: failed.length === 0,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:runReadySubtasks]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to run subtasks',
+      });
+    }
+  }),
+
   updateStatus: taskProcedure
     .input(
       z.object({
         error: z.string().optional(),
         id: z.string(),
-        status: z.enum(['backlog', 'running', 'paused', 'completed', 'failed', 'canceled']),
+        status: z.enum(TASK_STATUSES),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const { id, status, error: errorMsg } = input;
       try {
+        if (errorMsg && status !== 'failed') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Task error can only be provided when status is failed.',
+          });
+        }
+
         const model = ctx.taskModel;
         const resolved = await resolveOrThrow(model, id);
+
+        // Cascade: when leaving `running`, cancel all running topics
+        if (resolved.status === 'running' && status !== 'running') {
+          const topics = await ctx.taskTopicModel.findByTaskId(resolved.id);
+          const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
+
+          for (const t of topics) {
+            if (t.status !== 'running' || !t.topicId) continue;
+
+            // Interrupt the remote operation first; if it fails, skip cancellation
+            // to avoid desynchronizing DB state from a still-running operation.
+            if (t.operationId) {
+              try {
+                await aiAgentService.interruptTask({ operationId: t.operationId });
+              } catch (err) {
+                console.error('[task:updateStatus] failed to interrupt topic %s:', t.topicId, err);
+                continue;
+              }
+            }
+
+            // Conditionally cancel only if the topic is still running,
+            // avoiding overwrite of a concurrent completed/timeout transition.
+            await ctx.taskTopicModel.cancelIfRunning(resolved.id, t.topicId);
+          }
+        }
 
         const extra: Record<string, unknown> = {};
         if (status === 'running') extra.startedAt = new Date();
@@ -1262,26 +1139,13 @@ export const taskRouter = router({
             allSubtasksDone = await model.areAllSubtasksCompleted(task.parentTaskId);
           }
 
-          // 3. Unlock tasks blocked by this one
-          const unlockedTasks = await model.getUnlockedTasks(task.id);
-          for (const ut of unlockedTasks) {
-            // Check beforeIds checkpoint on parent before starting
-            let shouldPause = false;
-            if (ut.parentTaskId) {
-              const parentTask = await model.findById(ut.parentTaskId);
-              if (parentTask && model.shouldPauseBeforeStart(parentTask, ut.identifier)) {
-                shouldPause = true;
-              }
-            }
-
-            if (shouldPause) {
-              await model.updateStatus(ut.id, 'paused');
-              paused.push(ut.identifier);
-            } else {
-              await model.updateStatus(ut.id, 'running', { startedAt: new Date() });
-              unlocked.push(ut.identifier);
-            }
-          }
+          // 3. Unlock tasks blocked by this one and actually kick them off.
+          // The runner creates a topic + enqueues to QStash; status transitions
+          // happen inside `runTask`, so callers don't need to flip it manually.
+          const runner = new TaskRunnerService(ctx.serverDB, ctx.userId);
+          const cascade = await runner.cascadeOnCompletion(task.id);
+          unlocked.push(...cascade.started);
+          paused.push(...cascade.paused);
         }
 
         return {

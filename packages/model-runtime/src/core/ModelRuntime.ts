@@ -19,8 +19,16 @@ import type {
   TextToSpeechPayload,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
-import type { AuthenticatedImageRuntime, CreateImagePayload } from '../types/image';
-import type { CreateVideoPayload, HandleCreateVideoWebhookPayload } from '../types/video';
+import type {
+  AuthenticatedImageRuntime,
+  CreateImageMethodOptions,
+  CreateImagePayload,
+} from '../types/image';
+import type {
+  CreateVideoMethodOptions,
+  CreateVideoPayload,
+  HandleCreateVideoWebhookPayload,
+} from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
 import type { LobeRuntimeAI } from './BaseAI';
 
@@ -198,16 +206,20 @@ export class ModelRuntime {
     }
   }
 
-  async createImage(payload: CreateImagePayload) {
-    return this._runtime.createImage?.(payload);
+  async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
+    return this._runtime.createImage?.(payload, options);
   }
 
-  async createVideo(payload: CreateVideoPayload) {
-    return this._runtime.createVideo?.(payload);
+  async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
+    return this._runtime.createVideo?.(payload, options);
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
     return this._runtime.handleCreateVideoWebhook?.(payload);
+  }
+
+  async handlePollVideoStatus(inferenceId: string) {
+    return this._runtime.handlePollVideoStatus?.(inferenceId);
   }
 
   async models() {
@@ -284,7 +296,6 @@ export class ModelRuntime {
         LobeBedrockAIParams &
         LobeCloudflareParams & {
           apiKey?: string;
-          apiVersion?: string;
           baseURL?: string;
           userId?: string;
         }

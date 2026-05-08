@@ -6,6 +6,8 @@ import type { IAgentService, IDiscoverService } from '../types';
 // Create mock services
 const mockAgentService: IAgentService = {
   createAgent: vi.fn(),
+  duplicateAgent: vi.fn(),
+  getAgentConfigById: vi.fn(),
   queryAgents: vi.fn(),
   removeAgent: vi.fn(),
 };
@@ -398,6 +400,79 @@ describe('AgentManagerRuntime', () => {
         ]),
         totalCount: 2,
       });
+    });
+  });
+
+  describe('getAgentDetail', () => {
+    it('should get agent detail successfully', async () => {
+      vi.mocked(mockAgentService.getAgentConfigById).mockResolvedValue({
+        avatar: '🤖',
+        chatConfig: {} as any,
+        description: 'A test agent',
+        model: 'gpt-4o',
+        params: {} as any,
+        plugins: ['web-search'],
+        provider: 'openai',
+        systemRole: 'You are helpful',
+        title: 'Test Agent',
+      } as any);
+
+      const result = await runtime.getAgentDetail('agent-id');
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Test Agent');
+      expect(result.state).toMatchObject({
+        agentId: 'agent-id',
+        success: true,
+        meta: expect.objectContaining({ title: 'Test Agent' }),
+        config: expect.objectContaining({ model: 'gpt-4o' }),
+      });
+    });
+
+    it('should return not found for missing agent', async () => {
+      vi.mocked(mockAgentService.getAgentConfigById).mockResolvedValue(null);
+
+      const result = await runtime.getAgentDetail('missing-id');
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not found');
+    });
+  });
+
+  describe('duplicateAgent', () => {
+    it('should duplicate agent successfully', async () => {
+      vi.mocked(mockAgentService.duplicateAgent).mockResolvedValue({
+        agentId: 'new-agent-id',
+      });
+
+      const result = await runtime.duplicateAgent('source-id', 'Copy of Agent');
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Successfully duplicated agent');
+      expect(result.content).toContain('new-agent-id');
+      expect(result.state).toMatchObject({
+        newAgentId: 'new-agent-id',
+        sourceAgentId: 'source-id',
+        success: true,
+      });
+    });
+
+    it('should handle null result', async () => {
+      vi.mocked(mockAgentService.duplicateAgent).mockResolvedValue(null);
+
+      const result = await runtime.duplicateAgent('missing-id');
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to duplicate agent');
+    });
+
+    it('should handle error', async () => {
+      vi.mocked(mockAgentService.duplicateAgent).mockRejectedValue(new Error('DB error'));
+
+      const result = await runtime.duplicateAgent('agent-id');
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to duplicate agent');
     });
   });
 

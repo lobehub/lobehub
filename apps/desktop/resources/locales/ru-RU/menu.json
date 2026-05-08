@@ -71,6 +71,7 @@
   "macOS.services": "Сервисы",
   "macOS.unhide": "Показать все",
   "tray.open": "Открыть {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
   "tray.quit": "Выйти",
   "tray.show": "Показать {{appName}}",
   "view.forceReload": "Принудительная перезагрузка",

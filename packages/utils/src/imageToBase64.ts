@@ -1,3 +1,5 @@
+import { Buffer } from 'buffer.js';
+
 export const imageToBase64 = ({
   size,
   img,

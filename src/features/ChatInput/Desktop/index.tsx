@@ -20,6 +20,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
+import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import RuntimeConfig from '../RuntimeConfig';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
@@ -62,6 +63,13 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   extentHeaderContent?: ReactNode;
   inputContainerProps?: ChatInputProps;
   leftContent?: ReactNode;
+  placeholder?: ReactNode;
+  placeholderVariant?: PlaceholderVariant;
+  /**
+   * Custom node to render in place of the default RuntimeConfig bar.
+   * When provided, used instead of `<RuntimeConfig />` (ignores `showRuntimeConfig`).
+   */
+  runtimeConfigSlot?: ReactNode;
   sendAreaPrefix?: ReactNode;
   showFootnote?: boolean;
   showRuntimeConfig?: boolean;
@@ -71,6 +79,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
   ({
     showFootnote,
     showRuntimeConfig = true,
+    runtimeConfigSlot,
     inputContainerProps,
     extentHeaderContent,
     actionBarStyle,
@@ -78,6 +87,8 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     extraActionItems,
     dropdownPlacement,
     leftContent,
+    placeholder,
+    placeholderVariant,
     sendAreaPrefix,
   }) => {
     const { t } = useTranslation('chat');
@@ -160,9 +171,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor />
+          <InputEditor placeholder={placeholder} placeholderVariant={placeholderVariant} />
         </ChatInput>
-        {showRuntimeConfig && <RuntimeConfig />}
+        {runtimeConfigSlot ?? (showRuntimeConfig && <RuntimeConfig />)}
         {showFootnote && !expand && (
           <Center style={{ pointerEvents: 'none', zIndex: 100 }}>
             <Text className={styles.footnote} type={'secondary'}>

@@ -236,7 +236,8 @@ export const GTDManifest: BuiltinToolManifest = {
   identifier: GTDIdentifier,
   meta: {
     avatar: '✅',
-    description: 'Create plans, manage todo lists with status tracking, and run background tasks',
+    description:
+      'Plan and track one-time goals, manage todo checklists, and run background tasks. For tasks that need to be done once or tracked manually — NOT for tasks that should repeat automatically on a schedule (use lobe-cron for daily/weekly/recurring automation).',
     title: 'GTD Tools',
   },
   systemRole: systemPrompt,

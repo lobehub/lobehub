@@ -1,0 +1,40 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildTaskListPrompt > notes truncation when total exceeds shown count 1`] = `
+"<task_list>
+<hint>The user is currently viewing the tasks list page. These are the 3 task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>
+Total: 120 (showing most recent 3)
+
+  T-1 ○ backlog  [normal]  Task 1  2h ago
+  T-2 ○ backlog  [normal]  Task 2  2h ago
+  T-3 ○ backlog  [normal]  Task 3  2h ago
+
+Only the most recent 3 tasks are shown above. Use the \`listTasks\` tool to query the full list of 120 tasks.
+</task_list>"
+`;
+
+exports[`buildTaskListPrompt > omits created-at suffix when tasks lack createdAt 1`] = `
+"<task_list>
+<hint>The user is currently viewing the tasks list page. These are the 1 task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>
+Total: 1
+
+  T-1 ○ backlog  [-]  Untimed
+</task_list>"
+`;
+
+exports[`buildTaskListPrompt > renders a short list with total equal to shown count 1`] = `
+"<task_list>
+<hint>The user is currently viewing the tasks list page. These are the 2 task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>
+Total: 2
+
+  T-1 ● running  [high]  Write chapter 1  3h ago
+  T-2 ○ backlog  [normal]  Review outline  1d ago
+</task_list>"
+`;
+
+exports[`buildTaskListPrompt > renders empty state when no tasks 1`] = `
+"<task_list>
+<hint>The user is currently viewing the tasks list page. These are the 0 task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>
+(no tasks)
+</task_list>"
+`;

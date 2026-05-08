@@ -12,6 +12,7 @@ const {
   mockAsyncTaskModelUpdate,
   mockChargeBeforeGenerate,
   mockCreateAsyncCaller,
+  mockResolveBusinessModelMapping,
 } = vi.hoisted(() => ({
   mockServerDB: {
     transaction: vi.fn(),
@@ -21,6 +22,7 @@ const {
   mockAsyncTaskModelUpdate: vi.fn(),
   mockChargeBeforeGenerate: vi.fn(),
   mockCreateAsyncCaller: vi.fn(),
+  mockResolveBusinessModelMapping: vi.fn(),
 }));
 
 // Mock debug
@@ -51,6 +53,12 @@ vi.mock('@/database/models/asyncTask', () => ({
 // Mock chargeBeforeGenerate
 vi.mock('@/business/server/image-generation/chargeBeforeGenerate', () => ({
   chargeBeforeGenerate: (params: any) => mockChargeBeforeGenerate(params),
+}));
+
+vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
+  ...((await importOriginal()) as any),
+  resolveBusinessModelMapping: (...args: [string, string]) =>
+    mockResolveBusinessModelMapping(...args),
 }));
 
 // Mock async caller
@@ -102,6 +110,11 @@ describe('imageRouter', () => {
     vi.clearAllMocks();
 
     // Default mock implementations
+    mockResolveBusinessModelMapping.mockImplementation(
+      async (_provider: string, model: string) => ({
+        resolvedModelId: model,
+      }),
+    );
     mockChargeBeforeGenerate.mockResolvedValue(undefined);
     mockGetKeyFromFullUrl.mockResolvedValue(null);
     mockGetFullFileUrl.mockResolvedValue(null);
@@ -172,6 +185,26 @@ describe('imageRouter', () => {
       expect(result.data.batch.id).toBe('batch-1');
       expect(result.data.generations).toHaveLength(2);
       expect(mockServerDB.transaction).toHaveBeenCalled();
+    });
+
+    it('should validate mapped model id before rejecting deprecated lobehub image models', async () => {
+      mockResolveBusinessModelMapping.mockResolvedValue({
+        requestedModelId: 'onboarding-image',
+        resolvedModelId: 'gpt-image-1',
+      });
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        model: 'onboarding-image',
+        provider: 'lobehub',
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+      const result = await caller.createImage(input);
+
+      expect(result.success).toBe(true);
+      expect(mockResolveBusinessModelMapping).toHaveBeenCalledWith('lobehub', 'onboarding-image');
+      expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
     });
 
     it('should convert imageUrls to S3 keys for database storage', async () => {

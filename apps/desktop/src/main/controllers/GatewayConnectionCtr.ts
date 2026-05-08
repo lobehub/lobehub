@@ -111,20 +111,39 @@ export default class GatewayConnectionCtr extends ControllerModule {
   // ─── Tool Call Routing ───
 
   private async executeToolCall(apiName: string, args: any): Promise<unknown> {
+    const editFile = () => this.localFileCtr.handleEditFile(args);
+    const globFiles = () => this.localFileCtr.handleGlobFiles(args);
+    const listFiles = () => this.localFileCtr.listLocalFiles(args);
+    const moveFiles = () => this.localFileCtr.handleMoveFiles(args);
+    const readFile = () => this.localFileCtr.readFile(args);
+    const searchFiles = () => this.localFileCtr.handleLocalFilesSearch(args);
+    const writeFile = () => this.localFileCtr.handleWriteFile(args);
+
     const methodMap: Record<string, () => Promise<unknown>> = {
-      editLocalFile: () => this.localFileCtr.handleEditFile(args),
-      globLocalFiles: () => this.localFileCtr.handleGlobFiles(args),
+      editFile,
+      globFiles,
       grepContent: () => this.localFileCtr.handleGrepContent(args),
-      listLocalFiles: () => this.localFileCtr.listLocalFiles(args),
-      moveLocalFiles: () => this.localFileCtr.handleMoveFiles(args),
-      readLocalFile: () => this.localFileCtr.readFile(args),
-      renameLocalFile: () => this.localFileCtr.handleRenameFile(args),
-      searchLocalFiles: () => this.localFileCtr.handleLocalFilesSearch(args),
-      writeLocalFile: () => this.localFileCtr.handleWriteFile(args),
+      listFiles,
+      moveFiles,
+      readFile,
+      searchFiles,
+      writeFile,
 
       getCommandOutput: () => this.shellCommandCtr.handleGetCommandOutput(args),
       killCommand: () => this.shellCommandCtr.handleKillCommand(args),
       runCommand: () => this.shellCommandCtr.handleRunCommand(args),
+
+      // Legacy aliases — keep these so older Gateway versions sending the long
+      // names continue to route correctly. `renameLocalFile` is also kept even
+      // though the new surface drops rename (it's now handled by `moveFiles`).
+      editLocalFile: editFile,
+      globLocalFiles: globFiles,
+      listLocalFiles: listFiles,
+      moveLocalFiles: moveFiles,
+      readLocalFile: readFile,
+      renameLocalFile: () => this.localFileCtr.handleRenameFile(args),
+      searchLocalFiles: searchFiles,
+      writeLocalFile: writeFile,
     };
 
     const handler = methodMap[apiName];

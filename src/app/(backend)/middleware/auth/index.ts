@@ -1,22 +1,18 @@
-import { type ChatCompletionErrorPayload, type ModelRuntime } from '@lobechat/model-runtime';
+import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { context as otContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { getXorPayload } from '@lobechat/utils/server';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { type LobeChatDatabase } from '@/database/type';
-import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
+import { LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-import { checkAuthMethod } from './utils';
-
-type CreateRuntime = (jwtPayload: ClientSecretPayload) => ModelRuntime;
-type RequestOptions = { createRuntime?: CreateRuntime; params: Promise<{ provider?: string }> };
+type RequestOptions = { params: Promise<{ provider?: string }> };
 
 export type RequestHandler = (
   req: Request,
@@ -26,6 +22,40 @@ export type RequestHandler = (
     userId: string;
   },
 ) => Promise<Response>;
+
+interface OIDCClientDebugInfo {
+  clientId?: string;
+  payload?: Record<string, unknown>;
+}
+
+const isUnauthorizedAuthError = (error: unknown) => {
+  return !!error && typeof error === 'object' && 'code' in error && error.code === 'UNAUTHORIZED';
+};
+
+/**
+ * Decode JWT payload for debugging only.
+ * The decoded payload must never be trusted for authorization decisions.
+ */
+const getOIDCClientDebugInfo = (token?: string | null): OIDCClientDebugInfo => {
+  if (!token) return {};
+
+  const [, payload] = token.split('.');
+  if (!payload) return {};
+
+  try {
+    const normalizedPayload = payload.replaceAll('-', '+').replaceAll('_', '/');
+    const decodedPayload = JSON.parse(Buffer.from(normalizedPayload, 'base64').toString('utf8')) as
+      | Record<string, unknown>
+      | undefined;
+
+    const clientId =
+      typeof decodedPayload?.client_id === 'string' ? decodedPayload.client_id : undefined;
+
+    return { clientId, payload: decodedPayload };
+  } catch {
+    return {};
+  }
+};
 
 export const checkAuth =
   (handler: RequestHandler) => async (req: Request, options: RequestOptions) => {
@@ -39,57 +69,64 @@ export const checkAuth =
 
     // we have a special header to debug the api endpoint in development mode
     const isDebugApi = req.headers.get('lobe-auth-dev-backend-api') === '1';
-    if (process.env.NODE_ENV === 'development' && isDebugApi) {
+    const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
+    if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
+      const mockUserId = process.env.MOCK_DEV_USER_ID || 'DEV_USER';
       return handler(clonedReq, {
         ...options,
-        jwtPayload: { userId: 'DEV_USER' },
+        jwtPayload: { userId: mockUserId },
         serverDB,
-        userId: 'DEV_USER',
+        userId: mockUserId,
       });
     }
 
-    let jwtPayload: ClientSecretPayload;
+    let userId: string;
 
     try {
-      // get Authorization from header
-      const authorization = req.headers.get(LOBE_CHAT_AUTH_HEADER);
-
-      // better auth handler
-      const session = await auth.api.getSession({
-        headers: req.headers,
-      });
-
-      const betterAuthAuthorized = !!session?.user?.id;
-
-      if (!authorization) throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
-
-      jwtPayload = getXorPayload(authorization);
-
+      // OIDC authentication (CLI)
       const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
-      let isUseOidcAuth = false;
-      if (!!oidcAuthorization) {
+      if (oidcAuthorization) {
         const oidc = await validateOIDCJWT(oidcAuthorization);
-
-        isUseOidcAuth = true;
-
-        jwtPayload = {
-          ...jwtPayload,
-          userId: oidc.userId,
-        };
-      }
-
-      if (!isUseOidcAuth)
-        checkAuthMethod({
-          apiKey: jwtPayload.apiKey,
-          betterAuthAuthorized,
+        userId = oidc.userId;
+      } else {
+        // Better Auth session authentication (web)
+        const session = await auth.api.getSession({
+          headers: req.headers,
         });
+
+        if (!session?.user?.id) {
+          throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
+        }
+
+        userId = session.user.id;
+      }
     } catch (e) {
       const params = await options.params;
+      const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
+
+      // Only log OIDC auth failures — better-auth session failures are a common
+      // baseline (unauthenticated browser hits) and would otherwise flood logs.
+      if (oidcAuthorization) {
+        const oidcDebugInfo = getOIDCClientDebugInfo(oidcAuthorization);
+
+        console.info('[auth] OIDC authentication failed', {
+          clientId: oidcDebugInfo.clientId,
+          code: (e as { code?: string })?.code,
+          path: new URL(req.url).pathname,
+          provider: params?.provider,
+          userAgent: req.headers.get('user-agent'),
+          xClientType: req.headers.get('x-client-type'),
+        });
+      }
 
       // if the error is not a ChatCompletionErrorPayload, it means the application error
       if (!(e as ChatCompletionErrorPayload).errorType) {
-        if ((e as any).code === 'ERR_JWT_EXPIRED')
-          return createErrorResponse(ChatErrorType.SystemTimeNotMatchError, e);
+        if (isUnauthorizedAuthError(e)) {
+          return createErrorResponse(ChatErrorType.Unauthorized, {
+            error: e,
+            provider: params?.provider,
+          });
+        }
 
         // other issue will be internal server error
         console.error(e);
@@ -110,7 +147,7 @@ export const checkAuth =
       return createErrorResponse(errorType, { error, ...res, provider: params?.provider });
     }
 
-    const userId = jwtPayload.userId || '';
+    const jwtPayload: ClientSecretPayload = { userId };
 
     const extractedContext = extractTraceContext(req.headers);
 

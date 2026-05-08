@@ -1,15 +1,24 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
+import {
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  RequestTrigger,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
-// TODO: temporarily disabled until notification UI is polished
-// import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
+import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
 import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
@@ -19,6 +28,8 @@ import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { GenerationService } from '@/server/services/generation';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
+
+import { getContentPolicyErrorMessage } from './contentPolicyError';
 
 const log = debug('lobe-image:async');
 
@@ -76,6 +87,7 @@ const categorizeError = (
   error: any,
   isAborted: boolean,
   isEditingImage: boolean,
+  providerContentPolicyMessage?: string,
 ): { errorMessage: string; errorType: AsyncTaskErrorType } => {
   log('🔥🔥🔥 [ASYNC] categorizeError called:', {
     errorMessage: error?.message,
@@ -157,19 +169,18 @@ const categorizeError = (
     };
   }
 
-  // Content moderation / policy violation — return a clean, generic message
-  const errorMsg: string = error.message || error.error?.message || '';
-  const errorCode: string = error.code || error.error?.code || '';
-  if (
-    errorCode === 'InputTextSensitiveContentDetected' ||
-    errorCode === 'content_policy_violation' ||
-    errorMsg.toLowerCase().includes('content policy') ||
-    errorMsg.toLowerCase().includes('sensitive information')
-  ) {
+  if (providerContentPolicyMessage) {
     return {
-      errorMessage:
-        'The request content may violate content policy. Please modify your prompt and try again.',
-      errorType: AsyncTaskErrorType.ServerError,
+      errorMessage: providerContentPolicyMessage,
+      errorType: AsyncTaskErrorType.ProviderContentModeration,
+    };
+  }
+
+  const fallbackContentPolicyMessage = getContentPolicyErrorMessage(error);
+  if (fallbackContentPolicyMessage) {
+    return {
+      errorMessage: fallbackContentPolicyMessage,
+      errorType: AsyncTaskErrorType.ProviderContentModeration,
     };
   }
 
@@ -257,6 +268,10 @@ export const imageRouter = router({
       try {
         const imageGenerationPromise = async (signal: AbortSignal) => {
           log('Initializing agent runtime for provider: %s', provider);
+          const { requestedModelId, resolvedModelId } = await resolveBusinessModelMapping(
+            provider,
+            model,
+          );
 
           // Read user's provider config from database
           const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
@@ -264,10 +279,13 @@ export const imageRouter = router({
           // Check if operation has been cancelled
           checkAbortSignal(signal);
           log('Agent runtime initialized, calling createImage');
-          const response = await modelRuntime.createImage!({
-            model,
-            params: params as unknown as RuntimeImageGenParams,
-          });
+          const response = await modelRuntime.createImage!(
+            {
+              model: resolvedModelId,
+              params: params as unknown as RuntimeImageGenParams,
+            },
+            { metadata: { trigger: RequestTrigger.Image } },
+          );
 
           if (!response) {
             log('Create image response is empty');
@@ -360,15 +378,18 @@ export const imageRouter = router({
             status: AsyncTaskStatus.Success,
           });
 
-          // TODO: temporarily disabled until notification UI is polished
-          // notifyImageCompleted({
-          //   duration,
-          //   generationBatchId,
-          //   model,
-          //   prompt: params.prompt,
-          //   topicId: generationTopicId,
-          //   userId: ctx.userId,
-          // }).catch((err) => console.error('[image-async] notification failed:', err));
+          try {
+            await notifyImageCompleted({
+              duration,
+              generationBatchId,
+              model,
+              prompt: params.prompt,
+              topicId: generationTopicId,
+              userId: ctx.userId,
+            });
+          } catch (err) {
+            console.error('[image-async] notification failed:', err);
+          }
 
           if (ENABLE_BUSINESS_FEATURES) {
             await chargeAfterGenerate({
@@ -376,8 +397,12 @@ export const imageRouter = router({
               metadata: {
                 asyncTaskId: taskId,
                 generationBatchId,
-                modelId: model,
                 topicId: generationTopicId,
+                ...buildMappedBusinessModelFields({
+                  provider,
+                  requestedModelId,
+                  resolvedModelId,
+                }),
               },
               modelUsage,
               provider,
@@ -417,10 +442,16 @@ export const imageRouter = router({
         });
 
         // Improved error categorization logic
+        const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+          error,
+          provider,
+          userId: ctx.userId,
+        });
         const { errorType, errorMessage } = categorizeError(
           error,
           abortController.signal.aborted,
           isEditingImage,
+          providerContentPolicyMessage,
         );
 
         await ctx.asyncTaskModel.update(taskId, {

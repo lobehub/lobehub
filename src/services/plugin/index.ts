@@ -1,5 +1,4 @@
-import { type LobeTool } from '@lobechat/types';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeTool, type ToolManifest } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
@@ -7,7 +6,7 @@ import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 export interface InstallPluginParams {
   customParams?: Record<string, any>;
   identifier: string;
-  manifest: LobeChatPluginManifest;
+  manifest: ToolManifest;
   settings?: Record<string, any>;
   type: 'plugin' | 'customPlugin';
 }
@@ -38,7 +37,7 @@ export class PluginService {
     });
   };
 
-  updatePluginManifest = async (id: string, manifest: LobeChatPluginManifest): Promise<void> => {
+  updatePluginManifest = async (id: string, manifest: ToolManifest): Promise<void> => {
     await lambdaClient.plugin.updatePlugin.mutate({ id, manifest });
   };
 

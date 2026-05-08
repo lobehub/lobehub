@@ -5,7 +5,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
-const VERSION = '0.20.1';
+const VERSION = '0.24.0';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const binDir = path.join(__dirname, '..', 'resources', 'bin');
