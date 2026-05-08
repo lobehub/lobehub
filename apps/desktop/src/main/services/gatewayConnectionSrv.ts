@@ -255,7 +255,10 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── Agent Run ───
 
-  private handleAgentRunRequest = (client: GatewayClient, request: AgentRunRequestMessage) => {
+  private handleAgentRunRequest = async (
+    client: GatewayClient,
+    request: AgentRunRequestMessage,
+  ) => {
     logger.info(
       `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
     );
