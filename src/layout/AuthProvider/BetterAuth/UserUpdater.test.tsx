@@ -68,6 +68,39 @@ describe('UserUpdater', () => {
     expect(useUserStore.getState().user?.latestName).toBe('lice');
   });
 
+  it('drops the previous user profile fields when the session switches to a different account', () => {
+    // Simulate user A is signed in with profile fields populated.
+    useUserStore.setState({
+      user: {
+        id: 'userA',
+        email: 'a@b.com',
+        fullName: 'Alice',
+        username: 'alice',
+        avatar: 'avatar-a',
+        interests: ['内容创作', '编程'],
+        firstName: 'A',
+        latestName: 'lice',
+      },
+    });
+
+    // Better-Auth refetch returns a different account directly (e.g. another
+    // tab signed in as user B with the same cookie jar). No intermediate
+    // signed-out state here.
+    useSessionMock.mockReturnValue(
+      sampleSession({ id: 'userB', email: 'b@c.com', name: 'Bob', username: 'bob' }),
+    );
+    render(<UserUpdater />);
+
+    // Profile fields tied to user A must NOT leak to user B's store entry.
+    const user = useUserStore.getState().user;
+    expect(user?.id).toBe('userB');
+    expect(user?.email).toBe('b@c.com');
+    expect(user?.interests).toBeUndefined();
+    expect(user?.firstName).toBeUndefined();
+    expect(user?.latestName).toBeUndefined();
+    expect(user?.avatar).toBe('');
+  });
+
   it('clears the user when the session goes away', () => {
     useUserStore.setState({
       user: { id: 'u1', email: 'a@b.com', interests: ['x'] },
