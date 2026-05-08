@@ -26,9 +26,9 @@ const stripHTML = (html: string): string => {
     sanitized = sanitized
       .replaceAll('&lt;', '<')
       .replaceAll('&gt;', '>')
-      .replaceAll('&amp;', '&')
       .replaceAll('&quot;', '"')
       .replaceAll('&#39;', "'")
+      .replaceAll('&amp;', '&')
       .replaceAll(/<\/?[a-z][^>]*>/gi, '');
   } while (sanitized !== previous);
 
