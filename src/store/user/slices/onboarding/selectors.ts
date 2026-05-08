@@ -33,14 +33,19 @@ const needsOnboarding = (s: Pick<UserStore, 'agentOnboarding' | 'onboarding'>) =
 };
 
 /**
- * Whether the shared-prefix steps (Welcome+Language, Privacy) have been completed.
- * Reads RAW stored settings (s.settings), not the default-merged currentSettings,
- * so unset users are correctly distinguished from users who explicitly chose.
+ * Whether the shared-prefix steps (Welcome+Privacy, Language) have been completed.
+ *
+ * Derives from the RAW stored `responseLanguage` only — the flow guarantees step 1
+ * (telemetry) precedes step 2 (language), so a stored responseLanguage implies
+ * both steps were completed.
+ *
+ * `telemetry` cannot be used as a signal: DEFAULT_COMMON_SETTINGS sets it to `true`,
+ * and setSettings strips fields equal to defaults from `s.settings`, so accepting
+ * the default leaves `telemetry` undefined in raw stored settings. `responseLanguage`
+ * has no default, so any explicit choice is preserved.
  */
-const commonStepsCompleted = (s: Pick<UserStore, 'settings'>) => {
-  const general = s.settings?.general;
-  return general?.responseLanguage !== undefined && general?.telemetry !== undefined;
-};
+const commonStepsCompleted = (s: Pick<UserStore, 'settings'>) =>
+  s.settings?.general?.responseLanguage !== undefined;
 
 export const onboardingSelectors = {
   commonStepsCompleted,

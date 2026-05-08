@@ -221,9 +221,9 @@ describe('onboardingSelectors', () => {
   });
 
   describe('commonStepsCompleted', () => {
-    it('returns true when both responseLanguage and telemetry are explicitly stored', () => {
+    it('returns true when responseLanguage is explicitly stored', () => {
       const store = {
-        settings: { general: { responseLanguage: 'en-US', telemetry: false } },
+        settings: { general: { responseLanguage: 'en-US' } },
       } as unknown as UserStore;
 
       expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
@@ -231,23 +231,15 @@ describe('onboardingSelectors', () => {
 
     it('returns true when responseLanguage is empty string (explicit auto-detect choice)', () => {
       const store = {
-        settings: { general: { responseLanguage: '', telemetry: true } },
+        settings: { general: { responseLanguage: '' } },
       } as unknown as UserStore;
 
       expect(onboardingSelectors.commonStepsCompleted(store)).toBe(true);
     });
 
-    it('returns false when responseLanguage is missing', () => {
+    it('returns false when responseLanguage is missing even if telemetry is stored', () => {
       const store = {
-        settings: { general: { telemetry: true } },
-      } as unknown as UserStore;
-
-      expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
-    });
-
-    it('returns false when telemetry is missing', () => {
-      const store = {
-        settings: { general: { responseLanguage: 'en-US' } },
+        settings: { general: { telemetry: false } },
       } as unknown as UserStore;
 
       expect(onboardingSelectors.commonStepsCompleted(store)).toBe(false);
