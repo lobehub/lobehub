@@ -27,6 +27,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       agentDocumentId?: string;
       apiName: string;
       errorReason?: string;
+      hintIsSkill?: boolean;
       relation?: string;
       status: 'failed' | 'succeeded';
       summary: string;
@@ -45,7 +46,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         domainKey: 'document:agent-document',
         errorReason: input.errorReason,
         identifier: AgentDocumentsIdentifier,
-        intentClass: 'explicit_persistence',
+        intentClass: input.hintIsSkill ? 'hinted_skill_document' : 'explicit_persistence',
         messageId: context.messageId,
         operationId: context.operationId,
         policyStateStore: redisPolicyStateStore,
@@ -73,6 +74,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         agentId?: string;
         getAgentDocumentId?: (result: T) => string | undefined;
         apiName: string;
+        hintIsSkill?: boolean;
         relation: string;
         summary: string;
         toolAction: string;
@@ -85,6 +87,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           agentId: input.agentId,
           agentDocumentId: input.getAgentDocumentId?.(result),
           apiName: input.apiName,
+          hintIsSkill: input.hintIsSkill,
           relation: input.relation,
           status: 'succeeded',
           summary: input.summary,
@@ -96,6 +99,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           agentId: input.agentId,
           apiName: input.apiName,
           errorReason: (error as Error).message,
+          hintIsSkill: input.hintIsSkill,
           relation: input.relation,
           status: 'failed',
           summary: `${input.summary} failed.`,
@@ -134,6 +138,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               agentId,
               apiName: 'createDocument',
               getAgentDocumentId: (result) => result?.id,
+              hintIsSkill,
               relation: 'created',
               summary: 'Agent documents created a document.',
               toolAction: 'create',
@@ -148,6 +153,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               agentId,
               apiName: 'createTopicDocument',
               getAgentDocumentId: (result) => result?.id,
+              hintIsSkill,
               relation: 'created',
               summary: 'Agent documents created a topic document.',
               toolAction: 'create',

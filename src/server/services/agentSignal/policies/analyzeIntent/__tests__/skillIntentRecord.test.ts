@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createProcedureStateService } from '@/server/services/agentSignal/services/procedureStateService';
 import type { AgentSignalPolicyStateStore } from '@/server/services/agentSignal/store/types';
 
-import { readDeferredSkillCandidate, writeDeferredSkillCandidate } from '../skillCandidate';
+import { readRecordedSkillIntent, recordSkillIntent } from '../skillIntentRecord';
 
 const createStore = (): AgentSignalPolicyStateStore => {
   const state = new Map<string, Record<string, string>>();
@@ -18,16 +18,16 @@ const createStore = (): AgentSignalPolicyStateStore => {
   };
 };
 
-describe('deferred skill candidates', () => {
+describe('recorded skill intents', () => {
   /**
    * @example
-   * User-stage direct skill intent persists as candidate state for completion-stage decisions.
+   * User-stage direct skill intent persists as a recorded intent for completion-stage decisions.
    */
-  it('writes and reads one deferred skill candidate by source id', async () => {
+  it('writes and reads one recorded skill intent by source id', async () => {
     const store = createStore();
 
-    await writeDeferredSkillCandidate(store, {
-      candidate: {
+    await recordSkillIntent(store, {
+      record: {
         actionIntent: 'create',
         confidence: 0.86,
         createdAt: 1000,
@@ -43,7 +43,7 @@ describe('deferred skill candidates', () => {
     });
 
     await expect(
-      readDeferredSkillCandidate(store, {
+      readRecordedSkillIntent(store, {
         scopeKey: 'topic:topic_1',
         sourceId: 'source_1',
       }),
@@ -62,18 +62,18 @@ describe('deferred skill candidates', () => {
 
   /**
    * @example
-   * Corrupt candidate JSON is ignored instead of crashing policy execution.
+   * Corrupt recorded intent JSON is ignored instead of crashing policy execution.
    */
-  it('returns undefined for malformed candidate JSON', async () => {
+  it('returns undefined for malformed recorded intent JSON', async () => {
     const store = {
       readPolicyState: vi.fn().mockResolvedValue({
-        'skill-candidate:source_1': '{bad-json',
+        'skill-intent-record:source_1': '{bad-json',
       }),
       writePolicyState: vi.fn(),
     } satisfies AgentSignalPolicyStateStore;
 
     await expect(
-      readDeferredSkillCandidate(store, {
+      readRecordedSkillIntent(store, {
         scopeKey: 'topic:topic_1',
         sourceId: 'source_1',
       }),
@@ -82,18 +82,18 @@ describe('deferred skill candidates', () => {
 
   /**
    * @example
-   * Candidate JSON with missing required fields is ignored instead of becoming policy input.
+   * Recorded intent JSON with missing required fields is ignored instead of becoming policy input.
    */
-  it('returns undefined for malformed candidate objects', async () => {
+  it('returns undefined for malformed recorded intent objects', async () => {
     const store = {
       readPolicyState: vi.fn().mockResolvedValue({
-        'skill-candidate:source_1': JSON.stringify({ sourceId: 'source_1' }),
+        'skill-intent-record:source_1': JSON.stringify({ sourceId: 'source_1' }),
       }),
       writePolicyState: vi.fn(),
     } satisfies AgentSignalPolicyStateStore;
 
     await expect(
-      readDeferredSkillCandidate(store, {
+      readRecordedSkillIntent(store, {
         scopeKey: 'topic:topic_1',
         sourceId: 'source_1',
       }),
@@ -102,12 +102,12 @@ describe('deferred skill candidates', () => {
 
   /**
    * @example
-   * Candidate payloads must match the requested source id and scope key after parsing.
+   * Recorded intent payloads must match the requested source id and scope key after parsing.
    */
-  it('returns undefined when parsed candidate identity does not match the read input', async () => {
+  it('returns undefined when parsed record identity does not match the read input', async () => {
     const store = {
       readPolicyState: vi.fn().mockResolvedValue({
-        'skill-candidate:source_1': JSON.stringify({
+        'skill-intent-record:source_1': JSON.stringify({
           createdAt: 1000,
           explicitness: 'explicit_action',
           feedbackMessageId: 'msg_1',
@@ -120,7 +120,7 @@ describe('deferred skill candidates', () => {
     } satisfies AgentSignalPolicyStateStore;
 
     await expect(
-      readDeferredSkillCandidate(store, {
+      readRecordedSkillIntent(store, {
         scopeKey: 'topic:topic_1',
         sourceId: 'source_1',
       }),
@@ -129,13 +129,13 @@ describe('deferred skill candidates', () => {
 
   /**
    * @example
-   * Same source ids in different runtime scopes do not read each other's candidates.
+   * Same source ids in different runtime scopes do not read each other's records.
    */
-  it('keeps candidates separated by scope key', async () => {
+  it('keeps records separated by scope key', async () => {
     const store = createStore();
 
-    await writeDeferredSkillCandidate(store, {
-      candidate: {
+    await recordSkillIntent(store, {
+      record: {
         confidence: 0.72,
         createdAt: 1000,
         explicitness: 'explicit_action',
@@ -150,7 +150,7 @@ describe('deferred skill candidates', () => {
     });
 
     await expect(
-      readDeferredSkillCandidate(store, {
+      readRecordedSkillIntent(store, {
         scopeKey: 'topic:topic_2',
         sourceId: 'source_1',
       }),
@@ -159,13 +159,13 @@ describe('deferred skill candidates', () => {
 
   /**
    * @example
-   * ProcedureStateService.skillCandidates.write(candidate) applies facade-owned TTL and scope.
+   * ProcedureStateService.skillIntentRecords.write(record) applies facade-owned TTL and scope.
    */
-  it('wires skill candidate helpers through ProcedureStateService', async () => {
+  it('wires skill intent record helpers through ProcedureStateService', async () => {
     const writePolicyState = vi.fn(async () => {});
     const store = {
       readPolicyState: vi.fn().mockResolvedValue({
-        'skill-candidate:source_1': JSON.stringify({
+        'skill-intent-record:source_1': JSON.stringify({
           confidence: 0.7,
           createdAt: 1000,
           explicitness: 'explicit_action',
@@ -183,7 +183,7 @@ describe('deferred skill candidates', () => {
       ttlSeconds: 90,
     });
 
-    await service.skillCandidates.write({
+    await service.skillIntentRecords.write({
       confidence: 0.7,
       createdAt: 1000,
       explicitness: 'explicit_action',
@@ -195,15 +195,15 @@ describe('deferred skill candidates', () => {
     });
 
     expect(writePolicyState).toHaveBeenCalledWith(
-      'analyze-intent:skill-candidates',
+      'analyze-intent:skill-intent-records',
       'topic:topic_1',
       expect.objectContaining({
-        'skill-candidate:source_1': expect.any(String),
+        'skill-intent-record:source_1': expect.any(String),
       }),
       90,
     );
     await expect(
-      service.skillCandidates.read({
+      service.skillIntentRecords.read({
         scopeKey: 'topic:topic_1',
         sourceId: 'source_1',
       }),

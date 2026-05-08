@@ -32,12 +32,13 @@ import { createDefaultActionServices } from '../../services/actionServices';
 import type { ProcedureMarkerSuppressInput, ProcedureStateService } from '../../services/types';
 import type { SignalFeedbackDomainMemory } from '../types';
 import { AGENT_SIGNAL_POLICY_SIGNAL_TYPES } from '../types';
-import type { DeferredSkillCandidate } from './skillCandidate';
+import type { RecordedSkillIntent } from './skillIntentRecord';
 
 /**
  * Weak positive skill feedback needs repeated observations before the accumulator emits.
  */
 const SATISFIED_SKILL_CHEAP_SCORE_DELTA = 0.6;
+const hintedSkillDocumentIntentClass = 'hinted_skill_document';
 
 /**
  * Marker reader dependency used by both legacy and procedure-state planner options.
@@ -110,14 +111,77 @@ const isAccumulatingSkillSignal = (
   );
 };
 
-const shouldDeferSkillMutationUntilClientCompletion = (signal: FeedbackDomainSignal) => {
+const detectClientStartNeedsSkillIntentRecord = (signal: FeedbackDomainSignal) => {
   return signal.payload.trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart;
 };
 
-const createDeferredSkillCandidate = (
+const detectClientComplete = (signal: FeedbackDomainSignal) => {
+  return signal.payload.trigger === AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete;
+};
+
+const findCompletionHintedDocumentReceipts = async (
+  signal: FeedbackDomainSignal,
+  context: RuntimeProcessorContext,
+  procedureState?: ProcedureStateService,
+) => {
+  if (!detectClientComplete(signal)) return [];
+  if (!procedureState) return [];
+
+  const snapshot = await procedureState.inspect.scope(context.scopeKey);
+
+  return snapshot.receipts.filter((receipt) => {
+    if (receipt.domainKey !== 'document:agent-document') return false;
+    if (receipt.intentClass !== hintedSkillDocumentIntentClass) return false;
+    if (receipt.messageId !== signal.payload.messageId) return false;
+    if (receipt.status !== 'handled') return false;
+
+    return (receipt.relatedObjects ?? []).some(
+      (object) => object.objectType === 'agent-document' && object.relation === 'created',
+    );
+  });
+};
+
+const createHintedDocumentEvidence = (
+  receipts: Awaited<ReturnType<typeof findCompletionHintedDocumentReceipts>>,
+) =>
+  receipts.map((receipt) => ({
+    cue: 'same_turn_hinted_document_receipt',
+    excerpt: [
+      receipt.summary,
+      ...(receipt.relatedObjects ?? [])
+        .filter((object) => object.objectType === 'agent-document')
+        .map((object) => `agentDocumentId=${object.objectId}`),
+    ]
+      .filter(Boolean)
+      .join('; '),
+  }));
+
+const createHintedDocumentSkillSignal = (
+  signal: FeedbackDomainSignal,
+  receipts: Awaited<ReturnType<typeof findCompletionHintedDocumentReceipts>>,
+): NonSatisfiedSkillActionServiceSignal => ({
+  ...signal,
+  payload: {
+    ...signal.payload,
+    conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 80 },
+    evidence: [...(signal.payload.evidence ?? []), ...createHintedDocumentEvidence(receipts)],
+    reason: 'completion included a createDocument tool outcome with hintIsSkill=true',
+    satisfactionResult: 'not_satisfied',
+    skillActionIntent: 'create',
+    skillIntentConfidence: 0.9,
+    skillIntentExplicitness: 'implicit_strong_learning',
+    skillIntentReason: 'A same-turn agent document was created with hintIsSkill=true.',
+    skillRoute: 'direct_decision',
+    target: 'skill',
+  },
+  signalId: `${signal.signalId}:hinted-skill-document`,
+  signalType: AGENT_SIGNAL_POLICY_SIGNAL_TYPES.feedbackDomainSkill,
+});
+
+const createRecordedSkillIntent = (
   signal: NonSatisfiedSkillActionServiceSignal,
   context: RuntimeProcessorContext,
-): DeferredSkillCandidate => ({
+): RecordedSkillIntent => ({
   ...(signal.payload.skillActionIntent ? { actionIntent: signal.payload.skillActionIntent } : {}),
   ...(typeof signal.payload.skillIntentConfidence === 'number'
     ? { confidence: signal.payload.skillIntentConfidence }
@@ -333,9 +397,25 @@ export const createFeedbackActionPlannerSignalHandler = (
         { procedureState },
         { onSuppress: () => transitionSuppressedProcedure(signal, procedureContext) },
       );
-
       if (suppression.type === 'transition' || suppression.type === 'stop') {
         return suppression.result;
+      }
+
+      const hintedDocumentReceipts = await findCompletionHintedDocumentReceipts(
+        signal,
+        procedureContext,
+        options.procedure?.procedureState,
+      );
+
+      if (hintedDocumentReceipts.length > 0) {
+        const plan = actionServices.skillActions.prepare(
+          createHintedDocumentSkillSignal(signal, hintedDocumentReceipts),
+        );
+
+        return {
+          actions: [plan.action],
+          status: 'dispatch',
+        };
       }
 
       if (isMemorySignal(signal)) {
@@ -348,13 +428,13 @@ export const createFeedbackActionPlannerSignalHandler = (
       }
 
       if (isDirectSkillDecisionSignal(signal)) {
-        if (shouldDeferSkillMutationUntilClientCompletion(signal)) {
-          await options.procedure?.procedureState?.skillCandidates?.write(
-            createDeferredSkillCandidate(signal, procedureContext),
+        if (detectClientStartNeedsSkillIntentRecord(signal)) {
+          await options.procedure?.procedureState?.skillIntentRecords?.write(
+            createRecordedSkillIntent(signal, procedureContext),
           );
 
           return {
-            concluded: { reason: 'skill mutation deferred until client.runtime.complete' },
+            concluded: { reason: 'skill intent recorded until client.runtime.complete' },
             status: 'conclude',
           };
         }

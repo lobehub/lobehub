@@ -103,6 +103,22 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     );
   });
 
+  it('marks hinted create outcomes as skill document intents', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument(
+      { content: 'body', hintIsSkill: true, title: 'Reusable Workflow' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(agentSignalProcedureMocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiName: 'createDocument',
+        intentClass: 'hinted_skill_document',
+      }),
+    );
+  });
+
   it('emits copy outcomes with the agent document binding id', async () => {
     const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
 
