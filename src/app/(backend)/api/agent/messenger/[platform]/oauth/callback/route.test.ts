@@ -98,19 +98,20 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
   });
 
   describe('slack — error / validation paths', () => {
-    it('redirects to settings with slack_error when the upstream returned ?error=', async () => {
+    it('redirects to settings with error when the upstream returned ?error=', async () => {
       const res = await GET(buildRequest('slack', 'error=access_denied'), ctx('slack'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger');
-      expect(loc.searchParams.get('slack_error')).toBe('access_denied');
+      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.searchParams.get('error')).toBe('access_denied');
     });
 
     it('redirects to settings with missing_code_or_state when params are absent', async () => {
       const res = await GET(buildRequest('slack', ''), ctx('slack'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.searchParams.get('slack_error')).toBe('missing_code_or_state');
+      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.searchParams.get('error')).toBe('missing_code_or_state');
     });
 
     it('returns 503 when Slack messenger env is not configured', async () => {
@@ -124,7 +125,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
       const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.searchParams.get('slack_error')).toBe('invalid_state');
+      expect(loc.searchParams.get('error')).toBe('invalid_state');
     });
 
     it('redirects with exchange_failed when oauth.v2.access throws', async () => {
@@ -132,7 +133,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
       const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.searchParams.get('slack_error')).toBe('exchange_failed');
+      expect(loc.searchParams.get('error')).toBe('exchange_failed');
     });
 
     it('redirects with exchange_failed when neither team.id nor enterprise.id is present', async () => {
@@ -148,7 +149,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
       const loc = new URL(res.headers.get('location')!);
       // missing_tenant is mapped to exchange_failed at the route level since
       // the adapter throws — error code surface stays generic per platform.
-      expect(loc.searchParams.get('slack_error')).toBe('exchange_failed');
+      expect(loc.searchParams.get('error')).toBe('exchange_failed');
     });
   });
 
@@ -243,9 +244,9 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
 
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger');
-      expect(loc.searchParams.get('slack_error')).toBe('already_installed');
-      expect(loc.searchParams.get('slack_workspace')).toBe('Acme Inc');
+      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.searchParams.get('error')).toBe('already_installed');
+      expect(loc.searchParams.get('workspace')).toBe('Acme Inc');
     });
 
     it('allows takeover when the previous installer was deleted (installedByUserId null)', async () => {
@@ -312,8 +313,8 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
 
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger');
-      expect(loc.searchParams.get('slack_installed')).toBe('ok');
+      expect(loc.pathname).toBe('/settings/messenger/slack');
+      expect(loc.searchParams.get('installed')).toBe('ok');
     });
   });
 
@@ -369,8 +370,8 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
 
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
-      expect(loc.pathname).toBe('/settings/messenger');
-      expect(loc.searchParams.get('discord_installed')).toBe('ok');
+      expect(loc.pathname).toBe('/settings/messenger/discord');
+      expect(loc.searchParams.get('installed')).toBe('ok');
     });
   });
 });
