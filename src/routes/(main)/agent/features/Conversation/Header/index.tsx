@@ -9,7 +9,6 @@ import NavHeader from '@/features/NavHeader';
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
-import ViewSwitcher from './ViewSwitcher';
 import WorkingPanelToggle from './WorkingPanelToggle';
 
 const headerStyles = createStaticStyles(({ css }) => ({
@@ -58,7 +57,6 @@ const Header = memo(() => {
             gap={4}
             style={{ backgroundColor: cssVar.colorBgContainer }}
           >
-            <ViewSwitcher />
             <ShareButton />
             <WorkingPanelToggle />
           </Flexbox>
