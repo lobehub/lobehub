@@ -1,3 +1,4 @@
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +39,7 @@ export const useDocumentTreeOps = ({
   topicId,
 }: UseDocumentTreeOpsArgs): DocumentTreeOps => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const dataRef = useRef(data);
   dataRef.current = data;
 
@@ -270,10 +271,10 @@ export const useDocumentTreeOps = ({
       const target = dataRef.current.find((doc) => doc.id === id);
       if (!target) return;
 
-      modal.confirm({
-        centered: true,
+      confirmModal({
         content: t('workingPanel.resources.deleteConfirm'),
         okButtonProps: { danger: true },
+        okText: t('delete', { ns: 'common' }),
         onOk: async () => {
           try {
             const isFolder = target.fileType === FOLDER_FILE_TYPE;
@@ -306,7 +307,7 @@ export const useDocumentTreeOps = ({
         title: t('workingPanel.resources.deleteTitle'),
       });
     },
-    [agentId, buildItemPath, message, modal, mutate, t, topicId],
+    [agentId, buildItemPath, message, mutate, t, topicId],
   );
 
   return useMemo(
