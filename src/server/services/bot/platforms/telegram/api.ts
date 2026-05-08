@@ -17,14 +17,23 @@ const isParseEntitiesError = (error: unknown): boolean => {
   return typeof msg === 'string' && msg.includes("can't parse entities");
 };
 
-const stripHTML = (html: string): string =>
-  html
-    .replaceAll(/<\/?[a-z][^>]*>/gi, '')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'");
+const stripHTML = (html: string): string => {
+  let sanitized = html;
+  let previous: string;
+
+  do {
+    previous = sanitized;
+    sanitized = sanitized
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(/<\/?[a-z][^>]*>/gi, '');
+  } while (sanitized !== previous);
+
+  return sanitized;
+};
 
 /**
  * Thrown when an edit cannot be retried (message is gone or beyond the edit
