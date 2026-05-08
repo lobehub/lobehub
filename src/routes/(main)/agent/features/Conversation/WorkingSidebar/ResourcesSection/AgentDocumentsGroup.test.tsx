@@ -71,6 +71,12 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => useNavigateMock,
 }));
 
+vi.mock('@/features/AgentDocumentsExplorer', () => ({
+  DocumentExplorerTree: ({ data }: { data: unknown[] }) => (
+    <div data-doc-count={data.length} data-testid="document-explorer-tree" />
+  ),
+}));
+
 vi.mock('@/services/agentDocument', () => ({
   agentDocumentSWRKeys: {
     documents: (agentId: string) => ['agent-documents', agentId],
@@ -188,15 +194,20 @@ describe('AgentDocumentsGroup', () => {
 
     expect(screen.getByText('Brief')).toBeInTheDocument();
     expect(screen.getByText('Example')).toBeInTheDocument();
+    expect(screen.queryByTestId('document-explorer-tree')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Web'));
 
     expect(screen.queryByText('Brief')).not.toBeInTheDocument();
     expect(screen.getByText('Example')).toBeInTheDocument();
+    expect(screen.queryByTestId('document-explorer-tree')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Documents'));
 
-    expect(screen.getByText('Brief')).toBeInTheDocument();
+    const tree = screen.getByTestId('document-explorer-tree');
+    expect(tree).toBeInTheDocument();
+    expect(tree).toHaveAttribute('data-doc-count', '2');
+    expect(screen.queryByText('Brief')).not.toBeInTheDocument();
     expect(screen.queryByText('Example')).not.toBeInTheDocument();
   });
 
