@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { appEnv } from '@/envs/app';
 import type { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:hetero-sandbox-runner');
@@ -68,11 +69,16 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     args.push('--cwd', cwd);
   }
 
-  // Embed the prompt as JSON on stdin so the CLI reads it via --input-json -.
+  // Encode the prompt as base64 to avoid all shell quoting issues.
+  // echo + shell quoting mangled inner JSON quotes; base64 is quote-safe.
   const stdinPayload = JSON.stringify(prompt);
+  const base64Payload = Buffer.from(stdinPayload).toString('base64');
 
-  // Build the full shell command: inject LOBEHUB_JWT and pipe the prompt.
-  const shellCommand = `LOBEHUB_JWT=${JSON.stringify(jwt)} echo ${JSON.stringify(stdinPayload)} | ${args.join(' ')}`;
+  // LOBEHUB_HETERO_SERVER_URL overrides the server URL for local dev/testing
+  // (e.g. a cloudflare tunnel). APP_URL is NOT used here because it's tied to
+  // auth callbacks and must stay as localhost in dev.
+  const serverUrl = process.env.LOBEHUB_HETERO_SERVER_URL ?? appEnv.APP_URL;
+  const shellCommand = `echo ${base64Payload} | base64 -d | LOBEHUB_JWT=${JSON.stringify(jwt)} LOBEHUB_SERVER=${JSON.stringify(serverUrl)} ${args.join(' ')}`;
 
   log(
     'spawnHeteroSandbox: userId=%s op=%s type=%s topic=%s',

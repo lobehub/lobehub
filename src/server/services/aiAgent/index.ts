@@ -627,9 +627,14 @@ export class AiAgentService {
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
     // back via `heteroIngest` / `heteroFinish`.
+    //
+    // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
+    // fall back to model field for backwards compatibility.
     const HETERO_AGENT_MODELS = new Set<string>(['claude-code', 'codex']);
-    if (HETERO_AGENT_MODELS.has(model)) {
-      const heteroType = model as 'claude-code' | 'codex';
+    const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
+    const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
+    if (isHeteroAgent) {
+      const heteroType = (heteroProviderType ?? model) as 'claude-code' | 'codex';
       const operationId = nanoid();
 
       // Create user message so the conversation is visible in the UI immediately.
@@ -659,7 +664,6 @@ export class AiAgentService {
       // Read resume session id for next-turn continuity.
       const heteroService = new HeterogeneousAgentService(this.db, this.userId);
       const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
-
       // Sign an operation-scoped JWT so the CLI can authenticate against
       // heteroIngest / heteroFinish without full user credentials.
       let operationJwt: string;
@@ -679,6 +683,16 @@ export class AiAgentService {
         topicId,
         userId: this.userId,
       };
+
+      // Seed topic.metadata.runningOperation so heteroIngest can validate the operation.
+      await this.topicModel.updateMetadata(topicId, {
+        runningOperation: {
+          assistantMessageId: assistantMsg.id,
+          operationId,
+          scope: appContext?.scope ?? undefined,
+          threadId: appContext?.threadId ?? undefined,
+        },
+      });
 
       if (requestedDeviceId) {
         // Dispatch to the user's connected desktop via device-gateway.

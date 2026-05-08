@@ -321,7 +321,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
     const exitedClean = !ingestError && (code === 0 || signal === 'SIGTERM');
     try {
-      await sink.finish({ result: exitedClean ? 'success' : 'error' });
+      await sink.finish({
+        result: exitedClean ? 'success' : 'error',
+        sessionId: handle.sessionId,
+      });
     } catch (err) {
       log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }

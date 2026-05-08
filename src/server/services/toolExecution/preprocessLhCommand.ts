@@ -1,8 +1,6 @@
 import debug from 'debug';
 
-import { appEnv } from '@/envs/app';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
-import { isDev } from '@/utils/env';
 
 const log = debug('lobe-server:lh-command');
 
@@ -34,7 +32,9 @@ export const preprocessLhCommand = async (
   try {
     const jwt = await signUserJWT(userId);
 
-    const serverUrl = isDev ? 'https://app.lobehub.com' : appEnv.APP_URL;
+    // const serverUrl = appEnv.APP_URL;
+
+    const serverUrl = 'airfare-leone-text-taxation.trycloudflare.com';
 
     const envPrefix = `LOBEHUB_JWT=${jwt} LOBEHUB_SERVER=${serverUrl}`;
 
