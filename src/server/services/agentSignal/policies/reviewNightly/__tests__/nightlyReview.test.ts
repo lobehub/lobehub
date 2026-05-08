@@ -54,10 +54,31 @@ const createReviewSource = (
 
 const reviewContext = {
   agentId: 'agent-1',
+  documentActivity: {
+    ambiguousBucket: [],
+    excludedSummary: { count: 0, reasons: [] },
+    generalDocumentBucket: [],
+    skillBucket: [],
+  },
+  feedbackActivity: {
+    neutralCount: 0,
+    notSatisfied: [],
+    satisfied: [],
+  },
+  maintenanceSignals: [],
   managedSkills: [],
+  receiptActivity: {
+    appliedCount: 0,
+    duplicateGroups: [],
+    failedCount: 0,
+    pendingProposalCount: 0,
+    recentReceipts: [],
+    reviewCount: 0,
+  },
   relevantMemories: [],
   reviewWindowEnd: reviewPayload.reviewWindowEnd,
   reviewWindowStart: reviewPayload.reviewWindowStart,
+  toolActivity: [],
   topics: [],
   userId: 'user-1',
 } satisfies NightlyReviewContext;

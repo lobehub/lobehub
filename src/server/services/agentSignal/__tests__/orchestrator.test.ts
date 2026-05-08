@@ -6,22 +6,46 @@ import { BriefModel } from '@/database/models/brief';
 import type { AgentSignalEmitOptions } from '../emitter';
 import { withServerAgentSignalPolicyDefaults } from '../orchestrator';
 import { createBriefMaintenanceService } from '../services/maintenance/brief';
+import type { NightlyReviewContext } from '../services/maintenance/nightlyCollector';
 import { MaintenanceActionStatus, ReviewRunStatus } from '../services/maintenance/types';
+
+const createNightlyReviewContext = (): NightlyReviewContext => ({
+  agentId: 'agent-1',
+  documentActivity: {
+    ambiguousBucket: [],
+    excludedSummary: { count: 0, reasons: [] },
+    generalDocumentBucket: [],
+    skillBucket: [],
+  },
+  feedbackActivity: {
+    neutralCount: 0,
+    notSatisfied: [],
+    satisfied: [],
+  },
+  maintenanceSignals: [],
+  managedSkills: [],
+  receiptActivity: {
+    appliedCount: 0,
+    duplicateGroups: [],
+    failedCount: 0,
+    pendingProposalCount: 0,
+    recentReceipts: [],
+    reviewCount: 0,
+  },
+  relevantMemories: [],
+  reviewWindowEnd: '2026-05-04T14:30:00.000Z',
+  reviewWindowStart: '2026-05-03T16:00:00.000Z',
+  toolActivity: [],
+  topics: [],
+  userId: 'user-1',
+});
 
 const createNightlyReviewOptions = (): NonNullable<
   NonNullable<AgentSignalEmitOptions['policyOptions']>['nightlyReview']
 > => ({
   acquireReviewGuard: vi.fn(async () => true),
   canRunReview: vi.fn(async () => true),
-  collectContext: vi.fn(async () => ({
-    agentId: 'agent-1',
-    managedSkills: [],
-    relevantMemories: [],
-    reviewWindowEnd: '2026-05-04T14:30:00.000Z',
-    reviewWindowStart: '2026-05-03T16:00:00.000Z',
-    topics: [],
-    userId: 'user-1',
-  })),
+  collectContext: vi.fn(async () => createNightlyReviewContext()),
   executePlan: vi.fn(async () => ({
     actions: [],
     status: ReviewRunStatus.Completed,
