@@ -11,6 +11,7 @@ import { installMarketplaceAgents } from './installMarketplaceAgents';
 
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
+  pluginState?: Record<string, unknown>;
   toolResultContent?: string;
 }
 
@@ -90,6 +91,13 @@ const handleAgentMarketplaceSubmit: CustomInteractionSubmitHandler = async (payl
   return {
     options: {
       createUserMessage: false,
+      pluginState: {
+        installedAgentIds: result.installedAgentIds,
+        requestId: pickBase?.requestId,
+        selectedAgentIds,
+        skippedAgentIds: result.skippedAgentIds,
+        summaries: result.summaries,
+      },
       toolResultContent: buildAgentMarketplaceToolResult({
         installedAgentIds: result.installedAgentIds,
         selectedAgentIds,

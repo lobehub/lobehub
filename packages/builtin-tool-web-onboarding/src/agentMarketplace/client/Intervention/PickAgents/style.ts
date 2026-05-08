@@ -20,10 +20,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 10px;
 
     padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorBgElevated};
 
     transition:
       border-color ${cssVar.motionDurationMid},
@@ -37,6 +37,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       outline: 2px solid ${cssVar.colorPrimary};
       outline-offset: 2px;
     }
+  `,
+  cardHeader: css`
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-width: 0;
   `,
   cardDescription: css`
     overflow: hidden;
@@ -57,9 +63,16 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   cardTitle: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
     font-size: 14px;
     font-weight: 600;
     color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   container: css`
     display: grid;
@@ -192,10 +205,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 10px;
 
     padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorBgElevated};
   `,
   skeletonLine: css`
     height: 10px;

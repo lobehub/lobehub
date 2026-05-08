@@ -25,6 +25,7 @@ export interface TaskUpdatePayload {
   description?: string;
   instruction?: string;
   name?: string;
+  parentTaskId?: string | null;
   priority?: number;
 }
 
@@ -64,10 +65,11 @@ export class TaskDetailSliceActionImpl {
   addComment = async (
     taskId: string,
     content: string,
-    opts?: { briefId?: string; topicId?: string },
-  ): Promise<void> => {
-    await taskService.addComment(taskId, content, opts);
+    opts?: { authorAgentId?: string; briefId?: string; topicId?: string },
+  ): Promise<Awaited<ReturnType<typeof taskService.addComment>>> => {
+    const result = await taskService.addComment(taskId, content, opts);
     await this.internal_refreshTaskDetail(taskId);
+    return result;
   };
 
   deleteComment = async (commentId: string, taskId?: string): Promise<void> => {
@@ -225,8 +227,10 @@ export class TaskDetailSliceActionImpl {
 
   updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
     const { assigneeAgentId, ...rest } = data;
+    const optimisticRest = { ...rest };
+    delete optimisticRest.parentTaskId;
     const optimistic: Partial<TaskDetailData> = {
-      ...rest,
+      ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
     };
 
@@ -238,6 +242,7 @@ export class TaskDetailSliceActionImpl {
     const refreshPatchedTargets = async (): Promise<void> => {
       const targets = new Set<string>([id]);
       if (patchedParentId) targets.add(patchedParentId);
+      if (data.parentTaskId) targets.add(data.parentTaskId);
       if (snapshotActiveTaskId) targets.add(snapshotActiveTaskId);
       await Promise.all(
         Array.from(targets).map((target) => this.internal_refreshTaskDetail(target)),
@@ -262,7 +267,7 @@ export class TaskDetailSliceActionImpl {
       throw error;
     }
 
-    if (assigneeAgentId !== undefined) {
+    if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
       await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
     }
   };

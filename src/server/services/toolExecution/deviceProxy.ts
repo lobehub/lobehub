@@ -66,6 +66,29 @@ export class DeviceProxy {
     }
   }
 
+  async dispatchAgentRun(params: {
+    agentType: 'claude-code' | 'codex';
+    cwd?: string;
+    deviceId?: string;
+    jwt: string;
+    operationId: string;
+    prompt: string;
+    resumeSessionId?: string;
+    topicId: string;
+    userId: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    const client = this.getClient();
+    if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };
+
+    try {
+      return await client.dispatchAgentRun(params);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log('dispatchAgentRun: error — %s', message);
+      return { error: message, success: false };
+    }
+  }
+
   async executeToolCall(
     params: { deviceId: string; userId: string },
     toolCall: { apiName: string; arguments: string; identifier: string },

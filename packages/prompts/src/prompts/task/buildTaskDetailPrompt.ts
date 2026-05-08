@@ -119,7 +119,7 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
         const author = act.agentId ? '🤖 agent' : '👤 user';
         const content = act.content || '';
         const truncated = content.length > 200 ? content.slice(0, 200) + '...' : content;
-        lines.push(`  💭 ${ago} ${author} ${truncated}`);
+        lines.push(`  💭 ${ago} ${author} ${truncated}${idSuffix}`);
       }
     }
   }

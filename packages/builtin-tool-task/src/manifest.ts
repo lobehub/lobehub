@@ -150,9 +150,64 @@ export const TaskManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+    // ==================== Task Comments ====================
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority) or dependencies (batched). Status changes go through updateTaskStatus.",
+        'Add a comment to a task. If identifier is omitted, this only works when there is a current task context. Use comments to record decisions, progress, or feedback that should appear in task activities.',
+      name: TaskApiName.addTaskComment,
+      parameters: {
+        properties: {
+          content: {
+            description: 'Comment content to add to the task.',
+            type: 'string',
+          },
+          identifier: {
+            description:
+              'The task identifier to comment on (e.g. "TASK-1"). If omitted, the current task is used only when a current task context exists.',
+            type: 'string',
+          },
+        },
+        required: ['content'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Update an existing task comment by commentId. Use viewTask to inspect task activities and find comment ids.',
+      name: TaskApiName.updateTaskComment,
+      parameters: {
+        properties: {
+          commentId: {
+            description: 'The task comment id to update.',
+            type: 'string',
+          },
+          content: {
+            description: 'Updated comment content.',
+            type: 'string',
+          },
+        },
+        required: ['commentId', 'content'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Delete an existing task comment by commentId. Use viewTask to inspect task activities and find comment ids.',
+      name: TaskApiName.deleteTaskComment,
+      parameters: {
+        properties: {
+          commentId: {
+            description: 'The task comment id to delete.',
+            type: 'string',
+          },
+        },
+        required: ['commentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Edit a task's fields (name, description, instruction, priority), parent, or dependencies (batched). Status changes go through updateTaskStatus.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
@@ -182,6 +237,11 @@ export const TaskManifest: BuiltinToolManifest = {
           name: {
             description: 'Updated name for the task.',
             type: 'string',
+          },
+          parentIdentifier: {
+            description:
+              'Set the parent task by identifier (e.g. "TASK-1"). Pass null to move this task to top level. Omit to keep the current parent.',
+            type: ['string', 'null'],
           },
           priority: {
             description: 'Updated priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low.',
@@ -284,7 +344,7 @@ export const TaskManifest: BuiltinToolManifest = {
   identifier: TaskIdentifier,
   meta: {
     avatar: '\uD83D\uDCCB',
-    description: 'Create, list, edit, delete tasks with dependencies',
+    description: 'Create, list, edit, comment on, and delete tasks with dependencies',
     title: 'Task Tools',
   },
   systemRole: systemPrompt,

@@ -8,6 +8,7 @@ import { marketSDK, marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/mi
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken } from '@/libs/trusted-client';
 import { normalizeLocale } from '@/locales/resources';
+import type { AgentForkBatchResult, AgentForkResponse } from '@/types/discover';
 
 const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
 
@@ -89,6 +90,103 @@ const fetchMarketUserInfo = async (
     return null;
   }
 };
+
+/**
+ * Build market-API auth headers from a procedure context.
+ * Mirrors the inline pattern used by other market.* procedures.
+ */
+const buildMarketAuthHeaders = (ctx: {
+  marketOidcAccessToken?: string;
+  marketUserInfo?: TrustedClientUserInfo;
+}): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (ctx.marketUserInfo) {
+    const trustedClientToken = generateTrustedClientToken(ctx.marketUserInfo);
+    if (trustedClientToken) {
+      headers['x-lobe-trust-token'] = trustedClientToken;
+    }
+  }
+
+  if (!headers['x-lobe-trust-token'] && ctx.marketOidcAccessToken) {
+    headers['Authorization'] = `Bearer ${ctx.marketOidcAccessToken}`;
+  }
+
+  return headers;
+};
+
+interface ForkAgentItemInput {
+  identifier: string;
+  name?: string;
+  sourceIdentifier: string;
+  status?: 'published' | 'unpublished' | 'archived' | 'deprecated';
+  versionNumber?: number;
+  visibility?: 'public' | 'private' | 'internal';
+}
+
+const forkOneAgent = async (
+  item: ForkAgentItemInput,
+  headers: Record<string, string>,
+): Promise<AgentForkBatchResult> => {
+  try {
+    const forkUrl = `${MARKET_BASE_URL}/api/v1/agents/${item.sourceIdentifier}/fork`;
+    const response = await fetch(forkUrl, {
+      body: JSON.stringify({
+        identifier: item.identifier,
+        name: item.name,
+        status: item.status,
+        versionNumber: item.versionNumber,
+        visibility: item.visibility,
+      }),
+      headers,
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      log(
+        'Fork agent failed (source=%s): %s %s - %s',
+        item.sourceIdentifier,
+        response.status,
+        response.statusText,
+        errorText,
+      );
+      return {
+        error: {
+          code: `HTTP_${response.status}`,
+          message: errorText || response.statusText || 'Failed to fork agent',
+        },
+        sourceIdentifier: item.sourceIdentifier,
+        success: false,
+      };
+    }
+
+    const data = (await response.json()) as AgentForkResponse;
+    log('Fork agent success (source=%s)', item.sourceIdentifier);
+    return { data, sourceIdentifier: item.sourceIdentifier, success: true };
+  } catch (error) {
+    log('Error forking agent (source=%s): %O', item.sourceIdentifier, error);
+    return {
+      error: {
+        code: 'FORK_FAILED',
+        message: error instanceof Error ? error.message : 'Failed to fork agent',
+      },
+      sourceIdentifier: item.sourceIdentifier,
+      success: false,
+    };
+  }
+};
+
+const forkAgentItemSchema = z.object({
+  identifier: z.string(),
+  name: z.string().optional(),
+  sourceIdentifier: z.string(),
+  status: z.enum(['published', 'unpublished', 'archived', 'deprecated']).optional(),
+  versionNumber: z.number().optional(),
+  visibility: z.enum(['public', 'private', 'internal']).optional(),
+});
 
 // Authenticated procedure for agent management
 // Requires user to be logged in and has MarketSDK initialized
@@ -315,75 +413,20 @@ export const agentRouter = router({
     }),
 
   /**
-   * Fork an agent
-   * POST /market/agent/:identifier/fork
+   * Fork one or more agents in a single batch.
+   * POST /market/agent/fork (batch)
+   *
+   * Best-effort: single-item failures are returned in-line as
+   * `{ success: false, error }` and do not abort the rest of the batch.
    */
   forkAgent: agentProcedure
-    .input(
-      z.object({
-        identifier: z.string(),
-        name: z.string().optional(),
-        sourceIdentifier: z.string(),
-        status: z.enum(['published', 'unpublished', 'archived', 'deprecated']).optional(),
-        versionNumber: z.number().optional(),
-        visibility: z.enum(['public', 'private', 'internal']).optional(),
-      }),
-    )
+    .input(z.object({ items: z.array(forkAgentItemSchema).min(1) }))
     .mutation(async ({ input, ctx }) => {
-      log('forkAgent input: %O', input);
+      log('forkAgent batch size: %d', input.items.length);
 
-      try {
-        // Call Market API directly to fork agent
-        const forkUrl = `${MARKET_BASE_URL}/api/v1/agents/${input.sourceIdentifier}/fork`;
+      const headers = buildMarketAuthHeaders(ctx);
 
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-
-        // Use trustedClientToken or accessToken for authentication
-        const userInfo = ctx.marketUserInfo as TrustedClientUserInfo | undefined;
-        const accessToken = (ctx as { marketOidcAccessToken?: string }).marketOidcAccessToken;
-
-        if (userInfo) {
-          const trustedClientToken = generateTrustedClientToken(userInfo);
-          if (trustedClientToken) {
-            headers['x-lobe-trust-token'] = trustedClientToken;
-          }
-        }
-
-        if (!headers['x-lobe-trust-token'] && accessToken) {
-          headers['Authorization'] = `Bearer ${accessToken}`;
-        }
-
-        const response = await fetch(forkUrl, {
-          body: JSON.stringify({
-            identifier: input.identifier,
-            name: input.name,
-            status: input.status,
-            versionNumber: input.versionNumber,
-            visibility: input.visibility,
-          }),
-          headers,
-          method: 'POST',
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          log('Fork agent failed: %s %s - %s', response.status, response.statusText, errorText);
-          throw new Error(`Failed to fork agent: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        log('Fork agent success: %O', result);
-        return result;
-      } catch (error) {
-        log('Error forking agent: %O', error);
-        throw new TRPCError({
-          cause: error,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to fork agent',
-        });
-      }
+      return Promise.all(input.items.map((item) => forkOneAgent(item, headers)));
     }),
 
   /**

@@ -16,8 +16,10 @@ const PickAgentsSkeleton = memo(() => (
       <div className={styles.grid}>
         {Array.from({ length: CARD_ITEMS }).map((_, i) => (
           <div className={styles.skeletonCard} key={i}>
-            <div className={styles.skeletonAvatar} />
-            <div className={styles.skeletonLine} style={{ width: '60%' }} />
+            <div className={styles.cardHeader}>
+              <div className={styles.skeletonAvatar} />
+              <div className={styles.skeletonLine} style={{ flex: 1 }} />
+            </div>
             <div className={styles.skeletonLine} style={{ width: '90%' }} />
             <div className={styles.skeletonLine} style={{ width: '75%' }} />
           </div>

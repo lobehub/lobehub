@@ -1,4 +1,5 @@
 import debug from 'debug';
+import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
@@ -41,12 +42,13 @@ const errorRedirect = (origin: string, platform: string, code: string, extra?: U
  *   5. Hand off to the platform's deep-link redirect (Slack
  *      `slack.com/app/open`) or fall back to the settings page.
  */
-export const GET = async (
-  req: Request,
-  { params }: { params: Promise<{ platform: string }> },
-): Promise<Response> => {
-  const { platform } = await params;
-  const url = new URL(req.url);
+export async function messengerOAuthCallback(c: Context): Promise<Response> {
+  const platform = c.req.param('platform');
+  if (!platform) {
+    return c.json({ error: 'platform is required' }, 400);
+  }
+
+  const url = new URL(c.req.url);
 
   const definition = messengerPlatformRegistry.getPlatform(platform);
   if (!definition?.oauth) {
@@ -201,4 +203,4 @@ export const GET = async (
   }
 
   return redirectToPlatform(url.origin, platform, 'installed=ok');
-};
+}

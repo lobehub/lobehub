@@ -6,6 +6,7 @@
  */
 
 export interface InstallMarketplaceAgentSummary {
+  avatar?: string;
   category?: string;
   description?: string;
   installedAgentId?: string;

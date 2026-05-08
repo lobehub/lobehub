@@ -74,6 +74,7 @@ class TaskService {
       heartbeatTimeout?: number | null;
       instruction?: string;
       name?: string;
+      parentTaskId?: string | null;
       priority?: number;
       // schedulePattern: cron expression for scheduled automation (e.g. '0 9 * * *')
       schedulePattern?: string | null;
@@ -96,8 +97,11 @@ class TaskService {
 
   runReadySubtasks = async (id: string) => lambdaClient.task.runReadySubtasks.mutate({ id });
 
-  addComment = async (id: string, content: string, opts?: { briefId?: string; topicId?: string }) =>
-    lambdaClient.task.addComment.mutate({ content, id, ...opts });
+  addComment = async (
+    id: string,
+    content: string,
+    opts?: { authorAgentId?: string; briefId?: string; topicId?: string },
+  ) => lambdaClient.task.addComment.mutate({ content, id, ...opts });
 
   deleteComment = async (commentId: string) =>
     lambdaClient.task.deleteComment.mutate({ commentId });

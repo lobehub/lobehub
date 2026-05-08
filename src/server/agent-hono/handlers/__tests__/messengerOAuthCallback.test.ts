@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { Context } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
@@ -6,7 +7,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { exchangeCode } from '@/server/services/messenger/oauth/slackOAuth';
 import { consumeOAuthState } from '@/server/services/messenger/oauth/stateStore';
 
-import { GET } from './route';
+import { messengerOAuthCallback } from '../messengerOAuthCallback';
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn().mockResolvedValue({}),
@@ -58,9 +59,19 @@ const VALID_DISCORD_CONFIG = {
   publicKey: 'pubkey',
 };
 
-const buildRequest = (platform: string, qs: string): Request =>
-  new Request(`https://app.example.com/api/agent/messenger/${platform}/oauth/callback?${qs}`);
-const ctx = (platform: string) => ({ params: Promise.resolve({ platform }) });
+const buildContext = (platform: string, qs: string): Context => {
+  const raw = new Request(
+    `https://app.example.com/api/agent/messenger/${platform}/oauth/callback?${qs}`,
+  );
+  return {
+    json: (b: any, status = 200) => Response.json(b, { status }),
+    req: {
+      param: (name: string) => (name === 'platform' ? platform : undefined),
+      raw,
+      url: raw.url,
+    },
+  } as any;
+};
 
 beforeEach(() => {
   vi.mocked(getMessengerSlackConfig).mockResolvedValue(VALID_SLACK_CONFIG);
@@ -84,22 +95,22 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
+describe('GET /api/agent/messenger/:platform/oauth/callback', () => {
   describe('platform routing', () => {
     it('404s for an unknown platform', async () => {
-      const res = await GET(buildRequest('unknown', 'code=c&state=s'), ctx('unknown'));
+      const res = await messengerOAuthCallback(buildContext('unknown', 'code=c&state=s'));
       expect(res.status).toBe(404);
     });
 
     it('404s for telegram (no OAuth adapter)', async () => {
-      const res = await GET(buildRequest('telegram', 'code=c&state=s'), ctx('telegram'));
+      const res = await messengerOAuthCallback(buildContext('telegram', 'code=c&state=s'));
       expect(res.status).toBe(404);
     });
   });
 
   describe('slack — error / validation paths', () => {
     it('redirects to settings with error when the upstream returned ?error=', async () => {
-      const res = await GET(buildRequest('slack', 'error=access_denied'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'error=access_denied'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
       expect(loc.pathname).toBe('/settings/messenger/slack');
@@ -107,7 +118,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
     });
 
     it('redirects to settings with missing_code_or_state when params are absent', async () => {
-      const res = await GET(buildRequest('slack', ''), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', ''));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
       expect(loc.pathname).toBe('/settings/messenger/slack');
@@ -116,13 +127,13 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
 
     it('returns 503 when Slack messenger env is not configured', async () => {
       vi.mocked(getMessengerSlackConfig).mockResolvedValue(null);
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
       expect(res.status).toBe(503);
     });
 
     it('redirects with invalid_state when the state token has expired or never existed', async () => {
       vi.mocked(consumeOAuthState).mockResolvedValue(null);
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
       expect(loc.searchParams.get('error')).toBe('invalid_state');
@@ -130,7 +141,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
 
     it('redirects with exchange_failed when oauth.v2.access throws', async () => {
       vi.mocked(exchangeCode).mockRejectedValue(new Error('upstream 502'));
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
       expect(loc.searchParams.get('error')).toBe('exchange_failed');
@@ -144,7 +155,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
         ok: true,
         team: null,
       });
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
       expect(res.status).toBe(302);
       const loc = new URL(res.headers.get('location')!);
       // missing_tenant is mapped to exchange_failed at the route level since
@@ -155,7 +166,9 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
 
   describe('slack — happy path: workspace install', () => {
     it('persists the installation and redirects to slack.com/app/open', async () => {
-      const res = await GET(buildRequest('slack', 'code=the-code&state=the-state'), ctx('slack'));
+      const res = await messengerOAuthCallback(
+        buildContext('slack', 'code=the-code&state=the-state'),
+      );
 
       expect(consumeOAuthState).toHaveBeenCalledWith('the-state');
       expect(exchangeCode).toHaveBeenCalledWith({
@@ -202,7 +215,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
         team: { id: 'T_ROT', name: 'Rotating' },
       });
 
-      await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
 
       const upsertCall = vi.mocked(MessengerInstallationModel.upsert).mock.calls.at(-1)!;
       const params = upsertCall[1];
@@ -229,7 +242,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
     it('refreshes credentials but preserves the original owner, then redirects with already_installed', async () => {
       vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue(existingInstall);
 
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
 
       expect(MessengerInstallationModel.upsert).toHaveBeenCalledWith(
         expect.anything(),
@@ -255,7 +268,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
         installedByUserId: null,
       });
 
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
 
       expect(MessengerInstallationModel.upsert).toHaveBeenCalledWith(
         expect.anything(),
@@ -273,7 +286,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
         installedByUserId: 'lobe-user-1',
       });
 
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
 
       expect(MessengerInstallationModel.upsert).toHaveBeenCalledWith(
         expect.anything(),
@@ -298,7 +311,7 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
         team: null,
       });
 
-      const res = await GET(buildRequest('slack', 'code=c&state=s'), ctx('slack'));
+      const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
 
       const upsertCall = vi.mocked(MessengerInstallationModel.upsert).mock.calls.at(-1)!;
       const params = upsertCall[1];
@@ -347,9 +360,8 @@ describe('GET /api/agent/messenger/[platform]/oauth/callback', () => {
     });
 
     it('persists the installation and falls back to settings (no deep link for discord)', async () => {
-      const res = await GET(
-        buildRequest('discord', 'code=the-code&state=the-state'),
-        ctx('discord'),
+      const res = await messengerOAuthCallback(
+        buildContext('discord', 'code=the-code&state=the-state'),
       );
 
       expect(fetchMock).toHaveBeenCalledWith(

@@ -195,7 +195,7 @@ export class TaskService {
     const [authorMap, enrichedBriefs] = await Promise.all([
       this.resolveAuthors(agentIds, userIds),
       this.briefService
-        .enrichBriefsWithAgents(briefs)
+        .enrichBriefAgentOnly(briefs)
         .catch(() => briefs.map((b) => ({ ...b, agent: null }))),
     ]);
 
