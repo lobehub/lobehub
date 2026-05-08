@@ -37,6 +37,33 @@ export class BriefService {
     this.taskModel = new TaskModel(db, userId);
   }
 
+  /**
+   * Lightweight enrich for callers that only need the direct producing agent
+   * (e.g. task detail, where the surrounding payload already covers task tree
+   * + status). Skips the recursive task-tree CTE and `taskFindByIds` round
+   * trip used by {@link enrichBriefsWithAgents}.
+   */
+  async enrichBriefAgentOnly(
+    briefs: BriefItem[],
+  ): Promise<(BriefItem & { agent: AgentAvatarInfo | null })[]> {
+    const directAgentIds = [
+      ...new Set(briefs.map((b) => b.agentId).filter((id): id is string => !!id)),
+    ];
+    if (directAgentIds.length === 0) {
+      return briefs.map((brief) => ({ ...brief, agent: null }));
+    }
+
+    const agentList = await this.agentModel.getAgentAvatarsByIds(directAgentIds);
+    const agentMap: Record<string, AgentAvatarInfo> = Object.fromEntries(
+      agentList.map((a) => [a.id, a]),
+    );
+
+    return briefs.map((brief) => ({
+      ...brief,
+      agent: brief.agentId ? (agentMap[brief.agentId] ?? null) : null,
+    }));
+  }
+
   async enrichBriefsWithAgents(briefs: BriefItem[]): Promise<BriefWithAgent[]> {
     const taskIds = [...new Set(briefs.map((b) => b.taskId).filter((id): id is string => !!id))];
     const directAgentIds = [

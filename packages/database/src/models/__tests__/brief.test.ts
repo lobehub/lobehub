@@ -155,6 +155,26 @@ describe('BriefModel', () => {
       const unresolved = await model.listUnresolved();
       expect(unresolved).toHaveLength(1);
     });
+
+    it('should cap unresolved briefs at the default limit of 20', async () => {
+      const model = new BriefModel(serverDB, userId);
+      for (let i = 0; i < 25; i++) {
+        await model.create({ summary: `S${i}`, title: `Brief ${i}`, type: 'insight' });
+      }
+
+      const unresolved = await model.listUnresolved();
+      expect(unresolved).toHaveLength(20);
+    });
+
+    it('should respect a caller-provided limit', async () => {
+      const model = new BriefModel(serverDB, userId);
+      for (let i = 0; i < 5; i++) {
+        await model.create({ summary: `S${i}`, title: `Brief ${i}`, type: 'insight' });
+      }
+
+      const unresolved = await model.listUnresolved({ limit: 2 });
+      expect(unresolved).toHaveLength(2);
+    });
   });
 
   describe('markRead', () => {

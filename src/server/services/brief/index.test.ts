@@ -230,6 +230,75 @@ describe('BriefService', () => {
     });
   });
 
+  describe('enrichBriefAgentOnly', () => {
+    it('should return briefs with null agent when no agentIds and skip db calls', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: null, id: 'b1', taskId: 'task-1', title: 'Brief 1' },
+        { agentId: null, id: 'b2', taskId: null, title: 'Brief 2' },
+      ] as any[];
+
+      const result = await service.enrichBriefAgentOnly(briefs);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].agent).toBeNull();
+      expect(result[1].agent).toBeNull();
+      expect(mockAgentModel.getAgentAvatarsByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+    });
+
+    it('should attach the direct producing agent without calling task tree CTE', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: 'agent-a', id: 'b1', taskId: 'task-1', title: 'Brief 1' },
+        { agentId: 'agent-b', id: 'b2', taskId: 'task-2', title: 'Brief 2' },
+      ] as any[];
+
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: '🤖', backgroundColor: null, id: 'agent-a', title: 'Agent A' },
+        { avatar: '🔧', backgroundColor: null, id: 'agent-b', title: 'Agent B' },
+      ]);
+
+      const result = await service.enrichBriefAgentOnly(briefs);
+
+      expect(result[0].agent).toEqual({
+        avatar: '🤖',
+        backgroundColor: null,
+        id: 'agent-a',
+        title: 'Agent A',
+      });
+      expect(result[1].agent).toEqual({
+        avatar: '🔧',
+        backgroundColor: null,
+        id: 'agent-b',
+        title: 'Agent B',
+      });
+      expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(
+        expect.arrayContaining(['agent-a', 'agent-b']),
+      );
+      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+    });
+
+    it('should leave agent null when the producing agent has been deleted', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: 'agent-gone', id: 'b1', taskId: 'task-1', title: 'Brief' },
+      ] as any[];
+
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([]);
+
+      const result = await service.enrichBriefAgentOnly(briefs);
+
+      expect(result[0].agent).toBeNull();
+      expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(['agent-gone']);
+    });
+  });
+
   describe('list', () => {
     it('should return enriched briefs with total', async () => {
       const service = new BriefService(db, userId);

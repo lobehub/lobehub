@@ -60,8 +60,12 @@ export class BriefModel {
     return { briefs: items, total: Number(countResult[0].count) };
   }
 
-  // For Daily Brief homepage — unresolved briefs sorted by priority
-  async listUnresolved(): Promise<BriefItem[]> {
+  // For Daily Brief homepage — unresolved briefs sorted by priority.
+  // Capped via `limit` (default 20) so heavy-inbox users don't pay the full
+  // enrich cost on every home render; users beyond the cap reach the rest
+  // through the task list page.
+  async listUnresolved(options?: { limit?: number }): Promise<BriefItem[]> {
+    const { limit = 20 } = options ?? {};
     return this.db
       .select()
       .from(briefs)
@@ -73,7 +77,8 @@ export class BriefModel {
           ELSE 2
         END`,
         desc(briefs.createdAt),
-      );
+      )
+      .limit(limit);
   }
 
   async findByTaskId(taskId: string): Promise<BriefItem[]> {
