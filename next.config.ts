@@ -21,6 +21,9 @@ const vercelConfig = {
 };
 const nextConfig = defineConfig({
   ...(isVercel ? vercelConfig : {}),
+  experimental: {
+    cpus: 2,
+  },
 });
 
 export default nextConfig;
