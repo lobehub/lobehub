@@ -24,7 +24,7 @@ import type {
   ExplorerTreeNode,
   ExplorerTreeProps,
 } from '../types';
-import { renderContextMenuSurface } from './ContextMenu';
+import { openExplorerContextMenu } from './ContextMenu';
 
 const asDirectory = (
   handle: FileTreeItemHandle | null | undefined,
@@ -86,8 +86,6 @@ function ExplorerTreeInner<TData>(
       path == null
         ? null
         : (adapterRef.current.nodeById.get(adapterRef.current.idByPath.get(path) ?? '') ?? null);
-    const toIdOrNull = (path: string | null) =>
-      path == null ? null : (adapterRef.current.idByPath.get(path) ?? null);
 
     return {
       density: props.density,
@@ -115,13 +113,17 @@ function ExplorerTreeInner<TData>(
           ) {
             return false;
           }
-          const targetPath = event.target.hoveredPath ?? event.target.directoryPath;
-          const targetId = toIdOrNull(targetPath);
+          // Use directoryPath (= the new parent), not hoveredPath. Hovering a
+          // file row at root yields directoryPath=null (root) but hoveredPath
+          // points at the file itself; conflating them blocks legitimate drops
+          // because canDrop sees a file as the target zone.
+          const newParentPath = event.target.directoryPath;
+          const targetId = newParentPath ? (a.idByPath.get(newParentPath) ?? null) : null;
           return fn({
             sourceIds,
             sourceNodes,
             targetId,
-            targetNode: toNodeOrNull(targetPath),
+            targetNode: targetId ? (a.nodeById.get(targetId) ?? null) : null,
           });
         },
         onDropComplete: (event) => {
@@ -430,23 +432,21 @@ function ExplorerTreeInner<TData>(
     [model],
   );
 
-  const renderContextMenu = useMemo(() => {
-    return (
-      item: { path: string },
-      ctx: { close: (opts?: { restoreFocus?: boolean }) => void },
-    ) => {
-      const fn = propsRef.current.getContextMenuItems;
-      if (!fn) return null;
-      const a = adapterRef.current;
-      const id = a.idByPath.get(item.path);
-      if (!id) return null;
-      const node = a.nodeById.get(id);
-      if (!node) return null;
-      const items = fn(node);
-      if (!items || items.length === 0) return null;
-      return renderContextMenuSurface(items, () => ctx.close({ restoreFocus: false }));
-    };
-  }, []);
+  const handleContextMenu = (event: MouseEvent<HTMLElement>) => {
+    const fn = propsRef.current.getContextMenuItems;
+    if (!fn) return;
+    const itemPath = getItemPathFromHostEvent(event);
+    if (!itemPath) return;
+    const a = adapterRef.current;
+    const id = a.idByPath.get(itemPath);
+    if (!id) return;
+    const node = a.nodeById.get(id);
+    if (!node) return;
+    const items = fn(node);
+    if (!items || items.length === 0) return;
+    event.preventDefault();
+    openExplorerContextMenu(items);
+  };
 
   const handleClick = (event: MouseEvent<HTMLElement>) => {
     const onNodeClick = propsRef.current.onNodeClick;
@@ -494,9 +494,9 @@ function ExplorerTreeInner<TData>(
       className={props.className}
       header={props.header}
       model={model}
-      renderContextMenu={renderContextMenu as never}
       style={props.style}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       onDragStart={handleDragStart}
       onDropCapture={handleDropCapture}
     />

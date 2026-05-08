@@ -8,8 +8,7 @@ import { type CSSProperties, memo, type MouseEvent, useMemo, useState } from 're
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 
-import type { ExplorerTreeNode } from '@/features/ExplorerTree';
-import { ExplorerTree } from '@/features/ExplorerTree';
+import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
@@ -87,18 +86,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     font-weight: 500;
-  `,
-  documentTree: css`
-    --trees-bg-override: transparent;
-    --trees-border-color-override: transparent;
-    --trees-selected-bg-override: ${cssVar.colorFillSecondary};
-    --trees-bg-muted-override: ${cssVar.colorFillTertiary};
-    --trees-fg-override: ${cssVar.colorText};
-    --trees-fg-muted-override: ${cssVar.colorTextSecondary};
-    --trees-accent-override: ${cssVar.colorPrimary};
-    --trees-padding-inline-override: 0px;
-    --trees-font-size-override: 12px;
-    --trees-border-radius-override: 6px;
   `,
 }));
 
@@ -226,10 +213,6 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
   const { t } = useTranslation('chat');
   const agentId = useAgentStore((s) => s.activeAgentId);
   const [filter, setFilter] = useState<ResourceFilter>('all');
-  const navigate = useNavigate();
-  const openDocument = useChatStore((s) => s.openDocument);
-  const pageMatch = useMatch(PAGE_ROUTE_PATTERN);
-  const { message, modal } = App.useApp();
 
   const {
     data = [],
@@ -257,70 +240,6 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
     ).filter((group) => group.items.length > 0);
   }, [data]);
 
-  const documentTreeNodes = useMemo(
-    () =>
-      data
-        .filter((doc) => doc.sourceType !== 'web')
-        .map(
-          (doc): ExplorerTreeNode<AgentDocumentListItem> => ({
-            data: doc,
-            id: doc.documentId,
-            isFolder: doc.fileType === 'custom/folder',
-            name: doc.title || doc.filename || '',
-            parentId: doc.parentId,
-          }),
-        ),
-    [data],
-  );
-
-  const handleDocumentTreeNodeClick = (node: ExplorerTreeNode<AgentDocumentListItem>) => {
-    const doc = node.data;
-    if (!doc || !doc.documentId || node.isFolder) return;
-    if (pageMatch?.params.aid && pageMatch.params.topicId) {
-      navigate(`/agent/${pageMatch.params.aid}/${pageMatch.params.topicId}/page/${doc.documentId}`);
-      return;
-    }
-    openDocument(doc.documentId);
-  };
-
-  const handleDocumentTreeContextMenu = (node: ExplorerTreeNode<AgentDocumentListItem>) => {
-    const doc = node.data;
-    if (!doc) return [];
-    return [
-      {
-        danger: true,
-        icon: <Trash2Icon size={14} />,
-        key: 'delete',
-        label: t('delete', { ns: 'common' }),
-        onClick: () => {
-          modal.confirm({
-            centered: true,
-            okButtonProps: { danger: true },
-            onOk: async () => {
-              try {
-                await agentDocumentService.removeDocument({
-                  agentId: agentId!,
-                  documentId: doc.documentId,
-                  id: doc.id,
-                  topicId: pageMatch?.params.topicId,
-                });
-                await mutate();
-                message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
-              } catch (error) {
-                message.error(
-                  error instanceof Error
-                    ? error.message
-                    : t('workingPanel.resources.deleteError', { ns: 'chat' }),
-                );
-              }
-            },
-            title: t('workingPanel.resources.deleteTitle', { ns: 'chat' }),
-          });
-        },
-      },
-    ];
-  };
-
   if (!agentId) return null;
 
   if (isLoading) {
@@ -339,7 +258,9 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
     );
   }
 
-  if (data.length === 0) {
+  // For filter==='documents' we still render the tree even when empty, so the
+  // toolbar (new folder / new doc) remains reachable.
+  if (data.length === 0 && filter !== 'documents') {
     return (
       <Center flex={1} gap={8} paddingBlock={24}>
         <Empty description={t('workingPanel.resources.empty')} icon={FileTextIcon} />
@@ -384,23 +305,22 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
           );
         })}
       </Flexbox>
-      {filteredData.length === 0 ? (
+      {filter === 'documents' ? (
+        <Flexbox flex={1} style={{ minHeight: 0 }}>
+          <DocumentExplorerTree
+            agentId={agentId}
+            data={data}
+            mutate={mutate}
+            style={{ height: '100%' }}
+          />
+        </Flexbox>
+      ) : filteredData.length === 0 ? (
         <Center flex={1} gap={8} paddingBlock={24}>
           <Empty
             description={t('workingPanel.resources.empty')}
             icon={filter === 'web' ? GlobeIcon : FileTextIcon}
           />
         </Center>
-      ) : filter === 'documents' ? (
-        <Flexbox className={styles.documentTree} flex={1} style={{ minHeight: 0 }}>
-          <ExplorerTree
-            density="relaxed"
-            getContextMenuItems={handleDocumentTreeContextMenu}
-            nodes={documentTreeNodes}
-            style={{ height: '100%' }}
-            onNodeClick={handleDocumentTreeNodeClick}
-          />
-        </Flexbox>
       ) : (
         <Flexbox gap={8}>
           {filteredData.map((doc) => (
