@@ -35,6 +35,24 @@ export class SkillConnectionPopupBlockedError extends Error {
 
 type ConnectTarget = Pick<SkillProviderMeta, 'provider' | 'source'>;
 
+export type SkillConnectionResultStatus =
+  | 'cancel'
+  | 'fail'
+  | 'popup_blocked'
+  | 'success'
+  | 'timeout';
+
+export interface SkillConnectionResult {
+  durationMs: number;
+  provider: string;
+  result: SkillConnectionResultStatus;
+  source: ConnectTarget['source'];
+}
+
+export interface UseSkillConnectionOptions {
+  onConnectResult?: (result: SkillConnectionResult) => void;
+}
+
 export interface UseSkillConnectionResult {
   connect: () => Promise<void>;
   isAllConnected: boolean;
@@ -47,7 +65,9 @@ export interface UseSkillConnectionResult {
 
 export const useSkillConnection = (
   specs: TaskTemplateSkillRequirement[] | undefined,
+  options: UseSkillConnectionOptions = {},
 ): UseSkillConnectionResult => {
+  const { onConnectResult } = options;
   const getLobehubAuth = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
   const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
   const createKlavisServer = useToolStore((s) => s.createKlavisServer);
@@ -89,6 +109,14 @@ export const useSkillConnection = (
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sync lock against double-click — useState guard would only flip after re-render.
   const isConnectingRef = useRef(false);
+  const activeConnectionRef = useRef<
+    | {
+        resultReported: boolean;
+        startedAt: number;
+        target: ConnectTarget;
+      }
+    | undefined
+  >(undefined);
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
@@ -111,11 +139,70 @@ export const useSkillConnection = (
     setIsWaitingAuth(false);
   }, []);
 
+  const reportConnectResult = useCallback(
+    (result: SkillConnectionResultStatus, target?: ConnectTarget) => {
+      const activeConnection = activeConnectionRef.current;
+      const resolvedTarget = target ?? activeConnection?.target;
+
+      if (!activeConnection || !resolvedTarget || activeConnection.resultReported) return;
+
+      activeConnectionRef.current = {
+        ...activeConnection,
+        resultReported: true,
+      };
+      onConnectResult?.({
+        durationMs: Date.now() - activeConnection.startedAt,
+        provider: resolvedTarget.provider,
+        result,
+        source: resolvedTarget.source,
+      });
+    },
+    [onConnectResult],
+  );
+
+  const finishConnection = useCallback(
+    (result: SkillConnectionResultStatus, target?: ConnectTarget) => {
+      reportConnectResult(result, target);
+      cleanup();
+    },
+    [cleanup, reportConnectResult],
+  );
+
+  const isTargetConnected = useCallback((target: ConnectTarget): boolean => {
+    const state = useToolStore.getState();
+
+    if (target.source === 'lobehub') {
+      return state.lobehubSkillServers.some(
+        (server) =>
+          server.identifier === target.provider && server.status === LobehubSkillStatus.CONNECTED,
+      );
+    }
+
+    return state.servers.some(
+      (server) =>
+        server.identifier === target.provider && server.status === KlavisServerStatus.CONNECTED,
+    );
+  }, []);
+
+  const refreshTargetStatus = useCallback(
+    async (target: ConnectTarget): Promise<boolean> => {
+      if (target.source === 'lobehub') {
+        const server = await checkLobehubStatus(target.provider);
+        return server?.status === LobehubSkillStatus.CONNECTED;
+      }
+
+      await refreshKlavisServerTools(target.provider);
+      return isTargetConnected(target);
+    },
+    [checkLobehubStatus, isTargetConnected, refreshKlavisServerTools],
+  );
+
   useEffect(() => () => cleanup(), [cleanup]);
 
   useEffect(() => {
-    if (isWaitingAuth && !nextUnconnected) cleanup();
-  }, [isWaitingAuth, nextUnconnected, cleanup]);
+    if (!isWaitingAuth || nextUnconnected) return;
+    finishConnection('success');
+  }, [finishConnection, isWaitingAuth, nextUnconnected]);
 
   const startFallbackPolling = useCallback(
     (target: ConnectTarget) => {
@@ -123,25 +210,20 @@ export const useSkillConnection = (
 
       pollIntervalRef.current = setInterval(async () => {
         try {
-          if (target.source === 'lobehub') {
-            await checkLobehubStatus(target.provider);
-          } else {
-            await refreshKlavisServerTools(target.provider);
-          }
-        } catch {
-          // Polling failure is expected until auth completes — suppress noise.
+          const connected = await refreshTargetStatus(target);
+          if (connected) finishConnection('success', target);
+        } catch (error) {
+          // Polling failure is expected until auth completes, but keep it visible
+          // in local debugging because it can otherwise mask a broken OAuth route.
+          console.error('[useSkillConnection] Failed to poll auth status:', error);
         }
       }, POLL_INTERVAL_MS);
 
       pollTimeoutRef.current = setTimeout(() => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-        setIsWaitingAuth(false);
+        finishConnection('timeout', target);
       }, POLL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshKlavisServerTools],
+    [finishConnection, refreshTargetStatus],
   );
 
   const startWindowMonitor = useCallback(
@@ -165,16 +247,11 @@ export const useSkillConnection = (
           // Refresh status once right after the popup closes so multi-spec flows
           // can advance to the next provider immediately, instead of waiting up
           // to 15s for fallback polling to release isWaitingAuth.
-          try {
-            if (target.source === 'lobehub') {
-              await checkLobehubStatus(target.provider);
-            } else {
-              await refreshKlavisServerTools(target.provider);
-            }
-          } catch {
-            // Status check failure isn't actionable; release waiting state regardless.
-          }
-          setIsWaitingAuth(false);
+          const connected = await refreshTargetStatus(target).catch((error) => {
+            console.error('[useSkillConnection] Failed to refresh auth status:', error);
+            return false;
+          });
+          finishConnection(connected ? 'success' : 'cancel', target);
         } catch {
           // COOP can block window.closed access — fall back to polling.
           stopMonitor();
@@ -192,10 +269,10 @@ export const useSkillConnection = (
           // Cross-origin restrictions may block .close(); ignore.
         }
         oauthWindowRef.current = null;
-        setIsWaitingAuth(false);
+        finishConnection('timeout', target);
       }, OAUTH_OVERALL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshKlavisServerTools, startFallbackPolling],
+    [finishConnection, refreshTargetStatus, startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(
@@ -208,12 +285,13 @@ export const useSkillConnection = (
         // Popup blocked — abandon the flow so the caller can surface a clear
         // error instead of polling forever for an auth that never started.
         setIsWaitingAuth(false);
+        reportConnectResult('popup_blocked', target);
         throw new SkillConnectionPopupBlockedError();
       }
       oauthWindowRef.current = oauthWindow;
       startWindowMonitor(oauthWindow, target);
     },
-    [cleanup, startWindowMonitor],
+    [cleanup, reportConnectResult, startWindowMonitor],
   );
 
   // Only LobeHub Skill OAuth signals completion via postMessage; Klavis relies on polling.
@@ -225,12 +303,16 @@ export const useSkillConnection = (
       if (event.data?.type !== LOBEHUB_SKILL_AUTH_SUCCESS_MESSAGE) return;
       const provider = event.data?.provider;
       if (!provider) return;
-      cleanup();
-      void checkLobehubStatus(provider);
+      void checkLobehubStatus(provider).then((server) => {
+        finishConnection(server?.status === LobehubSkillStatus.CONNECTED ? 'success' : 'fail', {
+          provider,
+          source: 'lobehub',
+        });
+      });
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [checkLobehubStatus, cleanup]);
+  }, [checkLobehubStatus, finishConnection]);
 
   const connect = useCallback(async () => {
     if (isConnectingRef.current || isWaitingAuth) return;
@@ -238,6 +320,11 @@ export const useSkillConnection = (
     if (!next) return;
 
     isConnectingRef.current = true;
+    activeConnectionRef.current = {
+      resultReported: false,
+      startedAt: Date.now(),
+      target: next,
+    };
     setIsConnecting(true);
     try {
       if (next.source === 'lobehub') {
@@ -262,6 +349,7 @@ export const useSkillConnection = (
       if (!newServer) throw new Error('Failed to create Klavis server');
       if (newServer.isAuthenticated) {
         await refreshKlavisServerTools(newServer.identifier);
+        reportConnectResult(isTargetConnected(next) ? 'success' : 'fail', next);
       } else if (newServer.oauthUrl) {
         openOAuthWindow(newServer.oauthUrl, next);
       } else {
@@ -269,6 +357,11 @@ export const useSkillConnection = (
       }
     } catch (error) {
       console.error('[useSkillConnection] Failed to connect:', error);
+      if (error instanceof SkillConnectionPopupBlockedError) {
+        reportConnectResult('popup_blocked', next);
+      } else {
+        reportConnectResult('fail', next);
+      }
       throw error;
     } finally {
       isConnectingRef.current = false;
@@ -281,6 +374,8 @@ export const useSkillConnection = (
     createKlavisServer,
     refreshKlavisServerTools,
     openOAuthWindow,
+    isTargetConnected,
+    reportConnectResult,
   ]);
 
   return {

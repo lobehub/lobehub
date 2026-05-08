@@ -1,6 +1,7 @@
-import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import type { RecommendedTaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import { useAnalytics } from '@lobehub/analytics/react';
 import { App } from 'antd';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -12,15 +13,24 @@ import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import { createRecommendationBatchId, getTaskTemplateListServedProperties } from './analytics';
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 
 export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
   | { mode: 'skeleton' }
-  | { mode: 'cards'; onDismiss: (templateId: string) => void; templates: TaskTemplate[] };
+  | {
+      mode: 'cards';
+      onCreated: (templateId: string) => void;
+      onDismiss: (templateId: string) => void;
+      recommendationBatchId: string;
+      templates: RecommendedTaskTemplate[];
+      userInterestCount: number;
+    };
 
 export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUIState {
   const { t } = useTranslation('taskTemplate');
+  const { analytics } = useAnalytics();
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
   const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
@@ -32,6 +42,14 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
   const interestKeys = useResolvedInterestKeys();
   const swrKey = interestKeys ? [...interestKeys].sort().join(',') : '';
   const swrEnabled = isLogin && !!enableAgentTask && interestKeys !== null;
+  const batchRef = useRef<
+    | {
+        id: string;
+        served: boolean;
+        swrKey: string;
+      }
+    | undefined
+  >(undefined);
 
   const { data, isLoading, mutate } = useSWR(
     swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey] : null,
@@ -39,8 +57,36 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );
 
-  const handleDismiss = useCallback(
-    async (templateId: string) => {
+  const templates = useMemo(() => data?.data ?? [], [data]);
+
+  if (templates.length > 0 && batchRef.current?.swrKey !== swrKey) {
+    batchRef.current = {
+      id: createRecommendationBatchId(),
+      served: false,
+      swrKey,
+    };
+  }
+
+  const recommendationBatchId = batchRef.current?.id;
+  const userInterestCount = interestKeys?.length ?? 0;
+
+  useEffect(() => {
+    const batch = batchRef.current;
+    if (!analytics || !batch || batch.served || templates.length === 0) return;
+
+    void analytics.track({
+      name: 'task_template_list_served',
+      properties: getTaskTemplateListServedProperties({
+        recommendationBatchId: batch.id,
+        templates,
+        userInterestCount,
+      }),
+    });
+    batch.served = true;
+  }, [analytics, templates, userInterestCount]);
+
+  const removeTemplateFromList = useCallback(
+    (templateId: string) => {
       mutate(
         (current) =>
           current
@@ -48,6 +94,20 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
             : current,
         { revalidate: false },
       );
+    },
+    [mutate],
+  );
+
+  const handleCreated = useCallback(
+    (templateId: string) => {
+      removeTemplateFromList(templateId);
+    },
+    [removeTemplateFromList],
+  );
+
+  const handleDismiss = useCallback(
+    async (templateId: string) => {
+      removeTemplateFromList(templateId);
       try {
         await taskTemplateService.dismiss(templateId);
       } catch (error) {
@@ -56,10 +116,9 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
         mutate();
       }
     },
-    [message, mutate, t],
+    [message, mutate, removeTemplateFromList, t],
   );
 
-  const templates = useMemo(() => data?.data ?? [], [data]);
   const requiredSources = useMemo(() => {
     const sources = new Set<TaskTemplateSkillSource>();
     for (const tmpl of templates) {
@@ -77,5 +136,12 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
   if (!isInit || isLoading) return { mode: 'skeleton' };
   if (templates.length === 0) return { mode: 'hidden' };
 
-  return { mode: 'cards', onDismiss: handleDismiss, templates };
+  return {
+    mode: 'cards',
+    onCreated: handleCreated,
+    onDismiss: handleDismiss,
+    recommendationBatchId: recommendationBatchId ?? createRecommendationBatchId(),
+    templates,
+    userInterestCount,
+  };
 }
