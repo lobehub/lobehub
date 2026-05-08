@@ -1,43 +1,42 @@
 'use client';
 
-import { SendButton } from '@lobehub/editor/react';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { type IconProps } from '@lobehub/ui';
-import { Block, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { LoadingDots } from '@lobehub/ui/chat';
-import { Steps } from 'antd';
+import { Steps, Switch } from 'antd';
 import { cssVar } from 'antd-style';
-import { BrainIcon, HeartHandshakeIcon, PencilRulerIcon } from 'lucide-react';
+import { BrainIcon, HeartHandshakeIcon, PencilRulerIcon, ShieldCheck } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
-import type { Locales } from '@/locales/resources';
-import { localeOptions, normalizeLocale } from '@/locales/resources';
-import { useGlobalStore } from '@/store/global';
+import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import { useUserStore } from '@/store/user';
 
-interface IntroLanguageStepProps {
-  onNext: () => Promise<void> | void;
+interface TelemetryStepProps {
+  onNext: () => void;
 }
 
-const IntroLanguageStep = memo<IntroLanguageStepProps>(({ onNext }) => {
-  const { t, i18n } = useTranslation(['onboarding', 'common']);
+const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
+  const { t, i18n } = useTranslation('onboarding');
   const locale = i18n.language;
-  const switchLocale = useGlobalStore((s) => s.switchLocale);
-  const setSettings = useUserStore((s) => s.setSettings);
-
-  const [value, setValue] = useState<Locales | ''>(() => normalizeLocale(navigator.language));
+  const [check, setCheck] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
+  const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
-  const handleNext = useCallback(async () => {
-    if (isNavigatingRef.current) return;
-    isNavigatingRef.current = true;
-    setIsNavigating(true);
-    await setSettings({ general: { responseLanguage: value || '' } });
-    await onNext();
-  }, [value, setSettings, onNext]);
+  const handleChoice = useCallback(
+    (enabled: boolean) => {
+      if (isNavigatingRef.current) return;
+      isNavigatingRef.current = true;
+      setIsNavigating(true);
+      updateGeneralConfig({ telemetry: enabled });
+      onNext();
+    },
+    [updateGeneralConfig, onNext],
+  );
 
   // eslint-disable-next-line @eslint-react/no-nested-component-definitions
   const IconAvatar = useCallback(({ icon }: { icon: IconProps['icon'] }) => {
@@ -124,46 +123,66 @@ const IntroLanguageStep = memo<IntroLanguageStepProps>(({ onNext }) => {
           },
         ]}
       />
-      <Flexbox horizontal align={'center'} gap={12}>
-        <Select
-          showSearch
-          options={localeOptions}
-          size="large"
-          value={value}
-          optionRender={(item) => (
-            <Flexbox key={item.value}>
-              <Text>{item.label}</Text>
-              <Text fontSize={12} type={'secondary'}>
-                {t(`lang.${item.value}` as any, { ns: 'common' })}
-              </Text>
-            </Flexbox>
-          )}
-          style={{
-            fontSize: 20,
-            fontWeight: 'bold',
-            width: '100%',
-          }}
-          onChange={(v) => {
-            if (v) {
-              switchLocale(v);
-              setValue(v);
-            }
-          }}
-        />
-        <SendButton
-          disabled={isNavigating}
-          style={{ zoom: 1.5 }}
-          type="primary"
-          onClick={handleNext}
-        />
+      <Flexbox gap={8}>
+        <Text as={'p'} color={cssVar.colorTextSecondary}>
+          {t('telemetry.rows.privacy.desc', { appName: BRANDING_NAME })}
+        </Text>
+        <Flexbox horizontal align="center" gap={8}>
+          <Switch checked={check} size={'small'} onChange={(v) => setCheck(v)} />
+          <Text fontSize={12} type={check ? undefined : 'secondary'}>
+            {t('telemetry.rows.privacy.title', { appName: BRANDING_NAME })}
+          </Text>
+        </Flexbox>
       </Flexbox>
-      <Text style={{ fontSize: 12 }} type="secondary">
-        {t('responseLanguage.hint')}
-      </Text>
+      <Button
+        disabled={isNavigating}
+        size={'large'}
+        type="primary"
+        style={{
+          marginBlock: 8,
+          maxWidth: 240,
+        }}
+        onClick={() => handleChoice(check)}
+      >
+        {t('telemetry.next')}
+      </Button>
+      {check && (
+        <Block horizontal align="flex-start" gap={8} variant={'borderless'}>
+          <Icon
+            icon={ShieldCheck}
+            size={16}
+            style={{ color: cssVar.colorSuccess, flexShrink: 0 }}
+          />
+          <Text fontSize={12} type="secondary">
+            <Trans
+              i18nKey={'telemetry.agreement'}
+              ns={'onboarding'}
+              components={{
+                privacy: (
+                  <a
+                    href={PRIVACY_URL}
+                    style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    {t('telemetry.terms')}
+                  </a>
+                ),
+                terms: (
+                  <a
+                    href={TERMS_URL}
+                    style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    {t('telemetry.privacy')}
+                  </a>
+                ),
+              }}
+            />
+          </Text>
+        </Block>
+      )}
     </Flexbox>
   );
 });
 
-IntroLanguageStep.displayName = 'IntroLanguageStep';
+TelemetryStep.displayName = 'TelemetryStep';
 
-export default IntroLanguageStep;
+export default TelemetryStep;

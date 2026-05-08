@@ -17,6 +17,7 @@ const renderCommon = async ({
   isUserStateInit = true,
   serverConfigInit = true,
 }: RenderOptions) => {
+  cleanup();
   vi.resetModules();
 
   vi.doMock('@lobechat/const', () => ({ isDesktop: desktop }));
@@ -26,11 +27,11 @@ const renderCommon = async ({
   vi.doMock('@/routes/onboarding/_layout', () => ({
     default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   }));
-  vi.doMock('@/routes/onboarding/features/IntroLanguageStep', () => ({
-    default: () => <div>IntroLanguageStep</div>,
+  vi.doMock('@/routes/onboarding/features/TelemetryStep', () => ({
+    default: () => <div>TelemetryStep</div>,
   }));
-  vi.doMock('@/routes/onboarding/features/PrivacyStep', () => ({
-    default: () => <div>PrivacyStep</div>,
+  vi.doMock('@/routes/onboarding/features/ResponseLanguageStep', () => ({
+    default: () => <div>ResponseLanguageStep</div>,
   }));
 
   function selectFromServerConfigStore(selector: (state: Record<string, unknown>) => unknown) {
@@ -75,17 +76,17 @@ afterEach(() => {
   vi.doUnmock('@lobechat/const');
   vi.doUnmock('@/components/Loading/BrandTextLoading');
   vi.doUnmock('@/routes/onboarding/_layout');
-  vi.doUnmock('@/routes/onboarding/features/IntroLanguageStep');
-  vi.doUnmock('@/routes/onboarding/features/PrivacyStep');
+  vi.doUnmock('@/routes/onboarding/features/TelemetryStep');
+  vi.doUnmock('@/routes/onboarding/features/ResponseLanguageStep');
   vi.doUnmock('@/store/serverConfig');
   vi.doUnmock('@/store/user');
   vi.doUnmock('@/store/user/selectors');
 });
 
 describe('CommonOnboardingPage', () => {
-  it('renders IntroLanguageStep when shared prefix is incomplete', async () => {
+  it('renders TelemetryStep (welcome + privacy) when shared prefix is incomplete', async () => {
     await renderCommon({ commonStepsCompleted: false });
-    expect(screen.getByText('IntroLanguageStep')).toBeInTheDocument();
+    expect(screen.getByText('TelemetryStep')).toBeInTheDocument();
   });
 
   it('redirects to /onboarding/agent when shared prefix is complete and agent flag is on', async () => {
