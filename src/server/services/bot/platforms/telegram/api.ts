@@ -4,6 +4,42 @@ const log = debug('bot-platform:telegram:client');
 
 export const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
+const isParseEntitiesError = (error: unknown): boolean => {
+  const msg = (error as { message?: string } | null)?.message;
+  return typeof msg === 'string' && msg.includes("can't parse entities");
+};
+
+const stripHTML = (html: string): string =>
+  html
+    .replaceAll(/<\/?[a-z][^>]*>/gi, '')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'");
+
+/**
+ * Thrown when an edit cannot be retried (message is gone or beyond the edit
+ * window). Callers should fall back to sending a new message so the user
+ * still receives the content.
+ */
+export class TelegramEditUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TelegramEditUnavailableError';
+  }
+}
+
+const isEditUnavailable = (error: unknown): boolean => {
+  const msg = (error as { message?: string } | null)?.message;
+  if (typeof msg !== 'string') return false;
+  return (
+    msg.includes('message to edit not found') ||
+    msg.includes("message can't be edited") ||
+    msg.includes('MESSAGE_ID_INVALID')
+  );
+};
+
 /**
  * Lightweight platform client for Telegram Bot API operations used by
  * callback and extension flows outside the Chat SDK adapter surface.
@@ -17,12 +53,32 @@ export class TelegramApi {
 
   async sendMessage(chatId: string | number, text: string): Promise<{ message_id: number }> {
     log('sendMessage: chatId=%s', chatId);
-    const data = await this.call('sendMessage', {
-      chat_id: chatId,
-      parse_mode: 'HTML',
-      text: this.truncateText(text),
-    });
-    return { message_id: data.result.message_id };
+    if (!text.trim()) {
+      // Telegram rejects empty / whitespace-only messages with 400 "message
+      // text is empty". Throwing here surfaces the bug at the call site
+      // instead of letting an upstream silent-catch drop the user's reply.
+      throw new Error('Telegram API sendMessage skipped: text is empty');
+    }
+    const truncated = this.truncateText(text);
+    try {
+      const data = await this.call('sendMessage', {
+        chat_id: chatId,
+        parse_mode: 'HTML',
+        text: truncated,
+      });
+      return { message_id: data.result.message_id };
+    } catch (error) {
+      // The HTML produced by markdownToTelegramHTML is best-effort — the LLM
+      // can emit content the converter can't always close cleanly. Falling
+      // back to plain text guarantees delivery instead of dropping the reply.
+      if (!isParseEntitiesError(error)) throw error;
+      log('sendMessage: HTML parse failed, retrying as plain text. chatId=%s', chatId);
+      const data = await this.call('sendMessage', {
+        chat_id: chatId,
+        text: this.truncateText(stripHTML(text)),
+      });
+      return { message_id: data.result.message_id };
+    }
   }
 
   /**
@@ -49,6 +105,9 @@ export class TelegramApi {
 
   async editMessageText(chatId: string | number, messageId: number, text: string): Promise<void> {
     log('editMessageText: chatId=%s, messageId=%s', chatId, messageId);
+    if (!text.trim()) {
+      throw new Error('Telegram API editMessageText skipped: text is empty');
+    }
     try {
       await this.call('editMessageText', {
         chat_id: chatId,
@@ -59,6 +118,29 @@ export class TelegramApi {
     } catch (error: any) {
       // Telegram returns 400 when the new content is identical to the current message — safe to ignore
       if (error?.message?.includes('message is not modified')) return;
+      if (isParseEntitiesError(error)) {
+        log(
+          'editMessageText: HTML parse failed, retrying as plain text. chatId=%s, messageId=%s',
+          chatId,
+          messageId,
+        );
+        try {
+          await this.call('editMessageText', {
+            chat_id: chatId,
+            message_id: messageId,
+            text: this.truncateText(stripHTML(text)),
+          });
+          return;
+        } catch (retryError) {
+          if (isEditUnavailable(retryError)) {
+            throw new TelegramEditUnavailableError((retryError as Error).message);
+          }
+          throw retryError;
+        }
+      }
+      if (isEditUnavailable(error)) {
+        throw new TelegramEditUnavailableError(error.message);
+      }
       throw error;
     }
   }
