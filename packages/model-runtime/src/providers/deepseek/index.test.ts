@@ -36,18 +36,14 @@ describe('LobeDeepSeekAI', () => {
     return (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
   };
 
-  const resolveFirstRuntime = async (baseURL: string, sdkType: string) => {
-    const runtime = new LobeDeepSeekAI({
-      apiKey: 'test',
-      baseURL,
-      sdkType,
-    });
+  const resolveFirstRouterOption = async (baseURL: string, sdkType: string) => {
+    const runtime = createRuntime({ baseURL, sdkType });
     const router = await (runtime as any).resolveMatchedRouter('deepseek-v4-pro');
     const routerOptions = (runtime as any).normalizeRouterOptions(router);
 
     return {
+      option: routerOptions[0],
       router,
-      runtime: (await (runtime as any).createRuntimeFromOption(router, routerOptions[0])).runtime,
     };
   };
 
@@ -95,21 +91,25 @@ describe('LobeDeepSeekAI', () => {
     });
 
     it('should normalize /v1/messages before creating an Anthropic SDK runtime', async () => {
-      const { runtime } = await resolveFirstRuntime(
+      const { option } = await resolveFirstRouterOption(
         'https://aihubmix.com/v1/messages',
         'anthropic',
       );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
 
+      expect(option.baseURL).toBe('https://aihubmix.com');
       expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
       expect((runtime as any).baseURL).toBe('https://aihubmix.com');
     });
 
     it('should normalize /anthropic/v1/messages before creating an Anthropic SDK runtime', async () => {
-      const { runtime } = await resolveFirstRuntime(
+      const { option } = await resolveFirstRouterOption(
         'https://api.deepseek.com/anthropic/v1/messages',
         'anthropic',
       );
+      const runtime = new LobeDeepSeekAnthropicAI({ apiKey: 'test', baseURL: option.baseURL });
 
+      expect(option.baseURL).toBe(anthropicBaseURL);
       expect(runtime).toBeInstanceOf(LobeDeepSeekAnthropicAI);
       expect((runtime as any).baseURL).toBe(anthropicBaseURL);
     });

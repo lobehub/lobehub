@@ -42,7 +42,7 @@ const toContentArray = (content: any) =>
     ? content
     : [{ text: isEmptyContent(content) ? ' ' : content, type: 'text' as const }];
 
-const normalizeDeepSeekAnthropicBaseURL = (baseURL?: string) =>
+const normalizeDeepSeekAnthropicBaseURL = (baseURL?: string | null) =>
   baseURL?.replace(DEEPSEEK_ANTHROPIC_MESSAGES_PATH_PATTERN, '');
 
 /**
