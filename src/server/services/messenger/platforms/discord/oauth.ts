@@ -39,15 +39,9 @@ const DISCORD_BOT_SCOPES = ['bot', 'applications.commands', 'identify'];
  *
  * Discord exposes these as decimal in the authorize URL.
  */
-const DISCORD_BOT_PERMISSIONS = (
-  (1n << 6n) |
-  (1n << 10n) |
-  (1n << 11n) |
-  (1n << 16n) |
-  (1n << 31n) |
-  (1n << 34n) |
-  (1n << 38n)
-).toString();
+const DISCORD_BOT_PERMISSIONS = [6, 10, 11, 16, 31, 34, 38]
+  .reduce((acc, bit) => acc | (BigInt(1) << BigInt(bit)), BigInt(0))
+  .toString();
 
 interface DiscordTokenResponse {
   access_token?: string;
