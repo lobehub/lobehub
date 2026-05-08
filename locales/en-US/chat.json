@@ -681,6 +681,8 @@
   "tool.intervention.mode.autoRunDesc": "Automatically approve all tool executions",
   "tool.intervention.mode.manual": "Manual",
   "tool.intervention.mode.manualDesc": "Manual approval required for each invocation",
+  "tool.intervention.onboarding.agentIdentity.editHint": "Not what you wanted? Click the avatar or name to edit directly.",
+  "tool.intervention.onboarding.agentIdentity.namePlaceholder": "Agent name",
   "tool.intervention.onboarding.agentIdentity.title": "I'll update my name and avatar",
   "tool.intervention.onboarding.agentIdentity.titleAvatarOnly": "I'll update my avatar",
   "tool.intervention.onboarding.agentIdentity.titleNameOnly": "I'll update my name",
