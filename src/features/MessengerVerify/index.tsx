@@ -167,18 +167,6 @@ const MessengerVerifyPage = memo(() => {
   const { data: session, isPending: sessionPending } = useSession();
   const isSignedIn = !!session?.user;
 
-  // Refresh-friendly: if the user already has a link for this platform, skip
-  // the token flow entirely and jump to the success state. Without this,
-  // refreshing the page after a successful link looks like an expired-token
-  // error (the random_id token gets consumed on confirm).
-  const existingLinkSWR = useSWR(
-    isSignedIn && (imType === 'telegram' || imType === 'slack' || imType === 'discord')
-      ? ['messenger:myLink', imType]
-      : null,
-    async () => messengerService.getMyLink(imType as 'telegram' | 'slack' | 'discord'),
-  );
-  const alreadyLinked = !!existingLinkSWR.data;
-
   // Messenger is a Labs-gated feature: don't let a user bind a new account
   // unless they've explicitly opted in. (Existing bindings keep working — the
   // bot's webhook doesn't consult this flag — but forming new ones requires
@@ -206,6 +194,34 @@ const MessengerVerifyPage = memo(() => {
   const tokenSWR = useSWR(randomId && isSignedIn ? ['messenger:peek', randomId] : null, async () =>
     messengerService.peekLinkToken(randomId),
   );
+
+  // Refresh-friendly: if the user already has a link for *this* (platform,
+  // tenant) pair, skip the token flow entirely and jump to the success state.
+  // Without this, refreshing the page after a successful link looks like an
+  // expired-token error (the random_id token gets consumed on confirm).
+  //
+  // Scoping by tenant is critical for Slack multi-workspace: a user already
+  // linked to workspace A must not short-circuit when verifying workspace B,
+  // otherwise confirmLink for B never runs. We wait for the token payload to
+  // resolve so we know the tenant. If the token is gone (expired/consumed,
+  // typical of a post-confirm refresh), fall back to the unscoped lookup so
+  // the refresh still lands on success.
+  const tokenResolved = !tokenSWR.isLoading;
+  const tokenTenantId = tokenSWR.data?.tenantId;
+  const tokenScopeKey = tokenSWR.data ? (tokenTenantId ?? '') : '__any__';
+  const existingLinkSWR = useSWR(
+    isSignedIn &&
+      tokenResolved &&
+      (imType === 'telegram' || imType === 'slack' || imType === 'discord')
+      ? ['messenger:myLink', imType, tokenScopeKey]
+      : null,
+    async () =>
+      messengerService.getMyLink(
+        imType as 'telegram' | 'slack' | 'discord',
+        tokenSWR.data ? tokenTenantId : undefined,
+      ),
+  );
+  const alreadyLinked = !!existingLinkSWR.data;
 
   // Default-select the first agent once loaded; user can change before confirming.
   useEffect(() => {
@@ -237,7 +253,15 @@ const MessengerVerifyPage = memo(() => {
     );
   }
 
-  if (sessionPending || existingLinkSWR.isLoading || userStateSWR.isLoading) {
+  if (
+    sessionPending ||
+    userStateSWR.isLoading ||
+    // Wait for the token peek so the existing-link lookup below can scope by
+    // tenantId (otherwise a Slack workspace-A link short-circuits workspace-B
+    // verification). isSignedIn is required for tokenSWR to fire at all.
+    (isSignedIn && tokenSWR.isLoading) ||
+    existingLinkSWR.isLoading
+  ) {
     return <Loading debugId="MessengerVerify" />;
   }
 

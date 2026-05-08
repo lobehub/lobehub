@@ -19,8 +19,8 @@ class MessengerService {
     return lambdaClient.messenger.confirmLink.mutate(params);
   };
 
-  getMyLink = async (platform: MessengerPlatform) => {
-    return lambdaClient.messenger.getMyLink.query({ platform });
+  getMyLink = async (platform: MessengerPlatform, tenantId?: string) => {
+    return lambdaClient.messenger.getMyLink.query({ platform, tenantId });
   };
 
   listMyLinks = async () => {
