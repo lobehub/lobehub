@@ -51,7 +51,7 @@ export default {
   'builtins.lobe-agent-management.render.installPlugin.plugin': 'Plugin',
   'builtins.lobe-agent-management.render.installPlugin.success': 'Installed successfully',
   'builtins.lobe-agent-management.title': 'Agent Manager',
-  'builtins.lobe-agent-marketplace.apiName.showAgentMarketplace': 'Open agent marketplace',
+  'builtins.lobe-agent-marketplace.apiName.showAgentMarketplace': 'Assemble agent team',
   'builtins.lobe-agent-marketplace.apiName.submitAgentPick': 'Submit agent picks',
   'builtins.lobe-agent-marketplace.title': 'Agent Marketplace',
   'builtins.lobe-claude-code.agent.instruction': 'Instruction',
