@@ -13,7 +13,7 @@ import AgentWorkingSidebar from './index';
 const mocks = vi.hoisted(() => ({
   agentStoreState: {
     activeAgentId: 'agent-1',
-    agentWorkingDirectory: undefined as string | undefined,
+    agentWorkingDirectoryById: {} as Record<string, string | undefined>,
   },
   repoType: undefined as 'git' | 'github' | undefined,
   topicWorkingDirectory: undefined as string | undefined,
@@ -149,9 +149,11 @@ vi.mock('@/store/agent', () => ({
 }));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    currentAgentWorkingDirectory: (state: { agentWorkingDirectory?: string }) =>
-      state.agentWorkingDirectory,
+  agentByIdSelectors: {
+    getAgentWorkingDirectoryById:
+      (agentId: string) =>
+      (state: { agentWorkingDirectoryById?: Record<string, string | undefined> }) =>
+        state.agentWorkingDirectoryById?.[agentId],
   },
 }));
 
@@ -177,7 +179,7 @@ vi.mock('@/store/chat/selectors', () => ({
 
 beforeEach(() => {
   mocks.agentStoreState.activeAgentId = 'agent-1';
-  mocks.agentStoreState.agentWorkingDirectory = undefined;
+  mocks.agentStoreState.agentWorkingDirectoryById = {};
   mocks.repoType = undefined;
   mocks.topicWorkingDirectory = undefined;
   vi.mocked(swr.useClientDataSWR).mockImplementation((() => ({
@@ -222,7 +224,7 @@ describe('AgentWorkingSidebar', () => {
   });
 
   it('shows review when the agent has a git working directory but the topic does not', () => {
-    mocks.agentStoreState.agentWorkingDirectory = '/Users/hai/LobeHub/lobehub';
+    mocks.agentStoreState.agentWorkingDirectoryById['agent-1'] = '/Users/hai/LobeHub/lobehub';
     mocks.repoType = 'git';
     useGlobalStore.setState({
       status: {

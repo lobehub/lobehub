@@ -8,7 +8,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import RightPanel from '@/features/RightPanel';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -74,7 +74,10 @@ const AgentWorkingSidebar = memo(() => {
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const agentWorkingDirectory = useAgentStore(agentSelectors.currentAgentWorkingDirectory);
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const agentWorkingDirectory = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.getAgentWorkingDirectoryById(activeAgentId)(s) : undefined,
+  );
   const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
   const repoType = useRepoType(workingDirectory);
 
