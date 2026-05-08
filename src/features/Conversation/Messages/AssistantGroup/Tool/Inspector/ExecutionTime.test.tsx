@@ -62,4 +62,29 @@ describe('ExecutionTime', () => {
 
     expect(screen.getByText('3.5s')).toBeTruthy();
   });
+
+  it('clears the cached start time when execution stops', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+
+    const { rerender } = render(<ExecutionTime isExecuting timerKey="tool-stop" />);
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(screen.getByText('1.5s')).toBeTruthy();
+
+    rerender(<ExecutionTime isExecuting={false} timerKey="tool-stop" />);
+
+    expect(screen.queryByText('1.5s')).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    rerender(<ExecutionTime isExecuting timerKey="tool-stop" />);
+
+    expect(screen.getByText('0ms')).toBeTruthy();
+  });
 });
