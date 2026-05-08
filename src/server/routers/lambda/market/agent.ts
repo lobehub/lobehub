@@ -414,7 +414,7 @@ export const agentRouter = router({
    * Response is keyed by MarketplaceCategory slug.
    */
   getOnboardingFull: agentProcedure
-    .input(z.object({ locale: z.string().optional() }))
+    .input(z.object({ locale: z.string().optional() }).optional().default({}))
     .query(async ({ input, ctx }) => {
       const url = new URL('/api/v1/agents/onboarding-full', MARKET_BASE_URL);
       url.searchParams.set('_ts', String(Date.now()));

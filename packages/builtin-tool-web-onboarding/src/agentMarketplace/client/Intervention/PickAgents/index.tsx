@@ -18,7 +18,8 @@ import { CATEGORY_LABEL_I18N_KEYS } from './constants';
 import PickAgentsSkeleton from './Skeleton';
 import { styles } from './style';
 
-const TEMPLATES_SWR_KEY = 'builtin-tool-web-onboarding/agent-marketplace/onboarding-templates';
+const getTemplatesSWRKey = (locale?: string) =>
+  `builtin-tool-web-onboarding/agent-marketplace/onboarding-templates/${locale ?? 'default'}`;
 const EMPTY_TEMPLATES: AgentTemplate[] = [];
 
 const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplaceArgs>>(
@@ -29,11 +30,14 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
 
     const { categoryHints, description, prompt } = args;
 
+    const { i18n } = useTranslation();
+    const swrLocale = i18n.resolvedLanguage || i18n.language;
+
     const {
       data: allTemplates = EMPTY_TEMPLATES,
       isLoading,
       error,
-    } = useSWR(TEMPLATES_SWR_KEY, () => fetchAgentTemplates(), {
+    } = useSWR(getTemplatesSWRKey(swrLocale), () => fetchAgentTemplates(), {
       dedupingInterval: 60_000,
       revalidateOnFocus: false,
       shouldRetryOnError: false,
