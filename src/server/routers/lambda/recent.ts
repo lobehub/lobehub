@@ -12,6 +12,8 @@ export interface RecentItem {
   id: string;
   metadata?: ChatTopicMetadata;
   routePath: string;
+  /** Task lifecycle status when `type === 'task'`; null/undefined for topic/document. */
+  status?: string | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
@@ -64,6 +66,7 @@ export const recentRouter = router({
           id: item.id,
           metadata: item.metadata as ChatTopicMetadata | undefined,
           routePath,
+          status: item.status,
           title: item.title,
           type: item.type,
           updatedAt: item.updatedAt,

@@ -36,15 +36,19 @@ const normalizeTaskStatus = (status?: string | null): TaskStatus => {
 };
 
 const RecentListItem = memo<RecentItem>((item) => {
-  const { title, type, agentId, id, metadata } = item;
+  const { title, type, agentId, id, metadata, status } = item;
   const IconComponent = TYPE_ICON_MAP[type] || FileTextIcon;
   const [editing, setEditing] = useState(false);
   const prefetchAgent = usePrefetchAgent();
   const prefetchPage = usePrefetchPage();
-  const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const taskKey = type === 'task' ? id : undefined;
-  useFetchTaskDetail(taskKey);
-  const taskStatus = useTaskStore((s) => (taskKey ? s.taskDetailMap[taskKey]?.status : undefined));
+  // Prefer the live task store entry (kept fresh by detail-page mutations) over
+  // the recent.getAll snapshot, so returning from the detail page reflects the
+  // latest status without waiting for the next poll.
+  const liveTaskStatus = useTaskStore((s) =>
+    taskKey ? s.taskDetailMap[taskKey]?.status : undefined,
+  );
+  const taskStatus = liveTaskStatus ?? status;
 
   const toggleEditing = useCallback((visible?: boolean) => {
     setEditing(!!visible);

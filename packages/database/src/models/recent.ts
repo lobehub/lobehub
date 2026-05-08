@@ -9,6 +9,8 @@ export interface RecentDbItem {
   metadata?: any;
   routeGroupId: string | null;
   routeId: string | null;
+  /** Task lifecycle status when `type === 'task'`; null for topic/document. */
+  status: string | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
@@ -41,6 +43,7 @@ export class RecentModel {
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
+        status: sql<string | null>`NULL`.as('status'),
         title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
         type: sql<RecentDbItem['type']>`'topic'`.as('type'),
         updatedAt: topics.updatedAt,
@@ -65,6 +68,7 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
+        status: sql<string | null>`NULL`.as('status'),
         title:
           sql<string>`COALESCE(${documents.title}, ${documents.filename}, 'Untitled Document')`.as(
             'title',
@@ -88,6 +92,7 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
+        status: sql<string | null>`${tasks.status}`.as('status'),
         title: sql<string>`COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task')`.as(
           'title',
         ),
@@ -111,6 +116,7 @@ export class RecentModel {
       metadata: row.metadata ?? undefined,
       routeGroupId: row.routeGroupId,
       routeId: row.routeId,
+      status: row.status,
       title: row.title,
       type: row.type,
       updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
