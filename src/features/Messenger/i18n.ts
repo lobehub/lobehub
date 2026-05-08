@@ -29,10 +29,10 @@ export const getMessengerErrorMessage = (
   error: unknown,
   t: MessengerT,
   fallbackKey: MessengerTranslationKey,
-) => {
+): string => {
   const key = getMessengerTranslationKey(error);
 
-  return key ? t(key) : t(fallbackKey);
+  return key ? t(key as any) : t(fallbackKey as any);
 };
 
 export const getSlackInstallErrorReason = (t: MessengerT, reason?: string | null) => {

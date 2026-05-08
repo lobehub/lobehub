@@ -46,6 +46,7 @@ const mockChatBot = {
   initialize: vi.fn().mockResolvedValue(undefined),
   onAction: vi.fn(),
   onDirectMessage: vi.fn(),
+  onNewMention: vi.fn(),
   onSlashCommand: vi.fn(),
   onSubscribedMessage: vi.fn(),
   webhooks: {
