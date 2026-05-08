@@ -18,7 +18,7 @@ import { CATEGORY_LABEL_I18N_KEYS } from './constants';
 import PickAgentsSkeleton from './Skeleton';
 import { styles } from './style';
 
-const TEMPLATES_SWR_KEY = 'builtin-tool-agent-marketplace/onboarding-templates';
+const TEMPLATES_SWR_KEY = 'builtin-tool-web-onboarding/agent-marketplace/onboarding-templates';
 const EMPTY_TEMPLATES: AgentTemplate[] = [];
 
 const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplaceArgs>>(

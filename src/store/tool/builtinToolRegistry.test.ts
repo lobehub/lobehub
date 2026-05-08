@@ -1,5 +1,4 @@
 import { WEB_ONBOARDING } from '@lobechat/builtin-agents';
-import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-agent-marketplace';
 import {
   GroupAgentBuilderApiName,
   GroupAgentBuilderIdentifier,
@@ -9,6 +8,7 @@ import { SkillStoreApiName, SkillStoreIdentifier } from '@lobechat/builtin-tool-
 import { SkillStoreInspectors, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
+import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { describe, expect, it } from 'vitest';
 
