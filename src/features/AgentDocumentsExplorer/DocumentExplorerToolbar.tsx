@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
     padding-block: 4px;
-    padding-inline: 4px;
+    padding-inline: 12px 4px;
     color: ${cssVar.colorTextSecondary};
   `,
   title: css`
