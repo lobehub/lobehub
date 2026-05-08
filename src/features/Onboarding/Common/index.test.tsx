@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,16 +6,22 @@ interface RenderOptions {
   commonStepsCompleted: boolean;
   desktop?: boolean;
   enableAgentOnboarding?: boolean;
+  finishedAt?: string;
   isUserStateInit?: boolean;
+  persistedStep?: number;
   serverConfigInit?: boolean;
+  setOnboardingStep?: ReturnType<typeof vi.fn>;
 }
 
 const renderCommon = async ({
   commonStepsCompleted,
   desktop = false,
   enableAgentOnboarding = true,
+  finishedAt,
   isUserStateInit = true,
+  persistedStep,
   serverConfigInit = true,
+  setOnboardingStep = vi.fn(),
 }: RenderOptions) => {
   cleanup();
   vi.resetModules();
@@ -45,10 +51,15 @@ const renderCommon = async ({
     useServerConfigStore: selectFromServerConfigStore,
   }));
 
-  const userState = { isUserStateInit, settings: {} };
+  const onboarding =
+    persistedStep === undefined && finishedAt === undefined
+      ? undefined
+      : { currentStep: persistedStep, finishedAt };
+  const userState = { isUserStateInit, onboarding, setOnboardingStep, settings: {} };
   function selectFromUserStore(selector: (state: Record<string, unknown>) => unknown) {
     return selector(userState);
   }
+  selectFromUserStore.getState = () => userState;
   vi.doMock('@/store/user', () => ({
     useUserStore: selectFromUserStore,
   }));
@@ -116,5 +127,57 @@ describe('CommonOnboardingPage', () => {
   it('shows loading until server config initializes when ready to redirect', async () => {
     await renderCommon({ commonStepsCompleted: true, serverConfigInit: false });
     expect(screen.getByText('Loading:CommonOnboarding/serverConfig')).toBeInTheDocument();
+  });
+
+  describe('legacy classic step migration', () => {
+    it('remaps legacy step 2 (old FullName) to new step 1', async () => {
+      const setOnboardingStep = vi.fn();
+      await renderCommon({ commonStepsCompleted: false, persistedStep: 2, setOnboardingStep });
+      await waitFor(() => expect(setOnboardingStep).toHaveBeenCalledWith(1));
+    });
+
+    it('remaps legacy step 3 (old Interests) to new step 2', async () => {
+      const setOnboardingStep = vi.fn();
+      await renderCommon({ commonStepsCompleted: false, persistedStep: 3, setOnboardingStep });
+      await waitFor(() => expect(setOnboardingStep).toHaveBeenCalledWith(2));
+    });
+
+    it('remaps legacy step 4+ (old Language/ProSettings) to MAX', async () => {
+      const setOnboardingStep = vi.fn();
+      await renderCommon({ commonStepsCompleted: false, persistedStep: 5, setOnboardingStep });
+      await waitFor(() => expect(setOnboardingStep).toHaveBeenCalledWith(3));
+    });
+
+    it('does not write when step is already within new schema (idempotent)', async () => {
+      const setOnboardingStep = vi.fn();
+      await renderCommon({ commonStepsCompleted: false, persistedStep: 1, setOnboardingStep });
+      // Allow effect to flush
+      await new Promise((r) => setTimeout(r, 0));
+      expect(setOnboardingStep).not.toHaveBeenCalled();
+    });
+
+    it('skips remap when onboarding is already finished', async () => {
+      const setOnboardingStep = vi.fn();
+      await renderCommon({
+        commonStepsCompleted: true,
+        finishedAt: '2024-01-01T00:00:00Z',
+        persistedStep: 5,
+        setOnboardingStep,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(setOnboardingStep).not.toHaveBeenCalled();
+    });
+
+    it('skips remap when user state is not yet initialized', async () => {
+      const setOnboardingStep = vi.fn();
+      await renderCommon({
+        commonStepsCompleted: false,
+        isUserStateInit: false,
+        persistedStep: 2,
+        setOnboardingStep,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(setOnboardingStep).not.toHaveBeenCalled();
+    });
   });
 });
