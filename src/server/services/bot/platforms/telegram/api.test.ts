@@ -104,4 +104,43 @@ describe('TelegramApi HTML parse fallback', () => {
     await expect(api.editMessageText('chat-1', 42, '\n')).rejects.toThrow(/text is empty/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('retries once on transient network errors (ETIMEDOUT)', async () => {
+    // Simulates undici's "TypeError: fetch failed" wrapping an ETIMEDOUT cause —
+    // exactly the shape we saw in the production log.
+    const fetchFailed = Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ETIMEDOUT' },
+    });
+    fetchSpy
+      .mockRejectedValueOnce(fetchFailed)
+      .mockResolvedValueOnce(okResponse({ message_id: 99 }));
+
+    const api = new TelegramApi(BOT_TOKEN);
+    const result = await api.sendMessage('chat-1', 'hello');
+
+    expect(result).toEqual({ message_id: 99 });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry on non-transient errors (e.g. logical 400)', async () => {
+    fetchSpy.mockResolvedValueOnce(telegramErrorResponse(400, 'Bad Request: chat not found'));
+
+    const api = new TelegramApi(BOT_TOKEN);
+    await expect(api.sendMessage('chat-1', 'hello')).rejects.toThrow(/chat not found/);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after a single retry when the transient error persists', async () => {
+    const fetchFailed = Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ETIMEDOUT' },
+    });
+    fetchSpy.mockRejectedValue(fetchFailed);
+
+    const api = new TelegramApi(BOT_TOKEN);
+    await expect(api.sendMessage('chat-1', 'hello')).rejects.toThrow(/fetch failed/);
+
+    // Original attempt + 1 retry = 2; never escalates further.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
 });

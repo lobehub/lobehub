@@ -4,6 +4,14 @@ const log = debug('bot-platform:telegram:client');
 
 export const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
+/**
+ * Hard cap per Telegram API request. Vercel functions have a finite total
+ * runtime and `handleCompletion` may serially call this once per chunk plus
+ * a possible edit→create fallback, so unbounded `fetch` (no default timeout
+ * in undici beyond ~5min) can wedge the whole callback.
+ */
+const TELEGRAM_FETCH_TIMEOUT_MS = 8000;
+
 const isParseEntitiesError = (error: unknown): boolean => {
   const msg = (error as { message?: string } | null)?.message;
   return typeof msg === 'string' && msg.includes("can't parse entities");
@@ -29,6 +37,27 @@ export class TelegramEditUnavailableError extends Error {
     this.name = 'TelegramEditUnavailableError';
   }
 }
+
+/**
+ * Transient network failures worth a single retry: connection-level timeouts
+ * (ETIMEDOUT, ECONNRESET, EAI_AGAIN), undici's generic "fetch failed", and
+ * the AbortSignal.timeout firing. Sustained outages will fail twice and bail.
+ */
+const isTransientNetworkError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as { name?: string; code?: string; message?: string; cause?: unknown };
+  if (err.name === 'TimeoutError' || err.name === 'AbortError') return true;
+  const codes = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'UND_ERR_SOCKET']);
+  if (err.code && codes.has(err.code)) return true;
+  // undici wraps low-level errors as `TypeError: fetch failed` with a `cause`.
+  if (err.message?.includes('fetch failed')) return true;
+  if (err.cause && typeof err.cause === 'object') {
+    const cause = err.cause as { code?: string; errors?: Array<{ code?: string }> };
+    if (cause.code && codes.has(cause.code)) return true;
+    if (cause.errors?.some((e) => e?.code && codes.has(e.code))) return true;
+  }
+  return false;
+};
 
 const isEditUnavailable = (error: unknown): boolean => {
   const msg = (error as { message?: string } | null)?.message;
@@ -377,33 +406,45 @@ export class TelegramApi {
 
   private async call(method: string, body: Record<string, unknown>): Promise<any> {
     const url = `${TELEGRAM_API_BASE}/bot${this.botToken}/${method}`;
+    const payload = JSON.stringify(body);
 
-    const response = await fetch(url, {
-      body: JSON.stringify(body),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
+    const attempt = async (): Promise<any> => {
+      // Cap each request so a slow Telegram doesn't eat the whole Vercel
+      // function budget (multiple chunks call this serially during reply).
+      const response = await fetch(url, {
+        body: payload,
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        signal: AbortSignal.timeout(TELEGRAM_FETCH_TIMEOUT_MS),
+      });
 
-    if (!response.ok) {
-      const text = await response.text();
-      log('Telegram API error: method=%s, status=%d, body=%s', method, response.status, text);
-      throw new Error(`Telegram API ${method} failed: ${response.status} ${text}`);
+      if (!response.ok) {
+        const text = await response.text();
+        log('Telegram API error: method=%s, status=%d, body=%s', method, response.status, text);
+        throw new Error(`Telegram API ${method} failed: ${response.status} ${text}`);
+      }
+
+      const data = await response.json();
+      // Telegram can return HTTP 200 with {"ok": false, ...} for logical errors
+      if (data.ok === false) {
+        const desc = data.description || 'Unknown error';
+        log(
+          'Telegram API logical error: method=%s, error_code=%d, description=%s',
+          method,
+          data.error_code,
+          desc,
+        );
+        throw new Error(`Telegram API ${method} failed: ${data.error_code} ${desc}`);
+      }
+      return data;
+    };
+
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!isTransientNetworkError(error)) throw error;
+      log('Telegram API %s: transient network error, retrying once: %O', method, error);
+      return await attempt();
     }
-
-    const data = await response.json();
-
-    // Telegram can return HTTP 200 with {"ok": false, ...} for logical errors
-    if (data.ok === false) {
-      const desc = data.description || 'Unknown error';
-      log(
-        'Telegram API logical error: method=%s, error_code=%d, description=%s',
-        method,
-        data.error_code,
-        desc,
-      );
-      throw new Error(`Telegram API ${method} failed: ${data.error_code} ${desc}`);
-    }
-
-    return data;
   }
 }
