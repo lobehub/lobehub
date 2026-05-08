@@ -103,6 +103,9 @@ describe('briefMaintenanceService', () => {
       type: 'decision',
     });
     expect(brief?.priority).toBe('normal');
+    expect(brief?.summary).toContain('1 maintenance proposal need review.');
+    expect(brief?.summary).toContain('**Proposal**');
+    expect(brief?.summary).toContain('- Review skill consolidation proposal.');
   });
 
   /**

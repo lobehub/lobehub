@@ -65,7 +65,7 @@ afterEach(() => {
 describe('nightlyReviewScheduleService', () => {
   describe('dispatchNightlyReviewRequests', () => {
     it('enqueues Shanghai user nightly review sources with local day window', async () => {
-      const deps = createDeps(new Date('2026-05-04T14:30:00.000Z'));
+      const deps = createDeps(new Date('2026-05-03T18:30:00.000Z'));
       const service = createNightlyReviewScheduleService(deps);
 
       const summary = await service.dispatchNightlyReviewRequests();
@@ -74,27 +74,27 @@ describe('nightlyReviewScheduleService', () => {
       expect(deps.listActiveAgentTargets).toHaveBeenCalledWith({
         limit: undefined,
         userId: 'user-1',
-        windowEnd: new Date('2026-05-04T14:30:00.000Z'),
+        windowEnd: new Date('2026-05-03T18:30:00.000Z'),
         windowStart: new Date('2026-05-03T16:00:00.000Z'),
       });
       expect(deps.enqueueSource).toHaveBeenCalledWith({
         payload: {
           agentId: 'agent-1',
           localDate: '2026-05-04',
-          requestedAt: '2026-05-04T14:30:00.000Z',
-          reviewWindowEnd: '2026-05-04T14:30:00.000Z',
+          requestedAt: '2026-05-03T18:30:00.000Z',
+          reviewWindowEnd: '2026-05-03T18:30:00.000Z',
           reviewWindowStart: '2026-05-03T16:00:00.000Z',
           timezone: 'Asia/Shanghai',
           userId: 'user-1',
         },
         sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
         sourceType: 'agent.nightly_review.requested',
-        timestamp: new Date('2026-05-04T14:30:00.000Z').getTime(),
+        timestamp: new Date('2026-05-03T18:30:00.000Z').getTime(),
       });
     });
 
     it('skips users outside the local night window without enqueueing', async () => {
-      const deps = createDeps(new Date('2026-05-04T13:30:00.000Z'));
+      const deps = createDeps(new Date('2026-05-03T20:30:00.000Z'));
       const service = createNightlyReviewScheduleService(deps);
 
       const summary = await service.dispatchNightlyReviewRequests();
@@ -105,7 +105,7 @@ describe('nightlyReviewScheduleService', () => {
     });
 
     it('falls back to UTC for invalid timezone values without throwing', async () => {
-      const deps = createDeps(new Date('2026-05-04T22:30:00.000Z'));
+      const deps = createDeps(new Date('2026-05-04T02:30:00.000Z'));
       deps.listEligibleUsers.mockResolvedValue([
         {
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -149,7 +149,7 @@ describe('nightlyReviewScheduleService', () => {
   describe('createServerNightlyReviewScheduleService', () => {
     it('calls the model methods and enqueues source payloads through the server adapter', async () => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2026-05-04T14:30:00.000Z'));
+      vi.setSystemTime(new Date('2026-05-03T18:30:00.000Z'));
       mocks.listEligibleUsers.mockResolvedValue([
         {
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -182,7 +182,7 @@ describe('nightlyReviewScheduleService', () => {
       });
       expect(mocks.listActiveAgentTargets).toHaveBeenCalledWith('user-1', {
         limit: 3,
-        windowEnd: new Date('2026-05-04T14:30:00.000Z'),
+        windowEnd: new Date('2026-05-03T18:30:00.000Z'),
         windowStart: new Date('2026-05-03T16:00:00.000Z'),
       });
       expect(mocks.enqueueAgentSignalSourceEvent).toHaveBeenCalledWith(
@@ -190,15 +190,15 @@ describe('nightlyReviewScheduleService', () => {
           payload: {
             agentId: 'agent-1',
             localDate: '2026-05-04',
-            requestedAt: '2026-05-04T14:30:00.000Z',
-            reviewWindowEnd: '2026-05-04T14:30:00.000Z',
+            requestedAt: '2026-05-03T18:30:00.000Z',
+            reviewWindowEnd: '2026-05-03T18:30:00.000Z',
             reviewWindowStart: '2026-05-03T16:00:00.000Z',
             timezone: 'Asia/Shanghai',
             userId: 'user-1',
           },
           sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
           sourceType: 'agent.nightly_review.requested',
-          timestamp: new Date('2026-05-04T14:30:00.000Z').getTime(),
+          timestamp: new Date('2026-05-03T18:30:00.000Z').getTime(),
         },
         {
           agentId: 'agent-1',
