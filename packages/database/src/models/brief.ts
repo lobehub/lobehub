@@ -70,32 +70,11 @@ export class BriefModel {
     return { briefs: items, total: Number(countResult[0].count) };
   }
 
-  // For Daily Brief homepage — unresolved briefs sorted by priority.
-  // Capped via `limit` (default 20) so heavy-inbox users don't pay the full
-  // enrich cost on every home render; users beyond the cap reach the rest
-  // through the task list page.
-  async listUnresolved(options?: { limit?: number }): Promise<BriefItem[]> {
-    const { limit = 20 } = options ?? {};
-    return this.db
-      .select()
-      .from(briefs)
-      .where(and(eq(briefs.userId, this.userId), isNull(briefs.resolvedAt)))
-      .orderBy(
-        sql`CASE
-          WHEN ${briefs.priority} = 'urgent' THEN 0
-          WHEN ${briefs.priority} = 'normal' THEN 1
-          ELSE 2
-        END`,
-        desc(briefs.createdAt),
-      )
-      .limit(limit);
-  }
-
   /**
-   * Same shape as {@link listUnresolved} but joins the producing agent and
-   * the parent task in a single SQL — saves one round trip vs. fetching
-   * briefs first and then enriching client-side. Used by the home Daily
-   * Brief surface where every brief renders `agent` + `taskStatus`.
+   * Home Daily Brief feed: unresolved briefs sorted by priority, joined
+   * with the producing agent + parent task in a single SQL. Capped at 20
+   * so heavy-inbox users don't pay the full enrich cost on every home
+   * render — the rest is reachable via the task list page.
    */
   async listUnresolvedEnriched(options?: { limit?: number }): Promise<UnresolvedBriefRow[]> {
     const { limit = 20 } = options ?? {};

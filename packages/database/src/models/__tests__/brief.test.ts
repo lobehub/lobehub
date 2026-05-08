@@ -121,10 +121,15 @@ describe('BriefModel', () => {
     });
   });
 
-  describe('listUnresolved', () => {
-    it('should return unresolved briefs sorted by priority', async () => {
+  describe('listUnresolvedEnriched', () => {
+    it('should return unresolved briefs sorted by priority and exclude resolved ones', async () => {
       const model = new BriefModel(serverDB, userId);
-      await model.create({ priority: 'info', summary: 'Low', title: 'Info', type: 'result' });
+      const b1 = await model.create({
+        priority: 'info',
+        summary: 'Low',
+        title: 'Info',
+        type: 'result',
+      });
       await model.create({
         priority: 'urgent',
         summary: 'High',
@@ -137,47 +142,14 @@ describe('BriefModel', () => {
         title: 'Normal',
         type: 'insight',
       });
-
-      const unresolved = await model.listUnresolved();
-      expect(unresolved).toHaveLength(3);
-      expect(unresolved[0].priority).toBe('urgent');
-      expect(unresolved[1].priority).toBe('normal');
-      expect(unresolved[2].priority).toBe('info');
-    });
-
-    it('should exclude resolved briefs', async () => {
-      const model = new BriefModel(serverDB, userId);
-      const b1 = await model.create({ summary: 'A', title: 'Brief 1', type: 'result' });
-      await model.create({ summary: 'B', title: 'Brief 2', type: 'result' });
-
       await model.resolve(b1.id);
 
-      const unresolved = await model.listUnresolved();
-      expect(unresolved).toHaveLength(1);
+      const rows = await model.listUnresolvedEnriched();
+      expect(rows).toHaveLength(2);
+      expect(rows[0].brief.priority).toBe('urgent');
+      expect(rows[1].brief.priority).toBe('normal');
     });
 
-    it('should cap unresolved briefs at the default limit of 20', async () => {
-      const model = new BriefModel(serverDB, userId);
-      for (let i = 0; i < 25; i++) {
-        await model.create({ summary: `S${i}`, title: `Brief ${i}`, type: 'insight' });
-      }
-
-      const unresolved = await model.listUnresolved();
-      expect(unresolved).toHaveLength(20);
-    });
-
-    it('should respect a caller-provided limit', async () => {
-      const model = new BriefModel(serverDB, userId);
-      for (let i = 0; i < 5; i++) {
-        await model.create({ summary: `S${i}`, title: `Brief ${i}`, type: 'insight' });
-      }
-
-      const unresolved = await model.listUnresolved({ limit: 2 });
-      expect(unresolved).toHaveLength(2);
-    });
-  });
-
-  describe('listUnresolvedEnriched', () => {
     it('should join the producing agent and parent task status in one query', async () => {
       await serverDB.insert(agents).values({
         avatar: '🤖',
