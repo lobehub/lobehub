@@ -1,3 +1,4 @@
+import type { TaskStatus } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
@@ -19,22 +20,6 @@ const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTe
   topic: HashIcon,
 };
 
-type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
-const LEGACY_TASK_STATUS_MAP: Record<string, TaskStatus> = {
-  backlog: 'backlog',
-  canceled: 'canceled',
-  completed: 'completed',
-  failed: 'failed',
-  in_progress: 'running',
-  paused: 'paused',
-  running: 'running',
-  todo: 'backlog',
-};
-const normalizeTaskStatus = (status?: string | null): TaskStatus => {
-  if (!status) return 'backlog';
-  return LEGACY_TASK_STATUS_MAP[status] ?? 'backlog';
-};
-
 const RecentListItem = memo<RecentItem>((item) => {
   const { title, type, agentId, id, metadata, status } = item;
   const IconComponent = TYPE_ICON_MAP[type] || FileTextIcon;
@@ -46,7 +31,7 @@ const RecentListItem = memo<RecentItem>((item) => {
   // the recent.getAll snapshot, so returning from the detail page reflects the
   // latest status without waiting for the next poll.
   const liveTaskStatus = useTaskStore((s) =>
-    taskKey ? s.taskDetailMap[taskKey]?.status : undefined,
+    taskKey ? (s.taskDetailMap[taskKey]?.status as TaskStatus | undefined) : undefined,
   );
   const taskStatus = liveTaskStatus ?? status;
 
@@ -83,7 +68,7 @@ const RecentListItem = memo<RecentItem>((item) => {
         }
         icon={(() => {
           if (type === 'task') {
-            return <TaskStatusIcon size={16} status={normalizeTaskStatus(taskStatus)} />;
+            return <TaskStatusIcon size={16} status={taskStatus ?? 'backlog'} />;
           }
 
           if (type === 'topic' && metadata?.bot?.platform) {

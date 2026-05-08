@@ -1,3 +1,4 @@
+import type { TaskStatus } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 
@@ -10,7 +11,7 @@ export interface RecentDbItem {
   routeGroupId: string | null;
   routeId: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
-  status: string | null;
+  status: TaskStatus | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
@@ -43,7 +44,7 @@ export class RecentModel {
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
-        status: sql<string | null>`NULL`.as('status'),
+        status: sql<TaskStatus | null>`NULL`.as('status'),
         title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
         type: sql<RecentDbItem['type']>`'topic'`.as('type'),
         updatedAt: topics.updatedAt,
@@ -68,7 +69,7 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
-        status: sql<string | null>`NULL`.as('status'),
+        status: sql<TaskStatus | null>`NULL`.as('status'),
         title:
           sql<string>`COALESCE(${documents.title}, ${documents.filename}, 'Untitled Document')`.as(
             'title',
@@ -92,7 +93,7 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
-        status: sql<string | null>`${tasks.status}`.as('status'),
+        status: sql<TaskStatus | null>`${tasks.status}`.as('status'),
         title: sql<string>`COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task')`.as(
           'title',
         ),
