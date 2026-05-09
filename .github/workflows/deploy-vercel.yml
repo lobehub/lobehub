@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - canary
+  workflow_run:
+    workflows: ["Upstream Sync"]
+    types:
+      - completed
+    branches:
+      - canary
   workflow_dispatch:
 
 env:
