@@ -30,7 +30,7 @@ git log "$PREV_TAG..origin/release/weekly-{YYYYMMDD}" --oneline --no-merges
 git diff "$PREV_TAG...origin/release/weekly-{YYYYMMDD}" --stat
 ```
 
-Then follow the **Computing Inputs (Hard Rules)** section in `../SKILL.md` to derive PR refs, metrics, and contributors. Every `(#XXXX)` in the body must come from actual commit subjects in this range — never inferred from descriptions.
+Then follow `./release-notes-style.md` § **Computing Inputs (Hard Rules)** to derive PR refs, metrics, and contributors. Every `(#XXXX)` in the body must come from actual commit subjects in this range — never inferred from descriptions.
 
 3. **Create PR to main** with the changelog as the PR body
 
