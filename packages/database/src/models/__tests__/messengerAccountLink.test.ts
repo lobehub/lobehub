@@ -7,6 +7,7 @@ import type { LobeChatDatabase } from '../../type';
 import {
   MessengerAccountLinkConflictError,
   MessengerAccountLinkModel,
+  MessengerAccountLinkRelinkRequiredError,
 } from '../messengerAccountLink';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -116,21 +117,27 @@ describe('MessengerAccountLinkModel', () => {
       expect(second.activeAgentId).toBe(agentA);
     });
 
-    it('overwrites the existing row when re-linking the same (platform, tenant)', async () => {
+    it('throws MessengerAccountLinkRelinkRequiredError when re-linking a different account in the same scope', async () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);
       const first = await model.upsertForPlatform({
         platform: 'slack',
         platformUserId: 'U_OLD',
         tenantId: 'T_ACME',
       });
-      const second = await model.upsertForPlatform({
+      const promise = model.upsertForPlatform({
         platform: 'slack',
         platformUserId: 'U_NEW',
         tenantId: 'T_ACME',
       });
 
-      expect(second.id).toBe(first.id);
-      expect(second.platformUserId).toBe('U_NEW');
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkRelinkRequiredError);
+      await expect(promise).rejects.toMatchObject({
+        code: 'MESSENGER_ACCOUNT_LINK_RELINK_REQUIRED',
+      });
+
+      const stillLinked = await model.findByPlatform('slack', 'T_ACME');
+      expect(stillLinked?.id).toBe(first.id);
+      expect(stillLinked?.platformUserId).toBe('U_OLD');
     });
   });
 
