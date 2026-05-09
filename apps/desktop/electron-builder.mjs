@@ -58,12 +58,15 @@ const getPublishConfig = () => {
   }
 
   // 本地开发无 S3 时回退到 GitHub
-  console.info(`📦 ${channelPath} channel: No UPDATE_SERVER_URL, falling back to GitHub provider`);
+  // UPDATE_GITHUB_OWNER/REPO allow fork builds to auto-update from their own releases
+  const githubOwner = process.env.UPDATE_GITHUB_OWNER || 'lobehub';
+  const githubRepo  = process.env.UPDATE_GITHUB_REPO  || 'lobehub';
+  console.info(`📦 ${channelPath} channel: No UPDATE_SERVER_URL, falling back to GitHub provider (${githubOwner}/${githubRepo})`);
   return [
     {
-      owner: 'lobehub',
+      owner: githubOwner,
       provider: 'github',
-      repo: 'lobehub',
+      repo: githubRepo,
     },
   ];
 };

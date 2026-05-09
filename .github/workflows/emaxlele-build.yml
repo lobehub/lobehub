@@ -112,6 +112,8 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
+          UPDATE_GITHUB_OWNER: emaxlele
+          UPDATE_GITHUB_REPO: lobehub
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
