@@ -74,10 +74,9 @@ describe('AgentSignalReceiptList', () => {
     expect(screen.getByText('Skill updated')).toBeInTheDocument();
   });
 
-  it('collapses recent activity receipts from the label', () => {
+  it('renders receipt cards without the recent activity label', () => {
     render(
       <AgentSignalReceiptList
-        showRecentLabel
         receipts={[
           {
             agentId: 'agent-1',
@@ -101,9 +100,9 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'agentSignal.receipts.recentActivity' }));
-
-    expect(screen.queryByText('Future reply preference')).not.toBeInTheDocument();
+    expect(screen.getByText('Future reply preference')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
+    expect(screen.queryByText('agentSignal.receipts.recentActivity')).not.toBeInTheDocument();
   });
 
   it('opens skill target documents from a receipt item', () => {
@@ -132,7 +131,69 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
+  });
+
+  it('renders receipts without openable targets as non-clickable status cards', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Reviewed recent activity and found no follow-up action.',
+            id: 'receipt-1',
+            kind: 'review',
+            sourceId: 'source-1',
+            sourceType: 'agent.signal.review',
+            status: 'completed',
+            title: 'Self-review completed',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Self-review completed'));
+
+    expect(screen.queryByRole('button', { name: 'Open' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Reviewed recent activity and found no follow-up action.'),
+    ).toBeInTheDocument();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.openDocument).not.toHaveBeenCalled();
+  });
+
+  it('opens skill targets when clicking the receipt card content', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Improved how this assistant handles similar requests',
+            id: 'receipt-1',
+            kind: 'skill',
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'updated',
+            target: {
+              id: 'document-1',
+              title: 'GitHub PR review workflow',
+              type: 'skill',
+            },
+            title: 'Skill updated',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('GitHub PR review workflow'));
 
     expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
   });
@@ -165,7 +226,7 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 
     expect(mocks.openDocument).toHaveBeenCalledWith('index-document-1');
   });
@@ -195,7 +256,7 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Decision-first PR review preference/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/memory');
   });
