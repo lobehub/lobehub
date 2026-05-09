@@ -24,6 +24,19 @@ describe('agent signal nightly review prompt', () => {
 
   /**
    * @example
+   * The prompt starts from maintenance signals and forbids model-side reclassification.
+   */
+  it('documents the structured maintenance signal boundary', () => {
+    const [system] = createAgentSignalNightlyReviewMessages({ maintenanceSignals: [] });
+
+    expect(system.content).toContain('Start from maintenanceSignals');
+    expect(system.content).toContain('Do not re-judge satisfaction');
+    expect(system.content).toContain('Tool activity alone must not trigger skill consolidation');
+    expect(system.content).toContain('Use receiptActivity to avoid duplicate or stale proposals');
+  });
+
+  /**
+   * @example
    * A private-safe bounded digest is sent as the user message beside the stable system role.
    */
   it('builds structured generation messages from bounded review context', () => {

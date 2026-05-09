@@ -135,31 +135,64 @@ const getOutcome = (
   return;
 };
 
+const formatActionSummaries = (
+  result: MaintenanceReviewRunResult,
+  status: MaintenanceActionStatus,
+  heading: string,
+) => {
+  const summaries = result.actions
+    .filter((action) => action.status === status)
+    .map((action) => action.summary?.trim() ?? '')
+    .filter(Boolean);
+
+  if (summaries.length === 0) return;
+
+  return [`**${heading}**`, ...summaries.map((summary) => `- ${summary}`)].join('\n');
+};
+
+const createDetailedSummary = (
+  summary: string,
+  result: MaintenanceReviewRunResult,
+  status: MaintenanceActionStatus,
+  heading: string,
+) => {
+  const details = formatActionSummaries(result, status, heading);
+
+  return details ? `${summary}\n\n${details}` : summary;
+};
+
 const createBriefCopy = (
   outcome: MaintenanceBriefMetadata['outcome'],
   counts: MaintenanceBriefActionCounts,
+  result: MaintenanceReviewRunResult,
 ) => {
   if (outcome === 'proposal') {
+    const summary = `${counts.proposed} maintenance proposal${counts.proposed === 1 ? '' : 's'} need review.`;
+
     return {
       priority: 'normal' as const,
-      summary: `${counts.proposed} maintenance proposal${counts.proposed === 1 ? '' : 's'} need review.`,
+      summary: createDetailedSummary(summary, result, MaintenanceActionStatus.Proposed, 'Proposal'),
       title: 'Agent self-review proposal',
       type: 'decision' as const,
     };
   }
 
   if (outcome === 'error') {
+    const summary = 'Agent self-review could not finish all maintenance actions.';
+
     return {
       priority: 'normal' as const,
-      summary: 'Agent self-review could not finish all maintenance actions.',
+      summary: createDetailedSummary(summary, result, MaintenanceActionStatus.Failed, 'Failure'),
       title: 'Agent self-review needs attention',
       type: 'error' as const,
     };
   }
 
+  const summary = `${counts.applied} maintenance update${counts.applied === 1 ? '' : 's'} applied.`;
+
   return {
     priority: 'info' as const,
-    summary: `${counts.applied} maintenance update${counts.applied === 1 ? '' : 's'} applied.`,
+    summary: createDetailedSummary(summary, result, MaintenanceActionStatus.Applied, 'Updated'),
     title: 'Agent self-review updated resources',
     type: 'insight' as const,
   };
@@ -241,7 +274,7 @@ export const createBriefMaintenanceService = () => ({
 
     if (!outcome) return;
 
-    const copy = createBriefCopy(outcome, actionCounts);
+    const copy = createBriefCopy(outcome, actionCounts, input.result);
 
     return {
       agentId: input.agentId,

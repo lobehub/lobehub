@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SelfReflectionReviewContext } from '@/server/services/agentSignal/policies/reviewNightly/selfReflection';
 import { createProcedurePolicyOptions as createProcedurePolicyOptionsFixture } from '@/server/services/agentSignal/procedure';
 import { MaintenanceReviewScope, ReviewRunStatus } from '@/server/services/agentSignal/services';
+import type { NightlyReviewContext } from '@/server/services/agentSignal/services/maintenance/nightlyCollector';
 import type { AgentSignalPolicyStateStore } from '@/server/services/agentSignal/store/types';
 import type { RunAgentSignalWorkflowDeps } from '@/server/workflows/agentSignal/run';
 import { runAgentSignalWorkflow } from '@/server/workflows/agentSignal/run';
@@ -35,6 +36,42 @@ const createPolicyStateStore = (): AgentSignalPolicyStateStore => {
     },
   };
 };
+
+const createNightlyReviewContext = (input: {
+  agentId: string;
+  reviewWindowEnd: string;
+  reviewWindowStart: string;
+  userId: string;
+}): NightlyReviewContext => ({
+  agentId: input.agentId,
+  documentActivity: {
+    ambiguousBucket: [],
+    excludedSummary: { count: 0, reasons: [] },
+    generalDocumentBucket: [],
+    skillBucket: [],
+  },
+  feedbackActivity: {
+    neutralCount: 0,
+    notSatisfied: [],
+    satisfied: [],
+  },
+  maintenanceSignals: [],
+  managedSkills: [],
+  receiptActivity: {
+    appliedCount: 0,
+    duplicateGroups: [],
+    failedCount: 0,
+    pendingProposalCount: 0,
+    recentReceipts: [],
+    reviewCount: 0,
+  },
+  relevantMemories: [],
+  reviewWindowEnd: input.reviewWindowEnd,
+  reviewWindowStart: input.reviewWindowStart,
+  toolActivity: [],
+  topics: [],
+  userId: input.userId,
+});
 
 describe('runAgentSignalWorkflow', () => {
   it('hydrates client.runtime.start into agent.user.message with serialized root-topic context', async () => {
@@ -767,15 +804,14 @@ describe('runAgentSignalWorkflow', () => {
     const nightlyReviewPolicyOptions = {
       acquireReviewGuard: vi.fn(async () => true),
       canRunReview: vi.fn(async () => true),
-      collectContext: vi.fn(async () => ({
-        agentId,
-        managedSkills: [],
-        relevantMemories: [],
-        reviewWindowEnd: '2026-05-04T14:30:00.000Z',
-        reviewWindowStart: '2026-05-03T16:00:00.000Z',
-        topics: [],
-        userId,
-      })),
+      collectContext: vi.fn(async () =>
+        createNightlyReviewContext({
+          agentId,
+          reviewWindowEnd: '2026-05-04T14:30:00.000Z',
+          reviewWindowStart: '2026-05-03T16:00:00.000Z',
+          userId,
+        }),
+      ),
       executePlan: vi.fn(async () => ({ actions: [], status: ReviewRunStatus.Completed })),
       planReviewOutput: vi.fn(() => ({
         actions: [],

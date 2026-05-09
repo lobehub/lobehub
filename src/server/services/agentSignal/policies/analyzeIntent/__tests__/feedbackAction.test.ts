@@ -361,7 +361,7 @@ describe('feedbackActionPlanner', () => {
 
   /**
    * @example
-   * User-stage direct skill intent is saved as a deferred candidate until completion evidence arrives.
+   * User-stage direct skill intent is recorded until completion evidence arrives.
    */
   it('defers direct skill decisions from normal user-message sources', async () => {
     const store = createStore();
@@ -370,7 +370,7 @@ describe('feedbackActionPlanner', () => {
       policyStateStore: store,
       ttlSeconds: 3600,
     });
-    const writeCandidate = vi.spyOn(procedure.procedureState.skillCandidates!, 'write');
+    const writeIntentRecord = vi.spyOn(procedure.procedureState.skillIntentRecords!, 'write');
     const skillActions = { prepare: vi.fn() };
     const handler = createFeedbackActionPlannerSignalHandler({
       actionServices: {
@@ -400,11 +400,11 @@ describe('feedbackActionPlanner', () => {
     const result = await handler.handle(signal, context);
 
     expect(result).toEqual({
-      concluded: { reason: 'skill mutation deferred until client.runtime.complete' },
+      concluded: { reason: 'skill intent recorded until client.runtime.complete' },
       status: 'conclude',
     });
     expect(skillActions.prepare).not.toHaveBeenCalled();
-    expect(writeCandidate).toHaveBeenCalledWith(
+    expect(writeIntentRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         actionIntent: 'create',
         confidence: 0.88,
@@ -418,7 +418,7 @@ describe('feedbackActionPlanner', () => {
       }),
     );
     await expect(
-      procedure.procedureState.skillCandidates!.read({
+      procedure.procedureState.skillIntentRecords!.read({
         scopeKey: 'topic:thread_1',
         sourceId: 'source_skill_defer',
       }),
@@ -472,7 +472,89 @@ describe('feedbackActionPlanner', () => {
 
   /**
    * @example
-   * Server-side user-message sources have no client completion event to resume deferred mutations.
+   * Completion-stage hinted document tool outcomes directly trigger skill decisions.
+   */
+  it('dispatches skill decisions from completion hinted document receipts even when domain classification is none', async () => {
+    const store = createStore();
+    const procedure = createProcedurePolicyOptions({
+      now: () => 123,
+      policyStateStore: store,
+      ttlSeconds: 3600,
+    });
+    await procedure.procedureState.receipts.append({
+      createdAt: 123,
+      domainKey: 'document:agent-document',
+      id: 'receipt_hinted_document',
+      intentClass: 'hinted_skill_document',
+      messageId: 'msg_skill_complete',
+      relatedObjects: [
+        {
+          objectId: 'agent-doc-1',
+          objectType: 'agent-document',
+          relation: 'created',
+        },
+      ],
+      scopeKey: 'topic:thread_1',
+      sourceId: 'tool-outcome:lobe-agent-documents:createDocument:succeeded:call_1',
+      status: 'handled',
+      summary: 'Agent documents created a hinted skill document.',
+      updatedAt: 123,
+    });
+    const action = {
+      actionId: 'action_hinted_document',
+      actionType: 'action.skill-management.handle' as const,
+      payload: {},
+    };
+    const skillActions = {
+      prepare: vi.fn(() => ({ action, reason: 'hinted document receipt', risk: 'low' as const })),
+    };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      markerReader: { shouldSuppress: vi.fn().mockResolvedValue(false) },
+      procedure: {
+        now: () => 123,
+        procedureState: procedure.procedureState,
+      },
+    });
+    const signal = createDomainSignal({
+      message: 'Can we keep this workflow?',
+      messageId: 'msg_skill_complete',
+      satisfactionResult: 'neutral',
+      signalId: 'sig_none_complete',
+      sourceId: 'source_complete',
+      target: 'none',
+      trigger: 'client.runtime.complete',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({ actions: [action], status: 'dispatch' });
+    expect(skillActions.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          evidence: expect.arrayContaining([
+            expect.objectContaining({
+              cue: 'same_turn_hinted_document_receipt',
+              excerpt: expect.stringContaining('agent-doc-1'),
+            }),
+          ]),
+          message: 'Can we keep this workflow?',
+          skillActionIntent: 'create',
+          skillIntentExplicitness: 'implicit_strong_learning',
+          skillRoute: 'direct_decision',
+          target: 'skill',
+        }),
+        signalType: 'signal.feedback.domain.skill',
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * Server-side user-message sources have no client completion event to resume recorded intents.
    */
   it('dispatches direct skill decisions from server-side user feedback', async () => {
     const action = {
@@ -696,8 +778,8 @@ describe('feedbackActionPlanner', () => {
               bucketKey: 'topic:thread_1:skill',
               domain: 'skill',
               recordIds: [
-                'procedure-record:sig_skill_positive_1:skill-candidate',
-                'procedure-record:sig_skill_positive_2:skill-candidate',
+                'procedure-record:sig_skill_positive_1:skill-observation-record',
+                'procedure-record:sig_skill_positive_2:skill-observation-record',
               ],
               suggestedActions: ['maintain'],
             }),
@@ -712,12 +794,12 @@ describe('feedbackActionPlanner', () => {
         expect.objectContaining({
           accumulatorRole: 'candidate',
           domainKey: 'skill',
-          id: 'procedure-record:sig_skill_positive_1:skill-candidate',
+          id: 'procedure-record:sig_skill_positive_1:skill-observation-record',
         }),
         expect.objectContaining({
           accumulatorRole: 'candidate',
           domainKey: 'skill',
-          id: 'procedure-record:sig_skill_positive_2:skill-candidate',
+          id: 'procedure-record:sig_skill_positive_2:skill-observation-record',
         }),
       ]),
     );
@@ -789,8 +871,8 @@ describe('feedbackActionPlanner', () => {
               bucketKey: 'topic:thread_1:skill',
               domain: 'skill',
               recordIds: [
-                'procedure-record:sig_skill_state_positive_1:skill-candidate',
-                'procedure-record:sig_skill_state_positive_2:skill-candidate',
+                'procedure-record:sig_skill_state_positive_1:skill-observation-record',
+                'procedure-record:sig_skill_state_positive_2:skill-observation-record',
               ],
               suggestedActions: ['maintain'],
             }),
@@ -815,7 +897,7 @@ describe('feedbackActionPlanner', () => {
    * @example
    * one context skill record plus one weak candidate stays below accumulated marker threshold.
    */
-  it('does not accumulate context plus one satisfied skill candidate', async () => {
+  it('does not accumulate context plus one satisfied skill intent record', async () => {
     let now = 100;
     const store = createStore();
     const procedure = createProcedurePolicyOptions({
@@ -867,7 +949,7 @@ describe('feedbackActionPlanner', () => {
         expect.objectContaining({
           accumulatorRole: 'candidate',
           domainKey: 'skill',
-          id: 'procedure-record:sig_skill_positive_single:skill-candidate',
+          id: 'procedure-record:sig_skill_positive_single:skill-observation-record',
         }),
       ]),
     );

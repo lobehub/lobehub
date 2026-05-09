@@ -342,6 +342,72 @@ describe('resolveClientRuntimeCompleteFeedbackSource', () => {
 
   /**
    * @example
+   * client.runtime.complete({ assistantMessageId: "final-assistant" }) walks assistant -> tool -> assistant -> user.
+   */
+  it('hydrates a multi-step assistant completion through tool parents to the original user message', async () => {
+    const db = await getTestDB();
+    const userId = `user_${uuid()}`;
+    const topicId = `topic_${uuid()}`;
+    const parentMessageId = `msg_${uuid()}`;
+    const firstAssistantMessageId = `msg_${uuid()}`;
+    const toolMessageId = `msg_${uuid()}`;
+    const finalAssistantMessageId = `msg_${uuid()}`;
+
+    await db.insert(users).values({ id: userId });
+    await db.insert(topics).values({ id: topicId, title: 'Workflow Topic', userId });
+    await db.insert(messages).values([
+      {
+        content: 'Create a reusable skill from this workflow.',
+        id: parentMessageId,
+        role: 'user',
+        topicId,
+        userId,
+      },
+      {
+        content: 'I will create the skill document.',
+        id: firstAssistantMessageId,
+        parentId: parentMessageId,
+        role: 'assistant',
+        topicId,
+        userId,
+      },
+      {
+        content: 'Created skill document.',
+        id: toolMessageId,
+        parentId: firstAssistantMessageId,
+        role: 'tool',
+        topicId,
+        userId,
+      },
+      {
+        content: 'Done, the workflow is now reusable.',
+        id: finalAssistantMessageId,
+        parentId: toolMessageId,
+        role: 'assistant',
+        topicId,
+        userId,
+      },
+    ]);
+
+    const result = await resolveClientRuntimeCompleteFeedbackSource(
+      createCompleteSource({ assistantMessageId: finalAssistantMessageId }),
+      { db, userId },
+    );
+
+    expect(result.diagnostic).toEqual({
+      kind: AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete,
+      status: 'resolved',
+    });
+    expect(result.contextBoundaryMessageId).toBe(finalAssistantMessageId);
+    expect(result.source?.payload.message).toBe('Create a reusable skill from this workflow.');
+    expect(result.source?.payload.messageId).toBe(parentMessageId);
+    expect(result.source?.sourceId).toBe(
+      `${finalAssistantMessageId}:completion:${parentMessageId}`,
+    );
+  });
+
+  /**
+   * @example
    * client.runtime.complete with an empty persisted user message cannot produce feedback text.
    */
   it('returns a skipped diagnostic when the parent message has empty content', async () => {

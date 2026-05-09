@@ -4,11 +4,7 @@ import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-doc
 
 import { TaskModel } from '@/database/models/task';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
-import {
-  emitToolOutcomeSafely,
-  resolveToolOutcomeScope,
-} from '@/server/services/agentSignal/procedure';
-import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
+import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -27,44 +23,28 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       agentDocumentId?: string;
       apiName: string;
       errorReason?: string;
+      hintIsSkill?: boolean;
       relation?: string;
       status: 'failed' | 'succeeded';
       summary: string;
       toolAction: string;
     }) => {
-      const { scope, scopeKey } = resolveToolOutcomeScope({
+      await emitAgentDocumentToolOutcomeSafely({
+        agentDocumentId: input.agentDocumentId,
         agentId: input.agentId ?? context.agentId,
-        taskId: context.taskId,
-        topicId: context.topicId,
-        userId,
-      });
-
-      await emitToolOutcomeSafely({
         apiName: input.apiName,
-        context: { agentId: input.agentId ?? context.agentId, userId },
-        domainKey: 'document:agent-document',
         errorReason: input.errorReason,
-        identifier: AgentDocumentsIdentifier,
-        intentClass: 'explicit_persistence',
+        hintIsSkill: input.hintIsSkill,
         messageId: context.messageId,
         operationId: context.operationId,
-        policyStateStore: redisPolicyStateStore,
-        relatedObjects: input.agentDocumentId
-          ? [
-              {
-                objectId: input.agentDocumentId,
-                objectType: 'agent-document',
-                relation: input.relation,
-              },
-            ]
-          : undefined,
-        scope,
-        scopeKey,
+        relation: input.relation,
         status: input.status,
         summary: input.summary,
-        ttlSeconds: 7 * 24 * 60 * 60,
+        taskId: context.taskId,
         toolAction: input.toolAction,
         toolCallId: context.toolCallId,
+        topicId: context.topicId,
+        userId,
       });
     };
 
@@ -73,6 +53,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         agentId?: string;
         getAgentDocumentId?: (result: T) => string | undefined;
         apiName: string;
+        hintIsSkill?: boolean;
         relation: string;
         summary: string;
         toolAction: string;
@@ -85,6 +66,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           agentId: input.agentId,
           agentDocumentId: input.getAgentDocumentId?.(result),
           apiName: input.apiName,
+          hintIsSkill: input.hintIsSkill,
           relation: input.relation,
           status: 'succeeded',
           summary: input.summary,
@@ -96,6 +78,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           agentId: input.agentId,
           apiName: input.apiName,
           errorReason: (error as Error).message,
+          hintIsSkill: input.hintIsSkill,
           relation: input.relation,
           status: 'failed',
           summary: `${input.summary} failed.`,
@@ -134,6 +117,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               agentId,
               apiName: 'createDocument',
               getAgentDocumentId: (result) => result?.id,
+              hintIsSkill,
               relation: 'created',
               summary: 'Agent documents created a document.',
               toolAction: 'create',
@@ -148,6 +132,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
               agentId,
               apiName: 'createTopicDocument',
               getAgentDocumentId: (result) => result?.id,
+              hintIsSkill,
               relation: 'created',
               summary: 'Agent documents created a topic document.',
               toolAction: 'create',

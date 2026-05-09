@@ -7,9 +7,9 @@ import type {
   AgentSignalSkillIntentRoute,
 } from '../types';
 
-const POLICY_ID = 'analyze-intent:skill-candidates';
+const POLICY_ID = 'analyze-intent:skill-intent-records';
 
-const DeferredSkillCandidateSchema = z.object({
+const RecordedSkillIntentSchema = z.object({
   actionIntent: z.enum(['create', 'refine', 'consolidate', 'maintain', 'noop']).optional(),
   confidence: z.number().min(0).max(1).optional(),
   createdAt: z.number(),
@@ -27,33 +27,33 @@ const DeferredSkillCandidateSchema = z.object({
 });
 
 /**
- * Deferred skill candidate stored between user-message and completion analysis stages.
+ * Recorded skill intent stored between user-message and completion analysis stages.
  */
-export interface DeferredSkillCandidate {
+export interface RecordedSkillIntent {
   /** Optional skill-management action hint selected before final-turn evidence is hydrated. */
   actionIntent?: AgentSignalSkillActionIntent;
   /** Optional confidence of the user-stage skill-intent classifier, from 0 to 1. */
   confidence?: number;
-  /** Time the candidate was written, in epoch milliseconds. */
+  /** Time the record was written, in epoch milliseconds. */
   createdAt: number;
   /** Whether the user-stage feedback looked explicit, strong implicit, weak, or non-skill. */
   explicitness: AgentSignalSkillIntentExplicitness;
-  /** User feedback message id that produced this candidate. */
+  /** User feedback message id that produced this record. */
   feedbackMessageId: string;
   /** Optional private-safe reason suitable for traces and eval assertions. */
   reason?: string;
   /** Runtime route selected before completion-stage evidence is available. */
   route: AgentSignalSkillIntentRoute;
-  /** Runtime scope key where the candidate is visible. */
+  /** Runtime scope key where the record is visible. */
   scopeKey: string;
-  /** Source id that produced this candidate. */
+  /** Source id that produced this record. */
   sourceId: string;
 }
 
-const candidateField = (sourceId: string) => `skill-candidate:${sourceId}`;
+const recordField = (sourceId: string) => `skill-intent-record:${sourceId}`;
 
 /**
- * Writes one deferred skill candidate to policy state.
+ * Writes one recorded skill intent to policy state.
  *
  * Use when:
  * - User-message analysis finds skill intent before assistant completion
@@ -63,12 +63,12 @@ const candidateField = (sourceId: string) => `skill-candidate:${sourceId}`;
  * - `scopeKey` matches the later completion source scope
  *
  * Returns:
- * - Resolves after the candidate field is stored
+ * - Resolves after the record field is stored
  */
-export const writeDeferredSkillCandidate = async (
+export const recordSkillIntent = async (
   store: AgentSignalPolicyStateStore,
   input: {
-    candidate: DeferredSkillCandidate;
+    record: RecordedSkillIntent;
     scopeKey: string;
     ttlSeconds: number;
   },
@@ -77,42 +77,42 @@ export const writeDeferredSkillCandidate = async (
     POLICY_ID,
     input.scopeKey,
     {
-      [candidateField(input.candidate.sourceId)]: JSON.stringify(input.candidate),
+      [recordField(input.record.sourceId)]: JSON.stringify(input.record),
     },
     input.ttlSeconds,
   );
 };
 
 /**
- * Reads one deferred skill candidate from policy state.
+ * Reads one recorded skill intent from policy state.
  *
  * Use when:
  * - Completion-stage skill management needs earlier user-stage intent
  *
  * Expects:
- * - Candidate JSON may be absent, malformed, or structurally invalid
+ * - Record JSON may be absent, malformed, or structurally invalid
  *
  * Returns:
- * - Parsed candidate, or `undefined` when unavailable
+ * - Parsed record, or `undefined` when unavailable
  */
-export const readDeferredSkillCandidate = async (
+export const readRecordedSkillIntent = async (
   store: AgentSignalPolicyStateStore,
   input: {
     scopeKey: string;
     sourceId: string;
   },
-): Promise<DeferredSkillCandidate | undefined> => {
+): Promise<RecordedSkillIntent | undefined> => {
   const state = await store.readPolicyState(POLICY_ID, input.scopeKey);
-  const raw = state?.[candidateField(input.sourceId)];
+  const raw = state?.[recordField(input.sourceId)];
   if (!raw) return undefined;
 
   try {
-    const candidate = DeferredSkillCandidateSchema.parse(JSON.parse(raw));
-    if (candidate.scopeKey !== input.scopeKey || candidate.sourceId !== input.sourceId) {
+    const record = RecordedSkillIntentSchema.parse(JSON.parse(raw));
+    if (record.scopeKey !== input.scopeKey || record.sourceId !== input.sourceId) {
       return undefined;
     }
 
-    return candidate;
+    return record;
   } catch {
     return undefined;
   }

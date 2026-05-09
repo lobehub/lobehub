@@ -101,18 +101,32 @@ export const resolveClientRuntimeCompleteFeedbackSource = async (
     return skipped('non-assistant-message');
   }
 
-  if (typeof assistantMessage.parentId !== 'string') {
+  let currentParentId = assistantMessage.parentId;
+
+  if (typeof currentParentId !== 'string') {
     return skipped('missing-parent-message-id');
   }
 
-  const parentMessage = await messageModel.findById(assistantMessage.parentId);
+  let parentMessage = await messageModel.findById(currentParentId);
 
   if (!parentMessage) {
     return skipped('parent-message-not-found');
   }
 
-  if (parentMessage.role !== 'user') {
-    return skipped('non-user-parent');
+  const visited = new Set<string>([assistantMessage.id]);
+
+  while (parentMessage.role !== 'user') {
+    if (visited.has(parentMessage.id) || typeof parentMessage.parentId !== 'string') {
+      return skipped('non-user-parent');
+    }
+
+    visited.add(parentMessage.id);
+    currentParentId = parentMessage.parentId;
+    parentMessage = await messageModel.findById(currentParentId);
+
+    if (!parentMessage) {
+      return skipped('parent-message-not-found');
+    }
   }
 
   if (!parentMessage.content) {

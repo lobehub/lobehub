@@ -473,6 +473,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const messages = await convertOpenAIMessages(postPayload.messages, {
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
+          model: postPayload.model,
         });
 
         let response: Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
