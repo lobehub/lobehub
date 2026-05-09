@@ -220,6 +220,7 @@ export interface RuntimeExecutorContext {
   toolExecutionService: ToolExecutionService;
   topicId?: string;
   userId?: string;
+  groupId?: string;
   userTimezone?: string;
 }
 
@@ -1246,6 +1247,7 @@ export const createRuntimeExecutors = (
         {
           agentId: state.metadata?.agentId,
           threadId: state.metadata?.threadId,
+          groupId: ctx.groupId,
           topicId,
         },
         { postProcessUrl: buildPostProcessUrl(ctx) },
@@ -1286,6 +1288,7 @@ export const createRuntimeExecutors = (
       const messageService = new MessageService(ctx.serverDB, ctx.userId);
       const compressionResult = await messageService.createCompressionGroup(topicId, messageIds, {
         agentId: state.metadata?.agentId,
+        groupId: ctx.groupId,
         threadId: state.metadata?.threadId,
         topicId,
       });
@@ -2318,6 +2321,7 @@ export const createRuntimeExecutors = (
       {
         agentId: state.metadata?.agentId,
         threadId: state.metadata?.threadId,
+        groupId: ctx.groupId,
         topicId: state.metadata?.topicId,
       },
       { postProcessUrl: buildPostProcessUrl(ctx) },

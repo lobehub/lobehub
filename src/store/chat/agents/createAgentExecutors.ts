@@ -2728,7 +2728,9 @@ export const createAgentExecutors = (context: {
         // 1. Create compression group with placeholder content
         const result = await messageService.createCompressionGroup({
           agentId,
+          groupId: opContext.groupId,
           messageIds,
+          threadId: opContext.threadId,
           topicId,
         });
         const { messageGroupId, messages: initialCompressedMessages, messagesToSummarize } = result;
