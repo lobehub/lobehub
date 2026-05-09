@@ -232,6 +232,93 @@ name: youtube-comment-retrieval-workflow
       );
     });
 
+    it('should preserve existing editorData for SKILL.md documents', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createMockEditor() as any;
+      const editorData = {
+        root: {
+          children: [
+            {
+              children: [
+                { children: [{ text: 'origin', type: 'text' }], type: 'paragraph' },
+                { children: [{ text: 'modified', type: 'text' }], type: 'paragraph' },
+              ],
+              diffType: 'modify',
+              type: 'diff',
+            },
+          ],
+          type: 'root',
+        },
+      };
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Skill metadata
+name: skill-name
+---
+
+# Body`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData,
+          sourceType: 'notebook',
+        });
+      });
+
+      act(() => {
+        result.current.onEditorInit(mockEditor);
+      });
+
+      expect(mockEditor.setDocument).toHaveBeenCalledTimes(1);
+      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData));
+    });
+
+    it('should fall back to editable body when SKILL.md editorData cannot be loaded', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const editorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const mockEditor = {
+        getDocument: vi.fn(),
+        setDocument: vi.fn((type: string) => {
+          if (type === 'json') {
+            throw new Error('editorData unavailable');
+          }
+        }),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Skill metadata
+name: skill-name
+---
+
+# Body`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData,
+          sourceType: 'notebook',
+        });
+      });
+
+      act(() => {
+        result.current.onEditorInit(mockEditor);
+      });
+
+      expect(consoleWarn).toHaveBeenCalledWith(
+        '[DocumentStore] Failed to load SKILL.md editorData, falling back to markdown',
+      );
+      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(1, 'json', JSON.stringify(editorData));
+      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(2, 'markdown', '# Body');
+
+      consoleWarn.mockRestore();
+    });
+
     it('should load editorData as json into editor', () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createMockEditor() as any;

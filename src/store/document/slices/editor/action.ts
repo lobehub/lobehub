@@ -190,10 +190,27 @@ export class EditorActionImpl {
 
     if (!doc) return;
 
+    // Check if editorData is valid and non-empty
+    const hasValidEditorData =
+      doc.editorData &&
+      typeof doc.editorData === 'object' &&
+      Object.keys(doc.editorData).length > 0;
+
     // SKILL.md frontmatter is metadata, not editable document body. Keep it out of the rich
     // Markdown editor because `---` fences are otherwise parsed as Markdown dividers/headings,
     // then stitch the same YAML back into the persisted content during save.
     if (doc.contentFormat === 'skillMarkdown') {
+      if (hasValidEditorData) {
+        try {
+          editor.setDocument('json', JSON.stringify(doc.editorData));
+          return;
+        } catch {
+          console.warn(
+            '[DocumentStore] Failed to load SKILL.md editorData, falling back to markdown',
+          );
+        }
+      }
+
       try {
         editor.setDocument('markdown', parseSkillMarkdownFrontmatter(doc.content).body);
         this.#set({ editor });
@@ -203,12 +220,6 @@ export class EditorActionImpl {
 
       return;
     }
-
-    // Check if editorData is valid and non-empty
-    const hasValidEditorData =
-      doc.editorData &&
-      typeof doc.editorData === 'object' &&
-      Object.keys(doc.editorData).length > 0;
 
     // Set content from document state
     if (hasValidEditorData) {
