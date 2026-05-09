@@ -146,7 +146,7 @@ Before creating the release branch, verify the source branch:
 
 Choose workflow by scenario (see `reference/patch-release-scenarios.md`):
 
-- **Weekly Release**: create `release/weekly-{YYYYMMDD}` from canary; use `git log main..canary` for release note inputs; title like `🚀 release: 20260222`
+- **Weekly Release**: create `release/weekly-{YYYYMMDD}` from canary; derive release note inputs from `$PREV_TAG..origin/release/weekly-<YYYYMMDD>` per **Computing Inputs (Hard Rules)** below (where `$PREV_TAG` is the latest semver tag on main) — using a hand-picked previous-weekly tag will silently miss hotfixes shipped between weeklies; title like `🚀 release: 20260222`
 - **Bug Hotfix**: create `hotfix/` from main; use gitmoji prefix title (e.g. `🐛 fix: ...`)
 - **New Model Launch**: community PRs trigger automatically via title prefix (`feat` / `style`)
 - **DB Migration**: create `release/db-migration-{name}` from main; cherry-pick migration commits; include dedicated migration notes
@@ -184,6 +184,88 @@ Collect these inputs first:
 5. Known risks / migrations / rollout notes (if any)
 
 If metrics cannot be reliably computed, omit unknown numbers instead of guessing.
+
+### Computing Inputs (Hard Rules — Verify, Never Guess)
+
+> Hallucinated PR numbers and wrong "Since v..." bases are the #1 failure mode of this skill. Every number and every `(#XXXX)` must come from `git`, never from memory or inference.
+
+#### 1. Compare base = latest semver tag on `main`
+
+Do **not** eyeball the tag list or pick the "last weekly" PR. Compute it:
+
+```bash
+git fetch origin main canary --tags
+PREV_TAG=$(git describe --tags --abbrev=0 origin/main --match 'v*.*.*' --exclude '*-canary*' --exclude '*-nightly*')
+echo "$PREV_TAG"
+```
+
+Sanity check that the tag is reachable from the release branch:
+
+```bash
+git merge-base --is-ancestor "$PREV_TAG" origin/release/weekly-<YYYYMMDD> && echo OK
+```
+
+If the check fails, stop and ask the user — the release branch is based on the wrong source.
+
+> **Why not "the last weekly release PR"?** Hotfixes (`v2.1.54`, `v2.1.55`, …) merge directly into main between weeklies. They get back-merged via `sync-main-to-canary`, so the latest semver tag on main _is_ the correct previous release for both weekly and minor flows. Picking the previous weekly's tag will silently undercount and put a stale version in "Since v…".
+
+#### 2. PR refs must come from commit subjects — never from descriptions
+
+Compute the canonical set:
+
+```bash
+git log "$PREV_TAG..origin/release/weekly-<YYYYMMDD>" \
+  --pretty=format:'%s' --no-merges \
+  | grep -oE '\(#[0-9]+\)$' \
+  | sort -u > /tmp/release_prs.txt
+```
+
+Hard rules:
+
+- Every `(#XXXX)` you write in the body **must** appear in `/tmp/release_prs.txt`. No exceptions.
+- Never infer a PR number from a feature description. If you remember "the KB BM25 PR was around #14501", that memory is wrong about half the time. Look up the commit hash by feature keyword and read its actual subject.
+- If your terminal truncates long subjects (any wrapper that compresses output, e.g. `rtk`), bypass it. With `rtk` use `rtk proxy git log …`. Verify with `wc -l /tmp/release_prs.txt` — the count must match `git log $PREV_TAG..HEAD --no-merges --pretty=format:'%h' | wc -l` minus the few commits without a PR ref. A mismatch of >5% means subjects are being silently truncated.
+
+#### 3. Metrics must come from git counts
+
+```bash
+PR_COUNT=$(wc -l < /tmp/release_prs.txt | tr -d ' ')
+
+COMMIT_COUNT=$(git log "$PREV_TAG..origin/release/weekly-<YYYYMMDD>" --no-merges --pretty=format:'%h' | wc -l | tr -d ' ')
+
+CONTRIBUTOR_COUNT=$(git log "$PREV_TAG..origin/release/weekly-<YYYYMMDD>" --no-merges --pretty=format:'%an' \
+  | sort -u \
+  | grep -viE '^(lobehubbot|LobeHub Bot|renovate\[bot\])$' \
+  | wc -l | tr -d ' ')
+```
+
+If a number cannot be confidently derived, omit it — never guess.
+
+#### 4. Author-to-handle resolution
+
+Git `%an` is the commit author display name, not the GitHub handle. For each author you mention, confirm the handle:
+
+```bash
+gh pr view lobehub/lobe-chat --json author --jq '.author.login' < some-pr-by-them > --repo
+```
+
+Use the result for `@handle`. Then classify each author per the `LobeHub team roster` below; community first, team after.
+
+#### 5. Pre-publish verification (mandatory)
+
+Before `gh pr create` / `gh pr edit --body-file`, diff body PR refs against the canonical set:
+
+```bash
+grep -oE '#[0-9]+' release_body.md | sort -u > /tmp/body_prs.txt
+sed 's/[()]//g' /tmp/release_prs.txt > /tmp/release_prs_clean.txt
+
+echo "=== In body but NOT in actual range (must be EMPTY) ==="
+comm -23 /tmp/body_prs.txt /tmp/release_prs_clean.txt
+```
+
+Empty diff = OK. Any output = the body cites a PR that wasn't merged in this range. Stop and fix before publishing.
+
+Also verify the metrics line in the body matches the computed values (`PR_COUNT`, `CONTRIBUTOR_COUNT`) and that `**Full Changelog**` uses `$PREV_TAG`, not some older tag.
 
 ### Canonical Structure
 
@@ -251,9 +333,10 @@ Render contributors as a **single flat list** (no separate "Community" / "Core T
 - @Neko
 - @Rdmclin2
 - @AmAzing129
-- @sudongyuer
-- @rivertwilight
+- @sudongyuer (commit author name: Tsuki)
+- @rivertwilight (commit author name: René Wang)
 - @CanisMinor
+- @cy948 (commit author name: Rylan Cai)
 
 > **Resolving handles** — git author names (e.g. `YuTengjing`) are not always the GitHub handle. Verify via `gh pr view <PR> --json author` or `gh api search/users -f q='<email>'` before listing.
 
@@ -330,6 +413,11 @@ Plus @lobehubbot and renovate[bot] for maintenance.
 
 ### Quick Checklist
 
+- [ ] `PREV_TAG` is `git describe --tags --abbrev=0 origin/main` (latest semver), not the last weekly's tag
+- [ ] Every `(#XXXX)` in the body appears in `/tmp/release_prs.txt` (verified via `comm -23`)
+- [ ] `Since v…` line uses `$PREV_TAG`; PR / contributor counts match `wc -l` on the computed sets
+- [ ] `**Full Changelog**` uses `$PREV_TAG...release/weekly-<YYYYMMDD>` (or `…v{x.y.z}` for minor)
+- [ ] Author handles resolved via `gh pr view --json author`, not assumed from `%an`
 - [ ] Uses top metadata and a clear release thesis
 - [ ] Includes `Highlights` plus domain-grouped sections
 - [ ] Every major bullet states both change and user/operator impact
