@@ -21,6 +21,50 @@ const buildProvider = (phaseGuidance: string) =>
   });
 
 describe('OnboardingActionHintInjector', () => {
+  describe('finished guard', () => {
+    it('skips injection entirely when onboarding is finished', async () => {
+      const provider = new OnboardingActionHintInjector({
+        enabled: true,
+        onboardingContext: {
+          finished: true,
+          personaContent: '# Persona',
+          phaseGuidance: 'Phase: Summary. Wrap-up.',
+          soulContent: '# SOUL',
+        },
+      });
+      const messages = [
+        { content: 'sys', role: 'system' },
+        { content: 'hi', role: 'user' },
+        { content: 'hello', role: 'assistant' },
+      ];
+      const result = await provider.process(createContext(messages));
+      // No virtual user message should be appended
+      expect(result.messages).toHaveLength(messages.length);
+      expect(result.messages.at(-1)?.role).toBe('assistant');
+    });
+
+    it('still injects when finished is false', async () => {
+      const provider = new OnboardingActionHintInjector({
+        enabled: true,
+        onboardingContext: {
+          finished: false,
+          personaContent: '# Persona',
+          phaseGuidance: 'Phase: Summary. Wrap-up.',
+          soulContent: '# SOUL',
+        },
+      });
+      const result = await provider.process(
+        createContext([
+          { content: 'sys', role: 'system' },
+          { content: 'hi', role: 'user' },
+        ]),
+      );
+      const last = result.messages.at(-1);
+      expect(last?.role).toBe('user');
+      expect(last?.content).toContain('next_actions');
+    });
+  });
+
   describe('marketplace detection (Summary phase)', () => {
     const phaseGuidance = 'Phase: Summary. Wrap-up.';
 
