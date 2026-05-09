@@ -1,3 +1,4 @@
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from '@lobechat/const';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,12 +64,17 @@ describe('AiModelService', () => {
 
 describe('Default model configuration', () => {
   it('DEFAULT_MODEL should be enabled in LOBE_DEFAULT_MODEL_LIST', () => {
-    const match = LOBE_DEFAULT_MODEL_LIST.find((m) => m.id === DEFAULT_MODEL);
+    const match = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.id === DEFAULT_MODEL && m.providerId === DEFAULT_PROVIDER,
+    );
     expect(
       match,
-      `DEFAULT_MODEL "${DEFAULT_MODEL}" not found in LOBE_DEFAULT_MODEL_LIST`,
+      `DEFAULT_MODEL "${DEFAULT_PROVIDER}/${DEFAULT_MODEL}" not found in LOBE_DEFAULT_MODEL_LIST`,
     ).toBeDefined();
-    expect(match!.enabled, `DEFAULT_MODEL "${DEFAULT_MODEL}" is not enabled`).toBe(true);
+    expect(
+      match!.enabled,
+      `DEFAULT_MODEL "${DEFAULT_PROVIDER}/${DEFAULT_MODEL}" is not enabled`,
+    ).toBe(true);
   });
 
   it('DEFAULT_MINI_MODEL should be enabled in LOBE_DEFAULT_MODEL_LIST', () => {
