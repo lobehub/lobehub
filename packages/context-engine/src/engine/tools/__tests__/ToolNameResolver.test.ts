@@ -714,6 +714,127 @@ describe('ToolNameResolver', () => {
       expect(result).toEqual([]);
     });
 
+    // Regression for LOBE-8696: some models (e.g. deepseek-v4-pro) drop the
+    // `<identifier>____` prefix and emit only the bare API name. When that
+    // bare name uniquely matches an API in the available manifests, we should
+    // recover the identifier from the manifest instead of silently dropping
+    // the call (which previously caused empty assistant bubbles).
+    describe('resolve - missing-prefix fallback', () => {
+      it('should recover identifier when bare API name uniquely matches a manifest', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{"toolIds": ["foo"]}', name: 'activateTools' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-activator': {
+            api: [{ description: 'Activate tools', name: 'activateTools', parameters: {} }],
+            identifier: 'lobe-activator',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-skills': {
+            api: [{ description: 'Activate skill', name: 'activateSkill', parameters: {} }],
+            identifier: 'lobe-skills',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests);
+
+        expect(result).toHaveLength(1);
+        expect(result[0]).toEqual({
+          apiName: 'activateTools',
+          arguments: '{"toolIds": ["foo"]}',
+          id: 'call_1',
+          identifier: 'lobe-activator',
+          type: 'builtin',
+        });
+      });
+
+      it('should drop bare API names when no manifest exposes them', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'unknownAction' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-activator': {
+            api: [{ description: '', name: 'activateTools', parameters: {} }],
+            identifier: 'lobe-activator',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests);
+
+        expect(result).toEqual([]);
+      });
+
+      it('should drop bare API names when multiple manifests expose the same name (ambiguous)', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'createDocument' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-agent-documents': {
+            api: [{ description: '', name: 'createDocument', parameters: {} }],
+            identifier: 'lobe-agent-documents',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-notebook': {
+            api: [{ description: '', name: 'createDocument', parameters: {} }],
+            identifier: 'lobe-notebook',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests);
+
+        expect(result).toEqual([]);
+      });
+
+      it('should preserve manifest type when recovering identifier', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'open_page' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'mcp-browser': {
+            api: [{ description: '', name: 'open_page', parameters: {} }],
+            identifier: 'mcp-browser',
+            meta: {},
+            type: 'mcp' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests);
+
+        expect(result).toHaveLength(1);
+        expect(result[0].identifier).toBe('mcp-browser');
+        expect(result[0].apiName).toBe('open_page');
+        expect(result[0].type).toBe('mcp');
+      });
+    });
+
     it('should handle tool calls with different types', () => {
       const toolCalls = [
         {

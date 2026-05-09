@@ -87,11 +87,30 @@ export class ToolNameResolver {
   ): ChatToolPayload[] {
     return toolCalls
       .map((toolCall): ChatToolPayload | null => {
-        const [initialIdentifier, apiName, type] =
+        const [initialIdentifier, initialApiName, type] =
           toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
         let identifier = initialIdentifier;
+        let apiName = initialApiName;
 
-        if (!apiName) return null;
+        // Fallback for malformed tool names without the `____` separator
+        // (e.g. model returns "activateTools" instead of
+        // "lobe-activator____activateTools"). When the bare name uniquely
+        // matches an API across known manifests, recover the identifier so we
+        // don't silently drop the tool call. The manifest's `type` is picked
+        // up by the existing `type ?? manifests[identifier]?.type` fallback
+        // when building the payload below.
+        if (!apiName) {
+          const bareName = initialIdentifier;
+          const matches = Object.entries(manifests).filter(([, manifest]) =>
+            manifest?.api?.some((api: LobeChatPluginApi) => api.name === bareName),
+          );
+          if (matches.length === 1) {
+            identifier = matches[0][0];
+            apiName = bareName;
+          } else {
+            return null;
+          }
+        }
 
         // Step 1: Resolve hashed identifier if needed
         if (identifier.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX)) {
