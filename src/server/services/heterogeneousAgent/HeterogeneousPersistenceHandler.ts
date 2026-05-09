@@ -239,6 +239,29 @@ export class HeterogeneousPersistenceHandler {
   }): Promise<void> {
     const state = await this.loadOrCreateState(params.operationId, params.topicId);
 
+    // Refresh content/reasoning baseline from DB before processing this batch.
+    //
+    // Root cause of truncation: Vercel serverless routes consecutive batches to
+    // different Lambda instances. A warm replica's in-memory `accumulatedContent`
+    // reflects only the batches IT processed — it has no visibility into batches
+    // handled by other replicas. When that warm replica later processes a
+    // tools_calling event, `persistMainToolBatch` writes the stale short content
+    // alongside the new tools, overwriting the correct (longer) DB value.
+    //
+    // Fix: re-read the current assistant message from DB at the start of every
+    // ingest call. Since `flushBatchContent` always writes at the end of each
+    // batch, DB is authoritative. Reading here gives us the freshest flushed
+    // content as the new baseline, so any text accumulated in this batch extends
+    // the correct full string rather than a stale partial.
+    //
+    // Cost: one extra `findById` round-trip per warm ingest call (cold calls
+    // already read the message in `loadOrCreateState` — the second read is
+    // redundant but harmless and keeps the logic uniform).
+    const refreshed = await this.deps.messageModel.findById(state.currentAssistantMessageId);
+    state.accumulatedContent = (refreshed?.content ?? '') as string;
+    state.accumulatedReasoning =
+      (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
+
     for (const event of params.events) {
       const key = eventKey(event);
       if (state.processedKeys.has(key)) {
