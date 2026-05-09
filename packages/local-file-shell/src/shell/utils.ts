@@ -24,3 +24,9 @@ export const getShellConfig = (command: string) =>
   process.platform === 'win32'
     ? { args: ['/c', command], cmd: 'cmd.exe' }
     : { args: ['-c', command], cmd: '/bin/sh' };
+
+/**
+ * Returns true when running on Windows — used to gate windowsVerbatimArguments
+ * and other platform-specific spawn options.
+ */
+export const isWindows = (): boolean => process.platform === 'win32';
