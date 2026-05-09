@@ -225,20 +225,37 @@ export const mobileRoutes: RouteObject[] = [
         path: 'settings',
       },
 
-      // Tasks routes (cross-agent)
+      // Task workspace routes (cross-agent)
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks'),
-            index: true,
+            children: [
+              {
+                element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks'),
+                index: true,
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/" />,
+            path: 'tasks',
+          },
+          {
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/task/[taskId]'),
+                  'Mobile > Task Detail',
+                ),
+                path: ':taskId',
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/tasks" />,
+            path: 'task',
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/tasks/_layout'),
-          'Mobile > Tasks > Layout',
+          () => import('@/routes/(main)/(task-workspace)/_layout'),
+          'Mobile > Task Workspace > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/" />,
-        path: 'tasks',
       },
 
       ...BusinessMobileRoutesWithMainLayout,

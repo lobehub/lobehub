@@ -135,19 +135,20 @@ export interface InfoRow {
 }
 
 export interface ConfirmCardProps {
-  /** Email of the LobeHub account already bound to this IM identity, if any. */
-  conflictEmail?: string;
+  blockingNotice?: {
+    ctaHref: string;
+    ctaLabel: string;
+    description: string;
+    title: string;
+  };
   infoRows: InfoRow[];
   onSuccess: () => void;
   platform: MessengerPlatform;
-  platformLabel: string;
   randomId: string;
-  /** Fallback URL the conflict warning sends the user to so they can switch accounts. */
-  signInUrl: string;
 }
 
 export const ConfirmCard = memo<ConfirmCardProps>(
-  ({ conflictEmail, infoRows, onSuccess, platform, platformLabel, randomId, signInUrl }) => {
+  ({ blockingNotice, infoRows, onSuccess, platform, randomId }) => {
     const { t } = useTranslation('messenger');
     const { message } = App.useApp();
 
@@ -164,7 +165,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
       setSelectedAgentId(agentsSWR.data[0].id);
     }, [agentsSWR.data, selectedAgentId]);
 
-    const hasConflict = !!conflictEmail;
+    const isBlocked = !!blockingNotice;
 
     const handleConfirm = async () => {
       if (!selectedAgentId) return;
@@ -198,27 +199,24 @@ export const ConfirmCard = memo<ConfirmCardProps>(
           </Flexbox>
         </Block>
 
-        {hasConflict && (
+        {blockingNotice && (
           <Block className={styles.warningBlock} style={{ width: '100%' }} variant={'outlined'}>
             <Flexbox horizontal gap={12}>
               <Icon className={styles.warningIcon} icon={AlertTriangleIcon} size={20} />
               <Flexbox gap={8} style={{ flex: 1 }}>
-                <Text strong>{t('verify.confirm.conflict.title')}</Text>
+                <Text strong>{blockingNotice.title}</Text>
                 <Text style={{ fontSize: 13 }} type="secondary">
-                  {t('verify.confirm.conflict.description', {
-                    email: conflictEmail,
-                    platform: platformLabel,
-                  })}
+                  {blockingNotice.description}
                 </Text>
-                <Button block href={signInUrl} type="default">
-                  {t('verify.confirm.conflict.switchAccount')}
+                <Button block href={blockingNotice.ctaHref} type="default">
+                  {blockingNotice.ctaLabel}
                 </Button>
               </Flexbox>
             </Flexbox>
           </Block>
         )}
 
-        {!hasConflict && (
+        {!isBlocked && (
           <Flexbox gap={8} style={{ width: '100%' }}>
             <Text strong>{t('verify.confirm.defaultAgent')}</Text>
             {agentsSWR.data?.length === 0 ? (
@@ -238,7 +236,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
         <Button
           block
-          disabled={hasConflict || !selectedAgentId}
+          disabled={isBlocked || !selectedAgentId}
           loading={confirming}
           size="large"
           type="primary"
@@ -293,6 +291,8 @@ export interface PeekedToken {
 
 export interface ExistingLink {
   platform: string;
+  platformUserId?: string;
+  platformUsername?: string | null;
   tenantId?: string | null;
 }
 

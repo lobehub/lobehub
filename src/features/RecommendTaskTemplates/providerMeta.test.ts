@@ -10,9 +10,15 @@ describe('getProviderMeta', () => {
     expect(meta?.icon).toBeDefined();
   });
 
+  it('resolves notion as a lobehub source provider', () => {
+    const meta = getProviderMeta({ provider: 'notion', source: 'lobehub' });
+    expect(meta).toMatchObject({ label: 'Notion', provider: 'notion', source: 'lobehub' });
+    expect(meta?.icon).toBeDefined();
+  });
+
   it('resolves klavis source via KLAVIS_SERVER_TYPES', () => {
-    const meta = getProviderMeta({ provider: 'notion', source: 'klavis' });
-    expect(meta).toMatchObject({ label: 'Notion', provider: 'notion', source: 'klavis' });
+    const meta = getProviderMeta({ provider: 'gmail', source: 'klavis' });
+    expect(meta).toMatchObject({ label: 'Gmail', provider: 'gmail', source: 'klavis' });
     expect(meta?.icon).toBeDefined();
   });
 
@@ -39,7 +45,7 @@ describe('findNextUnconnectedSpec', () => {
   it('returns undefined when all specs are connected', () => {
     const specs: TaskTemplateSkillRequirement[] = [
       { provider: 'github', source: 'lobehub' },
-      { provider: 'notion', source: 'klavis' },
+      { provider: 'notion', source: 'lobehub' },
     ];
     expect(findNextUnconnectedSpec(specs, allConnected)).toBeUndefined();
   });
@@ -47,7 +53,7 @@ describe('findNextUnconnectedSpec', () => {
   it('returns the first spec when none are connected', () => {
     const specs: TaskTemplateSkillRequirement[] = [
       { provider: 'github', source: 'lobehub' },
-      { provider: 'notion', source: 'klavis' },
+      { provider: 'notion', source: 'lobehub' },
     ];
     const result = findNextUnconnectedSpec(specs, noneConnected);
     expect(result?.provider).toBe('github');
@@ -58,19 +64,19 @@ describe('findNextUnconnectedSpec', () => {
     const specs: TaskTemplateSkillRequirement[] = [
       { provider: 'github', source: 'lobehub' },
       { provider: 'linear', source: 'lobehub' },
-      { provider: 'notion', source: 'klavis' },
+      { provider: 'notion', source: 'lobehub' },
     ];
     const isConnected = (s: TaskTemplateSkillRequirement) =>
       s.provider === 'github' || s.provider === 'linear';
     const result = findNextUnconnectedSpec(specs, isConnected);
     expect(result?.provider).toBe('notion');
-    expect(result?.source).toBe('klavis');
+    expect(result?.source).toBe('lobehub');
   });
 
   it('skips specs with unknown providers (no meta) and continues searching', () => {
     const specs: TaskTemplateSkillRequirement[] = [
       { provider: 'nonexistent-x', source: 'lobehub' },
-      { provider: 'notion', source: 'klavis' },
+      { provider: 'notion', source: 'lobehub' },
     ];
     const result = findNextUnconnectedSpec(specs, noneConnected);
     expect(result?.provider).toBe('notion');

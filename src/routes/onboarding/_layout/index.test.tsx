@@ -1,16 +1,35 @@
 import type * as BusinessConst from '@lobechat/business-const';
-import { render, screen } from '@testing-library/react';
+import type * as Const from '@lobechat/const';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import OnBoardingContainer from './index';
 
+const mocks = vi.hoisted(() => ({
+  AGENT_ONBOARDING_ENABLED: true,
+  enableAgentOnboarding: true as boolean | undefined,
+  isDesktop: false,
+  serverConfigInit: true,
+}));
+
 vi.mock('@lobechat/business-const', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof BusinessConst;
-
   return {
     ...actual,
-    AGENT_ONBOARDING_ENABLED: true,
+    get AGENT_ONBOARDING_ENABLED() {
+      return mocks.AGENT_ONBOARDING_ENABLED;
+    },
+  };
+});
+
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof Const;
+  return {
+    ...actual,
+    get isDesktop() {
+      return mocks.isDesktop;
+    },
   };
 });
 
@@ -38,34 +57,78 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      featureFlags: { enableAgentOnboarding: mocks.enableAgentOnboarding },
+      serverConfigInit: mocks.serverConfigInit,
+    }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ finishOnboarding: vi.fn() }),
+}));
+
+const renderAt = (initialPath: string) =>
+  render(
+    <MemoryRouter initialEntries={[initialPath]}>
+      <OnBoardingContainer>
+        <div>Onboarding Content</div>
+      </OnBoardingContainer>
+    </MemoryRouter>,
+  );
+
+const hasSkipFooter = () =>
+  screen.queryByText((content) => content.includes('agent.layout.skip')) !== null;
+
+beforeEach(() => {
+  mocks.AGENT_ONBOARDING_ENABLED = true;
+  mocks.enableAgentOnboarding = true;
+  mocks.isDesktop = false;
+  mocks.serverConfigInit = true;
+});
+
+afterEach(() => {
+  cleanup();
+});
+
 describe('OnBoardingContainer', () => {
-  it('renders onboarding content without footer copyright', () => {
-    render(
-      <MemoryRouter>
-        <OnBoardingContainer>
-          <div>Onboarding Content</div>
-        </OnBoardingContainer>
-      </MemoryRouter>,
-    );
+  it('renders onboarding content without footer on the shared-prefix /onboarding path', () => {
+    renderAt('/onboarding');
 
     expect(screen.getByText('Lang Button')).toBeInTheDocument();
     expect(screen.getByText('Theme Button')).toBeInTheDocument();
     expect(screen.getByText('Onboarding Content')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'agent.skipOnboarding' })).not.toBeInTheDocument();
-    expect(screen.queryByText('© 2026 LobeHub. All rights reserved.')).not.toBeInTheDocument();
+    expect(hasSkipFooter()).toBe(false);
   });
 
-  it('shows skip onboarding on agent onboarding route', () => {
-    render(
-      <MemoryRouter initialEntries={['/onboarding/agent']}>
-        <OnBoardingContainer>
-          <div>Onboarding Content</div>
-        </OnBoardingContainer>
-      </MemoryRouter>,
-    );
+  it('shows skip-and-switch footer on /onboarding/agent when agent flow is reachable', () => {
+    renderAt('/onboarding/agent');
+    expect(hasSkipFooter()).toBe(true);
+  });
 
-    expect(
-      screen.getByText((content) => content.includes('agent.layout.skip')),
-    ).toBeInTheDocument();
+  it('hides footer when AGENT_ONBOARDING_ENABLED master switch is off', () => {
+    mocks.AGENT_ONBOARDING_ENABLED = false;
+    renderAt('/onboarding/agent');
+    expect(hasSkipFooter()).toBe(false);
+  });
+
+  it('hides footer on desktop, where agent flow is unreachable', () => {
+    mocks.isDesktop = true;
+    renderAt('/onboarding/agent');
+    expect(hasSkipFooter()).toBe(false);
+  });
+
+  it('hides footer when runtime feature flag enableAgentOnboarding is off', () => {
+    mocks.enableAgentOnboarding = false;
+    renderAt('/onboarding/agent');
+    expect(hasSkipFooter()).toBe(false);
+  });
+
+  it('hides footer until server config has initialized', () => {
+    mocks.serverConfigInit = false;
+    renderAt('/onboarding/agent');
+    expect(hasSkipFooter()).toBe(false);
   });
 });

@@ -27,6 +27,20 @@ export class MessengerAccountLinkConflictError extends Error {
   }
 }
 
+/**
+ * Thrown when the same LobeHub user already has a different IM identity bound
+ * for the requested `(platform, tenant)` scope and must explicitly unlink
+ * before switching accounts.
+ */
+export class MessengerAccountLinkRelinkRequiredError extends Error {
+  readonly code = 'MESSENGER_ACCOUNT_LINK_RELINK_REQUIRED' as const;
+
+  constructor(message?: string) {
+    super(message ?? 'Existing messenger link must be unlinked before re-linking');
+    this.name = 'MessengerAccountLinkRelinkRequiredError';
+  }
+}
+
 export class MessengerAccountLinkModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -40,10 +54,9 @@ export class MessengerAccountLinkModel {
 
   /**
    * Insert or update the user's link for `(platform, tenantId)`. Used by the
-   * verify-im confirm flow — if the user re-links the same Telegram account
-   * they keep the same row; if they link a different IM account in the same
-   * `(platform, tenant)` the existing row is overwritten (one IM account per
-   * `(user, platform, tenant)`).
+   * verify-im confirm flow — if the user re-asserts the same IM identity they
+   * keep the same row, but switching to a different IM identity in the same
+   * `(platform, tenant)` requires an explicit unlink first.
    *
    * For Telegram (and any global-bot platform), `tenantId` is omitted /
    * defaults to the empty string, which collapses the new 3-column index
@@ -61,10 +74,46 @@ export class MessengerAccountLinkModel {
     params: Omit<NewMessengerAccountLink, 'userId' | 'id'>,
   ): Promise<MessengerAccountLinkItem> => {
     const tenantId = params.tenantId ?? GLOBAL_TENANT_ID;
+    const now = new Date();
 
-    // Resolve by IM identity first. If the row exists and belongs to another
-    // user, refuse — the caller (router) should already have surfaced a
-    // friendly 409, this is the defensive backstop.
+    // Try to claim the `(user, platform, tenant)` scope first. This prevents
+    // concurrent verify-im confirmations from both observing "no row" and
+    // then silently overwriting one another in a later update path.
+    try {
+      const [created] = await this.db
+        .insert(messengerAccountLinks)
+        .values({
+          ...params,
+          tenantId,
+          updatedAt: now,
+          userId: this.userId,
+        })
+        .onConflictDoNothing({
+          target: [
+            messengerAccountLinks.userId,
+            messengerAccountLinks.platform,
+            messengerAccountLinks.tenantId,
+          ],
+        })
+        .returning();
+
+      if (created) return created;
+    } catch (error) {
+      const pgError = error as { cause?: { code?: string; constraint?: string }; code?: string };
+      const code = pgError.cause?.code ?? pgError.code;
+      const constraint = pgError.cause?.constraint;
+
+      if (
+        code !== '23505' &&
+        constraint !== 'messenger_account_links_platform_tenant_user_unique'
+      ) {
+        throw error;
+      }
+    }
+
+    // Resolve by IM identity after the insert attempt. This catches both the
+    // steady-state refresh path and races where another request/user inserted
+    // before us.
     const byIdentity = await MessengerAccountLinkModel.findByPlatformUser(
       this.db,
       params.platform,
@@ -81,37 +130,32 @@ export class MessengerAccountLinkModel {
         .set({
           activeAgentId: params.activeAgentId ?? byIdentity.activeAgentId,
           platformUsername: params.platformUsername ?? null,
-          updatedAt: new Date(),
+          updatedAt: now,
         })
         .where(eq(messengerAccountLinks.id, byIdentity.id))
         .returning();
       return updated;
     }
 
-    // IM identity is unbound. If the user already has a row for this
-    // `(platform, tenant)` (e.g. they previously linked a different account),
-    // overwrite it with the new platformUserId.
     const existingForUser = await this.findByPlatform(params.platform, tenantId);
-
     if (existingForUser) {
+      if (existingForUser.platformUserId !== params.platformUserId) {
+        throw new MessengerAccountLinkRelinkRequiredError();
+      }
+
       const [updated] = await this.db
         .update(messengerAccountLinks)
         .set({
           activeAgentId: params.activeAgentId ?? existingForUser.activeAgentId,
-          platformUserId: params.platformUserId,
           platformUsername: params.platformUsername ?? null,
-          updatedAt: new Date(),
+          updatedAt: now,
         })
         .where(eq(messengerAccountLinks.id, existingForUser.id))
         .returning();
       return updated;
     }
 
-    const [created] = await this.db
-      .insert(messengerAccountLinks)
-      .values({ ...params, tenantId, userId: this.userId })
-      .returning();
-    return created;
+    throw new Error('MessengerAccountLink upsert could not resolve the final row state');
   };
 
   delete = async (id: string) => {

@@ -7,7 +7,7 @@ import { Outlet } from 'react-router-dom';
 import AgentTaskManager from '@/features/AgentTaskManager';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-const TaskDetailLayout = memo(() => {
+const TaskWorkspaceLayout = memo(() => {
   const isMobile = useIsMobile();
 
   return (
@@ -20,6 +20,6 @@ const TaskDetailLayout = memo(() => {
   );
 });
 
-TaskDetailLayout.displayName = 'TaskDetailLayout';
+TaskWorkspaceLayout.displayName = 'TaskWorkspaceLayout';
 
-export default TaskDetailLayout;
+export default TaskWorkspaceLayout;

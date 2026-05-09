@@ -7,17 +7,29 @@ import { createContextInner } from '@/libs/trpc/lambda/context';
 import { messengerRouter } from '../messenger';
 
 const {
+  mockConsumeLinkToken,
+  mockFindByPlatform,
+  mockFindByPlatformUser,
   mockGetServerDB,
   mockInitWithEnvKey,
   mockListByInstallerUserId,
   mockMarkRevoked,
+  mockNotifyTelegramLinkSuccess,
+  mockPeekLinkToken,
   mockSlackAuthTest,
+  mockUpsertForPlatform,
 } = vi.hoisted(() => ({
+  mockConsumeLinkToken: vi.fn(),
+  mockFindByPlatform: vi.fn(),
+  mockFindByPlatformUser: vi.fn(),
   mockGetServerDB: vi.fn(),
   mockInitWithEnvKey: vi.fn(),
   mockListByInstallerUserId: vi.fn(),
   mockMarkRevoked: vi.fn(),
+  mockNotifyTelegramLinkSuccess: vi.fn(),
+  mockPeekLinkToken: vi.fn(),
   mockSlackAuthTest: vi.fn(),
+  mockUpsertForPlatform: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -32,10 +44,33 @@ vi.mock('@/database/models/messengerInstallation', () => ({
   },
 }));
 
+vi.mock('@/database/models/messengerAccountLink', () => ({
+  MessengerAccountLinkConflictError: class MessengerAccountLinkConflictError extends Error {},
+  MessengerAccountLinkModel: class MessengerAccountLinkModel {
+    static findByPlatformUser = mockFindByPlatformUser;
+
+    findByPlatform = mockFindByPlatform;
+    upsertForPlatform = mockUpsertForPlatform;
+  },
+}));
+
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: {
     initWithEnvKey: mockInitWithEnvKey,
   },
+}));
+
+vi.mock('@/server/services/messenger', () => ({
+  consumeLinkToken: mockConsumeLinkToken,
+  MessengerDiscordBinder: vi.fn(),
+  messengerPlatformRegistry: {
+    listSerializedPlatforms: vi.fn().mockReturnValue([]),
+  },
+  MessengerSlackBinder: vi.fn(),
+  MessengerTelegramBinder: vi.fn().mockImplementation(() => ({
+    notifyLinkSuccess: mockNotifyTelegramLinkSuccess,
+  })),
+  peekLinkToken: mockPeekLinkToken,
 }));
 
 vi.mock('@/server/services/bot/platforms/slack/api', () => ({
@@ -62,6 +97,16 @@ const buildSlackInstall = () => ({
   tokenExpiresAt: null,
   updatedAt: new Date('2026-05-06T00:00:00.000Z'),
 });
+
+const createSelectBuilder = <T>(result: T) => {
+  const builder = {
+    from: vi.fn(() => builder),
+    limit: vi.fn().mockResolvedValue(result),
+    where: vi.fn(() => builder),
+  };
+
+  return builder;
+};
 
 describe('messengerRouter.listMyInstallations', () => {
   const serverDB = { kind: 'server-db' };
@@ -112,5 +157,137 @@ describe('messengerRouter.listMyInstallations', () => {
 
     expect(result).toHaveLength(1);
     expect(mockMarkRevoked).not.toHaveBeenCalled();
+  });
+});
+
+describe('messengerRouter.confirmLink', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInitWithEnvKey.mockResolvedValue(undefined);
+  });
+
+  it('blocks linking a different Telegram account when the user already has one', async () => {
+    const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockPeekLinkToken.mockResolvedValue({
+      platform: 'telegram',
+      platformUserId: 'tg-new',
+      tenantId: '',
+    });
+    mockFindByPlatformUser.mockResolvedValue(undefined);
+    mockFindByPlatform.mockResolvedValue({
+      platform: 'telegram',
+      platformUserId: 'tg-old',
+      tenantId: '',
+    });
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.confirmLink({ initialAgentId: 'agent-1', randomId: 'rand-1234' }),
+    ).rejects.toMatchObject({
+      message: 'verify.error.unlinkBeforeRelink',
+    });
+
+    expect(mockConsumeLinkToken).not.toHaveBeenCalled();
+    expect(mockUpsertForPlatform).not.toHaveBeenCalled();
+    expect(serverDB.select).not.toHaveBeenCalled();
+  });
+
+  it('blocks linking a different Discord account when the user already has one', async () => {
+    const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockPeekLinkToken.mockResolvedValue({
+      platform: 'discord',
+      platformUserId: 'dc-new',
+      tenantId: '',
+    });
+    mockFindByPlatformUser.mockResolvedValue(undefined);
+    mockFindByPlatform.mockResolvedValue({
+      platform: 'discord',
+      platformUserId: 'dc-old',
+      tenantId: '',
+    });
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.confirmLink({ initialAgentId: 'agent-1', randomId: 'rand-1234' }),
+    ).rejects.toMatchObject({
+      message: 'verify.error.unlinkBeforeRelink',
+    });
+
+    expect(mockConsumeLinkToken).not.toHaveBeenCalled();
+    expect(mockUpsertForPlatform).not.toHaveBeenCalled();
+    expect(serverDB.select).not.toHaveBeenCalled();
+  });
+
+  it('blocks linking a different Slack account in the same workspace when the user already has one', async () => {
+    const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockPeekLinkToken.mockResolvedValue({
+      platform: 'slack',
+      platformUserId: 'U_NEW',
+      tenantId: 'T_LOBE',
+    });
+    mockFindByPlatformUser.mockResolvedValue(undefined);
+    mockFindByPlatform.mockResolvedValue({
+      platform: 'slack',
+      platformUserId: 'U_OLD',
+      tenantId: 'T_LOBE',
+    });
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.confirmLink({ initialAgentId: 'agent-1', randomId: 'rand-1234' }),
+    ).rejects.toMatchObject({
+      message: 'verify.error.unlinkBeforeRelink',
+    });
+
+    expect(mockConsumeLinkToken).not.toHaveBeenCalled();
+    expect(mockUpsertForPlatform).not.toHaveBeenCalled();
+    expect(serverDB.select).not.toHaveBeenCalled();
+  });
+
+  it('allows re-confirming the same Telegram account', async () => {
+    const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const linkPayload = {
+      platform: 'telegram',
+      platformUserId: 'tg-same',
+      platformUsername: '@same',
+      tenantId: '',
+    };
+
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockPeekLinkToken.mockResolvedValue(linkPayload);
+    mockFindByPlatformUser.mockResolvedValue(undefined);
+    mockFindByPlatform.mockResolvedValue({
+      platform: 'telegram',
+      platformUserId: 'tg-same',
+      tenantId: '',
+    });
+    mockConsumeLinkToken.mockResolvedValue(linkPayload);
+    mockUpsertForPlatform.mockResolvedValue({ id: 'link-1' });
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+    const result = await caller.confirmLink({ initialAgentId: 'agent-1', randomId: 'rand-1234' });
+
+    expect(result).toEqual({ data: { id: 'link-1' }, success: true });
+    expect(mockConsumeLinkToken).toHaveBeenCalledWith('rand-1234');
+    expect(mockUpsertForPlatform).toHaveBeenCalledWith({
+      activeAgentId: 'agent-1',
+      platform: 'telegram',
+      platformUserId: 'tg-same',
+      platformUsername: '@same',
+      tenantId: '',
+    });
   });
 });

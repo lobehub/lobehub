@@ -24,6 +24,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import AgentSelectorAction from './AgentSelectorAction';
+import { useTaskAgentSelection } from './TaskAgentProvider';
 import Toolbar from './Toolbar';
 
 const Search = actionMap['search'];
@@ -44,11 +45,9 @@ const Welcome = memo(() => {
 Welcome.displayName = 'Welcome';
 
 const Conversation = memo(() => {
-  const [setActiveAgentId, useFetchAgentConfig] = useAgentStore((s) => [
-    s.setActiveAgentId,
-    s.useFetchAgentConfig,
-  ]);
+  const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
   const currentAgentId = useConversationStore(conversationSelectors.agentId);
+  const selectTaskAgent = useTaskAgentSelection();
 
   useFetchAgentConfig(true, currentAgentId);
 
@@ -61,9 +60,9 @@ const Conversation = memo(() => {
   const handleAgentChange = useCallback(
     (id: string) => {
       if (!id || id === currentAgentId || isChatGroupSessionId(id)) return;
-      setActiveAgentId(id);
+      selectTaskAgent(id);
     },
-    [currentAgentId, setActiveAgentId],
+    [currentAgentId, selectTaskAgent],
   );
 
   const leftContent = useMemo(

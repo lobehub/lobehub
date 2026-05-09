@@ -469,7 +469,7 @@ export class GeneralChatAgent implements Agent {
 
       case 'llm_result': {
         // LLM response received, check if it contains tool calls
-        const { hasToolsCalling, toolsCalling, parentMessageId } =
+        const { hasToolsCalling, toolsCalling, parentMessageId, result } =
           context.payload as GeneralAgentCallLLMResultPayload;
 
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
@@ -516,12 +516,26 @@ export class GeneralChatAgent implements Agent {
           return instructions;
         }
 
+        // Silent-drop diagnostic: LLM emitted raw tool_calls but every one
+        // failed to resolve to a known tool (e.g. malformed names without the
+        // `____` separator). Surface this in reasonDetail so dashboards can
+        // distinguish it from a genuine no-tool completion. See LOBE-8696.
+        const rawToolCallCount = result?.tool_calls?.length ?? 0;
+        const hasUnresolvedToolCalls = rawToolCallCount > 0;
+
         // No tool calls, conversation is complete
         return {
           reason: state.forceFinish ? 'max_steps_completed' : 'completed',
-          reasonDetail: state.forceFinish
-            ? 'Force finish: LLM produced final text response after max steps'
-            : 'LLM response completed without tool calls',
+          reasonDetail: hasUnresolvedToolCalls
+            ? `LLM returned ${rawToolCallCount} unresolvable tool_calls: ${(
+                result?.tool_calls ?? []
+              )
+                .map((tc) => tc.function?.name)
+                .filter(Boolean)
+                .join(', ')}`
+            : state.forceFinish
+              ? 'Force finish: LLM produced final text response after max steps'
+              : 'LLM response completed without tool calls',
           type: 'finish',
         };
       }

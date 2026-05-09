@@ -51,7 +51,7 @@ describe('task template analytics helpers', () => {
         recommendationBatchId: 'batch-1',
         template: makeTemplate({
           fallbackPool: 'all_candidates',
-          optionalSkills: [{ provider: 'notion', source: 'klavis' }],
+          optionalSkills: [{ provider: 'google-calendar', source: 'klavis' }],
           requiresSkills: [{ provider: 'github', source: 'lobehub' }],
           source: 'fallback',
         }),

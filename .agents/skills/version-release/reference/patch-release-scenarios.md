@@ -21,12 +21,16 @@ git push -u origin release/weekly-{YYYYMMDD}
 
 2. **Scan changes and write changelog**
 
+Compute the previous tag from main first — never reuse the last weekly's tag, since hotfixes published in between will be missed:
+
 ```bash
-git log main..canary --oneline
-git diff main...canary --stat
+git fetch origin main canary --tags
+PREV_TAG=$(git describe --tags --abbrev=0 origin/main --match 'v*.*.*' --exclude '*-canary*' --exclude '*-nightly*')
+git log "$PREV_TAG..origin/release/weekly-{YYYYMMDD}" --oneline --no-merges
+git diff "$PREV_TAG...origin/release/weekly-{YYYYMMDD}" --stat
 ```
 
-Write a user-facing changelog following the format in `patch-release-changelog-example.md`.
+Then follow `./release-notes-style.md` § **Computing Inputs (Hard Rules)** to derive PR refs, metrics, and contributors. Every `(#XXXX)` in the body must come from actual commit subjects in this range — never inferred from descriptions.
 
 3. **Create PR to main** with the changelog as the PR body
 

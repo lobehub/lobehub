@@ -114,6 +114,7 @@
   "response.ProviderBizError": "Fehler bei der Anfrage an {{provider}}. Bitte prüfen Sie die Details.",
   "response.ProviderContentModeration": "Die Inhaltsrichtlinienprüfung ist fehlgeschlagen. Überarbeiten Sie Ihre Eingabe und versuchen Sie es erneut.",
   "response.ProviderContentModerationWarning": "Wiederholte Verstöße gegen die Richtlinien wurden erkannt. Weitere Missbräuche können zur Einschränkung Ihres Kontos führen.",
+  "response.ProviderImageContentModerationWarning": "Wiederholte Sicherheitsablehnungen von Bildern festgestellt. Ähnliche Eingaben können die Bildgenerierung vorübergehend pausieren.",
   "response.QuotaLimitReached": "Token- oder Anfrage-Limit erreicht. Bitte Kontingent erhöhen oder später versuchen.",
   "response.QuotaLimitReachedCloud": "Der Modelldienst ist derzeit stark ausgelastet. Bitte versuchen Sie es später erneut.",
   "response.ServerAgentRuntimeError": "Agent-Dienst derzeit nicht verfügbar. Bitte später erneut versuchen.",
