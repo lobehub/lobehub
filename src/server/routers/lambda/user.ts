@@ -243,19 +243,21 @@ export const userRouter = router({
     const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
     const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
-    const [state, soulDoc, persona] = await Promise.all([
+    const [state, soulDoc, persona, userInfo] = await Promise.all([
       onboardingService.getState(),
       onboardingService
         .getInboxAgentId()
         .then((inboxAgentId) => docService.getDocumentByFilename(inboxAgentId, 'SOUL.md'))
         .catch(() => null),
       personaModel.getLatestPersonaDocument().catch(() => null),
+      onboardingService.getInitialUserInfo().catch(() => undefined),
     ]);
 
     return {
       personaContent: persona?.persona || null,
       phaseGuidance: formatWebOnboardingStateMessage(state),
       soulContent: soulDoc?.content || null,
+      userInfo,
     };
   }),
 

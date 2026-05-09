@@ -107,6 +107,30 @@ describe('ToolNameResolver', () => {
       expect(result).toBe('plugin123____action456____type789');
     });
 
+    it('should hash invalid api names so provider tool names stay valid', () => {
+      const result = resolver.generate('mcp-server', 'get.current/weather', 'mcp');
+
+      expect(result).toMatch(/^mcp-server____MD5HASH_[\da-f]+____mcp$/);
+      expect(result).toMatch(/^[\w-]+$/);
+      expect(result).not.toContain('get.current/weather');
+    });
+
+    it('should hash non-ASCII api names so provider tool names stay valid', () => {
+      const result = resolver.generate('custom_mcp_plugin', '中文API', 'mcp');
+
+      expect(result).toMatch(/^custom_mcp_plugin____MD5HASH_[\da-f]+____mcp$/);
+      expect(result).toMatch(/^[\w-]+$/);
+      expect(result).not.toContain('中文API');
+    });
+
+    it('should hash invalid identifiers so provider tool names stay valid', () => {
+      const result = resolver.generate('@browser/use', 'open_page', 'mcp');
+
+      expect(result).toMatch(/^MD5HASH_[\da-f]+____open_page____mcp$/);
+      expect(result).toMatch(/^[\w-]+$/);
+      expect(result).not.toContain('@browser/use');
+    });
+
     it('should be consistent for same inputs', () => {
       const result1 = resolver.generate('plugin', 'action', 'type');
       const result2 = resolver.generate('plugin', 'action', 'type');
@@ -400,6 +424,76 @@ describe('ToolNameResolver', () => {
 
       expect(result[0].apiName).toBe('MD5HASH_abc123def456');
     });
+
+    it('should resolve apiName hashed because it contains provider-invalid characters', () => {
+      const identifier = 'mcp-server';
+      const apiName = 'get.current/weather';
+      const toolName = resolver.generate(identifier, apiName, 'mcp');
+
+      const result = resolver.resolve(
+        [
+          {
+            function: {
+              arguments: '{"location":"Shanghai"}',
+              name: toolName,
+            },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        {
+          [identifier]: {
+            api: [{ description: 'Get weather', name: apiName, parameters: {} }],
+            identifier,
+            meta: {},
+            type: 'mcp' as const,
+          },
+        },
+      );
+
+      expect(result[0]).toEqual({
+        apiName,
+        arguments: '{"location":"Shanghai"}',
+        id: 'call_1',
+        identifier,
+        type: 'mcp',
+      });
+    });
+
+    it('should resolve non-ASCII apiName hashed for provider-safe tool names', () => {
+      const identifier = 'custom_mcp_plugin';
+      const apiName = '中文API';
+      const toolName = resolver.generate(identifier, apiName, 'mcp');
+
+      const result = resolver.resolve(
+        [
+          {
+            function: {
+              arguments: '{"query":"最近工作压力好大"}',
+              name: toolName,
+            },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        {
+          [identifier]: {
+            api: [{ description: 'Chat with companion', name: apiName, parameters: {} }],
+            identifier,
+            meta: {},
+            type: 'mcp' as const,
+          },
+        },
+      );
+
+      expect(result[0]).toEqual({
+        apiName,
+        arguments: '{"query":"最近工作压力好大"}',
+        id: 'call_1',
+        identifier,
+        type: 'mcp',
+      });
+    });
   });
 
   describe('resolve - hashed identifier', () => {
@@ -463,6 +557,37 @@ describe('ToolNameResolver', () => {
       const result = resolver.resolve(toolCalls, manifests);
 
       expect(result[0].identifier).toBe('MD5HASH_abc123def456');
+    });
+
+    it('should resolve identifier hashed because it contains provider-invalid characters', () => {
+      const identifier = '@browser/use';
+      const apiName = 'open_page';
+      const toolName = resolver.generate(identifier, apiName, 'mcp');
+
+      const result = resolver.resolve(
+        [
+          {
+            function: {
+              arguments: '{}',
+              name: toolName,
+            },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        {
+          [identifier]: {
+            api: [{ description: 'Open page', name: apiName, parameters: {} }],
+            identifier,
+            meta: {},
+            type: 'mcp' as const,
+          },
+        },
+      );
+
+      expect(result[0].identifier).toBe(identifier);
+      expect(result[0].apiName).toBe(apiName);
+      expect(result[0].type).toBe('mcp');
     });
   });
 

@@ -114,6 +114,7 @@
   "response.ProviderBizError": "Error al solicitar el servicio {{provider}}. Intenta solucionarlo o vuelve a intentarlo.",
   "response.ProviderContentModeration": "La verificación de políticas de contenido ha fallado. Revisa tu solicitud y vuelve a intentarlo.",
   "response.ProviderContentModerationWarning": "Se han detectado infracciones reiteradas de las políticas. Un uso indebido adicional puede restringir tu cuenta.",
+  "response.ProviderImageContentModerationWarning": "Se han detectado rechazos repetidos de seguridad de imágenes. Solicitudes similares pueden pausar temporalmente la generación de imágenes.",
   "response.QuotaLimitReached": "Lo sentimos, se alcanzó el límite de uso de tokens o solicitudes para esta clave.",
   "response.QuotaLimitReachedCloud": "El servicio del modelo está actualmente bajo una carga elevada. Por favor, inténtalo de nuevo más tarde.",
   "response.ServerAgentRuntimeError": "Lo sentimos, el servicio Agent no está disponible. Inténtalo más tarde o contáctanos.",

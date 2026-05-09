@@ -19,6 +19,15 @@ describe('findLobeHubModel', () => {
     expect(findLobeHubModel(sample.id)).toMatchObject({ id: sample.id, type: 'chat' });
   });
 
+  it('returns runtime-only hidden alias models', () => {
+    expect(findLobeHubModel('lobehub-onboarding-v1')).toMatchObject({
+      enabled: true,
+      id: 'lobehub-onboarding-v1',
+      type: 'chat',
+      visible: false,
+    });
+  });
+
   it('returns the model when id exists in image / video / embedding models', () => {
     if (lobehubImageModels[0]) {
       expect(findLobeHubModel(lobehubImageModels[0].id)?.type).toBe('image');
@@ -42,6 +51,10 @@ describe('isLobeHubModelAvailable', () => {
   it('returns true when id and expected type both match', () => {
     const sample = lobehubChatModels[0];
     expect(isLobeHubModelAvailable(sample.id, 'chat')).toBe(true);
+  });
+
+  it('treats runtime-only hidden alias models as available', () => {
+    expect(isLobeHubModelAvailable('lobehub-onboarding-v1', 'chat')).toBe(true);
   });
 
   it('returns false when id matches but type differs', () => {

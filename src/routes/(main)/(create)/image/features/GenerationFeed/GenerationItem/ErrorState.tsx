@@ -7,12 +7,24 @@ import { ImageOffIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import defaultErrorLocale from '@/locales/default/error';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
 
 import { ActionButtons } from './ActionButtons';
 import { styles } from './styles';
 import { type ErrorStateProps } from './types';
 import { getThumbnailMaxWidth } from './utils';
+
+const providerContentModerationErrorKeys = [
+  'response.ProviderContentModeration',
+  'response.ProviderContentModerationWarning',
+  'response.ProviderImageContentModerationWarning',
+] as const;
+
+const providerContentModerationKeyByDefaultMessage = new Map<
+  string,
+  (typeof providerContentModerationErrorKeys)[number]
+>(providerContentModerationErrorKeys.map((key) => [defaultErrorLocale[key], key]));
 
 // Error state component
 export const ErrorState = memo<ErrorStateProps>(
@@ -25,9 +37,33 @@ export const ErrorState = memo<ErrorStateProps>(
 
       const error = generation.task.error;
       const errorBody = typeof error.body === 'string' ? error.body : error.body?.detail;
+      const translateErrorKey = (translationKey: string, fallbackKey?: string) => {
+        const translated = tError(translationKey as any);
+
+        // If translation key is not found, it returns the key itself.
+        if (translated !== translationKey && !(translated as string).startsWith('response.')) {
+          return translated as string;
+        }
+
+        if (!fallbackKey) return;
+
+        // Try without any prefix for backwards compatibility with legacy error details.
+        const directTranslated = tError(fallbackKey as any);
+        return directTranslated !== fallbackKey ? (directTranslated as string) : undefined;
+      };
 
       // Try to translate based on error type if it matches known AgentRuntimeErrorType
       if (errorBody) {
+        if (errorBody.startsWith('response.')) {
+          return translateErrorKey(errorBody) || errorBody;
+        }
+
+        const defaultMessageTranslationKey =
+          providerContentModerationKeyByDefaultMessage.get(errorBody);
+        if (defaultMessageTranslationKey) {
+          return translateErrorKey(defaultMessageTranslationKey) || errorBody;
+        }
+
         // Check if the error body is an AgentRuntimeErrorType that needs translation
         const knownErrorTypes = Object.values(AgentRuntimeErrorType);
         if (
@@ -37,21 +73,7 @@ export const ErrorState = memo<ErrorStateProps>(
         ) {
           // Use localized error message - ComfyUI errors are under 'response' namespace
           const translationKey = `response.${errorBody}`;
-          const translated = tError(translationKey as any);
-
-          // If translation key is not found, it returns the key itself
-          // Check if we got back the key (meaning translation failed)
-          if (translated === translationKey || (translated as string).startsWith('response.')) {
-            // Try without any prefix (for backwards compatibility)
-            const directTranslated = tError(errorBody as any);
-            if (directTranslated !== errorBody) {
-              return directTranslated as string;
-            }
-            // Final fallback to the original error message
-            return errorBody;
-          }
-
-          return translated as string;
+          return translateErrorKey(translationKey, errorBody) || errorBody;
         }
       }
 
@@ -80,7 +102,7 @@ export const ErrorState = memo<ErrorStateProps>(
           <Icon color={cssVar.colorTextDescription} icon={ImageOffIcon} size={24} />
           <Text strong align={'center'} type={'secondary'}>
             {isProviderContentModerationError
-              ? tError('response.ProviderContentModeration')
+              ? errorMessage || tError('response.ProviderContentModeration')
               : t('generation.status.failed')}
           </Text>
           {generation.task.error && !isProviderContentModerationError && (

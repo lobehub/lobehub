@@ -5,7 +5,10 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import RightPanel from '@/features/RightPanel';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -70,12 +73,17 @@ const AgentWorkingSidebar = memo(() => {
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
-  const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const agentWorkingDirectory = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.getAgentWorkingDirectoryById(activeAgentId)(s) : undefined,
+  );
+  const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+  const repoType = useRepoType(workingDirectory);
 
-  const reviewAvailable = !!workingDirectory;
-  // When the topic has a working directory we lead with Review — that's why
-  // the sidebar is open in agent-coding flows. Otherwise no tab strip at all,
-  // we just show the resources view as before.
+  const reviewAvailable = !!workingDirectory && !!repoType;
+  // Topic metadata is preferred for resuming a coding session, but Review is
+  // project-scoped and should also work before a topic has bound metadata.
   const activeTab: Tab = reviewAvailable ? (storedTab ?? 'review') : 'resources';
 
   return (

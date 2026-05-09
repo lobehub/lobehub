@@ -1,3 +1,4 @@
+import { AGENT_ONBOARDING_ENABLED } from '@lobechat/business-const';
 import {
   BabyIcon,
   CameraIcon,
@@ -18,15 +19,32 @@ import {
   UsersIcon,
 } from 'lucide-react';
 
-/** Default target when the user opens `/onboarding`. Flip to `'agent'` when agent onboarding is ready to ship as the primary flow. */
-export type DefaultOnboardingEntryVariant = 'agent' | 'classic';
-export const DEFAULT_ONBOARDING_ENTRY_VARIANT: DefaultOnboardingEntryVariant = 'classic';
+export const ONBOARDING_AGENT_PATH = '/onboarding/agent';
+export const ONBOARDING_CLASSIC_PATH = '/onboarding/classic';
 
-const resolveDefaultOnboardingPath = (variant: DefaultOnboardingEntryVariant) =>
-  variant === 'agent' ? '/onboarding/agent' : '/onboarding/classic';
+export type OnboardingBranchPath = typeof ONBOARDING_AGENT_PATH | typeof ONBOARDING_CLASSIC_PATH;
 
-export const DEFAULT_ONBOARDING_PATH: '/onboarding/agent' | '/onboarding/classic' =
-  resolveDefaultOnboardingPath(DEFAULT_ONBOARDING_ENTRY_VARIANT);
+interface DeriveOnboardingBranchInput {
+  enableAgentOnboarding: boolean;
+  isDesktop: boolean;
+}
+
+/**
+ * Decide which branch the user enters after the shared-prefix steps complete.
+ * `AGENT_ONBOARDING_ENABLED` is the build-time master switch — when it is off,
+ * the agent flow is unreachable regardless of the runtime feature flag.
+ * Desktop and disabled-flag users also land on the classic flow; otherwise
+ * the agent conversational flow is the default.
+ */
+export const deriveOnboardingBranchPath = ({
+  enableAgentOnboarding,
+  isDesktop,
+}: DeriveOnboardingBranchInput): OnboardingBranchPath => {
+  if (!AGENT_ONBOARDING_ENABLED || isDesktop || !enableAgentOnboarding) {
+    return ONBOARDING_CLASSIC_PATH;
+  }
+  return ONBOARDING_AGENT_PATH;
+};
 
 /**
  * Predefined interest areas with icons and translation keys.

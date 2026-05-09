@@ -626,6 +626,7 @@ export const topicRouter = router({
             })
             .nullable()
             .optional(),
+          repos: z.array(z.string()).optional(),
           workingDirectory: z.string().optional(),
         }),
       }),

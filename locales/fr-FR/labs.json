@@ -9,5 +9,7 @@
   "features.groupChat.title": "Discussion de groupe (multi-agents)",
   "features.inputMarkdown.desc": "Affichez le Markdown dans la zone de saisie en temps réel (texte en gras, blocs de code, tableaux, etc.).",
   "features.inputMarkdown.title": "Rendu Markdown dans la saisie",
+  "features.messenger.desc": "Discutez avec vos agents depuis Telegram (et d'autres messageries) via le bot partagé LobeHub. Ajoute un onglet Messagerie dans les Paramètres pour lier votre compte et choisir quel agent reçoit les messages.",
+  "features.messenger.title": "Messagerie",
   "title": "Laboratoires"
 }

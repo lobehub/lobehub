@@ -142,6 +142,12 @@ const ExecAgentSchema = z
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().optional().nullable(),
         groupId: z.string().optional().nullable(),
+        initialTopicMetadata: z
+          .object({
+            repos: z.array(z.string()).optional(),
+            workingDirectory: z.string().optional(),
+          })
+          .optional(),
         scope: z.string().optional().nullable(),
         sessionId: z.string().optional(),
         taskId: z.string().optional().nullable(),

@@ -186,7 +186,7 @@ export const suppressHandled = async (
 };
 
 /**
- * Writes and scores one satisfied skill procedure candidate.
+ * Records and scores one satisfied skill procedure observation.
  *
  * Use when:
  * - Weak positive skill feedback should accumulate before action planning
@@ -230,7 +230,7 @@ export const accumulateSignal = async (
     cheapScoreDelta: options.scoreDelta,
     createdAt: context.now(),
     domainKey: 'skill',
-    id: `procedure-record:${signal.signalId}:skill-candidate`,
+    id: `procedure-record:${signal.signalId}:skill-observation-record`,
     intentClass: toPlannerIntentClass(payload.satisfactionResult),
     refs: {
       signalIds: [signal.signalId],
@@ -244,7 +244,7 @@ export const accumulateSignal = async (
   await services.procedureState.records.write(record);
   const scored = await services.procedureState.accumulators.appendAndScore(record);
 
-  return continueWith('accumulated skill candidate', { record, scored });
+  return continueWith('recorded skill observation', { record, scored });
 };
 
 /**

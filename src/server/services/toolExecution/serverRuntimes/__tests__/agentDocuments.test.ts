@@ -6,17 +6,13 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
 import { agentDocumentsRuntime } from '../agentDocuments';
 
-const agentSignalProcedureMocks = vi.hoisted(() => ({
-  emitToolOutcomeSafely: vi.fn(),
-  resolveToolOutcomeScope: vi.fn(() => ({
-    scope: { agentId: 'agent-1', userId: 'user-1' },
-    scopeKey: 'agent:agent-1:user:user-1',
-  })),
+const agentDocumentToolOutcomeMocks = vi.hoisted(() => ({
+  emitAgentDocumentToolOutcomeSafely: vi.fn(),
 }));
 
 vi.mock('@/server/services/agentDocuments');
 vi.mock('@/database/models/task');
-vi.mock('@/server/services/agentSignal/procedure', () => agentSignalProcedureMocks);
+vi.mock('@/server/services/agentDocuments/toolOutcome', () => agentDocumentToolOutcomeMocks);
 
 describe('agentDocumentsRuntime', () => {
   it('should have correct identifier', () => {
@@ -54,8 +50,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
   let pinDocument: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    agentSignalProcedureMocks.emitToolOutcomeSafely.mockClear();
-    agentSignalProcedureMocks.resolveToolOutcomeScope.mockClear();
+    agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
     serviceImpl = {
       copyDocumentById: vi.fn().mockResolvedValue(newDoc),
       createDocument: vi.fn().mockResolvedValue(newDoc),
@@ -89,16 +84,27 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
 
     await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
 
-    expect(agentSignalProcedureMocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentDocumentId: 'agent-doc-assoc-id',
+        apiName: 'createDocument',
+        relation: 'created',
+      }),
+    );
+  });
+
+  it('marks hinted create outcomes as skill document intents', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument(
+      { content: 'body', hintIsSkill: true, title: 'Reusable Workflow' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
       expect.objectContaining({
         apiName: 'createDocument',
-        relatedObjects: [
-          {
-            objectId: 'agent-doc-assoc-id',
-            objectType: 'agent-document',
-            relation: 'created',
-          },
-        ],
+        hintIsSkill: true,
       }),
     );
   });
@@ -108,16 +114,11 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
 
     await runtime.copyDocument({ id: 'source-agent-doc-id' }, { agentId: 'agent-1' });
 
-    expect(agentSignalProcedureMocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
       expect.objectContaining({
+        agentDocumentId: 'agent-doc-assoc-id',
         apiName: 'copyDocument',
-        relatedObjects: [
-          {
-            objectId: 'agent-doc-assoc-id',
-            objectType: 'agent-document',
-            relation: 'created',
-          },
-        ],
+        relation: 'created',
       }),
     );
   });
@@ -131,16 +132,11 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       { agentId: 'agent-1' },
     );
 
-    expect(agentSignalProcedureMocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
       expect.objectContaining({
+        agentDocumentId: 'agent-doc-assoc-id',
         apiName: 'renameDocument',
-        relatedObjects: [
-          {
-            objectId: 'agent-doc-assoc-id',
-            objectType: 'agent-document',
-            relation: 'updated',
-          },
-        ],
+        relation: 'updated',
       }),
     );
   });

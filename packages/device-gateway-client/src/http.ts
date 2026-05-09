@@ -73,6 +73,27 @@ export class GatewayHttpClient {
     };
   }
 
+  async dispatchAgentRun(params: {
+    agentType: 'claude-code' | 'codex';
+    cwd?: string;
+    deviceId?: string;
+    jwt: string;
+    operationId: string;
+    prompt: string;
+    resumeSessionId?: string;
+    timeout?: number;
+    topicId: string;
+    userId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { userId: _userId, ...body } = params;
+    const res = await this.post('/api/device/agent/run', body);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { error: text || `HTTP ${res.status}`, success: false };
+    }
+    return { success: true };
+  }
+
   async getDeviceSystemInfo(
     userId: string,
     deviceId: string,

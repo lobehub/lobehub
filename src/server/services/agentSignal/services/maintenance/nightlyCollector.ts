@@ -1,3 +1,7 @@
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
+import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+
+import { deriveNightlyMaintenanceSignals } from './nightlySignals';
 import type { EvidenceRef } from './types';
 
 const DEFAULT_MAX_TOPICS = 30;
@@ -101,12 +105,38 @@ export interface NightlyReviewTopicSignalFields {
   receiptIds?: string[];
 }
 
+/** Bounded failed tool-call evidence safe to include in nightly review context. */
+export interface NightlyReviewFailedToolCallSummary {
+  /** Tool API name when available. */
+  apiName?: string | null;
+  /** Short serialized error summary. */
+  errorSummary?: string | null;
+  /** Tool identifier when available. */
+  identifier?: string | null;
+  /** Message id that carried this failed tool call. */
+  messageId: string;
+  /** Tool call id when available. */
+  toolCallId?: string | null;
+}
+
+/** Bounded failed message evidence safe to include in nightly review context. */
+export interface NightlyReviewFailedMessageSummary {
+  /** Short serialized error summary. */
+  errorSummary?: string | null;
+  /** Failed message id. */
+  messageId: string;
+}
+
 /** Topic digest row returned by the injected topic activity boundary. */
 export interface NightlyReviewTopicActivityRow extends NightlyReviewTopicSignalFields {
   /** Optional digest metadata that callers may pass through to reviewers. */
   attributes?: Record<string, unknown>;
   /** Evidence refs from upstream digest construction. Preserved when provided. */
   evidenceRefs?: EvidenceRef[];
+  /** Bounded failed message evidence rows. */
+  failedMessages?: NightlyReviewFailedMessageSummary[];
+  /** Bounded failed tool-call evidence rows. */
+  failedToolCalls?: NightlyReviewFailedToolCallSummary[];
   /** Stable topic id. */
   id?: string;
   /** Last topic activity as an ISO string, used only as a deterministic tie-breaker. */
@@ -155,6 +185,183 @@ export interface NightlyReviewRelevantMemorySummary {
   updatedAt?: string;
 }
 
+/** Bounded successful or failed tool activity grouped by tool identifier and API name. */
+export interface ToolActivityDigest {
+  /** Tool API name, such as `createDocument`, when recorded by the tool runner. */
+  apiName?: string | null;
+  /** Number of failed tool calls in the group. */
+  failedCount: number;
+  /** First use in the review window as an ISO string. */
+  firstUsedAt?: string;
+  /** Tool identifier, such as `lobe-agent-documents`, when recorded by the tool runner. */
+  identifier?: string | null;
+  /** Last use in the review window as an ISO string. */
+  lastUsedAt?: string;
+  /** Message ids that carried this tool activity, bounded by the read adapter. */
+  messageIds: string[];
+  /** Redacted argument samples, bounded and safe for reviewer context. */
+  sampleArgs: string[];
+  /** Error samples, bounded and safe for reviewer context. */
+  sampleErrors: string[];
+  /** Topic ids where the tool appeared, bounded by the read adapter. */
+  topicIds: string[];
+  /** Total tool call count in the group. */
+  totalCount: number;
+}
+
+/** Bounded document event used by nightly document activity buckets. */
+export interface DocumentEventDigest {
+  /** Agent document row id. */
+  agentDocumentId: string;
+  /** Canonical document id. */
+  documentId: string;
+  /** Why this document event was bucketed this way. */
+  reason: string;
+  /** Short document title when available. */
+  title?: string | null;
+  /** Last update inside the review window as an ISO string. */
+  updatedAt: string;
+}
+
+/** Document event with explicit skill-maintenance evidence. */
+export interface SkillDocumentEventDigest extends DocumentEventDigest {
+  /** Whether metadata explicitly says this document was hinted as a skill. */
+  hintIsSkill: boolean;
+  /** Optional skill file type or policy format metadata when known. */
+  skillFileType?: string | null;
+}
+
+/** Review-window document activity grouped by maintenance relevance. */
+export interface DocumentActivityDigest {
+  /** Weak or unclear document events. */
+  ambiguousBucket: DocumentEventDigest[];
+  /** Count and reasons for events omitted from reviewer context. */
+  excludedSummary: { count: number; reasons: string[] };
+  /** Ordinary document activity that cannot independently trigger skill maintenance. */
+  generalDocumentBucket: DocumentEventDigest[];
+  /** Skill-like document events, primarily `hintIsSkill:true`. */
+  skillBucket: SkillDocumentEventDigest[];
+}
+
+/** One existing satisfaction judgement reused by nightly review. */
+export interface FeedbackSatisfactionDigest {
+  /** Confidence from the existing satisfaction judgement. */
+  confidence: number;
+  /** Judgement creation time as an ISO string. */
+  createdAt: string;
+  /** Bounded evidence text from the existing judgement. */
+  evidence: string;
+  /** Message id judged by the online satisfaction path. */
+  messageId: string;
+  /** Existing judgement reason. */
+  reason: string;
+  /** Existing satisfaction result. */
+  result: 'satisfied' | 'not_satisfied';
+  /** Optional topic id for grounding. */
+  topicId?: string;
+}
+
+/** Existing satisfaction judgements grouped for maintenance review. */
+export interface FeedbackActivityDigest {
+  /** Number of neutral judgements suppressed from detailed context. */
+  neutralCount: number;
+  /** Negative satisfaction judgements that may reinforce repair proposals. */
+  notSatisfied: FeedbackSatisfactionDigest[];
+  /** Positive satisfaction judgements that may reinforce preserving a workflow. */
+  satisfied: FeedbackSatisfactionDigest[];
+}
+
+/** Bounded receipt summary visible to nightly review. */
+export interface ReceiptActivityItemDigest {
+  /** Receipt id. */
+  id: string;
+  /** Receipt kind. */
+  kind: 'maintenance' | 'memory' | 'review' | 'skill';
+  /** Receipt status. */
+  status: 'applied' | 'completed' | 'failed' | 'proposed' | 'skipped' | 'updated';
+  /** Short receipt summary. */
+  summary?: string;
+  /** Target id or scope key when available. */
+  targetId?: string;
+}
+
+/** Duplicate proposal group summarized from recent receipts. */
+export interface ReceiptDuplicateGroupDigest {
+  /** Count of repeated matching receipts. */
+  count: number;
+  /** Stable grouping key, such as target id plus action type. */
+  key: string;
+  /** Representative receipt ids. */
+  receiptIds: string[];
+}
+
+/** Recent receipt history used to suppress repeated maintenance proposals. */
+export interface ReceiptActivityDigest {
+  /** Count of applied or updated receipts. */
+  appliedCount: number;
+  /** Repeated proposal or action groups. */
+  duplicateGroups: ReceiptDuplicateGroupDigest[];
+  /** Count of failed receipts. */
+  failedCount: number;
+  /** Count of pending proposed receipts. */
+  pendingProposalCount: number;
+  /** Bounded recent receipts. */
+  recentReceipts: ReceiptActivityItemDigest[];
+  /** Count of review receipts. */
+  reviewCount: number;
+}
+
+/** Nightly maintenance signal shown to the reviewer before raw buckets. */
+export interface MaintenanceSignal {
+  /** Evidence refs that justify the signal. */
+  evidenceRefs: EvidenceRef[];
+  /** Extensible signal features. */
+  features: MaintenanceSignalFeature[];
+  /** Signal category. */
+  kind: MaintenanceSignalKind;
+  /** Conservative signal strength. */
+  strength: 'weak' | 'medium' | 'strong';
+}
+
+/** Initial nightly maintenance signal categories. */
+export type MaintenanceSignalKind =
+  | 'frequent_tool_workflow'
+  | 'hinted_skill_document_changed'
+  | 'pending_related_proposal_exists'
+  | 'repeated_tool_failure'
+  | 'skill_document_with_tool_failure'
+  | 'skill_documents_maybe_overlap';
+
+/** Extensible feature bag attached to maintenance signals. */
+export type MaintenanceSignalFeature =
+  | {
+      confidence: number;
+      reason: string;
+      result: 'satisfied' | 'not_satisfied' | 'neutral';
+      type: 'feedback_satisfaction';
+    }
+  | {
+      documentCount: number;
+      eventCount: number;
+      hintIsSkill: boolean;
+      type: 'document_hint';
+    }
+  | {
+      appliedCount: number;
+      dedupedCount: number;
+      failedCount: number;
+      pendingProposalCount: number;
+      type: 'receipt_history';
+    }
+  | {
+      apiName?: string | null;
+      failedCount: number;
+      identifier?: string | null;
+      topicCount: number;
+      totalCount: number;
+      type: 'tool_usage';
+    };
+
 /** Normalized topic digest emitted in nightly review context. */
 export interface NightlyReviewTopicDigest extends Omit<
   NightlyReviewTopicActivityRow,
@@ -170,12 +377,20 @@ export interface NightlyReviewTopicDigest extends Omit<
 
 /** Read adapters used by the pure nightly review collector service. */
 export interface NightlyReviewReadAdapters {
+  /** Lists review-window document activity grouped by later server adapters. */
+  listDocumentActivity?: (input: NightlyReviewReadInput) => Promise<DocumentActivityDigest>;
+  /** Lists existing satisfaction judgements for this agent and review window. */
+  listFeedbackActivity?: (input: NightlyReviewReadInput) => Promise<FeedbackActivityDigest>;
   /** Lists managed skill summaries for this agent and review window. */
   listManagedSkills: (input: ListManagedSkillsInput) => Promise<NightlyReviewManagedSkillSummary[]>;
+  /** Lists recent receipt activity relevant to this review window. */
+  listReceiptActivity?: (input: NightlyReviewReadInput) => Promise<ReceiptActivityDigest>;
   /** Lists relevant memory summaries for this agent and review window. */
   listRelevantMemories: (
     input: ListRelevantMemoriesInput,
   ) => Promise<NightlyReviewRelevantMemorySummary[]>;
+  /** Lists grouped tool activity for this agent and review window. */
+  listToolActivity?: (input: NightlyReviewReadInput) => Promise<ToolActivityDigest[]>;
   /** Lists digest-first topic activity rows for this agent and review window. */
   listTopicActivity: (input: ListTopicActivityInput) => Promise<NightlyReviewTopicActivityRow[]>;
 }
@@ -220,14 +435,24 @@ export interface CollectNightlyReviewContextInput {
 export interface NightlyReviewContext {
   /** Stable agent id being reviewed. */
   agentId: string;
+  /** Review-window document activity grouped by maintenance relevance. */
+  documentActivity: DocumentActivityDigest;
+  /** Existing satisfaction judgements grouped for reviewer context. */
+  feedbackActivity: FeedbackActivityDigest;
+  /** Conservative maintenance signals used as reviewer entry points. */
+  maintenanceSignals: MaintenanceSignal[];
   /** Managed skills relevant to the agent. */
   managedSkills: NightlyReviewManagedSkillSummary[];
+  /** Recent receipt history used to avoid duplicate proposals. */
+  receiptActivity: ReceiptActivityDigest;
   /** Memories relevant to the review window and agent. */
   relevantMemories: NightlyReviewRelevantMemorySummary[];
   /** Review window end as an ISO string. */
   reviewWindowEnd: string;
   /** Review window start as an ISO string. */
   reviewWindowStart: string;
+  /** Ranked topic digests with evidence refs and no raw messages. */
+  toolActivity: ToolActivityDigest[];
   /** Ranked topic digests with evidence refs and no raw messages. */
   topics: NightlyReviewTopicDigest[];
   /** Stable user id owning the agent. */
@@ -318,6 +543,10 @@ const synthesizeEvidenceRefs = (row: NightlyReviewTopicActivityRow): EvidenceRef
     pushUniqueRef(refs, { id: failureId, type: 'operation' });
   }
 
+  for (const failedMessage of row.failedMessages ?? []) {
+    pushUniqueRef(refs, { id: failedMessage.messageId, type: 'message' });
+  }
+
   for (const feedbackId of row.negativeFeedbackIds ?? []) {
     pushUniqueRef(refs, { id: feedbackId, type: 'message' });
   }
@@ -328,6 +557,14 @@ const synthesizeEvidenceRefs = (row: NightlyReviewTopicActivityRow): EvidenceRef
 
   for (const toolCallId of row.failedToolCallIds ?? []) {
     pushUniqueRef(refs, { id: toolCallId, type: 'tool_call' });
+  }
+
+  for (const failedToolCall of row.failedToolCalls ?? []) {
+    if (failedToolCall.toolCallId) {
+      pushUniqueRef(refs, { id: failedToolCall.toolCallId, type: 'tool_call' });
+    } else {
+      pushUniqueRef(refs, { id: failedToolCall.messageId, type: 'message' });
+    }
   }
 
   for (const receiptId of row.receiptIds ?? []) {
@@ -392,6 +629,28 @@ const compareTopics = (left: NightlyReviewTopicDigest, right: NightlyReviewTopic
   return (left.topicId ?? left.id ?? '').localeCompare(right.topicId ?? right.id ?? '');
 };
 
+const createEmptyDocumentActivity = (): DocumentActivityDigest => ({
+  ambiguousBucket: [],
+  excludedSummary: { count: 0, reasons: [] },
+  generalDocumentBucket: [],
+  skillBucket: [],
+});
+
+const createEmptyFeedbackActivity = (): FeedbackActivityDigest => ({
+  neutralCount: 0,
+  notSatisfied: [],
+  satisfied: [],
+});
+
+const createEmptyReceiptActivity = (): ReceiptActivityDigest => ({
+  appliedCount: 0,
+  duplicateGroups: [],
+  failedCount: 0,
+  pendingProposalCount: 0,
+  recentReceipts: [],
+  reviewCount: 0,
+});
+
 /**
  * Creates a pure nightly review collector service from digest read adapters.
  *
@@ -411,37 +670,136 @@ export const createNightlyReviewService = (
 ): NightlyReviewService => {
   return {
     collectNightlyReviewContext: async (input) => {
-      const maxTopics = input.maxTopics ?? DEFAULT_MAX_TOPICS;
-      const maxManagedSkills = input.maxManagedSkills ?? DEFAULT_MAX_MANAGED_SKILLS;
-      const maxRelevantMemories = input.maxRelevantMemories ?? DEFAULT_MAX_RELEVANT_MEMORIES;
-      const readInput = {
-        agentId: input.agentId,
-        reviewWindowEnd: input.reviewWindowEnd,
-        reviewWindowStart: input.reviewWindowStart,
-        userId: input.userId,
-      };
+      return tracer.startActiveSpan(
+        'agent_signal.nightly_review.collector.collect',
+        {
+          attributes: {
+            'agent.signal.agent_id': input.agentId,
+            'agent.signal.nightly.max_managed_skills':
+              input.maxManagedSkills ?? DEFAULT_MAX_MANAGED_SKILLS,
+            'agent.signal.nightly.max_memories':
+              input.maxRelevantMemories ?? DEFAULT_MAX_RELEVANT_MEMORIES,
+            'agent.signal.nightly.max_topics': input.maxTopics ?? DEFAULT_MAX_TOPICS,
+            'agent.signal.user_id': input.userId,
+          },
+        },
+        async (span) => {
+          try {
+            const maxTopics = input.maxTopics ?? DEFAULT_MAX_TOPICS;
+            const maxManagedSkills = input.maxManagedSkills ?? DEFAULT_MAX_MANAGED_SKILLS;
+            const maxRelevantMemories = input.maxRelevantMemories ?? DEFAULT_MAX_RELEVANT_MEMORIES;
+            const readInput = {
+              agentId: input.agentId,
+              reviewWindowEnd: input.reviewWindowEnd,
+              reviewWindowStart: input.reviewWindowStart,
+              userId: input.userId,
+            };
 
-      const [topicRows, managedSkills, relevantMemories] = await Promise.all([
-        readAdapters.listTopicActivity({
-          ...readInput,
-          limit: input.topicFetchLimit ?? maxTopics * 3,
-        }),
-        readAdapters.listManagedSkills({
-          ...readInput,
-          limit: maxManagedSkills,
-        }),
-        readAdapters.listRelevantMemories({
-          ...readInput,
-          limit: maxRelevantMemories,
-        }),
-      ]);
+            const [
+              topicRows,
+              managedSkills,
+              relevantMemories,
+              toolActivity,
+              documentActivity,
+              feedbackActivity,
+              receiptActivity,
+            ] = await Promise.all([
+              readAdapters.listTopicActivity({
+                ...readInput,
+                limit: input.topicFetchLimit ?? maxTopics * 3,
+              }),
+              readAdapters.listManagedSkills({
+                ...readInput,
+                limit: maxManagedSkills,
+              }),
+              readAdapters.listRelevantMemories({
+                ...readInput,
+                limit: maxRelevantMemories,
+              }),
+              readAdapters.listToolActivity?.(readInput) ?? Promise.resolve([]),
+              readAdapters.listDocumentActivity?.(readInput) ??
+                Promise.resolve(createEmptyDocumentActivity()),
+              readAdapters.listFeedbackActivity?.(readInput) ??
+                Promise.resolve(createEmptyFeedbackActivity()),
+              readAdapters.listReceiptActivity?.(readInput) ??
+                Promise.resolve(createEmptyReceiptActivity()),
+            ]);
+            const topics = topicRows.map(normalizeTopic).sort(compareTopics).slice(0, maxTopics);
+            const maintenanceSignals = deriveNightlyMaintenanceSignals({
+              documentActivity,
+              feedbackActivity,
+              receiptActivity,
+              toolActivity,
+            });
 
-      return {
-        ...readInput,
-        managedSkills: managedSkills.slice(0, maxManagedSkills),
-        relevantMemories: relevantMemories.slice(0, maxRelevantMemories),
-        topics: topicRows.map(normalizeTopic).sort(compareTopics).slice(0, maxTopics),
-      };
+            span.setAttribute('agent.signal.nightly.raw_topic_count', topicRows.length);
+            span.setAttribute('agent.signal.nightly.topic_count', topics.length);
+            span.setAttribute(
+              'agent.signal.nightly.high_signal_topic_count',
+              topics.filter((topic) => topic.highSignalReasons.length > 0).length,
+            );
+            span.setAttribute('agent.signal.nightly.managed_skill_count', managedSkills.length);
+            span.setAttribute('agent.signal.nightly.memory_count', relevantMemories.length);
+            span.setAttribute('agent.signal.nightly.tool_activity_count', toolActivity.length);
+            span.setAttribute(
+              'agent.signal.nightly.document_skill_event_count',
+              documentActivity.skillBucket.length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.document_general_event_count',
+              documentActivity.generalDocumentBucket.length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.feedback_satisfied_count',
+              feedbackActivity.satisfied.length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.feedback_not_satisfied_count',
+              feedbackActivity.notSatisfied.length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.receipt_pending_proposal_count',
+              receiptActivity.pendingProposalCount,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.maintenance_signal_count',
+              maintenanceSignals.length,
+            );
+            span.addEvent('agent_signal.nightly_review.maintenance_signals_derived', {
+              'agent.signal.nightly.maintenance_signal_count': maintenanceSignals.length,
+              'agent.signal.nightly.maintenance_signal_kinds': maintenanceSignals
+                .map((signal) => signal.kind)
+                .join(','),
+            });
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return {
+              ...readInput,
+              documentActivity,
+              feedbackActivity,
+              maintenanceSignals,
+              managedSkills: managedSkills.slice(0, maxManagedSkills),
+              receiptActivity,
+              relevantMemories: relevantMemories.slice(0, maxRelevantMemories),
+              toolActivity,
+              topics,
+            };
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'AgentSignal nightly review context collection failed',
+            });
+            span.recordException(error as Error);
+
+            throw error;
+          } finally {
+            span.end();
+          }
+        },
+      );
     },
   };
 };

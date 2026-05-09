@@ -76,7 +76,7 @@ vi.mock('@/features/Conversation/hooks/useAgentMeta', () => ({
 }));
 
 vi.mock('./Welcome', () => ({
-  default: ({ content }: { content: string }) => <div data-testid="welcome-content">{content}</div>,
+  default: () => <div data-testid="welcome-content">Welcome</div>,
 }));
 
 describe('AgentOnboardingConversation', () => {
@@ -98,7 +98,7 @@ describe('AgentOnboardingConversation', () => {
   });
 
   it('renders the onboarding greeting without any completion CTA', () => {
-    mockState.displayMessages = [{ content: 'Welcome', id: 'assistant-1', role: 'assistant' }];
+    mockState.displayMessages = [];
 
     render(<AgentOnboardingConversation />);
 

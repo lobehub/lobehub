@@ -114,6 +114,7 @@
   "response.ProviderBizError": "Erreur lors de la requête au service {{provider}}. Veuillez diagnostiquer ou réessayer.",
   "response.ProviderContentModeration": "Échec de la vérification de la politique de contenu. Révisez votre demande et réessayez.",
   "response.ProviderContentModerationWarning": "Violations répétées des règles détectées. Une mauvaise utilisation supplémentaire pourrait restreindre votre compte.",
+  "response.ProviderImageContentModerationWarning": "Détections répétées de rejet de sécurité d'image. Des invites similaires peuvent temporairement suspendre la génération d'images.",
   "response.QuotaLimitReached": "Désolé, la limite de quota pour cette clé a été atteinte. Veuillez augmenter le quota ou réessayer plus tard.",
   "response.QuotaLimitReachedCloud": "Le service du modèle est actuellement très sollicité. Veuillez réessayer plus tard.",
   "response.ServerAgentRuntimeError": "Désolé, le service Agent est actuellement indisponible. Veuillez réessayer plus tard ou nous contacter par e-mail.",

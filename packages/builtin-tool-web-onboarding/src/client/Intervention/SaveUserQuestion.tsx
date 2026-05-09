@@ -1,18 +1,10 @@
 'use client';
 
 import type { BuiltinInterventionProps, SaveUserQuestionInput } from '@lobechat/types';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
-import { memo, useMemo } from 'react';
+import { EmojiPicker, Flexbox, Text } from '@lobehub/ui';
+import type { CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-const chipStyle = {
-  background: 'var(--lobe-fill-quaternary)',
-  border: '1px solid var(--lobe-colorBorderSecondary)',
-  borderRadius: 999,
-  color: 'var(--lobe-colorTextSecondary)',
-  fontSize: 12,
-  padding: '4px 10px',
-} as const;
 
 const detailCardStyle = {
   background: 'var(--lobe-fill-tertiary)',
@@ -37,108 +29,111 @@ const detailValueStyle = {
   padding: '10px 12px',
 } as const;
 
+const nameInputStyle: CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--lobe-colorText)',
+  flex: 1,
+  fontFamily: 'inherit',
+  fontSize: 16,
+  fontWeight: 600,
+  minWidth: 0,
+  outline: 'none',
+  padding: 0,
+};
+
+const emojiPickerStyle: CSSProperties = {
+  background: 'var(--lobe-fill-quaternary)',
+  borderRadius: 16,
+  cursor: 'pointer',
+  flex: 'none',
+};
+
 interface DetailField {
   label: string;
   value: string;
 }
 
 interface AgentIdentitySectionProps {
-  agentEmoji?: string;
-  agentName?: string;
+  args: SaveUserQuestionInput;
+  onArgsChange?: BuiltinInterventionProps<SaveUserQuestionInput>['onArgsChange'];
+  registerBeforeApprove?: BuiltinInterventionProps<SaveUserQuestionInput>['registerBeforeApprove'];
 }
 
-const AgentIdentitySection = memo<AgentIdentitySectionProps>(({ agentEmoji, agentName }) => {
-  const { t } = useTranslation('chat');
+const AgentIdentitySection = memo<AgentIdentitySectionProps>(
+  ({ args, onArgsChange, registerBeforeApprove }) => {
+    const { i18n, t } = useTranslation('chat');
 
-  const fields = useMemo<DetailField[]>(
-    () =>
-      [
-        agentName && {
-          label: t('tool.intervention.onboarding.agentIdentity.name'),
-          value: agentName,
-        },
-        agentEmoji && {
-          label: t('tool.intervention.onboarding.agentIdentity.emoji'),
-          value: agentEmoji,
-        },
-      ].filter(Boolean) as DetailField[],
-    [agentEmoji, agentName, t],
-  );
+    const [name, setName] = useState(args.agentName ?? '');
+    const [emoji, setEmoji] = useState(args.agentEmoji ?? '');
 
-  return (
-    <Flexbox gap={12}>
-      <Flexbox gap={4}>
-        <Text style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.04em' }} type="secondary">
-          {t('tool.intervention.onboarding.agentIdentity.eyebrow')}
-        </Text>
-        <Text style={{ fontSize: 16, fontWeight: 600 }}>
-          {t('tool.intervention.onboarding.agentIdentity.title')}
-        </Text>
-        <Text style={{ fontSize: 13 }} type="secondary">
-          {t('tool.intervention.onboarding.agentIdentity.description')}
-        </Text>
-      </Flexbox>
+    // Flush local edits into args before the framework triggers the actual save.
+    useEffect(() => {
+      if (!registerBeforeApprove || !onArgsChange) return;
+      return registerBeforeApprove('agentIdentity', async () => {
+        const trimmedName = name.trim();
+        const trimmedEmoji = emoji.trim();
+        await onArgsChange({
+          ...args,
+          agentEmoji: trimmedEmoji || undefined,
+          agentName: trimmedName || undefined,
+        });
+      });
+    }, [args, emoji, name, onArgsChange, registerBeforeApprove]);
 
-      <div style={detailCardStyle}>
-        <Flexbox gap={16}>
-          <Flexbox horizontal align="center" gap={12}>
-            <Avatar
-              avatar={agentEmoji || '🤖'}
-              size={48}
-              style={{
-                background: 'var(--lobe-fill-quaternary)',
-                borderRadius: 16,
-                flex: 'none',
-              }}
-            />
-            <Flexbox gap={2}>
-              <Text style={{ fontSize: 16, fontWeight: 600 }}>
-                {agentName || t('untitledAgent')}
-              </Text>
-              <Text style={{ fontSize: 12 }} type="secondary">
-                {t('tool.intervention.onboarding.agentIdentity.applyHint')}
-              </Text>
-            </Flexbox>
-          </Flexbox>
+    // Manifest routes name-only and emoji-only saves through the same intervention,
+    // so the title must reflect the *live* edit state — adding a previously-missing
+    // field via the input/picker should flip the wording accordingly, instead of
+    // promising a name change that was never proposed (or vice versa).
+    const titleKey =
+      name && emoji
+        ? 'tool.intervention.onboarding.agentIdentity.title'
+        : name
+          ? 'tool.intervention.onboarding.agentIdentity.titleNameOnly'
+          : 'tool.intervention.onboarding.agentIdentity.titleAvatarOnly';
 
-          <div style={detailGridStyle}>
-            {fields.map((field) => (
-              <Flexbox gap={6} key={field.label}>
-                <Text style={{ fontSize: 12, fontWeight: 600 }} type="secondary">
-                  {field.label}
-                </Text>
-                <div style={detailValueStyle}>{field.value}</div>
-              </Flexbox>
-            ))}
-          </div>
-
-          <Flexbox gap={8}>
-            <Text style={{ fontSize: 12, fontWeight: 600 }} type="secondary">
-              {t('tool.intervention.onboarding.agentIdentity.targets')}
-            </Text>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <span style={chipStyle}>
-                {t('tool.intervention.onboarding.agentIdentity.targetInbox')}
-              </span>
-              <span style={chipStyle}>
-                {t('tool.intervention.onboarding.agentIdentity.targetOnboarding')}
-              </span>
-            </div>
-          </Flexbox>
+    return (
+      <Flexbox gap={12}>
+        <Flexbox gap={4}>
+          <Text style={{ fontSize: 16, fontWeight: 600 }}>{t(titleKey)}</Text>
+          <Text style={{ fontSize: 13 }} type="secondary">
+            {t('tool.intervention.onboarding.agentIdentity.editHint')}
+          </Text>
         </Flexbox>
-      </div>
-    </Flexbox>
-  );
-});
+
+        <div style={detailCardStyle}>
+          <Flexbox horizontal align="center" gap={12}>
+            <EmojiPicker
+              defaultAvatar={'🤖'}
+              locale={i18n.language}
+              shape={'square'}
+              size={48}
+              style={emojiPickerStyle}
+              value={emoji}
+              onChange={setEmoji}
+            />
+            <input
+              aria-label={t('tool.intervention.onboarding.agentIdentity.namePlaceholder')}
+              placeholder={t('tool.intervention.onboarding.agentIdentity.namePlaceholder')}
+              style={nameInputStyle}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Flexbox>
+        </div>
+      </Flexbox>
+    );
+  },
+);
 
 AgentIdentitySection.displayName = 'AgentIdentitySection';
 
 interface UserProfileSectionProps {
   fullName?: string;
-  responseLanguage?: string;
 }
 
-const UserProfileSection = memo<UserProfileSectionProps>(({ fullName, responseLanguage }) => {
+const UserProfileSection = memo<UserProfileSectionProps>(({ fullName }) => {
   const { t } = useTranslation('chat');
 
   const fields = useMemo<DetailField[]>(
@@ -148,12 +143,8 @@ const UserProfileSection = memo<UserProfileSectionProps>(({ fullName, responseLa
           label: t('tool.intervention.onboarding.userProfile.fullName'),
           value: fullName,
         },
-        responseLanguage && {
-          label: t('tool.intervention.onboarding.userProfile.responseLanguage'),
-          value: responseLanguage,
-        },
       ].filter(Boolean) as DetailField[],
-    [fullName, responseLanguage, t],
+    [fullName, t],
   );
 
   if (fields.length === 0) return null;
@@ -196,21 +187,22 @@ const UserProfileSection = memo<UserProfileSectionProps>(({ fullName, responseLa
 UserProfileSection.displayName = 'UserProfileSection';
 
 const SaveUserQuestionIntervention = memo<BuiltinInterventionProps<SaveUserQuestionInput>>(
-  ({ args }) => {
-    const agentName = args.agentName?.trim() || undefined;
-    const agentEmoji = args.agentEmoji?.trim() || undefined;
+  ({ args, onArgsChange, registerBeforeApprove }) => {
     const fullName = args.fullName?.trim() || undefined;
-    const responseLanguage = args.responseLanguage?.trim() || undefined;
 
-    const hasAgentIdentity = Boolean(agentName || agentEmoji);
-    const hasUserProfile = Boolean(fullName || responseLanguage);
+    const hasAgentIdentity = Boolean(args.agentName || args.agentEmoji);
+    const hasUserProfile = Boolean(fullName);
 
     return (
       <Flexbox gap={16}>
-        {hasAgentIdentity && <AgentIdentitySection agentEmoji={agentEmoji} agentName={agentName} />}
-        {hasUserProfile && (
-          <UserProfileSection fullName={fullName} responseLanguage={responseLanguage} />
+        {hasAgentIdentity && (
+          <AgentIdentitySection
+            args={args}
+            registerBeforeApprove={registerBeforeApprove}
+            onArgsChange={onArgsChange}
+          />
         )}
+        {hasUserProfile && <UserProfileSection fullName={fullName} />}
       </Flexbox>
     );
   },

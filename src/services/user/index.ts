@@ -1,3 +1,4 @@
+import type { OnboardingUserInfo } from '@lobechat/context-engine';
 import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
 import { type PartialDeep } from 'type-fest';
 
@@ -45,6 +46,7 @@ export class UserService {
     personaContent: string | null;
     phaseGuidance: string;
     soulContent: string | null;
+    userInfo?: OnboardingUserInfo;
   }> => {
     return lambdaClient.user.getOnboardingAgentContext.query();
   };

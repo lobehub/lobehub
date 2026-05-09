@@ -1,5 +1,7 @@
 import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
+import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { createAgentSignalNightlyReviewMessages } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
@@ -28,18 +30,29 @@ import { redisPolicyStateStore } from '../../store/adapters/redis/policyStateSto
 import { redisSourceEventStore } from '../../store/adapters/redis/sourceEventStore';
 import { persistAgentSignalReceipts } from '../receiptService';
 import { createSelfReflectionService } from '../selfReflection';
+import { createServerMaintenanceBriefWriter } from './brief';
 import { createMaintenanceExecutorService } from './executor';
 import { createMemoryMaintenanceService } from './memory';
 import type {
+  FeedbackActivityDigest,
   NightlyReviewContext,
   NightlyReviewManagedSkillSummary,
   NightlyReviewRelevantMemorySummary,
   NightlyReviewTopicActivityRow,
+  ReceiptActivityDigest,
+  ToolActivityDigest,
 } from './nightlyCollector';
 import { createNightlyReviewService } from './nightlyCollector';
+import { mapNightlyDocumentActivityRows } from './nightlyDocumentActivity';
 import { createMaintenancePlannerService } from './planner';
 import { createSkillManagementService } from './skill';
-import type { MaintenanceActionDraft, MaintenancePlanDraft } from './types';
+import type {
+  EvidenceRef,
+  MaintenanceActionDraft,
+  MaintenanceActionPolicyHints,
+  MaintenanceActionTarget,
+  MaintenancePlanDraft,
+} from './types';
 
 // NOTICE:
 // This schema is intentionally hand-authored for `generateObject` structured output.
@@ -72,7 +85,7 @@ const NIGHTLY_REVIEW_AGENT_SCHEMA = {
                 additionalProperties: false,
                 properties: {
                   id: { type: 'string' },
-                  summary: { type: 'string' },
+                  summary: { type: ['string', 'null'] },
                   type: {
                     enum: [
                       'topic',
@@ -88,7 +101,7 @@ const NIGHTLY_REVIEW_AGENT_SCHEMA = {
                     type: 'string',
                   },
                 },
-                required: ['id', 'type'],
+                required: ['id', 'summary', 'type'],
                 type: 'object',
               },
               type: 'array',
@@ -96,30 +109,97 @@ const NIGHTLY_REVIEW_AGENT_SCHEMA = {
             policyHints: {
               additionalProperties: false,
               properties: {
-                evidenceStrength: { enum: ['weak', 'medium', 'strong'], type: 'string' },
-                mutationScope: { enum: ['small', 'broad'], type: 'string' },
-                persistence: { enum: ['stable', 'temporal'], type: 'string' },
-                sensitivity: { enum: ['normal', 'sensitive'], type: 'string' },
-                userExplicitness: { enum: ['explicit', 'implicit', 'inferred'], type: 'string' },
+                evidenceStrength: {
+                  enum: ['weak', 'medium', 'strong', null],
+                  type: ['string', 'null'],
+                },
+                mutationScope: { enum: ['small', 'broad', null], type: ['string', 'null'] },
+                persistence: { enum: ['stable', 'temporal', null], type: ['string', 'null'] },
+                sensitivity: { enum: ['normal', 'sensitive', null], type: ['string', 'null'] },
+                userExplicitness: {
+                  enum: ['explicit', 'implicit', 'inferred', null],
+                  type: ['string', 'null'],
+                },
               },
+              required: [
+                'evidenceStrength',
+                'mutationScope',
+                'persistence',
+                'sensitivity',
+                'userExplicitness',
+              ],
               type: 'object',
             },
             rationale: { type: 'string' },
             target: {
               additionalProperties: false,
               properties: {
-                memoryId: { type: 'string' },
-                skillDocumentId: { type: 'string' },
-                skillName: { type: 'string' },
-                targetReadonly: { type: 'boolean' },
-                taskIds: { items: { type: 'string' }, type: 'array' },
-                topicIds: { items: { type: 'string' }, type: 'array' },
+                memoryId: { type: ['string', 'null'] },
+                skillDocumentId: { type: ['string', 'null'] },
+                skillName: { type: ['string', 'null'] },
+                targetReadonly: { type: ['boolean', 'null'] },
+                taskIds: {
+                  items: { type: 'string' },
+                  type: ['array', 'null'],
+                },
+                topicIds: {
+                  items: { type: 'string' },
+                  type: ['array', 'null'],
+                },
               },
+              required: [
+                'memoryId',
+                'skillDocumentId',
+                'skillName',
+                'targetReadonly',
+                'taskIds',
+                'topicIds',
+              ],
               type: 'object',
             },
-            value: { type: ['object', 'string', 'null'] },
+            value: {
+              additionalProperties: false,
+              properties: {
+                bodyMarkdown: { type: ['string', 'null'] },
+                canonicalSkillDocumentId: { type: ['string', 'null'] },
+                content: { type: ['string', 'null'] },
+                description: { type: ['string', 'null'] },
+                name: { type: ['string', 'null'] },
+                patch: { type: ['string', 'null'] },
+                readonly: { type: ['boolean', 'null'] },
+                skillDocumentId: { type: ['string', 'null'] },
+                sourceSkillIds: {
+                  items: { type: 'string' },
+                  type: ['array', 'null'],
+                },
+                targetReadonly: { type: ['boolean', 'null'] },
+                title: { type: ['string', 'null'] },
+              },
+              required: [
+                'bodyMarkdown',
+                'canonicalSkillDocumentId',
+                'content',
+                'description',
+                'name',
+                'patch',
+                'readonly',
+                'skillDocumentId',
+                'sourceSkillIds',
+                'targetReadonly',
+                'title',
+              ],
+              type: ['object', 'null'],
+            },
           },
-          required: ['actionType', 'confidence', 'evidenceRefs', 'rationale'],
+          required: [
+            'actionType',
+            'confidence',
+            'evidenceRefs',
+            'policyHints',
+            'rationale',
+            'target',
+            'value',
+          ],
           type: 'object',
         },
         type: 'array',
@@ -133,10 +213,10 @@ const NIGHTLY_REVIEW_AGENT_SCHEMA = {
                 additionalProperties: false,
                 properties: {
                   id: { type: 'string' },
-                  summary: { type: 'string' },
+                  summary: { type: ['string', 'null'] },
                   type: { type: 'string' },
                 },
-                required: ['id', 'type'],
+                required: ['id', 'summary', 'type'],
                 type: 'object',
               },
               type: 'array',
@@ -159,67 +239,105 @@ const NIGHTLY_REVIEW_AGENT_SCHEMA = {
 
 // Runtime parser for model output after structured generation. This mirrors the
 // model-facing schema above, but the two schemas serve different boundaries.
-const EvidenceRefSchema = z.object({
-  id: z.string(),
-  summary: z.string().optional(),
-  type: z.enum([
-    'topic',
-    'message',
-    'operation',
-    'source',
-    'receipt',
-    'tool_call',
-    'task',
-    'agent_document',
-    'memory',
-  ]),
-});
-
-const MaintenanceActionDraftSchema = z.object({
-  actionType: z.enum([
-    'write_memory',
-    'create_skill',
-    'refine_skill',
-    'consolidate_skill',
-    'noop',
-    'proposal_only',
-  ]),
-  confidence: z.number().min(0).max(1),
-  evidenceRefs: z.array(EvidenceRefSchema),
-  policyHints: z
-    .object({
-      evidenceStrength: z.enum(['weak', 'medium', 'strong']).optional(),
-      mutationScope: z.enum(['small', 'broad']).optional(),
-      persistence: z.enum(['stable', 'temporal']).optional(),
-      sensitivity: z.enum(['normal', 'sensitive']).optional(),
-      userExplicitness: z.enum(['explicit', 'implicit', 'inferred']).optional(),
-    })
-    .optional(),
-  rationale: z.string(),
-  target: z
-    .object({
-      memoryId: z.string().optional(),
-      skillDocumentId: z.string().optional(),
-      skillName: z.string().optional(),
-      targetReadonly: z.boolean().optional(),
-      taskIds: z.array(z.string()).optional(),
-      topicIds: z.array(z.string()).optional(),
-    })
-    .optional(),
-  value: z.unknown().optional(),
-}) satisfies z.ZodType<MaintenanceActionDraft>;
-
-const MaintenancePlanDraftSchema = z.object({
-  actions: z.array(MaintenanceActionDraftSchema),
-  findings: z.array(
-    z.object({
-      evidenceRefs: z.array(EvidenceRefSchema),
-      severity: z.enum(['high', 'low', 'medium']),
-      summary: z.string(),
+const EvidenceRefSchema = z
+  .object({
+    id: z.string(),
+    summary: z.string().nullish(),
+    type: z.enum([
+      'topic',
+      'message',
+      'operation',
+      'source',
+      'receipt',
+      'tool_call',
+      'task',
+      'agent_document',
+      'memory',
+    ]),
+  })
+  .transform(
+    (value): EvidenceRef => ({
+      id: value.id,
+      ...(value.summary ? { summary: value.summary } : {}),
+      type: value.type,
     }),
-  ),
-  summary: z.string(),
-}) satisfies z.ZodType<MaintenancePlanDraft>;
+  );
+
+const MaintenanceActionDraftSchema: z.ZodType<MaintenanceActionDraft, z.ZodTypeDef, unknown> =
+  z.object({
+    actionType: z.enum([
+      'write_memory',
+      'create_skill',
+      'refine_skill',
+      'consolidate_skill',
+      'noop',
+      'proposal_only',
+    ]),
+    confidence: z.number().min(0).max(1),
+    evidenceRefs: z.array(EvidenceRefSchema),
+    policyHints: z
+      .object({
+        evidenceStrength: z.enum(['weak', 'medium', 'strong']).nullish(),
+        mutationScope: z.enum(['small', 'broad']).nullish(),
+        persistence: z.enum(['stable', 'temporal']).nullish(),
+        sensitivity: z.enum(['normal', 'sensitive']).nullish(),
+        userExplicitness: z.enum(['explicit', 'implicit', 'inferred']).nullish(),
+      })
+      .nullable()
+      .transform((value): MaintenanceActionPolicyHints | undefined =>
+        value
+          ? {
+              ...(value.evidenceStrength ? { evidenceStrength: value.evidenceStrength } : {}),
+              ...(value.mutationScope ? { mutationScope: value.mutationScope } : {}),
+              ...(value.persistence ? { persistence: value.persistence } : {}),
+              ...(value.sensitivity ? { sensitivity: value.sensitivity } : {}),
+              ...(value.userExplicitness ? { userExplicitness: value.userExplicitness } : {}),
+            }
+          : undefined,
+      )
+      .optional(),
+    rationale: z.string(),
+    target: z
+      .object({
+        memoryId: z.string().nullish(),
+        skillDocumentId: z.string().nullish(),
+        skillName: z.string().nullish(),
+        targetReadonly: z.boolean().nullish(),
+        taskIds: z.array(z.string()).nullish(),
+        topicIds: z.array(z.string()).nullish(),
+      })
+      .nullable()
+      .transform((value): MaintenanceActionTarget | undefined =>
+        value
+          ? {
+              ...(value.memoryId ? { memoryId: value.memoryId } : {}),
+              ...(value.skillDocumentId ? { skillDocumentId: value.skillDocumentId } : {}),
+              ...(value.skillName ? { skillName: value.skillName } : {}),
+              ...(typeof value.targetReadonly === 'boolean'
+                ? { targetReadonly: value.targetReadonly }
+                : {}),
+              ...(value.taskIds ? { taskIds: value.taskIds } : {}),
+              ...(value.topicIds ? { topicIds: value.topicIds } : {}),
+            }
+          : undefined,
+      )
+      .optional(),
+    value: z.unknown().optional(),
+  });
+
+const MaintenancePlanDraftSchema: z.ZodType<MaintenancePlanDraft, z.ZodTypeDef, unknown> = z.object(
+  {
+    actions: z.array(MaintenanceActionDraftSchema),
+    findings: z.array(
+      z.object({
+        evidenceRefs: z.array(EvidenceRefSchema),
+        severity: z.enum(['high', 'low', 'medium']),
+        summary: z.string(),
+      }),
+    ),
+    summary: z.string(),
+  },
+);
 
 const getStringField = (value: unknown, key: string) => {
   if (!value || typeof value !== 'object') return undefined;
@@ -345,21 +463,52 @@ const runServerMaintenanceReviewAgent = async (
   userId: string,
   context: NightlyReviewContext | SelfReflectionReviewContext,
 ) => {
-  const modelRuntime = await initModelRuntimeFromDB(
-    db,
-    userId,
-    DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
-  );
-  const result = await modelRuntime.generateObject(
+  return tracer.startActiveSpan(
+    'agent_signal.maintenance_review_agent.run',
     {
-      messages: createAgentSignalNightlyReviewMessages(context),
-      model: DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
-      schema: NIGHTLY_REVIEW_AGENT_SCHEMA,
+      attributes: {
+        'agent.signal.agent_id': context.agentId,
+        'agent.signal.model': DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
+        'agent.signal.provider': DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
+        'agent.signal.user_id': userId,
+      },
     },
-    { metadata: { trigger: RequestTrigger.AgentSignal } },
-  );
+    async (span) => {
+      try {
+        const modelRuntime = await initModelRuntimeFromDB(
+          db,
+          userId,
+          DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
+        );
+        const result = await modelRuntime.generateObject(
+          {
+            messages: createAgentSignalNightlyReviewMessages(context),
+            model: DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
+            schema: NIGHTLY_REVIEW_AGENT_SCHEMA,
+          },
+          { metadata: { trigger: RequestTrigger.AgentSignal } },
+        );
+        const draft = MaintenancePlanDraftSchema.parse(result);
 
-  return MaintenancePlanDraftSchema.parse(result);
+        span.setAttribute('agent.signal.nightly.draft_action_count', draft.actions.length);
+        span.setAttribute('agent.signal.nightly.finding_count', draft.findings.length);
+        span.setStatus({ code: SpanStatusCode.OK });
+
+        return draft;
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message:
+            error instanceof Error ? error.message : 'AgentSignal maintenance reviewer failed',
+        });
+        span.recordException(error as Error);
+
+        throw error;
+      } finally {
+        span.end();
+      }
+    },
+  );
 };
 
 const collectSelfReflectionContext = async (
@@ -598,6 +747,75 @@ export const createServerNightlyReviewPolicyOptions = ({
   const reviewContextModel = new AgentSignalReviewContextModel(db, userId);
   const skillDocumentService = new SkillManagementDocumentService(db, userId);
   const collector = createNightlyReviewService({
+    listDocumentActivity: async ({ agentId: targetAgentId, reviewWindowEnd, reviewWindowStart }) =>
+      tracer.startActiveSpan(
+        'agent_signal.nightly_review.collector.list_document_activity',
+        {
+          attributes: {
+            'agent.signal.agent_id': targetAgentId,
+            'agent.signal.user_id': userId,
+          },
+        },
+        async (span) => {
+          try {
+            const rows = await reviewContextModel.listDocumentActivity({
+              agentId: targetAgentId,
+              windowEnd: new Date(reviewWindowEnd),
+              windowStart: new Date(reviewWindowStart),
+            });
+            const digest = mapNightlyDocumentActivityRows(rows);
+
+            span.setAttribute('agent.signal.nightly.document_activity_row_count', rows.length);
+            span.setAttribute(
+              'agent.signal.nightly.document_skill_event_count',
+              digest.skillBucket.length,
+            );
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return digest;
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'AgentSignal nightly document activity read failed',
+            });
+            span.recordException(error as Error);
+
+            throw error;
+          } finally {
+            span.end();
+          }
+        },
+      ),
+    listFeedbackActivity: async ({ agentId: targetAgentId }) =>
+      tracer.startActiveSpan(
+        'agent_signal.nightly_review.collector.list_feedback_activity',
+        {
+          attributes: {
+            'agent.signal.agent_id': targetAgentId,
+            'agent.signal.user_id': userId,
+          },
+        },
+        async (span): Promise<FeedbackActivityDigest> => {
+          try {
+            const digest: FeedbackActivityDigest = {
+              neutralCount: 0,
+              notSatisfied: [],
+              satisfied: [],
+            };
+
+            span.setAttribute('agent.signal.nightly.feedback_satisfied_count', 0);
+            span.setAttribute('agent.signal.nightly.feedback_not_satisfied_count', 0);
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return digest;
+          } finally {
+            span.end();
+          }
+        },
+      ),
     listManagedSkills: async ({ agentId: targetAgentId, limit = 20 }) => {
       const skills = await skillDocumentService.listSkills({ agentId: targetAgentId });
 
@@ -617,6 +835,85 @@ export const createServerNightlyReviewPolicyOptions = ({
         updatedAt: row.updatedAt.toISOString(),
       }));
     },
+    listReceiptActivity: async ({ agentId: targetAgentId }) =>
+      tracer.startActiveSpan(
+        'agent_signal.nightly_review.collector.list_receipt_activity',
+        {
+          attributes: {
+            'agent.signal.agent_id': targetAgentId,
+            'agent.signal.user_id': userId,
+          },
+        },
+        async (span): Promise<ReceiptActivityDigest> => {
+          try {
+            const digest: ReceiptActivityDigest = {
+              appliedCount: 0,
+              duplicateGroups: [],
+              failedCount: 0,
+              pendingProposalCount: 0,
+              recentReceipts: [],
+              reviewCount: 0,
+            };
+
+            span.setAttribute('agent.signal.nightly.receipt_pending_proposal_count', 0);
+            span.setAttribute('agent.signal.nightly.receipt_recent_count', 0);
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return digest;
+          } finally {
+            span.end();
+          }
+        },
+      ),
+    listToolActivity: async ({ agentId: targetAgentId, reviewWindowEnd, reviewWindowStart }) =>
+      tracer.startActiveSpan(
+        'agent_signal.nightly_review.collector.list_tool_activity',
+        {
+          attributes: {
+            'agent.signal.agent_id': targetAgentId,
+            'agent.signal.user_id': userId,
+          },
+        },
+        async (span) => {
+          try {
+            const rows = await reviewContextModel.listToolActivity({
+              agentId: targetAgentId,
+              windowEnd: new Date(reviewWindowEnd),
+              windowStart: new Date(reviewWindowStart),
+            });
+            const digest = rows.map<ToolActivityDigest>((row) => ({
+              apiName: row.apiName,
+              failedCount: row.failedCount,
+              firstUsedAt: row.firstUsedAt?.toISOString(),
+              identifier: row.identifier,
+              lastUsedAt: row.lastUsedAt?.toISOString(),
+              messageIds: row.messageIds.slice(0, 10),
+              sampleArgs: row.sampleArgs.slice(0, 3),
+              sampleErrors: row.sampleErrors.slice(0, 3),
+              topicIds: row.topicIds.slice(0, 10),
+              totalCount: row.totalCount,
+            }));
+
+            span.setAttribute('agent.signal.nightly.tool_activity_count', digest.length);
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return digest;
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'AgentSignal nightly tool activity read failed',
+            });
+            span.recordException(error as Error);
+
+            throw error;
+          } finally {
+            span.end();
+          }
+        },
+      ),
     listTopicActivity: async ({
       agentId: targetAgentId,
       limit = 90,
@@ -632,7 +929,9 @@ export const createServerNightlyReviewPolicyOptions = ({
 
       return rows.map<NightlyReviewTopicActivityRow>((row) => ({
         evidenceRefs: row.topicId ? [{ id: row.topicId, type: 'topic' }] : [],
+        failedMessages: row.failedMessages,
         failedToolCount: row.failedToolCount,
+        failedToolCalls: row.failedToolCalls,
         failureCount: row.failureCount,
         lastActivityAt: row.lastActivityAt.toISOString(),
         messageCount: row.messageCount,
@@ -648,6 +947,7 @@ export const createServerNightlyReviewPolicyOptions = ({
     skillDocumentService,
     userId,
   });
+  const briefWriter = createServerMaintenanceBriefWriter(db, userId);
 
   return {
     acquireReviewGuard: (input) =>
@@ -675,6 +975,7 @@ export const createServerNightlyReviewPolicyOptions = ({
     executePlan: (plan) => executor.execute(plan),
     planReviewOutput: (request) => planner.plan(request),
     runMaintenanceReviewAgent: (context) => runServerMaintenanceReviewAgent(db, userId, context),
+    writeDailyBrief: (brief) => briefWriter.writeDailyBrief(brief),
     writeReceipts: (receipts) => persistAgentSignalReceipts(receipts),
   };
 };

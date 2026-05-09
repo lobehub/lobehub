@@ -1,3 +1,4 @@
+import type { TaskStatus } from '@lobechat/types';
 import { z } from 'zod';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
@@ -12,6 +13,8 @@ export interface RecentItem {
   id: string;
   metadata?: ChatTopicMetadata;
   routePath: string;
+  /** Task lifecycle status when `type === 'task'`; null for topic/document. */
+  status: TaskStatus | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
@@ -64,6 +67,7 @@ export const recentRouter = router({
           id: item.id,
           metadata: item.metadata as ChatTopicMetadata | undefined,
           routePath,
+          status: item.status,
           title: item.title,
           type: item.type,
           updatedAt: item.updatedAt,

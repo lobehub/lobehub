@@ -4,7 +4,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import type {
+  GetGitBranchDiffPayload,
   GitAheadBehind,
+  GitBranchDiffPatches,
   GitBranchInfo,
   GitBranchListItem,
   GitCheckoutResult,
@@ -12,6 +14,7 @@ import type {
   GitLinkedPullRequestResult,
   GitPullResult,
   GitPushResult,
+  GitRemoteBranchListItem,
   GitWorkingTreeFiles,
   GitWorkingTreePatch,
   GitWorkingTreePatches,
@@ -150,6 +153,21 @@ export const quoteGitPath = (prefix: 'a/' | 'b/', filePath: string): string => {
     }
   }
   return out + '"';
+};
+
+/**
+ * Status from a single diff block's preamble: `new file mode` → added,
+ * `deleted file mode` → deleted, otherwise modified. Used by branch-diff mode
+ * where there's no `git status` to consult — the diff itself is the source.
+ */
+const detectDiffBlockStatus = (block: string): GitFileDiffStatus => {
+  // Only scan up to the first hunk / binary marker so huge bodies aren't walked.
+  for (const line of block.split('\n')) {
+    if (line.startsWith('new file mode ')) return 'added';
+    if (line.startsWith('deleted file mode ')) return 'deleted';
+    if (line.startsWith('@@') || line.startsWith('Binary files ')) break;
+  }
+  return 'modified';
 };
 
 /** Walk a patch counting `+`/`-` lines while skipping `+++`/`---` headers. */
@@ -557,6 +575,54 @@ export default class GitController extends ControllerModule {
   }
 
   /**
+   * List remote branches under `refs/remotes/origin/*`, ordered by most
+   * recent commit. The `HEAD` symref is filtered out and the resolved
+   * default branch is flagged via `isDefault` so the UI can render it
+   * with a marker. Used by the Review panel's branch-compare picker.
+   */
+  @IpcMethod()
+  async listGitRemoteBranches(dirPath: string): Promise<GitRemoteBranchListItem[]> {
+    const execFileAsync = promisify(execFile);
+    let defaultRef: string | undefined;
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+        { cwd: dirPath, timeout: 5000 },
+      );
+      defaultRef = stdout.trim() || undefined;
+    } catch {
+      defaultRef = undefined;
+    }
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        [
+          'for-each-ref',
+          '--sort=-committerdate',
+          '--format=%(refname:short)',
+          'refs/remotes/origin',
+        ],
+        { cwd: dirPath, timeout: 5000 },
+      );
+      return stdout
+        .replaceAll('\r', '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((name) => name.length > 0 && name !== 'origin/HEAD' && !name.endsWith('/HEAD'))
+        .map((name) => ({ isDefault: name === defaultRef, name }));
+    } catch (error: any) {
+      logger.warn('[listGitRemoteBranches] git command failed', {
+        code: error?.code,
+        cwd: dirPath,
+        message: error?.message,
+        stderr: error?.stderr?.toString?.() ?? error?.stderr,
+      });
+      return [];
+    }
+  }
+
+  /**
    * Bucket dirty files into added / modified / deleted via `git status --porcelain -z`.
    * Each file is counted once: untracked (`??`) and staged-add (`A`) → added,
    * any `D` in index or working tree → deleted, everything else (`M`/`R`/`C`/`T`/`U`) → modified.
@@ -789,6 +855,99 @@ export default class GitController extends ControllerModule {
     allPatches.sort((a, b) => order[a.status] - order[b.status]);
 
     return { patches: allPatches };
+  }
+
+  /**
+   * Diff every changed file between the current HEAD and the remote default
+   * branch (resolved via `refs/remotes/origin/HEAD` — typically `origin/main`
+   * or `origin/canary`). Uses `<base>...HEAD` so the result is "what this
+   * branch added since it forked", ignoring upstream-only commits.
+   *
+   * Best-effort `git fetch` first so the comparison reflects the latest
+   * remote state; fetch failures (offline / no creds / no `origin`) are
+   * swallowed and we fall back to whatever cached refs exist. Returns
+   * `baseRef: undefined` + empty patches when no remote default is set —
+   * the renderer surfaces a "noBaseRef" hint in that case.
+   *
+   * Patch parsing reuses the same bulk-split + size-cap path as the working
+   * tree variant; status comes from each diff block's preamble (no `git
+   * status` cross-reference needed since every block is from history).
+   */
+  @IpcMethod()
+  async getGitBranchDiff(payload: GetGitBranchDiffPayload): Promise<GitBranchDiffPatches> {
+    const { path: dirPath, baseRef: baseRefOverride } = payload;
+    const MAX_PATCH_BYTES = 256 * 1024;
+    const execFileAsync = promisify(execFile);
+
+    // Step 1 — best-effort fetch so origin/<default> reflects remote HEAD.
+    try {
+      await execFileAsync('git', ['fetch', '--no-tags', '--quiet', 'origin'], {
+        cwd: dirPath,
+        timeout: 10_000,
+      });
+    } catch {
+      // swallow — fall through to cached refs
+    }
+
+    // Step 2 — pick the comparison base. When the caller passes an explicit
+    // override (e.g. user picked a non-default branch in the UI) we trust it;
+    // otherwise we resolve `refs/remotes/origin/HEAD`. The default may be
+    // missing on repos cloned with --no-checkout or after a remote rename —
+    // surface a "noBaseRef" empty state in that case so the user can run
+    // `git remote set-head origin --auto` themselves.
+    let baseRef: string | undefined = baseRefOverride;
+    if (!baseRef) {
+      try {
+        const { stdout } = await execFileAsync(
+          'git',
+          ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+          { cwd: dirPath, timeout: 5000 },
+        );
+        baseRef = stdout.trim() || undefined;
+      } catch {
+        baseRef = undefined;
+      }
+    }
+
+    // headRef populated even when baseRef is missing so the UI can still
+    // surface "fix/foo ← ?" instead of going completely blank.
+    const headRef = (await this.getGitBranch(dirPath)).branch;
+
+    if (!baseRef) {
+      return { headRef, patches: [] };
+    }
+
+    // Step 3 — single bulk diff against the merge base. Three-dot semantics
+    // (`base...HEAD`) ignore commits added to base after the branch forked,
+    // matching what users expect from "compare branch" UI on GitHub. Stream
+    // capture mirrors the working-tree path so multi-MB diffs land intact.
+    let bulkDiff = '';
+    try {
+      bulkDiff = await runGitCaptureStream(
+        dirPath,
+        ['-c', 'core.quotepath=off', 'diff', '--no-color', `${baseRef}...HEAD`],
+        30_000,
+      );
+    } catch (error: any) {
+      logger.warn('[getGitBranchDiff] diff failed', {
+        baseRef,
+        cwd: dirPath,
+        stderr: error?.stderr?.toString?.() ?? error?.stderr,
+      });
+      if (typeof error?.partialStdout === 'string') bulkDiff = error.partialStdout;
+    }
+
+    // Step 4 — split + classify per-file from the diff preamble alone.
+    const patches: GitWorkingTreePatch[] = [];
+    for (const block of splitBulkDiff(bulkDiff)) {
+      const status = detectDiffBlockStatus(block.patch);
+      patches.push(buildTrackedPatch({ filePath: block.path, status }, block, MAX_PATCH_BYTES));
+    }
+
+    const order: Record<GitFileDiffStatus, number> = { added: 0, modified: 1, deleted: 2 };
+    patches.sort((a, b) => order[a.status] - order[b.status]);
+
+    return { baseRef, headRef, patches };
   }
 
   /**

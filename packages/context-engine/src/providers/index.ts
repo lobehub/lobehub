@@ -95,6 +95,7 @@ export type { LocalSystemToolSnapshotInjectorConfig } from './LocalSystemToolSna
 export type {
   OnboardingContext,
   OnboardingContextInjectorConfig,
+  OnboardingUserInfo,
 } from './OnboardingContextInjector';
 export type { PageEditorContextInjectorConfig } from './PageEditorContextInjector';
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';

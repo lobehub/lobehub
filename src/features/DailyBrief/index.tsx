@@ -11,7 +11,6 @@ import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -22,15 +21,14 @@ const DailyBrief = memo(() => {
   const { t } = useTranslation('home');
   const navigate = useNavigate();
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  useFetchBriefs(isLogin && !!enableAgentTask);
+  useFetchBriefs(isLogin);
 
   const briefs = useBriefStore(briefListSelectors.briefs);
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
   const recState = useDailyBriefRecommendationsUI();
 
-  if (!enableAgentTask || !isLogin) return null;
+  if (!isLogin) return null;
 
   if (!isInit) {
     return (

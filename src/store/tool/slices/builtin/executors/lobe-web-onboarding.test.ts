@@ -73,7 +73,6 @@ describe('webOnboardingExecutor', () => {
             items: { type: 'string' },
             type: 'array',
           },
-          responseLanguage: { type: 'string' },
         },
         type: 'object',
       },

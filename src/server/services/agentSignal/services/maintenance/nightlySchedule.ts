@@ -1,4 +1,6 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
+import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import dayjs from 'dayjs';
 import timezonePlugin from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -14,8 +16,8 @@ dayjs.extend(utc);
 dayjs.extend(timezonePlugin);
 
 const FALLBACK_TIMEZONE = 'UTC';
-const NIGHT_WINDOW_START_HOUR = 22;
-const NIGHT_WINDOW_END_HOUR = 23;
+const NIGHT_WINDOW_START_HOUR = 2;
+const NIGHT_WINDOW_END_HOUR_EXCLUSIVE = 4;
 
 /** Active agent target returned by the nightly review scheduler data boundary. */
 export interface NightlyReviewAgentTarget {
@@ -126,6 +128,7 @@ export interface NightlyReviewScheduleService {
 
 interface LocalNightWindow {
   localDate: string;
+  reviewWindowEnd: Date;
   reviewWindowStart: Date;
   timezone: string;
   withinWindow: boolean;
@@ -147,14 +150,17 @@ const resolveTimezone = (timezone: string | null | undefined): string => {
 const getLocalNightWindow = (now: Date, timezone: string | null | undefined): LocalNightWindow => {
   const resolvedTimezone = resolveTimezone(timezone);
   const localNow = dayjs(now).tz(resolvedTimezone);
-  const localDate = localNow.format('YYYY-MM-DD');
+  const reviewDate = localNow.subtract(1, 'day').format('YYYY-MM-DD');
+  const localDayStart = dayjs.tz(localNow.format('YYYY-MM-DD'), resolvedTimezone).startOf('day');
   const localHour = localNow.hour();
 
   return {
-    localDate,
-    reviewWindowStart: dayjs.tz(localDate, resolvedTimezone).startOf('day').toDate(),
+    localDate: reviewDate,
+    reviewWindowEnd: localDayStart.toDate(),
+    reviewWindowStart: localDayStart.subtract(1, 'day').toDate(),
     timezone: resolvedTimezone,
-    withinWindow: localHour >= NIGHT_WINDOW_START_HOUR && localHour <= NIGHT_WINDOW_END_HOUR,
+    withinWindow:
+      localHour >= NIGHT_WINDOW_START_HOUR && localHour < NIGHT_WINDOW_END_HOUR_EXCLUSIVE,
   };
 };
 
@@ -177,54 +183,90 @@ export const createNightlyReviewScheduleService = (
 ): NightlyReviewScheduleService => {
   return {
     dispatchNightlyReviewRequests: async (options = {}) => {
-      const now = adapters.now?.() ?? new Date();
-      const users = await adapters.listEligibleUsers({
-        cursor: options.cursor,
-        limit: options.limit,
-        whitelist: options.whitelist,
-      });
-      let enqueued = 0;
-      let skipped = 0;
+      return tracer.startActiveSpan(
+        'agent_signal.nightly_review.schedule.dispatch',
+        {
+          attributes: {
+            'agent.signal.nightly.limit': options.limit ?? 0,
+            'agent.signal.nightly.target_limit': options.targetLimit ?? 0,
+            'agent.signal.nightly.whitelist_count': options.whitelist?.length ?? 0,
+          },
+        },
+        async (span) => {
+          try {
+            const now = adapters.now?.() ?? new Date();
+            const users = await adapters.listEligibleUsers({
+              cursor: options.cursor,
+              limit: options.limit,
+              whitelist: options.whitelist,
+            });
+            let enqueued = 0;
+            let skipped = 0;
+            let targetCount = 0;
 
-      for (const user of users) {
-        const localWindow = getLocalNightWindow(now, user.timezone);
+            for (const user of users) {
+              const localWindow = getLocalNightWindow(now, user.timezone);
 
-        if (!localWindow.withinWindow) {
-          skipped += 1;
-          continue;
-        }
+              if (!localWindow.withinWindow) {
+                skipped += 1;
+                continue;
+              }
 
-        const targets = await adapters.listActiveAgentTargets({
-          limit: options.targetLimit,
-          userId: user.id,
-          windowEnd: now,
-          windowStart: localWindow.reviewWindowStart,
-        });
+              const targets = await adapters.listActiveAgentTargets({
+                limit: options.targetLimit,
+                userId: user.id,
+                windowEnd: localWindow.reviewWindowEnd,
+                windowStart: localWindow.reviewWindowStart,
+              });
 
-        for (const target of targets) {
-          await adapters.enqueueSource({
-            payload: {
-              agentId: target.agentId,
-              localDate: localWindow.localDate,
-              requestedAt: now.toISOString(),
-              reviewWindowEnd: now.toISOString(),
-              reviewWindowStart: localWindow.reviewWindowStart.toISOString(),
-              timezone: localWindow.timezone,
-              userId: user.id,
-            },
-            sourceId: buildNightlyReviewSourceId({
-              agentId: target.agentId,
-              localDate: localWindow.localDate,
-              userId: user.id,
-            }),
-            sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
-            timestamp: now.getTime(),
-          });
-          enqueued += 1;
-        }
-      }
+              targetCount += targets.length;
 
-      return { enqueued, skipped };
+              for (const target of targets) {
+                await adapters.enqueueSource({
+                  payload: {
+                    agentId: target.agentId,
+                    localDate: localWindow.localDate,
+                    requestedAt: now.toISOString(),
+                    reviewWindowEnd: localWindow.reviewWindowEnd.toISOString(),
+                    reviewWindowStart: localWindow.reviewWindowStart.toISOString(),
+                    timezone: localWindow.timezone,
+                    userId: user.id,
+                  },
+                  sourceId: buildNightlyReviewSourceId({
+                    agentId: target.agentId,
+                    localDate: localWindow.localDate,
+                    userId: user.id,
+                  }),
+                  sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+                  timestamp: now.getTime(),
+                });
+                enqueued += 1;
+              }
+            }
+
+            span.setAttribute('agent.signal.nightly.user_count', users.length);
+            span.setAttribute('agent.signal.nightly.target_count', targetCount);
+            span.setAttribute('agent.signal.nightly.enqueued', enqueued);
+            span.setAttribute('agent.signal.nightly.skipped', skipped);
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return { enqueued, skipped };
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'AgentSignal nightly review schedule dispatch failed',
+            });
+            span.recordException(error as Error);
+
+            throw error;
+          } finally {
+            span.end();
+          }
+        },
+      );
     },
   };
 };

@@ -2,10 +2,6 @@ import {
   AgentBuilderInterventions,
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
-import {
-  AgentMarketplaceInterventions,
-  AgentMarketplaceManifest,
-} from '@lobechat/builtin-tool-agent-marketplace/client';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CloudSandboxInterventions } from '@lobechat/builtin-tool-cloud-sandbox/client';
 import {
@@ -23,6 +19,10 @@ import {
   UserInteractionIdentifier,
   UserInteractionInterventions,
 } from '@lobechat/builtin-tool-user-interaction/client';
+import {
+  AgentMarketplaceInterventions,
+  AgentMarketplaceManifest,
+} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/client';
 import {
   WebOnboardingInterventions,
   WebOnboardingManifest,

@@ -857,6 +857,7 @@
   "tab.manualFill": "수동 입력",
   "tab.manualFill.desc": "사용자 정의 MCP 스킬을 수동으로 구성합니다",
   "tab.memory": "기억 설정",
+  "tab.messenger": "메신저",
   "tab.notification": "알림",
   "tab.profile": "내 계정",
   "tab.provider": "AI 서비스 제공자",

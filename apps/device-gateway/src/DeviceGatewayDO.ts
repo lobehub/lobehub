@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { Hono } from 'hono';
 
 import { resolveSocketAuth, verifyApiKeyToken, verifyDesktopToken } from './auth';
-import type { DeviceAttachment, Env } from './types';
+import type { AgentRunRequestMessage, DeviceAttachment, Env } from './types';
 
 const AUTH_TIMEOUT = 10_000; // 10s to authenticate after connect
 const HEARTBEAT_TIMEOUT = 90_000; // 90s without heartbeat → close
@@ -30,6 +30,9 @@ export class DeviceGatewayDO extends DurableObject<Env> {
     })
     .post('/api/device/system-info', async (c) => {
       return this.handleSystemInfo(c.req.raw);
+    })
+    .post('/api/device/agent/run', async (c) => {
+      return this.handleAgentRun(c.req.raw);
     })
     .all('/api/device/devices', async () => {
       const sockets = this.getAuthenticatedSockets();
@@ -102,12 +105,16 @@ export class DeviceGatewayDO extends DurableObject<Env> {
     if (!att.authenticated) return;
 
     // ─── Business messages (authenticated only) ───
-    if (data.type === 'tool_call_response' || data.type === 'system_info_response') {
-      const pending = this.pendingRequests.get(data.requestId);
+    if (
+      data.type === 'tool_call_response' ||
+      data.type === 'system_info_response' ||
+      data.type === 'agent_run_ack'
+    ) {
+      const pending = this.pendingRequests.get(data.requestId ?? data.operationId);
       if (pending) {
         clearTimeout(pending.timer);
-        pending.resolve(data.result);
-        this.pendingRequests.delete(data.requestId);
+        pending.resolve(data.type === 'agent_run_ack' ? data : data.result);
+        this.pendingRequests.delete(data.requestId ?? data.operationId);
       }
     }
 
@@ -275,6 +282,60 @@ export class DeviceGatewayDO extends DurableObject<Env> {
         },
         { status: 504 },
       );
+    }
+  }
+
+  // ─── Agent Run RPC ───
+
+  private async handleAgentRun(request: Request): Promise<Response> {
+    const sockets = this.getAuthenticatedSockets();
+    if (sockets.length === 0) {
+      return Response.json({ error: 'DEVICE_OFFLINE', success: false }, { status: 503 });
+    }
+
+    const body = (await request.json()) as {
+      agentType: 'claude-code' | 'codex';
+      cwd?: string;
+      deviceId?: string;
+      jwt: string;
+      operationId: string;
+      prompt: string;
+      resumeSessionId?: string;
+      timeout?: number;
+      topicId: string;
+    };
+    const { deviceId, timeout = 10_000, ...runParams } = body;
+
+    const targetWs = deviceId
+      ? sockets.find((ws) => {
+          const att = ws.deserializeAttachment() as DeviceAttachment;
+          return att.deviceId === deviceId;
+        })
+      : sockets[0];
+
+    if (!targetWs) {
+      return Response.json({ error: 'DEVICE_NOT_FOUND', success: false }, { status: 503 });
+    }
+
+    try {
+      const ack = await new Promise<{ status: string }>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.pendingRequests.delete(runParams.operationId);
+          reject(new Error('TIMEOUT'));
+        }, timeout);
+
+        this.pendingRequests.set(runParams.operationId, { resolve, timer });
+
+        const msg: AgentRunRequestMessage = { type: 'agent_run_request', ...runParams };
+        targetWs.send(JSON.stringify(msg));
+      });
+
+      if (ack.status === 'rejected') {
+        return Response.json({ error: 'DEVICE_REJECTED', success: false }, { status: 422 });
+      }
+      return Response.json({ success: true });
+    } catch (err) {
+      return Response.json({ error: (err as Error).message, success: false }, { status: 504 });
     }
   }
 

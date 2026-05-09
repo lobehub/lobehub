@@ -83,6 +83,23 @@ describe('model command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(models, null, 2));
     });
+
+    it('should filter hidden runtime-only models from JSON output', async () => {
+      const visibleModels = [{ displayName: 'DeepSeek V4 Pro', id: 'deepseek-v4-pro' }];
+      mockTrpcClient.aiModel.getAiProviderModelList.query.mockResolvedValue([
+        ...visibleModels,
+        {
+          displayName: 'LobeHub Onboarding',
+          id: 'lobehub-onboarding-v1',
+          visible: false,
+        },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'model', 'list', 'lobehub', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(visibleModels, null, 2));
+    });
   });
 
   describe('view', () => {

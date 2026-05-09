@@ -1,4 +1,5 @@
 import ImageSearchRef from './ImageSearchRef';
+import LobeAgents from './LobeAgents';
 import LobeArtifact from './LobeArtifact';
 import LobeThinking from './LobeThinking';
 import LocalFile from './LocalFile';
@@ -17,4 +18,5 @@ export const markdownElements: MarkdownElement[] = [
   Mention,
   Task,
   ImageSearchRef,
+  LobeAgents,
 ];

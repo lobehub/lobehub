@@ -1,11 +1,14 @@
 import debug from 'debug';
 
+import type { MessengerPlatform } from '@/config/messenger';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
+import { getInstallationStore } from '@/server/services/messenger/installations';
+import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
@@ -18,7 +21,7 @@ import {
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
-  renderError,
+  renderAgentError,
   renderFinalReply,
   renderStepProgress,
   renderStopped,
@@ -36,6 +39,7 @@ export interface BotCallbackBody {
   duration?: number;
   elapsedMs?: number;
   errorMessage?: string;
+  errorType?: string;
   executionTimeMs?: number;
   /** Hook ID from HookDispatcher (e.g. 'bot-step-progress', 'bot-completion') */
   hookId?: string;
@@ -45,6 +49,13 @@ export interface BotCallbackBody {
   lastLLMContent?: string;
   lastToolsCalling?: any;
   llmCalls?: number;
+  /**
+   * When set, this run originated from the shared Messenger bot — credentials
+   * live in the messenger installation store, not `agent_bot_providers`.
+   * Format: `<platform>:<tenantId>` or `<platform>:singleton`. See
+   * `ChatTopicBotContext.messengerInstallationKey`.
+   */
+  messengerInstallationKey?: string;
   operationId?: string;
   platformThreadId: string;
   progressMessageId?: string;
@@ -81,14 +92,16 @@ export class BotCallbackService {
   }
 
   async handleCallback(body: BotCallbackBody): Promise<void> {
-    const { type, applicationId, platformThreadId, progressMessageId } = body;
+    const { type, applicationId, platformThreadId, progressMessageId, messengerInstallationKey } =
+      body;
     const platform = platformThreadId.split(':')[0];
 
-    const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger(
-      platform,
+    const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger({
       applicationId,
+      messengerInstallationKey,
+      platform,
       platformThreadId,
-    );
+    });
 
     const entry = platformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
@@ -130,17 +143,28 @@ export class BotCallbackService {
     }
   }
 
-  private async createMessenger(
-    platform: string,
-    applicationId: string,
-    platformThreadId: string,
-  ): Promise<{
+  private async createMessenger(params: {
+    applicationId: string;
+    messengerInstallationKey?: string;
+    platform: string;
+    platformThreadId: string;
+  }): Promise<{
     charLimit?: number;
     connectionId: string;
     client: PlatformClient;
     messenger: PlatformMessenger;
     settings: Record<string, unknown>;
   }> {
+    const { applicationId, messengerInstallationKey, platform, platformThreadId } = params;
+
+    // Deterministic discriminator: any run originated from the shared
+    // Messenger bot is tagged by `MessengerRouter` with the install key. We
+    // never inspect the applicationId shape — that's a runtime bookkeeping
+    // handle, not a routing key.
+    if (messengerInstallationKey) {
+      return this.createMessengerClient(platform, messengerInstallationKey, platformThreadId);
+    }
+
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
       this.db,
       platform,
@@ -177,6 +201,54 @@ export class BotCallbackService {
     const messenger = client.getMessenger(platformThreadId);
 
     return { charLimit, connectionId: row.id, messenger, client, settings };
+  }
+
+  /**
+   * Build a PlatformClient for messenger-originated runs. Mirrors what
+   * `MessengerRouter.loadBot` does — installation store → binder.createClient —
+   * but skips the Chat SDK + handler registration since the callback only
+   * needs outbound messaging (edit / post / react), not webhook routing.
+   *
+   * `connectionId` is returned empty: messenger runs don't have an
+   * `agent_bot_providers.id`, so gateway typing is skipped (see
+   * `renewGatewayTyping` / `stopGatewayTyping`).
+   */
+  private async createMessengerClient(
+    platform: string,
+    installationKey: string,
+    platformThreadId: string,
+  ): Promise<{
+    charLimit?: number;
+    connectionId: string;
+    client: PlatformClient;
+    messenger: PlatformMessenger;
+    settings: Record<string, unknown>;
+  }> {
+    const store = getInstallationStore(platform as MessengerPlatform);
+    if (!store) {
+      throw new Error(`Unsupported messenger platform: ${platform}`);
+    }
+
+    const creds = await store.resolveByKey(installationKey);
+    if (!creds) {
+      throw new Error(`Messenger install not found for ${platform} (key=${installationKey})`);
+    }
+
+    const binder = messengerPlatformRegistry.createBinder(creds);
+    if (!binder) {
+      throw new Error(`Messenger binder not registered for platform=${platform}`);
+    }
+
+    const client = await binder.createClient();
+    if (!client) {
+      throw new Error(
+        `Messenger binder returned no client for ${platform} (key=${installationKey})`,
+      );
+    }
+
+    const messenger = client.getMessenger(platformThreadId);
+
+    return { charLimit: undefined, client, connectionId: '', messenger, settings: {} };
   }
 
   private async handleStep(
@@ -241,24 +313,18 @@ export class BotCallbackService {
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
-    const { reason, lastAssistantContent, errorMessage, operationId } = body;
+    const { reason, lastAssistantContent, errorMessage, errorType, operationId } = body;
 
     if (reason === 'error') {
       log(
-        'handleCompletion: agent run failed, operationId=%s, errorMessage=%s',
+        'handleCompletion: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
         operationId,
+        errorType,
         errorMessage,
       );
-      const errorText = renderError(operationId, replyLocale);
-      try {
-        if (canEdit && progressMessageId) {
-          await messenger.editMessage(progressMessageId, errorText);
-        } else {
-          await messenger.createMessage(errorText);
-        }
-      } catch (error) {
-        log('handleCompletion: failed to send error message: %O', error);
-      }
+      const errorBody = renderAgentError(errorType, operationId, replyLocale);
+      const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
+      await this.deliverFirstChunk(messenger, progressMessageId, errorText, canEdit);
       return;
     }
 
@@ -272,7 +338,10 @@ export class BotCallbackService {
       return;
     }
 
-    if (!lastAssistantContent) {
+    // `!lastAssistantContent` lets whitespace-only strings ("\n", "  ") through;
+    // those collapse to empty text downstream and get rejected by Telegram as
+    // "message text is empty", silently losing the reply. Trim before testing.
+    if (!lastAssistantContent?.trim()) {
       log('handleCompletion: no lastAssistantContent, skipping');
       return;
     }
@@ -291,20 +360,47 @@ export class BotCallbackService {
     const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
     const chunks = splitMessage(finalText, charLimit);
 
-    try {
-      if (canEdit && progressMessageId) {
-        await messenger.editMessage(progressMessageId, chunks[0]);
-        for (let i = 1; i < chunks.length; i++) {
-          await messenger.createMessage(chunks[i]);
-        }
-      } else {
-        // No progress message to edit or platform doesn't support edit — send all chunks as new messages
-        for (const chunk of chunks) {
-          await messenger.createMessage(chunk);
-        }
+    if (chunks.length === 0) {
+      log('handleCompletion: all chunks empty after formatting, skipping send');
+      return;
+    }
+
+    await this.deliverFirstChunk(messenger, progressMessageId, chunks[0], canEdit);
+    // Each remaining chunk gets its own try/catch so a single transient failure
+    // (rate-limit, network blip) doesn't drop everything that follows.
+    for (let i = 1; i < chunks.length; i++) {
+      try {
+        await messenger.createMessage(chunks[i]);
+      } catch (error) {
+        log('handleCompletion: failed to send chunk %d: %O', i, error);
       }
+    }
+  }
+
+  /**
+   * Deliver the first chunk via edit when possible, else send a new message.
+   * If editing fails for any reason, fall back to createMessage so the agent's
+   * actual reply still reaches the user — silent edit failures were causing
+   * "agent ran but no reply appeared" reports on Telegram.
+   */
+  private async deliverFirstChunk(
+    messenger: PlatformMessenger,
+    progressMessageId: string,
+    text: string,
+    canEdit: boolean,
+  ): Promise<void> {
+    if (canEdit && progressMessageId) {
+      try {
+        await messenger.editMessage(progressMessageId, text);
+        return;
+      } catch (error) {
+        log('handleCompletion: editMessage failed, falling back to createMessage: %O', error);
+      }
+    }
+    try {
+      await messenger.createMessage(text);
     } catch (error) {
-      log('handleCompletion: failed to send final message: %O', error);
+      log('handleCompletion: createMessage fallback failed: %O', error);
     }
   }
 
@@ -379,8 +475,12 @@ export class BotCallbackService {
   /**
    * Renew typing on the message-gateway. Each POST resets the 30s auto-stop timeout.
    * Fire-and-forget — typing is best-effort.
+   *
+   * Skipped when `connectionId` is empty (messenger-originated runs have no
+   * `agent_bot_providers.id` to register against the gateway).
    */
   private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
+    if (!connectionId) return;
     const client = getMessageGatewayClient();
     if (!client.isEnabled) return;
 
@@ -390,6 +490,7 @@ export class BotCallbackService {
   }
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
+    if (!connectionId) return;
     const client = getMessageGatewayClient();
     if (!client.isEnabled) return;
 

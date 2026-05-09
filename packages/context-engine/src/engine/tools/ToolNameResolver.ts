@@ -7,6 +7,7 @@ import type { LobeChatPluginApi, LobeToolManifest } from './types';
 // Tool naming constants
 const PLUGIN_SCHEMA_SEPARATOR = '____';
 const PLUGIN_SCHEMA_API_MD5_PREFIX = 'MD5HASH_';
+const TOOL_NAME_COMPONENT_PATTERN = /^[\w-]+$/;
 
 /**
  * Tool Name Resolver
@@ -21,6 +22,25 @@ export class ToolNameResolver {
     return Md5.hashStr(name).toString().slice(0, 12);
   }
 
+  private hashComponent(name: string): string {
+    return PLUGIN_SCHEMA_API_MD5_PREFIX + this.genHash(name);
+  }
+
+  /**
+   * Strict providers reject tool function names with non-ASCII characters,
+   * dots, slashes, spaces, or other punctuation. Hash invalid segments so the
+   * generated name stays provider-safe while `resolve()` can still recover the
+   * original value from the manifest.
+   *
+   * Example: `custom_mcp____中文API____mcp` is rejected, so the API segment
+   * becomes `MD5HASH_xxx` on the wire.
+   */
+  private normalizeComponent(name: string): string {
+    return name.length > 0 && !TOOL_NAME_COMPONENT_PATTERN.test(name)
+      ? this.hashComponent(name)
+      : name;
+  }
+
   /**
    * Generate tool calling name
    * @param identifier - Plugin identifier
@@ -30,25 +50,29 @@ export class ToolNameResolver {
    */
   generate(identifier: string, name: string, type: string = 'builtin'): string {
     const pluginType =
-      type && type !== 'builtin' && type !== 'default' ? `${PLUGIN_SCHEMA_SEPARATOR}${type}` : '';
+      type && type !== 'builtin' && type !== 'default'
+        ? `${PLUGIN_SCHEMA_SEPARATOR}${this.normalizeComponent(type)}`
+        : '';
+    let identifierName = this.normalizeComponent(identifier);
+    let apiName = this.normalizeComponent(name);
 
     // Step 1: Try normal format
-    let apiName = identifier + PLUGIN_SCHEMA_SEPARATOR + name + pluginType;
+    let toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName + pluginType;
 
     // OpenAI GPT function_call name can't be longer than 64 characters
     // Step 2: If >= 64, hash the name part
-    if (apiName.length >= 64) {
-      const nameHash = PLUGIN_SCHEMA_API_MD5_PREFIX + this.genHash(name);
-      apiName = identifier + PLUGIN_SCHEMA_SEPARATOR + nameHash + pluginType;
+    if (toolName.length >= 64) {
+      apiName = this.hashComponent(name);
+      toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName + pluginType;
 
       // Step 3: If still >= 64, also hash the identifier
-      if (apiName.length >= 64) {
-        const identifierHash = PLUGIN_SCHEMA_API_MD5_PREFIX + this.genHash(identifier);
-        apiName = identifierHash + PLUGIN_SCHEMA_SEPARATOR + nameHash + pluginType;
+      if (toolName.length >= 64) {
+        identifierName = this.hashComponent(identifier);
+        toolName = identifierName + PLUGIN_SCHEMA_SEPARATOR + apiName + pluginType;
       }
     }
 
-    return apiName;
+    return toolName;
   }
 
   /**

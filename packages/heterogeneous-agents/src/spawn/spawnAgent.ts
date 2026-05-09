@@ -69,6 +69,13 @@ export interface SpawnAgentHandle {
   /** Spawned child PID, undefined if spawn failed pre-PID. */
   pid: number | undefined;
   /**
+   * The agent's native session id, extracted from the `system:init` event.
+   * Available after the `events` async iterable has been fully consumed.
+   * Used by `lh hetero exec` to pass `sessionId` to `heteroFinish` so the
+   * server can persist it for `--resume` on the next turn.
+   */
+  readonly sessionId: string | undefined;
+  /**
    * The child's stderr stream — caller can pipe to its own stderr or
    * collect for error reporting. The pipeline does not consume stderr.
    */
@@ -83,9 +90,22 @@ const CLAUDE_CODE_BASE_ARGS = [
   'stream-json',
   '--verbose',
   '--include-partial-messages',
-  '--permission-mode',
-  'bypassPermissions',
 ] as const;
+
+// bypassPermissions is blocked when running as root (e.g. cloud sandbox).
+// Fall back to acceptEdits + pre-approved tools so the agent can still run
+// headlessly without interactive permission prompts.
+const isRunningAsRoot = () => process.getuid?.() === 0;
+
+const CLAUDE_CODE_PERMISSION_ARGS = (): string[] =>
+  isRunningAsRoot()
+    ? [
+        '--permission-mode',
+        'acceptEdits',
+        '--allowed-tools',
+        'Bash,Read,Write,Edit,MultiEdit,WebSearch,mcp__*',
+      ]
+    : ['--permission-mode', 'bypassPermissions'];
 
 const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check', '--full-auto'] as const;
 
@@ -95,6 +115,7 @@ const buildClaudeCodeArgs = (
   extraArgs: string[],
 ) => [
   ...CLAUDE_CODE_BASE_ARGS,
+  ...CLAUDE_CODE_PERMISSION_ARGS(),
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ...inputArgs,
   ...extraArgs,
@@ -302,6 +323,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     exit,
     kill: (signal: NodeJS.Signals = 'SIGINT') => killProcessTree(proc, signal),
     pid: proc.pid,
+    get sessionId() {
+      return pipeline.sessionId;
+    },
     stderr,
   };
 };

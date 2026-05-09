@@ -109,7 +109,11 @@ export class ToolActionImpl {
   submitToolInteraction = async (
     toolMessageId: string,
     response: Record<string, unknown>,
-    options?: { createUserMessage?: boolean; toolResultContent?: string },
+    options?: {
+      createUserMessage?: boolean;
+      pluginState?: Record<string, unknown>;
+      toolResultContent?: string;
+    },
   ): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();

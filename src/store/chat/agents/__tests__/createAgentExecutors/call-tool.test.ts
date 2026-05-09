@@ -13,6 +13,20 @@ import {
   simulateOperationCancellation,
 } from './helpers';
 
+vi.mock('@/utils/localStorage', () => {
+  class AsyncLocalStorage<State> {
+    async getFromLocalStorage(): Promise<State> {
+      return {} as State;
+    }
+
+    async saveToLocalStorage(): Promise<void> {
+      return undefined;
+    }
+  }
+
+  return { AsyncLocalStorage };
+});
+
 describe('call_tool executor', () => {
   describe('Basic Behavior', () => {
     it('should create tool message and execute tool successfully', async () => {
@@ -460,10 +474,11 @@ describe('call_tool executor', () => {
       // Then
       expect(mockStore.startOperation).toHaveBeenNthCalledWith(1, {
         type: 'toolCalling',
-        context: {
+        context: expect.objectContaining({
           agentId: 'sess_op',
+          sourceMessageId: 'msg_parent',
           topicId: 'topic_op',
-        },
+        }),
         parentOperationId: context.operationId,
         metadata: expect.objectContaining({
           identifier: 'lobe-web-browsing',

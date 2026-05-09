@@ -33,6 +33,7 @@ const Header = memo(() => {
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
   const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const removeAgent = useHomeStore((s) => s.removeAgent);
   const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
   const { isUnderReview } = useVersionReviewStatus();
@@ -178,7 +179,9 @@ const Header = memo(() => {
                 size={DESKTOP_HEADER_ICON_SIZE}
               />
             </DropdownMenu>
-            <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} />
+            {!isHeterogeneous && (
+              <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} />
+            )}
           </Flexbox>
         }
       />

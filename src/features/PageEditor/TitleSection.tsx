@@ -104,6 +104,7 @@ const TitleSection = memo(() => {
             padding: 0,
             resize: 'none',
             width: '100%',
+            borderRadius: '0px',
           }}
           onChange={(e) => {
             const truncated = truncateByWeightedLength(e.target.value, 100);

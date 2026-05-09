@@ -1,4 +1,4 @@
-import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-agent-marketplace';
+import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

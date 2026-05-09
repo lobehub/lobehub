@@ -1123,7 +1123,7 @@ describe('TaskService', () => {
       // Force the brief enrichment path to reject without breaking the
       // sibling resolveAuthors call (which shares the agent model mock).
       const enrichSpy = vi
-        .spyOn(BriefService.prototype, 'enrichBriefsWithAgents')
+        .spyOn(BriefService.prototype, 'enrichBriefAgentOnly')
         .mockRejectedValueOnce(new Error('DB error'));
 
       const service = new TaskService(db, userId);

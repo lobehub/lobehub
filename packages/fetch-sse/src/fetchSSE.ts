@@ -218,7 +218,15 @@ const createSmoothMessage = (params: {
     outputQueue.push(...text.split(''));
   };
 
+  const flushQueue = () => {
+    if (outputQueue.length === 0) return;
+    const remaining = outputQueue.splice(0).join('');
+    buffer += remaining;
+    params.onTextUpdate(remaining, buffer);
+  };
+
   return {
+    flushQueue,
     isAnimationActive,
     isTokenRemain: () => outputQueue.length > 0,
     pushToQueue,
@@ -510,6 +518,7 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
   // so like abort, we don't need to call onFinish
   if (response) {
     textController.stopAnimation();
+    thinkingController.stopAnimation();
 
     // Ensure all buffered data is processed
     if (bufferTimer) {
@@ -532,9 +541,8 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
       const traceId = response.headers.get(LOBE_CHAT_TRACE_ID);
       const observationId = response.headers.get(LOBE_CHAT_OBSERVATION_ID);
 
-      if (textController.isTokenRemain()) {
-        await textController.startAnimation(smoothingSpeed);
-      }
+      textController.flushQueue();
+      thinkingController.flushQueue();
 
       await options?.onFinish?.(output, {
         grounding,

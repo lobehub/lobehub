@@ -56,10 +56,12 @@ import type {
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
 import { createSkillManagementService } from '../../../services/maintenance/skill';
+import type { ProcedureStateService } from '../../../services/types';
 import { hasAppliedActionIdempotency, markAppliedActionIdempotency } from '../../actionIdempotency';
 import type { ActionSkillManagementHandle, AgentSignalFeedbackEvidence } from '../../types';
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../types';
 import { createFeedbackActionPlannerSignalHandler } from '../feedbackAction';
+import type { RecordedSkillIntent } from '../skillIntentRecord';
 
 export interface SkillManagementCandidateSkill {
   id: string;
@@ -141,6 +143,8 @@ export interface SkillManagementActionInput {
 
 export interface SkillManagementActionHandlerOptions {
   db: LobeChatDatabase;
+  /** Optional procedure state used to read user-stage skill intent records. */
+  procedureState?: Pick<ProcedureStateService, 'skillIntentRecords'>;
   selfIterationEnabled: boolean;
   skillCandidateSkillsFactory?: (input: {
     agentId: string;
@@ -148,6 +152,8 @@ export interface SkillManagementActionHandlerOptions {
   skillCreateRunner?: (input: SkillCreateAuthoringInput) => Promise<unknown>;
   skillDecisionModel?: SkillManagementAgentModelConfig;
   skillDecisionRunner?: (input: SkillManagementSignalPayload) => Promise<unknown>;
+  /** Optional factory used to inspect same-turn document outcomes before decision. */
+  skillDecisionToolsetFactory?: (input: { agentId: string }) => SkillDecisionToolset;
   skillMaintainerRunner?: (input: SkillMaintainerWorkflowInput) => Promise<unknown>;
   skillManagementServiceFactory?: (input: { agentId: string }) => SkillManagementOperationService;
   userId: string;
@@ -155,6 +161,7 @@ export interface SkillManagementActionHandlerOptions {
 
 export interface SkillDecisionDocumentOutcome {
   agentDocumentId: string;
+  hintIsSkill?: boolean;
   relation?: string;
   summary?: string;
 }
@@ -169,8 +176,10 @@ export interface SkillDecisionCandidateDocument {
 export interface SkillDecisionDocumentSnapshot {
   agentDocumentId: string;
   content?: string;
+  description?: string | null;
   documentId?: string;
   filename?: string;
+  metadata?: Record<string, unknown>;
   title?: string;
 }
 
@@ -203,6 +212,71 @@ export interface SkillDecisionToolset {
  */
 export const isAgentDocumentRelatedObject = (object: { objectType: string }) =>
   object.objectType === 'agent-document';
+
+/**
+ * Reads the agent-signal skill hint from an agent-document snapshot.
+ *
+ * Use when:
+ * - Same-turn document evidence may include document creation intent.
+ * - Decision agents need a high-context hint without treating malformed metadata as evidence.
+ *
+ * Expects:
+ * - Metadata may be absent, malformed, or intentionally set to false.
+ *
+ * Returns:
+ * - `true` or `false` only when the metadata explicitly stores a boolean hint.
+ * - `undefined` when the hint is absent or malformed.
+ */
+export const readAgentSignalHintIsSkill = (metadata: unknown): boolean | undefined => {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+
+  const agentSignal = (metadata as Record<string, unknown>).agentSignal;
+  if (!agentSignal || typeof agentSignal !== 'object') return undefined;
+
+  const hintIsSkill = (agentSignal as Record<string, unknown>).hintIsSkill;
+  return typeof hintIsSkill === 'boolean' ? hintIsSkill : undefined;
+};
+
+const createRecordedSkillIntentEvidence = (
+  record: RecordedSkillIntent | undefined,
+): AgentSignalFeedbackEvidence[] => {
+  if (!record) return [];
+
+  return [
+    {
+      cue: 'recorded_skill_intent',
+      excerpt: `${record.explicitness}/${record.route}/${record.actionIntent ?? 'none'}: ${
+        record.reason ?? 'recorded skill intent'
+      }`,
+    },
+  ];
+};
+
+const readRecordedSkillIntentForExecution = async (
+  options: SkillManagementActionHandlerOptions,
+  action: ActionSkillManagementHandle,
+  context: RuntimeProcessorContext,
+) => {
+  const reader = options.procedureState?.skillIntentRecords?.read;
+  if (!reader) return undefined;
+
+  const messageId = action.payload.messageId;
+  if (messageId) {
+    const record = await reader({
+      scopeKey: context.scopeKey,
+      sourceId: messageId,
+    });
+    if (record) return record;
+  }
+
+  const sourceId = action.source?.sourceId;
+  if (!sourceId || sourceId === messageId) return undefined;
+
+  return reader({
+    scopeKey: context.scopeKey,
+    sourceId,
+  });
+};
 
 export interface SkillManagementAgentModelConfig {
   model: string;
@@ -795,7 +869,7 @@ export const runSkillDecisionAgentRuntime = async (input: SkillDecisionAgentRunt
 };
 
 /**
- * Handles one skill-domain Agent Signal payload.
+ * Executes the skill-management decision step for one skill-domain action payload.
  *
  * Use when:
  * - Feedback has already been routed into the skill domain
@@ -807,7 +881,7 @@ export const runSkillDecisionAgentRuntime = async (input: SkillDecisionAgentRunt
  * Returns:
  * - A skipped status when disabled, otherwise the decision result
  */
-export const handleSkillManagementSignal = async (input: {
+export const executeSkillManagementDecision = async (input: {
   decide: (payload: SkillManagementSignalPayload) => Promise<unknown>;
   payload: SkillManagementSignalPayload;
   selfIterationEnabled: boolean;
@@ -905,8 +979,7 @@ const createDefaultSkillDecisionToolset = (
       if (!scopeKey) return [];
 
       const snapshot = await inspector.inspectScope(scopeKey);
-
-      return snapshot.receipts
+      const outcomes = snapshot.receipts
         .filter((receipt) => receipt.domainKey.startsWith('document:'))
         .filter((receipt) => !messageId || receipt.messageId === messageId)
         .flatMap((receipt) =>
@@ -916,8 +989,29 @@ const createDefaultSkillDecisionToolset = (
             summary: receipt.summary,
           })),
         );
+
+      return Promise.all(
+        outcomes.map(async (outcome) => {
+          const document = await agentDocumentsService.getDocumentSnapshotById(
+            outcome.agentDocumentId,
+          );
+          const hintIsSkill = readAgentSignalHintIsSkill(document?.metadata);
+
+          return {
+            ...outcome,
+            ...(hintIsSkill === undefined ? {} : { hintIsSkill }),
+          };
+        }),
+      );
     },
     readDocument: async ({ agentDocumentId }) => {
+      // NOTICE:
+      // This is the Agent Signal decision-only inspection tool, not the chat-visible
+      // lobe-agent-documents.readDocument tool and not a skill runtime document tool.
+      // The decision agent needs a read-only snapshot to evaluate hinted same-turn documents
+      // without invoking user-facing tool permissions or mutating agent document state.
+      // Keep this boundary until Agent Signal decision tools are unified with a scoped
+      // read-only tool registry.
       const snapshot = await agentDocumentsService.getDocumentSnapshotById(agentDocumentId);
       if (!snapshot) return { agentDocumentId };
 
@@ -926,10 +1020,106 @@ const createDefaultSkillDecisionToolset = (
         content: snapshot.content,
         documentId: snapshot.documentId,
         filename: snapshot.filename,
+        metadata: snapshot.metadata ?? undefined,
         title: snapshot.title,
       };
     },
   };
+};
+
+const hintedDocumentEvidenceContentLength = 200;
+
+/**
+ * Normalizes document evidence for compact decision prompts.
+ *
+ * Before:
+ * - "# Title\n\nLong body..."
+ *
+ * After:
+ * - "# Title Long body..."
+ */
+const toCompactDocumentEvidenceExcerpt = (content: string) => {
+  const normalized = content.replaceAll(/\s+/g, ' ').trim();
+
+  if (normalized.length <= hintedDocumentEvidenceContentLength) return normalized;
+
+  return `${normalized.slice(0, hintedDocumentEvidenceContentLength)}...`;
+};
+
+const getDocumentDescription = (document: SkillDecisionDocumentSnapshot) => {
+  const description = document.description?.trim();
+
+  if (description) return description;
+
+  const metadataDescription = document.metadata?.description;
+  return typeof metadataDescription === 'string' && metadataDescription.trim()
+    ? metadataDescription.trim()
+    : undefined;
+};
+
+const getSkillDecisionToolset = (options: SkillManagementActionHandlerOptions, agentId: string) =>
+  options.skillDecisionToolsetFactory?.({ agentId }) ??
+  createDefaultSkillDecisionToolset(options.db, options.userId);
+
+const collectHintedSameTurnDocumentEvidence = async (
+  input: {
+    agentId: string;
+    messageId?: string;
+    scopeKey: string;
+    topicId?: string;
+  },
+  options: SkillManagementActionHandlerOptions,
+): Promise<AgentSignalFeedbackEvidence[]> => {
+  if (!input.messageId) return [];
+
+  const tools = getSkillDecisionToolset(options, input.agentId);
+  const outcomes = await tools.listSameTurnDocumentOutcomes({
+    agentId: input.agentId,
+    messageId: input.messageId,
+    scopeKey: input.scopeKey,
+    topicId: input.topicId,
+  });
+  const hintedOutcomes = outcomes.filter((outcome) => outcome.hintIsSkill === true);
+
+  if (hintedOutcomes.length === 0) return [];
+
+  const evidence: AgentSignalFeedbackEvidence[] = [];
+
+  for (const outcome of hintedOutcomes) {
+    evidence.push({
+      cue: 'same_turn_hinted_document',
+      excerpt: [
+        `agentDocumentId=${outcome.agentDocumentId}`,
+        `hintIsSkill=true`,
+        outcome.relation ? `relation=${outcome.relation}` : undefined,
+        outcome.summary ? `summary=${outcome.summary}` : undefined,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    });
+
+    const document = await tools.readDocument({ agentDocumentId: outcome.agentDocumentId });
+    const description = getDocumentDescription(document);
+
+    evidence.push({
+      cue: description
+        ? 'same_turn_hinted_document_description'
+        : 'same_turn_hinted_document_content',
+      excerpt: [
+        `agentDocumentId=${outcome.agentDocumentId}`,
+        document.title ? `title=${document.title}` : undefined,
+        description
+          ? `description=${description}`
+          : document.content
+            ? `content=${toCompactDocumentEvidenceExcerpt(document.content)}`
+            : undefined,
+      ]
+        .filter(Boolean)
+        .join('; '),
+    });
+  }
+
+  return evidence;
 };
 
 const toSkillMaintainerWorkflowResult = (
@@ -967,6 +1157,7 @@ class SkillManagementDecisionAgentService {
     private db: LobeChatDatabase,
     private userId: string,
     modelConfig: Partial<SkillManagementAgentModelConfig> = {},
+    private toolsetFactory?: SkillManagementActionHandlerOptions['skillDecisionToolsetFactory'],
   ) {
     this.modelConfig = {
       model: modelConfig.model ?? DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
@@ -993,7 +1184,9 @@ class SkillManagementDecisionAgentService {
         ...input,
         ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
       },
-      tools: createDefaultSkillDecisionToolset(this.db, this.userId),
+      tools:
+        this.toolsetFactory?.({ agentId: input.agentId }) ??
+        createDefaultSkillDecisionToolset(this.db, this.userId),
     });
 
     return toSkillManagementDecision(
@@ -1177,6 +1370,7 @@ export const createSkillDecisionRunner = (options: SkillManagementActionHandlerO
     options.db,
     options.userId,
     options.skillDecisionModel,
+    options.skillDecisionToolsetFactory,
   );
 
   return (input: SkillManagementSignalPayload) => agent.decide(input);
@@ -1553,7 +1747,25 @@ export const runSkillManagementAction = async (
   return runCreateWorkflow(input, options, decision);
 };
 
-export const handleSkillManagementAction = async (
+/**
+ * Executes one skill-management action by collecting evidence, deciding, and applying mutations.
+ *
+ * Triggering workflow:
+ *
+ * {@link defineSkillManagementActionHandler}
+ *   -> `action.skill-management.handle`
+ *     -> {@link executeSkillManagementAction}
+ *       -> {@link executeSkillManagementDecision}
+ *
+ * Upstream:
+ * - {@link defineSkillManagementActionHandler}
+ *
+ * Downstream:
+ * - {@link executeSkillManagementDecision}
+ * - {@link runMaintainerWorkflow}
+ * - {@link runCreateWorkflow}
+ */
+export const executeSkillManagementAction = async (
   action: BaseAction,
   options: SkillManagementActionHandlerOptions,
   context: RuntimeProcessorContext,
@@ -1607,10 +1819,25 @@ export const handleSkillManagementAction = async (
     }
 
     const candidateSkills = await resolveSkillDecisionCandidates(options, action.payload.agentId);
+    const recordedIntent = await readRecordedSkillIntentForExecution(options, action, context);
+    const sameTurnDocumentEvidence = await collectHintedSameTurnDocumentEvidence(
+      {
+        agentId: action.payload.agentId,
+        messageId: action.payload.messageId,
+        scopeKey: context.scopeKey,
+        topicId: action.payload.topicId,
+      },
+      options,
+    );
+    const evidence = [
+      ...(action.payload.evidence ?? []),
+      ...sameTurnDocumentEvidence,
+      ...createRecordedSkillIntentEvidence(recordedIntent),
+    ];
     const runnerInput = {
       agentId: action.payload.agentId,
       ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
-      evidence: action.payload.evidence,
+      ...(evidence.length > 0 ? { evidence } : {}),
       feedbackHint: action.payload.feedbackHint,
       message,
       messageId: action.payload.messageId,
@@ -1618,12 +1845,12 @@ export const handleSkillManagementAction = async (
       serializedContext: action.payload.serializedContext,
       topicId: action.payload.topicId,
     };
-    const decisionResult = await handleSkillManagementSignal({
+    const decisionResult = await executeSkillManagementDecision({
       decide: options.skillDecisionRunner ?? createSkillDecisionRunner(options),
       payload: {
         agentId: action.payload.agentId,
         ...(candidateSkills.length > 0 ? { candidateSkills } : {}),
-        evidence: action.payload.evidence,
+        ...(evidence.length > 0 ? { evidence } : {}),
         feedbackMessage: message,
         messageId: action.payload.messageId,
         scopeKey: context.scopeKey,
@@ -1689,7 +1916,7 @@ export const handleSkillManagementAction = async (
  * - {@link createFeedbackActionPlannerSignalHandler}
  *
  * Downstream:
- * - {@link runSkillManagementAction}
+ * - {@link executeSkillManagementAction}
  * - {@link SkillManagementDocumentService}
  */
 export const defineSkillManagementActionHandler = (
@@ -1699,7 +1926,7 @@ export const defineSkillManagementActionHandler = (
     AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle,
     'handler.skill-management.handle',
     async (action, context: RuntimeProcessorContext) => {
-      return handleSkillManagementAction(action, options, context);
+      return executeSkillManagementAction(action, options, context);
     },
   );
 };

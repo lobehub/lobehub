@@ -17,7 +17,14 @@ import { getTaskStoreState } from '@/store/task';
 
 import { normalizeListTasksParams } from '../listTasks';
 import { TaskIdentifier } from '../manifest';
-import type { CreateTaskParams, CreateTasksItemResult, RunTasksItemResult } from '../types';
+import type {
+  AddTaskCommentParams,
+  CreateTaskParams,
+  CreateTasksItemResult,
+  DeleteTaskCommentParams,
+  RunTasksItemResult,
+  UpdateTaskCommentParams,
+} from '../types';
 import { TaskApiName } from '../types';
 
 const log = debug('lobe-task:executor');
@@ -25,6 +32,42 @@ const log = debug('lobe-task:executor');
 class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   readonly identifier = TaskIdentifier;
   protected readonly apiEnum = TaskApiName;
+
+  addTaskComment = async (
+    params: AddTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const identifier = params.identifier?.trim() || ctx?.taskId || undefined;
+    if (!identifier) {
+      return {
+        content: 'No task identifier provided.',
+        error: { message: 'identifier is required', type: 'MissingIdentifier' },
+        success: false,
+      };
+    }
+
+    try {
+      log('[TaskExecutor] addTaskComment - identifier:', identifier);
+      const result = await getTaskStoreState().addComment(identifier, params.content, {
+        authorAgentId: ctx?.agentId,
+      });
+      const commentId = (result as { data?: { id?: string } } | undefined)?.data?.id;
+
+      return {
+        content: `Comment added to task ${identifier}.`,
+        state: { commentId, identifier, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] addTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to add task comment';
+      return {
+        content: `Failed to add task comment: ${message}`,
+        error: { message, type: 'AddTaskCommentFailed' },
+        success: false,
+      };
+    }
+  };
 
   createTask = async (
     params: {
@@ -164,6 +207,30 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
   };
 
+  deleteTaskComment = async (
+    params: DeleteTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] deleteTaskComment - commentId:', params.commentId);
+      await getTaskStoreState().deleteComment(params.commentId, ctx?.taskId ?? undefined);
+
+      return {
+        content: `Comment ${params.commentId} deleted.`,
+        state: { commentId: params.commentId, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] deleteTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete task comment';
+      return {
+        content: `Failed to delete task comment: ${message}`,
+        error: { message, type: 'DeleteTaskCommentFailed' },
+        success: false,
+      };
+    }
+  };
+
   editTask = async (
     params: {
       addDependencies?: string[];
@@ -172,6 +239,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       identifier: string;
       instruction?: string;
       name?: string;
+      parentIdentifier?: string | null;
       priority?: number;
       removeDependencies?: string[];
     },
@@ -190,6 +258,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         assigneeAgentId?: string | null;
         instruction?: string;
         name?: string;
+        parentTaskId?: string | null;
         priority?: number;
       } = {};
       if (params.name !== undefined) {
@@ -211,6 +280,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       if (params.description !== undefined) {
         updateData.description = params.description;
         changes.push('description updated');
+      }
+      if (params.parentIdentifier !== undefined) {
+        const parentIdentifier = params.parentIdentifier?.trim() || null;
+        updateData.parentTaskId = parentIdentifier;
+        changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
       }
       if (params.priority !== undefined) {
         updateData.priority = params.priority;
@@ -390,6 +464,34 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       state: { failed, results, succeeded },
       success: failed === 0,
     };
+  };
+
+  updateTaskComment = async (
+    params: UpdateTaskCommentParams,
+    ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] updateTaskComment - commentId:', params.commentId);
+      await getTaskStoreState().updateComment(
+        params.commentId,
+        params.content,
+        ctx?.taskId ?? undefined,
+      );
+
+      return {
+        content: `Comment ${params.commentId} updated.`,
+        state: { commentId: params.commentId, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] updateTaskComment - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to update task comment';
+      return {
+        content: `Failed to update task comment: ${message}`,
+        error: { message, type: 'UpdateTaskCommentFailed' },
+        success: false,
+      };
+    }
   };
 
   updateTaskStatus = async (

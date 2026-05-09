@@ -16,13 +16,13 @@ describe('selectRuntimeType', () => {
       expect(selectRuntimeType({ isGatewayMode: true }, opts)).toBe('gateway');
     });
 
-    it('ignores heterogeneousProvider on web — falls through to gateway/client', () => {
+    it('routes heterogeneousProvider to gateway on web — cloud sandbox is the only execution env', () => {
       expect(
         selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: true }, opts),
       ).toBe('gateway');
       expect(
         selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: false }, opts),
-      ).toBe('client');
+      ).toBe('gateway');
     });
   });
 

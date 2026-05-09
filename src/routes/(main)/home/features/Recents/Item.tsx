@@ -10,7 +10,6 @@ import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { usePrefetchPage } from '@/hooks/usePrefetchPage';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { type RecentItem } from '@/server/routers/lambda/recent';
-import { useTaskStore } from '@/store/task';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
@@ -19,32 +18,12 @@ const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTe
   topic: HashIcon,
 };
 
-type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
-const LEGACY_TASK_STATUS_MAP: Record<string, TaskStatus> = {
-  backlog: 'backlog',
-  canceled: 'canceled',
-  completed: 'completed',
-  failed: 'failed',
-  in_progress: 'running',
-  paused: 'paused',
-  running: 'running',
-  todo: 'backlog',
-};
-const normalizeTaskStatus = (status?: string | null): TaskStatus => {
-  if (!status) return 'backlog';
-  return LEGACY_TASK_STATUS_MAP[status] ?? 'backlog';
-};
-
 const RecentListItem = memo<RecentItem>((item) => {
-  const { title, type, agentId, id, metadata } = item;
+  const { title, type, agentId, id, metadata, status } = item;
   const IconComponent = TYPE_ICON_MAP[type] || FileTextIcon;
   const [editing, setEditing] = useState(false);
   const prefetchAgent = usePrefetchAgent();
   const prefetchPage = usePrefetchPage();
-  const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
-  const taskKey = type === 'task' ? id : undefined;
-  useFetchTaskDetail(taskKey);
-  const taskStatus = useTaskStore((s) => (taskKey ? s.taskDetailMap[taskKey]?.status : undefined));
 
   const toggleEditing = useCallback((visible?: boolean) => {
     setEditing(!!visible);
@@ -79,7 +58,7 @@ const RecentListItem = memo<RecentItem>((item) => {
         }
         icon={(() => {
           if (type === 'task') {
-            return <TaskStatusIcon size={16} status={normalizeTaskStatus(taskStatus)} />;
+            return <TaskStatusIcon size={16} status={status ?? 'backlog'} />;
           }
 
           if (type === 'topic' && metadata?.bot?.platform) {

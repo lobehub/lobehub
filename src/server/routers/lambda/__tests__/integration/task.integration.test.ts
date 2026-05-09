@@ -187,6 +187,53 @@ describe('Task Router Integration', () => {
       const ch2Sub = detail.data.subtasks!.find((s) => s.name === 'Chapter 2');
       expect(ch2Sub?.blockedBy).toBeTruthy();
     });
+
+    it('should reparent tasks and allow moving them back to top level', async () => {
+      const parent = await caller.create({ instruction: 'Parent', name: 'Parent' });
+      const newParent = await caller.create({ instruction: 'New parent', name: 'New Parent' });
+      const child = await caller.create({
+        instruction: 'Child',
+        name: 'Child',
+        parentTaskId: parent.data.id,
+      });
+
+      const reparented = await caller.update({
+        id: child.data.identifier,
+        parentTaskId: newParent.data.identifier,
+      });
+
+      expect(reparented.data.parentTaskId).toBe(newParent.data.id);
+
+      const topLevel = await caller.update({
+        id: child.data.identifier,
+        parentTaskId: null,
+      });
+
+      expect(topLevel.data.parentTaskId).toBeNull();
+    });
+
+    it('should reject reparenting a task to itself or its descendant', async () => {
+      const parent = await caller.create({ instruction: 'Parent', name: 'Parent' });
+      const child = await caller.create({
+        instruction: 'Child',
+        name: 'Child',
+        parentTaskId: parent.data.id,
+      });
+
+      await expect(
+        caller.update({
+          id: parent.data.identifier,
+          parentTaskId: parent.data.identifier,
+        }),
+      ).rejects.toThrow('Task cannot be parented to itself');
+
+      await expect(
+        caller.update({
+          id: parent.data.identifier,
+          parentTaskId: child.data.identifier,
+        }),
+      ).rejects.toThrow('Task cannot be parented to its own descendant');
+    });
   });
 
   describe('status transitions', () => {
@@ -233,6 +280,34 @@ describe('Task Router Integration', () => {
       const commentActivities = detail.data.activities?.filter((a) => a.type === 'comment');
       expect(commentActivities).toHaveLength(2);
       expect(commentActivities?.[0].content).toBe('First comment');
+    });
+
+    it('should add agent-authored comments and support update/delete', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+
+      const added = await caller.addComment({
+        authorAgentId: testAgentId,
+        content: 'Agent progress note',
+        id: task.data.id,
+      });
+
+      expect(added.data.authorAgentId).toBe(testAgentId);
+      expect(added.data.authorUserId).toBeNull();
+
+      await caller.updateComment({
+        commentId: added.data.id,
+        content: 'Updated progress note',
+      });
+
+      const updatedDetail = await caller.detail({ id: task.data.identifier });
+      const updatedComment = updatedDetail.data.activities?.find((a) => a.id === added.data.id);
+      expect(updatedComment?.content).toBe('Updated progress note');
+      expect(updatedComment?.agentId).toBe(testAgentId);
+
+      await caller.deleteComment({ commentId: added.data.id });
+
+      const deletedDetail = await caller.detail({ id: task.data.identifier });
+      expect(deletedDetail.data.activities?.some((a) => a.id === added.data.id)).toBe(false);
     });
   });
 

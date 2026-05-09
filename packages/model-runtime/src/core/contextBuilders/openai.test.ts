@@ -351,6 +351,111 @@ describe('convertOpenAIMessages', () => {
     expect((result[0] as any).reasoning).toBeUndefined();
     expect((result[0] as any).reasoning_content).toBe('some reasoning content');
   });
+
+  describe('DeepSeek reasoning_content compatibility', () => {
+    it('should derive reasoning_content from reasoning.content for deepseek models', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: 'Answer with tool call',
+          reasoning: { content: 'planned tool invocation', duration: 100 },
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'search', arguments: '{}' } },
+          ],
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-flash' });
+
+      expect((result[0] as any).reasoning_content).toBe('planned tool invocation');
+      expect((result[0] as any).tool_calls).toHaveLength(1);
+      expect((result[0] as any).reasoning).toBeUndefined();
+    });
+
+    it('should force empty reasoning_content for deepseek-v4 thinking-mode assistant messages without reasoning', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'search', arguments: '{}' } },
+          ],
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-pro' });
+
+      expect((result[0] as any).reasoning_content).toBe('');
+    });
+
+    it('should force empty reasoning_content for deepseek-reasoner', async () => {
+      const messages = [{ role: 'assistant', content: 'Hi' }] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-reasoner' });
+
+      expect((result[0] as any).reasoning_content).toBe('');
+    });
+
+    it('should match provider-prefixed deepseek model ids (e.g. Deepseek/deepseek-v4-pro)', async () => {
+      const messages = [{ role: 'assistant', content: 'Hi' }] as any;
+
+      const result = await convertOpenAIMessages(messages, {
+        model: 'Deepseek/deepseek-v4-pro',
+      });
+
+      expect((result[0] as any).reasoning_content).toBe('');
+    });
+
+    it('should not force reasoning_content for non-thinking deepseek models', async () => {
+      const messages = [{ role: 'assistant', content: 'Hi' }] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-chat' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+    });
+
+    it('should leave non-deepseek models untouched', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: 'Hi',
+          reasoning: { content: 'unrelated', duration: 10 },
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'gpt-4o-mini' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+      expect((result[0] as any).reasoning).toBeUndefined();
+    });
+
+    it('should not touch non-assistant messages', async () => {
+      const messages = [
+        { role: 'user', content: 'hello' },
+        { role: 'tool', content: '{}', tool_call_id: 'call_1' },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-flash' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+      expect((result[1] as any).reasoning_content).toBeUndefined();
+    });
+
+    it('should preserve existing reasoning_content over reasoning.content', async () => {
+      const messages = [
+        {
+          role: 'assistant',
+          content: 'Hi',
+          reasoning: { content: 'should be ignored', duration: 10 },
+          reasoning_content: 'kept',
+        },
+      ] as any;
+
+      const result = await convertOpenAIMessages(messages, { model: 'deepseek-v4-flash' });
+
+      expect((result[0] as any).reasoning_content).toBe('kept');
+    });
+  });
 });
 
 describe('convertOpenAIResponseInputs', () => {
@@ -774,6 +879,55 @@ describe('convertOpenAIResponseInputs', () => {
       },
       {
         content: [{ text: '我是 Claude', type: 'output_text' }],
+        role: 'assistant',
+      },
+    ]);
+  });
+
+  it('should drop assistant image content for Responses API input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            image_url: { url: 'data:image/jpeg;base64,abc123' },
+            type: 'image_url',
+          },
+        ],
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([]);
+  });
+
+  it('should keep assistant text and drop unsupported assistant media for Responses API input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            text: 'Here is the generated image.',
+            type: 'text',
+          },
+          {
+            image_url: { url: 'data:image/jpeg;base64,abc123' },
+            type: 'image_url',
+          },
+          {
+            video_url: { url: 'data:video/mp4;base64,def456' },
+            type: 'video_url',
+          },
+        ],
+        role: 'assistant',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        content: [{ text: 'Here is the generated image.', type: 'output_text' }],
         role: 'assistant',
       },
     ]);

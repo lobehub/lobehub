@@ -1,5 +1,5 @@
-import { AgentMarketplaceExecutionRuntime } from '@lobechat/builtin-tool-agent-marketplace/executionRuntime';
-import { AgentMarketplaceExecutor } from '@lobechat/builtin-tool-agent-marketplace/executor';
+import { AgentMarketplaceExecutionRuntime } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/executionRuntime';
+import { AgentMarketplaceExecutor } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/executor';
 
 import {
   trackOnboardingMarketplacePicked,

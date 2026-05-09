@@ -1,3 +1,4 @@
+import type { RecordedSkillIntent } from '../policies/analyzeIntent/skillIntentRecord';
 import type { ProcedureAccumulatorScoreResult } from '../procedure/accumulators/procedure';
 import type { AgentSignalProcedureInspectionSnapshot } from '../procedure/inspector';
 import type { ProcedureMarkerKeyInput } from '../procedure/keys';
@@ -74,5 +75,15 @@ export interface ProcedureStateService {
   records: {
     /** Writes one compact procedure record field. */
     write: (record: AgentSignalProcedureRecord) => Promise<void>;
+  };
+  /** Recorded skill-intent operations between user and completion analysis stages. */
+  skillIntentRecords?: {
+    /** Reads one recorded skill intent by source id. */
+    read: (input: {
+      scopeKey: string;
+      sourceId: string;
+    }) => Promise<RecordedSkillIntent | undefined>;
+    /** Writes one recorded skill intent with facade-owned expiry semantics. */
+    write: (record: RecordedSkillIntent) => Promise<void>;
   };
 }

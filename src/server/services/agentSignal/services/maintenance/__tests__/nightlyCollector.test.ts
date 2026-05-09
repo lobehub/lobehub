@@ -122,6 +122,38 @@ describe('nightlyReviewService', () => {
       expect(context.topics[1]).not.toHaveProperty('rawMessages');
     });
 
+    it('returns empty structured maintenance buckets when optional adapters are absent', async () => {
+      /**
+       * @example
+       * expect(context.maintenanceSignals).toEqual([]).
+       */
+      const service = createNightlyReviewService({
+        listManagedSkills: async () => [],
+        listRelevantMemories: async () => [],
+        listTopicActivity: async () => [],
+      });
+
+      await expect(service.collectNightlyReviewContext(REVIEW_INPUT)).resolves.toMatchObject({
+        documentActivity: {
+          ambiguousBucket: [],
+          excludedSummary: { count: 0, reasons: [] },
+          generalDocumentBucket: [],
+          skillBucket: [],
+        },
+        feedbackActivity: { neutralCount: 0, notSatisfied: [], satisfied: [] },
+        maintenanceSignals: [],
+        receiptActivity: {
+          appliedCount: 0,
+          duplicateGroups: [],
+          failedCount: 0,
+          pendingProposalCount: 0,
+          recentReceipts: [],
+          reviewCount: 0,
+        },
+        toolActivity: [],
+      });
+    });
+
     it('clips topic activity to the default max topic budget', async () => {
       /**
        * @example
@@ -200,6 +232,52 @@ describe('nightlyReviewService', () => {
         { id: 'message-1', summary: 'User corrected the answer.', type: 'message' },
       ]);
       expect(context.topics[1].evidenceRefs).toEqual([{ id: 'topic-missing', type: 'topic' }]);
+    });
+
+    it('keeps bounded failed tool evidence and uses it as evidence refs', async () => {
+      /**
+       * @example
+       * expect(context.topics[0].failedToolCalls[0].errorSummary).toContain('timeout').
+       */
+      const deps = createDeps({
+        listTopicActivity: vi.fn().mockResolvedValue([
+          {
+            failedMessages: [{ errorSummary: '{"message":"model failed"}', messageId: 'msg-1' }],
+            failedToolCalls: [
+              {
+                apiName: 'search',
+                errorSummary: '{"message":"timeout"}',
+                identifier: 'web-search',
+                messageId: 'msg-2',
+                toolCallId: 'tool-call-1',
+              },
+            ],
+            id: 'topic-failed-tools',
+            messageCount: 3,
+          },
+        ]),
+      });
+      const service = createNightlyReviewService(deps);
+
+      const context = await service.collectNightlyReviewContext(REVIEW_INPUT);
+
+      expect(context.topics[0]).toMatchObject({
+        failedMessages: [{ errorSummary: '{"message":"model failed"}', messageId: 'msg-1' }],
+        failedToolCalls: [
+          {
+            apiName: 'search',
+            errorSummary: '{"message":"timeout"}',
+            identifier: 'web-search',
+            messageId: 'msg-2',
+            toolCallId: 'tool-call-1',
+          },
+        ],
+      });
+      expect(context.topics[0].evidenceRefs).toEqual([
+        { id: 'topic-failed-tools', type: 'topic' },
+        { id: 'msg-1', type: 'message' },
+        { id: 'tool-call-1', type: 'tool_call' },
+      ]);
     });
 
     it('uses id tie-breakers when last activity timestamps are invalid', async () => {

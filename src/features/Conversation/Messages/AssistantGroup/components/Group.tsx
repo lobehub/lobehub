@@ -144,9 +144,14 @@ const createAnswerRenderBlock = (
   block: AssistantContentBlock,
   overrides: Partial<RenderableAssistantContentBlock> = {},
 ): RenderableAssistantContentBlock => {
+  const content = 'content' in overrides ? overrides.content : block.content;
+  const tools = 'tools' in overrides ? overrides.tools : block.tools;
+
   return {
     ...block,
+    contentOverride: content,
     domId: `${block.id}${ANSWER_DOM_ID_SUFFIX}`,
+    hasToolsOverride: !!tools?.length,
     renderKey: `${block.id}${ANSWER_DOM_ID_SUFFIX}`,
     ...overrides,
   };
@@ -156,9 +161,14 @@ const createWorkflowRenderBlock = (
   block: AssistantContentBlock,
   overrides: Partial<RenderableAssistantContentBlock> = {},
 ): RenderableAssistantContentBlock => {
+  const content = 'content' in overrides ? overrides.content : block.content;
+  const tools = 'tools' in overrides ? overrides.tools : block.tools;
+
   return {
     ...block,
+    contentOverride: content,
     domId: `${block.id}${WORKFLOW_DOM_ID_SUFFIX}`,
+    hasToolsOverride: !!tools?.length,
     renderKey: `${block.id}${WORKFLOW_DOM_ID_SUFFIX}`,
     ...overrides,
   };

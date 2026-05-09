@@ -79,7 +79,13 @@ export const createAnalyzeIntentPolicy = (options: CreateAnalyzeIntentPolicyOpti
       procedure: options.procedure,
     }),
     ...(options.skillManagement
-      ? [defineSkillManagementActionHandler(options.skillManagement)]
+      ? [
+          defineSkillManagementActionHandler({
+            ...options.skillManagement,
+            procedureState:
+              options.skillManagement.procedureState ?? options.procedure?.procedureState,
+          }),
+        ]
       : []),
     ...(options.userMemory ? [defineUserMemoryActionHandler(options.userMemory)] : []),
   ]);

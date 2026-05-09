@@ -82,6 +82,42 @@ export interface GitWorkingTreePatches {
   patches: GitWorkingTreePatch[];
 }
 
+export interface GitRemoteBranchListItem {
+  /** Whether this ref is the resolved default branch (origin/HEAD target). */
+  isDefault: boolean;
+  /** Short ref name, e.g. `origin/canary`. */
+  name: string;
+}
+
+export interface GetGitBranchDiffPayload {
+  /**
+   * Override the comparison base. When omitted, the controller resolves
+   * `refs/remotes/origin/HEAD` and uses that.
+   */
+  baseRef?: string;
+  path: string;
+}
+
+export interface GitBranchDiffPatches {
+  /**
+   * Resolved base ref the diff was taken against (e.g. `origin/canary`).
+   * Undefined when no remote default branch could be resolved — in that case
+   * `patches` is empty and the UI should show a `noBaseRef` empty state.
+   */
+  baseRef?: string;
+  /**
+   * Current branch short name (e.g. `fix/gateway-loading-flicker`), or short
+   * SHA when HEAD is detached. Lets the UI render a GitHub-style
+   * `<headRef> → <baseRef>` compare label without a second IPC round-trip.
+   */
+  headRef?: string;
+  /**
+   * Per-file diff blocks, ordered added → modified → deleted. Same shape as
+   * GitWorkingTreePatch so the renderer can reuse the existing PatchDiff path.
+   */
+  patches: GitWorkingTreePatch[];
+}
+
 export interface GitCheckoutResult {
   error?: string;
   success: boolean;

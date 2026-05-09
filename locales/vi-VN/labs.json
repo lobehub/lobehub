@@ -9,5 +9,7 @@
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
+  "features.messenger.desc": "Trò chuyện với các đại lý của bạn từ Telegram (và các ứng dụng nhắn tin khác) thông qua bot LobeHub được chia sẻ. Thêm một tab Messenger trong Cài đặt để liên kết tài khoản của bạn và chọn đại lý nhận tin nhắn.",
+  "features.messenger.title": "Nhắn tin",
   "title": "Phòng Thí Nghiệm"
 }

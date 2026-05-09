@@ -172,6 +172,7 @@ export class TaskLifecycleService {
 
       await this.briefModel.create({
         actions: DEFAULT_BRIEF_ACTIONS['error'],
+        agentId: currentTask?.assigneeAgentId || undefined,
         priority: 'urgent',
         summary: `Execution failed: ${errorMessage || 'Unknown error'}`,
         taskId,
@@ -476,6 +477,7 @@ export class TaskLifecycleService {
 
       await this.briefModel.create({
         actions,
+        agentId: currentTask.assigneeAgentId || undefined,
         artifacts,
         priority,
         summary: generated.summary,
@@ -548,6 +550,7 @@ export class TaskLifecycleService {
         // (no actionable buttons in the UI) and the task transitions to 'completed'.
         const now = new Date();
         await this.briefModel.create({
+          agentId: currentTask?.assigneeAgentId || undefined,
           priority: 'info',
           resolvedAction: 'auto-judge-pass',
           resolvedAt: now,
@@ -565,6 +568,7 @@ export class TaskLifecycleService {
 
       if (reviewConfig.autoRetry && iteration < reviewConfig.maxIterations) {
         await this.briefModel.create({
+          agentId: currentTask?.assigneeAgentId || undefined,
           priority: 'normal',
           summary: `Review failed (score: ${reviewResult.overallScore}%, iteration ${iteration}/${reviewConfig.maxIterations}). Auto-retrying...`,
           taskId,
@@ -583,6 +587,7 @@ export class TaskLifecycleService {
       // accept signal (force-pass) by BriefService.resolve. Result briefs render
       // a fixed single-button UI, so no custom actions are persisted.
       await this.briefModel.create({
+        agentId: currentTask?.assigneeAgentId || undefined,
         priority: 'urgent',
         summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
         taskId,

@@ -67,6 +67,8 @@ const ChatList = memo<ChatListProps>(
     const activeAgentId = useChatStore((s) => s.activeAgentId);
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
     useFetchMessages(context, skipFetch);
+    const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
+    const latestMessageId = displayMessageIds.at(-1);
 
     // Skip fetching notebook and memories for share pages (they require authentication)
     const isSharePage = !!context.topicShareId;
@@ -75,6 +77,7 @@ const ChatList = memo<ChatListProps>(
     const { receiptsByAnchor, unanchoredReceipts } = useAgentSignalReceipts({
       agentId: canShowAgentSignalReceipts ? activeAgentId : undefined,
       enabled: canShowAgentSignalReceipts,
+      pollingSignal: latestMessageId,
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
     });
 
@@ -85,8 +88,6 @@ const ChatList = memo<ChatListProps>(
 
     // Use selectors for data
 
-    const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
-
     const defaultItemContent = useCallback(
       (index: number, id: string) => {
         const isLatestItem = displayMessageIds.length === index + 1;
@@ -96,14 +97,14 @@ const ChatList = memo<ChatListProps>(
           anchoredReceipts.length > 0 || latestUnanchoredReceipts.length > 0 ? (
             <>
               <AgentSignalReceiptList receipts={anchoredReceipts} />
-              <AgentSignalReceiptList showRecentLabel receipts={latestUnanchoredReceipts} />
+              <AgentSignalReceiptList receipts={latestUnanchoredReceipts} />
             </>
           ) : undefined;
 
         return (
           <MessageItem
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
-            endRender={receiptRender}
+            footerRender={receiptRender}
             id={id}
             index={index}
             isLatestItem={isLatestItem}

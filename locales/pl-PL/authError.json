@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "Zbyt wiele żądań, spróbuj ponownie później",
   "codes.SESSION_EXPIRED": "Sesja wygasła, zaloguj się ponownie",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "To konto społecznościowe jest już powiązane z innym użytkownikiem",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "Tymczasowe adresy e-mail nie są obsługiwane. Proszę użyć zwykłego adresu e-mail. Powtarzające się próby mogą zablokować tę sieć.",
   "codes.UNEXPECTED_ERROR": "Wystąpił nieoczekiwany błąd, spróbuj ponownie",
   "codes.UNKNOWN": "Wystąpił nieznany błąd, spróbuj ponownie lub skontaktuj się z pomocą techniczną",
   "codes.USER_ALREADY_EXISTS": "Użytkownik już istnieje",

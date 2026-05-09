@@ -22,8 +22,25 @@ export interface SearchKnowledgeBaseArgs {
   query: string;
   topK?: number;
 }
+
+/**
+ * BM25 hit on a custom/document inside a knowledge base.
+ * Mirrors database/repositories/search KnowledgeBaseDocumentHit; redeclared
+ * here to keep this package decoupled from server-only types.
+ */
+export interface KnowledgeBaseDocumentResult {
+  documentId: string;
+  knowledgeBaseId: string;
+  relevance: number;
+  snippet: string;
+  title: string;
+  updatedAt: Date | string;
+}
+
 export interface SearchKnowledgeBaseState {
   chunks: ChatSemanticSearchChunk[];
+  documents: KnowledgeBaseDocumentResult[];
+  errors?: { bm25?: string; vector?: string };
   fileResults: FileSearchResult[];
   totalResults: number;
 }

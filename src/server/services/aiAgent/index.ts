@@ -69,6 +69,7 @@ import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
@@ -587,14 +588,20 @@ export class AiAgentService {
         throw new Error('Resume mode requires the parent message to belong to a topic');
       }
 
-      // Prepare metadata with cronJobId, taskId, botContext, and bound device if provided
+      // Prepare metadata with cronJobId, taskId, botContext, bound device, and any
+      // client-supplied initial metadata (e.g. repos selected before first message).
+      const initialTopicMeta = appContext?.initialTopicMetadata;
       const metadata =
-        cronJobId || operationTaskId || botContext || requestedDeviceId
+        cronJobId || operationTaskId || botContext || requestedDeviceId || initialTopicMeta
           ? {
               bot: botContext,
               boundDeviceId: requestedDeviceId,
               cronJobId: cronJobId || undefined,
               taskId: operationTaskId,
+              ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
+              ...(initialTopicMeta?.workingDirectory && {
+                workingDirectory: initialTopicMeta.workingDirectory,
+              }),
             }
           : undefined;
 
@@ -621,6 +628,175 @@ export class AiAgentService {
     // Extract model and provider from agent config
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
+
+    // 3.5. Hetero-agent early exit — Claude Code / Codex agents bypass the
+    // server-side LLM pipeline.  After topic + message creation we hand off to
+    // the device gateway (desktop) or cloud sandbox, which will push events
+    // back via `heteroIngest` / `heteroFinish`.
+    //
+    // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
+    // fall back to model field for backwards compatibility.
+    const HETERO_AGENT_MODELS = new Set<string>(['claude-code', 'codex']);
+    const heteroProviderType = agentConfig.agencyConfig?.heterogeneousProvider?.type;
+    const isHeteroAgent = !!heteroProviderType || HETERO_AGENT_MODELS.has(model);
+    if (isHeteroAgent) {
+      const heteroType = (heteroProviderType ?? model) as 'claude-code' | 'codex';
+      const operationId = nanoid();
+
+      // Create user message so the conversation is visible in the UI immediately.
+      const userMsg = effectiveResume
+        ? undefined
+        : await this.messageModel.create({
+            agentId: resolvedAgentId,
+            content: prompt,
+            role: 'user',
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+          });
+
+      // Create an assistant message placeholder (shows spinner in the UI).
+      const assistantMsg = await this.messageModel.create({
+        agentId: resolvedAgentId,
+        content: LOADING_FLAT,
+        model,
+        parentId: parentMessageId ?? userMsg?.id,
+        provider,
+        role: 'assistant',
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      });
+      assistantMessageRef.current = assistantMsg.id;
+
+      // Read resume session id for next-turn continuity.
+      const heteroService = new HeterogeneousAgentService(this.db, this.userId);
+      const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
+      // Sign an operation-scoped JWT so the CLI can authenticate against
+      // heteroIngest / heteroFinish without full user credentials.
+      let operationJwt: string;
+      try {
+        operationJwt = await signUserJWT(this.userId);
+      } catch (err) {
+        log('execAgent: failed to sign operation JWT for hetero run: %O', err);
+        throw new Error('Failed to sign operation JWT for hetero agent', { cause: err });
+      }
+
+      // Read repos from topic metadata for sandbox setup (web/cloud only).
+      const topic = await this.topicModel.findById(topicId);
+      const topicRepos: string[] = topic?.metadata?.repos ?? [];
+
+      // Resolve GitHub OAuth token so the sandbox can clone private repos.
+      let githubToken: string | undefined;
+      if (topicRepos.length > 0) {
+        const githubCredKey = agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY;
+        if (githubCredKey) {
+          try {
+            const list = await this.marketService.market.creds.list();
+            const cred = list.data?.find((c: { key: string }) => c.key === githubCredKey);
+            if (cred) {
+              const full = await this.marketService.market.creds.get(cred.id, { decrypt: true });
+              const vals = (full as any).plaintext ?? (full as any).values ?? {};
+              githubToken = vals.access_token ?? vals.token;
+            }
+          } catch (err) {
+            log('execAgent: failed to resolve GitHub token for repo clone: %O', err);
+          }
+        }
+      }
+
+      // Build cloud-specific system context (repo list + workspace info + optional agent-level static context).
+      const { buildCloudHeteroContext } =
+        await import('@/server/services/heterogeneousAgent/cloudHeteroContext');
+      const systemContext = buildCloudHeteroContext({
+        agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        githubToken,
+        repos: topicRepos,
+      });
+
+      const heteroParams = {
+        agentType: heteroType,
+        githubToken,
+        jwt: operationJwt,
+        operationId,
+        prompt,
+        repos: topicRepos,
+        resumeSessionId,
+        systemContext,
+        topicId,
+        userId: this.userId,
+      };
+
+      // Seed topic.metadata.runningOperation so heteroIngest can validate the operation.
+      await this.topicModel.updateMetadata(topicId, {
+        runningOperation: {
+          assistantMessageId: assistantMsg.id,
+          operationId,
+          scope: appContext?.scope ?? undefined,
+          threadId: appContext?.threadId ?? undefined,
+        },
+      });
+
+      if (requestedDeviceId) {
+        // Dispatch to the user's connected desktop via device-gateway.
+        const result = await deviceProxy.dispatchAgentRun({
+          ...heteroParams,
+          deviceId: requestedDeviceId,
+        });
+        if (!result.success) {
+          log('execAgent: hetero device dispatch failed: %s', result.error);
+          await this.messageModel.update(assistantMsg.id, {
+            content: '',
+            error: {
+              body: { detail: result.error },
+              message: result.error ?? 'Device dispatch failed',
+              type: 'ServerAgentRuntimeError',
+            },
+          });
+          return {
+            agentId: resolvedAgentId,
+            assistantMessageId: assistantMsg.id,
+            autoStarted: false,
+            createdAt: new Date().toISOString(),
+            error: result.error,
+            message: 'Hetero agent device dispatch failed',
+            operationId,
+            status: 'error',
+            success: false,
+            timestamp: new Date().toISOString(),
+            topicId,
+            userMessageId: userMsg?.id ?? parentMessageId ?? '',
+          };
+        }
+      } else {
+        // Cloud sandbox path — fire-and-forget; errors surfaced via heteroFinish.
+        const { spawnHeteroSandbox } =
+          await import('@/server/services/heterogeneousAgent/sandboxRunner');
+        spawnHeteroSandbox({ ...heteroParams, marketService: this.marketService }).catch((err) => {
+          log('execAgent: hetero sandbox spawn failed: %O', err);
+        });
+      }
+
+      let gatewayToken: string | undefined;
+      try {
+        gatewayToken = await signUserJWT(this.userId);
+      } catch {
+        // non-critical
+      }
+
+      return {
+        agentId: resolvedAgentId,
+        assistantMessageId: assistantMsg.id,
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'Hetero agent dispatched successfully',
+        operationId,
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: gatewayToken,
+        topicId,
+        userMessageId: userMsg?.id ?? parentMessageId ?? '',
+      };
+    }
 
     // 4. Fetch user settings (memory config + timezone)
     // Agent-level memory config takes priority; fallback to user-level setting

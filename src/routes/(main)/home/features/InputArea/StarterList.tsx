@@ -12,9 +12,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
-
-const DEEPSEEK_V4_PRO_MODEL = 'deepseek-v4-pro';
-const DEEPSEEK_V4_PRO_PROVIDER = 'lobehub';
+import { DEEPSEEK_V4_PRO_MODEL, DEEPSEEK_V4_PRO_PROVIDER } from './starterModels';
 
 type StarterKey = 'image' | 'video' | 'deepseek-v4-pro';
 
