@@ -8,7 +8,7 @@ import type { SkillConnectionResult, UseSkillConnectionResult } from './useSkill
 const mocks = vi.hoisted(() => ({
   analyticsEnabled: true,
   analyticsTrack: vi.fn(() => Promise.resolve()),
-  createCronJob: vi.fn(),
+  createTask: vi.fn(),
   errorMessage: vi.fn(),
   inboxAgentId: 'inbox-agent-1' as string | undefined,
   intersectionCallback: undefined as IntersectionObserverCallback | undefined,
@@ -113,12 +113,6 @@ vi.mock('@/features/DailyBrief/BriefCardSummary', () => ({
   default: ({ summary }: { summary: string }) => <div>{summary}</div>,
 }));
 
-vi.mock('@/services/agentCronJob', () => ({
-  agentCronJobService: {
-    create: mocks.createCronJob,
-  },
-}));
-
 vi.mock('@/services/taskTemplate', () => ({
   taskTemplateService: {
     recordCreated: mocks.recordCreated,
@@ -133,6 +127,11 @@ vi.mock('@/store/agent/selectors', () => ({
   builtinAgentSelectors: {
     inboxAgentId: () => mocks.inboxAgentId,
   },
+}));
+
+vi.mock('@/store/task', () => ({
+  useTaskStore: (selector: (state: { createTask: typeof mocks.createTask }) => unknown) =>
+    selector({ createTask: mocks.createTask }),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -245,7 +244,7 @@ beforeEach(() => {
   mocks.optionalConnection = makeConnection();
   mocks.requiredConnectOptions = undefined;
   mocks.optionalConnectOptions = undefined;
-  mocks.createCronJob.mockResolvedValue({ id: 'cron-1' });
+  mocks.createTask.mockResolvedValue({ id: 'task-1' });
   mocks.recordCreated.mockResolvedValue({ success: true });
   vi.stubGlobal(
     'IntersectionObserver',
@@ -332,7 +331,15 @@ describe('TaskTemplateCard analytics', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(mocks.createCronJob).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.createTask).toHaveBeenCalled());
+    expect(mocks.createTask).toHaveBeenCalledWith({
+      assigneeAgentId: 'inbox-agent-1',
+      automationMode: 'schedule',
+      instruction: 'Template prompt',
+      name: 'Template A',
+      schedulePattern: '0 9 * * *',
+      scheduleTimezone: expect.any(String),
+    });
     expect(mocks.analyticsTrack).toHaveBeenCalledWith({
       name: 'task_template_create_clicked',
       properties: expect.objectContaining({
@@ -354,7 +361,7 @@ describe('TaskTemplateCard analytics', () => {
   it('tracks create failure without removing the template', async () => {
     const user = userEvent.setup();
     const { onCreated } = renderCard();
-    mocks.createCronJob.mockRejectedValueOnce(new Error('network'));
+    mocks.createTask.mockRejectedValueOnce(new Error('network'));
 
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
