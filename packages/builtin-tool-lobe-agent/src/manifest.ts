@@ -11,7 +11,6 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       name: LobeAgentApiName.analyzeVisualMedia,
       parameters: {
         additionalProperties: false,
-        anyOf: [{ required: ['refs'] }, { required: ['urls'] }],
         properties: {
           question: {
             description: 'The visual question or task to answer.',
@@ -19,7 +18,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
           refs: {
             description:
-              'Stable visual file ref strings to analyze, such as ["msg_xxx.image_1"] or ["msg_xxx.video_1"].',
+              'Stable visual file ref strings to analyze, such as ["msg_xxx.image_1"] or ["msg_xxx.video_1"]. Provide either refs or urls; at least one is required.',
             items: {
               type: 'string',
             },
@@ -27,7 +26,8 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             type: 'array',
           },
           urls: {
-            description: 'Direct image or video URLs to analyze when no message file ref exists.',
+            description:
+              'Direct image or video URLs to analyze when no message file ref exists. Provide either refs or urls; at least one is required.',
             items: {
               type: 'string',
             },

@@ -20,4 +20,14 @@ describe('LobeAgentManifest', () => {
     expect(apiDescription).toContain('Use only stable refs');
     expect(apiDescription).toContain('answer the user directly with the result');
   });
+
+  it('should keep visual analysis parameters compatible with strict tool schema validators', () => {
+    const parameters = LobeAgentManifest.api[0].parameters;
+
+    expect(parameters).not.toHaveProperty('oneOf');
+    expect(parameters).not.toHaveProperty('allOf');
+    expect(parameters).not.toHaveProperty('anyOf');
+    expect(parameters.properties.refs.description).toContain('Provide either refs or urls');
+    expect(parameters.properties.urls.description).toContain('Provide either refs or urls');
+  });
 });
