@@ -1,9 +1,9 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { homeService } from '@/services/home';
 import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
+import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 const FETCH_HOME_DAILY_BRIEF_KEY = 'fetchHomeDailyBrief';
 
@@ -48,10 +48,24 @@ const setCurrentIndex = (next: number) => {
 
 export const useHomeDailyBrief = (): UseHomeDailyBriefResult => {
   const isLogin = useUserStore(authSelectors.isLogin);
+  const userId = useUserStore(userProfileSelectors.userId);
 
-  const { data } = useClientDataSWR(isLogin ? FETCH_HOME_DAILY_BRIEF_KEY : null, () =>
-    homeService.getDailyBrief(),
+  // Scope the SWR key by userId so an account switch within the same SPA
+  // session (or signing in as a different user after sign-out) refetches
+  // and never serves the previous user's cached pairs from this slot.
+  const { data } = useClientDataSWR(
+    isLogin && userId ? [FETCH_HOME_DAILY_BRIEF_KEY, userId] : null,
+    () => homeService.getDailyBrief(),
   );
+
+  // Reset the module-level rotation when the user changes — otherwise the
+  // new user inherits the previous user's offset (wrong starting pair).
+  const lastSeenUserIdRef = useRef<string | undefined>(userId);
+  useEffect(() => {
+    if (lastSeenUserIdRef.current === userId) return;
+    lastSeenUserIdRef.current = userId;
+    setCurrentIndex(0);
+  }, [userId]);
 
   const pairs = data?.pairs ?? [];
 
