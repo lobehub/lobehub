@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "الإعدادات",
   "detailModal.title": "تفاصيل المهارة",
   "dev.confirmDeleteDevPlugin": "سيتم حذف هذه المهارة المحلية نهائيًا. هل ترغب في المتابعة؟",
-  "dev.customParams.useProxy.label": "التثبيت عبر وكيل (فعّل إذا واجهت أخطاء CORS، ثم أعد المحاولة)",
   "dev.deleteSuccess": "تم حذف المهارة",
   "dev.manifest.identifier.desc": "معرّف فريد للمهارة",
   "dev.manifest.identifier.label": "المعرّف",

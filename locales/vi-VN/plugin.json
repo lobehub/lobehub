@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Cài đặt",
   "detailModal.title": "Chi tiết Kỹ năng",
   "dev.confirmDeleteDevPlugin": "Kỹ năng cục bộ này sẽ bị xóa vĩnh viễn. Tiếp tục?",
-  "dev.customParams.useProxy.label": "Cài đặt qua proxy (bật nếu gặp lỗi CORS, sau đó thử lại)",
   "dev.deleteSuccess": "Đã xóa Kỹ năng",
   "dev.manifest.identifier.desc": "Định danh duy nhất cho Kỹ năng",
   "dev.manifest.identifier.label": "Định danh",

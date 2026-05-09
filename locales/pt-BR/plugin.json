@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Configurações",
   "detailModal.title": "Detalhes da Skill",
   "dev.confirmDeleteDevPlugin": "Esta Skill local será excluída permanentemente. Continuar?",
-  "dev.customParams.useProxy.label": "Instalar via proxy (ative se ocorrerem erros de CORS e tente novamente)",
   "dev.deleteSuccess": "Skill excluída",
   "dev.manifest.identifier.desc": "Identificador único da Skill",
   "dev.manifest.identifier.label": "Identificador",

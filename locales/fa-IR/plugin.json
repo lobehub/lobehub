@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "تنظیمات",
   "detailModal.title": "جزئیات مهارت",
   "dev.confirmDeleteDevPlugin": "این مهارت محلی به‌طور دائمی حذف خواهد شد. ادامه می‌دهید؟",
-  "dev.customParams.useProxy.label": "نصب از طریق پراکسی (در صورت بروز خطای CORS فعال کنید و دوباره تلاش کنید)",
   "dev.deleteSuccess": "مهارت حذف شد",
   "dev.manifest.identifier.desc": "شناسه یکتا برای مهارت",
   "dev.manifest.identifier.label": "شناسه",

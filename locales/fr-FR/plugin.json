@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Paramètres",
   "detailModal.title": "Détails de la compétence",
   "dev.confirmDeleteDevPlugin": "Cette compétence locale sera supprimée définitivement. Continuer ?",
-  "dev.customParams.useProxy.label": "Installer via proxy (activer en cas d’erreurs CORS, puis réessayer)",
   "dev.deleteSuccess": "Compétence supprimée",
   "dev.manifest.identifier.desc": "Identifiant unique de la compétence",
   "dev.manifest.identifier.label": "Identifiant",

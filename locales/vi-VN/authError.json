@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "Quá nhiều yêu cầu, vui lòng thử lại sau",
   "codes.SESSION_EXPIRED": "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "Tài khoản mạng xã hội này đã được liên kết với người dùng khác",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "Địa chỉ email tạm thời không được hỗ trợ. Vui lòng sử dụng địa chỉ email thông thường. Việc thử lại nhiều lần có thể chặn mạng này.",
   "codes.UNEXPECTED_ERROR": "Đã xảy ra lỗi không mong muốn, vui lòng thử lại",
   "codes.UNKNOWN": "Đã xảy ra lỗi không xác định, vui lòng thử lại hoặc liên hệ hỗ trợ",
   "codes.USER_ALREADY_EXISTS": "Người dùng đã tồn tại",

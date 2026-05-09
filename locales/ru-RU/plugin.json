@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Настройки",
   "detailModal.title": "Детали навыка",
   "dev.confirmDeleteDevPlugin": "Этот локальный навык будет удалён безвозвратно. Продолжить?",
-  "dev.customParams.useProxy.label": "Установить через прокси (включите при ошибках CORS, затем повторите)",
   "dev.deleteSuccess": "Навык удалён",
   "dev.manifest.identifier.desc": "Уникальный идентификатор навыка",
   "dev.manifest.identifier.label": "Идентификатор",

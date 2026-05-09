@@ -114,6 +114,7 @@
   "response.ProviderBizError": "حدث خطأ أثناء طلب خدمة {{provider}}، يرجى التحقق أو إعادة المحاولة.",
   "response.ProviderContentModeration": "فشل التحقق من سياسة المحتوى. عدّل طلبك وحاول مرة أخرى.",
   "response.ProviderContentModerationWarning": "تم رصد انتهاكات متكررة لسياسة الاستخدام. قد يؤدي أي سوء استخدام إضافي إلى تقييد حسابك.",
+  "response.ProviderImageContentModerationWarning": "تم اكتشاف رفضات متكررة لسلامة الصور. قد تؤدي الطلبات المشابهة إلى إيقاف مؤقت لتوليد الصور.",
   "response.QuotaLimitReached": "عذرًا، تم الوصول إلى الحد الأقصى لاستخدام الرموز أو عدد الطلبات لهذا المفتاح. يرجى زيادة الحصة أو المحاولة لاحقًا.",
   "response.QuotaLimitReachedCloud": "خدمة النموذج تحت ضغط كبير حاليًا. يرجى المحاولة مرة أخرى لاحقًا.",
   "response.ServerAgentRuntimeError": "عذرًا، خدمة الوكيل غير متوفرة حاليًا. يرجى المحاولة لاحقًا أو التواصل معنا عبر البريد الإلكتروني.",
