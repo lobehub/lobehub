@@ -200,12 +200,15 @@ const buildDeepSeekOpenAIPayload = (
   });
 
   // DeepSeek rejects `reasoning_effort` when thinking is explicitly disabled.
-  const { reasoning_effort, ...restPayload } = payload;
+  const { reasoning_effort, thinking, ...restPayload } = payload;
 
   return {
     ...restPayload,
     messages,
     ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
+    ...(thinking?.type === 'enabled' || thinking?.type === 'disabled'
+      ? { thinking: { type: thinking.type } }
+      : {}),
     stream: payload.stream ?? true,
   } as OpenAI.ChatCompletionCreateParamsStreaming;
 };

@@ -179,7 +179,7 @@ describe('LobeDeepSeekAnthropicAI', () => {
 
       const payload = getLastRequestPayload();
 
-      expect(payload.max_tokens).toBe(384_000);
+      expect(payload.max_tokens).toBe(393_216);
       expect(payload.thinking).toEqual({
         budget_tokens: 1024,
         type: 'enabled',
@@ -610,6 +610,82 @@ describe('LobeDeepSeekAI - custom features', () => {
           content: 'hi',
         });
       });
+    });
+
+    it('should add empty reasoning_content for assistant messages in deepseek-v4-pro thinking mode', () => {
+      const payload = {
+        messages: [
+          { role: 'user', content: 'Call a tool' },
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: 'call_1',
+                type: 'function',
+                function: {
+                  name: 'lookup',
+                  arguments: '{"q":"docs"}',
+                },
+              },
+            ],
+          },
+        ],
+        model: 'deepseek-v4-pro',
+      };
+
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { role: 'user', content: 'Call a tool' },
+        {
+          role: 'assistant',
+          content: '',
+          reasoning_content: '',
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'lookup',
+                arguments: '{"q":"docs"}',
+              },
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('should preserve only supported DeepSeek thinking config fields', () => {
+      const payload = {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-v4-flash',
+        reasoning_effort: 'high' as const,
+        thinking: {
+          budget_tokens: 4096,
+          type: 'enabled' as const,
+        },
+      };
+
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.reasoning_effort).toBe('high');
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'enabled' } }));
+      expect(result).not.toEqual(
+        expect.objectContaining({ thinking: expect.objectContaining({ budget_tokens: 4096 }) }),
+      );
+    });
+
+    it('should forward disabled thinking mode for deepseek-v4-pro', () => {
+      const payload = {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-v4-pro',
+        thinking: { type: 'disabled' as const },
+      };
+
+      const result = openAIParams.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result).toEqual(expect.objectContaining({ thinking: { type: 'disabled' } }));
     });
   });
 

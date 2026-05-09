@@ -16,6 +16,7 @@ export interface ModelParamsContext {
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
+  deepseekV4ReasoningEffort?: string;
   effort?: string;
   enabledContextCaching?: boolean;
   imageAspectRatio?: string;
@@ -207,15 +208,27 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.hy3ReasoningEffort;
   }
 
-  if (
-    modelExtendParams.includes('deepseekV4ReasoningEffort') &&
-    chatConfig.deepseekV4ReasoningEffort
-  ) {
-    extendParams.reasoning_effort = chatConfig.deepseekV4ReasoningEffort;
-  }
-
   if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
+  }
+
+  // DeepSeek reasoning effort is reconciled last to avoid invalid combinations.
+  if (modelExtendParams.includes('deepseekV4ReasoningEffort')) {
+    const deepseekV4ReasoningEffort = chatConfig.deepseekV4ReasoningEffort;
+
+    if (typeof deepseekV4ReasoningEffort === 'string') {
+      if (deepseekV4ReasoningEffort === 'none') {
+        delete extendParams.reasoning_effort;
+        extendParams.thinking = {
+          type: 'disabled',
+        };
+      } else {
+        extendParams.reasoning_effort = deepseekV4ReasoningEffort;
+        extendParams.thinking = {
+          type: 'enabled',
+        };
+      }
+    }
   }
 
   if (modelExtendParams.includes('effort') && chatConfig.effort) {
