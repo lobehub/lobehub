@@ -23,7 +23,11 @@ import { after } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
-import { getReferralStatus, getSubscriptionPlan } from '@/business/server/user';
+import {
+  getReferralStatus,
+  getSubscriptionPlan,
+  onUserActivityForBusiness,
+} from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
@@ -90,7 +94,23 @@ export const userRouter = router({
     try {
       after(async () => {
         try {
-          await ctx.userModel.updateUser({ lastActiveAt: new Date() });
+          const currentTime = new Date();
+          const user = await UserModel.findById(ctx.serverDB, ctx.userId);
+
+          await ctx.userModel.updateUser({ lastActiveAt: currentTime });
+
+          if (user?.createdAt && user.lastActiveAt) {
+            try {
+              await onUserActivityForBusiness({
+                currentTime,
+                previousLastActiveAt: user.lastActiveAt,
+                userCreatedAt: user.createdAt,
+                userId: ctx.userId,
+              });
+            } catch (err) {
+              console.error('user activity hook failed, error:', err);
+            }
+          }
         } catch (err) {
           console.error('update lastActiveAt failed, error:', err);
         }
