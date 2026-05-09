@@ -16,6 +16,7 @@ const ToolResultBodySchema = z.object({
       type: z.string().optional(),
     })
     .optional(),
+  state: z.record(z.string(), z.any()).optional(),
   success: z.boolean(),
   toolCallId: z.string().min(1),
 });
