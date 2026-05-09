@@ -181,6 +181,7 @@ const createHarness = () => {
       });
       return { success: true };
     }),
+    listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
   const threadModel = {
@@ -202,6 +203,7 @@ const createHarness = () => {
         runningOperation: { assistantMessageId: 'asst-fixture', operationId: 'op-fixture' },
       },
     })),
+    updateMetadata: vi.fn(async (_topicId: string, _patch: any) => {}),
   };
 
   const handler = new HeterogeneousPersistenceHandler({

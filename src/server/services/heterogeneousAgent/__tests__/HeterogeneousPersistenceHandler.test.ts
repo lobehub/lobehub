@@ -101,6 +101,7 @@ const createHarness = (params: {
         return { success: true };
       },
     ),
+    listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
   const threadModel = {
@@ -138,6 +139,7 @@ const createHarness = (params: {
         },
       };
     }),
+    updateMetadata: vi.fn(async (_topicId: string, _patch: any) => {}),
   };
 
   const handler = new HeterogeneousPersistenceHandler({
@@ -190,8 +192,8 @@ describe('HeterogeneousPersistenceHandler', () => {
       });
 
       expect(h.topicModel.findById).toHaveBeenCalledWith('topic-1');
-      // Text chunks accumulate; nothing flushed until step boundary or finish
-      expect(h.messageModel.update).not.toHaveBeenCalled();
+      // Text chunks accumulate; flushed to DB at end of each batch (multi-replica fix)
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-seeded', { content: 'hello world' });
     });
 
     it('throws when the topic has no matching runningOperation', async () => {
@@ -394,8 +396,8 @@ describe('HeterogeneousPersistenceHandler', () => {
         topicId: 'topic-1',
       });
 
-      // Phase 1 (update-asst) → Phase 2 (create-tool) → Phase 3 (update-asst)
-      expect(order).toEqual(['update-asst', 'create-tool', 'update-asst']);
+      // Phase 1 (update-asst) → Phase 2 (create-tool) → Phase 3 (update-asst) → batch flush (update-asst)
+      expect(order).toEqual(['update-asst', 'create-tool', 'update-asst', 'update-asst']);
 
       // Tool message exists with content from tool_result + correct tool_call_id
       const toolMsg = [...h.messages.values()].find((m) => m.role === 'tool');
