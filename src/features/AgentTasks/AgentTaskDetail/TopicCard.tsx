@@ -9,6 +9,7 @@ import {
   stopPropagation,
   Text,
 } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -70,8 +71,21 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   }, [activity.operationId]);
 
   const handleStop = useCallback(() => {
-    if (activity.id) void cancelTopic(activity.id);
-  }, [activity.id, cancelTopic]);
+    if (!activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.stopConfirm.content', {
+        defaultValue:
+          'The current run will be canceled. Generated messages are kept and you can re-run the task later.',
+      }),
+      okText: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop run' }),
+      onOk: async () => {
+        await cancelTopic(topicId);
+      },
+      title: t('taskDetail.topicMenu.stopConfirm.title', { defaultValue: 'Stop run?' }),
+    });
+  }, [activity.id, cancelTopic, t]);
 
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
