@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { authedProcedure, heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -407,6 +407,19 @@ const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
+    },
+  });
+});
+
+// Dedicated procedure for hetero-agent ingest/finish endpoints.
+// Requires a `hetero-operation` JWT (4h expiry) — normal user tokens are rejected,
+// so only the sandbox/device that received the JWT from execAgent can call these.
+const heteroAgentProcedure = heteroAuthedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+
+  return opts.next({
+    ctx: {
+      heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -1226,7 +1239,7 @@ export const aiAgentRouter = router({
    * existing stream fanout so renderer-side gateway WS subscribers see them
    * unchanged. Phase 2a: pub/sub only — no DB persistence (phase 2b adds it).
    */
-  heteroIngest: aiAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
+  heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
     const { agentType, events, operationId, topicId } = input;
 
     log(
@@ -1264,7 +1277,7 @@ export const aiAgentRouter = router({
    * `agent_runtime_end` so renderer subscribers can shut down even when the
    * CLI's own end-event was lost mid-flight.
    */
-  heteroFinish: aiAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
+  heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
     const { agentType, error, operationId, result, sessionId, topicId } = input;
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);

@@ -74,7 +74,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 12px 8px;
   `,
   itemDivider: css`
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorFillTertiary};
   `,
   text: css`
     overflow: hidden;

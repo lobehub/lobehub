@@ -2,7 +2,8 @@ import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 
 import { deriveNightlyMaintenanceSignals } from './nightlySignals';
-import type { EvidenceRef } from './types';
+import type { MaintenanceProposalStatus } from './proposal';
+import type { EvidenceRef, MaintenanceActionType } from './types';
 
 const DEFAULT_MAX_TOPICS = 30;
 const DEFAULT_MAX_MANAGED_SKILLS = 20;
@@ -311,6 +312,48 @@ export interface ReceiptActivityDigest {
   reviewCount: number;
 }
 
+/** Bounded unresolved proposal visible to nightly review. */
+export interface MaintenanceProposalDigest {
+  /** Dominant action type represented by this proposal. */
+  actionType: MaintenanceActionType;
+  /** Last known conflict reason when the proposal became stale or blocked. */
+  conflictReason?: string;
+  /** Proposal creation ISO timestamp. */
+  createdAt: string;
+  /** Number of bounded evidence refs attached to the proposal. */
+  evidenceCount: number;
+  /** Proposal expiry ISO timestamp. */
+  expiresAt: string;
+  /** Daily Brief id or durable proposal id. */
+  proposalId: string;
+  /** Stable one-pending-proposal key for this action target. */
+  proposalKey: string;
+  /** Current lifecycle status. */
+  status: MaintenanceProposalStatus;
+  /** Short proposal summary safe to inject into reviewer context. */
+  summary: string;
+  /** Target id when available. */
+  targetId?: string;
+  /** Human-readable target title when available. */
+  targetTitle?: string;
+  /** Last proposal update ISO timestamp. */
+  updatedAt: string;
+}
+
+/** Existing unresolved proposal row activity summarized for nightly review. */
+export interface ProposalActivityDigest {
+  /** Active proposals that may be refreshed, superseded, or kept pending. */
+  active: MaintenanceProposalDigest[];
+  /** Count of unresolved proposal rows whose metadata is already dismissed. */
+  dismissedCount: number;
+  /** Count of unresolved proposal rows whose metadata is expired or whose pending expiry passed. */
+  expiredCount: number;
+  /** Count of unresolved proposal rows whose metadata is stale. */
+  staleCount: number;
+  /** Count of unresolved proposal rows whose metadata is superseded. */
+  supersededCount: number;
+}
+
 /** Nightly maintenance signal shown to the reviewer before raw buckets. */
 export interface MaintenanceSignal {
   /** Evidence refs that justify the signal. */
@@ -325,6 +368,7 @@ export interface MaintenanceSignal {
 
 /** Initial nightly maintenance signal categories. */
 export type MaintenanceSignalKind =
+  | 'durable_user_preference'
   | 'frequent_tool_workflow'
   | 'hinted_skill_document_changed'
   | 'pending_related_proposal_exists'
@@ -360,6 +404,13 @@ export type MaintenanceSignalFeature =
       topicCount: number;
       totalCount: number;
       type: 'tool_usage';
+    }
+  | {
+      correctionCount: number;
+      hasCorrection: boolean;
+      messageCount: number;
+      topicId?: string;
+      type: 'topic_signal';
     };
 
 /** Normalized topic digest emitted in nightly review context. */
@@ -383,6 +434,8 @@ export interface NightlyReviewReadAdapters {
   listFeedbackActivity?: (input: NightlyReviewReadInput) => Promise<FeedbackActivityDigest>;
   /** Lists managed skill summaries for this agent and review window. */
   listManagedSkills: (input: ListManagedSkillsInput) => Promise<NightlyReviewManagedSkillSummary[]>;
+  /** Lists existing maintenance proposal activity for this agent. */
+  listProposalActivity?: (input: NightlyReviewReadInput) => Promise<ProposalActivityDigest>;
   /** Lists recent receipt activity relevant to this review window. */
   listReceiptActivity?: (input: NightlyReviewReadInput) => Promise<ReceiptActivityDigest>;
   /** Lists relevant memory summaries for this agent and review window. */
@@ -443,6 +496,8 @@ export interface NightlyReviewContext {
   maintenanceSignals: MaintenanceSignal[];
   /** Managed skills relevant to the agent. */
   managedSkills: NightlyReviewManagedSkillSummary[];
+  /** Existing maintenance proposals used to refresh or supersede pending decisions. */
+  proposalActivity: ProposalActivityDigest;
   /** Recent receipt history used to avoid duplicate proposals. */
   receiptActivity: ReceiptActivityDigest;
   /** Memories relevant to the review window and agent. */
@@ -651,6 +706,14 @@ const createEmptyReceiptActivity = (): ReceiptActivityDigest => ({
   reviewCount: 0,
 });
 
+const createEmptyProposalActivity = (): ProposalActivityDigest => ({
+  active: [],
+  dismissedCount: 0,
+  expiredCount: 0,
+  staleCount: 0,
+  supersededCount: 0,
+});
+
 /**
  * Creates a pure nightly review collector service from digest read adapters.
  *
@@ -703,6 +766,7 @@ export const createNightlyReviewService = (
               documentActivity,
               feedbackActivity,
               receiptActivity,
+              proposalActivity,
             ] = await Promise.all([
               readAdapters.listTopicActivity({
                 ...readInput,
@@ -723,6 +787,8 @@ export const createNightlyReviewService = (
                 Promise.resolve(createEmptyFeedbackActivity()),
               readAdapters.listReceiptActivity?.(readInput) ??
                 Promise.resolve(createEmptyReceiptActivity()),
+              readAdapters.listProposalActivity?.(readInput) ??
+                Promise.resolve(createEmptyProposalActivity()),
             ]);
             const topics = topicRows.map(normalizeTopic).sort(compareTopics).slice(0, maxTopics);
             const maintenanceSignals = deriveNightlyMaintenanceSignals({
@@ -730,6 +796,7 @@ export const createNightlyReviewService = (
               feedbackActivity,
               receiptActivity,
               toolActivity,
+              topics,
             });
 
             span.setAttribute('agent.signal.nightly.raw_topic_count', topicRows.length);
@@ -762,6 +829,26 @@ export const createNightlyReviewService = (
               receiptActivity.pendingProposalCount,
             );
             span.setAttribute(
+              'agent.signal.nightly.proposal_active_count',
+              proposalActivity.active.length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.proposal_expired_count',
+              proposalActivity.expiredCount,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.proposal_dismissed_count',
+              proposalActivity.dismissedCount,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.proposal_stale_count',
+              proposalActivity.staleCount,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.proposal_superseded_count',
+              proposalActivity.supersededCount,
+            );
+            span.setAttribute(
               'agent.signal.nightly.maintenance_signal_count',
               maintenanceSignals.length,
             );
@@ -779,6 +866,7 @@ export const createNightlyReviewService = (
               feedbackActivity,
               maintenanceSignals,
               managedSkills: managedSkills.slice(0, maxManagedSkills),
+              proposalActivity,
               receiptActivity,
               relevantMemories: relevantMemories.slice(0, maxRelevantMemories),
               toolActivity,

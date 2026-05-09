@@ -128,6 +128,29 @@ describe('dispatchClientTool', () => {
     expect(mockDisconnect).toHaveBeenCalled();
   });
 
+  it('forwards pluginState (state field) from the BLPOP payload to the execution result', async () => {
+    const sendToolExecute = vi.fn().mockResolvedValue(undefined);
+    const streamManager = makeStreamManager(sendToolExecute);
+
+    const state = { cursor: 7, mode: 'preview' };
+    mockBlpop.mockResolvedValue([
+      'tool_result:call-1',
+      JSON.stringify({
+        content: 'file contents',
+        state,
+        success: true,
+        toolCallId: 'call-1',
+      }),
+    ]);
+
+    const result = await dispatchClientTool(makePayload(), {
+      operationId: 'op-1',
+      streamManager,
+    });
+
+    expect(result.state).toEqual(state);
+  });
+
   it('returns a timeout result and still disconnects when BLPOP times out', async () => {
     const sendToolExecute = vi.fn().mockResolvedValue(undefined);
     const streamManager = makeStreamManager(sendToolExecute);

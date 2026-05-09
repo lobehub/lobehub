@@ -9,10 +9,10 @@ import type {
   AgentSignalSignalHandlerDefinition,
   AgentSignalSourceHandlerDefinition,
 } from '../../../runtime/middleware';
+import type { MaintenanceAgentRunResult } from '../../../services/maintenance/agentRunner';
 import type { NightlyReviewContext } from '../../../services/maintenance/nightlyCollector';
 import type {
   MaintenancePlan,
-  MaintenancePlanDraft,
   MaintenanceReviewRunResult,
 } from '../../../services/maintenance/types';
 import {
@@ -67,6 +67,13 @@ const reviewContext = {
   },
   maintenanceSignals: [],
   managedSkills: [],
+  proposalActivity: {
+    active: [],
+    dismissedCount: 0,
+    expiredCount: 0,
+    staleCount: 0,
+    supersededCount: 0,
+  },
   receiptActivity: {
     appliedCount: 0,
     duplicateGroups: [],
@@ -83,30 +90,17 @@ const reviewContext = {
   userId: 'user-1',
 } satisfies NightlyReviewContext;
 
-const reviewDraft = {
-  actions: [
-    {
-      actionType: 'noop',
-      confidence: 0.9,
-      evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
-      rationale: 'No maintenance needed.',
-    },
-  ],
-  findings: [],
-  summary: 'Quiet night.',
-} satisfies MaintenancePlanDraft;
-
 const reviewPlan = {
   actions: [
     {
       actionType: 'noop',
-      applyMode: MaintenanceApplyMode.ProposalOnly,
+      applyMode: MaintenanceApplyMode.Skip,
       confidence: 0.9,
       dedupeKey: 'noop:quiet',
       evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
       idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:noop:quiet',
       rationale: 'No maintenance needed.',
-      risk: MaintenanceRisk.Medium,
+      risk: MaintenanceRisk.Low,
     },
   ],
   localDate: reviewPayload.localDate,
@@ -119,12 +113,18 @@ const executionResult = {
   actions: [
     {
       idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:noop:quiet',
-      status: MaintenanceActionStatus.Proposed,
+      status: MaintenanceActionStatus.Skipped,
       summary: 'No maintenance needed.',
     },
   ],
   status: ReviewRunStatus.Completed,
 } satisfies MaintenanceReviewRunResult;
+
+const reviewAgentResult = {
+  execution: executionResult,
+  projectionPlan: reviewPlan,
+  stepCount: 1,
+} satisfies MaintenanceAgentRunResult;
 
 const createDependencies = (
   overrides: Partial<CreateNightlyReviewSourceHandlerDependencies> = {},
@@ -132,9 +132,7 @@ const createDependencies = (
   acquireReviewGuard: vi.fn(async () => true),
   canRunReview: vi.fn(async () => true),
   collectContext: vi.fn(async () => reviewContext),
-  executePlan: vi.fn(async () => executionResult),
-  planReviewOutput: vi.fn(async () => reviewPlan),
-  runMaintenanceReviewAgent: vi.fn(async () => reviewDraft),
+  runMaintenanceReviewAgent: vi.fn(async () => reviewAgentResult),
   ...overrides,
 });
 
@@ -143,7 +141,7 @@ describe('nightly review source handler', () => {
    * @example
    * expect(result.status).toBe('completed');
    */
-  it('orchestrates collector reviewer planner and executor for a valid nightly source', async () => {
+  it('orchestrates collector and bounded agent runner for a valid nightly source', async () => {
     const deps = createDependencies();
     const handler = createNightlyReviewSourceHandler(deps);
 
@@ -166,15 +164,12 @@ describe('nightly review source handler', () => {
       reviewWindowStart: reviewPayload.reviewWindowStart,
       userId: 'user-1',
     });
-    expect(deps.runMaintenanceReviewAgent).toHaveBeenCalledWith(reviewContext);
-    expect(deps.planReviewOutput).toHaveBeenCalledWith({
-      draft: reviewDraft,
+    expect(deps.runMaintenanceReviewAgent).toHaveBeenCalledWith({
+      context: reviewContext,
       localDate: '2026-05-04',
-      reviewScope: MaintenanceReviewScope.Nightly,
       sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
       userId: 'user-1',
     });
-    expect(deps.executePlan).toHaveBeenCalledWith(reviewPlan);
     expect(result).toEqual(
       expect.objectContaining({
         agentId: 'agent-1',
@@ -195,27 +190,32 @@ describe('nightly review source handler', () => {
   it('writes review receipts before creating an eligible nightly brief', async () => {
     const calls: string[] = [];
     const deps = createDependencies({
-      executePlan: vi.fn(async () => ({
-        actions: [
-          {
-            idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:noop:quiet',
-            status: MaintenanceActionStatus.Proposed,
-            summary: 'No maintenance needed.',
-          },
-        ],
-        status: ReviewRunStatus.Completed,
-      })),
-      planReviewOutput: vi.fn(async () => {
-        return {
+      runMaintenanceReviewAgent: vi.fn(async () => ({
+        execution: {
+          actions: [
+            {
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
+              status: MaintenanceActionStatus.Proposed,
+              summary: 'Review the skill consolidation proposal.',
+            },
+          ],
+          status: ReviewRunStatus.Completed,
+        },
+        projectionPlan: {
           ...reviewPlan,
           actions: [
             {
               ...reviewPlan.actions[0],
               actionType: 'proposal_only',
+              applyMode: MaintenanceApplyMode.ProposalOnly,
+              dedupeKey: 'proposal_only:skill-doc-1',
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
+              rationale: 'Review the skill consolidation proposal.',
+              risk: MaintenanceRisk.Medium,
             },
           ],
-        } satisfies MaintenancePlan;
-      }),
+        } satisfies MaintenancePlan,
+      })),
       writeDailyBrief: vi.fn(async () => {
         calls.push('brief');
 
@@ -233,7 +233,7 @@ describe('nightly review source handler', () => {
     expect(deps.writeReceipts).toHaveBeenCalledWith([
       expect.objectContaining({ id: 'nightly-review:user-1:agent-1:2026-05-04:review-summary' }),
       expect.objectContaining({
-        id: 'nightly-review:user-1:agent-1:2026-05-04:noop:quiet:action',
+        id: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1:action',
       }),
     ]);
     expect(deps.writeDailyBrief).toHaveBeenCalledWith(
@@ -256,23 +256,203 @@ describe('nightly review source handler', () => {
 
   /**
    * @example
+   * expect(deps.writeDailyBrief).toHaveBeenCalledWith(expect.objectContaining({ type: 'insight' }));
+   */
+  it('creates an insight brief for auto-applied nightly maintenance', async () => {
+    const deps = createDependencies({
+      runMaintenanceReviewAgent: vi.fn(async () => ({
+        execution: {
+          actions: [
+            {
+              idempotencyKey:
+                'nightly-review:user-1:agent-1:2026-05-04:write_memory:memory:concise',
+              resourceId: 'mem-1',
+              status: MaintenanceActionStatus.Applied,
+              summary: 'Saved concise release summary preference.',
+            },
+          ],
+          status: ReviewRunStatus.Completed,
+        },
+        projectionPlan: {
+          ...reviewPlan,
+          actions: [
+            {
+              ...reviewPlan.actions[0],
+              actionType: 'write_memory',
+              applyMode: MaintenanceApplyMode.AutoApply,
+              dedupeKey: 'memory:concise',
+              idempotencyKey:
+                'nightly-review:user-1:agent-1:2026-05-04:write_memory:memory:concise',
+              operation: {
+                domain: 'memory',
+                input: {
+                  content: 'User prefers concise release summaries.',
+                  userId: 'user-1',
+                },
+                operation: 'write',
+              },
+              rationale: 'The user stated a durable release summary preference.',
+              risk: MaintenanceRisk.Low,
+              target: { topicIds: ['topic-1'] },
+            },
+          ],
+        } satisfies MaintenancePlan,
+      })),
+      writeDailyBrief: vi.fn(async () => ({ id: 'brief-insight-1' })),
+      writeReceipts: vi.fn(async () => {}),
+    });
+    const handler = createNightlyReviewSourceHandler(deps);
+
+    const result = await handler.handle(createReviewSource());
+
+    expect(deps.writeReceipts).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'nightly-review:user-1:agent-1:2026-05-04:review-summary' }),
+      expect.objectContaining({
+        id: 'nightly-review:user-1:agent-1:2026-05-04:write_memory:memory:concise:action',
+      }),
+    ]);
+    expect(deps.writeDailyBrief).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          actionCounts: { applied: 1, failed: 0, proposed: 0, skipped: 0 },
+          outcome: 'applied',
+        }),
+        title: 'Agent self-review updated resources',
+        trigger: 'agent-signal:nightly-review',
+        type: 'insight',
+      }),
+    );
+    expect(result.execution).toEqual(
+      expect.objectContaining({
+        briefId: 'brief-insight-1',
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * expect(deps.writeDailyBrief).not.toHaveBeenCalled();
+   */
+  it('keeps skipped noop reviews silent after writing the summary receipt', async () => {
+    const deps = createDependencies({
+      writeDailyBrief: vi.fn(async () => ({ id: 'brief-1' })),
+      writeReceipts: vi.fn(async () => {}),
+    });
+    const handler = createNightlyReviewSourceHandler(deps);
+
+    const result = await handler.handle(createReviewSource());
+
+    expect(deps.writeReceipts).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'nightly-review:user-1:agent-1:2026-05-04:review-summary' }),
+    ]);
+    expect(deps.writeDailyBrief).not.toHaveBeenCalled();
+    expect(result.execution).toEqual(
+      expect.not.objectContaining({
+        briefId: expect.any(String),
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * expect(brief.metadata.proposal.actions[0].operation).toBeDefined();
+   */
+  it('projects frozen proposal action operations from the runner projection plan', async () => {
+    const proposedSkillPlan = {
+      ...reviewPlan,
+      actions: [
+        {
+          ...reviewPlan.actions[0],
+          actionType: 'refine_skill',
+          dedupeKey: 'refine_skill:skill-doc-1',
+          idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1',
+          operation: {
+            domain: 'skill',
+            input: {
+              patch: 'Use the newer workflow summary wording.',
+              skillDocumentId: 'skill-doc-1',
+              userId: 'user-1',
+            },
+            operation: 'refine',
+          },
+          target: { skillDocumentId: 'skill-doc-1' },
+        },
+      ],
+    } satisfies MaintenancePlan;
+    const deps = createDependencies({
+      runMaintenanceReviewAgent: vi.fn(async () => ({
+        execution: {
+          actions: [
+            {
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1',
+              status: MaintenanceActionStatus.Proposed,
+              summary: 'Refine the workflow summary skill.',
+            },
+          ],
+          status: ReviewRunStatus.Completed,
+        },
+        projectionPlan: proposedSkillPlan,
+      })),
+      writeDailyBrief: vi.fn(async () => ({ id: 'brief-1' })),
+      writeReceipts: vi.fn(async () => {}),
+    });
+    const handler = createNightlyReviewSourceHandler(deps);
+
+    await handler.handle(createReviewSource());
+
+    expect(deps.writeDailyBrief).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          proposal: expect.objectContaining({
+            actions: [
+              expect.objectContaining({
+                actionType: 'refine_skill',
+                operation: expect.objectContaining({
+                  domain: 'skill',
+                  operation: 'refine',
+                }),
+              }),
+            ],
+          }),
+        }),
+      }),
+    );
+  });
+
+  /**
+   * @example
    * expect(result.briefWriteFailed).toBe(true);
    */
   it('keeps nightly runs completed when brief creation fails after receipts', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const briefError = new Error('brief store unavailable');
     const deps = createDependencies({
-      planReviewOutput: vi.fn(async () => {
-        return {
+      runMaintenanceReviewAgent: vi.fn(async () => ({
+        execution: {
+          actions: [
+            {
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
+              status: MaintenanceActionStatus.Proposed,
+              summary: 'Review the skill consolidation proposal.',
+            },
+          ],
+          status: ReviewRunStatus.Completed,
+        },
+        projectionPlan: {
           ...reviewPlan,
           actions: [
             {
               ...reviewPlan.actions[0],
               actionType: 'proposal_only',
+              applyMode: MaintenanceApplyMode.ProposalOnly,
+              dedupeKey: 'proposal_only:skill-doc-1',
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
+              rationale: 'Review the skill consolidation proposal.',
+              risk: MaintenanceRisk.Medium,
             },
           ],
-        } satisfies MaintenancePlan;
-      }),
+        } satisfies MaintenancePlan,
+      })),
       writeDailyBrief: vi.fn(async () => {
         throw briefError;
       }),
@@ -315,7 +495,6 @@ describe('nightly review source handler', () => {
     );
     expect(deps.collectContext).not.toHaveBeenCalled();
     expect(deps.runMaintenanceReviewAgent).not.toHaveBeenCalled();
-    expect(deps.executePlan).not.toHaveBeenCalled();
   });
 
   /**

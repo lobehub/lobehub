@@ -2,6 +2,7 @@ import type {
   DocumentActivityDigest,
   FeedbackActivityDigest,
   MaintenanceSignal,
+  NightlyReviewTopicDigest,
   ReceiptActivityDigest,
   ToolActivityDigest,
 } from './nightlyCollector';
@@ -12,6 +13,7 @@ interface DeriveNightlyMaintenanceSignalsInput {
   feedbackActivity: FeedbackActivityDigest;
   receiptActivity: ReceiptActivityDigest;
   toolActivity: ToolActivityDigest[];
+  topics?: NightlyReviewTopicDigest[];
 }
 
 const pushUniqueRef = (refs: EvidenceRef[], ref: EvidenceRef) => {
@@ -46,6 +48,26 @@ export const deriveNightlyMaintenanceSignals = (
 ): MaintenanceSignal[] => {
   const signals: MaintenanceSignal[] = [];
   const feedbackFeatures = createFeedbackFeatures(input.feedbackActivity);
+
+  for (const topic of input.topics ?? []) {
+    if (!topic.highSignalReasons.includes('correction')) continue;
+
+    signals.push({
+      evidenceRefs: topic.evidenceRefs.slice(0, 5),
+      features: [
+        {
+          correctionCount: topic.correctionCount ?? (topic.hasCorrection ? 1 : 0),
+          hasCorrection: Boolean(topic.hasCorrection),
+          messageCount: topic.messageCount ?? 0,
+          ...((topic.topicId ?? topic.id) ? { topicId: topic.topicId ?? topic.id } : {}),
+          type: 'topic_signal',
+        },
+        ...feedbackFeatures,
+      ],
+      kind: 'durable_user_preference',
+      strength: 'strong',
+    });
+  }
 
   for (const tool of input.toolActivity) {
     const topicCount = new Set(tool.topicIds).size;
