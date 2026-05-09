@@ -159,6 +159,231 @@ describe('AgentDocumentsGroup', () => {
     expect(openDocument).toHaveBeenCalledWith('doc-content-1');
   });
 
+  it('opens a managed skill bundle card through its SKILL.md document and hides the duplicate file', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-05-09T00:00:00Z'),
+          description: 'Use for YouTube comments',
+          documentId: 'skill-bundle-doc',
+          fileType: 'skills/bundle',
+          filename: 'youtube-comment-retrieval-workflow',
+          id: 'skill-bundle-row',
+          parentId: null,
+          sourceType: 'agent-signal',
+          templateId: 'agent-skill',
+          title: 'YouTube Comment Retrieval Workflow',
+          updatedAt: new Date(),
+        },
+        {
+          createdAt: new Date('2026-05-09T00:00:00Z'),
+          description: 'Use for YouTube comments',
+          documentId: 'skill-index-doc',
+          fileType: 'skills/index',
+          filename: 'SKILL.md',
+          id: 'skill-index-row',
+          parentId: 'skill-bundle-doc',
+          sourceType: 'agent-signal',
+          templateId: 'agent-skill',
+          title: 'SKILL.md',
+          updatedAt: new Date(),
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    const bundle = screen.getByText('YouTube Comment Retrieval Workflow');
+    expect(bundle).toBeInTheDocument();
+    expect(screen.queryByText('SKILL.md')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('delete')).not.toBeInTheDocument();
+
+    fireEvent.click(bundle);
+
+    expect(openDocument).toHaveBeenCalledWith('skill-index-doc');
+    expect(openDocument).not.toHaveBeenCalledWith('skill-bundle-doc');
+  });
+
+  it('renders the empty state when only hidden managed skill index documents are available', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-05-09T00:00:00Z'),
+          description: 'Use for YouTube comments',
+          documentId: 'skill-index-doc',
+          fileType: 'skills/index',
+          filename: 'SKILL.md',
+          id: 'skill-index-row',
+          parentId: 'missing-skill-bundle-doc',
+          sourceType: 'agent-signal',
+          templateId: 'agent-skill',
+          title: 'SKILL.md',
+          updatedAt: new Date(),
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    expect(screen.getByText('No agent documents yet')).toBeInTheDocument();
+    expect(screen.queryByText('SKILL.md')).not.toBeInTheDocument();
+  });
+
+  it('navigates to the page route when opening from a topic page', () => {
+    useMatchMock.mockReturnValue({
+      params: { aid: 'agent-1', topicId: 'topic-1' },
+    });
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'File doc',
+          documentId: 'doc-content-1',
+          filename: 'brief.md',
+          id: 'doc-1',
+          sourceType: 'file',
+          templateId: 'claw',
+          title: 'Brief',
+          updatedAt: null,
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    fireEvent.click(screen.getByText('Brief'));
+
+    expect(useNavigateMock).toHaveBeenCalledWith('/agent/agent-1/topic-1/page/doc-content-1');
+    expect(openDocument).not.toHaveBeenCalled();
+  });
+
+  it('allows opening and deleting an orphan managed skill bundle as a recovery path', async () => {
+    const mutate = vi.fn().mockResolvedValue(undefined);
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-05-09T00:00:00Z'),
+          description: 'Missing SKILL.md',
+          documentId: 'skill-bundle-doc',
+          fileType: 'skills/bundle',
+          filename: 'youtube-comment-retrieval-workflow',
+          id: 'skill-bundle-row',
+          parentId: null,
+          sourceType: 'agent-signal',
+          templateId: 'agent-skill',
+          title: 'YouTube Comment Retrieval Workflow',
+          updatedAt: new Date(),
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate,
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    const bundle = screen.getByText('YouTube Comment Retrieval Workflow');
+    expect(screen.getByLabelText('delete')).toBeInTheDocument();
+
+    fireEvent.click(bundle);
+    expect(openDocument).toHaveBeenCalledWith('skill-bundle-doc');
+
+    fireEvent.click(screen.getByLabelText('delete'));
+
+    const [firstConfirmCall] = modalConfirm.mock.calls;
+    const [{ onOk }] = firstConfirmCall;
+    await onOk();
+
+    expect(removeDocumentMock).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      documentId: 'skill-bundle-doc',
+      id: 'skill-bundle-row',
+      topicId: undefined,
+    });
+    expect(mutate).toHaveBeenCalled();
+  });
+
+  it('shows an error message when deleting a document fails', async () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'File doc',
+          documentId: 'doc-content-1',
+          filename: 'brief.md',
+          id: 'doc-1',
+          sourceType: 'file',
+          templateId: 'claw',
+          title: 'Brief',
+          updatedAt: new Date(),
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+    removeDocumentMock.mockRejectedValue(new Error('delete failed'));
+
+    render(<AgentDocumentsGroup />);
+
+    fireEvent.click(screen.getByLabelText('delete'));
+
+    const [firstConfirmCall] = modalConfirm.mock.calls;
+    const [{ onOk }] = firstConfirmCall;
+    await onOk();
+
+    expect(messageError).toHaveBeenCalledWith('delete failed');
+  });
+
+  it('renders grouped cards in tree view mode', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'File doc',
+          documentId: 'doc-content-1',
+          filename: 'brief.md',
+          id: 'doc-1',
+          sourceType: 'file',
+          templateId: 'claw',
+          title: 'Brief',
+          updatedAt: new Date(),
+        },
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'Crawled page',
+          documentId: 'doc-content-2',
+          filename: 'example.com',
+          id: 'doc-2',
+          sourceType: 'web',
+          templateId: null,
+          title: 'Example',
+          updatedAt: null,
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup viewMode="tree" />);
+
+    expect(screen.getByText('Documents')).toBeInTheDocument();
+    expect(screen.getByText('Web')).toBeInTheDocument();
+    expect(screen.getByText('Brief')).toBeInTheDocument();
+    expect(screen.getByText('Example')).toBeInTheDocument();
+    expect(screen.queryByTestId('document-explorer-tree')).not.toBeInTheDocument();
+  });
+
   it('filters documents by source type via segmented tabs', () => {
     useClientDataSWR.mockReturnValue({
       data: [
@@ -238,6 +463,16 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByLabelText('delete'));
+
+    expect(modalConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelText: 'cancel',
+        centered: true,
+        okButtonProps: { danger: true, type: 'primary' },
+        okText: 'delete',
+        title: 'workingPanel.resources.deleteTitle',
+      }),
+    );
 
     const [firstConfirmCall] = modalConfirm.mock.calls;
     const [{ onOk }] = firstConfirmCall;

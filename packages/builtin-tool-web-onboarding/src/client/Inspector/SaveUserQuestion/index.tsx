@@ -19,11 +19,8 @@ export const SaveUserQuestionInspector = memo<
   const agentName = data.agentName?.trim();
   const agentEmoji = data.agentEmoji?.trim();
   const fullName = data.fullName?.trim();
-  const responseLanguage = data.responseLanguage?.trim();
   const interestsCount = Array.isArray(data.interests) ? data.interests.length : 0;
-  const hasAnyField = Boolean(
-    agentName || agentEmoji || fullName || responseLanguage || interestsCount > 0,
-  );
+  const hasAnyField = Boolean(agentName || agentEmoji || fullName || interestsCount > 0);
 
   if (isArgumentsStreaming && !hasAnyField) {
     return (
@@ -49,7 +46,6 @@ export const SaveUserQuestionInspector = memo<
         </span>
       )}
       {fullName && <span className={styles.chip}>{fullName}</span>}
-      {responseLanguage && <span className={styles.chip}>{responseLanguage}</span>}
       {interestsCount > 0 && (
         <span className={styles.meta}>
           {t('builtins.lobe-web-onboarding.inspector.interests', { count: interestsCount })}

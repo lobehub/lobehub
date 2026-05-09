@@ -7,11 +7,10 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "Analyze images or videos selected by visual file refs or direct media URLs and answer a visual question. Prefer the active model's native multimodal capability when it can inspect the visual media directly; use this tool only as a fallback when the active model cannot inspect the requested images or videos. Use only stable refs shown in <files_info>, such as msg_xxx.image_1 or msg_xxx.video_1. Pass refs for message attachments, or urls for direct media URLs that are not available as message refs. After this tool returns, answer the user directly with the result.",
+        "Analyze images or videos selected by visual file refs or direct media URLs and answer a visual question. Prefer the active model's native multimodal capability when it can inspect the visual media directly; use this tool only as a fallback when the active model cannot inspect the requested images or videos. Provide either refs or urls; at least one is required. Prefer refs when stable refs are available in <files_info>, such as msg_xxx.image_1 or msg_xxx.video_1, and use urls only for direct media URLs that are not available as message refs. After this tool returns, answer the user directly with the result.",
       name: LobeAgentApiName.analyzeVisualMedia,
       parameters: {
         additionalProperties: false,
-        anyOf: [{ required: ['refs'] }, { required: ['urls'] }],
         properties: {
           question: {
             description: 'The visual question or task to answer.',

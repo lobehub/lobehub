@@ -1,4 +1,3 @@
-import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +5,13 @@ import type { KeyedMutator } from 'swr';
 
 import { agentDocumentService } from '@/services/agentDocument';
 
-import { type AgentDocumentItem, FOLDER_FILE_TYPE } from '../types';
+import type { AgentDocumentItem } from '../types';
+import {
+  FOLDER_FILE_TYPE,
+  isManagedSkillItem,
+  isProtectedManagedSkillItem,
+  isSkillBundleItem,
+} from '../types';
 
 interface UseDocumentTreeOpsArgs {
   agentId: string;
@@ -39,7 +44,7 @@ export const useDocumentTreeOps = ({
   topicId,
 }: UseDocumentTreeOpsArgs): DocumentTreeOps => {
   const { t } = useTranslation(['chat', 'common']);
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const dataRef = useRef(data);
   dataRef.current = data;
 
@@ -77,6 +82,7 @@ export const useDocumentTreeOps = ({
       if (parentRowId === null) return ROOT_PATH;
       const parent = byRowId.get(parentRowId);
       if (!parent) return null;
+      if (isManagedSkillItem(parent)) return null;
       return buildItemPath(parent);
     },
     [byRowId, buildItemPath],
@@ -171,6 +177,7 @@ export const useDocumentTreeOps = ({
     async (id: string, newName: string) => {
       const target = dataRef.current.find((doc) => doc.id === id);
       if (!target) return;
+      if (isManagedSkillItem(target)) return;
 
       const trimmed = newName.trim();
       if (!trimmed) {
@@ -218,12 +225,15 @@ export const useDocumentTreeOps = ({
       }
 
       const targetItem = targetId ? byRowId.get(targetId) : null;
+      if (targetItem && isSkillBundleItem(targetItem)) return;
+
       const targetParentDocId = targetItem ? targetItem.documentId : null;
 
       const moves: Array<{ fromPath: string; id: string; toPath: string }> = [];
       for (const id of sourceIds) {
         const node = sourceNodes.find((n) => n.data?.id === id)?.data;
         if (!node) continue;
+        if (isManagedSkillItem(node)) return;
         const fromPath = buildItemPath(node);
         if (!fromPath) continue;
         const toPath = joinPath(targetParentPath, node.filename);
@@ -270,10 +280,13 @@ export const useDocumentTreeOps = ({
     (id: string) => {
       const target = dataRef.current.find((doc) => doc.id === id);
       if (!target) return;
+      if (isProtectedManagedSkillItem(target, dataRef.current)) return;
 
-      confirmModal({
+      modal.confirm({
+        cancelText: t('cancel', { ns: 'common' }),
+        centered: true,
         content: t('workingPanel.resources.deleteConfirm'),
-        okButtonProps: { danger: true },
+        okButtonProps: { danger: true, type: 'primary' },
         okText: t('delete', { ns: 'common' }),
         onOk: async () => {
           try {
@@ -307,7 +320,7 @@ export const useDocumentTreeOps = ({
         title: t('workingPanel.resources.deleteTitle'),
       });
     },
-    [agentId, buildItemPath, message, mutate, t, topicId],
+    [agentId, buildItemPath, message, modal, mutate, t, topicId],
   );
 
   return useMemo(

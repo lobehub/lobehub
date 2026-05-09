@@ -24,8 +24,9 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const navigate = useNavigate();
   const finishOnboarding = useUserStore((s) => s.finishOnboarding);
   const isAgentOnboarding = pathname.startsWith('/onboarding/agent');
+  const isBranchOnboarding = isAgentOnboarding || pathname.startsWith('/onboarding/classic');
 
-  const showModeSwitchAndSkipFooter = AGENT_ONBOARDING_ENABLED;
+  const showModeSwitchAndSkipFooter = AGENT_ONBOARDING_ENABLED && isBranchOnboarding;
 
   const handleConfirmSkip = useCallback(() => {
     finishOnboarding();

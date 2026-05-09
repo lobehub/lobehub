@@ -15,6 +15,7 @@ import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import { fetchOnboardingAgentTemplates } from '@/services/agentMarketplace';
+import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
@@ -115,16 +116,49 @@ const AgentOnboardingPage = memo(() => {
     [onboardingAgentId, effectiveTopicId],
   );
   const messagesForOnboarding = useChatStore((s) => s.dbMessagesMap[onboardingChatKey]);
-  const isGreeting = useMemo(() => {
-    if (!messagesForOnboarding || messagesForOnboarding.length !== 1) return false;
-    return messagesForOnboarding[0]?.role !== 'user';
-  }, [messagesForOnboarding]);
+  // No persisted welcome message: greeting = no messages yet.
+  const isGreeting = useMemo(
+    () => !messagesForOnboarding || messagesForOnboarding.length === 0,
+    [messagesForOnboarding],
+  );
 
   const onboardingFollowUp = useOnboardingFollowUp({
     enabled: !onboardingFinished && !viewingHistoricalTopic,
     isGreeting,
   });
   const { onBeforeSendMessage, triggerExtract } = onboardingFollowUp;
+
+  const composedOnBeforeSendMessage = useCallback(
+    async (params: { messages?: any }) => {
+      const welcomeContent = t('agent.welcome');
+      await onBeforeSendMessage();
+
+      if (!onboardingAgentId || !effectiveTopicId) return;
+
+      const currentMessages = useChatStore.getState().dbMessagesMap[onboardingChatKey];
+      if (currentMessages && currentMessages.length > 0) return;
+
+      const result = await messageService.createMessage({
+        agentId: onboardingAgentId,
+        content: welcomeContent,
+        role: 'assistant',
+        topicId: effectiveTopicId,
+      });
+
+      // Sync the local cache so any subsequent reads see the welcome.
+      useChatStore.setState((state) => ({
+        dbMessagesMap: {
+          ...state.dbMessagesMap,
+          [onboardingChatKey]: result.messages,
+        },
+      }));
+
+      // Force the in-flight sendMessage to use the welcome as LLM history,
+      // since its `displayMessages` snapshot was captured before this hook ran.
+      params.messages = result.messages;
+    },
+    [effectiveTopicId, onBeforeSendMessage, onboardingAgentId, onboardingChatKey, t],
+  );
 
   const syncOnboardingContext = useCallback(async () => {
     const nextContext = await userService.getOrCreateOnboardingState();
@@ -167,6 +201,11 @@ const AgentOnboardingPage = memo(() => {
   const assistantTurnSettledHandler =
     onboardingFinished || viewingHistoricalTopic ? undefined : handleAssistantTurnSettled;
 
+  const conversationHooks = useMemo(
+    () => (onboardingFinished ? undefined : { onBeforeSendMessage: composedOnBeforeSendMessage }),
+    [onboardingFinished, composedOnBeforeSendMessage],
+  );
+
   if (error) {
     return (
       <OnboardingContainer>
@@ -198,14 +237,8 @@ const AgentOnboardingPage = memo(() => {
         <OnboardingConversationProvider
           agentId={onboardingAgentId}
           frozen={onboardingFinished}
+          hooks={conversationHooks}
           topicId={effectiveTopicId}
-          hooks={
-            onboardingFinished
-              ? undefined
-              : {
-                  onBeforeSendMessage,
-                }
-          }
         >
           <ErrorBoundary fallbackRender={() => null}>
             <AgentOnboardingConversation

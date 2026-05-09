@@ -40,6 +40,10 @@ const idInput = z.object({ id: z.string() });
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
   assigneeUserId: z.string().optional(),
+  // Optional schedule wiring at create time. When `automationMode` is
+  // 'schedule', `schedulePattern` (cron) is required for the central
+  // schedule-dispatch sweep to pick the task up.
+  automationMode: z.enum(['heartbeat', 'schedule']).optional(),
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   identifierPrefix: z.string().optional(),
@@ -47,6 +51,8 @@ const createSchema = z.object({
   name: z.string().optional(),
   parentTaskId: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
+  schedulePattern: z.string().optional(),
+  scheduleTimezone: z.string().optional(),
 });
 
 const updateSchema = z.object({

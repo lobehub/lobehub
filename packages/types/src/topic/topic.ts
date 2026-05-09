@@ -73,6 +73,14 @@ export interface ChatTopicMetadata {
    */
   cronJobId?: string;
   /**
+   * Scoped pointer to the currently active assistant message for a running
+   * heterogeneous agent operation. Includes `operationId` so cold-start
+   * replicas only use the value when it belongs to the current operation —
+   * preventing a stale pointer from a previous run from corrupting a new one.
+   * Updated on every step boundary.
+   */
+  heteroCurrentMsgId?: { msgId: string; operationId: string };
+  /**
    * Persistent session id for a heterogeneous agent.
    * Saved after each turn so the next message in the same topic can resume
    * the conversation (e.g. Claude Code CLI uses `--resume <sessionId>`).

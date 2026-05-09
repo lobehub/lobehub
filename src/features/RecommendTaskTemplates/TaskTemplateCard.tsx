@@ -8,14 +8,15 @@ import type { LucideIcon } from 'lucide-react';
 import { Clock, Link2, Sparkles, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
-import { agentCronJobService } from '@/services/agentCronJob';
 import { taskTemplateService } from '@/services/taskTemplate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 
 import {
@@ -69,7 +70,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     const [loading, setLoading] = useState(false);
     const [created, setCreated] = useState(false);
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+    const createTask = useTaskStore((s) => s.createTask);
     const userId = useUserStore((s) => s.user?.id);
+    const navigate = useNavigate();
     const cardRef = useRef<HTMLDivElement>(null);
     const impressedAtRef = useRef<number | undefined>(undefined);
 
@@ -229,14 +232,13 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       setLoading(true);
       try {
         const prompt = t(`${template.id}.prompt`, { defaultValue: '' });
-        await agentCronJobService.create({
-          agentId: inboxAgentId,
-          content: prompt,
-          cronPattern: template.cronPattern,
-          enabled: true,
+        const createdTask = await createTask({
+          assigneeAgentId: inboxAgentId,
+          automationMode: 'schedule',
+          instruction: prompt,
           name: title,
-          templateId: template.id,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          schedulePattern: template.cronPattern,
+          scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
           duration_ms: Date.now() - startedAt,
@@ -248,7 +250,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         });
         setCreated(true);
         onCreated(template.id);
-        message.success(t('action.create.success'));
+        if (createdTask?.identifier) {
+          navigate(`/task/${createdTask.identifier}`);
+        }
       } catch (error) {
         trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
           duration_ms: Date.now() - startedAt,
@@ -261,8 +265,10 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         setLoading(false);
       }
     }, [
+      createTask,
       inboxAgentId,
       message,
+      navigate,
       onCreated,
       t,
       template.cronPattern,

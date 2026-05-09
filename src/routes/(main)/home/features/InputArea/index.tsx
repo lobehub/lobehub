@@ -10,13 +10,8 @@ import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelec
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import {
-  featureFlagsSelectors,
-  serverConfigSelectors,
-  useServerConfigStore,
-} from '@/store/serverConfig';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import SuggestQuestions from '../SuggestQuestions';
 import BotIntegrationBanner, { BOT_INTEGRATION_BANNER_ID } from './BotIntegrationBanner';
 import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
@@ -99,10 +94,6 @@ const InputArea = () => {
     [],
   );
 
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
-  // Whitelist users get DailyBrief + an upcoming auto-generated module instead.
-  const showSuggestQuestions = !enableAgentTask;
-
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
       <Flexbox
@@ -145,11 +136,6 @@ const InputArea = () => {
       </Flexbox>
 
       <StarterList />
-      {showSuggestQuestions && (
-        <Flexbox style={{ marginTop: 24 }}>
-          <SuggestQuestions />
-        </Flexbox>
-      )}
     </Flexbox>
   );
 };

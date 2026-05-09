@@ -12,6 +12,17 @@ export interface OnboardingContext {
   phaseGuidance: string;
   /** SOUL.md document content */
   soulContent?: string | null;
+  /** Initial account profile fields, usually sourced from OAuth or profile sync */
+  userInfo?: OnboardingUserInfo | null;
+}
+
+export interface OnboardingUserInfo {
+  /** Best available display name candidate for address confirmation */
+  displayName?: string;
+  /** Account full name, if present */
+  fullName?: string;
+  /** Account username, if present */
+  username?: string;
 }
 
 export interface OnboardingContextInjectorConfig {
@@ -65,9 +76,42 @@ export class OnboardingContextInjector extends BaseFirstUserContentProvider {
       );
     }
 
+    const userInfo = formatOnboardingUserInfo(onboardingContext.userInfo);
+    if (userInfo) {
+      parts.push(userInfo);
+    }
+
     return `<onboarding_context>\n${parts.join('\n\n')}\n</onboarding_context>`;
   }
 }
+
+export const formatOnboardingUserInfo = (userInfo?: OnboardingUserInfo | null): string | null => {
+  if (!userInfo) return null;
+
+  const normalizedUserInfo = {
+    displayName: normalizeUserInfoField(userInfo.displayName),
+    fullName: normalizeUserInfoField(userInfo.fullName),
+    username: normalizeUserInfoField(userInfo.username),
+  };
+
+  const entries = Object.entries(normalizedUserInfo).filter(([, value]) => !!value);
+  if (entries.length === 0) return null;
+
+  const serialized = JSON.stringify(Object.fromEntries(entries)).replaceAll('<', '\\u003c');
+
+  return [
+    '<user_info>',
+    'These account profile fields are unconfirmed. If a displayName is available, ask whether you may use it before saving it as fullName.',
+    serialized,
+    '</user_info>',
+  ].join('\n');
+};
+
+const normalizeUserInfoField = (value?: string): string | undefined => {
+  const trimmed = value?.trim();
+
+  return trimmed || undefined;
+};
 
 /**
  * Prefix each line with a 1-based line number and `→` separator, mirroring the

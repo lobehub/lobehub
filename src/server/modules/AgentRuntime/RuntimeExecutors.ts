@@ -451,7 +451,7 @@ export const createRuntimeExecutors = (
             const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
             const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
-            const [onboardingState, soulDoc, persona] = await Promise.all([
+            const [onboardingState, soulDoc, persona, userInfo] = await Promise.all([
               onboardingService.getState(),
               onboardingService
                 .getInboxAgentId()
@@ -466,12 +466,17 @@ export const createRuntimeExecutors = (
                 log('Failed to fetch user persona for onboarding context: %O', error);
                 return null;
               }),
+              onboardingService.getInitialUserInfo().catch((error) => {
+                log('Failed to fetch initial user info for onboarding context: %O', error);
+                return undefined;
+              }),
             ]);
 
             onboardingContext = {
               personaContent: persona?.persona ?? null,
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
               soulContent: soulDoc?.content ?? null,
+              userInfo,
             };
             log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
           } catch (error) {

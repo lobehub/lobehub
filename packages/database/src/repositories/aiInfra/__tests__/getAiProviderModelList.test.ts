@@ -128,6 +128,22 @@ describe('AiInfraRepos', () => {
       expect(result.map((i) => i.id)).toEqual(all.slice(2, 5).map((i) => i.id));
     });
 
+    it('should filter hidden builtin models before applying pagination', async () => {
+      const providerId = 'lobehub';
+      const builtinModels = [
+        { enabled: true, id: 'lobehub-onboarding-v1', type: 'chat', visible: false },
+        { enabled: true, id: 'deepseek-v4-pro', type: 'chat' },
+        { enabled: true, id: 'gpt-5.5', type: 'chat' },
+      ] as AiProviderModelListItem[];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue([]);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const result = await repo.getAiProviderModelList(providerId, { limit: 1, offset: 0 });
+
+      expect(result.map((i) => i.id)).toEqual(['deepseek-v4-pro']);
+    });
+
     it('should support enabled filter with pagination', async () => {
       const providerId = 'openai';
 

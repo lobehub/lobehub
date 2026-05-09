@@ -1,12 +1,64 @@
 import { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from '@lobechat/const';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testService } from '~test-utils';
 
-import { AiModelService } from './index';
+import { AiModelService, aiModelService } from './index';
+
+const mockLambdaClient = vi.hoisted(() => ({
+  aiModel: {
+    batchToggleAiModels: { mutate: vi.fn() },
+    batchUpdateAiModels: { mutate: vi.fn() },
+    clearModelsByProvider: { mutate: vi.fn() },
+    clearRemoteModels: { mutate: vi.fn() },
+    createAiModel: { mutate: vi.fn() },
+    getAiModelById: { query: vi.fn() },
+    getAiProviderModelList: { query: vi.fn() },
+    removeAiModel: { mutate: vi.fn() },
+    toggleModelEnabled: { mutate: vi.fn() },
+    updateAiModel: { mutate: vi.fn() },
+    updateAiModelOrder: { mutate: vi.fn() },
+  },
+}));
+
+vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: mockLambdaClient,
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('AiModelService', () => {
   testService(AiModelService);
+
+  describe('getAiProviderModelList', () => {
+    it('filters hidden runtime-only models from frontend settings lists', async () => {
+      mockLambdaClient.aiModel.getAiProviderModelList.query.mockResolvedValueOnce([
+        {
+          displayName: 'DeepSeek V4 Pro',
+          enabled: true,
+          id: 'deepseek-v4-pro',
+          type: 'chat',
+        },
+        {
+          displayName: 'LobeHub Onboarding',
+          enabled: true,
+          id: 'lobehub-onboarding-v1',
+          type: 'chat',
+          visible: false,
+        },
+      ]);
+
+      const result = await aiModelService.getAiProviderModelList('lobehub');
+
+      expect(mockLambdaClient.aiModel.getAiProviderModelList.query).toHaveBeenCalledWith({
+        id: 'lobehub',
+      });
+      expect(result.map((model) => model.id)).toEqual(['deepseek-v4-pro']);
+    });
+  });
 });
 
 describe('Default model configuration', () => {

@@ -122,6 +122,8 @@
     "workflow:mdx": "tsx ./scripts/mdxWorkflow/index.ts",
     "workflow:mobile-spa": "tsx scripts/mobileSpaWorkflow/index.ts",
     "workflow:readme": "tsx ./scripts/readmeWorkflow/index.ts",
+    "workflow:reset-onboarding": "tsx ./scripts/resetOnboarding/index.ts",
+    "workflow:seed-user-info": "tsx ./scripts/seedUserInfo/index.ts",
     "workflow:set-desktop-version": "tsx ./scripts/electronWorkflow/setDesktopVersion.ts"
   },
   "lint-staged": {

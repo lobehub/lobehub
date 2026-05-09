@@ -4,8 +4,7 @@ import { toolSystemPrompt } from './toolSystemRole';
 import { WebOnboardingApiName, WebOnboardingIdentifier } from './types';
 
 // Agent identity (name/emoji) surface a confirmation card;
-// user profile fields (fullName, responseLanguage) and interests
-// saves bypass intervention.
+// user profile fields (fullName) and interests saves bypass intervention.
 const saveUserQuestionConfirmationRules: HumanInterventionRule[] = [
   {
     match: {
@@ -48,9 +47,6 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
               type: 'string',
             },
             type: 'array',
-          },
-          responseLanguage: {
-            type: 'string',
           },
         },
         type: 'object',

@@ -8,7 +8,6 @@ import useSWR from 'swr';
 import { taskTemplateService } from '@/services/taskTemplate';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
@@ -33,15 +32,14 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
   const { analytics } = useAnalytics();
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  useFetchBriefs(isLogin && !!enableAgentTask);
+  useFetchBriefs(isLogin);
 
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
 
   const interestKeys = useResolvedInterestKeys();
   const swrKey = interestKeys ? [...interestKeys].sort().join(',') : '';
-  const swrEnabled = isLogin && !!enableAgentTask && interestKeys !== null;
+  const swrEnabled = isLogin && interestKeys !== null;
   const batchRef = useRef<
     | {
         id: string;
