@@ -196,6 +196,36 @@ describe('messengerRouter.confirmLink', () => {
     expect(serverDB.select).not.toHaveBeenCalled();
   });
 
+  it('blocks linking a different Discord account when the user already has one', async () => {
+    const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockPeekLinkToken.mockResolvedValue({
+      platform: 'discord',
+      platformUserId: 'dc-new',
+      tenantId: '',
+    });
+    mockFindByPlatformUser.mockResolvedValue(undefined);
+    mockFindByPlatform.mockResolvedValue({
+      platform: 'discord',
+      platformUserId: 'dc-old',
+      tenantId: '',
+    });
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.confirmLink({ initialAgentId: 'agent-1', randomId: 'rand-1234' }),
+    ).rejects.toMatchObject({
+      message: 'verify.error.unlinkBeforeRelink',
+    });
+
+    expect(mockConsumeLinkToken).not.toHaveBeenCalled();
+    expect(mockUpsertForPlatform).not.toHaveBeenCalled();
+    expect(serverDB.select).not.toHaveBeenCalled();
+  });
+
   it('allows re-confirming the same Telegram account', async () => {
     const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
     const serverDB = { select: vi.fn(() => selectBuilder) };

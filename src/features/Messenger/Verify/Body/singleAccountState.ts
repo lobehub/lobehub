@@ -1,6 +1,6 @@
 import type { ExistingLink, PeekedToken } from './shared';
 
-export const isTelegramRebindBlocked = (
+export const isSingleAccountRebindBlocked = (
   existingLink?: ExistingLink | null,
   tokenData?: PeekedToken | null,
 ): boolean =>
@@ -11,7 +11,7 @@ export const isTelegramRebindBlocked = (
     existingLink.platformUserId !== tokenData.platformUserId
   );
 
-export const shouldShowTelegramSuccess = (
+export const shouldShowSingleAccountSuccess = (
   existingLink?: ExistingLink | null,
   tokenData?: PeekedToken | null,
   done?: boolean,

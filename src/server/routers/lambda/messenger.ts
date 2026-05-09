@@ -45,6 +45,8 @@ const REVOKED_SLACK_AUTH_ERRORS = new Set([
   'token_revoked',
 ]);
 
+const singleAccountRebindPlatforms = new Set<MessengerPlatform>(['discord', 'telegram']);
+
 const extractSlackAuthErrorCode = (error: unknown): string | null => {
   if (!(error instanceof Error)) return null;
 
@@ -245,15 +247,15 @@ export const messengerRouter = router({
         });
       }
 
-      // Telegram is a single global personal binding: if this LobeHub account
-      // already points at another Telegram user, require an explicit unlink
-      // instead of silently overwriting the old row with the new identity.
+      // Single-account personal bindings must not silently hop between IM
+      // identities for the same LobeHub account. Require an explicit unlink
+      // first so a Discord/Telegram account switch is always deliberate.
       const existingUserLink = await ctx.messengerLinkModel.findByPlatform(
         peeked.platform,
         peeked.tenantId ?? '',
       );
       if (
-        peeked.platform === 'telegram' &&
+        singleAccountRebindPlatforms.has(peeked.platform) &&
         existingUserLink &&
         existingUserLink.platformUserId !== peeked.platformUserId
       ) {

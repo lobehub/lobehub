@@ -12,7 +12,7 @@ import {
   type PlatformMeta,
   SuccessCard,
 } from './shared';
-import { isTelegramRebindBlocked, shouldShowTelegramSuccess } from './telegramState';
+import { isSingleAccountRebindBlocked, shouldShowSingleAccountSuccess } from './singleAccountState';
 
 interface TelegramBodyProps {
   existingLink?: ExistingLink | null;
@@ -30,9 +30,9 @@ const TelegramBody = memo<TelegramBodyProps>(
 
     const platformLabel = platformMeta?.name ?? 'Telegram';
     const botUsername = platformMeta?.botUsername;
-    const rebindBlocked = isTelegramRebindBlocked(existingLink, tokenData);
+    const rebindBlocked = isSingleAccountRebindBlocked(existingLink, tokenData);
 
-    if (shouldShowTelegramSuccess(existingLink, tokenData, done)) {
+    if (shouldShowSingleAccountSuccess(existingLink, tokenData, done)) {
       return (
         <SuccessCard
           openBotUrl={botUsername ? buildTelegramBotUrl(botUsername) : null}
@@ -66,8 +66,9 @@ const TelegramBody = memo<TelegramBodyProps>(
                 description: t('verify.confirm.relink.description', {
                   account:
                     existingLink?.platformUsername ?? `ID ${existingLink?.platformUserId ?? ''}`,
+                  platform: platformLabel,
                 }),
-                title: t('verify.confirm.relink.title'),
+                title: t('verify.confirm.relink.title', { platform: platformLabel }),
               }
             : tokenData.linkedToEmail
               ? {
