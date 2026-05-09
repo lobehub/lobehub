@@ -245,6 +245,24 @@ export const messengerRouter = router({
         });
       }
 
+      // Telegram is a single global personal binding: if this LobeHub account
+      // already points at another Telegram user, require an explicit unlink
+      // instead of silently overwriting the old row with the new identity.
+      const existingUserLink = await ctx.messengerLinkModel.findByPlatform(
+        peeked.platform,
+        peeked.tenantId ?? '',
+      );
+      if (
+        peeked.platform === 'telegram' &&
+        existingUserLink &&
+        existingUserLink.platformUserId !== peeked.platformUserId
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'verify.error.unlinkBeforeRelink',
+        });
+      }
+
       const [agentRow] = await ctx.serverDB
         .select({ id: agents.id, title: agents.title })
         .from(agents)

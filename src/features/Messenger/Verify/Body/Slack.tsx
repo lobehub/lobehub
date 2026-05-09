@@ -58,12 +58,22 @@ const SlackBody = memo<SlackBodyProps>(
 
     return (
       <ConfirmCard
-        conflictEmail={tokenData.linkedToEmail ?? undefined}
         infoRows={infoRows}
         platform="slack"
-        platformLabel={platformLabel}
         randomId={randomId}
-        signInUrl={signInUrl}
+        blockingNotice={
+          tokenData.linkedToEmail
+            ? {
+                ctaHref: signInUrl,
+                ctaLabel: t('verify.confirm.conflict.switchAccount'),
+                description: t('verify.confirm.conflict.description', {
+                  email: tokenData.linkedToEmail,
+                  platform: platformLabel,
+                }),
+                title: t('verify.confirm.conflict.title'),
+              }
+            : undefined
+        }
         onSuccess={() => setDone(true)}
       />
     );
