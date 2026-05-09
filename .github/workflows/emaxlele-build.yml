@@ -1,0 +1,245 @@
+name: emaxlele-dev Build
+
+on:
+  push:
+    branches:
+      - emaxlele-dev
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows'
+        required: true
+        default: true
+        type: boolean
+      build_linux:
+        description: 'Build Linux'
+        required: true
+        default: false
+        type: boolean
+      force:
+        description: 'Force build (skip commit check)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: emaxlele-dev-build
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  calculate-version:
+    name: Calculate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      should_build: ${{ steps.check.outputs.should_build }}
+      release_notes: ${{ steps.notes.outputs.release_notes }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check trigger
+        id: check
+        run: |
+          if [ "${{ inputs.force }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          commit_msg=$(git log -1 --pretty=%s HEAD)
+          echo "Commit: $commit_msg"
+          if echo "$commit_msg" | grep -qiE '^(style|feat|fix|refactor|release)(\(.+\))?:'; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "Skipping: commit prefix does not match build trigger"
+          fi
+
+      - name: Calculate version
+        if: steps.check.outputs.should_build == 'true'
+        id: version
+        run: |
+          latest_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          base="${latest_tag#v}"
+          IFS='.' read -r major minor patch <<< "$base"
+          new_patch=$((patch + 1))
+          base_ver="${major}.${minor}.${new_patch}"
+          max_seq=0
+          for t in $(git tag -l "v${base_ver}-emaxlele.*" 2>/dev/null || true); do
+            seq=$(echo "$t" | grep -oE '[0-9]+$' || true)
+            [ -n "$seq" ] && [ "$seq" -gt "$max_seq" ] && max_seq=$seq
+          done
+          next_seq=$((max_seq + 1))
+          version="${base_ver}-emaxlele.${next_seq}"
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "tag=v${version}" >> $GITHUB_OUTPUT
+          echo "Version: ${version}"
+
+      - name: Generate release notes
+        if: steps.check.outputs.should_build == 'true'
+        id: notes
+        run: |
+          prev=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-emaxlele\.[0-9]+$' | head -n 1)
+          base_stable=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          compare_from=${prev:-$base_stable}
+          range="${compare_from}..HEAD"
+          commits=$(git log --no-merges --pretty='- `%h` %s (%an)' "$range")
+          [ -z "$commits" ] && commits='- No new commits.'
+          {
+            echo "release_notes<<EOF"
+            echo "## emaxlele-dev Build — ${{ steps.version.outputs.tag }}"
+            echo
+            echo "> Personal fork build — emaxlele. Based on ${compare_from}."
+            echo
+            printf '%s\n' "$commits"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+  build-windows:
+    needs: [calculate-version]
+    name: Build Windows
+    if: needs.calculate-version.outputs.should_build == 'true' && (github.event_name != 'workflow_dispatch' || inputs.build_windows == true)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} canary
+
+      - name: Build Windows artifact
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: canary
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          TEMP: C:\temp
+          TMP: C:\temp
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-windows
+          path: |
+            apps/desktop/release/latest*
+            apps/desktop/release/*.exe*
+            apps/desktop/release/*.zip*
+          retention-days: 7
+
+  build-linux:
+    needs: [calculate-version]
+    name: Build Linux
+    if: needs.calculate-version.outputs.should_build == 'true' && inputs.build_linux == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} canary
+
+      - name: Build Linux artifact
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: canary
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-linux
+          path: |
+            apps/desktop/release/latest*
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb*
+          retention-days: 7
+
+  publish-release:
+    needs: [calculate-version, build-windows]
+    name: Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: release-windows
+          path: release
+
+      - name: Download Linux artifacts (if built)
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: release-linux
+          path: release
+
+      - name: List artifacts
+        run: ls -R release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.calculate-version.outputs.tag }}
+          name: 'emaxlele-dev ${{ needs.calculate-version.outputs.tag }}'
+          prerelease: true
+          body: ${{ needs.calculate-version.outputs.release_notes }}
+          files: |
+            release/latest*
+            release/*.exe*
+            release/*.zip*
+            release/*.AppImage
+            release/*.deb*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup-old-releases:
+    needs: [publish-release]
+    name: Cleanup Old Releases (keep 5)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Delete old emaxlele releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const mine = releases
+              .filter(r => r.tag_name.includes('-emaxlele.'))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const toDelete = mine.slice(5);
+            for (const r of toDelete) {
+              console.log('Deleting: ' + r.tag_name);
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner, repo: context.repo.repo, release_id: r.id
+              });
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner, repo: context.repo.repo, ref: 'tags/' + r.tag_name
+                });
+              } catch(e) { console.log('Tag delete failed: ' + e.message); }
+            }
+            console.log('Kept ' + Math.min(mine.length, 5) + ', deleted ' + toDelete.length);
