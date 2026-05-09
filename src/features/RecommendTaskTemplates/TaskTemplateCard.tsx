@@ -8,6 +8,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Clock, Link2, Sparkles, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
@@ -71,6 +72,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const createTask = useTaskStore((s) => s.createTask);
     const userId = useUserStore((s) => s.user?.id);
+    const navigate = useNavigate();
     const cardRef = useRef<HTMLDivElement>(null);
     const impressedAtRef = useRef<number | undefined>(undefined);
 
@@ -230,7 +232,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       setLoading(true);
       try {
         const prompt = t(`${template.id}.prompt`, { defaultValue: '' });
-        await createTask({
+        const createdTask = await createTask({
           assigneeAgentId: inboxAgentId,
           automationMode: 'schedule',
           instruction: prompt,
@@ -248,7 +250,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         });
         setCreated(true);
         onCreated(template.id);
-        message.success(t('action.create.success'));
+        if (createdTask?.identifier) {
+          navigate(`/task/${createdTask.identifier}`);
+        }
       } catch (error) {
         trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
           duration_ms: Date.now() - startedAt,
@@ -264,6 +268,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       createTask,
       inboxAgentId,
       message,
+      navigate,
       onCreated,
       t,
       template.cronPattern,

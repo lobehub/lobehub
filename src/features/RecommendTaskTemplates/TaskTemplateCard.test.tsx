@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   errorMessage: vi.fn(),
   inboxAgentId: 'inbox-agent-1' as string | undefined,
   intersectionCallback: undefined as IntersectionObserverCallback | undefined,
+  navigate: vi.fn(),
   optionalConnectOptions: undefined as
     | { onConnectResult?: (result: SkillConnectionResult) => void }
     | undefined,
@@ -111,6 +112,10 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/features/DailyBrief/BriefCardSummary', () => ({
   default: ({ summary }: { summary: string }) => <div>{summary}</div>,
+}));
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mocks.navigate,
 }));
 
 vi.mock('@/services/taskTemplate', () => ({
@@ -244,7 +249,7 @@ beforeEach(() => {
   mocks.optionalConnection = makeConnection();
   mocks.requiredConnectOptions = undefined;
   mocks.optionalConnectOptions = undefined;
-  mocks.createTask.mockResolvedValue({ id: 'task-1' });
+  mocks.createTask.mockResolvedValue({ id: 'task-1', identifier: 'T-1' });
   mocks.recordCreated.mockResolvedValue({ success: true });
   vi.stubGlobal(
     'IntersectionObserver',
@@ -356,6 +361,7 @@ describe('TaskTemplateCard analytics', () => {
       }),
     });
     expect(onCreated).toHaveBeenCalledWith('template-a');
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1'));
   });
 
   it('tracks create failure without removing the template', async () => {
@@ -376,6 +382,7 @@ describe('TaskTemplateCard analytics', () => {
       }),
     );
     expect(onCreated).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
   it('tracks dismiss with impression timing state', async () => {
