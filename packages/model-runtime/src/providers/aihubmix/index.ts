@@ -25,18 +25,35 @@ export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.AiHubMix,
   models: async ({ client }) => {
     try {
+      const apiKey = (client as any).apiKey as string | undefined;
+      if (!apiKey) throw new Error('AiHubMix API key is missing');
+
       // AiHubMix exposes two model list endpoints:
       // - https://api.aihubmix.com/v1/models  — returns per-user-group list only (~256 models)
       // - https://aihubmix.com/api/v1/models  — returns the complete model catalog (800+)
       // Use the full endpoint so users can access all available models.
       // Note: this endpoint uses `model_id` instead of `id`; normalize before processing.
-      const response = await fetch('https://aihubmix.com/api/v1/models', {
-        headers: {
-          Authorization: `Bearer ${(client as any).apiKey}`,
-          'APP-Code': 'LobeHub',
-        },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      // 'APP-Code' is an AiHubMix-required client identifier (see https://docs.aihubmix.com/cn/api/Models-API).
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10_000);
+      let response: Response;
+      try {
+        response = await fetch('https://aihubmix.com/api/v1/models', {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'APP-Code': 'LobeHub',
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
+
       const json = (await response.json()) as any;
       const modelList: AiHubMixModelCard[] = (json.data || []).map((m: any) => ({
         ...m,
