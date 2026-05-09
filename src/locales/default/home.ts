@@ -21,7 +21,7 @@ export default {
   'brief.expandAll': 'Show more',
   'brief.feedbackSent': 'Feedback shared',
   'brief.resolved': 'Marked as resolved',
-  'brief.title': 'Daily brief',
+  'brief.title': 'Brief',
   'brief.viewAllTasks': 'View all tasks',
   'brief.viewRun': 'View run',
   'project.create': 'New project',
