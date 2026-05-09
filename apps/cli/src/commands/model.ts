@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { isAiModelVisible } from 'model-bank';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
@@ -33,7 +34,9 @@ export function registerModelCommand(program: Command) {
         if (options.type) input.type = options.type;
 
         const result = await client.aiModel.getAiProviderModelList.query(input as any);
-        let items = Array.isArray(result) ? result : ((result as any).items ?? []);
+        let items = (Array.isArray(result) ? result : ((result as any).items ?? [])).filter(
+          isAiModelVisible,
+        );
 
         if (options.type) {
           items = items.filter((m: any) => m.type === options.type);

@@ -86,6 +86,55 @@ export const deepseekChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description: 'Runtime-only model alias resolved before request dispatch.',
+    displayName: 'LobeHub Onboarding',
+    enabled: true,
+    id: 'lobehub-onboarding-v1',
+    maxOutput: 384_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          originalRate: 0.0145,
+          rate: 0.0003625,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          originalRate: 1.74,
+          rate: 0.0435,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          originalRate: 3.48,
+          rate: 0.087,
+          strategy: 'fixed',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParamOptions: {
+        enableReasoning: {
+          defaultValue: true,
+          includeBudget: false,
+        },
+      },
+      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+    },
+    type: 'chat',
+    visible: false,
+  },
+  {
+    abilities: {
+      functionCall: true,
     },
     contextWindowTokens: 1_000_000,
     // Per official docs: deepseek-chat is now a compatibility alias that points

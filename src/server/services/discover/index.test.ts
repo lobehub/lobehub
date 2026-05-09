@@ -58,6 +58,19 @@ vi.mock('model-bank', async (importOriginal) => {
         },
         releasedAt: '2024-02-01T00:00:00Z',
       },
+      {
+        id: 'lobehub-onboarding-v1',
+        displayName: 'LobeHub Onboarding',
+        description: 'Runtime-only onboarding alias model',
+        providerId: 'lobehub',
+        contextWindowTokens: 1_000_000,
+        abilities: {
+          functionCall: true,
+          reasoning: true,
+        },
+        releasedAt: '2026-04-24T00:00:00Z',
+        visible: false,
+      },
     ],
   };
 });
@@ -675,6 +688,12 @@ describe('DiscoverService', () => {
 
         expect(result.items.length).toBeGreaterThan(0);
       });
+
+      it('should filter hidden runtime-only models', async () => {
+        const result = await service.getModelList({ q: 'onboarding' });
+
+        expect(result.items).toEqual([]);
+      });
     });
 
     describe('getModelDetail', () => {
@@ -692,6 +711,14 @@ describe('DiscoverService', () => {
           }),
         );
       });
+
+      it('should not expose hidden runtime-only model details', async () => {
+        const result = await service.getModelDetail({
+          identifier: 'lobehub-onboarding-v1',
+        });
+
+        expect(result).toBeUndefined();
+      });
     });
 
     describe('getModelCategories', () => {
@@ -706,6 +733,12 @@ describe('DiscoverService', () => {
             }),
           ]),
         );
+      });
+
+      it('should not include categories that only have hidden models', async () => {
+        const result = await service.getModelCategories();
+
+        expect(result.some((item) => item.category === 'lobehub')).toBe(false);
       });
     });
   });
