@@ -105,9 +105,9 @@ Empty diff = OK. Any output = the body cites a PR that wasn't merged in this ran
 
 Also verify the metrics line in the body matches the computed values (`PR_COUNT`, `CONTRIBUTOR_COUNT`) and that `**Full Changelog**` uses `$PREV_TAG`, not some older tag.
 
-## Canonical Structure
+## Canonical Structure (Long-Form: Minor / Weekly)
 
-Follow this section order unless the user asks otherwise:
+Follow this section order for **Minor** and **Weekly** releases unless the user asks otherwise. For **Hotfix** and **DB Migration**, see § Variants for Shorter Releases below — the canonical structure does not apply.
 
 1. `# 🚀 LobeHub Release (<YYYYMMDD>)`
 2. Metadata lines:
@@ -126,6 +126,44 @@ Follow this section order unless the user asks otherwise:
 7. `**Full Changelog**: <prev>...<current>`
 
 Use `---` separators between major blocks for long releases.
+
+## Variants for Shorter Releases
+
+The Canonical Structure above is for **long-form** (Minor / Weekly). Two short-form variants override it.
+
+### Hotfix Variant
+
+A hotfix targets one regression and ships fast. The body is short and operator-focused — no Highlights, no domain blocks, no Contributors line.
+
+Required sections, in order:
+
+1. `# 🚀 LobeHub Release (<YYYYMMDD>)`
+2. `**Hotfix Scope:**` — one line summarizing the regression scope (e.g. `Agent topic-switching regression — stale chat state on agent change`). Replaces the long-form `Release Date` / `Since vX.Y.Z` metrics.
+3. One quoted thesis (single paragraph, 1-2 lines) describing what is now restored.
+4. `## 🐛 What's Fixed` — 1-3 bullets, each `**<symptom>** — <fix in one sentence>. (#PR)`. No root-cause prose; that lives in the commit message.
+5. `## ⚙️ Upgrade` — short notes for self-hosted (pull image / restart, schema or env changes) and cloud (usually "applied automatically").
+6. `## 👥 Owner` — single `@handle` for the PR author, resolved via `gh pr view "$PR" --json author --jq '.author.login'`. Never hardcoded.
+
+Hard rules specific to hotfix:
+
+- **No Highlights / domain blocks / Contributors / Full Changelog** — these add noise to a one-shot fix.
+- **No metric line** — `Since vX.Y.Z` doesn't apply; the body cites the single PR (or 1-3 PRs) directly.
+- **Owner ≠ Contributors** — one author, listed under § Owner. Not a flat handle list.
+- See `changelog-example/hotfix.md` for the canonical template.
+
+### DB Migration Variant
+
+Database schema changes that need to be released independently. Operator impact is the headline.
+
+Required sections, in order:
+
+1. `# 🚀 LobeHub Release (<YYYYMMDD>)` + scope line
+2. **Migration overview** — what tables / columns are added, modified, or removed
+3. **Operator impact** — backwards-compatible? required actions for self-hosted?
+4. **Rollback / backup note** — how to recover
+5. `## 👥 Owner` — single PR author, resolved via `gh pr view`
+
+See `changelog-example/db-migration.md` for the canonical template.
 
 ## Writing Rules (Hard)
 
@@ -149,13 +187,16 @@ Use `---` separators between major blocks for long releases.
 ## Release Size Heuristics
 
 - **Minor / major milestone release**
-  - Include full structure with multiple domain blocks.
+  - Long-form structure with multiple domain blocks.
   - `Highlights` usually 8-12 bullets.
 - **Weekly patch release**
-  - Keep full skeleton but reduce subsection count.
+  - Long-form skeleton with reduced subsection count.
   - `Highlights` usually 4-8 bullets.
+- **Hotfix release**
+  - Short-form (see § Variants → Hotfix). No Highlights, no domain blocks, no Contributors.
+  - 1-3 fix bullets. Body should fit on one screen.
 - **DB migration release**
-  - Keep concise.
+  - Short-form (see § Variants → DB Migration).
   - Must include `Migration overview`, operator impact, and rollback/backup note.
 
 ## Contributor Ordering
@@ -251,6 +292,8 @@ Plus @lobehubbot and renovate[bot] for maintenance.
 
 ## Quick Checklist
 
+### Long-Form (Minor / Weekly)
+
 - [ ] `PREV_TAG` is `git describe --tags --abbrev=0 origin/main` (latest semver), not the last weekly's tag
 - [ ] Every `(#XXXX)` in the body appears in `/tmp/release_prs.txt` (verified via `comm -23`)
 - [ ] `Since v…` line uses `$PREV_TAG`; PR / contributor counts match `wc -l` on the computed sets
@@ -262,3 +305,12 @@ Plus @lobehubbot and renovate[bot] for maintenance.
 - [ ] Security and reliability updates are explicitly surfaced (when present)
 - [ ] Contributor credits and compare range are included
 - [ ] All numbers and claims are verifiable
+
+### Hotfix
+
+- [ ] `**Hotfix Scope:**` line replaces metrics line
+- [ ] Single quoted thesis describes what is restored (operator-facing, not internal)
+- [ ] `## 🐛 What's Fixed` has 1-3 bullets, each `**<symptom>** — <fix>. (#PR)` with PR ref verified to exist and be merged
+- [ ] `## ⚙️ Upgrade` notes self-hosted action and cloud auto-apply
+- [ ] `## 👥 Owner` is a single `@handle` resolved via `gh pr view "$PR" --json author`
+- [ ] No Highlights / domain blocks / Contributors / Full Changelog included
