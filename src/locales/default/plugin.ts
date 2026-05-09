@@ -359,8 +359,6 @@ export default {
   'detailModal.tabs.settings': 'Settings',
   'detailModal.title': 'Skill details',
   'dev.confirmDeleteDevPlugin': 'This local Skill will be deleted permanently. Continue?',
-  'dev.customParams.useProxy.label':
-    'Install via proxy (enable if encountering CORS errors, then retry)',
   'dev.deleteSuccess': 'Skill deleted',
   'dev.manifest.identifier.desc': 'Unique identifier for the Skill',
   'dev.manifest.identifier.label': 'Identifier',

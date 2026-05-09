@@ -11,7 +11,6 @@ import { DiscoverService } from './index';
 vi.mock('@/server/modules/AssistantStore');
 vi.mock('@/server/modules/PluginStore');
 vi.mock('@lobehub/market-sdk');
-vi.mock('@/utils/toolManifest');
 vi.mock('@/locales/resources', () => ({
   normalizeLocale: vi.fn((locale) => {
     if (locale === 'en-US') return 'en';
