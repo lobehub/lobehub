@@ -12,6 +12,7 @@ import {
   type PlatformMeta,
   SuccessCard,
 } from './shared';
+import { isSingleAccountRebindBlocked, shouldShowSingleAccountSuccess } from './singleAccountState';
 
 interface TelegramBodyProps {
   existingLink?: ExistingLink | null;
@@ -29,8 +30,9 @@ const TelegramBody = memo<TelegramBodyProps>(
 
     const platformLabel = platformMeta?.name ?? 'Telegram';
     const botUsername = platformMeta?.botUsername;
+    const rebindBlocked = isSingleAccountRebindBlocked(existingLink, tokenData);
 
-    if (existingLink || done) {
+    if (shouldShowSingleAccountSuccess(existingLink, tokenData, done)) {
       return (
         <SuccessCard
           openBotUrl={botUsername ? buildTelegramBotUrl(botUsername) : null}
@@ -53,12 +55,33 @@ const TelegramBody = memo<TelegramBodyProps>(
 
     return (
       <ConfirmCard
-        conflictEmail={tokenData.linkedToEmail ?? undefined}
         infoRows={infoRows}
         platform="telegram"
-        platformLabel={platformLabel}
         randomId={randomId}
-        signInUrl={signInUrl}
+        blockingNotice={
+          rebindBlocked
+            ? {
+                ctaHref: '/settings/messenger/telegram',
+                ctaLabel: t('verify.confirm.relink.manage'),
+                description: t('verify.confirm.relink.description', {
+                  account:
+                    existingLink?.platformUsername ?? `ID ${existingLink?.platformUserId ?? ''}`,
+                  platform: platformLabel,
+                }),
+                title: t('verify.confirm.relink.title', { platform: platformLabel }),
+              }
+            : tokenData.linkedToEmail
+              ? {
+                  ctaHref: signInUrl,
+                  ctaLabel: t('verify.confirm.conflict.switchAccount'),
+                  description: t('verify.confirm.conflict.description', {
+                    email: tokenData.linkedToEmail,
+                    platform: platformLabel,
+                  }),
+                  title: t('verify.confirm.conflict.title'),
+                }
+              : undefined
+        }
         onSuccess={() => setDone(true)}
       />
     );
