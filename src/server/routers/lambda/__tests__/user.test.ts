@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  getReferralStatus,
+  getSubscriptionPlan,
+  onUserActivityForBusiness,
+} from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
@@ -9,7 +14,21 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { userRouter } from '../user';
 
+const mockAfterTasks = vi.hoisted((): Promise<void>[] => []);
+
 // Mock modules
+vi.mock('next/server', () => ({
+  after: (callback: () => Promise<void> | void) => {
+    mockAfterTasks.push(Promise.resolve(callback()));
+  },
+}));
+
+vi.mock('@/business/server/user', () => ({
+  getReferralStatus: vi.fn(),
+  getSubscriptionPlan: vi.fn(),
+  onUserActivityForBusiness: vi.fn(),
+}));
+
 vi.mock('@/database/server', () => ({
   serverDB: {},
 }));
@@ -27,8 +46,16 @@ describe('userRouter', () => {
     userId: mockUserId,
   };
 
+  const flushAfterTasks = async () => {
+    await Promise.all(mockAfterTasks.splice(0));
+  };
+
   beforeEach(() => {
+    mockAfterTasks.length = 0;
     vi.clearAllMocks();
+    vi.mocked(getReferralStatus).mockResolvedValue(undefined);
+    vi.mocked(getSubscriptionPlan).mockResolvedValue(undefined);
+    vi.mocked(onUserActivityForBusiness).mockResolvedValue(undefined);
   });
 
   describe('getUserRegistrationDuration', () => {
@@ -114,6 +141,100 @@ describe('userRouter', () => {
         canEnableTrace: true,
         userId: mockUserId,
       });
+    });
+
+    it('should invoke the user activity hook after winning the lastActiveAt update', async () => {
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      const previousLastActiveAt = new Date('2026-03-01T00:00:00.000Z');
+      const updateLastActiveAtIfUnchanged = vi.fn().mockResolvedValue(true);
+      const mockState = {
+        isOnboarded: true,
+        preference: {},
+        settings: {},
+        userId: mockUserId,
+      };
+
+      vi.mocked(UserModel.findById).mockResolvedValue({
+        createdAt,
+        lastActiveAt: previousLastActiveAt,
+      } as any);
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            getUserState: vi.fn().mockResolvedValue(mockState),
+            updateLastActiveAtIfUnchanged,
+          }) as any,
+      );
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            countUpTo: vi.fn().mockResolvedValue(0),
+          }) as any,
+      );
+      vi.mocked(SessionModel).mockImplementation(
+        () =>
+          ({
+            hasMoreThanN: vi.fn().mockResolvedValue(false),
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).getUserState();
+      await flushAfterTasks();
+
+      expect(updateLastActiveAtIfUnchanged).toHaveBeenCalledWith(
+        expect.any(Date),
+        previousLastActiveAt,
+      );
+      expect(onUserActivityForBusiness).toHaveBeenCalledWith({
+        currentTime: expect.any(Date),
+        previousLastActiveAt,
+        userCreatedAt: createdAt,
+        userId: mockUserId,
+      });
+    });
+
+    it('should skip the user activity hook when a concurrent request already updated lastActiveAt', async () => {
+      const previousLastActiveAt = new Date('2026-03-01T00:00:00.000Z');
+      const updateLastActiveAtIfUnchanged = vi.fn().mockResolvedValue(false);
+      const mockState = {
+        isOnboarded: true,
+        preference: {},
+        settings: {},
+        userId: mockUserId,
+      };
+
+      vi.mocked(UserModel.findById).mockResolvedValue({
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        lastActiveAt: previousLastActiveAt,
+      } as any);
+      vi.mocked(UserModel).mockImplementation(
+        () =>
+          ({
+            getUserState: vi.fn().mockResolvedValue(mockState),
+            updateLastActiveAtIfUnchanged,
+          }) as any,
+      );
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            countUpTo: vi.fn().mockResolvedValue(0),
+          }) as any,
+      );
+      vi.mocked(SessionModel).mockImplementation(
+        () =>
+          ({
+            hasMoreThanN: vi.fn().mockResolvedValue(false),
+          }) as any,
+      );
+
+      await userRouter.createCaller({ ...mockCtx }).getUserState();
+      await flushAfterTasks();
+
+      expect(updateLastActiveAtIfUnchanged).toHaveBeenCalledWith(
+        expect.any(Date),
+        previousLastActiveAt,
+      );
+      expect(onUserActivityForBusiness).not.toHaveBeenCalled();
     });
   });
 

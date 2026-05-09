@@ -203,6 +203,32 @@ describe('UserModel', () => {
     });
   });
 
+  describe('updateLastActiveAtIfUnchanged', () => {
+    it('should only advance lastActiveAt when the expected previous value still matches', async () => {
+      const previousLastActiveAt = new Date('2026-03-01T00:00:00.000Z');
+      const currentTime = new Date('2026-05-01T00:00:00.000Z');
+      const staleCurrentTime = new Date('2026-05-02T00:00:00.000Z');
+
+      await serverDB
+        .update(users)
+        .set({ lastActiveAt: previousLastActiveAt })
+        .where(eq(users.id, userId));
+
+      await expect(
+        userModel.updateLastActiveAtIfUnchanged(currentTime, previousLastActiveAt),
+      ).resolves.toBe(true);
+      await expect(
+        userModel.updateLastActiveAtIfUnchanged(staleCurrentTime, previousLastActiveAt),
+      ).resolves.toBe(false);
+
+      const updated = await serverDB.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      expect(updated?.lastActiveAt.getTime()).toBe(currentTime.getTime());
+    });
+  });
+
   describe('deleteSetting', () => {
     it('should delete user settings', async () => {
       await serverDB.insert(userSettings).values({

@@ -97,9 +97,13 @@ export const userRouter = router({
           const currentTime = new Date();
           const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 
-          await ctx.userModel.updateUser({ lastActiveAt: currentTime });
-
           if (user?.createdAt && user.lastActiveAt) {
+            const lastActiveAtUpdated = await ctx.userModel.updateLastActiveAtIfUnchanged(
+              currentTime,
+              user.lastActiveAt,
+            );
+            if (!lastActiveAtUpdated) return;
+
             try {
               await onUserActivityForBusiness({
                 currentTime,

@@ -198,6 +198,21 @@ export class UserModel {
       .where(eq(users.id, this.userId));
   };
 
+  /**
+   * Advances `lastActiveAt` only if no concurrent request has already moved it.
+   * Callers can use the boolean result to run transition hooks exactly once for
+   * the observed previous timestamp.
+   */
+  updateLastActiveAtIfUnchanged = async (currentTime: Date, previousLastActiveAt: Date) => {
+    const [updated] = await this.db
+      .update(users)
+      .set({ lastActiveAt: currentTime, updatedAt: currentTime })
+      .where(and(eq(users.id, this.userId), eq(users.lastActiveAt, previousLastActiveAt)))
+      .returning({ id: users.id });
+
+    return updated !== undefined;
+  };
+
   deleteSetting = async () => {
     return this.db.delete(userSettings).where(eq(userSettings.id, this.userId));
   };
