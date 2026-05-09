@@ -16,8 +16,10 @@ describe('LobeAgentManifest', () => {
 
     expect(apiDescription).toContain('native multimodal capability');
     expect(apiDescription).toContain('use this tool only as a fallback');
+    expect(apiDescription).toContain('Provide either refs or urls');
+    expect(apiDescription).toContain('Prefer refs when stable refs are available');
     expect(apiDescription).toContain('msg_xxx.image_1');
-    expect(apiDescription).toContain('Use only stable refs');
+    expect(apiDescription).toContain('use urls only for direct media URLs');
     expect(apiDescription).toContain('answer the user directly with the result');
   });
 
@@ -27,7 +29,5 @@ describe('LobeAgentManifest', () => {
     expect(parameters).not.toHaveProperty('oneOf');
     expect(parameters).not.toHaveProperty('allOf');
     expect(parameters).not.toHaveProperty('anyOf');
-    expect(parameters.properties.refs.description).toContain('Provide either refs or urls');
-    expect(parameters.properties.urls.description).toContain('Provide either refs or urls');
   });
 });

@@ -7,7 +7,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "Analyze images or videos selected by visual file refs or direct media URLs and answer a visual question. Prefer the active model's native multimodal capability when it can inspect the visual media directly; use this tool only as a fallback when the active model cannot inspect the requested images or videos. Use only stable refs shown in <files_info>, such as msg_xxx.image_1 or msg_xxx.video_1. Pass refs for message attachments, or urls for direct media URLs that are not available as message refs. After this tool returns, answer the user directly with the result.",
+        "Analyze images or videos selected by visual file refs or direct media URLs and answer a visual question. Prefer the active model's native multimodal capability when it can inspect the visual media directly; use this tool only as a fallback when the active model cannot inspect the requested images or videos. Provide either refs or urls; at least one is required. Prefer refs when stable refs are available in <files_info>, such as msg_xxx.image_1 or msg_xxx.video_1, and use urls only for direct media URLs that are not available as message refs. After this tool returns, answer the user directly with the result.",
       name: LobeAgentApiName.analyzeVisualMedia,
       parameters: {
         additionalProperties: false,
@@ -18,7 +18,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
           refs: {
             description:
-              'Stable visual file ref strings to analyze, such as ["msg_xxx.image_1"] or ["msg_xxx.video_1"]. Provide either refs or urls; at least one is required.',
+              'Stable visual file ref strings to analyze, such as ["msg_xxx.image_1"] or ["msg_xxx.video_1"].',
             items: {
               type: 'string',
             },
@@ -26,8 +26,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             type: 'array',
           },
           urls: {
-            description:
-              'Direct image or video URLs to analyze when no message file ref exists. Provide either refs or urls; at least one is required.',
+            description: 'Direct image or video URLs to analyze when no message file ref exists.',
             items: {
               type: 'string',
             },
