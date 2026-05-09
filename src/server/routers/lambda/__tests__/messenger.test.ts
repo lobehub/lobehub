@@ -15,6 +15,7 @@ const {
   mockListByInstallerUserId,
   mockMarkRevoked,
   mockNotifyTelegramLinkSuccess,
+  mockPeekConsumedLinkToken,
   mockPeekLinkToken,
   mockSlackAuthTest,
   mockUpsertForPlatform,
@@ -27,6 +28,7 @@ const {
   mockListByInstallerUserId: vi.fn(),
   mockMarkRevoked: vi.fn(),
   mockNotifyTelegramLinkSuccess: vi.fn(),
+  mockPeekConsumedLinkToken: vi.fn(),
   mockPeekLinkToken: vi.fn(),
   mockSlackAuthTest: vi.fn(),
   mockUpsertForPlatform: vi.fn(),
@@ -70,6 +72,7 @@ vi.mock('@/server/services/messenger', () => ({
   MessengerTelegramBinder: vi.fn().mockImplementation(() => ({
     notifyLinkSuccess: mockNotifyTelegramLinkSuccess,
   })),
+  peekConsumedLinkToken: mockPeekConsumedLinkToken,
   peekLinkToken: mockPeekLinkToken,
 }));
 
@@ -157,6 +160,69 @@ describe('messengerRouter.listMyInstallations', () => {
 
     expect(result).toHaveLength(1);
     expect(mockMarkRevoked).not.toHaveBeenCalled();
+  });
+});
+
+describe('messengerRouter.peekLinkToken', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns status:active with payload when the token is live', async () => {
+    const selectBuilder = createSelectBuilder([]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockPeekLinkToken.mockResolvedValue({
+      platform: 'slack',
+      platformUserId: 'U_ALICE',
+      platformUsername: 'alice',
+      tenantId: 'T_LOBE',
+      tenantName: 'LobeHub',
+    });
+    mockFindByPlatformUser.mockResolvedValue(undefined);
+
+    const caller = createCaller(await createContextInner({}));
+    const result = await caller.peekLinkToken({ randomId: 'rand-1234' });
+
+    expect(result).toMatchObject({
+      linkedToEmail: null,
+      platform: 'slack',
+      platformUserId: 'U_ALICE',
+      status: 'active',
+      tenantId: 'T_LOBE',
+      tenantName: 'LobeHub',
+    });
+    expect(mockPeekConsumedLinkToken).not.toHaveBeenCalled();
+  });
+
+  it('returns status:consumed when the token was already burned by confirmLink', async () => {
+    mockGetServerDB.mockResolvedValue({ kind: 'server-db' });
+    mockPeekLinkToken.mockResolvedValue(null);
+    mockPeekConsumedLinkToken.mockResolvedValue({
+      consumedAt: 1_700_000_000_000,
+      platform: 'slack',
+      tenantId: 'T_LOBE',
+    });
+
+    const caller = createCaller(await createContextInner({}));
+    const result = await caller.peekLinkToken({ randomId: 'rand-1234' });
+
+    expect(result).toEqual({
+      platform: 'slack',
+      status: 'consumed',
+      tenantId: 'T_LOBE',
+    });
+  });
+
+  it('returns status:expired without throwing when neither token nor consumed marker exists', async () => {
+    mockGetServerDB.mockResolvedValue({ kind: 'server-db' });
+    mockPeekLinkToken.mockResolvedValue(null);
+    mockPeekConsumedLinkToken.mockResolvedValue(null);
+
+    const caller = createCaller(await createContextInner({}));
+    const result = await caller.peekLinkToken({ randomId: 'rand-1234' });
+
+    expect(result).toEqual({ status: 'expired' });
   });
 });
 

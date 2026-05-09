@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "Un altro account Telegram è già collegato",
   "verify.confirm.title": "Conferma collegamento",
   "verify.confirm.workspace": "Workspace: {{workspace}}",
+  "verify.error.alreadyConsumed": "Questo link è già stato utilizzato per collegare un account. Accedi a quell'account LobeHub per gestire la connessione, oppure torna al bot e invia /start di nuovo per generare un nuovo link.",
+  "verify.error.alreadyConsumedTitle": "Questo link è già stato utilizzato",
   "verify.error.alreadyLinkedToOther": "Questo account è già collegato a un altro account LobeHub. Accedi prima a quell'account.",
   "verify.error.expired": "Questo collegamento è scaduto. Torna al bot e invia nuovamente /start.",
   "verify.error.generic": "Qualcosa è andato storto. Riprova.",
