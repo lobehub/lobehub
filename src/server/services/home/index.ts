@@ -2,6 +2,7 @@ import debug from 'debug';
 
 import { getRedisConfig } from '@/envs/redis';
 import {
+  getJSONFromRedis,
   initializeRedisWithPrefix,
   isRedisEnabled,
   RedisKeyNamespace,
@@ -49,15 +50,12 @@ export class HomeService {
       if (!isRedisEnabled(redisConfig)) return null;
 
       const redis = await initializeRedisWithPrefix(redisConfig, RedisKeyNamespace.AI_GENERATION);
-      if (!redis) return null;
-
-      const key = RedisKeys.aiGeneration.homeBrief(this.userId);
-      const value = await redis.get(key);
-      if (!value) return null;
-
-      const parsed = JSON.parse(value) as HomeBriefData;
-      if (!Array.isArray(parsed.pairs)) return null;
-      return parsed;
+      const data = await getJSONFromRedis<HomeBriefData>(
+        redis,
+        RedisKeys.aiGeneration.homeBrief(this.userId),
+      );
+      if (!data || !Array.isArray(data.pairs)) return null;
+      return data;
     } catch (error) {
       log('Failed to read daily brief from Redis for user %s: %O', this.userId, error);
       return null;
