@@ -375,34 +375,39 @@ describe('computeChatPricing', () => {
         const usage: ModelTokensUsage = {
           inputAudioTokens: 1000,
           inputCachedAudioTokens: 400,
+          inputCachedImageTokens: 200,
           inputCachedTextTokens: 600,
-          inputCachedTokens: 1000,
+          inputCachedTokens: 1300,
+          inputCachedVideoTokens: 100,
+          inputImageTokens: 500,
           inputTextTokens: 1200,
+          inputVideoTokens: 300,
           inputWriteCacheTokens: 300,
           outputTextTokens: 100,
-          totalInputTokens: 2200,
+          totalInputTokens: 3000,
           totalOutputTokens: 100,
-          totalTokens: 2300,
+          totalTokens: 3100,
         };
 
-        const result = computeChatCost(pricing, usage, { lookupParams: { ttl: '1h' } });
+        const result = computeChatCost(pricing, usage);
         expect(result).toBeDefined();
         expect(result?.issues).toHaveLength(0);
-        expect(result?.totalCredits).toBe(935);
+        expect(result?.totalCredits).toBe(1068);
 
         const { breakdown } = result!;
         expect(breakdown.find((item) => item.unit.name === 'textInput_cacheRead')?.credits).toBe(
-          15,
+          23,
         );
         expect(breakdown.find((item) => item.unit.name === 'audioInput_cacheRead')?.credits).toBe(
           20,
         );
         expect(breakdown.find((item) => item.unit.name === 'textInput')?.credits).toBe(150);
+        expect(breakdown.find((item) => item.unit.name === 'imageInput')?.credits).toBe(75);
+        expect(breakdown.find((item) => item.unit.name === 'videoInput')?.credits).toBe(50);
         expect(breakdown.find((item) => item.unit.name === 'audioInput')?.credits).toBe(300);
         expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(150);
 
         const cacheWrite = breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
-        expect(cacheWrite?.lookupKey).toBe('1h');
         expect(cacheWrite?.credits).toBe(300);
       }
     });

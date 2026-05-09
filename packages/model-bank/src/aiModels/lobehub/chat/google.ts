@@ -114,12 +114,7 @@ export const googleChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheWrite', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-05-07',
