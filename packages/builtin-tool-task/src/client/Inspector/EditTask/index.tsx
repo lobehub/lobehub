@@ -2,12 +2,12 @@
 
 import { priorityLabel } from '@lobechat/prompts';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
@@ -114,21 +114,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const AssigneeChip = memo<{ agentId: string }>(({ agentId }) => {
-  const agentMeta = useAgentDisplayMeta(agentId);
+  const agentMeta = useAgentDisplayMeta(agentId, { fallbackToDefault: false });
   const displayName = agentMeta?.title || agentId;
 
   return (
     <span className={styles.assigneeChip} title={displayName}>
-      {agentMeta && (
-        <Avatar
-          avatar={agentMeta.avatar || displayName}
-          background={agentMeta.backgroundColor}
-          className={styles.assigneeAvatar}
-          shape={'circle'}
-          size={16}
-          title={displayName}
-        />
-      )}
+      <span className={styles.assigneeAvatar}>
+        <AssigneeAvatar agentId={agentId} fallbackToDefault={false} size={16} />
+      </span>
       <span className={styles.assigneeName}>{displayName}</span>
     </span>
   );

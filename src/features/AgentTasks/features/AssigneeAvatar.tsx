@@ -7,11 +7,12 @@ import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 
 interface AssigneeAvatarProps {
   agentId?: string | null;
+  fallbackToDefault?: boolean;
   size?: number;
 }
 
-const AssigneeAvatar = memo<AssigneeAvatarProps>(({ agentId, size = 18 }) => {
-  const displayMeta = useAgentDisplayMeta(agentId);
+const AssigneeAvatar = memo<AssigneeAvatarProps>(({ agentId, fallbackToDefault, size = 18 }) => {
+  const displayMeta = useAgentDisplayMeta(agentId, { fallbackToDefault });
 
   if (!displayMeta) {
     return (

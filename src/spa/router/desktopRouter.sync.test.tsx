@@ -52,8 +52,10 @@ describe('desktopRouter config sync', () => {
   it('task list and detail desktop routes share one workspace layout', async () => {
     const [asyncSource, syncSource] = await readDesktopRouterSources();
 
-    expect(asyncSource).toContain("import('@/routes/(main)/task-workspace/_layout')");
-    expect(syncSource).toContain("from '@/routes/(main)/task-workspace/_layout'");
+    expect(asyncSource).toContain("import('@/routes/(main)/(task-workspace)/_layout')");
+    expect(syncSource).toContain("from '@/routes/(main)/(task-workspace)/_layout'");
+    expect(asyncSource).not.toContain("import('@/routes/(main)/task-workspace/_layout')");
+    expect(syncSource).not.toContain("from '@/routes/(main)/task-workspace/_layout'");
     expect(asyncSource).not.toContain("import('@/routes/(main)/tasks/_layout')");
     expect(asyncSource).not.toContain("import('@/routes/(main)/task/_layout')");
     expect(syncSource).not.toContain("from '@/routes/(main)/tasks/_layout'");

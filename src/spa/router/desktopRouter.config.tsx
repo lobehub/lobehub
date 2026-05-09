@@ -596,7 +596,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/task-workspace/_layout'),
+          () => import('@/routes/(main)/(task-workspace)/_layout'),
           'Desktop > Task Workspace > Layout',
         ),
       },

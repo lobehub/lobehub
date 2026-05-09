@@ -13,15 +13,27 @@ interface AgentDisplayMeta {
   title?: string;
 }
 
+interface AgentDisplayMetaOptions {
+  fallbackToDefault?: boolean;
+}
+
 const mocks = vi.hoisted(() => ({
   agentMetaById: {} as Record<string, AgentDisplayMeta | undefined>,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Avatar: ({ avatar, title }: { avatar?: string; title?: string }) => (
-    <span data-testid="agent-avatar" title={title}>
-      {avatar}
-    </span>
+vi.mock('@/features/AgentTasks/features/AssigneeAvatar', () => ({
+  default: ({
+    agentId,
+    fallbackToDefault,
+  }: {
+    agentId?: string | null;
+    fallbackToDefault?: boolean;
+  }) => (
+    <span
+      data-agent-id={agentId || ''}
+      data-fallback-to-default={String(fallbackToDefault)}
+      data-testid="assignee-avatar"
+    />
   ),
 }));
 
@@ -32,7 +44,15 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/features/AgentTasks/shared/useAgentDisplayMeta', () => ({
-  useAgentDisplayMeta: (id: string) => mocks.agentMetaById[id],
+  useAgentDisplayMeta: (id: string, options?: AgentDisplayMetaOptions) =>
+    mocks.agentMetaById[id] ||
+    (options?.fallbackToDefault === false
+      ? undefined
+      : {
+          avatar: 'default-avatar',
+          backgroundColor: '#ffffff',
+          title: 'Default Agent',
+        }),
 }));
 
 vi.mock('@/styles', () => ({
@@ -67,7 +87,8 @@ describe('EditTaskInspector', () => {
 
     renderInspector({ assigneeAgentId: 'agt_worker' });
 
-    expect(screen.getByTestId('agent-avatar').textContent).toBe('worker-avatar');
+    expect(screen.getByTestId('assignee-avatar').dataset.agentId).toBe('agt_worker');
+    expect(screen.getByTestId('assignee-avatar').dataset.fallbackToDefault).toBe('false');
     expect(screen.getByText('Worker Agent')).toBeTruthy();
     expect(screen.queryByText('agt_worker')).toBeNull();
   });
@@ -75,8 +96,10 @@ describe('EditTaskInspector', () => {
   it('falls back to the agent id when assignee metadata is unavailable', () => {
     renderInspector({ assigneeAgentId: 'agt_missing' });
 
-    expect(screen.queryByTestId('agent-avatar')).toBeNull();
+    expect(screen.getByTestId('assignee-avatar').dataset.agentId).toBe('agt_missing');
+    expect(screen.getByTestId('assignee-avatar').dataset.fallbackToDefault).toBe('false');
     expect(screen.getByText('agt_missing')).toBeTruthy();
+    expect(screen.queryByText('Default Agent')).toBeNull();
   });
 
   it('renders the resolved agent name instead of the raw assignee id', () => {
@@ -88,7 +111,8 @@ describe('EditTaskInspector', () => {
 
     renderInspector({ assigneeAgentId: 'agt_lobe' });
 
-    expect(screen.getByTestId('agent-avatar').textContent).toBe('lobe-avatar');
+    expect(screen.getByTestId('assignee-avatar').dataset.agentId).toBe('agt_lobe');
+    expect(screen.getByTestId('assignee-avatar').dataset.fallbackToDefault).toBe('false');
     expect(screen.getByText('Lobe AI')).toBeTruthy();
     expect(screen.queryByText('agt_lobe')).toBeNull();
   });
