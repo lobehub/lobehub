@@ -94,8 +94,7 @@ agent-browser --session-name myapp open https://example.com/dashboard
 **Option 5: Auth vault (credentials stored encrypted, login by name)**
 
 \`\`\`bash
-# Save credentials with interactive prompt (never expose secrets in CLI args)
-agent-browser auth save myapp --url https://example.com/login --username user --interactive
+echo "$PASSWORD" | agent-browser auth save myapp --url https://app.example.com/login --username user --password-stdin
 agent-browser auth login myapp
 \`\`\`
 
@@ -301,8 +300,7 @@ agent-browser batch "fill @e1 \\"Jane Doe\\"" "fill @e2 \\"jane@example.com\\"" 
 \`\`\`bash
 # Save credentials once (encrypted with AGENT_BROWSER_ENCRYPTION_KEY)
 # Recommended: pipe password via stdin to avoid shell history exposure
-# Save credentials via interactive prompt (never expose secrets)
-agent-browser auth save github --url https://github.com/login --username user --interactive
+echo "pass" | agent-browser auth save github --url https://github.com/login --username user --password-stdin
 
 # Login using saved profile (LLM never sees password)
 agent-browser auth login github
