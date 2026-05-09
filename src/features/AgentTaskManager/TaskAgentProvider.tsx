@@ -18,16 +18,6 @@ interface TaskAgentProviderProps {
   children: ReactNode;
 }
 
-let taskAgentProviderMountCount = 0;
-let taskAgentScopeResetScheduled = false;
-let taskAgentScopedAgentId: string | undefined;
-
-const isTaskAgentRoutePath = (pathname: string | undefined) =>
-  pathname === '/tasks' ||
-  pathname?.startsWith('/tasks/') ||
-  pathname === '/task' ||
-  pathname?.startsWith('/task/');
-
 const TaskAgentSelectionContext = createContext<(agentId: string) => void>(() => {});
 
 export const useTaskAgentSelection = () => use(TaskAgentSelectionContext);
@@ -41,9 +31,7 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
   const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const syncedAgentIdRef = useRef<string | undefined>(undefined);
-  const [scopedSelectedAgentId, setScopedSelectedAgentId] = useState<string | undefined>(
-    () => taskAgentScopedAgentId,
-  );
+  const [scopedSelectedAgentId, setScopedSelectedAgentId] = useState<string | undefined>();
 
   const detailMatch = useMatch('/task/:taskId');
   const viewedTaskId = detailMatch?.params.taskId;
@@ -52,32 +40,7 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
 
   const selectTaskAgent = useCallback((agentId: string) => {
     if (!agentId || isChatGroupSessionId(agentId)) return;
-    taskAgentScopedAgentId = agentId;
     setScopedSelectedAgentId(agentId);
-  }, []);
-
-  useEffect(() => {
-    taskAgentProviderMountCount += 1;
-
-    return () => {
-      taskAgentProviderMountCount = Math.max(0, taskAgentProviderMountCount - 1);
-
-      // `/tasks` and `/task/:taskId` have separate lazy layouts, so internal task navigation
-      // can leave a short gap between unmount and the next provider mount while the route
-      // chunk resolves. For example, `/tasks` -> `/task/T-1` should retain the active task
-      // topic, but `/tasks` -> `/agent/agt_xxx` should clear the task-scoped selection.
-      if (taskAgentScopeResetScheduled) return;
-      taskAgentScopeResetScheduled = true;
-      queueMicrotask(() => {
-        if (
-          taskAgentProviderMountCount === 0 &&
-          !isTaskAgentRoutePath(globalThis.location?.pathname)
-        ) {
-          taskAgentScopedAgentId = undefined;
-        }
-        taskAgentScopeResetScheduled = false;
-      });
-    };
   }, []);
 
   useEffect(() => {
@@ -95,13 +58,8 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
       useChatStore.setState({ activeAgentId: selectedAgentId });
     }
 
-    if (
-      !shouldSyncChatAgent &&
-      (syncedAgentIdRef.current === selectedAgentId || taskAgentScopedAgentId === selectedAgentId)
-    )
-      return;
+    if (!shouldSyncChatAgent && syncedAgentIdRef.current === selectedAgentId) return;
     syncedAgentIdRef.current = selectedAgentId;
-    taskAgentScopedAgentId = selectedAgentId;
 
     if (shouldResetTaskTopic) {
       void chatState.switchTopic(null, { scope: 'task', skipRefreshMessage: true });

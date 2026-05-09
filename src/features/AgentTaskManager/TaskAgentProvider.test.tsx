@@ -94,11 +94,8 @@ const SelectAgentButton = ({ agentId }: { agentId: string }) => {
   return <button onClick={() => selectTaskAgent(agentId)}>select agent</button>;
 };
 
-const flushMicrotasks = () => new Promise((resolve) => queueMicrotask(resolve));
-
 describe('TaskAgentProvider', () => {
   beforeEach(() => {
-    window.history.pushState(null, '', '/tasks');
     mocks.agentState.activeAgentId = undefined;
     mocks.agentState.setActiveAgentId.mockClear();
     mocks.chatState.activeAgentId = undefined;
@@ -111,10 +108,8 @@ describe('TaskAgentProvider', () => {
     mocks.routeMatch = undefined;
   });
 
-  afterEach(async () => {
-    window.history.pushState(null, '', '/agent/cleanup');
+  afterEach(() => {
     cleanup();
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
   it('initializes builtin agents and builds task list context', () => {
@@ -200,8 +195,8 @@ describe('TaskAgentProvider', () => {
     expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
   });
 
-  it('keeps the current task topic when task list/detail navigation remounts the provider', async () => {
-    const firstRender = render(
+  it('keeps the current task topic when switching between task list and detail', async () => {
+    const { rerender } = render(
       <TaskAgentProvider>
         <div>content</div>
       </TaskAgentProvider>,
@@ -213,10 +208,9 @@ describe('TaskAgentProvider', () => {
 
     mocks.chatState.switchTopic.mockClear();
     mocks.chatState.activeTopicId = 'tpc_created';
+    mocks.routeMatch = { params: { taskId: 'T-1' } };
 
-    firstRender.unmount();
-
-    render(
+    rerender(
       <TaskAgentProvider>
         <div>content</div>
       </TaskAgentProvider>,
@@ -225,13 +219,14 @@ describe('TaskAgentProvider', () => {
     await waitFor(() => {
       expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
     });
+    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
     expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
   });
 
-  it('keeps the current task topic when lazy task navigation remounts after cleanup runs', async () => {
+  it('resets the scoped agent when the task workspace remounts', async () => {
     const firstRender = render(
       <TaskAgentProvider>
-        <div>content</div>
+        <SelectAgentButton agentId="agt_custom" />
       </TaskAgentProvider>,
     );
 
@@ -239,12 +234,18 @@ describe('TaskAgentProvider', () => {
       expect(mocks.chatState.activeAgentId).toBe('agt_task');
     });
 
-    mocks.chatState.switchTopic.mockClear();
-    mocks.chatState.activeTopicId = 'tpc_created';
-    window.history.pushState(null, '', '/task/T-1');
+    fireEvent.click(screen.getByText('select agent'));
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_custom');
+    });
 
     firstRender.unmount();
-    await flushMicrotasks();
+    mocks.providerContexts = [];
+    mocks.agentState.activeAgentId = 'agt_lobe';
+    mocks.chatState.activeAgentId = 'agt_lobe';
+    mocks.chatState.activeTopicId = 'tpc_lobe';
+    mocks.chatState.switchTopic.mockClear();
 
     render(
       <TaskAgentProvider>
@@ -253,9 +254,13 @@ describe('TaskAgentProvider', () => {
     );
 
     await waitFor(() => {
-      expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_task');
     });
-    expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
+    expect(mocks.agentState.setActiveAgentId).toHaveBeenLastCalledWith('agt_task');
+    expect(mocks.chatState.switchTopic).toHaveBeenCalledWith(null, {
+      scope: 'task',
+      skipRefreshMessage: true,
+    });
   });
 
   it('allows the task manager selector to switch the scoped agent', async () => {

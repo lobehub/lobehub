@@ -76,10 +76,9 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
-import TaskDetailLayout from '@/routes/(main)/task/_layout';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
+import TaskWorkspaceLayout from '@/routes/(main)/task-workspace/_layout';
 import AllTasksPage from '@/routes/(main)/tasks';
-import AllTasksLayout from '@/routes/(main)/tasks/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -459,30 +458,31 @@ export const desktopRoutes: RouteObject[] = [
         path: 'eval',
       },
 
-      // Tasks routes (cross-agent)
+      // Task workspace routes (cross-agent)
       {
         children: [
           {
-            element: <AllTasksPage />,
-            index: true,
+            children: [
+              {
+                element: <AllTasksPage />,
+                index: true,
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/" />,
+            path: 'tasks',
           },
-        ],
-        element: <AllTasksLayout />,
-        errorElement: <ErrorBoundary resetPath="/" />,
-        path: 'tasks',
-      },
-
-      // Task detail route (cross-agent entry — resolves by task identifier)
-      {
-        children: [
           {
-            element: <TaskDetailRoute />,
-            path: ':taskId',
+            children: [
+              {
+                element: <TaskDetailRoute />,
+                path: ':taskId',
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/tasks" />,
+            path: 'task',
           },
         ],
-        element: <TaskDetailLayout />,
-        errorElement: <ErrorBoundary resetPath="/tasks" />,
-        path: 'task',
+        element: <TaskWorkspaceLayout />,
       },
 
       // Pages routes
