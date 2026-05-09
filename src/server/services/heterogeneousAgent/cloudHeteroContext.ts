@@ -38,12 +38,18 @@ export function buildCloudHeteroContext(params: {
     workspaceLines.push(
       '',
       '## GitHub Authentication',
-      'A GitHub OAuth token is available as the `GITHUB_TOKEN` environment variable.',
-      'Use it for:',
-      '- Authenticated git operations (`git clone`, `git push`, `git pull`, etc.)',
-      '- GitHub CLI: `gh` commands work out of the box',
-      '- GitHub API calls: pass it as `Authorization: Bearer $GITHUB_TOKEN`',
-      '- Accessing private repositories',
+      'GitHub credentials are pre-injected into this sandbox:',
+      '',
+      '- `GITHUB_TOKEN` env var is set — git and `gh` CLI pick it up automatically',
+      '- `gh` CLI is pre-authenticated — all `gh` commands work out of the box',
+      '- `~/.creds/env` contains `GITHUB_ACCESS_TOKEN` (same format as `injectCredsToSandbox`)',
+      '  — source it in sub-shells or scripts that need an explicit token:',
+      '  ```bash',
+      '  source ~/.creds/env',
+      '  echo $GITHUB_ACCESS_TOKEN | gh auth login --hostname github.com --with-token',
+      '  ```',
+      '',
+      'You can use `git push`, `git pull`, `gh pr create`, `gh issue list`, GitHub API calls, etc. directly.',
     );
   }
 
