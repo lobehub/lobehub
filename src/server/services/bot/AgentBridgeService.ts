@@ -1067,7 +1067,7 @@ export class AgentBridgeService {
                   await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
                 }
 
-                if (!event.shouldContinue || !progressMessage || displayToolCalls === false) return;
+                if (!event.shouldContinue || !progressMessage || displayToolCalls !== true) return;
 
                 const msgBody = renderStepProgress(
                   {

@@ -478,7 +478,7 @@ export class BotMessageRouter {
     const { agentId, applicationId, platform, userId } = info;
     const bridge = new AgentBridgeService(serverDB, userId);
     const charLimit = (info.settings?.charLimit as number) || undefined;
-    const displayToolCalls = info.settings?.displayToolCalls !== false;
+    const displayToolCalls = info.settings?.displayToolCalls === true;
     const dmSettings: DmSettings = extractDmSettings(info.settings);
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
     const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
