@@ -334,7 +334,7 @@ describe('computeChatPricing', () => {
 
     it('charges Gemini 3.1 Flash-Lite image, video, and audio input tokens', () => {
       const pricing = googleChatModels.find(
-        (model: { id: string }) => model.id === 'gemini-3.1-flash-lite-preview',
+        (model: { id: string }) => model.id === 'gemini-3.1-flash-lite',
       )?.pricing;
       expect(pricing).toBeDefined();
 
