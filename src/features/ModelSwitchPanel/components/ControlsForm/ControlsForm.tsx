@@ -50,16 +50,13 @@ interface ControlsFormProps {
  * Users may still have only `thinking: 'disabled'`; treating that as unset would
  * show the model default and could persist the opposite value on unrelated edits.
  */
-const resolveEnableReasoningInitialValue = (
-  config: LobeAgentChatConfig,
-  defaultValue?: boolean,
-) => {
+const resolveEnableReasoningInitialValue = (config: LobeAgentChatConfig) => {
   if (Object.hasOwn(config, 'enableReasoning')) return config.enableReasoning;
 
   if (config.thinking === 'enabled') return true;
   if (config.thinking === 'disabled') return false;
 
-  return defaultValue;
+  return undefined;
 };
 
 const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: providerProp }) => {
@@ -80,20 +77,14 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   );
 
   const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
-  const modelExtendParamOptions = useAiInfraStore(
-    aiModelSelectors.modelExtendParamOptions(model, provider),
-  );
   const initialValues = useMemo(() => {
-    const enableReasoningInitialValue = resolveEnableReasoningInitialValue(
-      config,
-      modelExtendParamOptions?.enableReasoning?.defaultValue,
-    );
+    const enableReasoningInitialValue = resolveEnableReasoningInitialValue(config);
 
     return {
       ...config,
       enableReasoning: enableReasoningInitialValue,
     };
-  }, [config, modelExtendParamOptions?.enableReasoning?.defaultValue]);
+  }, [config]);
 
   useEffect(() => {
     form.setFieldsValue(initialValues);
@@ -101,7 +92,6 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
 
   const enableReasoningValue =
     AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
-  const includeReasoningBudget = modelExtendParamOptions?.enableReasoning?.includeBudget !== false;
 
   const screens = Grid.useBreakpoint();
   const isNarrow = !screens.sm;
@@ -163,8 +153,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       minWidth: undefined,
       name: 'enableAdaptiveThinking',
     },
-    ((enableReasoningValue && includeReasoningBudget) ||
-      modelExtendParams?.includes('reasoningBudgetToken')) && {
+    (enableReasoningValue || modelExtendParams?.includes('reasoningBudgetToken')) && {
       children: <ReasoningTokenSlider />,
       label: t('extendParams.reasoningBudgetToken.title'),
       layout: 'vertical',
