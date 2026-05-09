@@ -172,101 +172,113 @@ const PAUSE_DURATION_MS = 30_000;
 
 interface DailyTypewriterProps {
   onSentenceComplete: () => void;
+  /**
+   * Index of the sentence currently being typed. Controlled by the parent
+   * (via `useHomeDailyBrief.currentIndex`) so InputArea and WelcomeText
+   * always agree on which pair is "current", even across remounts.
+   */
+  sentenceIndex: number;
   sentences: ParsedSentence[];
 }
 
 /**
- * Local typewriter: type → pause (links rendered) → snap to next sentence.
- * Supports real `\n` line breaks via `white-space: pre-wrap`.
+ * Controlled typewriter: type → pause (links rendered) → call
+ * `onSentenceComplete` to ask the parent to advance, then re-type when
+ * `sentenceIndex` flips. Supports real `\n` line breaks via
+ * `white-space: pre-wrap`.
  */
-const DailyTypewriter = memo<DailyTypewriterProps>(({ sentences, onSentenceComplete }) => {
-  const [partial, setPartial] = useState('');
-  const [sentenceIndex, setSentenceIndex] = useState(0);
-  const [phase, setPhase] = useState<'typing' | 'pause'>('typing');
-  const [charIndex, setCharIndex] = useState(0);
+const DailyTypewriter = memo<DailyTypewriterProps>(
+  ({ sentences, sentenceIndex, onSentenceComplete }) => {
+    const [partial, setPartial] = useState('');
+    const [phase, setPhase] = useState<'typing' | 'pause'>('typing');
+    const [charIndex, setCharIndex] = useState(0);
 
-  const onSentenceCompleteRef = useRef(onSentenceComplete);
-  useEffect(() => {
-    onSentenceCompleteRef.current = onSentenceComplete;
-  }, [onSentenceComplete]);
+    const onSentenceCompleteRef = useRef(onSentenceComplete);
+    useEffect(() => {
+      onSentenceCompleteRef.current = onSentenceComplete;
+    }, [onSentenceComplete]);
 
-  useEffect(() => {
-    setPartial('');
-    setSentenceIndex(0);
-    setCharIndex(0);
-    setPhase('typing');
-  }, [sentences]);
+    // Reset typing state when the controlled `sentenceIndex` changes (i.e.
+    // remount, or after `advance()` flips the shared external index) and
+    // when the sentence list itself is replaced by a new SWR payload.
+    useEffect(() => {
+      setPartial('');
+      setCharIndex(0);
+      setPhase('typing');
+    }, [sentenceIndex, sentences]);
 
-  useEffect(() => {
-    if (sentences.length === 0) return;
-    const current = sentences[sentenceIndex % sentences.length].plain;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    useEffect(() => {
+      if (sentences.length === 0) return;
+      const current = sentences[sentenceIndex % sentences.length].plain;
+      let timer: ReturnType<typeof setTimeout> | undefined;
 
-    switch (phase) {
-      case 'typing': {
-        if (charIndex < current.length) {
-          timer = setTimeout(() => {
-            setPartial(current.slice(0, charIndex + 1));
-            setCharIndex((c) => c + 1);
-          }, TYPING_INTERVAL_MS);
-        } else {
-          setPhase('pause');
+      switch (phase) {
+        case 'typing': {
+          if (charIndex < current.length) {
+            timer = setTimeout(() => {
+              setPartial(current.slice(0, charIndex + 1));
+              setCharIndex((c) => c + 1);
+            }, TYPING_INTERVAL_MS);
+          } else {
+            setPhase('pause');
+          }
+          break;
         }
-        break;
+        case 'pause': {
+          timer = setTimeout(() => {
+            // Just nudge the parent — the new `sentenceIndex` prop will
+            // flow back in and the reset effect above will re-arm typing
+            // for the next sentence. Single source of truth.
+            onSentenceCompleteRef.current();
+          }, PAUSE_DURATION_MS);
+          break;
+        }
       }
-      case 'pause': {
-        timer = setTimeout(() => {
-          onSentenceCompleteRef.current();
-          setSentenceIndex((i) => (i + 1) % sentences.length);
-          setCharIndex(0);
-          setPartial('');
-          setPhase('typing');
-        }, PAUSE_DURATION_MS);
-        break;
-      }
-    }
 
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [phase, charIndex, sentenceIndex, sentences]);
+      return () => {
+        if (timer) clearTimeout(timer);
+      };
+    }, [phase, charIndex, sentenceIndex, sentences]);
 
-  const isPaused = phase === 'pause';
-  const showCursor = !isPaused;
-  const currentSentence = sentences[sentenceIndex % sentences.length];
+    const isPaused = phase === 'pause';
+    const showCursor = !isPaused;
+    const currentSentence = sentences[sentenceIndex % sentences.length];
 
-  return (
-    <Flexbox
-      style={{
-        fontSize: 16,
-        // Strict 2-line height so the layout never jumps between empty,
-        // single-line, and full sentences. The typewriter pre-fills the
-        // box so cycling between sentences also doesn't reflow.
-        height: '3.2em',
-        lineHeight: 1.6,
-        // Clip the rare 3-line generation rather than push the layout.
-        overflow: 'hidden',
-        paddingInlineStart: 5,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    >
-      <span>
-        {isPaused ? renderWithLinks(currentSentence.plain, currentSentence.links) : partial}
-        {showCursor && (
-          <span style={{ display: 'inline-block', marginInlineStart: 4, verticalAlign: 'middle' }}>
-            <LoadingDots color={cssVar.colorText} size={12} variant={'pulse'} />
-          </span>
-        )}
-      </span>
-    </Flexbox>
-  );
-});
+    return (
+      <Flexbox
+        style={{
+          fontSize: 16,
+          // Strict 2-line height so the layout never jumps between empty,
+          // single-line, and full sentences. The typewriter pre-fills the
+          // box so cycling between sentences also doesn't reflow.
+          height: '3.2em',
+          lineHeight: 1.6,
+          // Clip the rare 3-line generation rather than push the layout.
+          overflow: 'hidden',
+          paddingInlineStart: 5,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }}
+      >
+        <span>
+          {isPaused ? renderWithLinks(currentSentence.plain, currentSentence.links) : partial}
+          {showCursor && (
+            <span
+              style={{ display: 'inline-block', marginInlineStart: 4, verticalAlign: 'middle' }}
+            >
+              <LoadingDots color={cssVar.colorText} size={12} variant={'pulse'} />
+            </span>
+          )}
+        </span>
+      </Flexbox>
+    );
+  },
+);
 
 const WelcomeText = memo(() => {
   const { t } = useTranslation('welcome');
 
-  const { pairs, advance } = useHomeDailyBrief();
+  const { pairs, currentIndex, advance } = useHomeDailyBrief();
 
   const dailySentences = useMemo<ParsedSentence[]>(
     () => pairs.map((p) => parseSentence(p.welcome)),
@@ -294,12 +306,23 @@ const WelcomeText = memo(() => {
     return lines.map((s) => ({ links: [], plain: s }));
   }, [t]);
 
-  const sentences = dailySentences.length > 0 ? dailySentences : fallbackSentences;
-  const onAdvance = dailySentences.length > 0 ? advance : NOOP;
+  const useDaily = dailySentences.length > 0;
+  const sentences = useDaily ? dailySentences : fallbackSentences;
+  const onAdvance = useDaily ? advance : NOOP;
+  // Daily mode: the controlled index lives in `useHomeDailyBrief` so InputArea
+  // and WelcomeText stay in sync across remounts. Fallback mode: just start
+  // from 0 — there is no shared hint to keep paired with.
+  const sentenceIndex = useDaily ? currentIndex % Math.max(sentences.length, 1) : 0;
 
   if (sentences.length === 0) return null;
 
-  return <DailyTypewriter sentences={sentences} onSentenceComplete={onAdvance} />;
+  return (
+    <DailyTypewriter
+      sentenceIndex={sentenceIndex}
+      sentences={sentences}
+      onSentenceComplete={onAdvance}
+    />
+  );
 });
 
 const NOOP = () => undefined;

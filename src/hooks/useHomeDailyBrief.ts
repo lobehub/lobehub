@@ -15,6 +15,12 @@ interface HomeDailyBriefPair {
 interface UseHomeDailyBriefResult {
   /** Index advancer — call from the typewriter's `onSentenceComplete`. */
   advance: () => void;
+  /**
+   * Index of the current pair within `pairs`. `0` when there is no data.
+   * Exposed so consumers can drive a controlled typewriter — keeping the
+   * welcome text and input hint paired across remounts.
+   */
+  currentIndex: number;
   /** Currently displayed pair (welcome + hint). `undefined` when no data. */
   currentPair: HomeDailyBriefPair | undefined;
   /** All paired entries from the daily-cron generator. */
@@ -64,6 +70,7 @@ export const useHomeDailyBrief = (): UseHomeDailyBriefResult => {
 
   return {
     advance,
+    currentIndex: safeIndex,
     currentPair: pairs[safeIndex],
     pairs,
   };
