@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Ustawienia",
   "detailModal.title": "Szczegóły umiejętności",
   "dev.confirmDeleteDevPlugin": "Ta lokalna umiejętność zostanie trwale usunięta. Kontynuować?",
-  "dev.customParams.useProxy.label": "Zainstaluj przez proxy (włącz, jeśli występują błędy CORS, a następnie spróbuj ponownie)",
   "dev.deleteSuccess": "Umiejętność usunięta",
   "dev.manifest.identifier.desc": "Unikalny identyfikator umiejętności",
   "dev.manifest.identifier.label": "Identyfikator",

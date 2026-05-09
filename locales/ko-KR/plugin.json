@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "설정",
   "detailModal.title": "기능 상세 정보",
   "dev.confirmDeleteDevPlugin": "이 로컬 기능을 삭제하려고 합니다. 삭제 후 복구할 수 없습니다. 삭제하시겠습니까?",
-  "dev.customParams.useProxy.label": "프록시를 통해 설치 (CORS 오류 발생 시 이 옵션을 활성화한 후 다시 시도하세요)",
   "dev.deleteSuccess": "기능이 성공적으로 삭제되었습니다",
   "dev.manifest.identifier.desc": "기능의 고유 식별자",
   "dev.manifest.identifier.label": "식별자",

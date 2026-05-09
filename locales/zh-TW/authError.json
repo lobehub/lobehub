@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "請求過於頻繁，請稍後再試",
   "codes.SESSION_EXPIRED": "會話已過期，請重新登入",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "該社群帳號已被其他使用者綁定",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "不支援臨時電子郵件地址。請使用常規電子郵件地址。多次嘗試可能會封鎖此網路。",
   "codes.UNEXPECTED_ERROR": "發生未知錯誤，請重試",
   "codes.UNKNOWN": "發生未知錯誤，請重試或聯絡支援",
   "codes.USER_ALREADY_EXISTS": "使用者已存在",

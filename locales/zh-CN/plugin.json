@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "设置",
   "detailModal.title": "技能详情",
   "dev.confirmDeleteDevPlugin": "即将删除该本地技能，删除后将无法找回，是否删除该技能？",
-  "dev.customParams.useProxy.label": "通过代理安装（如遇到跨域访问错误，可尝试开启该选项后重新安装）",
   "dev.deleteSuccess": "技能删除成功",
   "dev.manifest.identifier.desc": "技能的唯一标识",
   "dev.manifest.identifier.label": "标识符",

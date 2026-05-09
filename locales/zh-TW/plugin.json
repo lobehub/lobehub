@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "設置",
   "detailModal.title": "插件詳情",
   "dev.confirmDeleteDevPlugin": "即將刪除該本地插件，刪除後將無法找回，是否刪除該插件？",
-  "dev.customParams.useProxy.label": "通過代理安裝（如遇到跨域訪問錯誤，可嘗試開啟該選項後重新安裝）",
   "dev.deleteSuccess": "插件刪除成功",
   "dev.manifest.identifier.desc": "插件的唯一標識",
   "dev.manifest.identifier.label": "標識符",

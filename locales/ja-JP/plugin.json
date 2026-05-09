@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "設定",
   "detailModal.title": "スキル詳細",
   "dev.confirmDeleteDevPlugin": "このローカルスキルを削除すると復元できません。本当に削除しますか？",
-  "dev.customParams.useProxy.label": "プロキシ経由でインストール（クロスオリジンエラーが発生した場合はこのオプションを有効にして再インストールをお試しください）",
   "dev.deleteSuccess": "スキルが正常に削除されました",
   "dev.manifest.identifier.desc": "スキルの一意識別子",
   "dev.manifest.identifier.label": "識別子",
