@@ -207,6 +207,37 @@ describe('AgentDocumentsGroup', () => {
     expect(openDocument).not.toHaveBeenCalledWith('skill-bundle-doc');
   });
 
+  it('navigates to the page route when opening from a topic page', () => {
+    useMatchMock.mockReturnValue({
+      params: { aid: 'agent-1', topicId: 'topic-1' },
+    });
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'File doc',
+          documentId: 'doc-content-1',
+          filename: 'brief.md',
+          id: 'doc-1',
+          sourceType: 'file',
+          templateId: 'claw',
+          title: 'Brief',
+          updatedAt: null,
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    fireEvent.click(screen.getByText('Brief'));
+
+    expect(useNavigateMock).toHaveBeenCalledWith('/agent/agent-1/topic-1/page/doc-content-1');
+    expect(openDocument).not.toHaveBeenCalled();
+  });
+
   it('allows opening and deleting an orphan managed skill bundle as a recovery path', async () => {
     const mutate = vi.fn().mockResolvedValue(undefined);
     useClientDataSWR.mockReturnValue({
@@ -251,6 +282,78 @@ describe('AgentDocumentsGroup', () => {
       topicId: undefined,
     });
     expect(mutate).toHaveBeenCalled();
+  });
+
+  it('shows an error message when deleting a document fails', async () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'File doc',
+          documentId: 'doc-content-1',
+          filename: 'brief.md',
+          id: 'doc-1',
+          sourceType: 'file',
+          templateId: 'claw',
+          title: 'Brief',
+          updatedAt: new Date(),
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+    removeDocumentMock.mockRejectedValue(new Error('delete failed'));
+
+    render(<AgentDocumentsGroup />);
+
+    fireEvent.click(screen.getByLabelText('delete'));
+
+    const [firstConfirmCall] = modalConfirm.mock.calls;
+    const [{ onOk }] = firstConfirmCall;
+    await onOk();
+
+    expect(messageError).toHaveBeenCalledWith('delete failed');
+  });
+
+  it('renders grouped cards in tree view mode', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'File doc',
+          documentId: 'doc-content-1',
+          filename: 'brief.md',
+          id: 'doc-1',
+          sourceType: 'file',
+          templateId: 'claw',
+          title: 'Brief',
+          updatedAt: new Date(),
+        },
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'Crawled page',
+          documentId: 'doc-content-2',
+          filename: 'example.com',
+          id: 'doc-2',
+          sourceType: 'web',
+          templateId: null,
+          title: 'Example',
+          updatedAt: null,
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup viewMode="tree" />);
+
+    expect(screen.getByText('Documents')).toBeInTheDocument();
+    expect(screen.getByText('Web')).toBeInTheDocument();
+    expect(screen.getByText('Brief')).toBeInTheDocument();
+    expect(screen.getByText('Example')).toBeInTheDocument();
+    expect(screen.queryByTestId('document-explorer-tree')).not.toBeInTheDocument();
   });
 
   it('filters documents by source type via segmented tabs', () => {
