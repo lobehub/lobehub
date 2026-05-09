@@ -51,8 +51,8 @@ exports[`settingsSelectors > currentSettings > should merge DEFAULT_SETTINGS and
 exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AGENT_CONFIG and s.settings.systemAgent correctly 1`] = `
 {
   "agentMeta": {
-    "model": "claude-sonnet-4-6",
-    "provider": "anthropic",
+    "model": "deepseek-v4-pro",
+    "provider": "deepseek",
   },
   "enableAutoReply": true,
   "generationTopic": {
@@ -60,8 +60,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "openai",
   },
   "historyCompress": {
-    "model": "claude-sonnet-4-6",
-    "provider": "anthropic",
+    "model": "deepseek-v4-pro",
+    "provider": "deepseek",
   },
   "inputCompletion": {
     "enabled": false,
@@ -75,8 +75,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
   },
   "replyMessage": "Custom auto reply",
   "thread": {
-    "model": "claude-sonnet-4-6",
-    "provider": "anthropic",
+    "model": "deepseek-v4-pro",
+    "provider": "deepseek",
   },
   "topic": {
     "model": "gpt-5.4-mini",
@@ -113,8 +113,8 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "historyCount": 20,
       "reasoningBudgetToken": 1024,
       "searchFCModel": {
-        "model": "claude-sonnet-4-6",
-        "provider": "anthropic",
+        "model": "deepseek-v4-pro",
+        "provider": "deepseek",
       },
       "searchMode": "auto",
     },
@@ -127,7 +127,7 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "top_p": 1,
     },
     "plugins": [],
-    "provider": "anthropic",
+    "provider": "deepseek",
     "systemRole": "user",
     "tts": {
       "showAllLocaleVoice": false,
@@ -157,8 +157,8 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "historyCount": 20,
     "reasoningBudgetToken": 1024,
     "searchFCModel": {
-      "model": "claude-sonnet-4-6",
-      "provider": "anthropic",
+      "model": "deepseek-v4-pro",
+      "provider": "deepseek",
     },
     "searchMode": "auto",
   },
@@ -171,7 +171,7 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "top_p": 1,
   },
   "plugins": [],
-  "provider": "anthropic",
+  "provider": "deepseek",
   "systemRole": "custom role",
   "tts": {
     "showAllLocaleVoice": false,
