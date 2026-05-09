@@ -287,6 +287,43 @@ name: youtube-comment-retrieval-workflow
         JSON.stringify(EMPTY_EDITOR_STATE),
       );
     });
+
+    it('should fail safely when SKILL.md body cannot be loaded into the editor', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const mockEditor = {
+        getDocument: vi.fn(),
+        setDocument: vi.fn(() => {
+          throw new Error('editor unavailable');
+        }),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Skill metadata
+name: skill-name
+---
+
+# Body`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'notebook',
+        });
+      });
+
+      await act(async () => {
+        await result.current.onEditorInit(mockEditor);
+      });
+
+      expect(consoleError).toHaveBeenCalledWith(
+        '[DocumentStore] Failed to load SKILL.md content:',
+        expect.any(Error),
+      );
+
+      consoleError.mockRestore();
+    });
   });
 
   describe('closeDocument', () => {
@@ -494,6 +531,112 @@ name: new-skill
         skillFrontmatter: `description: New metadata
 name: new-skill`,
       });
+    });
+
+    it('should update an inactive SKILL.md document from stored content', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createMockEditor() as any;
+      const editorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Active',
+          documentId: 'doc-active',
+          editor: mockEditor,
+          sourceType: 'notebook',
+        });
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Old metadata
+name: old-skill
+---
+
+# Stored Body`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-inactive',
+          editor: mockEditor,
+          editorData,
+          sourceType: 'notebook',
+        });
+        result.current.initDocumentWithEditor({
+          content: '# Active',
+          documentId: 'doc-active',
+          editor: mockEditor,
+          sourceType: 'notebook',
+        });
+      });
+
+      act(() => {
+        result.current.updateSkillFrontmatter(
+          'doc-inactive',
+          `description: New metadata
+name: new-skill`,
+        );
+      });
+
+      expect(result.current.documents['doc-inactive']).toMatchObject({
+        content: `---
+description: New metadata
+name: new-skill
+---
+
+# Stored Body`,
+        editorData,
+        isDirty: true,
+      });
+    });
+
+    it('should reject frontmatter updates for missing or non-SKILL documents', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Markdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'notebook',
+        });
+      });
+
+      expect(result.current.updateSkillFrontmatter('missing', 'name: skill')).toBe(false);
+      expect(result.current.updateSkillFrontmatter('doc-1', 'name: skill')).toBe(false);
+    });
+
+    it('should fail safely when active SKILL.md frontmatter update cannot read editor content', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const mockEditor = {
+        getDocument: vi.fn(() => {
+          throw new Error('editor unavailable');
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Skill metadata
+name: skill-name
+---
+
+# Body`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'notebook',
+        });
+      });
+
+      expect(result.current.updateSkillFrontmatter('doc-1', 'name: skill-name')).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith(
+        '[DocumentStore] Failed to update SKILL.md frontmatter:',
+        expect.any(Error),
+      );
+
+      consoleError.mockRestore();
     });
   });
 

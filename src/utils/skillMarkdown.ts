@@ -2,6 +2,7 @@ import { parse } from 'yaml';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const SKILL_INDEX_FILE_TYPE = 'skills/index';
+const SKILL_MARKDOWN_LEADING_WHITESPACE_REGEX = /^\uFEFF?[ \t]*(?:\r?\n[ \t]*)*/;
 const SKILL_MARKDOWN_FRONTMATTER_REGEX =
   /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/;
 const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -68,7 +69,8 @@ export const isSkillMarkdownDocument = (document: SkillMarkdownDocumentFields): 
 export const parseSkillMarkdownFrontmatter = (content?: string | null): SkillMarkdownParts => {
   if (!content) return { body: '' };
 
-  const match = content.match(SKILL_MARKDOWN_FRONTMATTER_REGEX);
+  const normalizedContent = content.replace(SKILL_MARKDOWN_LEADING_WHITESPACE_REGEX, '');
+  const match = normalizedContent.match(SKILL_MARKDOWN_FRONTMATTER_REGEX);
   if (!match) return { body: content };
 
   return {
