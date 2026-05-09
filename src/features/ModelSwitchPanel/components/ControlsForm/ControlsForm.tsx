@@ -14,7 +14,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
-import DeepseekV4ReasoningEffortSlider from './DeepseekV4ReasoningEffortSlider';
+import DeepSeekReasoningEffortSlider from './DeepSeekReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
@@ -99,7 +99,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
     form.setFieldsValue(initialValues);
   }, [form, initialValues]);
 
-  const enableReasoning =
+  const enableReasoningValue =
     AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
   const includeReasoningBudget = modelExtendParamOptions?.enableReasoning?.includeBudget !== false;
 
@@ -163,7 +163,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       minWidth: undefined,
       name: 'enableAdaptiveThinking',
     },
-    ((enableReasoning && includeReasoningBudget) ||
+    ((enableReasoningValue && includeReasoningBudget) ||
       modelExtendParams?.includes('reasoningBudgetToken')) && {
       children: <ReasoningTokenSlider />,
       label: t('extendParams.reasoningBudgetToken.title'),
@@ -190,6 +190,16 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'vertical',
       minWidth: undefined,
       name: 'reasoningBudgetToken80k',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <DeepSeekReasoningEffortSlider />,
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'deepseekV4ReasoningEffort',
       style: {
         paddingBottom: 0,
       },
@@ -297,28 +307,6 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'horizontal',
       minWidth: undefined,
       name: 'hy3ReasoningEffort',
-      style: {
-        paddingBottom: 0,
-      },
-    },
-    {
-      children: <DeepseekV4ReasoningEffortSlider />,
-      desc: 'reasoning_effort',
-      label: t('extendParams.reasoningEffort.title'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'deepseekV4ReasoningEffort',
-      style: {
-        paddingBottom: 0,
-      },
-    },
-    {
-      children: <DeepseekV4ReasoningEffortSlider />,
-      desc: 'reasoning_effort',
-      label: t('extendParams.reasoningEffort.title'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'deepseekV4ReasoningEffort',
       style: {
         paddingBottom: 0,
       },

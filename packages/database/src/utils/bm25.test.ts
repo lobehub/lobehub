@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from './bm25';
+import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from './bm25';
 
 describe('sanitizeBm25Query', () => {
   it('should join multiple words with AND', () => {
@@ -29,6 +29,7 @@ describe('sanitizeBm25Query', () => {
     expect(sanitizeBm25Query('back\\slash')).toBe('back\\\\slash');
     expect(sanitizeBm25Query('a/b')).toBe('a\\/b');
     expect(sanitizeBm25Query('`inside`')).toBe('\\`inside\\`');
+    expect(sanitizeBm25Query("customers'")).toBe("customers\\'");
   });
 
   it('should escape multiple special characters and join with AND', () => {
@@ -112,5 +113,20 @@ describe('sanitizeBm25Query', () => {
     expect(terms).not.toContain('AND');
     expect(terms).not.toContain('OR');
     expect(terms).not.toContain('NOT');
+  });
+});
+
+describe('normalizeBm25MatchQuery', () => {
+  it('should prepare parser-hostile text for paradedb.match without query-language operators', () => {
+    const payload = `
+      TOOL: <searchResults>
+      <item title="NCB Online Log in">Customers' financial needs</item>
+      ASSISTANT: I'm checking curl -H "X-API-Key: $KEY" https://example.test/a/b
+      AND OR NOT
+    `;
+
+    expect(normalizeBm25MatchQuery(payload, SAFE_BM25_QUERY_OPTIONS)).toBe(
+      'TOOL: <searchResults> <item title="NCB Online Log in">Customers\' financial needs</item> ASSISTANT: I\'m checking curl H "X API Key: $KEY" https://example.test/a/b',
+    );
   });
 });
