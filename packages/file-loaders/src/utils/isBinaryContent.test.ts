@@ -47,6 +47,21 @@ describe('sniffBinaryBuffer', () => {
     expect(sniffBinaryBuffer(buf).isBinary).toBe(false);
   });
 
+  it('treats UTF-16LE without BOM as text (Windows-style exports)', () => {
+    const buf = Buffer.from('hello world\nthis is a longer ASCII sample\n', 'utf16le');
+    expect(sniffBinaryBuffer(buf).isBinary).toBe(false);
+  });
+
+  it('treats UTF-16BE without BOM as text', () => {
+    const ascii = 'hello world\nthis is a longer ASCII sample\n';
+    const bytes = Buffer.alloc(ascii.length * 2);
+    for (let i = 0; i < ascii.length; i++) {
+      bytes[i * 2] = 0x00;
+      bytes[i * 2 + 1] = ascii.charCodeAt(i);
+    }
+    expect(sniffBinaryBuffer(bytes).isBinary).toBe(false);
+  });
+
   it('flags buffers with high non-printable ratio', () => {
     const bytes: number[] = [];
     for (let i = 0; i < 100; i++) bytes.push(i % 0x20 === 0 ? 0x41 : 0x01);
@@ -76,7 +91,11 @@ describe('sniffBinaryFile', () => {
 
   it('flags a file whose first bytes contain null', async () => {
     const filePath = path.join(tmpDir, 'binary.bin');
-    await writeFile(filePath, Buffer.from([0x48, 0x00, 0x65, 0x6c, 0x6c, 0x6f]));
+    // PNG magic + IHDR length: contains nulls but doesn't pattern-match UTF-16.
+    await writeFile(
+      filePath,
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]),
+    );
     const result = await sniffBinaryFile(filePath);
     expect(result.isBinary).toBe(true);
   });
