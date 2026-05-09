@@ -17,22 +17,25 @@ export const formatCommandResult = ({
 }: FormatCommandResultParams): string => {
   const parts: string[] = [];
 
-  if (success) {
-    if (shellId) {
-      parts.push(`Command started in background with shell_id: ${shellId}`);
-    } else {
-      parts.push('Command completed successfully.');
-    }
+  // `success` is the envelope ("service responded"); `exitCode` is the command
+  // itself. Treat a non-zero exit as failure regardless of envelope success,
+  // so we never render "Command completed successfully." over a 137/130/etc.
+  const hasNonZeroExit = exitCode !== undefined && exitCode !== 0;
+  const failed = !success || hasNonZeroExit;
+
+  if (failed) {
+    let header = 'Command failed';
+    if (hasNonZeroExit) header += ` with exit code ${exitCode}`;
+    if (error) header += `: ${error}`;
+    parts.push(header);
+  } else if (shellId) {
+    parts.push(`Command started in background with shell_id: ${shellId}`);
   } else {
-    parts.push(`Command failed: ${error}`);
+    parts.push('Command completed successfully.');
   }
 
   if (stdout) parts.push(`Output:\n${stdout}`);
   if (stderr) parts.push(`Stderr:\n${stderr}`);
-  // Suppress the redundant `Exit code: 0` tail — "Command completed successfully."
-  // already conveys the same signal. Non-zero codes stay because they carry
-  // diagnostic info the LLM may need (e.g. 137=OOM, 130=SIGINT).
-  if (exitCode !== undefined && exitCode !== 0) parts.push(`Exit code: ${exitCode}`);
 
   return parts.join('\n\n');
 };

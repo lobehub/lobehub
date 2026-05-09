@@ -52,19 +52,17 @@ describe('formatCommandResult', () => {
     expect(result).toMatchInlineSnapshot(`"Command completed successfully."`);
   });
 
-  it('should include the Exit code line for non-zero exit codes', () => {
+  it('should treat a non-zero exit code as failure even when envelope success is true', () => {
     const result = formatCommandResult({
       exitCode: 137,
       stdout: 'partial output',
       success: true,
     });
     expect(result).toMatchInlineSnapshot(`
-      "Command completed successfully.
+      "Command failed with exit code 137
 
       Output:
-      partial output
-
-      Exit code: 137"
+      partial output"
     `);
   });
 
@@ -85,15 +83,13 @@ describe('formatCommandResult', () => {
       success: false,
     });
     expect(result).toMatchInlineSnapshot(`
-      "Command failed: Command error
+      "Command failed with exit code 1: Command error
 
       Output:
       Some output
 
       Stderr:
-      Error occurred
-
-      Exit code: 1"
+      Error occurred"
     `);
   });
 });
