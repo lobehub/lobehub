@@ -51,6 +51,26 @@ const mockCreateBot = vi.hoisted(() =>
   })),
 );
 
+// Mocks for messenger-originated callbacks (synthetic applicationIds like
+// 'messenger-telegram'). Resolves credentials via the messenger installation
+// store + binder, bypassing `agent_bot_providers` entirely.
+const mockMessengerStoreResolveByKey = vi.hoisted(() => vi.fn());
+const mockMessengerGetInstallationStore = vi.hoisted(() =>
+  vi.fn().mockImplementation(() => ({ resolveByKey: mockMessengerStoreResolveByKey })),
+);
+const mockMessengerBinderCreateClient = vi.hoisted(() =>
+  vi.fn().mockImplementation(async () => ({
+    applicationId: 'mock-messenger-app',
+    createAdapter: () => ({}),
+    extractChatId: (id: string) => id,
+    getMessenger: mockGetMessenger,
+    parseMessageId: (id: string) => id,
+  })),
+);
+const mockMessengerCreateBinder = vi.hoisted(() =>
+  vi.fn().mockImplementation(() => ({ createClient: mockMessengerBinderCreateClient })),
+);
+
 // ==================== vi.mock ====================
 
 vi.mock('@/database/models/agentBotProvider', () => ({
@@ -95,6 +115,16 @@ vi.mock('@/server/services/systemAgent', () => ({
   SystemAgentService: vi.fn().mockImplementation(() => ({
     generateTopicTitle: mockGenerateTopicTitle,
   })),
+}));
+
+vi.mock('@/server/services/messenger/installations', () => ({
+  getInstallationStore: mockMessengerGetInstallationStore,
+}));
+
+vi.mock('@/server/services/messenger/platforms', () => ({
+  messengerPlatformRegistry: {
+    createBinder: mockMessengerCreateBinder,
+  },
 }));
 
 vi.mock('../platforms', async (importOriginal) => {
@@ -170,6 +200,29 @@ describe('BotCallbackService', () => {
       triggerTyping: mockTriggerTyping,
       updateThreadName: mockUpdateThreadName,
     }));
+
+    // Default messenger install store + binder responses for messenger-* runs.
+    mockMessengerStoreResolveByKey.mockResolvedValue({
+      applicationId: 'telegram:singleton',
+      botToken: 'fake-token',
+      installationKey: 'telegram:singleton',
+      metadata: {},
+      platform: 'telegram',
+      tenantId: '',
+    });
+    mockMessengerGetInstallationStore.mockImplementation(() => ({
+      resolveByKey: mockMessengerStoreResolveByKey,
+    }));
+    mockMessengerBinderCreateClient.mockImplementation(async () => ({
+      applicationId: 'mock-messenger-app',
+      createAdapter: () => ({}),
+      extractChatId: (id: string) => id,
+      getMessenger: mockGetMessenger,
+      parseMessageId: (id: string) => id,
+    }));
+    mockMessengerCreateBinder.mockImplementation(() => ({
+      createClient: mockMessengerBinderCreateClient,
+    }));
   });
 
   // ==================== Platform detection ====================
@@ -197,6 +250,93 @@ describe('BotCallbackService', () => {
       await service.handleCallback(body);
 
       expect(mockFindByPlatformAndAppId).toHaveBeenCalledWith(FAKE_DB, 'telegram', 'app-123');
+    });
+  });
+
+  // ==================== Messenger-originated runs ====================
+
+  describe('messenger-originated callbacks', () => {
+    it('should resolve telegram credentials via messenger install store, not agent_bot_providers, when messengerInstallationKey is set', async () => {
+      const body = makeTelegramBody({
+        // The applicationId is intentionally just a runtime bookkeeping
+        // handle — we never inspect its shape. The deterministic switch is
+        // `messengerInstallationKey`, set by `MessengerRouter`.
+        applicationId: 'messenger-telegram',
+        messengerInstallationKey: 'telegram:singleton',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      // Crucially: never hits agent_bot_providers — that lookup throws for
+      // messenger-originated runs and was the cause of LOBE-8654.
+      expect(mockFindByPlatformAndAppId).not.toHaveBeenCalled();
+      expect(mockMessengerGetInstallationStore).toHaveBeenCalledWith('telegram');
+      expect(mockMessengerStoreResolveByKey).toHaveBeenCalledWith('telegram:singleton');
+      expect(mockMessengerBinderCreateClient).toHaveBeenCalled();
+      expect(mockEditMessage).toHaveBeenCalled();
+    });
+
+    it('should pass through the messenger install key verbatim for slack workspaces', async () => {
+      mockMessengerStoreResolveByKey.mockResolvedValue({
+        applicationId: 'A0123',
+        botToken: 'xoxb-fake',
+        installationKey: 'slack:T0123',
+        metadata: {},
+        platform: 'slack',
+        tenantId: 'T0123',
+      });
+
+      const body = makeBody({
+        applicationId: 'messenger-slack-T0123',
+        messengerInstallationKey: 'slack:T0123',
+        platformThreadId: 'slack:C0123:thread-1',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockMessengerGetInstallationStore).toHaveBeenCalledWith('slack');
+      expect(mockMessengerStoreResolveByKey).toHaveBeenCalledWith('slack:T0123');
+    });
+
+    it('should throw a clear error when messenger install is not found', async () => {
+      mockMessengerStoreResolveByKey.mockResolvedValue(null);
+
+      const body = makeTelegramBody({
+        applicationId: 'messenger-telegram',
+        messengerInstallationKey: 'telegram:singleton',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow(
+        'Messenger install not found for telegram (key=telegram:singleton)',
+      );
+    });
+
+    it('should fall back to agent_bot_providers when messengerInstallationKey is absent, even if applicationId looks messenger-like', async () => {
+      // Defensive guard: a row in agent_bot_providers happens to be named
+      // 'messenger-anything' — we should still treat it as a per-user bot
+      // because the discriminator is the explicit field, not the name shape.
+      const body = makeBody({
+        applicationId: 'messenger-looking-but-real-bot',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockFindByPlatformAndAppId).toHaveBeenCalledWith(
+        FAKE_DB,
+        'discord',
+        'messenger-looking-but-real-bot',
+      );
+      expect(mockMessengerStoreResolveByKey).not.toHaveBeenCalled();
     });
   });
 

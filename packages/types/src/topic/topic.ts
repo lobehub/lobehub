@@ -31,6 +31,15 @@ export interface TopicUserMemoryExtractRunState {
 
 export interface ChatTopicBotContext {
   applicationId: string;
+  /**
+   * Set when the run originated from the shared Messenger bot (Telegram global
+   * token, Slack per-workspace install, Discord global token). The value is
+   * the messenger installation key (`<platform>:<tenantId>` or
+   * `<platform>:singleton`) — `BotCallbackService` uses its presence as the
+   * deterministic switch to resolve credentials via the messenger install
+   * store instead of `agent_bot_providers`.
+   */
+  messengerInstallationKey?: string;
   platform: string;
   platformThreadId: string;
 }
