@@ -1,0 +1,44 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # ogni 30 minuti
+  workflow_dispatch:               # bottone manuale disponibile
+
+jobs:
+  sync:
+    name: Sync lobehub/lobehub → emaxlele/lobehub
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "emaxlele"
+          git config user.email "emaxlele.lavoro@gmail.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/lobehub/lobehub.git
+
+      - name: Fetch upstream
+        run: git fetch upstream --tags
+
+      - name: Sync canary branch
+        run: |
+          git checkout canary
+          git merge --no-edit upstream/canary
+
+      - name: Push to fork
+        run: git push origin canary --follow-tags
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Sync failed — likely a merge conflict. Resolve manually and re-run."
