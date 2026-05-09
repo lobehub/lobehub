@@ -232,8 +232,11 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         const prompt = t(`${template.id}.prompt`, { defaultValue: '' });
         await createTask({
           assigneeAgentId: inboxAgentId,
+          automationMode: 'schedule',
           instruction: prompt,
           name: title,
+          schedulePattern: template.cronPattern,
+          scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
           duration_ms: Date.now() - startedAt,
@@ -257,7 +260,17 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       } finally {
         setLoading(false);
       }
-    }, [createTask, inboxAgentId, message, onCreated, t, template.id, title, trackCardEvent]);
+    }, [
+      createTask,
+      inboxAgentId,
+      message,
+      onCreated,
+      t,
+      template.cronPattern,
+      template.id,
+      title,
+      trackCardEvent,
+    ]);
 
     const handleDismiss = useCallback(() => {
       if (loading || created) return;
