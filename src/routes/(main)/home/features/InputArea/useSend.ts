@@ -42,8 +42,13 @@ export const useSend = () => {
   const { agentId: activeAgentId } = useResolvedHomeAgentId();
 
   const send = useCallback<SendButtonHandler>(
-    async ({ getEditorData }) => {
+    async ({ getEditorData, getMarkdownContent }) => {
       const { inputMessage, mainInputEditor } = useChatStore.getState();
+      // Prefer the live editor content over the cached `inputMessage`.
+      // `onMarkdownContentChange` is wired through the editor's async
+      // `onChange`, so a fast type-then-Enter sequence can fire before the
+      // cache catches up and the empty-message guard would bail incorrectly.
+      const message = (getMarkdownContent?.() ?? inputMessage ?? '').trim();
       const editorData = getEditorData?.() ?? mainInputEditor?.getJSONState();
       const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
       const contextList = fileChatSelectors.chatContextSelections(useFileStore.getState());
@@ -51,27 +56,27 @@ export const useSend = () => {
         useHomeStore.getState();
 
       // Require input content (except for default inbox which can have files/context)
-      if (!inputMessage && fileList.length === 0 && contextList.length === 0) return;
+      if (!message && fileList.length === 0 && contextList.length === 0) return;
 
       try {
         switch (inputActiveMode) {
           case 'agent': {
-            await sendAsAgent({ editorData, message: inputMessage });
+            await sendAsAgent({ editorData, message });
             break;
           }
 
           case 'group': {
-            await sendAsGroup({ editorData, message: inputMessage });
+            await sendAsGroup({ editorData, message });
             break;
           }
 
           case 'write': {
-            await sendAsWrite({ editorData, message: inputMessage });
+            await sendAsWrite({ editorData, message });
             break;
           }
 
           case 'research': {
-            await sendAsResearch(inputMessage);
+            await sendAsResearch(message);
             break;
           }
 
@@ -89,7 +94,7 @@ export const useSend = () => {
               contexts: contextList,
               editorData,
               files: fileList,
-              message: inputMessage,
+              message,
               onTopicCreated: (topicId) => {
                 router.replace(SESSION_CHAT_TOPIC_URL(activeAgentId, topicId, false));
               },
