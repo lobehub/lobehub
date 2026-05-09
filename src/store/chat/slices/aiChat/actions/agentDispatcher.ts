@@ -46,6 +46,9 @@ export const selectRuntimeType = (
 ): AgentRuntimeType => {
   if (ctx.parentRuntime) return ctx.parentRuntime;
   if (isDesktop && ctx.heterogeneousProvider) return 'hetero';
+  // On web, heterogeneous agents always run via Gateway sandbox regardless of the
+  // isGatewayMode user preference — the sandbox is the only execution environment.
+  if (!isDesktop && ctx.heterogeneousProvider) return 'gateway';
   if (ctx.isGatewayMode) return 'gateway';
   return 'client';
 };
