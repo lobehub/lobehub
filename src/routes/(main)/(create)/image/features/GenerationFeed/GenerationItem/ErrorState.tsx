@@ -7,12 +7,24 @@ import { ImageOffIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import defaultErrorLocale from '@/locales/default/error';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
 
 import { ActionButtons } from './ActionButtons';
 import { styles } from './styles';
 import { type ErrorStateProps } from './types';
 import { getThumbnailMaxWidth } from './utils';
+
+const providerContentModerationErrorKeys = [
+  'response.ProviderContentModeration',
+  'response.ProviderContentModerationWarning',
+  'response.ProviderImageContentModerationWarning',
+] as const;
+
+const providerContentModerationKeyByDefaultMessage = new Map<
+  string,
+  (typeof providerContentModerationErrorKeys)[number]
+>(providerContentModerationErrorKeys.map((key) => [defaultErrorLocale[key], key]));
 
 // Error state component
 export const ErrorState = memo<ErrorStateProps>(
@@ -44,6 +56,12 @@ export const ErrorState = memo<ErrorStateProps>(
       if (errorBody) {
         if (errorBody.startsWith('response.')) {
           return translateErrorKey(errorBody) || errorBody;
+        }
+
+        const defaultMessageTranslationKey =
+          providerContentModerationKeyByDefaultMessage.get(errorBody);
+        if (defaultMessageTranslationKey) {
+          return translateErrorKey(defaultMessageTranslationKey) || errorBody;
         }
 
         // Check if the error body is an AgentRuntimeErrorType that needs translation

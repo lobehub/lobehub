@@ -33,6 +33,10 @@ vi.mock('react-i18next', () => ({
         return 'Translated image moderation warning';
       }
 
+      if (namespace === 'error' && key === 'response.ProviderContentModeration') {
+        return 'Translated generic moderation';
+      }
+
       return key;
     },
   }),
@@ -75,5 +79,36 @@ describe('ErrorState', () => {
 
     expect(screen.getByText('Translated image moderation warning')).toBeTruthy();
     expect(screen.queryByText('response.ProviderImageContentModerationWarning')).toBeNull();
+  });
+
+  it('localizes the generic provider moderation fallback message', () => {
+    const generation: Generation = {
+      asyncTaskId: 'task-id',
+      createdAt: new Date(),
+      id: 'generation-id',
+      task: {
+        error: {
+          body: { detail: 'Content policy check failed. Revise your prompt and try again.' },
+          name: AsyncTaskErrorType.ProviderContentModeration,
+        },
+        id: 'task-id',
+        status: AsyncTaskStatus.Error,
+      },
+    };
+
+    render(
+      <ErrorState
+        aspectRatio="1 / 1"
+        generation={generation}
+        generationBatch={generationBatch}
+        onCopyError={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Translated generic moderation')).toBeTruthy();
+    expect(
+      screen.queryByText('Content policy check failed. Revise your prompt and try again.'),
+    ).toBeNull();
   });
 });
