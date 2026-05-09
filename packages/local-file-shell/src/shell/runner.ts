@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellProcess, ShellProcessManager } from './process-manager';
@@ -43,6 +44,10 @@ export async function runCommand(
         cwd,
         env: childEnv,
         shell: false,
+        // On Windows, cmd.exe /c requires verbatim args to preserve quoted paths.
+        // Without this flag, Node.js re-escapes double quotes and breaks paths
+        // like "C:\Program Files\Git\cmd\git.exe" → command not found.
+        ...(os.platform() === 'win32' && { windowsVerbatimArguments: true }),
       });
 
       const shellProcess: ShellProcess = {
@@ -75,6 +80,10 @@ export async function runCommand(
           cwd,
           env: childEnv,
           shell: false,
+          // On Windows, cmd.exe /c requires verbatim args to preserve quoted paths.
+          // Without this flag, Node.js re-escapes double quotes and breaks paths
+          // like "C:\Program Files\Git\cmd\git.exe" → command not found.
+          ...(os.platform() === 'win32' && { windowsVerbatimArguments: true }),
         });
 
         let stdout = '';
