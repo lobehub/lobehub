@@ -119,6 +119,39 @@ class CopilotTokenManager {
 // Singleton token manager
 const tokenManager = new CopilotTokenManager();
 
+/**
+ * Strip JSON Schema composition keywords (anyOf/oneOf/allOf) that the GitHub
+ * Copilot Anthropic proxy rejects at the top level of tool parameter schemas.
+ * Mirrors the handleSchema sanitizer pattern used by Groq and xAI providers.
+ * Related: PR #14550 (same fix for Bedrock), issue #14544.
+ */
+const stripCompositionKeywords = (schema: unknown): unknown => {
+  if (typeof schema !== 'object' || schema === null) return schema;
+  if (Array.isArray(schema)) return schema.map(stripCompositionKeywords);
+
+  const DISALLOWED = new Set(['anyOf', 'oneOf', 'allOf']);
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+    if (DISALLOWED.has(key)) continue;
+    result[key] = stripCompositionKeywords(value);
+  }
+
+  return result;
+};
+
+const sanitizeCopilotTools = (tools?: any[]): any[] | undefined =>
+  tools?.map((tool) => {
+    if (!tool?.function?.parameters) return tool;
+    return {
+      ...tool,
+      function: {
+        ...tool.function,
+        parameters: stripCompositionKeywords(tool.function.parameters) as any,
+      },
+    };
+  });
+
 export interface LobeGithubCopilotAIParams {
   apiKey?: string;
   /**
@@ -191,6 +224,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         const anthropicPayload = await buildDefaultAnthropicPayload({
           ...(rest as ChatStreamPayload),
           model,
+          tools: sanitizeCopilotTools((rest as ChatStreamPayload).tools as any) as any,
         });
 
         const finalPayload = { ...anthropicPayload, stream: shouldStream };
