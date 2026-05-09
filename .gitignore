@@ -3,6 +3,9 @@
 
 # emaxlele-dev personal tooling — not pushed upstream
 fixPatch/
+_*.py
+_*.bat
+_*.md
 
 # System files
 .DS_Store
