@@ -7,6 +7,7 @@ import { type FC } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router-dom';
 
+import MediaKeyBlocker from '@/components/MediaKeyBlocker';
 import { isDesktop } from '@/const/version';
 import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
@@ -26,6 +27,7 @@ const PopupLayout: FC = () => {
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
+      <MediaKeyBlocker />
       <MarketAuthProvider isDesktop={isDesktop}>
         <Flexbox
           className={styles.container}

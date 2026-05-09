@@ -45,6 +45,7 @@ vi.mock('@/store/user/selectors', () => ({
 
 vi.mock('@/utils/env', () => ({
   isDev: false,
+  isOnServerSide: false,
 }));
 
 describe('useHotkeyById', () => {
