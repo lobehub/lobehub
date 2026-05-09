@@ -83,6 +83,35 @@ describe('convertGoogleAIUsage', () => {
     });
   });
 
+  it('should calculate cache miss tokens when cached content token count is zero', () => {
+    const usage: GenerateContentResponseUsageMetadata = {
+      cachedContentTokenCount: 0,
+      candidatesTokenCount: 217,
+      candidatesTokensDetails: undefined,
+      promptTokenCount: 5491,
+      promptTokensDetails: undefined,
+      thoughtsTokenCount: 0,
+      toolUsePromptTokenCount: 0,
+      toolUsePromptTokensDetails: undefined,
+      totalTokenCount: 6973,
+    };
+
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    const result = convertGoogleAIUsage(usage, pricing);
+
+    expect(result.inputCacheMissTokens).toBe(5491);
+    expect(result.inputCachedTokens).toBe(0);
+    expect(result.totalInputTokens).toBe(5491);
+    expect(result.cost).toBeCloseTo((5491 + 217 * 2) / 1_000_000, 10);
+  });
+
   it('should attach cost when pricing provided', () => {
     const usage: GenerateContentResponseUsageMetadata = {
       candidatesTokenCount: 100_000,
