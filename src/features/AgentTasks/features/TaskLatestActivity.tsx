@@ -21,7 +21,7 @@ const getActivityText = (activity: TaskDetailActivity | undefined, t: TFunction<
   if (!briefTitle) {
     return activity.briefType
       ? t('taskDetail.latestActivity.briefWithTypeOnly', { type: activity.briefType })
-      : t('taskDetail.latestActivity.briefOnly');
+      : undefined;
   }
 
   if (activity.resolvedAction) {

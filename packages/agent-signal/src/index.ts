@@ -2,6 +2,7 @@ export * from './base/builders';
 export * from './base/guards';
 export * from './base/registries';
 export * from './base/types';
+export * from './source';
 export {
   type AgentSignalBuiltInSignalPayloadMap,
   type AgentSignalBuiltInSignalVariant,

@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "ورودی (نوشتن در کش)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "خروجی",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "تولید ویدیو",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "ورودی ویدئو",
   "ModelSwitchPanel.detail.releasedAt": "منتشر شده در {{date}}",
   "ModelSwitchPanel.emptyModel": "مدلی فعال نیست. لطفاً به تنظیمات بروید و فعال کنید.",
   "ModelSwitchPanel.emptyProvider": "ارائه‌دهنده‌ای فعال نیست. لطفاً به تنظیمات بروید و یکی را فعال کنید.",

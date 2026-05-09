@@ -1,7 +1,7 @@
-# 🚀 LobeHub v2.1.50 (20260420)
+# 🚀 LobeHub Release (20260420)
 
 **Release Date:** April 20, 2026\
-**Since v2026.04.13:** 96 commits · 58 merged PRs · 31 resolved issues · 17 contributors
+**Since previous release:** 96 commits · 58 merged PRs · 31 resolved issues · 17 contributors
 
 > This weekly release focuses on reducing friction in everyday agent work: faster model routing, smoother gateway behavior, stronger task continuity, and clearer operator diagnostics when something goes wrong.
 
@@ -77,4 +77,4 @@
 
 ---
 
-**Full Changelog**: v2026.04.13...v2026.04.20
+**Full Changelog**: <previous-tag>...<current-tag>

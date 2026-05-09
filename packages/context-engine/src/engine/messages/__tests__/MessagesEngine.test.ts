@@ -129,6 +129,67 @@ describe('MessagesEngine', () => {
       expect(hasHistorySummary).toBe(true);
     });
 
+    it('should replay local-system tool snapshots as tool results', async () => {
+      const now = Date.now();
+      const messages: UIChatMessage[] = [
+        {
+          content: '<localFile name="a.ts" path="/tmp/a.ts" />',
+          createdAt: now,
+          id: 'msg-1',
+          metadata: {
+            localSystemToolSnapshots: [
+              {
+                apiName: 'readLocalFile',
+                arguments: { path: '/tmp/a.ts' },
+                capturedAt: '2026-04-28T12:21:08.785Z',
+                content: 'File: /tmp/a.ts (lines 0-200)\n\nconst a = 1;\n',
+                identifier: 'lobe-local-system',
+                snapshotId: 'local-system-snapshot-1',
+                success: true,
+                toolCallId: 'call_local-system-snapshot-1',
+              },
+            ],
+          },
+          role: 'user',
+          updatedAt: now,
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        capabilities: {
+          isCanUseFC: () => true,
+          isCanUseVideo: () => false,
+          isCanUseVision: () => false,
+        },
+        messages,
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.metadata.LocalSystemToolSnapshotInjectorInjectedCount).toBe(1);
+      expect(result.messages).toContainEqual({
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: {
+              arguments: '{"path":"/tmp/a.ts"}',
+              name: 'lobe-local-system____readLocalFile',
+            },
+            id: 'call_local-system-snapshot-1',
+            type: 'function',
+          },
+        ],
+      });
+      expect(result.messages).toContainEqual({
+        content: 'File: /tmp/a.ts (lines 0-200)\n\nconst a = 1;\n',
+        name: 'lobe-local-system____readLocalFile',
+        role: 'tool',
+        tool_call_id: 'call_local-system-snapshot-1',
+      });
+    });
+
     it('should use custom formatHistorySummary when provided', async () => {
       const historySummary = 'test summary';
       const formatHistorySummary = vi.fn((s: string) => `<custom>${s}</custom>`);
@@ -328,7 +389,7 @@ describe('MessagesEngine', () => {
       expect(result).toBeDefined();
     });
 
-    it('should default to enabled with includeFileUrl true', async () => {
+    it('should default to enabled without file URLs', async () => {
       const params = createBasicParams();
       const engine = new MessagesEngine(params);
 
@@ -591,7 +652,7 @@ Document content here.
             {
               function: {
                 arguments: '{}',
-                name: 'lobe-page-agent____modifyNodes____builtin',
+                name: 'lobe-page-agent____modifyNodes',
               },
               id: 'call_1',
               type: 'function',
@@ -631,10 +692,63 @@ Document content here.
       expect(
         result.messages.some(
           (m) =>
-            m.role === 'assistant' &&
-            JSON.stringify(m).includes('lobe-page-agent____modifyNodes____builtin'),
+            m.role === 'assistant' && JSON.stringify(m).includes('lobe-page-agent____modifyNodes'),
         ),
       ).toBe(false);
+      expect(result.metadata.disabledToolCallFilter).toEqual({
+        filteredAssistantMessages: 1,
+        filteredToolCalls: 1,
+      });
+    });
+
+    it('should remove disabled tool calls after provider-safe name hashing', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Open the page',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: 'msg-2',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'open_page',
+              arguments: '{}',
+              id: 'call_1',
+              identifier: '@browser/use',
+              type: 'mcp',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: 'Opened the page.',
+          createdAt: Date.now(),
+          id: 'msg-3',
+          role: 'tool',
+          tool_call_id: 'call_1',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        messages,
+        toolsConfig: {
+          disabledToolIdentifiers: ['@browser/use'],
+          tools: [],
+        },
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+
+      expect(result.messages.some((m) => m.role === 'tool')).toBe(false);
+      expect(result.messages.some((m) => JSON.stringify(m).includes('MD5HASH_'))).toBe(false);
       expect(result.metadata.disabledToolCallFilter).toEqual({
         filteredAssistantMessages: 1,
         filteredToolCalls: 1,

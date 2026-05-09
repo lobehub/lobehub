@@ -1,4 +1,3 @@
-import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
@@ -8,9 +7,14 @@ import { createPortal } from 'react-dom';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
-import { useConversationStore } from '../../../../../store';
+import { dataSelectors, useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
+import {
+  isCustomInteractionIdentifier,
+  prepareCustomInteractionSubmit,
+  recordCustomInteractionResolution,
+} from './customInteractionHandlers';
 import Fallback from './Fallback';
 import KeyValueEditor from './KeyValueEditor';
 import SecurityBlacklistWarning from './SecurityBlacklistWarning';
@@ -88,8 +92,9 @@ const Intervention = memo<InterventionProps>(
 
     const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
 
-    const isCustomInteraction = identifier === UserInteractionIdentifier;
+    const isCustomInteraction = isCustomInteractionIdentifier(identifier);
 
+    const topicId = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s)?.topicId);
     const submitToolInteraction = useConversationStore((s) => s.submitToolInteraction);
     const skipToolInteraction = useConversationStore((s) => s.skipToolInteraction);
     const cancelToolInteraction = useConversationStore((s) => s.cancelToolInteraction);
@@ -98,25 +103,55 @@ const Intervention = memo<InterventionProps>(
       async (
         action:
           | { type: 'submit'; payload: Record<string, unknown> }
-          | { type: 'skip'; reason?: string }
-          | { type: 'cancel' },
+          | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
+          | { type: 'cancel'; payload?: Record<string, unknown> },
       ) => {
         switch (action.type) {
           case 'submit': {
-            await submitToolInteraction(id, action.payload);
+            const { payload, options } = await prepareCustomInteractionSubmit(
+              identifier,
+              action.payload,
+              {
+                requestArgs: parsedArgs,
+                topicId,
+              },
+            );
+            await submitToolInteraction(id, payload, options);
             break;
           }
           case 'skip': {
+            await recordCustomInteractionResolution(
+              identifier,
+              'skipped',
+              action.payload,
+              {
+                requestArgs: parsedArgs,
+                topicId,
+              },
+              action.reason,
+            );
             await skipToolInteraction(id, action.reason);
             break;
           }
           case 'cancel': {
+            await recordCustomInteractionResolution(identifier, 'cancelled', action.payload, {
+              requestArgs: parsedArgs,
+              topicId,
+            });
             await cancelToolInteraction(id);
             break;
           }
         }
       },
-      [id, submitToolInteraction, skipToolInteraction, cancelToolInteraction],
+      [
+        cancelToolInteraction,
+        id,
+        identifier,
+        parsedArgs,
+        skipToolInteraction,
+        submitToolInteraction,
+        topicId,
+      ],
     );
 
     const BuiltinToolInterventionRender = getBuiltinIntervention(identifier, apiName);

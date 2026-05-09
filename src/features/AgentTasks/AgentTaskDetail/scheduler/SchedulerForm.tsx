@@ -1,7 +1,16 @@
-import { Checkbox, Flexbox, InputNumber, Select, Text } from '@lobehub/ui';
-import { TimePicker } from 'antd';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Accordion,
+  AccordionItem,
+  Checkbox,
+  Flexbox,
+  Icon,
+  InputNumber,
+  Select,
+  Text,
+} from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
+import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,9 +24,8 @@ import {
 } from './CronConfig';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  label: css`
-    flex-shrink: 0;
-    width: 80px;
+  fieldLabel: css`
+    font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
   weekdayButton: css`
@@ -29,37 +37,50 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 36px;
     height: 32px;
-    border: 1px solid ${cssVar.colorBorder};
     border-radius: 6px;
 
     font-size: 12px;
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
 
-    background: transparent;
+    background: ${cssVar.colorFillTertiary};
 
     transition: all 0.15s ease;
 
     &:hover {
-      border-color: ${cssVar.colorPrimary};
-      color: ${cssVar.colorPrimary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   weekdayButtonActive: css`
-    border-color: ${cssVar.colorPrimary};
-    color: ${cssVar.colorTextLightSolid};
-    background: ${cssVar.colorPrimary};
+    color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
 
     &:hover {
-      border-color: ${cssVar.colorPrimaryHover};
-      color: ${cssVar.colorTextLightSolid};
-      background: ${cssVar.colorPrimaryHover};
+      color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorPrimaryBgHover};
     }
   `,
 }));
 
 const DEFAULT_PATTERN = '0 9 * * *';
 const DEFAULT_TIMEZONE = 'UTC';
+
+// Cron storage rounds minutes to 0 or 30 (see buildCronPattern), so the picker
+// only needs to offer half-hour slots — flatten to a single column instead of
+// antd's hour×minute grid.
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2);
+  const minute = i % 2 === 0 ? 0 : 30;
+  const label = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return { label, value: hour * 60 + minute };
+});
+
+// The parent Popover (Base UI) treats any click outside its popup root as an
+// outside-click and dismisses. antd Select's dropdown defaults to a body-level
+// portal, which trips that detection — anchor it inside the Popover's DOM so
+// option clicks stay "inside".
+const getPopupContainer = (triggerNode: HTMLElement) => triggerNode.parentElement ?? document.body;
 
 export interface SchedulerFormChange {
   maxExecutions: number | null;
@@ -146,10 +167,12 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
     emit({ scheduleType: value, weekdays: nextWeekdays });
   };
 
-  const handleTimeChange = (value: Dayjs | null) => {
-    if (!value) return;
-    setTriggerTime(value);
-    emit({ triggerTime: value });
+  const handleTimeChange = (totalMinutes: number) => {
+    const next = dayjs()
+      .hour(Math.floor(totalMinutes / 60))
+      .minute(totalMinutes % 60);
+    setTriggerTime(next);
+    emit({ triggerTime: next });
   };
 
   const handleHourlyMinuteChange = (minute: number) => {
@@ -189,66 +212,70 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
 
   const isUnlimited = maxExec === null || maxExec === undefined;
 
-  return (
-    <Flexbox gap={14} paddingBlock={4}>
-      <Flexbox horizontal align="center" gap={12} justify="space-between">
-        <Text className={styles.label}>{t('taskSchedule.frequency')}</Text>
-        <Select
-          style={{ width: 200 }}
-          value={scheduleType}
-          variant="outlined"
-          options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
-            label: t(opt.label as any),
-            value: opt.value,
-          }))}
-          onChange={handleScheduleTypeChange}
-        />
-      </Flexbox>
+  const showTimeRow = scheduleType !== 'hourly';
 
-      {scheduleType !== 'hourly' && (
-        <Flexbox horizontal align="center" gap={12} justify="space-between">
-          <Text className={styles.label}>{t('taskSchedule.time')}</Text>
-          <TimePicker
-            format="HH:mm"
-            minuteStep={15}
-            style={{ width: 200 }}
-            value={triggerTime}
-            onChange={handleTimeChange}
+  return (
+    <Flexbox gap={16}>
+      <Flexbox horizontal gap={12}>
+        <Flexbox flex={1} gap={6}>
+          <Text className={styles.fieldLabel}>{t('taskSchedule.frequency')}</Text>
+          <Select
+            getPopupContainer={getPopupContainer}
+            value={scheduleType}
+            variant="filled"
+            options={SCHEDULE_TYPE_OPTIONS.map((opt) => ({
+              label: t(opt.label as any),
+              value: opt.value,
+            }))}
+            onChange={handleScheduleTypeChange}
           />
         </Flexbox>
-      )}
-
-      {scheduleType === 'hourly' && (
-        <Flexbox horizontal align="center" gap={12} justify="space-between">
-          <Text className={styles.label}>{t('taskSchedule.every')}</Text>
-          <Flexbox horizontal align="center" gap={8}>
-            <InputNumber
-              max={24}
-              min={1}
-              style={{ width: 70 }}
-              value={hourlyInterval}
-              onChange={handleHourlyIntervalChange}
-            />
-            <Text type="secondary">{t('taskSchedule.hours')}</Text>
+        {showTimeRow && (
+          <Flexbox flex={1} gap={6}>
+            <Text className={styles.fieldLabel}>{t('taskSchedule.time')}</Text>
             <Select
-              style={{ width: 80 }}
-              value={triggerTime.minute()}
-              variant="outlined"
-              options={[
-                { label: ':00', value: 0 },
-                { label: ':15', value: 15 },
-                { label: ':30', value: 30 },
-                { label: ':45', value: 45 },
-              ]}
-              onChange={handleHourlyMinuteChange}
+              getPopupContainer={getPopupContainer}
+              options={TIME_OPTIONS}
+              value={triggerTime.hour() * 60 + triggerTime.minute()}
+              variant="filled"
+              onChange={handleTimeChange}
             />
           </Flexbox>
-        </Flexbox>
-      )}
+        )}
+        {scheduleType === 'hourly' && (
+          <Flexbox flex={1} gap={6}>
+            <Text className={styles.fieldLabel}>{t('taskSchedule.every')}</Text>
+            <Flexbox horizontal align="center" gap={6}>
+              <InputNumber
+                max={24}
+                min={1}
+                style={{ flex: 1 }}
+                value={hourlyInterval}
+                variant="filled"
+                onChange={handleHourlyIntervalChange}
+              />
+              <Text type="secondary">{t('taskSchedule.hours')}</Text>
+              <Select
+                getPopupContainer={getPopupContainer}
+                style={{ width: 80 }}
+                value={triggerTime.minute()}
+                variant="filled"
+                options={[
+                  { label: ':00', value: 0 },
+                  { label: ':15', value: 15 },
+                  { label: ':30', value: 30 },
+                  { label: ':45', value: 45 },
+                ]}
+                onChange={handleHourlyMinuteChange}
+              />
+            </Flexbox>
+          </Flexbox>
+        )}
+      </Flexbox>
 
       {scheduleType === 'weekly' && (
-        <Flexbox horizontal align="center" gap={12} justify="space-between">
-          <Text className={styles.label}>{t('taskSchedule.weekday')}</Text>
+        <Flexbox gap={6}>
+          <Text className={styles.fieldLabel}>{t('taskSchedule.weekday')}</Text>
           <Flexbox horizontal gap={6}>
             {WEEKDAYS.map(({ key, label }) => (
               <div
@@ -266,35 +293,60 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         </Flexbox>
       )}
 
-      <Flexbox horizontal align="center" gap={12} justify="space-between">
-        <Text className={styles.label}>{t('taskSchedule.timezone')}</Text>
-        <Select
-          showSearch
-          options={TIMEZONE_OPTIONS}
-          popupMatchSelectWidth={false}
-          style={{ width: 280 }}
-          value={tz}
-          variant="outlined"
-          onChange={handleTimezoneChange}
-        />
-      </Flexbox>
+      <Accordion gap={0}>
+        <AccordionItem
+          itemKey="advanced"
+          paddingBlock={6}
+          paddingInline={0}
+          title={
+            <Flexbox horizontal align="center" gap={8}>
+              <Icon color={cssVar.colorTextDescription} icon={SlidersHorizontal} size={14} />
+              <Text style={{ color: cssVar.colorTextSecondary }}>
+                {t('taskSchedule.advancedSettings')}
+              </Text>
+            </Flexbox>
+          }
+        >
+          <Flexbox gap={14} paddingBlock={'8px 4px'}>
+            <Flexbox gap={6}>
+              <Flexbox horizontal align="center" gap={6}>
+                <Icon color={cssVar.colorTextDescription} icon={Globe} size={14} />
+                <Text className={styles.fieldLabel}>{t('taskSchedule.timezone')}</Text>
+              </Flexbox>
+              <Select
+                showSearch
+                getPopupContainer={getPopupContainer}
+                options={TIMEZONE_OPTIONS}
+                popupMatchSelectWidth={false}
+                value={tz}
+                variant="filled"
+                onChange={handleTimezoneChange}
+              />
+            </Flexbox>
 
-      <Flexbox horizontal align="center" gap={12} justify="space-between">
-        <Text className={styles.label}>{t('taskSchedule.maxExecutions')}</Text>
-        <Flexbox horizontal align="center" gap={10}>
-          <InputNumber
-            disabled={isUnlimited}
-            min={1}
-            placeholder="100"
-            style={{ width: 90 }}
-            value={maxExec ?? undefined}
-            onChange={handleMaxExecChange}
-          />
-          <Checkbox checked={isUnlimited} onChange={handleContinuousChange}>
-            {t('taskSchedule.continuous')}
-          </Checkbox>
-        </Flexbox>
-      </Flexbox>
+            <Flexbox gap={6}>
+              <Flexbox horizontal align="center" gap={6}>
+                <Icon color={cssVar.colorTextDescription} icon={Hash} size={14} />
+                <Text className={styles.fieldLabel}>{t('taskSchedule.maxExecutions')}</Text>
+              </Flexbox>
+              <Flexbox horizontal align="center" gap={12}>
+                <InputNumber
+                  disabled={isUnlimited}
+                  min={1}
+                  placeholder={t('taskSchedule.maxExecutionsPlaceholder')}
+                  style={{ flex: 1 }}
+                  value={maxExec ?? undefined}
+                  variant="filled"
+                  onChange={handleMaxExecChange}
+                />
+                <Checkbox checked={isUnlimited} onChange={handleContinuousChange}>
+                  {t('taskSchedule.continuous')}
+                </Checkbox>
+              </Flexbox>
+            </Flexbox>
+          </Flexbox>
+        </AccordionItem>
+      </Accordion>
     </Flexbox>
   );
 });

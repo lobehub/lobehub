@@ -147,6 +147,7 @@ export type PricingUnitName =
   | 'imageOutput'
 
   // Video-based pricing units
+  | 'videoInput'
   | 'videoGeneration';
 
 export type PricingUnitType =
@@ -166,6 +167,10 @@ export interface PricingUnitBase {
 }
 
 export interface FixedPricingUnit extends PricingUnitBase {
+  /**
+   * Original display price before discounts. Billing and cost calculation use `rate`.
+   */
+  originalRate?: number;
   rate: number;
   strategy: 'fixed';
 }
@@ -224,7 +229,14 @@ export interface AIBaseModelCard {
   organization?: string;
 
   releasedAt?: string;
+  /**
+   * Whether the model should be shown in user-facing model lists.
+   * Runtime-only aliases can set this to false while staying enabled and resolvable.
+   */
+  visible?: boolean;
 }
+
+export const isAiModelVisible = (model: { visible?: boolean }) => model.visible !== false;
 
 export interface AiModelConfig {
   /**
@@ -254,6 +266,7 @@ export type ExtendParamsType =
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
   | 'grok4_20ReasoningEffort'
+  | 'hy3ReasoningEffort'
   | 'deepseekV4ReasoningEffort'
   | 'codexMaxReasoningEffort'
   | 'opus47Effort'
@@ -312,6 +325,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
   'grok4_20ReasoningEffort',
+  'hy3ReasoningEffort',
   'deepseekV4ReasoningEffort',
   'codexMaxReasoningEffort',
   'opus47Effort',
@@ -431,6 +445,7 @@ export interface AiFullModelCard extends AIBaseModelCard {
   maxDimension?: number;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
+  settings?: AiModelSettings;
   type: AiModelType;
 }
 
@@ -472,6 +487,7 @@ export interface AiProviderModelListItem {
   settings?: AiModelSettings;
   source?: AiModelSourceType;
   type: AiModelType;
+  visible?: boolean;
 }
 
 // Update
@@ -546,4 +562,5 @@ export interface EnabledAiModel {
   settings?: AiModelSettings;
   sort?: number;
   type: AiModelType;
+  visible?: boolean;
 }

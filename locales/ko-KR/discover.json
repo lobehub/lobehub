@@ -624,6 +624,8 @@
   "user.logout": "로그아웃",
   "user.myProfile": "내 프로필",
   "user.noAgents": "이 사용자가 아직 도우미를 게시하지 않았습니다",
+  "user.noAgents.ownerDescription": "첫 번째 에이전트를 만들고 커뮤니티와 공유하세요.",
+  "user.noAgents.title": "아직 에이전트가 없습니다",
   "user.noFavoriteAgents": "즐겨찾는 어시스턴트가 없습니다",
   "user.noFavoritePlugins": "즐겨찾는 플러그인이 없습니다",
   "user.noForkedAgentGroups": "포크한 에이전트 그룹이 없습니다",

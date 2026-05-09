@@ -1,10 +1,8 @@
-import { type ChatToolPayload, type RuntimeStepContext, type UIChatMessage } from '@lobechat/types';
-import i18n from 'i18next';
+import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 
-import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
 import { displayMessageSelectors } from '../../message/selectors';
 
 /**
@@ -25,19 +23,6 @@ export class PluginPublicApiActionImpl {
     this.#get = get;
   }
 
-  fillPluginMessageContent = async (
-    id: string,
-    content: string,
-    triggerAiMessage?: boolean,
-    context?: OptimisticUpdateContext,
-  ): Promise<void> => {
-    const { triggerAIMessage, optimisticUpdateMessageContent } = this.#get();
-
-    await optimisticUpdateMessageContent(id, content, undefined, context);
-
-    if (triggerAiMessage) await triggerAIMessage({ parentId: id });
-  };
-
   reInvokeToolMessage = async (id: string): Promise<void> => {
     const message = displayMessageSelectors.getDisplayMessageById(id)(this.#get());
     if (!message || message.role !== 'tool' || !message.plugin) return;
@@ -54,36 +39,6 @@ export class PluginPublicApiActionImpl {
     const payload: ChatToolPayload = { ...message.plugin, id: message.tool_call_id! };
 
     await this.#get().internal_invokeDifferentTypePlugin(id, payload);
-  };
-
-  summaryPluginContent = async (id: string): Promise<void> => {
-    const message = displayMessageSelectors.getDisplayMessageById(id)(this.#get());
-    if (!message || message.role !== 'tool') return;
-
-    const { activeAgentId, activeTopicId, activeThreadId } = this.#get();
-
-    await this.#get().internal_execAgentRuntime({
-      context: {
-        agentId: activeAgentId,
-        topicId: activeTopicId,
-        threadId: activeThreadId ?? undefined,
-      },
-      messages: [
-        {
-          role: 'assistant',
-          content: i18n.t('prompts.summaryExpert', { ns: 'chat' }),
-        },
-        {
-          ...message,
-          content: message.content,
-          role: 'assistant',
-          name: undefined,
-          tool_call_id: undefined,
-        },
-      ] as UIChatMessage[],
-      parentMessageId: message.id,
-      parentMessageType: 'assistant',
-    });
   };
 
   internal_invokeDifferentTypePlugin = async (

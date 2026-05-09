@@ -3,16 +3,64 @@ import { z } from 'zod';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
+const LocalSystemToolSnapshotSchema = z.object({
+  apiName: z.enum(['readFile', 'listFiles', 'readLocalFile', 'listLocalFiles']),
+  arguments: z.record(z.string(), z.unknown()),
+  capturedAt: z.string(),
+  content: z.string().nullable(),
+  error: z.unknown().optional(),
+  identifier: z.literal('lobe-local-system'),
+  result: z.unknown().optional(),
+  snapshotId: z.string(),
+  state: z.unknown().optional(),
+  success: z.boolean(),
+  toolCallId: z.string(),
+});
+
+export interface LocalSystemToolSnapshot {
+  apiName: 'readFile' | 'listFiles' | 'readLocalFile' | 'listLocalFiles';
+  arguments: Record<string, unknown>;
+  capturedAt: string;
+  content: string | null;
+  error?: unknown;
+  identifier: 'lobe-local-system';
+  result?: unknown;
+  snapshotId: string;
+  state?: unknown;
+  success: boolean;
+  toolCallId: string;
+}
+
 export interface ModelTokensUsage {
   // Prediction tokens
   acceptedPredictionTokens?: number;
+  /**
+   * Total input audio tokens for the request. This is a modality breakdown, not
+   * a cache-miss count.
+   */
   inputAudioTokens?: number;
+  /**
+   * Cached audio tokens for the request.
+   */
+  inputCachedAudioTokens?: number;
+  /**
+   * Cached image tokens for the request.
+   */
+  inputCachedImageTokens?: number;
+  /**
+   * Cached text tokens for the request.
+   */
+  inputCachedTextTokens?: number;
   // Input tokens breakdown
   /**
    * user prompt input
    */
   // Input cache tokens
   inputCachedTokens?: number;
+  /**
+   * Cached video tokens for the request.
+   */
+  inputCachedVideoTokens?: number;
 
   inputCacheMissTokens?: number;
   /**
@@ -20,15 +68,25 @@ export interface ModelTokensUsage {
    */
   inputCitationTokens?: number;
   /**
-   * user prompt image
+   * Total user prompt image tokens for the request. This is a modality
+   * breakdown, not a cache-miss count.
    */
   inputImageTokens?: number;
+  /**
+   * Total user prompt text tokens for the request. This is a modality
+   * breakdown, not a cache-miss count.
+   */
   inputTextTokens?: number;
-
   /**
    * tool use prompt tokens (Google AI / Vertex AI)
    */
   inputToolTokens?: number;
+
+  /**
+   * Total user prompt video tokens for the request. This is a modality
+   * breakdown, not a cache-miss count.
+   */
+  inputVideoTokens?: number;
   inputWriteCacheTokens?: number;
   outputAudioTokens?: number;
   outputImageTokens?: number;
@@ -50,9 +108,14 @@ export const ModelUsageSchema = z.object({
   inputCachedTokens: z.number().optional(),
   inputCacheMissTokens: z.number().optional(),
   inputWriteCacheTokens: z.number().optional(),
+  inputCachedTextTokens: z.number().optional(),
+  inputCachedImageTokens: z.number().optional(),
+  inputCachedAudioTokens: z.number().optional(),
+  inputCachedVideoTokens: z.number().optional(),
   inputTextTokens: z.number().optional(),
   inputImageTokens: z.number().optional(),
   inputAudioTokens: z.number().optional(),
+  inputVideoTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
   inputToolTokens: z.number().optional(),
 
@@ -101,6 +164,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   inspectExpanded: z.boolean().optional(),
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
+  localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
   // Canonical nested shape — flat fields above are deprecated. Must be listed
   // here so zod doesn't strip them from writes going through UpdateMessageParamsSchema
@@ -164,7 +228,15 @@ export interface MessageMetadata {
   /** @deprecated use `metadata.usage` instead */
   inputAudioTokens?: number;
   /** @deprecated use `metadata.usage` instead */
+  inputCachedAudioTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedImageTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedTextTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
   inputCachedTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedVideoTokens?: number;
   /** @deprecated use `metadata.usage` instead */
   inputCacheMissTokens?: number;
   /** @deprecated use `metadata.usage` instead */
@@ -175,6 +247,8 @@ export interface MessageMetadata {
   inputTextTokens?: number;
   /** @deprecated use `metadata.usage` instead */
   inputToolTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputVideoTokens?: number;
   /** @deprecated use `metadata.usage` instead */
   inputWriteCacheTokens?: number;
   /**
@@ -200,6 +274,10 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
+  /**
+   * Local-system tool snapshots materialized when the user sent @file mentions.
+   */
+  localSystemToolSnapshots?: LocalSystemToolSnapshot[];
   /** @deprecated use `metadata.usage` instead */
   outputAudioTokens?: number;
   /** @deprecated use `metadata.usage` instead */

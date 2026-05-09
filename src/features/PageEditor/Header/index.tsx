@@ -10,6 +10,7 @@ import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 
+import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
 import { useMenu } from './useMenu';
@@ -23,6 +24,7 @@ const Header = memo(() => {
     s.parentId,
     s.onBack,
   ]);
+  const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const { menuItems } = useMenu();
 
   return (
@@ -61,7 +63,12 @@ const Header = memo(() => {
           >
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SIZE} />
           </DropdownMenu>
-          <ToggleRightPanelButton hideWhenExpanded showActive={false} />
+          <ToggleRightPanelButton
+            hideWhenExpanded
+            expand={showPageAgentPanel}
+            showActive={false}
+            onToggle={() => togglePageAgentPanel()}
+          />
         </>
       }
     />

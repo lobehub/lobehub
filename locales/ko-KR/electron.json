@@ -35,6 +35,7 @@
   "navigation.recentView": "최근 조회",
   "navigation.resources": "리소스",
   "navigation.settings": "설정",
+  "navigation.tasks": "작업",
   "navigation.unpin": "고정 해제",
   "notification.finishChatGeneration": "AI 메시지 생성이 완료되었습니다",
   "proxy.auth": "인증 필요",

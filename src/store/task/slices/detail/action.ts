@@ -10,7 +10,7 @@ import type { StoreSetter } from '@/store/types';
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
 import type { TaskDetailDispatch } from './reducer';
-import { taskDetailReducer } from './reducer';
+import { findSubtaskParentId, taskDetailReducer } from './reducer';
 
 type CreatedTask = NonNullable<Awaited<ReturnType<typeof taskService.create>>['data']>;
 type DeletedTask = NonNullable<Awaited<ReturnType<typeof taskService.delete>>['data']>;
@@ -25,6 +25,7 @@ export interface TaskUpdatePayload {
   description?: string;
   instruction?: string;
   name?: string;
+  parentTaskId?: string | null;
   priority?: number;
 }
 
@@ -64,10 +65,11 @@ export class TaskDetailSliceActionImpl {
   addComment = async (
     taskId: string,
     content: string,
-    opts?: { briefId?: string; topicId?: string },
-  ): Promise<void> => {
-    await taskService.addComment(taskId, content, opts);
+    opts?: { authorAgentId?: string; briefId?: string; topicId?: string },
+  ): Promise<Awaited<ReturnType<typeof taskService.addComment>>> => {
+    const result = await taskService.addComment(taskId, content, opts);
     await this.internal_refreshTaskDetail(taskId);
+    return result;
   };
 
   deleteComment = async (commentId: string, taskId?: string): Promise<void> => {
@@ -126,12 +128,15 @@ export class TaskDetailSliceActionImpl {
 
   createTask = async (params: {
     assigneeAgentId?: string;
+    automationMode?: 'heartbeat' | 'schedule';
     createdByAgentId?: string;
     description?: string;
     instruction: string;
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    schedulePattern?: string;
+    scheduleTimezone?: string;
   }): Promise<CreatedTask | null> => {
     this.#set({ isCreatingTask: true }, false, 'createTask/start');
     try {
@@ -192,7 +197,10 @@ export class TaskDetailSliceActionImpl {
   setActiveTaskId = (taskId?: string): void => {
     if (this.#get().activeTaskId === taskId) return;
     this.#set(
-      { activeTaskId: taskId, activeTopicDrawerTopicId: undefined },
+      {
+        activeTaskId: taskId,
+        activeTopicDrawerTopicId: undefined,
+      },
       false,
       'setActiveTaskId',
     );
@@ -210,28 +218,49 @@ export class TaskDetailSliceActionImpl {
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {
     await taskService.unpinDocument(taskId, documentId);
+    // taskId here is the source (owning) task — may be a descendant of the
+    // task currently open. The detail page's SWR cache is keyed by activeTaskId,
+    // so revalidate that too; otherwise the artifact stays visible until reload.
     await this.internal_refreshTaskDetail(taskId);
+    const activeTaskId = this.#get().activeTaskId;
+    if (activeTaskId && activeTaskId !== taskId) {
+      await this.internal_refreshTaskDetail(activeTaskId);
+    }
   };
 
   updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
     const { assigneeAgentId, ...rest } = data;
+    const optimisticRest = { ...rest };
+    delete optimisticRest.parentTaskId;
     const optimistic: Partial<TaskDetailData> = {
-      ...rest,
+      ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
     };
+
+    // Snapshot every map entry the optimistic patch will touch BEFORE dispatch.
+    // activeTaskId can change mid-flight, and the patch can mutate a parent's
+    // cached subtree in addition to `id`, so rollback must target both.
+    const patchedParentId = findSubtaskParentId(this.#get().taskDetailMap, id);
+    const snapshotActiveTaskId = this.#get().activeTaskId;
+    const refreshPatchedTargets = async (): Promise<void> => {
+      const targets = new Set<string>([id]);
+      if (patchedParentId) targets.add(patchedParentId);
+      if (data.parentTaskId) targets.add(data.parentTaskId);
+      if (snapshotActiveTaskId) targets.add(snapshotActiveTaskId);
+      await Promise.all(
+        Array.from(targets).map((target) => this.internal_refreshTaskDetail(target)),
+      );
+    };
+
     this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
     this.#set({ taskSaveStatus: 'saving' }, false, 'updateTask/saving');
 
     try {
       await taskService.update(id, data);
       this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
-      if (assigneeAgentId !== undefined) {
-        await this.#get().refreshTaskList();
-      }
     } catch (error) {
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
-      // Revert by refreshing from server
-      await this.internal_refreshTaskDetail(id);
+      await refreshPatchedTargets();
       message.error(
         t('taskDetail.updateFailed', {
           defaultValue: 'Failed to update task',
@@ -239,6 +268,10 @@ export class TaskDetailSliceActionImpl {
         }),
       );
       throw error;
+    }
+
+    if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
+      await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
     }
   };
 

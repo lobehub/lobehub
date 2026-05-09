@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "Вход (запис в кеш)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "Изход",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "Генериране на видео",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "Видео вход",
   "ModelSwitchPanel.detail.releasedAt": "Пуснат на {{date}}",
   "ModelSwitchPanel.emptyModel": "Няма активиран модел. Моля, отидете в настройките, за да активирате.",
   "ModelSwitchPanel.emptyProvider": "Няма активирани доставчици. Моля, отидете в настройките, за да активирате такъв.",

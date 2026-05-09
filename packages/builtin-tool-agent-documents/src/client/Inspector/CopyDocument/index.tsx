@@ -5,17 +5,21 @@ import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { CopyDocumentArgs, CopyDocumentState } from '../../../types';
+import { formatDocumentId, inspectorChipStyles } from '../_styles';
 
 export const CopyDocumentInspector = memo<
   BuiltinInspectorProps<CopyDocumentArgs, CopyDocumentState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
-  const summary = args?.newTitle || partialArgs?.newTitle || args?.id || partialArgs?.id;
 
-  if (isArgumentsStreaming && !summary) {
+  const id = args?.id || partialArgs?.id;
+  const newTitle = args?.newTitle || partialArgs?.newTitle;
+  const styles = inspectorChipStyles;
+
+  if (isArgumentsStreaming && !id && !newTitle) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-agent-documents.apiName.copyDocument')}</span>
@@ -25,13 +29,20 @@ export const CopyDocumentInspector = memo<
 
   return (
     <div
+      style={{ flexWrap: 'wrap', gap: 4 }}
       className={cx(
         inspectorTextStyles.root,
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{t('builtins.lobe-agent-documents.apiName.copyDocument')}: </span>
-      {summary && <span className={highlightTextStyles.primary}>{summary}</span>}
+      <span>{t('builtins.lobe-agent-documents.apiName.copyDocument')}</span>
+      {id && <span className={styles.idChip}>{formatDocumentId(id)}</span>}
+      {newTitle && (
+        <>
+          <span className={styles.separator}>→</span>
+          <span className={styles.chip}>{newTitle}</span>
+        </>
+      )}
     </div>
   );
 });

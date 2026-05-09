@@ -1,4 +1,7 @@
-import { EMPTY_DOCUMENT_MESSAGES } from '@lobechat/builtin-tool-web-onboarding/utils';
+import {
+  EMPTY_DOCUMENT_MESSAGES,
+  formatWebOnboardingStateMessage,
+} from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
 import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import {
@@ -234,10 +237,28 @@ export const userRouter = router({
     return onboardingService.getOrCreateState();
   }),
 
-  getOnboardingState: userProcedure.query(async ({ ctx }) => {
+  getOnboardingAgentContext: userProcedure.query(async ({ ctx }) => {
     const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+    const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+    const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+    const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
-    return onboardingService.getState();
+    const [state, soulDoc, persona, userInfo] = await Promise.all([
+      onboardingService.getState(),
+      onboardingService
+        .getInboxAgentId()
+        .then((inboxAgentId) => docService.getDocumentByFilename(inboxAgentId, 'SOUL.md'))
+        .catch(() => null),
+      personaModel.getLatestPersonaDocument().catch(() => null),
+      onboardingService.getInitialUserInfo().catch(() => undefined),
+    ]);
+
+    return {
+      personaContent: persona?.persona || null,
+      phaseGuidance: formatWebOnboardingStateMessage(state),
+      soulContent: soulDoc?.content || null,
+      userInfo,
+    };
   }),
 
   saveUserQuestion: userProcedure

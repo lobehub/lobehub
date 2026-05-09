@@ -3,6 +3,9 @@ import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import { type ConversationContext } from '@lobechat/types';
 
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
@@ -33,11 +36,12 @@ export class ConversationControlActionImpl {
   /**
    * Decide whether approve/reject/reject_continue should go through the
    * Gateway resume path (new op carrying `resumeApproval`) instead of the
-   * local `internal_execAgentRuntime` path. Mirrors the "interrupt + new op"
+   * local `executeClientAgent` path. Mirrors the "interrupt + new op"
    * pattern from LOBE-7142.
    *
-   * Uses the same `isGatewayModeEnabled()` lab flag that routes the initial
-   * send, so approve/reject align with how the conversation was dispatched.
+   * Routes via `selectRuntimeType` so approve/reject align with how the
+   * conversation was dispatched at sendMessage time. Hetero resume is not yet
+   * implemented and falls through to client local resume — see LOBE-8519.
    *
    * We deliberately do **not** look for a living `execServerAgentRuntime`
    * op here. The server's `waiting_for_human` → `agent_runtime_end` signal
@@ -47,8 +51,16 @@ export class ConversationControlActionImpl {
    * scanning for it would flip us back into client-mode against a live
    * Gateway backend.
    */
-  #shouldUseGatewayResume = (): boolean => {
-    return this.#get().isGatewayModeEnabled();
+  #shouldUseGatewayResume = (context: ConversationContext): boolean => {
+    const agentConfig = context.agentId
+      ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
+      : undefined;
+    return (
+      selectRuntimeType({
+        heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
+        isGatewayMode: this.#get().isGatewayModeEnabled(),
+      }) === 'gateway'
+    );
   };
 
   /**
@@ -170,7 +182,7 @@ export class ConversationControlActionImpl {
     _assistantGroupId: string,
     context?: ConversationContext,
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
@@ -212,7 +224,7 @@ export class ConversationControlActionImpl {
     // message, persists `intervention=approved`, dispatches the approved
     // tool, and streams results back on the new op. No in-place resume of
     // the paused op — simpler state + avoids stepIndex races.
-    if (this.#shouldUseGatewayResume()) {
+    if (this.#shouldUseGatewayResume(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -277,7 +289,7 @@ export class ConversationControlActionImpl {
 
     // 7. Execute agent runtime from tool message position
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: toolMessageId, // Start from tool message
@@ -303,8 +315,13 @@ export class ConversationControlActionImpl {
     toolMessageId: string,
     response: Record<string, unknown>,
     context?: ConversationContext,
+    options?: {
+      createUserMessage?: boolean;
+      pluginState?: Record<string, unknown>;
+      toolResultContent?: string;
+    },
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -329,6 +346,7 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
+    const shouldCreateUserMessage = options?.createUserMessage !== false;
 
     // 1. Mark intervention as approved and set tool result to user's response
     await this.#get().optimisticUpdateMessagePlugin(
@@ -337,7 +355,7 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
 
-    const toolContent = `User submitted: ${JSON.stringify(response)}`;
+    const toolContent = options?.toolResultContent ?? `User submitted: ${JSON.stringify(response)}`;
     await this.#get().optimisticUpdateMessageContent(
       toolMessageId,
       toolContent,
@@ -345,7 +363,69 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
 
-    // 2. Create a user message summarizing the response (makes conversation natural)
+    if (options?.pluginState) {
+      await this.#get().optimisticUpdatePluginState(
+        toolMessageId,
+        options.pluginState,
+        optimisticContext,
+      );
+    }
+
+    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
+
+    // 2a. Tool-result-only path: skip the synthetic user message and resume from the
+    // tool message. Used by interventions whose UI handles its own side effect (e.g.
+    // the agent marketplace picker forks agents directly) — the LLM should see the
+    // tool result, not a fake user turn.
+    if (!shouldCreateUserMessage) {
+      const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+
+      const { state, context: initialContext } = this.#get().internal_createAgentState({
+        messages: currentMessages,
+        parentMessageId: toolMessageId,
+        agentId,
+        topicId,
+        threadId: threadId ?? undefined,
+        operationId,
+      });
+
+      // Resume directly from `tool_result` phase rather than `human_approved_tool`.
+      // The intervention UI already wrote the final tool result content via
+      // `optimisticUpdateMessageContent`; routing through `human_approved_tool`
+      // would re-execute the builtin tool on the server and overwrite our
+      // content with the server-side placeholder (e.g. the marketplace picker
+      // would clobber the picked-templates result with "picker is now visible").
+      const agentRuntimeContext: AgentRuntimeContext = {
+        ...initialContext,
+        phase: 'tool_result',
+        payload: {
+          parentMessageId: toolMessageId,
+        },
+      };
+
+      try {
+        await executeClientAgent({
+          context: effectiveContext,
+          messages: currentMessages,
+          parentMessageId: toolMessageId,
+          parentMessageType: 'tool',
+          initialState: state,
+          initialContext: agentRuntimeContext,
+          parentOperationId: operationId,
+        });
+        completeOperation(operationId);
+      } catch (error) {
+        const err = error as Error;
+        console.error('[submitToolInteraction] Error executing agent runtime:', err);
+        this.#get().failOperation(operationId, {
+          type: 'submitToolInteraction',
+          message: err.message || 'Unknown error',
+        });
+      }
+      return;
+    }
+
+    // 2b. Default path: create a user message summarizing the response, resume from user
     const userMessageContent = Object.values(response).join(', ');
     const groupId = toolMessage.groupId;
     const userMsg = await this.#get().optimisticCreateMessage(
@@ -369,7 +449,6 @@ export class ConversationControlActionImpl {
     }
 
     // 3. Resume agent from user message (not tool re-execution)
-    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
 
     const { state, context: initialContext } = this.#get().internal_createAgentState({
@@ -382,7 +461,7 @@ export class ConversationControlActionImpl {
     });
 
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: userMsg.id,
@@ -407,7 +486,7 @@ export class ConversationControlActionImpl {
     reason?: string,
     context?: ConversationContext,
   ): Promise<void> => {
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -485,7 +564,7 @@ export class ConversationControlActionImpl {
     });
 
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: userMsg.id,
@@ -612,7 +691,7 @@ export class ConversationControlActionImpl {
     // `rejected_continue` share the same code path (both surface the
     // rejection to the LLM as user feedback), so a separate `rejected`
     // decision adds complexity without behavioural difference.
-    if (this.#shouldUseGatewayResume()) {
+    if (this.#shouldUseGatewayResume(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -651,7 +730,7 @@ export class ConversationControlActionImpl {
     const toolMessage = dbMessageSelectors.getDbMessageById(messageId)(this.#get());
     if (!toolMessage) return;
 
-    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+    const { executeClientAgent, startOperation, completeOperation } = this.#get();
 
     // Build effective context from provided context or global state
     const effectiveContext: ConversationContext = context ?? {
@@ -667,7 +746,7 @@ export class ConversationControlActionImpl {
     // the LLM loop with the rejection content surfaced as user feedback.
     // Skip the client-mode `rejectToolCalling` chain below — that would fire
     // a duplicate halting `reject` before this continue signal.
-    if (this.#shouldUseGatewayResume()) {
+    if (this.#shouldUseGatewayResume(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -768,7 +847,7 @@ export class ConversationControlActionImpl {
 
     // Execute agent runtime from rejected tool message position to continue
     try {
-      await internal_execAgentRuntime({
+      await executeClientAgent({
         context: effectiveContext,
         messages: currentMessages,
         parentMessageId: messageId,

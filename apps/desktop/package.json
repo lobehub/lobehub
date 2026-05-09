@@ -58,6 +58,7 @@
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobehub/i18n-cli": "^1.25.1",
     "@modelcontextprotocol/sdk": "^1.24.3",

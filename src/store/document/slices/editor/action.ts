@@ -57,13 +57,17 @@ export class EditorActionImpl {
     }
   };
 
-  handleContentChange = (): void => {
+  private syncEditorContent = (
+    documentId?: string,
+    options: { triggerAutoSave?: boolean } = {},
+  ): boolean => {
     const { editor, activeDocumentId, documents, internal_dispatchDocument } = this.#get();
+    const id = documentId || activeDocumentId;
 
-    if (!editor || !activeDocumentId) return;
+    if (!editor || !id) return false;
 
-    const doc = documents[activeDocumentId];
-    if (!doc) return;
+    const doc = documents[id];
+    if (!doc) return false;
 
     try {
       const markdown = (editor.getDocument('markdown') as unknown as string) || '';
@@ -75,7 +79,7 @@ export class EditorActionImpl {
 
       internal_dispatchDocument(
         {
-          id: activeDocumentId,
+          id,
           type: 'updateDocument',
           value: { content: markdown, editorData, isDirty: contentChanged },
         },
@@ -83,12 +87,30 @@ export class EditorActionImpl {
       );
 
       // Only trigger auto-save if content actually changed AND autoSave is enabled
-      if (contentChanged && doc.autoSave !== false) {
-        this.#get().triggerDebouncedSave(activeDocumentId);
+      if (options.triggerAutoSave !== false && contentChanged && doc.autoSave !== false) {
+        this.#get().triggerDebouncedSave(id);
       }
+
+      return contentChanged;
     } catch (error) {
       console.error('[DocumentStore] Failed to update content:', error);
+      return false;
     }
+  };
+
+  commitEditorMutation = async (
+    documentId?: string,
+    options?: SaveExecutionOptions,
+  ): Promise<void> => {
+    const id = documentId || this.#get().activeDocumentId;
+    if (!id) return;
+
+    this.syncEditorContent(id, { triggerAutoSave: false });
+    await this.performSave(id, undefined, options);
+  };
+
+  handleContentChange = (): void => {
+    this.syncEditorContent(undefined, { triggerAutoSave: true });
   };
 
   internal_dispatchDocument = (payload: DocumentDispatch, action?: string): void => {

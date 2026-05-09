@@ -122,6 +122,34 @@ describe('GeneralChatAgent', () => {
         },
       });
     });
+
+    it('should trigger compression using thresholdRatio from compressionConfig', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig: {
+          enabled: true,
+          maxWindowToken: 200_000,
+          thresholdRatio: 0.5,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [
+          {
+            content: '',
+            metadata: { usage: { totalOutputTokens: 100_001 } },
+            role: 'assistant',
+          },
+        ] as any,
+      });
+      const context = createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual(expectCompressionInstruction(state.messages));
+    });
   });
 
   describe('llm_result phase', () => {

@@ -114,7 +114,7 @@ export class SystemAgentService {
   /**
    * Get the user's preferred response language (locale).
    */
-  private async getUserLocale(): Promise<string> {
+  async getUserLocale(): Promise<string> {
     const userInfo = await UserModel.getInfoForAIGeneration(this.db, this.userId);
     return userInfo.responseLanguage || 'en-US';
   }

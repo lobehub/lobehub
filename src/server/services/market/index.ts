@@ -547,7 +547,7 @@ export class MarketService {
           };
           const providerLabel = PROVIDER_LABELS[providerId] || providerId;
 
-          const { tools } = await this.market.skills.listTools(providerId);
+          const { tools, instruction } = await this.market.skills.listTools(providerId);
           if (!tools || tools.length === 0) continue;
 
           const manifest: LobeToolManifest = {
@@ -563,6 +563,7 @@ export class MarketService {
               tags: ['lobehub-skill', providerId],
               title: providerLabel,
             },
+            systemRole: instruction || undefined,
             type: 'builtin',
           };
 

@@ -1,3 +1,4 @@
+import { type AgentStreamEventType } from '@lobechat/agent-gateway-client';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
@@ -38,24 +39,19 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
   return 'Agent runtime completed successfully';
 };
 
+/**
+ * Server-side stream event shape. Wire-compatible with `AgentStreamEvent` in
+ * `@lobechat/agent-gateway-client` (the type union is the single source of
+ * truth) — heterogeneous CLI agents that ingest via `aiAgent.heteroIngest`
+ * republish their events through this same manager unchanged.
+ */
 export interface StreamEvent {
   data: any;
   id?: string; // Redis Stream event ID
   operationId: string;
   stepIndex: number;
   timestamp: number;
-  type:
-    | 'agent_runtime_init'
-    | 'agent_runtime_end'
-    | 'stream_start'
-    | 'stream_chunk'
-    | 'stream_end'
-    | 'stream_retry'
-    | 'tool_start'
-    | 'tool_end'
-    | 'step_start'
-    | 'step_complete'
-    | 'error';
+  type: AgentStreamEventType;
 }
 
 export interface StreamChunkData {

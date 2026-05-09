@@ -1,3 +1,4 @@
+import type { SearchMemoryParams } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { normalizeSearchMemoryParams, resolveTimeIntent } from './searchParams';
@@ -113,6 +114,24 @@ describe('searchParams', () => {
       };
 
       expect(normalizeSearchMemoryParams(params, now)).toBe(params);
+    });
+
+    it('coerces JSON date strings from tool calls before preserving timeRange', () => {
+      const params = {
+        queries: ['atlas'],
+        timeRange: {
+          end: '2026-01-02T00:00:00.000Z',
+          start: '2026-01-01T00:00:00.000Z',
+        },
+      } as unknown as SearchMemoryParams;
+
+      expect(normalizeSearchMemoryParams(params, now)).toEqual({
+        queries: ['atlas'],
+        timeRange: {
+          end: new Date('2026-01-02T00:00:00.000Z'),
+          start: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
     });
   });
 });

@@ -1,10 +1,13 @@
 'use client';
 
-import { createContext, memo, type ReactNode, use } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, memo, use } from 'react';
 
-import { type GlobalServerConfig } from '@/types/serverConfig';
+import type { IFeatureFlagsState } from '@/config/featureFlags';
+import type { GlobalServerConfig } from '@/types/serverConfig';
 
 interface AuthServerConfigState {
+  featureFlags: Partial<IFeatureFlagsState>;
   isMobile?: boolean;
   segmentVariants?: string;
   serverConfig: GlobalServerConfig;
@@ -15,15 +18,17 @@ const AuthServerConfigContext = createContext<AuthServerConfigState | null>(null
 
 interface Props {
   children: ReactNode;
+  featureFlags?: Partial<IFeatureFlagsState>;
   isMobile?: boolean;
   segmentVariants?: string;
   serverConfig?: GlobalServerConfig;
 }
 
 export const AuthServerConfigProvider = memo<Props>(
-  ({ children, serverConfig, isMobile, segmentVariants }) => (
+  ({ children, featureFlags, serverConfig, isMobile, segmentVariants }) => (
     <AuthServerConfigContext
       value={{
+        featureFlags: featureFlags || {},
         isMobile,
         segmentVariants,
         serverConfig: serverConfig || { aiProvider: {}, telemetry: {} },

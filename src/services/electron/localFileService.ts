@@ -24,6 +24,8 @@ import {
   type OpenLocalFolderParams,
   type PrepareSkillDirectoryParams,
   type PrepareSkillDirectoryResult,
+  type ProjectFileIndexParams,
+  type ProjectFileIndexResult,
   type RenameLocalFileParams,
   type ResolveSkillResourcePathParams,
   type ResolveSkillResourcePathResult,
@@ -52,6 +54,10 @@ class LocalFileService {
 
   async searchLocalFiles(params: LocalSearchFilesParams): Promise<LocalFileItem[]> {
     return ensureElectronIpc().localSystem.handleLocalFilesSearch(params);
+  }
+
+  async getProjectFileIndex(params: ProjectFileIndexParams): Promise<ProjectFileIndexResult> {
+    return ensureElectronIpc().localSystem.getProjectFileIndex(params);
   }
 
   async openLocalFile(params: OpenLocalFileParams) {

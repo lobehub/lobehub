@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderStepParams } from '../replyTemplate';
 import {
   formatTokens,
+  renderAgentError,
   renderCommandReply,
   renderDmRejected,
   renderError,
@@ -355,6 +356,62 @@ describe('replyTemplate', () => {
     });
   });
 
+  // ==================== renderAgentError ====================
+
+  describe('renderAgentError', () => {
+    it('returns the friendly NoAvailableProvider copy and appends the operation id footer', () => {
+      const out = renderAgentError('NoAvailableProvider', 'op-abc');
+      expect(out).toContain('No model provider configured');
+      // The friendly message guides the user; the op id is appended as a
+      // traceable footer so operators can still find the failure in logs.
+      expect(out).toContain('op-abc');
+    });
+
+    it('renders Chinese NoAvailableProvider copy with operation id footer when locale is zh-CN', () => {
+      const out = renderAgentError('NoAvailableProvider', 'op-abc', 'zh-CN');
+      expect(out).toContain('未配置可用的模型 Provider');
+      expect(out).toContain('op-abc');
+    });
+
+    it('omits the operation id footer when none is provided', () => {
+      const out = renderAgentError('NoAvailableProvider', undefined);
+      expect(out).toContain('No model provider configured');
+      expect(out).not.toContain('Operation ID');
+    });
+
+    it('returns the friendly InvalidProviderAPIKey copy', () => {
+      const en = renderAgentError('InvalidProviderAPIKey', 'op-1');
+      expect(en).toContain('Invalid or missing API key');
+      const zh = renderAgentError('InvalidProviderAPIKey', 'op-1', 'zh-CN');
+      expect(zh).toContain('API Key 无效');
+    });
+
+    it('returns the friendly ExceededContextWindow copy', () => {
+      expect(renderAgentError('ExceededContextWindow', 'op-1')).toContain(
+        'Context window exceeded',
+      );
+      expect(renderAgentError('ExceededContextWindow', 'op-1', 'zh-CN')).toContain('上下文已超出');
+    });
+
+    it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
+      const a = renderAgentError('QuotaLimitReached', 'op-1');
+      const b = renderAgentError('InsufficientQuota', 'op-1');
+      expect(a).toContain('quota');
+      expect(b).toContain('quota');
+      expect(a).toBe(b);
+    });
+
+    it('falls back to the generic op-id template for unknown error codes', () => {
+      expect(renderAgentError('SomeNewErrorCode', 'op-1')).toBe(
+        '**Agent Execution Failed**\nOperation ID: `op-1`',
+      );
+    });
+
+    it('falls back to the generic header when neither errorType nor operationId is known', () => {
+      expect(renderAgentError(undefined, undefined)).toBe('**Agent Execution Failed**');
+    });
+  });
+
   // ==================== renderStopped ====================
 
   describe('renderStopped', () => {
@@ -444,6 +501,16 @@ describe('replyTemplate', () => {
       expect(out).toContain('Agent 执行失败');
       expect(out).toContain('详细信息');
       expect(out).toContain('stack trace');
+    });
+
+    it('includes the Operation ID footer when an operationId is provided', () => {
+      const en = renderErrorWithDetails('stack trace', undefined, 'op-xyz');
+      expect(en).toContain('Operation ID: `op-xyz`');
+      expect(en).toContain('stack trace');
+
+      const zh = renderErrorWithDetails('stack trace', 'zh-CN', 'op-xyz');
+      expect(zh).toContain('Operation ID: `op-xyz`');
+      expect(zh).toContain('stack trace');
     });
   });
 
@@ -557,6 +624,22 @@ describe('replyTemplate', () => {
     it('should handle multiple chunks', () => {
       const text = 'chunk1\n\nchunk2\n\nchunk3';
       expect(splitMessage(text, 10)).toEqual(['chunk1', 'chunk2', 'chunk3']);
+    });
+
+    it('should drop empty input rather than emitting a single empty chunk', () => {
+      // Telegram rejects empty/whitespace-only sendMessage as
+      // "message text is empty" — splitMessage must not produce one.
+      expect(splitMessage('', 100)).toEqual([]);
+      expect(splitMessage('   ', 100)).toEqual([]);
+      expect(splitMessage('\n\n\n', 100)).toEqual([]);
+    });
+
+    it('should drop whitespace-only chunks at boundaries', () => {
+      // Leading "\n\n" with a tight limit used to produce ["\n", ...] —
+      // a single newline is treated as empty by Telegram.
+      const chunks = splitMessage('\n\nAAAAAA', 3);
+      for (const c of chunks) expect(c.trim().length).toBeGreaterThan(0);
+      expect(chunks.join('')).toContain('AAA');
     });
   });
 });

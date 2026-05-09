@@ -114,9 +114,11 @@ async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
       continue;
     }
 
-    // Any of these means the page workspace is ready for interactions
+    // Any of these means the page workspace is ready for interactions.
+    // The new-page button is rendered by `@lobehub/ui` ActionIcon as a
+    // `<div role="button">` rather than a native `<button>`, so match either.
     const readyCandidates = [
-      world.page.locator('button:has(svg.lucide-square-pen)').first(),
+      world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
       world.page.locator('input[placeholder*="Search"], input[placeholder*="搜索"]').first(),
       world.page.locator('a[href^="/page/"]').first(),
     ];
@@ -137,7 +139,7 @@ async function clickNewPageButton(world: CustomWorld): Promise<void> {
   await waitForPageWorkspaceReady(world);
 
   const candidates = [
-    world.page.locator('button:has(svg.lucide-square-pen)').first(),
+    world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
     world.page
       .locator('svg.lucide-square-pen')
       .first()

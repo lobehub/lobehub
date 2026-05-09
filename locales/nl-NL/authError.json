@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "Te veel verzoeken, probeer het later opnieuw",
   "codes.SESSION_EXPIRED": "Sessie is verlopen, log opnieuw in",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "Dit sociale account is al gekoppeld aan een andere gebruiker",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "Tijdelijke e-mailadressen worden niet ondersteund. Gebruik alstublieft een regulier e-mailadres. Herhaalde pogingen kunnen dit netwerk blokkeren.",
   "codes.UNEXPECTED_ERROR": "Er is een onverwachte fout opgetreden, probeer het opnieuw",
   "codes.UNKNOWN": "Er is een onbekende fout opgetreden, probeer het opnieuw of neem contact op met de ondersteuning",
   "codes.USER_ALREADY_EXISTS": "Gebruiker bestaat al",

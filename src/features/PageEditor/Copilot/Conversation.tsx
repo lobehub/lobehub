@@ -1,6 +1,6 @@
 import { isChatGroupSessionId } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
@@ -18,7 +18,6 @@ import {
 } from '@/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
 
 import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
 import CopilotModelSelect from './CopilotModelSelect';
@@ -35,25 +34,6 @@ const Conversation = memo(() => {
     s.useFetchAgentConfig,
   ]);
   const currentAgentId = useConversationStore(conversationSelectors.agentId);
-
-  useEffect(() => {
-    if (!currentAgentId) return;
-
-    if (useAgentStore.getState().activeAgentId !== currentAgentId) {
-      setActiveAgentId(currentAgentId);
-    }
-
-    const { activeAgentId, activeTopicId, switchTopic } = useChatStore.getState();
-
-    if (activeAgentId !== currentAgentId) {
-      useChatStore.setState({ activeAgentId: currentAgentId });
-    }
-
-    // Reset topic on agent/context switch to avoid reusing old topic scope.
-    if (activeAgentId !== currentAgentId || !!activeTopicId) {
-      void switchTopic(null, { scope: 'page', skipRefreshMessage: true });
-    }
-  }, [currentAgentId, setActiveAgentId]);
 
   useFetchAgentConfig(true, currentAgentId);
 

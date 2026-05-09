@@ -33,7 +33,6 @@ import {
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryManifest, MemoryStreamings } from '@lobechat/builtin-tool-memory/client';
 import { MessageManifest, MessageStreamings } from '@lobechat/builtin-tool-message/client';
-import { NotebookManifest, NotebookStreamings } from '@lobechat/builtin-tool-notebook/client';
 import { type BuiltinStreaming } from '@lobechat/types';
 
 /**
@@ -65,7 +64,6 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
   [LocalSystemManifest.identifier]: LocalSystemStreamings as Record<string, BuiltinStreaming>,
   [MemoryManifest.identifier]: MemoryStreamings as Record<string, BuiltinStreaming>,
   [MessageManifest.identifier]: MessageStreamings as Record<string, BuiltinStreaming>,
-  [NotebookManifest.identifier]: NotebookStreamings as Record<string, BuiltinStreaming>,
 };
 
 export interface BuiltinStreamingRegistryEntry {

@@ -104,4 +104,25 @@ describe('AgentRuntimeService', () => {
       }),
     );
   });
+
+  it('should use current agent plugins when creating operation tools', async () => {
+    getAgentStoreStateMock.mockReturnValue({
+      activeAgentId: 'agent-1',
+    });
+
+    await agentRuntimeService.createOperation({
+      messages: [{ id: 'msg-1', content: 'Hello', role: 'user' }] as UIChatMessage[],
+      userMessageId: 'msg-1',
+    });
+
+    expect(createAgentToolsEngineMock).toHaveBeenCalledWith({
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+    expect(contextEngineeringMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: ['plugin-1'],
+      }),
+    );
+  });
 });

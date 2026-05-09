@@ -2,13 +2,16 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { WriteFileParams, WriteFileResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function writeLocalFile({
-  path: filePath,
+  path: rawPath,
   content,
 }: WriteFileParams): Promise<WriteFileResult> {
-  if (!filePath) return { error: 'Path cannot be empty', success: false };
+  if (!rawPath) return { error: 'Path cannot be empty', success: false };
   if (content === undefined) return { error: 'Content cannot be empty', success: false };
+
+  const filePath = expandTilde(rawPath) ?? rawPath;
 
   try {
     const dirname = path.dirname(filePath);

@@ -7,6 +7,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
+import { BriefService } from '@/server/services/brief';
 
 import { TaskService } from './index';
 
@@ -649,6 +650,66 @@ describe('TaskService', () => {
       expect(result?.topicCount).toBe(2);
     });
 
+    it('should propagate topic completedAt to the topic activity', async () => {
+      const task = {
+        assigneeAgentId: null,
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Task 1',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+        totalTopics: 0,
+      };
+
+      const topics = [
+        {
+          completedAt: new Date('2024-01-03T00:01:30Z'),
+          createdAt: new Date('2024-01-03T00:00:00Z'),
+          handoff: null,
+          seq: 1,
+          status: 'completed',
+          topicId: 'topic-done',
+        },
+        {
+          completedAt: null,
+          createdAt: new Date('2024-01-03T00:05:00Z'),
+          handoff: null,
+          seq: 2,
+          status: 'running',
+          topicId: 'topic-running',
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getReviewConfig.mockReturnValue(undefined);
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      const topicActivities = result?.activities?.filter((a) => a.type === 'topic') ?? [];
+      const done = topicActivities.find((a) => a.id === 'topic-done');
+      const running = topicActivities.find((a) => a.id === 'topic-running');
+      expect(done?.completedAt).toBe('2024-01-03T00:01:30.000Z');
+      expect(running?.completedAt).toBeUndefined();
+    });
+
     it('should not include topicCount when no topics exist', async () => {
       const task = {
         assigneeAgentId: null,
@@ -712,6 +773,7 @@ describe('TaskService', () => {
             charCount: 500,
             createdAt: '2024-01-01T00:00:00Z',
             fileType: 'markdown',
+            sourceTaskId: 'task-2-id',
             sourceTaskIdentifier: 'TASK-2',
             title: 'Document One',
           },
@@ -719,6 +781,7 @@ describe('TaskService', () => {
             charCount: 200,
             createdAt: '2024-01-02T00:00:00Z',
             fileType: 'text',
+            sourceTaskId: 'task-1-id',
             sourceTaskIdentifier: null,
             title: 'Document Two',
           },
@@ -930,7 +993,6 @@ describe('TaskService', () => {
       mockTaskModel.findByIds.mockResolvedValue([]);
       mockTaskModel.getCheckpointConfig.mockReturnValue({});
       mockTaskModel.getReviewConfig.mockReturnValue(undefined);
-      mockTaskModel.getTreeAgentIdsForTaskIds.mockResolvedValue({ task_001: ['agent-1'] });
       mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
         { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
       ]);
@@ -940,10 +1002,8 @@ describe('TaskService', () => {
 
       expect(result?.activities?.[0]).toMatchObject({
         actions: [{ key: 'approve', label: '✅', type: 'resolve' }],
+        agent: { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
         agentId: 'agent-1',
-        agents: [
-          { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
-        ],
         artifacts: ['doc_1'],
         briefType: 'decision',
         createdAt: '2024-01-01T00:00:00.000Z',
@@ -1060,7 +1120,11 @@ describe('TaskService', () => {
       mockTaskModel.findByIds.mockResolvedValue([]);
       mockTaskModel.getCheckpointConfig.mockReturnValue({});
       mockTaskModel.getReviewConfig.mockReturnValue(undefined);
-      mockTaskModel.getTreeAgentIdsForTaskIds.mockRejectedValue(new Error('DB error'));
+      // Force the brief enrichment path to reject without breaking the
+      // sibling resolveAuthors call (which shares the agent model mock).
+      const enrichSpy = vi
+        .spyOn(BriefService.prototype, 'enrichBriefAgentOnly')
+        .mockRejectedValueOnce(new Error('DB error'));
 
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-1');
@@ -1068,10 +1132,11 @@ describe('TaskService', () => {
       expect(result).not.toBeNull();
       expect(result?.activities).toHaveLength(1);
       expect(result?.activities?.[0]).toMatchObject({
-        agents: [],
+        agent: null,
         id: 'brief-1',
         type: 'brief',
       });
+      enrichSpy.mockRestore();
     });
 
     it('should use topic handoff title with fallback to Untitled', async () => {

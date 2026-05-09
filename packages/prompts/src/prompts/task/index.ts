@@ -88,6 +88,7 @@ export const formatTaskCreated = (
 export interface TaskListFilters {
   assigneeAgentId?: string;
   isDefaultScope?: boolean;
+  isForAllAgents?: boolean;
   isForCurrentAgent?: boolean;
   parentIdentifier?: string;
   priorities?: number[];
@@ -96,6 +97,7 @@ export interface TaskListFilters {
 
 const buildTaskListLabel = (filters: TaskListFilters): string => {
   if (filters.isDefaultScope) {
+    if (filters.isForAllAgents) return 'top-level unfinished tasks across all agents';
     return filters.isForCurrentAgent
       ? 'top-level unfinished tasks of the current agent'
       : 'top-level unfinished tasks';
@@ -249,7 +251,7 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
         const author = act.agentId ? '🤖 agent' : '👤 user';
         const content = act.content || '';
         const truncated = content.length > 80 ? content.slice(0, 80) + '...' : content;
-        lines.push(`  💭 ${act.time || ''} ${author} ${truncated}`);
+        lines.push(`  💭 ${act.time || ''} ${author} ${truncated}${idSuffix}`);
       }
     }
   }
@@ -615,3 +617,5 @@ export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
 export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
+export type { TaskManagerPromptDefaults } from './taskManagerDefaults';
+export { buildTaskManagerDefaultsPrompt } from './taskManagerDefaults';

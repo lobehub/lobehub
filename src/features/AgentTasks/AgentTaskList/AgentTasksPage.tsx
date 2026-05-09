@@ -5,7 +5,9 @@ import { useNavigate } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
@@ -17,17 +19,23 @@ import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
+import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TasksGroupConfig from './TasksGroupConfig';
 
 const AgentTasksPage = memo(() => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ allAgents: true });
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
+  const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
+    systemStatusSelectors.showTaskAgentPanel(s),
+    s.toggleTaskAgentPanel,
+  ]);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const setViewOptions = useCallback(
     (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => {
@@ -49,16 +57,25 @@ const AgentTasksPage = memo(() => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
   }, [setViewOptions]);
 
+  const showTaskAgentPanelToggle = shouldRenderTaskAgentPanelToggle(isMobile);
+
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         left={<Breadcrumb />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {inlineCollapsed && (
+            {(inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
             )}
             <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
+            {showTaskAgentPanelToggle && (
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={showTaskAgentPanel}
+                onToggle={() => toggleTaskAgentPanel()}
+              />
+            )}
           </Flexbox>
         }
         styles={{

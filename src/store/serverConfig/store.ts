@@ -52,7 +52,7 @@ const createStore: CreateStore =
 
 //  ===============  Implement useStore ============ //
 
-let store: StoreApi<ServerConfigStore>;
+let store: StoreApi<ServerConfigStore> | undefined;
 
 declare global {
   interface Window {
@@ -82,6 +82,8 @@ export const createServerConfigStore = (initState?: Partial<ServerConfigStore>) 
 
   return store;
 };
+
+export const getServerConfigStoreState = () => store?.getState();
 
 export const { useStore: useServerConfigStore, Provider } =
   createContext<StoreApiWithSelector<ServerConfigStore>>();

@@ -15,17 +15,19 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      "Kimi K2.6 is Kimi's latest and most capable model, delivering stronger long-horizon coding, instruction following, and self-correction while supporting text, image, and video inputs plus chat and agent tasks.",
+      'Kimi-K2.6 is a large language model launched by Moonshot AI, with excellent coding and tool calling capabilities. Service deployment is only supported in mainland China.',
     displayName: 'Kimi K2.6',
     id: 'kimi-k2.6',
-    maxOutput: 32_768,
+    maxOutput: 98_304,
     pricing: {
       currency: 'CNY',
       units: [
         { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 6.5 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2026-04-21',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -387,12 +389,12 @@ const qwenChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
-    contextWindowTokens: 202_752,
+    contextWindowTokens: 202_745,
     description:
-      'GLM-5.1 is Zhipu’s latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. It excels at long-horizon tasks, able to autonomously plan, execute, and iterate for up to 8 hours in a single task, making it an ideal foundation for Autonomous Agents and long-horizon Coding Agents.',
+      'The GLM series is a hybrid reasoning model from Zhipu AI built for agents, with thinking and non-thinking modes. GLM-5.1 is the latest flagship variant for long-horizon agentic engineering and complex development workflows.',
     displayName: 'GLM-5.1',
     id: 'glm-5.1',
-    maxOutput: 16_384,
+    maxOutput: 131_072,
     pricing: {
       currency: 'CNY',
       units: [
@@ -422,6 +424,7 @@ const qwenChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    releasedAt: '2026-04-14',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -922,19 +925,19 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'The Qwen3.6 35B-A3B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse Mixture-of-Experts (MoE) design, achieving higher inference efficiency. Compared to the 3.5-35B-A3B model, it delivers significant improvements in agentic coding capabilities, mathematical reasoning, code reasoning, spatial intelligence, as well as object localization and target detection.',
-    displayName: 'Qwen3.6-35B-A3B',
-    id: 'qwen3.6-35b-a3b',
+      'Qwen3.6 27B is an open-source dense model with strong performance in reasoning, coding, and general capabilities. It supports thinking mode by default, offering balanced performance and efficiency.',
+    displayName: 'Qwen3.6-27B',
+    id: 'qwen3.6-27b',
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-04-16',
+    releasedAt: '2026-04-23',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -949,19 +952,19 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'The Qwen 3.6 series 27B is a native vision-language dense model. Compared to version 3.5-27B, it delivers significant improvements in agentic coding capabilities, with further enhancements in STEM performance and reasoning ability. On the visual side, it shows notable gains in spatial intelligence, object localization, and detection, while also steadily improving in video understanding, document OCR, and visual agent capabilities.',
-    displayName: 'Qwen3.6-27B',
-    id: 'qwen3.6-27b',
+      'The Qwen3.6 35B-A3B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse Mixture-of-Experts (MoE) design, achieving higher inference efficiency. Compared to the 3.5-35B-A3B model, it delivers significant improvements in agentic coding capabilities, mathematical reasoning, code reasoning, spatial intelligence, as well as object localization and target detection.',
+    displayName: 'Qwen3.6-35B-A3B',
+    id: 'qwen3.6-35b-a3b',
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
       currency: 'CNY',
       units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10.8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-04-22',
+    releasedAt: '2026-04-16',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -1553,51 +1556,30 @@ const qwenChatModels: AIChatModelCard[] = [
       currency: 'CNY',
       units: [
         {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 1.2 * 0.1,
-              '[0.256, infinity]': 4.8 * 0.1,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 1.2 * 1.25,
-              '[0.256, infinity]': 4.8 * 1.25,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 1.2,
-              '[0.256, infinity]': 4.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
           name: 'textInput',
-          strategy: 'lookup',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.2, upTo: 0.256 },
+            { rate: 4.8, upTo: 'infinity' },
+          ],
           unit: 'millionTokens',
         },
         {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 7.2,
-              '[0.256, infinity]': 28.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
           name: 'textOutput',
-          strategy: 'lookup',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 7.2, upTo: 0.256 },
+            { rate: 28.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.2 * 0.2, upTo: 0.256 },
+            { rate: 4.8 * 0.2, upTo: 'infinity' },
+          ],
           unit: 'millionTokens',
         },
       ],
@@ -2338,43 +2320,11 @@ const qwenChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, 0.256]': 2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'audioInput', rate: 4.96, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, infinity]': 2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'imageInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 9.6,
-              '[0.128, 0.256]': 24,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 53, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 213, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -2402,43 +2352,11 @@ const qwenChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.2,
-              '[0.128, 0.256]': 0.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'audioInput', rate: 1.24, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.2,
-              '[0.128, infinity]': 0.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'imageInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 4,
-              '[0.128, 0.256]': 16,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 13.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 72, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -2471,6 +2389,7 @@ const qwenChatModels: AIChatModelCard[] = [
         { name: 'audioInput', rate: 15.8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'imageInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 6.9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 62.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-04',

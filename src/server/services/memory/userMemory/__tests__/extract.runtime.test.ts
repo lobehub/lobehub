@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type MemoryExtractionPrivateConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
-import { MemoryExtractionExecutor } from '../extract';
+import { makeTaskErrorItem, MemoryExtractionExecutor } from '../extract';
 
 const createRuntimeState = (models: EnabledAiModel[], keyVaults: Record<string, any>) =>
   ({
@@ -277,5 +277,34 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
     });
 
     warnSpy.mockRestore();
+  });
+});
+
+describe('makeTaskErrorItem', () => {
+  it('preserves database driver details from nested causes', () => {
+    const driverError = new Error('must be able to parse query');
+    driverError.name = 'PostgresError';
+    Object.assign(driverError, { code: 'XX000' });
+
+    const queryError = new Error('Failed query: select ...', { cause: driverError });
+    queryError.name = 'DrizzleQueryError';
+
+    const item = makeTaskErrorItem('retrieval', queryError, {
+      sourceId: 'topic-1',
+      sourceType: 'chat_topic',
+    });
+
+    expect(item).toMatchObject({
+      cause: {
+        code: 'XX000',
+        message: 'must be able to parse query',
+        name: 'PostgresError',
+      },
+      message: 'Failed query: select ...',
+      name: 'DrizzleQueryError',
+      sourceId: 'topic-1',
+      sourceType: 'chat_topic',
+      stage: 'retrieval',
+    });
   });
 });

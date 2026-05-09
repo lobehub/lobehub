@@ -1254,6 +1254,14 @@ describe('AgentModel', () => {
         expect(result?.slug).toBe('page-agent');
         expect(result?.virtual).toBe(true);
       });
+
+      it('should create task-agent builtin agent', async () => {
+        const result = await agentModel.getBuiltinAgent('task-agent');
+
+        expect(result).toBeDefined();
+        expect(result?.slug).toBe('task-agent');
+        expect(result?.virtual).toBe(true);
+      });
     });
   });
 

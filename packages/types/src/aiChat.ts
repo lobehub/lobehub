@@ -18,6 +18,7 @@ export interface SendNewMessage {
   editorData?: Record<string, any>;
   // if message has attached with files, then add files to message and the agent
   files?: string[];
+  metadata?: MessageMetadata;
   /** Page selections attached to this message (for Ask AI functionality) */
   pageSelections?: PageSelection[];
   parentId?: string;
@@ -142,6 +143,7 @@ export const AiSendMessageServerSchema = z.object({
     content: z.string(),
     editorData: z.record(z.unknown()).optional(),
     files: z.array(z.string()).optional(),
+    metadata: MessageMetadataSchema.optional(),
     pageSelections: z.array(PageSelectionSchema).optional(),
     parentId: z.string().optional(),
   }),

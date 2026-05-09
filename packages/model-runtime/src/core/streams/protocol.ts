@@ -268,6 +268,7 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
   let grounding: any;
   let toolsCalling: any;
   let streamError: any;
+  let finishReason: string | undefined;
   // Track base64 images for accumulation
   const base64Images: Array<{ data: string; id: string }> = [];
 
@@ -278,6 +279,7 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
     async flush(): Promise<void> {
       const data = {
         error: streamError,
+        finishReason,
         grounding,
         speed,
         text: aggregatedText,
@@ -388,6 +390,22 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
             toolsCalling = parseToolCalls(toolsCalling, data);
 
             await callbacks.onToolsCalling?.({ chunk: data, toolsCalling });
+            break;
+          }
+
+          case 'stop': {
+            // Provider's terminal finishReason (e.g. Google's RECITATION / MAX_TOKENS,
+            // OpenAI's length, Anthropic's end_turn). Capture so downstream consumers
+            // can detect soft interrupts where content is empty but tokens were billed.
+            //
+            // Some providers emit multiple stop chunks per stream — Anthropic sends
+            // `message_delta` (carrying the real `stop_reason` like `end_turn` /
+            // `max_tokens` / `tool_use`) followed by a `message_stop` sentinel.
+            // Keep the FIRST non-empty value so the meaningful reason is not
+            // clobbered by the trailing sentinel.
+            if (typeof data === 'string' && data && !finishReason) {
+              finishReason = data;
+            }
             break;
           }
 

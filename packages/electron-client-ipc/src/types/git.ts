@@ -48,6 +48,76 @@ export interface GitWorkingTreeFiles {
   modified: string[];
 }
 
+export type GitFileDiffStatus = 'added' | 'modified' | 'deleted';
+
+export interface GitWorkingTreePatch {
+  /** Number of `+` lines in the patch (excluding the `+++ b/...` header). */
+  additions: number;
+  /** Number of `-` lines in the patch (excluding the `--- a/...` header). */
+  deletions: number;
+  /** Repo-relative path of the file. */
+  filePath: string;
+  /**
+   * True when git reported `Binary files … differ` for this entry — the UI
+   * should show a placeholder instead of a textual diff.
+   */
+  isBinary: boolean;
+  /**
+   * Unified diff patch text exactly as `git diff` produced it (including the
+   * `diff --git` header line). Empty when isBinary or truncated.
+   */
+  patch: string;
+  /** Same status bucket as GitWorkingTreeFiles. */
+  status: GitFileDiffStatus;
+  /** Patch was elided because it exceeded the per-file size cap. */
+  truncated: boolean;
+}
+
+export interface GitWorkingTreePatches {
+  /**
+   * All dirty file patches, ordered added → modified → deleted to match the
+   * working-tree file listing. Each entry corresponds to one file path in
+   * GitWorkingTreeFiles.
+   */
+  patches: GitWorkingTreePatch[];
+}
+
+export interface GitRemoteBranchListItem {
+  /** Whether this ref is the resolved default branch (origin/HEAD target). */
+  isDefault: boolean;
+  /** Short ref name, e.g. `origin/canary`. */
+  name: string;
+}
+
+export interface GetGitBranchDiffPayload {
+  /**
+   * Override the comparison base. When omitted, the controller resolves
+   * `refs/remotes/origin/HEAD` and uses that.
+   */
+  baseRef?: string;
+  path: string;
+}
+
+export interface GitBranchDiffPatches {
+  /**
+   * Resolved base ref the diff was taken against (e.g. `origin/canary`).
+   * Undefined when no remote default branch could be resolved — in that case
+   * `patches` is empty and the UI should show a `noBaseRef` empty state.
+   */
+  baseRef?: string;
+  /**
+   * Current branch short name (e.g. `fix/gateway-loading-flicker`), or short
+   * SHA when HEAD is detached. Lets the UI render a GitHub-style
+   * `<headRef> → <baseRef>` compare label without a second IPC round-trip.
+   */
+  headRef?: string;
+  /**
+   * Per-file diff blocks, ordered added → modified → deleted. Same shape as
+   * GitWorkingTreePatch so the renderer can reuse the existing PatchDiff path.
+   */
+  patches: GitWorkingTreePatch[];
+}
+
 export interface GitCheckoutResult {
   error?: string;
   success: boolean;

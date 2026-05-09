@@ -3,24 +3,24 @@ export const AgentDocumentsIdentifier = 'lobe-agent-documents';
 export const AgentDocumentsApiName = {
   createDocument: 'createDocument',
   copyDocument: 'copyDocument',
-  editDocument: 'editDocument',
   listDocuments: 'listDocuments',
   modifyNodes: 'modifyNodes',
   readDocument: 'readDocument',
-  readDocumentByFilename: 'readDocumentByFilename',
   removeDocument: 'removeDocument',
   renameDocument: 'renameDocument',
+  replaceDocumentContent: 'replaceDocumentContent',
   updateLoadRule: 'updateLoadRule',
-  upsertDocumentByFilename: 'upsertDocumentByFilename',
 } as const;
 
 export interface CreateDocumentArgs {
   content: string;
+  hintIsSkill?: boolean;
   target?: 'agent' | 'currentTopic';
   title: string;
 }
 
 export interface CreateDocumentState {
+  agentDocumentId?: string;
   documentId?: string;
 }
 
@@ -36,12 +36,12 @@ export interface ReadDocumentState {
   xml?: string;
 }
 
-export interface EditDocumentArgs {
+export interface ReplaceDocumentContentArgs {
   content: string;
   id: string;
 }
 
-export interface EditDocumentState {
+export interface ReplaceDocumentContentState {
   id: string;
   updated: boolean;
 }
@@ -159,28 +159,4 @@ export interface ListDocumentsArgs {
 
 export interface ListDocumentsState {
   documents: { documentId?: string; filename: string; id: string; title?: string }[];
-}
-
-export interface ReadDocumentByFilenameArgs {
-  filename: string;
-  format?: 'xml' | 'markdown' | 'both';
-}
-
-export interface ReadDocumentByFilenameState {
-  content?: string;
-  filename: string;
-  id: string;
-  title?: string;
-  xml?: string;
-}
-
-export interface UpsertDocumentByFilenameArgs {
-  content: string;
-  filename: string;
-}
-
-export interface UpsertDocumentByFilenameState {
-  created: boolean;
-  filename: string;
-  id: string;
 }

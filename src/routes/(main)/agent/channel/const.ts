@@ -6,6 +6,7 @@ const ICON_NAMES = [
   'Discord',
   'GoogleChat',
   'Lark',
+  'Line',
   'MicrosoftTeams',
   'QQ',
   'Slack',

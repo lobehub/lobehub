@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 
 import type { GrepContentParams, GrepContentResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function grepContent({
   pattern,
@@ -12,7 +13,7 @@ export async function grepContent({
     if (filePattern) args.push('--glob', filePattern);
     args.push(pattern);
 
-    const child = spawn('rg', args, { cwd: cwd || process.cwd() });
+    const child = spawn('rg', args, { cwd: expandTilde(cwd) || process.cwd() });
     let stdout = '';
 
     child.stdout?.on('data', (data) => {

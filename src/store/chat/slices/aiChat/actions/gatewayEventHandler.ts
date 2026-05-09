@@ -123,6 +123,7 @@ export const createGatewayEventHandler = (
           void emitClientAgentSignalSourceEvent({
             payload: {
               agentId: context.agentId,
+              ...(newAssistantMessageId ? { assistantMessageId: newAssistantMessageId } : {}),
               operationId,
               stepIndex: event.stepIndex,
               topicId: context.topicId ?? undefined,
@@ -272,6 +273,9 @@ export const createGatewayEventHandler = (
           void emitClientAgentSignalSourceEvent({
             payload: {
               agentId: context.agentId,
+              ...(currentAssistantMessageId
+                ? { assistantMessageId: currentAssistantMessageId }
+                : {}),
               operationId,
               topicId: context.topicId ?? undefined,
             },

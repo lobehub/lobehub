@@ -26,6 +26,7 @@ const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
   // Feishu and Lark share `sharedSchema`, which always passes 'feishu' — the
   // tooltip copy mentions both products so it reads naturally for either.
   feishu: 'channel.userIdHint.feishu',
+  line: 'channel.userIdHint.line',
   qq: 'channel.userIdHint.qq',
   slack: 'channel.userIdHint.slack',
   telegram: 'channel.userIdHint.telegram',

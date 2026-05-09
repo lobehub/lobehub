@@ -12,8 +12,8 @@ export interface ResolvedBillboardItem {
 }
 
 /**
- * locale 候选优先级：完整 code（zh-CN） → 基础 code（zh） → 其它共享同基础的 code（zh-HK）→ 默认字段。
- * 只命中 i18n 中存在的 key，避免把 undefined 当作有效值覆盖默认。
+ * Locale candidate priority: full code (zh-CN) → base code (zh) → other codes sharing the same base (zh-HK) → default fields.
+ * Only matches keys that exist in i18n to avoid overriding defaults with undefined values.
  */
 const pickLocaleEntry = <T>(i18n: Record<string, T> | undefined, locale: string): T | undefined => {
   if (!i18n) return undefined;
@@ -41,7 +41,7 @@ export const resolveBillboardItem = (
 };
 
 /**
- * 解析 billboard 级别字段（目前只有 title，用于 ? 菜单展示）。
+ * Resolve billboard-level fields (currently only title, used for the ? menu display).
  */
 export const resolveBillboardTitle = (billboard: GlobalBillboard, locale: string): string => {
   const entry = pickLocaleEntry<GlobalBillboardLocaleFields>(billboard.i18n, locale);

@@ -14,6 +14,7 @@ import { registerDocCommand } from './commands/doc';
 import { registerEvalCommand } from './commands/eval';
 import { registerFileCommand } from './commands/file';
 import { registerGenerateCommand } from './commands/generate';
+import { registerHeteroCommand } from './commands/hetero';
 import { registerKbCommand } from './commands/kb';
 import { registerLoginCommand } from './commands/login';
 import { registerLogoutCommand } from './commands/logout';
@@ -62,6 +63,7 @@ export function createProgram() {
   registerCronCommand(program);
   registerGenerateCommand(program);
   registerFileCommand(program);
+  registerHeteroCommand(program);
   registerSkillCommand(program);
   registerSessionGroupCommand(program);
   registerTaskCommand(program);

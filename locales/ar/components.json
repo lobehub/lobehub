@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "مدخل (كتابة في التخزين)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "مخرج",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "إنشاء الفيديو",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "مدخل الفيديو",
   "ModelSwitchPanel.detail.releasedAt": "تم الإصدار في {{date}}",
   "ModelSwitchPanel.emptyModel": "لا يوجد نموذج مفعل. يرجى الذهاب إلى الإعدادات لتفعيله.",
   "ModelSwitchPanel.emptyProvider": "لا يوجد مزود مفعل. يرجى الذهاب إلى الإعدادات لتفعيل أحدهم.",

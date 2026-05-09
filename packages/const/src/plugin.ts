@@ -6,6 +6,7 @@ export const ARTIFACT_THINKING_TAG = 'lobeThinking';
 export const MENTION_TAG = 'mention';
 export const THINKING_TAG = 'think';
 export const LOCAL_FILE_TAG = 'localFile';
+export const TASK_TAG = 'task';
 // https://regex101.com/r/TwzTkf/2
 export const ARTIFACT_TAG_REGEX = /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/;
 
@@ -18,3 +19,6 @@ export const ARTIFACT_THINKING_TAG_REGEX = /<lobeThinking\b[^>]*>([\S\s]*?)(?:<\
 export const THINKING_TAG_REGEX = /<think\b[^>]*>([\S\s]*?)(?:<\/think>|$)/;
 
 export const MENTION_TAG_REGEX = /<mention\b[^>]*>([\S\s]*?)(?:<\/mention>|$)/;
+
+export const AGENTS_TAG = 'lobeAgents';
+export const AGENTS_TAG_REGEX = /<lobeAgents\b[^>]*(?:\/>|>([\S\s]*?)(?:<\/lobeAgents>|$))/;

@@ -20,13 +20,18 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   categoryExtra: css`
+    overflow: hidden;
     display: flex;
     flex-shrink: 0;
     gap: 2px;
     align-items: center;
 
+    max-width: 180px;
+
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   container: css`
     position: fixed;
@@ -98,11 +103,40 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   itemLabel: css`
     overflow: hidden;
     flex: 1;
+
+    min-width: 0;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  localFileName: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 88px;
+
+    font-size: 13px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  localFilePath: css`
+    overflow: hidden;
+    flex: 0 1 auto;
+
+    max-width: 190px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+    text-align: end;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   scrollArea: css`
     overflow-y: auto;
     flex: 1;
+    margin: -4px;
+    padding: 4px;
   `,
 }));

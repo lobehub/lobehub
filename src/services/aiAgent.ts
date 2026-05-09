@@ -1,4 +1,4 @@
-import type { ExecAgentResult } from '@lobechat/types';
+import type { ExecAgentAppContext, ExecAgentResult } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -26,14 +26,7 @@ export interface ResumeApprovalParam {
 
 export interface ExecAgentTaskParams {
   agentId?: string;
-  appContext?: {
-    documentId?: string | null;
-    groupId?: string | null;
-    scope?: string | null;
-    sessionId?: string;
-    threadId?: string | null;
-    topicId?: string | null;
-  };
+  appContext?: ExecAgentAppContext;
   autoStart?: boolean;
   /**
    * Runtime of the client initiating this request. When 'desktop', server
@@ -133,8 +126,11 @@ class AiAgentService {
    * Execute a single Agent task.
    * Returns the operationId needed to connect to the Agent Gateway.
    */
-  async execAgentTask(params: ExecAgentTaskParams): Promise<ExecAgentResult> {
-    return await lambdaClient.aiAgent.execAgent.mutate(params);
+  async execAgentTask(
+    params: ExecAgentTaskParams,
+    options?: { signal?: AbortSignal },
+  ): Promise<ExecAgentResult> {
+    return await lambdaClient.aiAgent.execAgent.mutate(params, options);
   }
 
   /**

@@ -1,0 +1,14 @@
+{
+  "name": "@lobechat/builtin-tool-self-iteration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@lobechat/context-engine": "workspace:*",
+    "@lobechat/types": "workspace:*"
+  }
+}

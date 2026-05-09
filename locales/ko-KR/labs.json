@@ -1,13 +1,15 @@
 {
+  "features.agentSelfIteration.desc": "어시스턴트가 스스로를 성찰하고 자기 인식을 구축하며, 지속적인 시도와 상호작용을 통해 계속해서 발전할 수 있도록 합니다.",
+  "features.agentSelfIteration.title": "에이전트 자기 반복",
   "features.assistantMessageGroup.desc": "도우미 메시지와 해당 도구 호출 결과를 그룹으로 묶어 표시합니다",
   "features.assistantMessageGroup.title": "도우미 메시지 그룹화",
   "features.gatewayMode.desc": "로컬에서 실행하는 대신 Gateway WebSocket을 통해 서버에서 에이전트 작업을 실행합니다. 더 빠른 처리 속도를 제공하고 클라이언트 리소스 사용을 줄여줍니다.",
   "features.gatewayMode.title": "서버 사이드 에이전트 실행(Gateway)",
   "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
-  "features.heterogeneousAgent.desc": "Claude Code, Codex CLI 및 기타 외부 에이전트 CLI를 사용하여 이기종 에이전트 실행을 활성화합니다. 사이드바 에이전트 메뉴에 \"Claude Code Agent\" 옵션이 생성됩니다.",
-  "features.heterogeneousAgent.title": "이기종 에이전트 (Claude Code)",
   "features.inputMarkdown.desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
   "features.inputMarkdown.title": "입력창 Markdown 렌더링",
+  "features.messenger.desc": "Telegram(및 기타 메신저)을 통해 공유된 LobeHub 봇으로 에이전트와 대화하세요. 계정을 연결하고 메시지를 받을 에이전트를 선택할 수 있는 설정의 메신저 탭이 추가됩니다.",
+  "features.messenger.title": "메신저",
   "title": "실험실"
 }

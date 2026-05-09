@@ -5,7 +5,7 @@ import {
 } from '@lobechat/builtin-tool-activator';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { safeParseJSON } from '@lobechat/utils';
-import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronRight, Edit3Icon } from 'lucide-react';
@@ -37,10 +37,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       color: ${cssVar.colorTextSecondary};
     }
-  `,
-  avatar: css`
-    font-size: 16px;
-    line-height: 1;
   `,
   description: css`
     padding-block: 8px;
@@ -153,7 +149,15 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
     return (
       <Flexbox gap={4}>
         <Flexbox horizontal align="center" className={styles.description} gap={6}>
-          {pluginMeta?.avatar && <span className={styles.avatar}>{pluginMeta.avatar}</span>}
+          {pluginMeta?.avatar && (
+            <Avatar
+              avatar={pluginMeta.avatar}
+              shape={'square'}
+              size={16}
+              style={{ flex: 'none' }}
+              title={toolTitle}
+            />
+          )}
           <span>
             {toolTitle} → {actionTitle}
             {actionTitleSuffix}

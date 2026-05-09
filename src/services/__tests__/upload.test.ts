@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
-import { API_ENDPOINTS } from '@/services/_url';
 
 import { UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
 
@@ -363,47 +362,6 @@ describe('UploadService', () => {
       });
 
       expect(result.path).toBe(customPath);
-    });
-  });
-
-  describe('getImageFileByUrlWithCORS', () => {
-    beforeEach(() => {
-      global.fetch = vi.fn();
-    });
-
-    it('should fetch and create file from URL', async () => {
-      const url = 'https://example.com/image.png';
-      const filename = 'test.png';
-      const mockArrayBuffer = new ArrayBuffer(8);
-
-      vi.mocked(global.fetch).mockResolvedValue({
-        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
-      } as Response);
-
-      const result = await uploadService.getImageFileByUrlWithCORS(url, filename);
-
-      expect(global.fetch).toHaveBeenCalledWith(API_ENDPOINTS.proxy, {
-        body: url,
-        method: 'POST',
-      });
-      expect(result).toBeInstanceOf(File);
-      expect(result.name).toBe(filename);
-      expect(result.type).toBe('image/png');
-    });
-
-    it('should handle custom file type', async () => {
-      const url = 'https://example.com/image.jpg';
-      const filename = 'test.jpg';
-      const fileType = 'image/jpeg';
-      const mockArrayBuffer = new ArrayBuffer(8);
-
-      vi.mocked(global.fetch).mockResolvedValue({
-        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
-      } as Response);
-
-      const result = await uploadService.getImageFileByUrlWithCORS(url, filename, fileType);
-
-      expect(result.type).toBe(fileType);
     });
   });
 });

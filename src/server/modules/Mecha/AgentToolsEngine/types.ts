@@ -59,6 +59,8 @@ export interface ServerCreateAgentToolsEngineParams {
     deviceOnline?: boolean;
     gatewayConfigured: boolean;
   };
+  /** Whether to suppress the local-system builtin while preserving other tools. */
+  disableLocalSystem?: boolean;
   /** Whether the user's global memory setting is enabled */
   globalMemoryEnabled?: boolean;
   /** Whether agent has agent documents */

@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createRuntimeProcessorContext } from '../../../runtime/context';
+import type { SignalFeedbackSatisfaction } from '../../types';
 import { createFeedbackDomainJudgeSignalHandler } from '../feedbackDomain';
 
 const context = createRuntimeProcessorContext({
@@ -14,6 +15,33 @@ const context = createRuntimeProcessorContext({
     },
   },
   scopeKey: 'topic:thread_1',
+});
+
+const createSatisfactionSignal = (input: {
+  message: string;
+  result: 'not_satisfied' | 'satisfied';
+  serializedContext?: string;
+}): SignalFeedbackSatisfaction => ({
+  chain: { chainId: 'chain:source_1', parentNodeId: 'source_1', rootSourceId: 'source_1' },
+  payload: {
+    agentId: 'agent_1',
+    confidence: 0.9,
+    evidence: [{ cue: 'feedback', excerpt: input.message }],
+    message: input.message,
+    messageId: 'msg_1',
+    reason: 'test satisfaction',
+    result: input.result,
+    serializedContext: input.serializedContext,
+    sourceHints: { intents: ['skill'] },
+    topicId: 'topic_1',
+  },
+  signalId: 'source_1:signal:feedback-satisfaction',
+  signalType: 'signal.feedback.satisfaction',
+  source: {
+    sourceId: 'source_1',
+    sourceType: 'agent.user.message',
+  },
+  timestamp: 101,
 });
 
 describe('feedbackDomainJudge', () => {
@@ -175,7 +203,63 @@ describe('feedbackDomainJudge', () => {
     expect(result).toBeUndefined();
   });
 
-  it('passes structured satisfaction output to the resolver without serialized context', async () => {
+  it('dispatches a none domain signal when a non-neutral resolver returns none', async () => {
+    const handler = createFeedbackDomainJudgeSignalHandler({
+      resolveDomains: async () => [
+        {
+          confidence: 0.81,
+          evidence: [],
+          reason: 'non-actionable feedback',
+          target: 'none',
+        },
+      ],
+    });
+
+    const result = await handler.handle(
+      {
+        chain: {
+          chainId: 'chain_none',
+          parentNodeId: 'source_none',
+          rootSourceId: 'source_none',
+        },
+        payload: {
+          confidence: 0.89,
+          evidence: [{ cue: 'commentary', excerpt: 'That was interesting.' }],
+          message: 'That was interesting.',
+          messageId: 'msg_none',
+          reason: 'commentary-only',
+          result: 'satisfied',
+          sourceHints: { intents: ['prompt'] },
+        },
+        signalId: 'sig_none',
+        signalType: 'signal.feedback.satisfaction',
+        source: { sourceId: 'source_none', sourceType: 'agent.user.message' },
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              conflictPolicy: {
+                forbiddenWith: ['memory', 'prompt', 'skill'],
+                mode: 'exclusive',
+                priority: 0,
+              },
+              evidence: [{ cue: 'commentary', excerpt: 'That was interesting.' }],
+              target: 'none',
+            }),
+            signalType: 'signal.feedback.domain.none',
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('passes structured satisfaction output and serialized context to the resolver', async () => {
     let resolverInput:
       | Parameters<
           NonNullable<
@@ -255,6 +339,7 @@ describe('feedbackDomainJudge', () => {
         messageId: 'msg_structured',
         reason: 'corrective-feedback-cue',
         result: 'not_satisfied',
+        serializedContext: '{"large":"context"}',
       },
       source: { sourceId: 'source_structured', sourceType: 'agent.user.message' },
       sourceHints: { intents: ['memory'] },
@@ -310,6 +395,103 @@ describe('feedbackDomainJudge', () => {
         signals: expect.arrayContaining([
           expect.objectContaining({ signalType: 'signal.feedback.domain.memory' }),
         ]),
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * skill-domain direct routing carries classifier metadata into the emitted signal.
+   */
+  it('enriches skill domain signals with direct skill intent classification', async () => {
+    const handler = createFeedbackDomainJudgeSignalHandler({
+      resolveDomains: vi.fn().mockResolvedValue([
+        {
+          confidence: 0.91,
+          evidence: [{ cue: 'skill target', excerpt: 'follow the checklist from earlier' }],
+          reason: 'skill-domain target',
+          target: 'skill',
+        },
+      ]),
+      skillIntentClassifier: {
+        classify: vi.fn().mockResolvedValue({
+          actionIntent: 'create',
+          confidence: 0.86,
+          explicitness: 'implicit_strong_learning',
+          reason: 'future-scoped procedural reuse instruction',
+          route: 'direct_decision',
+        }),
+      },
+    });
+
+    const result = await handler.handle(
+      createSatisfactionSignal({
+        message: 'For future database migration reviews, follow the checklist from earlier.',
+        result: 'satisfied',
+        serializedContext: 'topic=database-migration-review',
+      }),
+      context,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              skillActionIntent: 'create',
+              skillIntentConfidence: 0.86,
+              skillIntentExplicitness: 'implicit_strong_learning',
+              skillIntentReason: 'future-scoped procedural reuse instruction',
+              skillRoute: 'direct_decision',
+              target: 'skill',
+            }),
+            signalType: 'signal.feedback.domain.skill',
+          }),
+        ],
+        status: 'dispatch',
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * weak positive skill-domain feedback carries accumulation metadata.
+   */
+  it('enriches weak positive skill domain signals with accumulation route', async () => {
+    const handler = createFeedbackDomainJudgeSignalHandler({
+      resolveDomains: vi.fn().mockResolvedValue([
+        {
+          confidence: 0.8,
+          evidence: [{ cue: 'skill target', excerpt: 'helpful' }],
+          reason: 'skill-domain target',
+          target: 'skill',
+        },
+      ]),
+    });
+
+    const result = await handler.handle(
+      createSatisfactionSignal({
+        message: 'This explanation was helpful.',
+        result: 'satisfied',
+        serializedContext: 'topic=debugging-help',
+      }),
+      context,
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        signals: [
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              skillActionIntent: 'maintain',
+              skillIntentConfidence: 0.35,
+              skillIntentExplicitness: 'weak_positive',
+              skillIntentReason: 'insufficient-evidence',
+              skillRoute: 'accumulate',
+              target: 'skill',
+            }),
+          }),
+        ],
       }),
     );
   });

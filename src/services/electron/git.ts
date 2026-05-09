@@ -1,12 +1,16 @@
 import {
+  type GetGitBranchDiffPayload,
   type GitAheadBehind,
+  type GitBranchDiffPatches,
   type GitBranchInfo,
   type GitBranchListItem,
   type GitCheckoutResult,
   type GitLinkedPullRequestResult,
   type GitPullResult,
   type GitPushResult,
+  type GitRemoteBranchListItem,
   type GitWorkingTreeFiles,
+  type GitWorkingTreePatches,
   type GitWorkingTreeStatus,
 } from '@lobechat/electron-client-ipc';
 
@@ -41,12 +45,24 @@ class ElectronGitService {
     return this.ipc.git.listGitBranches(dirPath);
   }
 
+  async listGitRemoteBranches(dirPath: string): Promise<GitRemoteBranchListItem[]> {
+    return this.ipc.git.listGitRemoteBranches(dirPath);
+  }
+
   async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
     return this.ipc.git.getGitWorkingTreeStatus(dirPath);
   }
 
   async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
     return this.ipc.git.getGitWorkingTreeFiles(dirPath);
+  }
+
+  async getGitWorkingTreePatches(dirPath: string): Promise<GitWorkingTreePatches> {
+    return this.ipc.git.getGitWorkingTreePatches(dirPath);
+  }
+
+  async getGitBranchDiff(payload: GetGitBranchDiffPayload): Promise<GitBranchDiffPatches> {
+    return this.ipc.git.getGitBranchDiff(payload);
   }
 
   async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {

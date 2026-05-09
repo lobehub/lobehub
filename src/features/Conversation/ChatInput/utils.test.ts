@@ -45,4 +45,18 @@ describe('getConversationChatInputUiState', () => {
       showStopButton: false,
     });
   });
+
+  it('forces the default placeholder when disableFollowUpVariant is set, even while loading', () => {
+    expect(
+      getConversationChatInputUiState({
+        disableFollowUpVariant: true,
+        isInputEmpty: true,
+        isInputLoading: true,
+      }),
+    ).toEqual({
+      placeholderVariant: 'default',
+      showSendMenu: false,
+      showStopButton: true,
+    });
+  });
 });

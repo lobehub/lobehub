@@ -31,6 +31,14 @@ export type SlashPlacement = 'top' | 'bottom';
 export interface PublicState {
   agentId?: string;
   allowExpand?: boolean;
+  /**
+   * Disable @ mention trigger (no menu, no agent-assignment hint in placeholder)
+   */
+  disableMention?: boolean;
+  /**
+   * Disable / slash command trigger
+   */
+  disableSlash?: boolean;
   expand?: boolean;
   getMessages?: () => OpenAIChatMessage[];
   leftActions: ActionKeys[];

@@ -7,6 +7,10 @@ import {
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
 import {
+  AgentDocumentsInspectors,
+  AgentDocumentsManifest,
+} from '@lobechat/builtin-tool-agent-documents/client';
+import {
   AgentManagementInspectors,
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management/client';
@@ -37,21 +41,30 @@ import {
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryInspectors, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
 import { MessageInspectors, MessageManifest } from '@lobechat/builtin-tool-message/client';
-import { NotebookInspectors, NotebookManifest } from '@lobechat/builtin-tool-notebook/client';
 import { PageAgentInspectors, PageAgentManifest } from '@lobechat/builtin-tool-page-agent/client';
 import {
   SkillStoreInspectors,
   SkillStoreManifest,
 } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsInspectors, SkillsManifest } from '@lobechat/builtin-tool-skills/client';
+import { TaskInspectors, TaskManifest } from '@lobechat/builtin-tool-task/client';
 import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
 } from '@lobechat/builtin-tool-web-browsing/client';
+import {
+  AgentMarketplaceInspectors,
+  AgentMarketplaceManifest,
+} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/client';
+import {
+  WebOnboardingInspectors,
+  WebOnboardingManifest,
+} from '@lobechat/builtin-tool-web-onboarding/client';
 import { createRunCommandInspector } from '@lobechat/shared-tool-ui/inspectors';
 import { type BuiltinInspector } from '@lobechat/types';
 
 import { CodexInspectors } from './codex';
+import { GithubIdentifier, GithubInspectors } from './github';
 
 /**
  * Builtin tools inspector registry
@@ -62,7 +75,12 @@ import { CodexInspectors } from './codex';
  */
 const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
+  [AgentDocumentsManifest.identifier]: AgentDocumentsInspectors as Record<string, BuiltinInspector>,
   [AgentManagementManifest.identifier]: AgentManagementInspectors as Record<
+    string,
+    BuiltinInspector
+  >,
+  [AgentMarketplaceManifest.identifier]: AgentMarketplaceInspectors as Record<
     string,
     BuiltinInspector
   >,
@@ -81,18 +99,18 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
   [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
   [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
-  [NotebookManifest.identifier]: NotebookInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
   [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
-  // @deprecated backward compat: old messages stored 'lobe-tools' as identifier
-  ['lobe-tools']: LobeActivatorInspectors as Record<string, BuiltinInspector>,
   [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
+  [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
+  [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
   codex: {
     ...CodexInspectors,
     command_execution: createRunCommandInspector('Run') as BuiltinInspector,
   },
+  [GithubIdentifier]: GithubInspectors,
 };
 
 export interface BuiltinInspectorRegistryEntry {

@@ -83,9 +83,16 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
 - Never ask users to paste API keys directly in chat — always use \`lobe-creds\` to store them securely
 - \`lobe-creds\` works together with \`lobe-cloud-sandbox\` for secure credential injection
 
-**Credential Injection Locations:**
+**Credential Usage by Runtime:**
+
+In cloud sandbox (\`injectCredsToSandbox\` available):
 - Environment-based credentials (oauth, kv-env, kv-header) → \`~/.creds/env\` — use \`runCommand\` with \`bash -c "source ~/.creds/env && your_command"\`
 - File-based credentials → \`~/.creds/files/{key}/{filename}\` — use file path directly in your code
+
+On desktop/local (no sandbox, \`injectCredsToSandbox\` NOT available):
+- Use \`getPlaintextCred\` to retrieve values, then pass as inline env vars in \`runCommand\`
+- Example: \`runCommand({ command: "GITHUB_TOKEN='xxx' gh repo list" })\`
+- File credentials: use \`getPlaintextCred\` to get the file path from the response state
 </credentials_management>
 
 <best_practices>

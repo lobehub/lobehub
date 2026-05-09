@@ -74,6 +74,12 @@ export const CHAT_MODELS_BLOCK_LIST = [
 ];
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
+type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
+type ResponseCreateParamsWithPromptCacheKey = (
+  | OpenAI.Responses.ResponseCreateParamsStreaming
+  | OpenAI.Responses.ResponseCreateParams
+) &
+  OpenAIExtraParams;
 export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
@@ -346,6 +352,27 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return false;
     }
 
+    private resolvePromptCacheKey(model?: string, user?: string) {
+      if (!user) return;
+
+      // Keep the default key at {userId}:{model}; {agentId} can be added later if a narrower cache bucket is needed.
+      if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
+        return `lobe:${user}:${model}`;
+      }
+    }
+
+    private resolvePromptCacheKeyParams(
+      model?: string,
+      user?: string,
+      existingPromptCacheKey?: string,
+    ) {
+      if (existingPromptCacheKey !== undefined) return {};
+
+      const promptCacheKey = this.resolvePromptCacheKey(model, user);
+
+      return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
+    }
+
     async chat({ responseMode, ...payload }: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
         const log = debug(`${this.logPrefix}:chat`);
@@ -446,6 +473,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const messages = await convertOpenAIMessages(postPayload.messages, {
           forceImageBase64: chatCompletion?.forceImageBase64,
           forceVideoBase64: chatCompletion?.forceVideoBase64,
+          model: postPayload.model,
         });
 
         let response: Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
@@ -484,6 +512,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             ...cleanedPayload,
             messages,
             ...(chatCompletion?.noUserId ? {} : { user: options?.user }),
+            ...this.resolvePromptCacheKeyParams(
+              cleanedPayload.model,
+              options?.user,
+              cleanedPayload.prompt_cache_key,
+            ),
             stream_options:
               postPayload.stream && !chatCompletion?.excludeUsage
                 ? { include_usage: true }
@@ -746,6 +779,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             {
               messages,
               model,
+              ...this.resolvePromptCacheKeyParams(model, options?.user),
               tool_choice: { function: { name: tool.function.name }, type: 'function' },
               tools: [tool],
               user: options?.user,
@@ -800,6 +834,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             {
               input: messages,
               model,
+              ...this.resolvePromptCacheKeyParams(model, options?.user),
               text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
               // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
               safety_identifier: options?.user,
@@ -830,6 +865,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             messages,
             model,
             response_format: { json_schema: processedSchema, type: 'json_schema' },
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
             user: options?.user,
           },
           { headers: options?.headers, signal: options?.signal },
@@ -1107,8 +1143,13 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         input,
         ...(max_tokens && { max_output_tokens: max_tokens }),
         store: false,
-        stream: !isStreaming ? undefined : isStreaming,
+        stream: isStreaming || undefined,
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
+        ...this.resolvePromptCacheKeyParams(
+          res.model,
+          options?.user,
+          (res as OpenAIExtraParams).prompt_cache_key,
+        ),
         // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
         safety_identifier: options?.user,
         // Sanitize sampling params for Responses API path
@@ -1116,7 +1157,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           normalizeTemperature: false,
           preferTemperature: true,
         }),
-      } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
+      } as ResponseCreateParamsWithPromptCacheKey;
 
       if (debugParams?.responses?.()) {
         // eslint-disable-next-line no-console
@@ -1233,6 +1274,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           {
             input,
             model,
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
             tool_choice: 'required',
             tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
             // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
@@ -1274,6 +1316,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         {
           messages: msgs,
           model,
+          ...this.resolvePromptCacheKeyParams(model, options?.user),
           tool_choice: 'required',
           tools,
           user: options?.user,

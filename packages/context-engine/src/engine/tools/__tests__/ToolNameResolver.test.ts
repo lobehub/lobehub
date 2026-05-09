@@ -10,17 +10,22 @@ describe('ToolNameResolver', () => {
       expect(result).toBe('test-plugin____myAction');
     });
 
-    it('should generate tool name with type suffix', () => {
-      const result = resolver.generate('test-plugin', 'myAction', 'builtin');
-      expect(result).toBe('test-plugin____myAction____builtin');
+    it('should generate tool name with non-builtin type suffix', () => {
+      const result = resolver.generate('test-plugin', 'myAction', 'standalone');
+      expect(result).toBe('test-plugin____myAction____standalone');
     });
 
-    it('should handle default type', () => {
+    it('should treat builtin type as default and skip the suffix', () => {
+      const result = resolver.generate('test-plugin', 'myAction', 'builtin');
+      expect(result).toBe('test-plugin____myAction');
+    });
+
+    it('should treat legacy default type the same as builtin', () => {
       const result = resolver.generate('test-plugin', 'myAction', 'default');
       expect(result).toBe('test-plugin____myAction');
     });
 
-    it('should handle undefined type as default', () => {
+    it('should handle undefined type as builtin', () => {
       const result = resolver.generate('test-plugin', 'myAction');
       expect(result).toBe('test-plugin____myAction');
     });
@@ -35,14 +40,14 @@ describe('ToolNameResolver', () => {
       const result = resolver.generate(identifier, longActionName, 'builtin');
 
       // The result should be shorter than the original would have been
-      const originalLength = `${identifier}____${longActionName}____builtin`.length;
+      const originalLength = `${identifier}____${longActionName}`.length;
       expect(result.length).toBeLessThan(originalLength);
 
-      // Should contain the identifier, MD5HASH prefix, and type
+      // Builtin tools have no type suffix; identifier and MD5HASH prefix remain
       expect(result).toContain(identifier);
       expect(result).toContain('MD5HASH_');
-      expect(result).toContain('____builtin');
-      expect(result).toMatch(/^my-plugin_{4}MD5HASH_[\da-f]+_{4}builtin$/);
+      expect(result).not.toContain('____builtin');
+      expect(result).toMatch(/^my-plugin_{4}MD5HASH_[\da-f]+$/);
     });
 
     it('should handle identifier that is itself long', () => {
@@ -89,17 +94,41 @@ describe('ToolNameResolver', () => {
   describe('generate - special characters and edge cases', () => {
     it('should handle identifiers with special characters', () => {
       const result = resolver.generate('my-plugin_v2', 'action-name', 'builtin');
-      expect(result).toBe('my-plugin_v2____action-name____builtin');
+      expect(result).toBe('my-plugin_v2____action-name');
     });
 
     it('should handle empty action name', () => {
       const result = resolver.generate('plugin', '', 'builtin');
-      expect(result).toBe('plugin________builtin');
+      expect(result).toBe('plugin____');
     });
 
     it('should handle numeric identifiers and action names', () => {
       const result = resolver.generate('plugin123', 'action456', 'type789');
       expect(result).toBe('plugin123____action456____type789');
+    });
+
+    it('should hash invalid api names so provider tool names stay valid', () => {
+      const result = resolver.generate('mcp-server', 'get.current/weather', 'mcp');
+
+      expect(result).toMatch(/^mcp-server____MD5HASH_[\da-f]+____mcp$/);
+      expect(result).toMatch(/^[\w-]+$/);
+      expect(result).not.toContain('get.current/weather');
+    });
+
+    it('should hash non-ASCII api names so provider tool names stay valid', () => {
+      const result = resolver.generate('custom_mcp_plugin', '中文API', 'mcp');
+
+      expect(result).toMatch(/^custom_mcp_plugin____MD5HASH_[\da-f]+____mcp$/);
+      expect(result).toMatch(/^[\w-]+$/);
+      expect(result).not.toContain('中文API');
+    });
+
+    it('should hash invalid identifiers so provider tool names stay valid', () => {
+      const result = resolver.generate('@browser/use', 'open_page', 'mcp');
+
+      expect(result).toMatch(/^MD5HASH_[\da-f]+____open_page____mcp$/);
+      expect(result).toMatch(/^[\w-]+$/);
+      expect(result).not.toContain('@browser/use');
     });
 
     it('should be consistent for same inputs', () => {
@@ -118,7 +147,8 @@ describe('ToolNameResolver', () => {
   describe('generate - hash consistency', () => {
     it('should generate consistent hash for same long action name', () => {
       const identifier = 'plugin';
-      const longActionName = 'very-long-action-name-that-will-also-cause-overflow';
+      const longActionName =
+        'very-long-action-name-that-will-also-cause-overflow-with-extra-padding';
 
       const result1 = resolver.generate(identifier, longActionName, 'builtin');
       const result2 = resolver.generate(identifier, longActionName, 'builtin');
@@ -129,8 +159,8 @@ describe('ToolNameResolver', () => {
 
     it('should generate different hashes for different long action names', () => {
       const identifier = 'plugin';
-      const longActionName1 = 'very-long-action-name-that-will-also-cause-overflow-1';
-      const longActionName2 = 'very-long-action-name-that-will-also-cause-overflow-2';
+      const longActionName1 = 'very-long-action-name-that-will-also-cause-overflow-with-padding-1';
+      const longActionName2 = 'very-long-action-name-that-will-also-cause-overflow-with-padding-2';
 
       const result1 = resolver.generate(identifier, longActionName1, 'builtin');
       const result2 = resolver.generate(identifier, longActionName2, 'builtin');
@@ -144,15 +174,15 @@ describe('ToolNameResolver', () => {
   describe('generate - real-world examples', () => {
     it('should handle builtin tools correctly', () => {
       const result = resolver.generate('lobe-image-designer', 'text2image', 'builtin');
-      expect(result).toBe('lobe-image-designer____text2image____builtin');
+      expect(result).toBe('lobe-image-designer____text2image');
     });
 
     it('should handle web browsing tools correctly', () => {
       const result = resolver.generate('lobe-web-browsing', 'search', 'builtin');
-      expect(result).toBe('lobe-web-browsing____search____builtin');
+      expect(result).toBe('lobe-web-browsing____search');
 
       const result2 = resolver.generate('lobe-web-browsing', 'crawlSinglePage', 'builtin');
-      expect(result2).toBe('lobe-web-browsing____crawlSinglePage____builtin');
+      expect(result2).toBe('lobe-web-browsing____crawlSinglePage');
     });
 
     it('should handle plugin tools correctly', () => {
@@ -167,7 +197,7 @@ describe('ToolNameResolver', () => {
         {
           function: {
             arguments: '{"query": "test"}',
-            name: 'test-plugin____myAction____builtin',
+            name: 'test-plugin____myAction',
           },
           id: 'call_1',
           type: 'function',
@@ -195,7 +225,7 @@ describe('ToolNameResolver', () => {
       });
     });
 
-    it('should handle default type correctly', () => {
+    it('should fall back to builtin type for two-segment tool names without manifest', () => {
       const toolCalls = [
         {
           function: {
@@ -217,7 +247,34 @@ describe('ToolNameResolver', () => {
 
       const result = resolver.resolve(toolCalls, manifests);
 
-      expect(result[0].type).toBe('default');
+      expect(result[0].type).toBe('builtin');
+    });
+
+    it('should still parse legacy three-segment ____builtin tool names', () => {
+      const toolCalls = [
+        {
+          function: {
+            arguments: '{}',
+            name: 'legacy-plugin____legacyAction____builtin',
+          },
+          id: 'call_1',
+          type: 'function',
+        },
+      ];
+
+      const manifests = {
+        'legacy-plugin': {
+          api: [{ description: '', name: 'legacyAction', parameters: {} }],
+          identifier: 'legacy-plugin',
+          meta: {},
+          type: 'builtin' as const,
+        },
+      };
+
+      const result = resolver.resolve(toolCalls, manifests);
+
+      expect(result[0].type).toBe('builtin');
+      expect(result[0].apiName).toBe('legacyAction');
     });
 
     it('should handle empty tool calls array', () => {
@@ -233,7 +290,7 @@ describe('ToolNameResolver', () => {
           type: 'function',
         },
         {
-          function: { arguments: '{}', name: 'plugin2____action2____builtin' },
+          function: { arguments: '{}', name: 'plugin2____action2' },
           id: 'call_2',
           type: 'function',
         },
@@ -367,6 +424,76 @@ describe('ToolNameResolver', () => {
 
       expect(result[0].apiName).toBe('MD5HASH_abc123def456');
     });
+
+    it('should resolve apiName hashed because it contains provider-invalid characters', () => {
+      const identifier = 'mcp-server';
+      const apiName = 'get.current/weather';
+      const toolName = resolver.generate(identifier, apiName, 'mcp');
+
+      const result = resolver.resolve(
+        [
+          {
+            function: {
+              arguments: '{"location":"Shanghai"}',
+              name: toolName,
+            },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        {
+          [identifier]: {
+            api: [{ description: 'Get weather', name: apiName, parameters: {} }],
+            identifier,
+            meta: {},
+            type: 'mcp' as const,
+          },
+        },
+      );
+
+      expect(result[0]).toEqual({
+        apiName,
+        arguments: '{"location":"Shanghai"}',
+        id: 'call_1',
+        identifier,
+        type: 'mcp',
+      });
+    });
+
+    it('should resolve non-ASCII apiName hashed for provider-safe tool names', () => {
+      const identifier = 'custom_mcp_plugin';
+      const apiName = '中文API';
+      const toolName = resolver.generate(identifier, apiName, 'mcp');
+
+      const result = resolver.resolve(
+        [
+          {
+            function: {
+              arguments: '{"query":"最近工作压力好大"}',
+              name: toolName,
+            },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        {
+          [identifier]: {
+            api: [{ description: 'Chat with companion', name: apiName, parameters: {} }],
+            identifier,
+            meta: {},
+            type: 'mcp' as const,
+          },
+        },
+      );
+
+      expect(result[0]).toEqual({
+        apiName,
+        arguments: '{"query":"最近工作压力好大"}',
+        id: 'call_1',
+        identifier,
+        type: 'mcp',
+      });
+    });
   });
 
   describe('resolve - hashed identifier', () => {
@@ -431,6 +558,37 @@ describe('ToolNameResolver', () => {
 
       expect(result[0].identifier).toBe('MD5HASH_abc123def456');
     });
+
+    it('should resolve identifier hashed because it contains provider-invalid characters', () => {
+      const identifier = '@browser/use';
+      const apiName = 'open_page';
+      const toolName = resolver.generate(identifier, apiName, 'mcp');
+
+      const result = resolver.resolve(
+        [
+          {
+            function: {
+              arguments: '{}',
+              name: toolName,
+            },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        {
+          [identifier]: {
+            api: [{ description: 'Open page', name: apiName, parameters: {} }],
+            identifier,
+            meta: {},
+            type: 'mcp' as const,
+          },
+        },
+      );
+
+      expect(result[0].identifier).toBe(identifier);
+      expect(result[0].apiName).toBe(apiName);
+      expect(result[0].type).toBe('mcp');
+    });
   });
 
   describe('resolve - both identifier and apiName hashed', () => {
@@ -487,7 +645,7 @@ describe('ToolNameResolver', () => {
         {
           function: {
             arguments: '{"query": "test"}',
-            name: 'test-plugin____myAction____builtin',
+            name: 'test-plugin____myAction',
           },
           id: 'call_1',
           thoughtSignature: 'thinking about this...',
@@ -515,7 +673,7 @@ describe('ToolNameResolver', () => {
         {
           function: {
             arguments: '{"query": "test"}',
-            name: 'test-plugin____myAction____builtin',
+            name: 'test-plugin____myAction',
           },
           id: 'call_1',
           type: 'function',
@@ -559,7 +717,7 @@ describe('ToolNameResolver', () => {
     it('should handle tool calls with different types', () => {
       const toolCalls = [
         {
-          function: { arguments: '{}', name: 'plugin1____action1____builtin' },
+          function: { arguments: '{}', name: 'plugin1____action1' },
           id: 'call_1',
           type: 'function',
         },

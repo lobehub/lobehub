@@ -50,6 +50,25 @@ export default {
   'channel.feishu.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
+  'channel.line.description':
+    'Connect this assistant to LINE Messaging API for direct and group chats.',
+  'channel.line.destinationUserId': 'Destination User ID',
+  'channel.line.destinationUserIdHint':
+    'The bot\'s own user ID (`U` + 32 chars) — click "Fetch from LINE" below to auto-fill. Not the personal "Your user ID" shown in LINE\'s Basic settings.',
+  'channel.line.fetchBotInfo': 'Fetch from LINE',
+  'channel.line.fetchBotInfoSuccess': 'Destination User ID fetched',
+  'channel.line.fetchBotInfoFailed': 'Failed to fetch bot info',
+  'channel.line.fetchBotInfoMissingToken':
+    'Enter the Channel Access Token first, then click "Fetch from LINE".',
+  'channel.line.destinationUserIdPlaceholder': 'e.g. U1234567890abcdef1234567890abcdef',
+  'channel.line.channelAccessToken': 'Channel Access Token',
+  'channel.line.channelAccessTokenHint':
+    'Long-lived token issued under the Messaging API tab. Token will be encrypted and stored securely.',
+  'channel.line.channelSecret': 'Channel Secret',
+  'channel.line.channelSecretHint':
+    'From the Basic settings tab. Required — used to verify X-Line-Signature on every inbound webhook.',
+  'channel.line.webhookManualSetup':
+    'LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click "Verify", and enable "Use webhook".',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',
@@ -196,6 +215,8 @@ export default {
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':
     'Open your app on the Feishu / Lark Open Platform → Permissions, then look up your Open ID.',
+  'channel.userIdHint.line':
+    'Open the LINE Developers Console → your channel → Basic settings tab, and copy "Your user ID" (starts with U, 33 chars).',
   'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':

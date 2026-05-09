@@ -3,11 +3,18 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { type BatchTaskResult } from '@/types/service';
 import {
   type ChatTopic,
+  type ChatTopicMetadata,
   type CreateTopicParams,
   type QueryTopicParams,
   type RecentTopic,
   type TopicRankItem,
 } from '@/types/topic';
+
+type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
+
+type UpdateTopicMetadataInput = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
+  onboardingSession?: OnboardingSessionMetadataPatch;
+};
 
 export class TopicService {
   createTopic = (params: CreateTopicParams): Promise<string> => {
@@ -81,32 +88,7 @@ export class TopicService {
     return lambdaClient.topic.updateTopic.mutate({ id, value: data });
   };
 
-  updateTopicMetadata = (
-    id: string,
-    metadata: {
-      boundDeviceId?: string;
-      model?: string;
-      onboardingFeedback?: {
-        comment?: string;
-        rating: 'good' | 'bad';
-        submittedAt: string;
-      };
-      onboardingSession?: {
-        agentIdentityCompletedAt?: string;
-        discoveryCompletedAt?: string;
-        finalAgentNames?: string[];
-        finishedAt?: string;
-        lastActiveAt: string;
-        phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
-        startedAt: string;
-        userIdentityCompletedAt?: string;
-        version: number;
-      };
-      provider?: string;
-      runningOperation?: { assistantMessageId: string; operationId: string } | null;
-      workingDirectory?: string;
-    },
-  ) => {
+  updateTopicMetadata = (id: string, metadata: UpdateTopicMetadataInput) => {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
   };
 

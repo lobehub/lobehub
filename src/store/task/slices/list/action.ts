@@ -19,10 +19,12 @@ export const ALL_AGENTS_LIST_KEY = '__all__';
 // 'scheduled' shares the 'running' column — both represent "automation in
 // progress" from the user's perspective (one is mid-tick, the other is
 // waiting for the next tick).
+// `needsInput` is intentionally first: in the list view it surfaces the
+// actionable items at the top of the page.
 const DEFAULT_KANBAN_GROUPS = [
+  { key: 'needsInput', statuses: ['paused', 'failed'] },
   { key: 'backlog', statuses: ['backlog'] },
   { key: 'running', statuses: ['running', 'scheduled'] },
-  { key: 'needsInput', statuses: ['paused', 'failed'] },
   { key: 'done', statuses: ['completed'] },
   { key: 'canceled', statuses: ['canceled'] },
 ];

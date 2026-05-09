@@ -357,6 +357,12 @@ describe('MessageContentProcessor', () => {
       expect(content[0].type).toBe('text');
       expect(content[0].text).toContain('SYSTEM CONTEXT');
       expect(content[0].text).toContain('Hello');
+      expect(content[0].text).toContain('<image ref="msg_1cs5ql.image_1" name="test.png"></image>');
+      expect(content[0].text).toContain(
+        '<file id="file1" name="test.txt" type="text/plain" size="100"></file>',
+      );
+      expect(content[0].text).not.toContain('http://example.com/image.jpg');
+      expect(content[0].text).not.toContain('http://example.com/test.txt');
     });
 
     it('should not add file context when disabled', async () => {

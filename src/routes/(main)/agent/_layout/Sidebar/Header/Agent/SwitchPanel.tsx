@@ -5,7 +5,7 @@ import { memo, Suspense, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import List from '@/routes/(main)/home/_layout/Body/Agent/List';
+import AgentListContent from '@/routes/(main)/home/_layout/Body/Agent/List/AgentListContent';
 import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 
 const styles = createStaticStyles(({ cssVar, css }) => ({
@@ -31,7 +31,7 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
               overflowY: 'auto',
             }}
           >
-            <List onMoreClick={() => navigate('/')} />
+            <AgentListContent onMoreClick={() => navigate('/')} />
           </Flexbox>
         </AgentModalProvider>
       </Suspense>

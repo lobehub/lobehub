@@ -161,6 +161,7 @@ export class TaskService {
           documentId: node.id,
           fileType: doc?.fileType,
           size: doc?.charCount,
+          sourceTaskId: doc?.sourceTaskId,
           sourceTaskIdentifier: doc?.sourceTaskIdentifier,
           title: doc?.title,
         };
@@ -194,8 +195,8 @@ export class TaskService {
     const [authorMap, enrichedBriefs] = await Promise.all([
       this.resolveAuthors(agentIds, userIds),
       this.briefService
-        .enrichBriefsWithAgents(briefs)
-        .catch(() => briefs.map((b) => ({ ...b, agents: [] }))),
+        .enrichBriefAgentOnly(briefs)
+        .catch(() => briefs.map((b) => ({ ...b, agent: null }))),
     ]);
 
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
@@ -214,7 +215,9 @@ export class TaskService {
         const handoff = t.handoff as TaskTopicHandoff | null;
         return {
           author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
+          completedAt: toISO(t.completedAt),
           id: t.topicId ?? undefined,
+          operationId: t.operationId ?? null,
           runningOperation: t.metadata?.runningOperation ?? null,
           seq: t.seq,
           status: t.status,
@@ -226,8 +229,8 @@ export class TaskService {
       }),
       ...enrichedBriefs.map((b) => ({
         actions: b.actions ?? undefined,
+        agent: b.agent,
         agentId: b.agentId,
-        agents: b.agents,
         artifacts: b.artifacts ?? undefined,
         author: b.agentId ? authorMap.get(b.agentId) : undefined,
         briefType: b.type,

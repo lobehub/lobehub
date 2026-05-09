@@ -66,7 +66,7 @@ export const STATUS_META: Record<TaskStatus, StatusMeta> = {
     labelKey: 'status.running',
   },
   scheduled: {
-    color: cssVar.colorTextDescription,
+    color: cssVar.colorWarning,
     icon: Clock,
     label: 'Scheduled',
     labelKey: 'status.scheduled',

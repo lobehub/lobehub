@@ -15,6 +15,12 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             description: 'Document content in markdown or plain text.',
             type: 'string',
           },
+          hintIsSkill: {
+            default: false,
+            description:
+              'Set true only when the document captures reusable procedural knowledge or durable agent behavior.',
+            type: 'boolean',
+          },
           target: {
             default: 'agent',
             description:
@@ -55,12 +61,12 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Edit an existing agent document content by ID. Use this for full-content replacement, not title rename. Prefer modifyNodes for targeted content edits.',
-      name: AgentDocumentsApiName.editDocument,
+        'Replace the entire content of an existing agent document by ID. Use this only when overwriting most or all of the document. Prefer modifyNodes for targeted edits.',
+      name: AgentDocumentsApiName.replaceDocumentContent,
       parameters: {
         properties: {
           content: {
-            description: 'Updated full document content.',
+            description: 'New full document content.',
             type: 'string',
           },
           id: {
@@ -201,47 +207,6 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
           },
         },
         required: [],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Read an existing agent document by its filename. Prefer XML format before node-level edits because XML includes stable node IDs.',
-      name: AgentDocumentsApiName.readDocumentByFilename,
-      parameters: {
-        properties: {
-          format: {
-            default: 'xml',
-            description:
-              'The format to return. Use "xml" for node-level edits, "markdown" for plain text, or "both". Defaults to "xml".',
-            enum: ['xml', 'markdown', 'both'],
-            type: 'string',
-          },
-          filename: {
-            description: 'Target document filename.',
-            type: 'string',
-          },
-        },
-        required: ['filename'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Create or update an agent document by filename. If a document with the given filename exists, its content is updated; otherwise a new document is created.',
-      name: AgentDocumentsApiName.upsertDocumentByFilename,
-      parameters: {
-        properties: {
-          content: {
-            description: 'Document content in markdown or plain text.',
-            type: 'string',
-          },
-          filename: {
-            description: 'Target document filename.',
-            type: 'string',
-          },
-        },
-        required: ['filename', 'content'],
         type: 'object',
       },
     },

@@ -1,5 +1,18 @@
-import { chainTaskTopicHandoff, TASK_TOPIC_HANDOFF_SCHEMA } from '@lobechat/prompts';
-import type { TaskItem, TaskSchedulerContext } from '@lobechat/types';
+import {
+  chainGenerateBrief,
+  chainJudgeBriefEmit,
+  chainTaskTopicHandoff,
+  GENERATE_BRIEF_SCHEMA,
+  JUDGE_BRIEF_EMIT_SCHEMA,
+  TASK_TOPIC_HANDOFF_SCHEMA,
+} from '@lobechat/prompts';
+import type {
+  BriefArtifacts,
+  BriefDecision,
+  TaskItem,
+  TaskSchedulerContext,
+  TaskTopicHandoff,
+} from '@lobechat/types';
 import { DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
@@ -12,6 +25,25 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskReviewService } from '@/server/services/taskReview';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
+
+import {
+  isTrivialAssistantContent,
+  selectBriefPriority,
+  selectBriefType,
+  shouldEmitTopicBrief,
+} from './synthesize';
+
+/**
+ * Read the brief generation mode from `task.config.brief.mode`.
+ *
+ * Defaults to `'auto'` — programmatic synthesis in `synthesizeTopicBrief`
+ * is the standard path. `'agent'` is an explicit escape hatch that re-enables
+ * the legacy agent-driven `createBrief` tool flow.
+ */
+const getBriefMode = (task: TaskItem | null): 'agent' | 'auto' => {
+  const mode = (task?.config as { brief?: { mode?: string } } | null)?.brief?.mode;
+  return mode === 'agent' ? 'agent' : 'auto';
+};
 
 const log = debug('task-lifecycle');
 
@@ -101,7 +133,21 @@ export class TaskLifecycleService {
 
       if (reviewTerminated) return;
 
-      // 4. Default post-tick transition.
+      // 4. Synthesize a programmatic brief for the user (auto mode only).
+      //    The agent-driven `createBrief` tool path stays the default until
+      //    the GrowthBook flag flips. See LOBE-8333 for the rollout plan.
+      if (getBriefMode(currentTask) === 'auto' && currentTask && topicId && lastAssistantContent) {
+        await this.synthesizeTopicBrief(
+          taskId,
+          taskIdentifier,
+          topicId,
+          lastAssistantContent,
+          reason,
+          currentTask,
+        );
+      }
+
+      // 5. Default post-tick transition.
       //    - Automation tasks (heartbeat / schedule) loop running ↔ scheduled, so
       //      a successful tick parks the task at 'scheduled' to wait for the next
       //      tick. They never auto-pause on success — only `reason === 'error'`
@@ -126,10 +172,12 @@ export class TaskLifecycleService {
 
       await this.briefModel.create({
         actions: DEFAULT_BRIEF_ACTIONS['error'],
+        agentId: currentTask?.assigneeAgentId || undefined,
         priority: 'urgent',
         summary: `Execution failed: ${errorMessage || 'Unknown error'}`,
         taskId,
         title: `${taskIdentifier} topic${topicRef} error`,
+        trigger: 'task',
         type: 'error',
       });
 
@@ -238,12 +286,14 @@ export class TaskLifecycleService {
     currentTask: any,
   ): Promise<void> {
     try {
-      const { model, provider } = await (this.systemAgentService as any).getTaskModelConfig(
-        'topic',
-      );
+      const [{ model, provider }, responseLanguage] = await Promise.all([
+        (this.systemAgentService as any).getTaskModelConfig('topic'),
+        this.systemAgentService.getUserLocale(),
+      ]);
 
       const payload = chainTaskTopicHandoff({
         lastAssistantContent,
+        responseLanguage,
         taskInstruction: currentTask?.instruction || '',
         taskName: currentTask?.name || taskIdentifier,
       });
@@ -276,6 +326,171 @@ export class TaskLifecycleService {
       log('handoff generated for topic %s: title=%s', topicId, handoff.title);
     } catch (e) {
       console.warn('[TaskLifecycle] handoff generation failed:', e);
+    }
+  }
+
+  /**
+   * Programmatic brief synthesis for a completed topic.
+   *
+   * Fired only in `brief.mode === 'auto'` and only when neither the error nor
+   * the judge path has already produced a brief. Two-stage decision:
+   *  1. Rule layer (`shouldEmitTopicBrief`) — deterministic. Returns
+   *     `'yes'` / `'no'` (caller persists the verdict and is done with the
+   *     decision phase) or `'unknown'` (defer to LLM).
+   *  2. LLM judge (`chainJudgeBriefEmit`) — semantic. Runs only on the
+   *     `'unknown'` branch, returns `{emit, reason}` for content the rule
+   *     can't classify (manual/non-scheduled topic with non-trivial output).
+   *
+   * The verdict (rule or LLM) is persisted to `taskTopics.handoff.briefDecision`
+   * so the emit/skip outcome is auditable per topic. Generation
+   * (`chainGenerateBrief`) is a separate LLM call that runs only when the
+   * decision is `emit: true` — never wasting tokens drafting copy for a
+   * brief that won't be persisted.
+   *
+   * Failures are swallowed — a missing brief should never block the task
+   * lifecycle. The caller still proceeds to the post-tick state transition.
+   */
+  private async synthesizeTopicBrief(
+    taskId: string,
+    taskIdentifier: string,
+    topicId: string,
+    lastAssistantContent: string,
+    reason: string,
+    currentTask: TaskItem,
+  ): Promise<void> {
+    try {
+      const reviewConfig = this.taskModel.getReviewConfig(currentTask);
+      const decisionInput = {
+        hasReviewConfigEnabled: !!reviewConfig?.enabled,
+        isTrivialContent: isTrivialAssistantContent(lastAssistantContent),
+        reason,
+        // We've already returned upstream when reviewTerminated was true; the
+        // remaining decision lives in shouldEmitTopicBrief itself.
+        reviewTerminated: false,
+        task: currentTask,
+      };
+
+      const ruleVerdict = shouldEmitTopicBrief(decisionInput);
+
+      // Inputs needed by both the LLM judge (when ruleVerdict === 'unknown')
+      // and by chainGenerateBrief (when emit ends up true). Hoisted so we
+      // only fetch them once.
+      const topicLink = await this.taskTopicModel.findByTopicId(topicId);
+      const topicStartedAt = topicLink?.createdAt ?? new Date(0);
+      const pinnedDocs = await this.taskModel.getDocumentsPinnedSince(taskId, topicStartedAt);
+      const artifacts: BriefArtifacts = { documents: pinnedDocs };
+      const handoff = (topicLink?.handoff as TaskTopicHandoff | null) ?? null;
+
+      const [{ model, provider }, responseLanguage] = await Promise.all([
+        (this.systemAgentService as any).getTaskModelConfig('topic'),
+        this.systemAgentService.getUserLocale(),
+      ]);
+
+      let decision: BriefDecision;
+      if (ruleVerdict.emit === 'unknown') {
+        // Rule can't decide — ask the LLM judge. Title/summary are NOT
+        // produced here; they come from chainGenerateBrief if emit=true.
+        const judgePayload = chainJudgeBriefEmit({
+          artifacts,
+          handoff,
+          lastAssistantContent,
+          taskInstruction: currentTask.instruction || '',
+          taskName: currentTask.name || taskIdentifier,
+        });
+
+        const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+        const judgeResult = (await modelRuntime.generateObject(
+          {
+            messages: judgePayload.messages as any[],
+            model,
+            schema: { name: 'task_topic_brief_judge', schema: JUDGE_BRIEF_EMIT_SCHEMA },
+          },
+          { metadata: { trigger: 'task-brief-judge' } },
+        )) as { emit?: boolean; reason?: string };
+
+        decision = {
+          decidedAt: new Date().toISOString(),
+          emit: judgeResult.emit === true,
+          model,
+          reason: judgeResult.reason || 'llm-judge-unknown',
+          source: 'llm-judge',
+        };
+      } else {
+        decision = {
+          decidedAt: new Date().toISOString(),
+          emit: ruleVerdict.emit === 'yes',
+          reason: ruleVerdict.reason,
+          source: 'rule',
+        };
+      }
+
+      // Persist the decision regardless of outcome — gives the operator a
+      // per-topic audit trail of why a brief was or wasn't produced.
+      await this.taskTopicModel.updateBriefDecision(taskId, topicId, decision);
+
+      if (!decision.emit) {
+        log(
+          'synthesize: skip task=%s topic=%s source=%s reason=%s',
+          taskIdentifier,
+          topicId,
+          decision.source,
+          decision.reason,
+        );
+        return;
+      }
+
+      const briefType = selectBriefType(decisionInput);
+      const priority = selectBriefPriority(decisionInput);
+
+      const payload = chainGenerateBrief({
+        artifacts,
+        handoff,
+        lastAssistantContent,
+        responseLanguage,
+        taskInstruction: currentTask.instruction || '',
+        taskName: currentTask.name || taskIdentifier,
+      });
+
+      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+      const result = await modelRuntime.generateObject(
+        {
+          messages: payload.messages as any[],
+          model,
+          schema: { name: 'task_topic_brief', schema: GENERATE_BRIEF_SCHEMA },
+        },
+        { metadata: { trigger: 'task-brief' } },
+      );
+
+      const generated = result as { summary?: string; title?: string };
+      if (!generated.title || !generated.summary) {
+        log(
+          'synthesize: LLM returned empty title/summary task=%s topic=%s',
+          taskIdentifier,
+          topicId,
+        );
+        return;
+      }
+
+      // `result` briefs render a fixed approval UI and intentionally have no
+      // default actions — see DEFAULT_BRIEF_ACTIONS comment.
+      const actions = briefType === 'result' ? null : (DEFAULT_BRIEF_ACTIONS[briefType] ?? null);
+
+      await this.briefModel.create({
+        actions,
+        agentId: currentTask.assigneeAgentId || undefined,
+        artifacts,
+        priority,
+        summary: generated.summary,
+        taskId,
+        title: generated.title,
+        topicId,
+        trigger: 'task',
+        type: briefType,
+      });
+
+      log('synthesize: brief created task=%s topic=%s type=%s', taskIdentifier, topicId, briefType);
+    } catch (e) {
+      console.warn('[TaskLifecycle] brief synthesis failed:', e);
     }
   }
 
@@ -335,6 +550,7 @@ export class TaskLifecycleService {
         // (no actionable buttons in the UI) and the task transitions to 'completed'.
         const now = new Date();
         await this.briefModel.create({
+          agentId: currentTask?.assigneeAgentId || undefined,
           priority: 'info',
           resolvedAction: 'auto-judge-pass',
           resolvedAt: now,
@@ -342,18 +558,22 @@ export class TaskLifecycleService {
           summary: `Review passed (score: ${reviewResult.overallScore}%, iteration: ${iteration}). ${content.slice(0, 150)}`,
           taskId,
           title: `${taskIdentifier} review passed`,
+          trigger: 'task',
           type: 'result',
         });
         await this.taskModel.updateStatus(taskId, 'completed', { error: null });
+        await this.cascadeAfterAutoComplete(taskId);
         return true;
       }
 
       if (reviewConfig.autoRetry && iteration < reviewConfig.maxIterations) {
         await this.briefModel.create({
+          agentId: currentTask?.assigneeAgentId || undefined,
           priority: 'normal',
           summary: `Review failed (score: ${reviewResult.overallScore}%, iteration ${iteration}/${reviewConfig.maxIterations}). Auto-retrying...`,
           taskId,
           title: `${taskIdentifier} review failed, retrying`,
+          trigger: 'task',
           type: 'insight',
         });
 
@@ -367,10 +587,12 @@ export class TaskLifecycleService {
       // accept signal (force-pass) by BriefService.resolve. Result briefs render
       // a fixed single-button UI, so no custom actions are persisted.
       await this.briefModel.create({
+        agentId: currentTask?.assigneeAgentId || undefined,
         priority: 'urgent',
         summary: `Review failed after ${iteration} iteration(s) (score: ${reviewResult.overallScore}%). Suggestions: ${reviewResult.suggestions?.join('; ') || 'none'}`,
         taskId,
         title: `${taskIdentifier} review failed — needs attention`,
+        trigger: 'task',
         type: 'result',
       });
       await this.taskModel.updateStatus(taskId, 'paused', { error: null });
@@ -378,6 +600,22 @@ export class TaskLifecycleService {
     } catch (e) {
       console.warn('[TaskLifecycle] auto-review failed:', e);
       return false;
+    }
+  }
+
+  /**
+   * Trigger downstream task kickoff after this task auto-completes via judge.
+   *
+   * Lazy-imports `TaskRunnerService` to break the runner ↔ lifecycle import
+   * cycle (the runner already constructs a lifecycle for its own hooks).
+   */
+  private async cascadeAfterAutoComplete(completedTaskId: string): Promise<void> {
+    try {
+      const { TaskRunnerService } = await import('@/server/services/taskRunner');
+      const runner = new TaskRunnerService(this.db, this.userId);
+      await runner.cascadeOnCompletion(completedTaskId);
+    } catch (e) {
+      console.warn('[TaskLifecycle] dependency cascade failed:', e);
     }
   }
 }

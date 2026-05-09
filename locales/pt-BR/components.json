@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "Entrada (Gravação em Cache)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "Saída",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "Geração de Vídeo",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "Entrada de Vídeo",
   "ModelSwitchPanel.detail.releasedAt": "Lançado em {{date}}",
   "ModelSwitchPanel.emptyModel": "Nenhum modelo ativado. Vá para as configurações para ativar.",
   "ModelSwitchPanel.emptyProvider": "Nenhum provedor ativado. Vá para as configurações para ativar um.",

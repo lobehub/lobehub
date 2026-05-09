@@ -8,10 +8,12 @@ import { TaskModel } from '@/database/models/task';
 import { type ServerRuntimeRegistration } from './types';
 
 const createBriefRuntime = ({
+  agentId,
   briefModel,
   taskId,
   taskModel,
 }: {
+  agentId?: string;
   briefModel: BriefModel;
   taskId?: string;
   taskModel: TaskModel;
@@ -31,6 +33,7 @@ const createBriefRuntime = ({
 
     const brief = await briefModel.create({
       actions,
+      agentId,
       priority: args.priority || 'info',
       summary: args.summary,
       taskId,
@@ -56,6 +59,7 @@ const createBriefRuntime = ({
     }
 
     await briefModel.create({
+      agentId,
       priority: 'normal',
       summary: args.reason,
       taskId,
@@ -76,7 +80,12 @@ export const briefRuntime: ServerRuntimeRegistration = {
     const briefModel = new BriefModel(context.serverDB, context.userId);
     const taskModel = new TaskModel(context.serverDB, context.userId);
 
-    return createBriefRuntime({ briefModel, taskId: context.taskId, taskModel });
+    return createBriefRuntime({
+      agentId: context.agentId,
+      briefModel,
+      taskId: context.taskId,
+      taskModel,
+    });
   },
   identifier: BriefIdentifier,
 };

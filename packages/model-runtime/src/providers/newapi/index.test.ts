@@ -14,7 +14,6 @@ vi.mock('../../utils/modelParse');
 
 // Mock console methods
 vi.spyOn(console, 'error').mockImplementation(() => {});
-vi.spyOn(console, 'debug').mockImplementation(() => {});
 
 // Type definitions for test data
 interface MockPricingResponse {
@@ -242,14 +241,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       });
 
       it('should handle network error (Branch 3.18: error handling)', () => {
-        let errorCaught = false;
-        try {
+        expect(() => {
           throw new Error('Network error');
-        } catch (error) {
-          errorCaught = true;
-          expect(error).toBeInstanceOf(Error);
-        }
-        expect(errorCaught).toBe(true);
+        }).toThrow(Error);
       });
     });
 
@@ -1076,10 +1070,6 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
       const result = await params.models({ client: mockClient as any });
 
-      expect(console.debug).toHaveBeenCalledWith(
-        'Failed to fetch NewAPI pricing info:',
-        expect.any(Error),
-      );
       expect(result[0].pricing).toBeUndefined();
     });
 

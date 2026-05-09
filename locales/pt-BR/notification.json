@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Sua tarefa agendada \"{{jobName}}\" falhou. Abra a tarefa para ver o erro completo.",
+  "agent_cron_job_failed_insufficient_budget": "Sua tarefa agendada \"{{jobName}}\" não pôde ser executada porque sua conta está sem créditos. Recarregue ou faça um upgrade do seu plano para retomar futuras execuções.",
+  "agent_cron_job_failed_insufficient_budget_title": "Tarefa agendada pausada: créditos insuficientes",
+  "agent_cron_job_failed_title": "Falha na tarefa agendada",
   "billboard.learnMore": "Saiba mais",
   "billboard.menuLabel": "Comunicados",
+  "image_generation_completed": "Sua imagem \"{{prompt}}\" está pronta.",
+  "image_generation_completed_title": "Geração de imagem concluída",
   "inbox.archiveAll": "Arquivar tudo",
   "inbox.empty": "Nenhuma notificação ainda",
   "inbox.emptyUnread": "Nenhuma notificação não lida",
   "inbox.filterUnread": "Mostrar apenas não lidas",
   "inbox.markAllRead": "Marcar todas como lidas",
-  "inbox.title": "Notificações"
+  "inbox.title": "Notificações",
+  "video_generation_completed": "Seu vídeo \"{{prompt}}\" está pronto.",
+  "video_generation_completed_title": "Geração de vídeo concluída"
 }

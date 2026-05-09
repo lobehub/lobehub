@@ -20,8 +20,8 @@ const LobeHub: ModelProviderCard = {
 export default LobeHub;
 
 export const planCardModels = [
+  'deepseek-v4-pro',
   'claude-sonnet-4-6',
   'gemini-3.1-pro-preview',
   'gpt-5.5',
-  'deepseek-v4-flash',
 ];

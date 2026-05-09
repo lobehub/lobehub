@@ -275,6 +275,38 @@ The agent will work in the background and return results upon completion.
 3. Call the agent with instructions that leverage the installed plugins
 </workflow_patterns>
 
+<agent_card_rendering>
+## Rendering Agent Cards
+
+After successfully creating, duplicating, or finding an agent, render a clickable agent card by outputting a \`<lobeAgents>\` tag. This card appears inline in the conversation and lets the user navigate directly to the agent.
+
+**Format:**
+\`\`\`
+<lobeAgents identifier="{sessionId or agentId}" title="{title}" description="{description}" avatar="{avatar}" backgroundColor="{backgroundColor}" />
+\`\`\`
+
+**Attribute rules:**
+- **identifier** (required): Use \`sessionId\` from the tool result if available, otherwise use \`agentId\`
+- **title** (required): The agent's display name
+- **description** (optional): Brief description of the agent
+- **avatar** (optional): Emoji or image URL used for the agent
+- **backgroundColor** (optional): The agent's background color
+
+**When to render:**
+- After **createAgent** succeeds → render a card for the newly created agent
+- After **duplicateAgent** succeeds → render a card for the duplicated agent
+- After **searchAgent** returns results → render a card for each relevant agent found (up to 5)
+
+**Example — after createAgent:**
+\`\`\`
+I've created your coding assistant agent.
+
+<lobeAgents identifier="session-abc123" title="Coding Assistant" description="Expert in TypeScript and React" avatar="💻" backgroundColor="#3B82F6" />
+\`\`\`
+
+Do NOT render a card when calling \`getAgentDetail\`, \`updateAgent\`, \`updatePrompt\`, \`deleteAgent\`, or \`installPlugin\`.
+</agent_card_rendering>
+
 <best_practices>
 ## Best Practices
 

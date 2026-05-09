@@ -624,6 +624,8 @@
   "user.logout": "Đăng xuất",
   "user.myProfile": "Hồ sơ của tôi",
   "user.noAgents": "Người dùng này chưa xuất bản tác vụ nào",
+  "user.noAgents.ownerDescription": "Tạo Agent đầu tiên của bạn và chia sẻ nó với Cộng đồng.",
+  "user.noAgents.title": "Chưa có Agent nào",
   "user.noFavoriteAgents": "Chưa lưu tác vụ nào",
   "user.noFavoritePlugins": "Chưa lưu kỹ năng nào",
   "user.noForkedAgentGroups": "Chưa có nhóm Agent nào được fork",

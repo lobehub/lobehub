@@ -1,12 +1,13 @@
+import {
+  AGENT_SIGNAL_CLIENT_SOURCE_TYPES,
+  type AgentSignalSourceEventInput,
+} from '@lobechat/agent-signal/source';
 import debug from 'debug';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
-import {
-  AGENT_SIGNAL_CLIENT_SOURCE_TYPES,
-  type AgentSignalSourcePayloadMap,
-} from '@/server/services/agentSignal/sourceTypes';
+import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
 
 const log = debug('lobe-server:agent-signal:router');
 
@@ -14,15 +15,7 @@ const agentSignalProcedure = authedProcedure;
 const clientSourceTypes = AGENT_SIGNAL_CLIENT_SOURCE_TYPES;
 
 type ClientSourceType = (typeof clientSourceTypes)[number];
-type ClientSourceEventInput = {
-  [TSourceType in ClientSourceType]: {
-    payload: AgentSignalSourcePayloadMap[TSourceType];
-    scopeKey?: string;
-    sourceId: string;
-    sourceType: TSourceType;
-    timestamp?: number;
-  };
-}[ClientSourceType];
+type ClientSourceEventInput = AgentSignalSourceEventInput<ClientSourceType>;
 
 export const agentSignalRouter = router({
   emitSourceEvent: agentSignalProcedure
@@ -48,6 +41,26 @@ export const agentSignalRouter = router({
 
       return enqueueAgentSignalSourceEvent(input as unknown as ClientSourceEventInput, {
         agentId: typeof input.payload.agentId === 'string' ? input.payload.agentId : undefined,
+        userId: ctx.userId,
+      });
+    }),
+  listReceipts: agentSignalProcedure
+    .input(
+      z.object({
+        agentId: z.string().min(1),
+        cursor: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+        sinceCreatedAt: z.number().int().min(0).optional(),
+        topicId: z.string().min(1),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return listAgentSignalReceipts({
+        agentId: input.agentId,
+        cursor: input.cursor,
+        limit: input.limit,
+        sinceCreatedAt: input.sinceCreatedAt,
+        topicId: input.topicId,
         userId: ctx.userId,
       });
     }),

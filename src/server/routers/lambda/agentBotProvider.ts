@@ -1,3 +1,4 @@
+import { LineApiClient } from '@lobechat/chat-adapter-line';
 import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -206,6 +207,38 @@ export const agentBotProviderRouter = router({
       }
 
       return { valid: true };
+    }),
+
+  /**
+   * Resolve the bot's `userId` (destination user ID) from a channel access
+   * token by calling LINE's `/v2/bot/info`. The LINE Developers Console UI
+   * does not surface this value, so the operator either runs `curl` themselves
+   * or lets the form pre-fill the field via this procedure.
+   */
+  lineFetchBotInfo: authedProcedure
+    .input(z.object({ channelAccessToken: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const api = new LineApiClient({ accessToken: input.channelAccessToken });
+      try {
+        const info = await api.getBotInfo();
+        if (!info.userId) {
+          throw new TRPCError({
+            code: 'BAD_GATEWAY',
+            message: 'LINE /v2/bot/info returned no userId',
+          });
+        }
+        return {
+          basicId: info.basicId,
+          displayName: info.displayName,
+          userId: info.userId,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to fetch bot info from LINE',
+        });
+      }
     }),
 
   wechatGetQrCode: authedProcedure.mutation(async () => {

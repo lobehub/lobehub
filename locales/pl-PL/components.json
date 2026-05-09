@@ -141,6 +141,7 @@
   "ModelSwitchPanel.detail.pricing.unit.textInput_cacheWrite": "Wejście (zapis do bufora)",
   "ModelSwitchPanel.detail.pricing.unit.textOutput": "Wyjście",
   "ModelSwitchPanel.detail.pricing.unit.videoGeneration": "Generowanie wideo",
+  "ModelSwitchPanel.detail.pricing.unit.videoInput": "Wejście wideo",
   "ModelSwitchPanel.detail.releasedAt": "Wydano {{date}}",
   "ModelSwitchPanel.emptyModel": "Brak włączonych modeli. Przejdź do ustawień, aby je włączyć.",
   "ModelSwitchPanel.emptyProvider": "Brak włączonych dostawców. Przejdź do ustawień, aby włączyć jednego.",

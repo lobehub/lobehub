@@ -202,7 +202,9 @@ export default {
   'response.ProviderContentModeration':
     'Content policy check failed. Revise your prompt and try again.',
   'response.ProviderContentModerationWarning':
-    'Repeated policy violations detected. Further misuse may restrict your account.',
+    'Repeated content policy rejections detected. Please revise your prompt before retrying.',
+  'response.ProviderImageContentModerationWarning':
+    'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
   'response.QuotaLimitReached':
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   'response.ServerAgentRuntimeError':
@@ -217,6 +219,8 @@ export default {
     'Your subscription points have been exhausted, and you cannot use this feature. Please top up credits or configure a custom model API to continue using it.',
   'response.SystemTimeNotMatchError':
     'Sorry, your system time does not match the server. Please check your system time and try again.',
+  'response.LobeHubModelDeprecated':
+    'The model "{{model}}" is no longer available. Please pick a current model from the model selector.',
   'response.UnknownChatFetchError':
     'Sorry, an unknown request error occurred. Please check the information below or try again.',
   'stt.responseError': 'Service request failed, please check the configuration or try again',

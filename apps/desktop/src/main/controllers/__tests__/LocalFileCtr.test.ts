@@ -5,13 +5,18 @@ import { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
-const { ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
+const { execaMock, ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
+  execaMock: vi.fn(),
   ipcMainHandleMock: vi.fn(),
   fetchMock: vi.fn(),
 }));
 
 vi.mock('@/utils/net-fetch', () => ({
   netFetch: fetchMock,
+}));
+
+vi.mock('execa', () => ({
+  execa: execaMock,
 }));
 
 // Mock logger
@@ -535,12 +540,112 @@ describe('LocalFileCtr', () => {
       });
     });
 
+    it('should use scope as the default search directory', async () => {
+      mockSearchService.search.mockResolvedValue([]);
+
+      await localFileCtr.handleLocalFilesSearch({ keywords: 'src', scope: '/workspace/project' });
+
+      expect(mockSearchService.search).toHaveBeenCalledWith('src', {
+        keywords: 'src',
+        limit: 30,
+        onlyIn: '/workspace/project',
+      });
+    });
+
     it('should return empty array on search error', async () => {
       mockSearchService.search.mockRejectedValue(new Error('Search failed'));
 
       const result = await localFileCtr.handleLocalFilesSearch({ keywords: 'test' });
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getProjectFileIndex', () => {
+    it('should build a project file index from git files', async () => {
+      execaMock
+        .mockResolvedValueOnce({ exitCode: 0, stdout: '/workspace/project' })
+        .mockResolvedValueOnce({
+          exitCode: 0,
+          stdout: 'src/index.ts\nsrc/components/Button.tsx',
+        })
+        .mockResolvedValueOnce({ exitCode: 0, stdout: 'tmp/local.ts' });
+
+      const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
+
+      expect(result.source).toBe('git');
+      expect(result.root).toBe('/workspace/project');
+      expect(result.entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            isDirectory: true,
+            path: '/workspace/project/src',
+            relativePath: 'src/',
+          }),
+          expect.objectContaining({
+            isDirectory: false,
+            path: '/workspace/project/src/index.ts',
+            relativePath: 'src/index.ts',
+          }),
+          expect.objectContaining({
+            isDirectory: false,
+            path: '/workspace/project/tmp/local.ts',
+            relativePath: 'tmp/local.ts',
+          }),
+        ]),
+      );
+      expect(result.totalCount).toBe(result.entries.length);
+    });
+
+    it('should fall back to glob when git indexing fails', async () => {
+      execaMock.mockResolvedValueOnce({ exitCode: 1, stdout: '' });
+      mockSearchService.glob.mockResolvedValue({
+        engine: 'fast-glob',
+        files: ['/workspace/project/src', '/workspace/project/src/index.ts'],
+        success: true,
+        total_files: 2,
+      });
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath: string) => ({
+        isDirectory: () => filePath === '/workspace/project/src',
+      }));
+
+      const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
+
+      expect(result.source).toBe('glob');
+      expect(result.entries).toEqual([
+        expect.objectContaining({
+          isDirectory: true,
+          path: '/workspace/project/src',
+          relativePath: 'src/',
+        }),
+        expect.objectContaining({
+          isDirectory: false,
+          path: '/workspace/project/src/index.ts',
+          relativePath: 'src/index.ts',
+        }),
+      ]);
+    });
+
+    it('should mark glob entries as files when stat fails', async () => {
+      execaMock.mockResolvedValueOnce({ exitCode: 1, stdout: '' });
+      mockSearchService.glob.mockResolvedValue({
+        engine: 'fast-glob',
+        files: ['/workspace/project/src/index.ts'],
+        success: true,
+        total_files: 1,
+      });
+      vi.mocked(mockFsPromises.stat).mockRejectedValue(new Error('missing'));
+
+      const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
+
+      expect(result.source).toBe('glob');
+      expect(result.entries).toEqual([
+        expect.objectContaining({
+          isDirectory: false,
+          path: '/workspace/project/src/index.ts',
+          relativePath: 'src/index.ts',
+        }),
+      ]);
     });
   });
 

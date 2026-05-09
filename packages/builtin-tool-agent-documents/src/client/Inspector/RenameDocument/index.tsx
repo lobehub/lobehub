@@ -5,17 +5,21 @@ import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { RenameDocumentArgs, RenameDocumentState } from '../../../types';
+import { formatDocumentId, inspectorChipStyles } from '../_styles';
 
 export const RenameDocumentInspector = memo<
   BuiltinInspectorProps<RenameDocumentArgs, RenameDocumentState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
-  const newTitle = args?.newTitle || partialArgs?.newTitle;
 
-  if (isArgumentsStreaming && !newTitle) {
+  const id = args?.id || partialArgs?.id;
+  const newTitle = args?.newTitle || partialArgs?.newTitle;
+  const styles = inspectorChipStyles;
+
+  if (isArgumentsStreaming && !id && !newTitle) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-agent-documents.apiName.renameDocument')}</span>
@@ -25,13 +29,20 @@ export const RenameDocumentInspector = memo<
 
   return (
     <div
+      style={{ flexWrap: 'wrap', gap: 4 }}
       className={cx(
         inspectorTextStyles.root,
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{t('builtins.lobe-agent-documents.apiName.renameDocument')}: </span>
-      {newTitle && <span className={highlightTextStyles.primary}>{newTitle}</span>}
+      <span>{t('builtins.lobe-agent-documents.apiName.renameDocument')}</span>
+      {id && <span className={styles.idChip}>{formatDocumentId(id)}</span>}
+      {newTitle && (
+        <>
+          <span className={styles.separator}>→</span>
+          <span className={styles.chip}>{newTitle}</span>
+        </>
+      )}
     </div>
   );
 });

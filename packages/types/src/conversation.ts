@@ -6,6 +6,7 @@ import type { IThreadType } from './topic/thread';
  * - thread: Agent thread conversation
  * - group: Group main conversation
  * - group_agent: Agent conversation within a group
+ * - task: Task manager side panel conversation
  * - sub_agent: Agent-to-agent communication (non-group, uses subAgentId for config/display only)
  */
 export type MessageMapScope =
@@ -15,6 +16,7 @@ export type MessageMapScope =
   | 'group_agent'
   | 'group_agent_builder'
   | 'page'
+  | 'task'
   | 'agent_builder'
   | 'sub_agent';
 
@@ -119,6 +121,11 @@ export interface MessageMapContext {
 export interface ConversationContext {
   agentId: string;
   /**
+   * Optional default assignee candidate for task manager conversations.
+   * This is a prompt hint only; task tools still require an explicit assigneeAgentId.
+   */
+  defaultTaskAssigneeAgentId?: string;
+  /**
    * Current document ID for page-scoped conversations.
    * Used by page editor integrations to distinguish the active document from
    * other agent resources tied to the same topic.
@@ -154,6 +161,7 @@ export interface ConversationContext {
    * - 'thread': Agent thread conversation
    * - 'group': Group main conversation
    * - 'group_agent': Agent conversation within a group
+   * - 'task': Task manager side panel conversation
    * @default 'main' (auto-detected based on threadId)
    */
   scope?: MessageMapScope;
@@ -201,12 +209,6 @@ export interface ConversationContext {
    * When present, allows unauthenticated access to topic messages
    */
   topicShareId?: string;
-  /**
-   * Trigger value applied when sendMessage creates a new topic from this
-   * context (e.g. `'task_manager'`). Stamped on the topic row to support
-   * page-specific filtering. Only consumed during new-topic creation.
-   */
-  topicTrigger?: string;
   /**
    * Task Manager page the user is currently viewing. When set, streamingExecutor
    * builds `RuntimeInitialContext.taskManager` from the task store.

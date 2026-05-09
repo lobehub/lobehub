@@ -24,19 +24,13 @@ export interface HeterogeneousAgentBuildPlanParams {
   resumeSessionId?: string;
 }
 
-export interface HeterogeneousAgentParsedOutput {
-  agentSessionId?: string;
-  payload: any;
-}
-
-export interface HeterogeneousAgentStreamProcessor {
-  flush: () => HeterogeneousAgentParsedOutput[];
-  push: (chunk: Buffer | string) => HeterogeneousAgentParsedOutput[];
-}
-
+/**
+ * Per-agent CLI flag composition + stdin shape. Stream framing is no longer the
+ * driver's concern — `AgentStreamPipeline` (`@lobechat/heterogeneous-agents/spawn`)
+ * runs JSONL parsing + adapter conversion uniformly for every agent type.
+ */
 export interface HeterogeneousAgentDriver {
   buildSpawnPlan: (
     params: HeterogeneousAgentBuildPlanParams,
   ) => Promise<HeterogeneousAgentBuildPlan>;
-  createStreamProcessor: () => HeterogeneousAgentStreamProcessor;
 }

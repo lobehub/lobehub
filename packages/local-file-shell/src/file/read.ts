@@ -4,12 +4,14 @@ import path from 'node:path';
 import { loadFile } from '@lobechat/file-loaders';
 
 import type { ReadFileParams, ReadFileResult } from '../types';
+import { expandTilde } from './expandTilde';
 
 export async function readLocalFile({
-  path: filePath,
+  path: rawPath,
   loc,
   fullContent,
 }: ReadFileParams): Promise<ReadFileResult> {
+  const filePath = expandTilde(rawPath) ?? rawPath;
   const effectiveLoc = fullContent ? undefined : (loc ?? [0, 200]);
 
   try {

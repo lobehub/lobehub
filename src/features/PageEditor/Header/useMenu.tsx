@@ -35,8 +35,8 @@ export const useMenu = (): { menuItems: any[] } => {
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
 
-  const [toggleRightPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
-    s.toggleRightPanel,
+  const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
+    s.togglePageAgentPanel,
     systemStatusSelectors.wideScreen(s),
     s.toggleWideScreen,
   ]);
@@ -127,7 +127,7 @@ export const useMenu = (): { menuItems: any[] } => {
         label: t('pageEditor.history.title'),
         onClick: () => {
           setRightPanelMode('history');
-          toggleRightPanel(true);
+          togglePageAgentPanel(true);
         },
       },
       {
@@ -189,7 +189,7 @@ export const useMenu = (): { menuItems: any[] } => {
     setRightPanelMode,
     wideScreen,
     toggleWideScreen,
-    toggleRightPanel,
+    togglePageAgentPanel,
     showViewModeSwitch,
     handleDuplicate,
     handleExportMarkdown,

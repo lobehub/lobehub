@@ -10,6 +10,12 @@ export type AgentStreamEventType =
   | 'tool_start'
   | 'tool_end'
   | 'tool_execute'
+  /**
+   * Producer-side tool result content (heterogeneous CLI agents emit this
+   * separately from `tool_end`; gateway-driven runs do not). Kept in the
+   * wire union so consumers can pattern-match without casting.
+   */
+  | 'tool_result'
   | 'step_start'
   | 'step_complete'
   | 'error';
@@ -141,6 +147,17 @@ export interface AuthFailedMessage {
   type: 'auth_failed';
 }
 
+/**
+ * Server → Client: token expired (e.g. JWT past `exp`) but the operation is
+ * still alive on the server. The server keeps the WebSocket open so the
+ * client can refresh its token and re-send `auth` without rebuilding the
+ * connection. Treat this as recoverable, NOT terminal — `auth_failed` remains
+ * the terminal "this op no longer exists / token is bogus" signal.
+ */
+export interface AuthExpiredMessage {
+  type: 'auth_expired';
+}
+
 export interface AgentEventMessage {
   event: AgentStreamEvent;
   id?: string;
@@ -157,6 +174,7 @@ export interface SessionCompleteMessage {
 
 export type ServerMessage =
   | AgentEventMessage
+  | AuthExpiredMessage
   | AuthFailedMessage
   | AuthSuccessMessage
   | HeartbeatAckMessage
@@ -175,6 +193,12 @@ export type ConnectionStatus =
 
 export interface AgentStreamClientEvents {
   agent_event: (event: AgentStreamEvent) => void;
+  /**
+   * JWT expired but the server kept the socket open. Listener should refresh
+   * the token, call `updateToken()`, then `reconnect()`. Until that happens
+   * the socket is connected but unauthenticated — no events will arrive.
+   */
+  auth_expired: () => void;
   auth_failed: (reason: string) => void;
   connected: () => void;
   disconnected: () => void;

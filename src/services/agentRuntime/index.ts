@@ -42,10 +42,7 @@ class AgentRuntimeService {
       provider: agentConfig.provider!,
     };
 
-    const toolsEngine = createAgentToolsEngine({
-      model: agentConfig.model,
-      provider: agentConfig.provider!,
-    });
+    const toolsEngine = createAgentToolsEngine(modelRuntimeConfig);
 
     const { tools, enabledToolIds } = toolsEngine.generateToolsDetailed({
       model: agentConfig.model,

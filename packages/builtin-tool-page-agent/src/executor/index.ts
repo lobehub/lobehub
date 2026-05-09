@@ -65,7 +65,7 @@ const getRuntimeDebugSnapshot = (runtime: EditorRuntime) => {
 const PAGE_EDITOR_NOT_MOUNTED_MESSAGE =
   'Page editor is not currently mounted. This topic was started in the page editor, but the editor is not active in the current view. ' +
   'Do not retry initPage / editTitle / modifyNodes / replaceText / getPageContent here — they require a mounted editor. ' +
-  'To read or modify the topic document, use lobe-agent-documents (readDocument / editDocument / modifyNodes / upsertDocumentByFilename).';
+  'To read or modify the topic document, use lobe-agent-documents (readDocument / replaceDocumentContent / modifyNodes).';
 
 const buildEditorNotMountedResult = (
   runtime: EditorRuntime,

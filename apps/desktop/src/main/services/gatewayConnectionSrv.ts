@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 
 import type {
+  AgentRunRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
@@ -21,6 +22,10 @@ interface ToolCallHandler {
   (apiName: string, args: any): Promise<unknown>;
 }
 
+interface AgentRunHandler {
+  (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
+}
+
 /**
  * GatewayConnectionService
  *
@@ -35,6 +40,7 @@ export default class GatewayConnectionService extends ServiceModule {
   private tokenProvider: (() => Promise<string | null>) | null = null;
   private tokenRefresher: (() => Promise<{ error?: string; success: boolean }>) | null = null;
   private toolCallHandler: ToolCallHandler | null = null;
+  private agentRunHandler: AgentRunHandler | null = null;
 
   // ─── Configuration ───
 
@@ -57,6 +63,10 @@ export default class GatewayConnectionService extends ServiceModule {
    */
   setToolCallHandler(handler: ToolCallHandler) {
     this.toolCallHandler = handler;
+  }
+
+  setAgentRunHandler(handler: AgentRunHandler) {
+    this.agentRunHandler = handler;
   }
 
   // ─── Device ID ───
@@ -178,6 +188,10 @@ export default class GatewayConnectionService extends ServiceModule {
       this.handleSystemInfoRequest(client, request);
     });
 
+    client.on('agent_run_request', (request) => {
+      this.handleAgentRunRequest(client, request);
+    });
+
     client.on('auth_expired', () => {
       logger.warn('Received auth_expired, will reconnect with refreshed token');
       this.handleAuthExpired();
@@ -238,6 +252,30 @@ export default class GatewayConnectionService extends ServiceModule {
       },
     });
   }
+
+  // ─── Agent Run ───
+
+  private handleAgentRunRequest = async (
+    client: GatewayClient,
+    request: AgentRunRequestMessage,
+  ) => {
+    logger.info(
+      `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
+    );
+
+    if (!this.agentRunHandler) {
+      logger.warn('No agent run handler configured, rejecting request');
+      client.sendAgentRunAck({
+        operationId: request.operationId,
+        reason: 'no handler',
+        status: 'rejected',
+      });
+      return;
+    }
+
+    const result = await this.agentRunHandler(request);
+    client.sendAgentRunAck({ operationId: request.operationId, ...result });
+  };
 
   // ─── Tool Call Routing ───
 

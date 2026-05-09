@@ -367,6 +367,55 @@ describe('DocumentStore - Editor Actions', () => {
     });
   });
 
+  describe('commitEditorMutation', () => {
+    it('syncs current editor content and immediately saves through the document manager', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const editorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Updated';
+          if (type === 'json') return editorData;
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Initial',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData: {
+            root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+          },
+          sourceType: 'page',
+        });
+      });
+
+      await act(async () => {
+        await result.current.commitEditorMutation('doc-1', { saveSource: 'llm_call' });
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: '# Updated',
+          editorData: JSON.stringify(editorData),
+          id: 'doc-1',
+          saveSource: 'llm_call',
+        }),
+      );
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: '# Updated',
+        editorData,
+        isDirty: false,
+        lastSavedContent: '# Updated',
+        lastSavedEditorData: editorData,
+      });
+    });
+  });
+
   describe('setEditorState', () => {
     it('should set editor state', () => {
       const { result } = renderHook(() => useDocumentStore());

@@ -1,4 +1,4 @@
-import { type ConversationContext } from '@lobechat/types';
+import type { ConversationContext, MessageMetadata, UploadFileItem } from '@lobechat/types';
 
 /**
  * Operation Type Definitions
@@ -187,6 +187,41 @@ export interface Operation {
 }
 
 /**
+ * Per-file preview metadata snapshotted at enqueue time so the queue tray can
+ * render thumbnails and the resumed sendMessage can rebuild the optimistic
+ * imageList/videoList without relying on the global chat upload store (which
+ * is cleared as soon as the user submits).
+ */
+export interface QueuedFile {
+  id: string;
+  /** MIME type, e.g. `image/png`, `video/mp4`, `application/pdf` */
+  mimeType: string;
+  name: string;
+  /** Preview URL — S3 URL for uploaded files, blob/base64 for in-memory items */
+  url: string;
+}
+
+/**
+ * Rebuild `UploadFileItem`-shaped objects from queued previews so the resumed
+ * `sendMessage` can derive imageList/videoList AND so we can repopulate
+ * `chatUploadFileList` when the user edits a queued message. The synthesized
+ * `File` carries only `name` + `type` (zero bytes) — the consumers we hit only
+ * read `file.name`, `file.type`, plus the URL fields we set below.
+ *
+ * We mirror the snapshotted `url` into both `fileUrl` and `previewUrl`: the
+ * optimistic-message path uses the `fileUrl || base64Url || previewUrl` fallback
+ * chain, while the desktop chat-input file preview only reads `previewUrl`.
+ */
+export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
+  files.map((f) => ({
+    id: f.id,
+    file: new File([], f.name, { type: f.mimeType }),
+    fileUrl: f.url || undefined,
+    previewUrl: f.url || undefined,
+    status: 'success',
+  }));
+
+/**
  * Queued message waiting to be injected into agent runtime
  */
 export interface QueuedMessage {
@@ -195,8 +230,11 @@ export interface QueuedMessage {
   /** Lexical editor JSON state for rich text rendering */
   editorData?: Record<string, any>;
   files?: string[];
+  /** Snapshot of file previews (id, name, mime, url) for tray rendering and optimistic resume */
+  filesPreview?: QueuedFile[];
   id: string;
   interruptMode: 'soft' | 'hard';
+  metadata?: MessageMetadata;
 }
 
 /**
@@ -207,6 +245,8 @@ export interface MergedQueuedMessage {
   /** Lexical editor JSON state for rich text rendering */
   editorData?: Record<string, any>;
   files: string[];
+  filesPreview: QueuedFile[];
+  metadata?: MessageMetadata;
 }
 
 const createTextNode = (text: string) => ({
@@ -289,10 +329,31 @@ const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> |
  */
 export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMessage => {
   const sorted = [...messages].sort((a, b) => a.createdAt - b.createdAt);
+  const metadata = sorted.reduce<MessageMetadata | undefined>((acc, message) => {
+    if (!message.metadata) return acc;
+    const localSystemToolSnapshots = [
+      ...(acc?.localSystemToolSnapshots ?? []),
+      ...(message.metadata.localSystemToolSnapshots ?? []),
+    ];
+    const pageSelections = [
+      ...(acc?.pageSelections ?? []),
+      ...(message.metadata.pageSelections ?? []),
+    ];
+
+    return {
+      ...acc,
+      ...message.metadata,
+      ...(localSystemToolSnapshots.length ? { localSystemToolSnapshots } : undefined),
+      ...(pageSelections.length ? { pageSelections } : undefined),
+    };
+  }, undefined);
+
   return {
     content: sorted.map((m) => m.content).join('\n\n'),
     editorData: mergeQueuedEditorData(sorted),
     files: sorted.flatMap((m) => m.files ?? []),
+    filesPreview: sorted.flatMap((m) => m.filesPreview ?? []),
+    metadata,
   };
 };
 

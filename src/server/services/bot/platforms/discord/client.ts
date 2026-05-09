@@ -31,6 +31,14 @@ const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
 export interface GatewayListenerOptions {
   durationMs?: number;
   waitUntil?: (task: Promise<any>) => void;
+  /**
+   * Override the URL the Gateway listener forwards events to. Defaults to
+   * `${appUrl}/api/agent/webhooks/discord/${applicationId}` (the per-agent
+   * bot path). Set when the same gateway connection should drive a different
+   * surface — e.g. the LobeHub Messenger forwards to
+   * `/api/agent/messenger/webhooks/discord`.
+   */
+  webhookUrl?: string;
 }
 
 function extractChannelId(platformThreadId: string): string {
@@ -116,7 +124,9 @@ class DiscordGatewayClient implements PlatformClient {
       const discordAdapter = (bot as any).adapters.get('discord') as DiscordAdapter;
       const waitUntil = options?.waitUntil ?? ((task: Promise<any>) => task.catch(() => {}));
 
-      const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/discord/${this.applicationId}`;
+      const webhookUrl =
+        options?.webhookUrl ??
+        `${(this.context.appUrl || '').trim()}/api/agent/webhooks/discord/${this.applicationId}`;
 
       await discordAdapter.startGatewayListener(
         { waitUntil },
@@ -125,7 +135,15 @@ class DiscordGatewayClient implements PlatformClient {
         webhookUrl,
       );
 
-      if (!options) {
+      // Auto-refresh by default. Skip ONLY when an explicit `waitUntil` is
+      // passed (the serverless / GatewayManager call sites manage their own
+      // lifecycle). Persist `webhookUrl` across the refresh cycle so callers
+      // that overrode the forwarding target keep their override.
+      const shouldAutoRefresh = !options?.waitUntil;
+      if (shouldAutoRefresh) {
+        const refreshOptions: GatewayListenerOptions | undefined = options?.webhookUrl
+          ? { webhookUrl: options.webhookUrl }
+          : undefined;
         this.refreshTimer = setTimeout(() => {
           if (this.abort.signal.aborted || this.stopped) return;
 
@@ -135,7 +153,7 @@ class DiscordGatewayClient implements PlatformClient {
             durationMs / 3_600_000,
           );
           this.abort.abort();
-          this.start().catch((err) => {
+          this.start(refreshOptions).catch((err) => {
             log('Failed to refresh DiscordBot appId=%s: %O', this.applicationId, err);
           });
         }, durationMs);

@@ -3,6 +3,7 @@ import { GroupManagementIdentifier } from '@lobechat/builtin-tool-group-manageme
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { NotebookIdentifier } from '@lobechat/builtin-tool-notebook';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as agentStore from '@/store/agent';
@@ -12,6 +13,19 @@ import * as agentGroupSelectors from '@/store/agentGroup/selectors';
 import * as userSelectors from '@/store/user/selectors';
 
 import { resolveAgentConfig } from './agentConfigResolver';
+
+vi.hoisted(() => {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      removeItem: (key: string) => storage.delete(key),
+      setItem: (key: string, value: string) => storage.set(key, value),
+    },
+  });
+});
 
 describe('resolveAgentConfig', () => {
   const mockAgentStoreState = { someState: true };
@@ -735,6 +749,60 @@ describe('resolveAgentConfig', () => {
       expect(result.agentConfig.systemRole).toBe('Page agent system prompt');
       expect(result.isBuiltinAgent).toBe(true);
       expect(result.slug).toBe('page-agent');
+    });
+  });
+
+  describe('Task Manager Integration (scope: task)', () => {
+    beforeEach(() => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
+
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        plugins: [TaskIdentifier],
+        systemRole: 'Task agent system prompt...',
+      });
+    });
+
+    it('should inject task tools for custom agent in task scope', () => {
+      const result = resolveAgentConfig({
+        agentId: 'custom-agent',
+        scope: 'task',
+      });
+
+      expect(result.plugins).toEqual([TaskIdentifier, 'plugin-a', 'plugin-b']);
+      expect(result.agentConfig.systemRole).toContain('Task agent system prompt');
+      expect(result.isBuiltinAgent).toBe(false);
+    });
+
+    it('should not duplicate TaskIdentifier if already present', () => {
+      const result = resolveAgentConfig({
+        agentId: 'custom-agent',
+        plugins: [TaskIdentifier, 'other-plugin'],
+        scope: 'task',
+      });
+
+      expect(result.plugins.filter((p) => p === TaskIdentifier)).toHaveLength(1);
+      expect(result.plugins).toEqual([TaskIdentifier, 'other-plugin']);
+    });
+
+    it('should not duplicate injection when task-agent itself is used in task scope', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+        () => 'task-agent',
+      );
+
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        plugins: [TaskIdentifier],
+        systemRole: 'Task agent system prompt',
+      });
+
+      const result = resolveAgentConfig({
+        agentId: 'task-agent-id',
+        scope: 'task',
+      });
+
+      expect(result.plugins.filter((p) => p === TaskIdentifier)).toHaveLength(1);
+      expect(result.agentConfig.systemRole).toBe('Task agent system prompt');
+      expect(result.isBuiltinAgent).toBe(true);
+      expect(result.slug).toBe('task-agent');
     });
   });
 

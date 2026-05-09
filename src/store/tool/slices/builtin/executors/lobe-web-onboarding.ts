@@ -7,7 +7,6 @@ import {
 import {
   createDocumentReadResult,
   createWebOnboardingToolResult,
-  formatWebOnboardingStateMessage,
 } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
@@ -27,16 +26,6 @@ const syncUserOnboardingState = async () => {
 class WebOnboardingExecutor extends BaseExecutor<typeof WebOnboardingApiName> {
   readonly identifier = WebOnboardingIdentifier;
   protected readonly apiEnum = WebOnboardingApiName;
-
-  getOnboardingState = async (): Promise<BuiltinToolResult> => {
-    const result = await userService.getOnboardingState();
-
-    return {
-      content: formatWebOnboardingStateMessage(result),
-      state: result,
-      success: true,
-    };
-  };
 
   saveUserQuestion = async (
     params: Parameters<typeof userService.saveUserQuestion>[0],

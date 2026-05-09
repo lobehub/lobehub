@@ -28,6 +28,7 @@ describe('sanitizeBm25Query', () => {
     expect(sanitizeBm25Query('field:value')).toBe('field\\:value');
     expect(sanitizeBm25Query('back\\slash')).toBe('back\\\\slash');
     expect(sanitizeBm25Query('a/b')).toBe('a\\/b');
+    expect(sanitizeBm25Query('`inside`')).toBe('\\`inside\\`');
   });
 
   it('should escape multiple special characters and join with AND', () => {
@@ -93,12 +94,12 @@ describe('sanitizeBm25Query', () => {
   it('should sanitize long tool-result-like payloads safely', () => {
     const payload = `
       TOOL: <searchResults>
-      <item title="No. 12 Gonzaga carves up Maryland defense in 100-61 rout"
-      url="https://gozags.com/news/2025/11/25/mens-basketball-no-12-gonzaga-carves-up-maryland.aspx" />
-      <item title="Men's Basketball Falls in Tight Matchup Against Brown"
-      url="https://goblackbears.com/news/2025/11/23/mens-basketball-falls-in-tight-matchup-against-brown.aspx" />
+      <item title="title"
+      url="https://example.test/a/b/c.ext" />
+      <item title="title"
+      url="https://example.test/d/e/f.ext" />
       </searchResults>
-      ASSISTANT: Let me search for "lost by 30 points" "November 2023" "college basketball"
+      ASSISTANT: Let me search for "synthetic margin" "sample month" "example category"
       AND OR NOT AND OR NOT AND OR NOT
     `
       .repeat(30)

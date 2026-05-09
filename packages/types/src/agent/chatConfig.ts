@@ -18,7 +18,13 @@ export interface AgentMemoryChatConfig {
   };
 }
 
-export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
+export interface AgentSelfIterationChatConfig {
+  selfIteration?: {
+    enabled?: boolean;
+  };
+}
+
+export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIterationChatConfig {
   autoCreateTopicThreshold: number;
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
@@ -80,6 +86,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Number of historical messages
    */
   historyCount?: number;
+  hy3ReasoningEffort?: 'no_think' | 'low' | 'high';
   /**
    * Image aspect ratio for image generation models
    */
@@ -176,6 +183,14 @@ export const MemoryChatConfigSchema = z.object({
     .optional(),
 });
 
+export const SelfIterationChatConfigSchema = z.object({
+  selfIteration: z
+    .object({
+      enabled: z.boolean().optional(),
+    })
+    .optional(),
+});
+
 export const AgentChatConfigSchema = z
   .object({
     autoCreateTopicThreshold: z.number().default(2),
@@ -198,6 +213,7 @@ export const AgentChatConfigSchema = z
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
     deepseekV4ReasoningEffort: z.enum(['high', 'max']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
@@ -231,4 +247,5 @@ export const AgentChatConfigSchema = z
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),
   })
-  .merge(MemoryChatConfigSchema);
+  .merge(MemoryChatConfigSchema)
+  .merge(SelfIterationChatConfigSchema);

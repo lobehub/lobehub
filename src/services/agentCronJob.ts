@@ -13,8 +13,11 @@ import { lambdaClient } from '@/libs/trpc/client/lambda';
 class AgentCronJobService {
   /**
    * Create a new cron job
+   *
+   * `templateId` is optional — when set, server records the task template
+   * interaction so the same template is excluded from future recommendations.
    */
-  async create(data: Omit<CreateAgentCronJobData, 'userId'>) {
+  async create(data: Omit<CreateAgentCronJobData, 'userId'> & { templateId?: string }) {
     return await lambdaClient.agentCronJob.create.mutate(data);
   }
 

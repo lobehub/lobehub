@@ -3,6 +3,8 @@ import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 const ARTIFACT_TAG_REGEX_GLOBAL =
   /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
 
+const AGENTS_TAG_REGEX_GLOBAL = /<lobeAgents\b[^>]*(?:\/>|>([\S\s]*?)(?:<\/lobeAgents>|$))/g;
+
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
  */
@@ -62,6 +64,11 @@ export const processWithArtifact = (input: string = '') => {
   if (regex.test(output)) {
     output = output.replace(regex, '<lobeArtifact>');
   }
+
+  // Strip newlines inside lobeAgents tags (self-closing or wrapping)
+  output = output.replaceAll(AGENTS_TAG_REGEX_GLOBAL, (match) =>
+    match.replaceAll(/\r?\n|\r/g, ''),
+  );
 
   return output;
 };

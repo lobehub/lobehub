@@ -278,6 +278,68 @@ describe('LobeAnthropicAI', () => {
       process.env.DEBUG_ANTHROPIC_CHAT_COMPLETION = originalDebugValue;
     });
 
+    it('should convert Claude assistant reasoning signatures to thinking content', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: 'Here is my response.',
+            model: 'claude-opus-4-7',
+            reasoning: {
+              content: 'Let me think about this...',
+              signature: 'EuYBCkQYAiJAHnHRJG4nPBrdTlo6CmXoyE8WYoQ=',
+            },
+            role: 'assistant',
+          } as any,
+          { content: 'Continue', role: 'user' },
+        ],
+        model: 'claude-opus-4-7',
+        temperature: 0,
+      });
+
+      const payload = (instance['client'].messages.create as Mock).mock.calls[0][0];
+
+      expect(payload.messages[1]).toEqual({
+        content: [
+          {
+            signature: 'EuYBCkQYAiJAHnHRJG4nPBrdTlo6CmXoyE8WYoQ=',
+            thinking: 'Let me think about this...',
+            type: 'thinking',
+          },
+          { text: 'Here is my response.', type: 'text' },
+        ],
+        role: 'assistant',
+      });
+    });
+
+    it('should not convert non-Claude reasoning signatures to thinking content', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: 'Here is my response.',
+            model: 'deepseek-v4-pro',
+            provider: 'lobehub',
+            reasoning: {
+              content: 'DeepSeek reasoning',
+              signature: '340acffe-0000-4000-8000-000000000000',
+            },
+            role: 'assistant',
+          } as any,
+          { content: 'Continue', role: 'user' },
+        ],
+        model: 'claude-opus-4-7',
+        temperature: 0,
+      });
+
+      const payload = (instance['client'].messages.create as Mock).mock.calls[0][0];
+
+      expect(payload.messages[1]).toEqual({
+        content: 'Here is my response.',
+        role: 'assistant',
+      });
+    });
+
     describe('chat with tools', () => {
       it('should call tools when tools are provided', async () => {
         // Arrange
@@ -822,6 +884,25 @@ describe('LobeAnthropicAI', () => {
           thinking: { type: 'adaptive' },
           tools: undefined,
         });
+      });
+
+      it('should drop assistant prefill for Claude Opus 4.7', async () => {
+        const payload: ChatStreamPayload = {
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: 'Partial assistant draft', role: 'assistant' },
+          ],
+          model: 'claude-opus-4-7',
+        };
+
+        const result = await buildDefaultAnthropicPayload(payload);
+
+        expect(result.messages).toEqual([
+          {
+            content: 'Continue this answer',
+            role: 'user',
+          },
+        ]);
       });
 
       it('should respect max_tokens in thinking mode when provided', async () => {

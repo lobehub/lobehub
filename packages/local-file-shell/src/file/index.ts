@@ -1,4 +1,5 @@
 export { editLocalFile } from './edit';
+export { expandTilde } from './expandTilde';
 export { globLocalFiles } from './glob';
 export { grepContent } from './grep';
 export type { ListFilesOptions } from './list';

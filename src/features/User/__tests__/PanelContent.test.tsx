@@ -63,6 +63,13 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
+vi.mock('@/store/serverConfig', () => ({
+  serverConfigSelectors: {
+    enableBusinessFeatures: () => false,
+  },
+  useServerConfigStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+
 describe('PanelContent', () => {
   const closePopover = vi.fn();
 

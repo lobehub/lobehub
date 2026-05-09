@@ -31,7 +31,7 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 }));
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   useTaskStore.setState({
     activeTaskId: undefined,
     isCreatingTask: false,
@@ -136,6 +136,106 @@ describe('TaskDetailSliceAction', () => {
       expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
       expect(message.error).toHaveBeenCalled();
     });
+
+    it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        activeTaskId: 'T-sub',
+        taskDetailMap: {
+          'T-parent': {
+            identifier: 'T-parent',
+            instruction: 'Parent',
+            status: 'backlog',
+            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+          },
+          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+        },
+      });
+
+      vi.mocked(taskService.update).mockRejectedValue(new Error('fail'));
+
+      await expect(
+        useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
+      ).rejects.toThrow('fail');
+
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
+    });
+
+    it('should not show error when update succeeds but cache refresh fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      const { message } = await import('@/components/AntdStaticMethods');
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+        },
+      });
+
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('network blip'));
+
+      await useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agent-x' });
+
+      expect(useTaskStore.getState().taskSaveStatus).toBe('saved');
+      expect(message.error).not.toHaveBeenCalled();
+    });
+
+    it('should refresh list and affected details when reparenting', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        activeTaskId: 'T-sub',
+        taskDetailMap: {
+          'T-parent': {
+            identifier: 'T-parent',
+            instruction: 'Parent',
+            status: 'backlog',
+            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+          },
+          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+        },
+      });
+
+      const refreshTaskList = vi.fn().mockResolvedValue(undefined);
+      useTaskStore.setState({ refreshTaskList } as any);
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTask('T-sub', { parentTaskId: 'T-new-parent' });
+
+      expect(taskService.update).toHaveBeenCalledWith('T-sub', { parentTaskId: 'T-new-parent' });
+      expect(useTaskStore.getState().taskDetailMap['T-sub']).not.toHaveProperty('parentTaskId');
+      expect(refreshTaskList).toHaveBeenCalled();
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-new-parent']);
+    });
+
+    it('should refresh the parent that was patched even if activeTaskId changes mid-flight', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        activeTaskId: 'T-parent',
+        taskDetailMap: {
+          'T-parent': {
+            identifier: 'T-parent',
+            instruction: 'Parent',
+            status: 'backlog',
+            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+          },
+        },
+      });
+
+      vi.mocked(taskService.update).mockImplementation(async () => {
+        useTaskStore.setState({ activeTaskId: 'T-other' });
+        throw new Error('fail');
+      });
+
+      await expect(
+        useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
+      ).rejects.toThrow('fail');
+
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-sub']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-parent']);
+    });
   });
 
   describe('deleteTask', () => {
@@ -234,6 +334,34 @@ describe('TaskDetailSliceAction', () => {
       await useTaskStore.getState().removeDependency('T-1', 'T-2');
 
       expect(taskService.removeDependency).toHaveBeenCalledWith('T-1', 'T-2');
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+    });
+  });
+
+  describe('unpinDocument', () => {
+    it('should refresh source task and active task when they differ', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
+
+      // Detail page is open at parent identifier; doc is owned by a child DB id.
+      useTaskStore.setState({ activeTaskId: 'T-1' });
+
+      await useTaskStore.getState().unpinDocument('task_child', 'doc_1');
+
+      expect(taskService.unpinDocument).toHaveBeenCalledWith('task_child', 'doc_1');
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'task_child']);
+      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+    });
+
+    it('should not double-refresh when source task equals active task', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
+
+      useTaskStore.setState({ activeTaskId: 'T-1' });
+
+      await useTaskStore.getState().unpinDocument('T-1', 'doc_1');
+
+      expect(mutate).toHaveBeenCalledTimes(1);
       expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
     });
   });

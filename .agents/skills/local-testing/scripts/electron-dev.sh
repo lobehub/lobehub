@@ -11,86 +11,167 @@
 # Environment variables:
 #   CDP_PORT          — Chrome DevTools Protocol port (default: 9222)
 #   ELECTRON_LOG      — Log file path (default: /tmp/electron-dev.log)
-#   ELECTRON_WAIT_S   — Max seconds to wait for Electron process (default: 60)
-#   RENDERER_WAIT_S   — Max seconds to wait for renderer/SPA (default: 60)
+#   ELECTRON_WAIT_S   — Max seconds to wait for CDP to become reachable (default: 90)
+#   RENDERER_WAIT_S   — Max seconds to wait for SPA after CDP is up (default: 60)
+#   FORCE_KILL_USER   — When set to 1, silently kill the user's `bun run dev`
+#                       Electron without confirmation (default: always confirm-by-action)
 #
 set -euo pipefail
 
 CDP_PORT="${CDP_PORT:-9222}"
 ELECTRON_LOG="${ELECTRON_LOG:-/tmp/electron-dev.log}"
-ELECTRON_WAIT_S="${ELECTRON_WAIT_S:-60}"
+ELECTRON_WAIT_S="${ELECTRON_WAIT_S:-90}"
 RENDERER_WAIT_S="${RENDERER_WAIT_S:-60}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 PIDFILE="/tmp/electron-dev-cdp-${CDP_PORT}.pid"
 
+# Project-scoped electron path prefix used for pgrep matching. Any Electron
+# binary from this project (main + helpers, with or without --remote-debugging-port)
+# starts with this string in its argv[0], so a single substring match catches all.
+PROJECT_ELECTRON_PATH="${PROJECT_ROOT}/apps/desktop/node_modules/.pnpm/electron@"
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
-# Get the Electron binary path used by this project
-electron_bin_pattern() {
-  echo "${PROJECT_ROOT}/apps/desktop/node_modules/.pnpm/electron@*/node_modules/electron/dist/Electron.app"
+# Print pid + every descendant pid (DFS via pgrep -P).
+expand_descendants() {
+  local pid="$1"
+  echo "$pid"
+  local children
+  children=$(pgrep -P "$pid" 2>/dev/null || true)
+  for c in $children; do
+    expand_descendants "$c"
+  done
 }
 
-# Find all PIDs related to the project's Electron dev session
-find_electron_pids() {
+# Find seed PIDs related to this project's Electron dev session.
+# Matches REGARDLESS of whether --remote-debugging-port was passed, so it also
+# catches a plain `bun run dev` session the user started outside this script.
+find_project_pids() {
   local pids=""
 
-  # 1. Main Electron process (launched with --remote-debugging-port)
-  local main_pids
-  main_pids=$(pgrep -f "Electron\.app.*--remote-debugging-port=${CDP_PORT}" 2>/dev/null || true)
-  [ -n "$main_pids" ] && pids="$pids $main_pids"
+  # 1. Any process whose command line mentions this project's electron path
+  #    (covers the main Electron binary AND every Helper subprocess)
+  local electron_pids
+  electron_pids=$(pgrep -f "$PROJECT_ELECTRON_PATH" 2>/dev/null || true)
+  pids="$pids $electron_pids"
 
-  # 2. Electron Helper processes (gpu, renderer, utility) spawned from the project's electron binary
-  local helper_pids
-  helper_pids=$(pgrep -f "${PROJECT_ROOT}/apps/desktop/node_modules/.*Electron Helper" 2>/dev/null || true)
-  [ -n "$helper_pids" ] && pids="$pids $helper_pids"
-
-  # 3. electron-vite dev server
+  # 2. electron-vite dev server (narrow match to avoid catching unrelated Vite invocations)
   local vite_pids
-  vite_pids=$(pgrep -f "electron-vite.*dev" 2>/dev/null || true)
-  [ -n "$vite_pids" ] && pids="$pids $vite_pids"
+  vite_pids=$(pgrep -f "electron-vite[/.].*\\bdev\\b" 2>/dev/null || true)
+  pids="$pids $vite_pids"
 
-  # 4. PID from pidfile (fallback)
+  # 3. The launcher subshell from a previous `start` (saved to pidfile)
   if [ -f "$PIDFILE" ]; then
     local saved_pid
-    saved_pid=$(cat "$PIDFILE")
-    if kill -0 "$saved_pid" 2>/dev/null; then
+    saved_pid=$(cat "$PIDFILE" 2>/dev/null || true)
+    if [ -n "$saved_pid" ] && kill -0 "$saved_pid" 2>/dev/null; then
       pids="$pids $saved_pid"
     fi
   fi
 
-  # Deduplicate
-  echo "$pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' || true
+  # 4. Whatever is currently bound to the CDP port — catches strays whose
+  #    binary path doesn't match (e.g. orphaned from a crashed restart)
+  local port_pid
+  port_pid=$(lsof -ti tcp:"$CDP_PORT" -sTCP:LISTEN 2>/dev/null || true)
+  pids="$pids $port_pid"
+
+  echo "$pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' '
 }
+
+# Wait for the CDP HTTP endpoint to respond, with a deadline + early bail-out
+# if the launcher process died (no point waiting if Electron crashed).
+wait_for_cdp() {
+  local deadline=$(( $(date +%s) + ELECTRON_WAIT_S ))
+  echo "[electron-dev] Waiting for CDP on port ${CDP_PORT} (up to ${ELECTRON_WAIT_S}s)..."
+
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
+      echo "[electron-dev] CDP is reachable."
+      return 0
+    fi
+
+    # If our launcher subshell died, abort early so we don't hang the full timeout
+    if [ -f "$PIDFILE" ]; then
+      local saved_pid
+      saved_pid=$(cat "$PIDFILE" 2>/dev/null || true)
+      if [ -n "$saved_pid" ] && ! kill -0 "$saved_pid" 2>/dev/null; then
+        echo "[electron-dev] Launcher PID $saved_pid is gone before CDP came up."
+        echo "[electron-dev] Last 30 lines of $ELECTRON_LOG:"
+        tail -30 "$ELECTRON_LOG" 2>/dev/null || true
+        return 1
+      fi
+    fi
+
+    sleep 2
+  done
+
+  echo "[electron-dev] ERROR: CDP did not respond within ${ELECTRON_WAIT_S}s"
+  echo "[electron-dev] Last 30 lines of $ELECTRON_LOG:"
+  tail -30 "$ELECTRON_LOG" 2>/dev/null || true
+  return 1
+}
+
+# After CDP is up, wait until the SPA renders interactive elements.
+wait_for_renderer() {
+  local deadline=$(( $(date +%s) + RENDERER_WAIT_S ))
+  echo "[electron-dev] Waiting for SPA to load (up to ${RENDERER_WAIT_S}s)..."
+
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    local snap
+    snap=$(agent-browser --cdp "$CDP_PORT" snapshot -i 2>&1 || true)
+    if echo "$snap" | grep -qE '\b(link|button)\b'; then
+      echo "[electron-dev] Renderer ready."
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "[electron-dev] WARNING: Renderer not interactive within ${RENDERER_WAIT_S}s — proceeding anyway."
+  return 0
+}
+
+# ── Commands ─────────────────────────────────────────────────────────
 
 do_stop() {
   echo "[electron-dev] Stopping Electron dev environment..."
 
-  local pids
-  pids=$(find_electron_pids)
+  local seed_pids
+  seed_pids=$(find_project_pids)
 
-  if [ -z "$pids" ]; then
-    echo "[electron-dev] No Electron processes found."
+  # Expand to include all descendants — catches helpers spawned by the main
+  # process AFTER our pgrep snapshot, and the launcher's child node/electron-vite
+  # process tree.
+  local all_pids=""
+  for pid in $seed_pids; do
+    all_pids="$all_pids $(expand_descendants "$pid")"
+  done
+  all_pids=$(echo "$all_pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
+
+  if [ -z "$all_pids" ]; then
+    echo "[electron-dev] No project Electron/vite processes found."
   else
-    echo "[electron-dev] Killing PIDs: $pids"
-    for pid in $pids; do
+    local count
+    count=$(echo "$all_pids" | tr ' ' '\n' | grep -c .)
+    echo "[electron-dev] Sending SIGTERM to $count process(es): $all_pids"
+    for pid in $all_pids; do
       kill "$pid" 2>/dev/null || true
     done
 
-    # Wait up to 5s for graceful exit, then force-kill survivors
+    # Wait up to 5s for graceful exit
     local waited=0
     while [ $waited -lt 5 ]; do
-      local alive=""
-      for pid in $pids; do
-        kill -0 "$pid" 2>/dev/null && alive="$alive $pid"
+      local any_alive=0
+      for pid in $all_pids; do
+        if kill -0 "$pid" 2>/dev/null; then any_alive=1; break; fi
       done
-      [ -z "$alive" ] && break
+      [ "$any_alive" = "0" ] && break
       sleep 1
       waited=$((waited + 1))
     done
 
-    # Force-kill any remaining
-    for pid in $pids; do
+    # SIGKILL anyone still alive
+    for pid in $all_pids; do
       if kill -0 "$pid" 2>/dev/null; then
         echo "[electron-dev] Force-killing PID $pid"
         kill -9 "$pid" 2>/dev/null || true
@@ -98,7 +179,27 @@ do_stop() {
     done
   fi
 
-  # Also close any agent-browser sessions connected to this port
+  # Belt-and-suspenders: anything still bound to the CDP port goes away
+  local port_pid
+  port_pid=$(lsof -ti tcp:"$CDP_PORT" -sTCP:LISTEN 2>/dev/null || true)
+  if [ -n "$port_pid" ]; then
+    echo "[electron-dev] Port $CDP_PORT still bound by PID $port_pid; force-killing"
+    # shellcheck disable=SC2086
+    kill -9 $port_pid 2>/dev/null || true
+  fi
+
+  # Also re-sweep the project's electron processes — sometimes the OS spawns
+  # new helpers during shutdown that didn't exist when we first enumerated.
+  local stragglers
+  stragglers=$(pgrep -f "$PROJECT_ELECTRON_PATH" 2>/dev/null || true)
+  if [ -n "$stragglers" ]; then
+    echo "[electron-dev] Cleaning up stragglers: $stragglers"
+    for pid in $stragglers; do
+      kill -9 "$pid" 2>/dev/null || true
+    done
+  fi
+
+  # Close any agent-browser sessions connected to this port
   agent-browser --cdp "$CDP_PORT" close --all 2>/dev/null || true
 
   rm -f "$PIDFILE"
@@ -107,113 +208,84 @@ do_stop() {
 
 do_status() {
   local pids
-  pids=$(find_electron_pids)
+  pids=$(find_project_pids)
 
   if [ -z "$pids" ]; then
-    echo "[electron-dev] Electron is NOT running."
+    echo "[electron-dev] No project Electron processes found."
     return 1
   fi
 
-  echo "[electron-dev] Electron is running (PIDs: $pids)"
+  echo "[electron-dev] Project processes: $pids"
 
-  # Check CDP connectivity
-  if agent-browser --cdp "$CDP_PORT" get url >/dev/null 2>&1; then
+  if curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
     local url
-    url=$(agent-browser --cdp "$CDP_PORT" get url 2>&1 | tail -1)
+    url=$(agent-browser --cdp "$CDP_PORT" get url 2>&1 | tail -1 || echo "?")
     echo "[electron-dev] CDP port ${CDP_PORT} is reachable. URL: $url"
     return 0
   else
-    echo "[electron-dev] CDP port ${CDP_PORT} is NOT reachable (Electron may still be loading)."
+    echo "[electron-dev] CDP port ${CDP_PORT} is NOT reachable (no --remote-debugging-port, or still loading)."
     return 2
   fi
 }
 
-wait_for_electron() {
-  echo "[electron-dev] Waiting for Electron process (up to ${ELECTRON_WAIT_S}s)..."
-  local elapsed=0
-  local interval=3
-  while [ $elapsed -lt "$ELECTRON_WAIT_S" ]; do
-    if strings "$ELECTRON_LOG" 2>/dev/null | grep -q "starting electron"; then
-      echo "[electron-dev] Electron process started."
-      return 0
-    fi
-    sleep "$interval"
-    elapsed=$((elapsed + interval))
-    echo "[electron-dev] Still waiting... (${elapsed}/${ELECTRON_WAIT_S}s)"
-  done
-  echo "[electron-dev] ERROR: Electron did not start within ${ELECTRON_WAIT_S}s"
-  echo "[electron-dev] Last 20 lines of log:"
-  tail -20 "$ELECTRON_LOG" 2>/dev/null || true
-  return 1
-}
-
-wait_for_renderer() {
-  echo "[electron-dev] Waiting for renderer/SPA to load (up to ${RENDERER_WAIT_S}s)..."
-
-  # Initial delay — renderer needs time to bootstrap
-  sleep 10
-
-  local elapsed=10
-  local interval=5
-  while [ $elapsed -lt "$RENDERER_WAIT_S" ]; do
-    if agent-browser --cdp "$CDP_PORT" wait 2000 >/dev/null 2>&1; then
-      # Check if interactive elements are present (SPA loaded)
-      local snap
-      snap=$(agent-browser --cdp "$CDP_PORT" snapshot -i 2>&1 || true)
-      if echo "$snap" | grep -qE 'link |button '; then
-        echo "[electron-dev] Renderer ready (interactive elements found)."
-        return 0
-      fi
-    fi
-    sleep "$interval"
-    elapsed=$((elapsed + interval))
-    echo "[electron-dev] SPA still loading... (${elapsed}/${RENDERER_WAIT_S}s)"
-  done
-
-  echo "[electron-dev] WARNING: Timed out waiting for renderer, proceeding anyway."
-  return 0
-}
-
 do_start() {
-  # If already running and healthy, skip
-  local status_ok=0
-  do_status >/dev/null 2>&1 || status_ok=$?
-  if [ "$status_ok" -eq 0 ]; then
-    echo "[electron-dev] Electron is already running and CDP is reachable. Skipping start."
-    echo "[electron-dev] Use 'restart' to force a fresh session, or 'stop' to tear down."
+  # Already up and CDP is reachable → nothing to do
+  if curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
+    echo "[electron-dev] CDP already reachable on port $CDP_PORT. Skipping start."
+    echo "[electron-dev] Use 'restart' to force a fresh session."
     return 0
   fi
 
-  # Clean up any stale processes
+  # Detect the user's existing dev session (or stale processes) BEFORE killing
+  local existing
+  existing=$(find_project_pids)
+  if [ -n "$existing" ]; then
+    echo "[electron-dev] Existing project Electron/vite processes detected:"
+    echo "$existing" | tr ' ' '\n' | sed 's/^/[electron-dev]   PID /'
+    echo "[electron-dev] Tearing them down so we can start a CDP-enabled session..."
+  fi
+
   do_stop
 
-  # Start fresh
+  # Wait for port + user-data-dir locks to release. Without this, the new
+  # Electron may fail with "user data directory in use" or fail to bind CDP.
+  local waited=0
+  while [ $waited -lt 10 ]; do
+    if ! lsof -i tcp:"$CDP_PORT" >/dev/null 2>&1 \
+       && ! pgrep -f "$PROJECT_ELECTRON_PATH" >/dev/null 2>&1; then
+      break
+    fi
+    [ $waited -eq 0 ] && echo "[electron-dev] Waiting for port + Electron locks to release..."
+    sleep 1
+    waited=$((waited + 1))
+  done
+
   echo "[electron-dev] Starting Electron dev server..."
-  echo "[electron-dev]   Project: $PROJECT_ROOT"
+  echo "[electron-dev]   Project:  $PROJECT_ROOT"
   echo "[electron-dev]   CDP port: $CDP_PORT"
-  echo "[electron-dev]   Log: $ELECTRON_LOG"
+  echo "[electron-dev]   Log:      $ELECTRON_LOG"
 
   : > "$ELECTRON_LOG"  # Truncate log
 
-  (
-    cd "$PROJECT_ROOT/apps/desktop" && \
-    ELECTRON_ENABLE_LOGGING=1 npx electron-vite dev -- --remote-debugging-port="$CDP_PORT" \
-      >> "$ELECTRON_LOG" 2>&1
-  ) &
-  local bg_pid=$!
-  echo "$bg_pid" > "$PIDFILE"
-  echo "[electron-dev] Background PID: $bg_pid"
+  # Launch in a new session (setsid) so the whole process tree shares a PGID
+  # we can later signal in one shot. `setsid bash -c '... exec ...' &` keeps
+  # the bash shell as the session leader; its PID is what we save.
+  setsid bash -c "
+    cd '$PROJECT_ROOT/apps/desktop'
+    exec npx electron-vite dev -- --remote-debugging-port=$CDP_PORT
+  " >> "$ELECTRON_LOG" 2>&1 < /dev/null &
+  local launcher_pid=$!
+  echo "$launcher_pid" > "$PIDFILE"
+  echo "[electron-dev] Launcher PID (session leader): $launcher_pid"
 
-  # Wait for Electron process to start
-  if ! wait_for_electron; then
-    echo "[electron-dev] Failed to start. Cleaning up..."
+  if ! wait_for_cdp; then
+    echo "[electron-dev] Failed to bring up CDP. Cleaning up..."
     do_stop
     return 1
   fi
 
-  # Wait for renderer to be interactive
   if ! wait_for_renderer; then
-    echo "[electron-dev] Renderer not ready, but Electron is running. You may need to wait more."
+    echo "[electron-dev] Renderer not interactive — you may need to wait more."
   fi
 
   echo "[electron-dev] Ready! Use: agent-browser --cdp $CDP_PORT snapshot -i"
@@ -221,7 +293,7 @@ do_start() {
 
 do_restart() {
   do_stop
-  sleep 2
+  sleep 1
   do_start
 }
 
@@ -235,10 +307,12 @@ case "${1:-help}" in
   *)
     echo "Usage: $0 {start|stop|status|restart}"
     echo ""
-    echo "  start   — Start Electron dev with CDP (idempotent, skips if already running)"
-    echo "  stop    — Kill all Electron dev processes (main + helpers + vite)"
-    echo "  status  — Check if Electron is running and CDP is reachable"
-    echo "  restart — Stop then start"
+    echo "  start   — Start Electron dev with CDP. Detects + tears down any"
+    echo "            existing project Electron (e.g. \`bun run dev\`) first."
+    echo "  stop    — Kill all project Electron/vite processes (main + helpers"
+    echo "            + descendants), with SIGTERM → 5s wait → SIGKILL fallback."
+    echo "  status  — Check if Electron is running and CDP is reachable."
+    echo "  restart — Stop then start."
     exit 1
     ;;
 esac

@@ -17,7 +17,6 @@ const FIELD_LABELS: Record<SaveUserQuestionField, string> = {
   agentName: 'agent name',
   fullName: 'full name',
   interests: 'interests',
-  responseLanguage: 'response language',
 };
 
 const formatNaturalList = (items: string[]) => {
@@ -31,9 +30,9 @@ const PHASE_GUIDANCE: Record<string, string> = {
   agent_identity:
     'Phase: Agent Identity. The agent has no name or personality yet. Introduce yourself as freshly awakened, discover your name, creature type, personality, and communication style through conversation. Update SOUL.md once the user settles on who you are.',
   discovery:
-    'Phase: Discovery. User identity is established. Now explore their work style, tools, active projects, pain points, and how they want you to help. Collect interests and responseLanguage naturally. Update the persona document as you learn more.',
+    'Phase: Discovery. User identity is established. Now explore their work style, tools, active projects, pain points, and how they want you to help. Collect interests naturally. Update the persona document as you learn more.',
   summary:
-    'Phase: Summary. All structured fields and documents are in good shape. Present a natural summary of what you learned about the user and how you can help. Ask for light confirmation, then call finishOnboarding.',
+    "Phase: Summary. All structured fields and documents are in good shape. Two-step wrap up: (1) THIS or the current summary turn, present a natural summary of what you learned and call `showAgentMarketplace` exactly once with `{ requestId, categoryHints, prompt }` (1–3 MarketplaceCategory slugs picked from what you learned in discovery). Do not call `submitAgentPick` / `skipAgentPick` / `cancelAgentPick` yourself. (2) On the NEXT turn, briefly acknowledge whatever the user said, send a warm closing, and call `finishOnboarding`. Treat the user's text reply on that next turn as the resolution signal even if the picker is still in `pending` state — do not stall waiting for a UI event. Do not call `showAgentMarketplace` more than once.",
   user_identity:
     'Phase: User Identity. The agent has an identity. Now learn who the user is — their name, role, and what they do. Save fullName via saveUserQuestion when learned. Start building the persona document.',
 };
@@ -54,7 +53,7 @@ export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) =
   const phaseGuidance = PHASE_GUIDANCE[state.phase] || '';
   const parts: string[] = [
     phaseGuidance,
-    'Questioning rule: prefer the `lobe-user-interaction____askUserQuestion____builtin` tool call for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
+    'Questioning rule: prefer the `lobe-user-interaction____askUserQuestion` tool call for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
   ];
 
   if (state.remainingDiscoveryExchanges !== undefined && state.remainingDiscoveryExchanges > 0) {

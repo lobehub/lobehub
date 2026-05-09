@@ -57,6 +57,10 @@ export class BotSliceActionImpl {
     return agentBotProviderService.testConnection(params);
   };
 
+  lineFetchBotInfo = async (channelAccessToken: string) => {
+    return agentBotProviderService.lineFetchBotInfo(channelAccessToken);
+  };
+
   deleteAllBotProviders = async (agentId: string) => {
     const providers = await agentBotProviderService.getByAgentId(agentId);
     await Promise.all(providers.map((p) => agentBotProviderService.delete(p.id)));

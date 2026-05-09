@@ -203,6 +203,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
   }
 
+  if (modelExtendParams.includes('hy3ReasoningEffort') && chatConfig.hy3ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.hy3ReasoningEffort;
+  }
+
   if (
     modelExtendParams.includes('deepseekV4ReasoningEffort') &&
     chatConfig.deepseekV4ReasoningEffort

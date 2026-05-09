@@ -486,8 +486,8 @@ describe('ConversationControl actions', () => {
           context: { phase: 'init' } as any,
           agentConfig: createMockResolvedAgentConfig(),
         });
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
 
       // Call with builder context
@@ -509,8 +509,8 @@ describe('ConversationControl actions', () => {
         }),
       );
 
-      // Verify internal_execAgentRuntime was called with builder context (now wrapped in context object)
-      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+      // Verify executeClientAgent was called with builder context (now wrapped in context object)
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.objectContaining({
             agentId: builderAgentId,
@@ -559,8 +559,8 @@ describe('ConversationControl actions', () => {
           context: { phase: 'init' } as any,
           agentConfig: createMockResolvedAgentConfig(),
         });
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
 
       // Call without context (should use global state)
@@ -576,8 +576,8 @@ describe('ConversationControl actions', () => {
         }),
       );
 
-      // Verify internal_execAgentRuntime was called with global context (now wrapped in context object)
-      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+      // Verify executeClientAgent was called with global context (now wrapped in context object)
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.objectContaining({
             agentId: globalAgentId,
@@ -599,16 +599,16 @@ describe('ConversationControl actions', () => {
         });
       });
 
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.approveToolCalling('non-existent-msg', 'group-1');
       });
 
-      // Should not call internal_execAgentRuntime when tool message not found
-      expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+      // Should not call executeClientAgent when tool message not found
+      expect(executeClientAgentSpy).not.toHaveBeenCalled();
     });
 
     describe('server-mode branch', () => {
@@ -655,8 +655,8 @@ describe('ConversationControl actions', () => {
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
           .mockResolvedValue({} as any);
-        const internal_execAgentRuntimeSpy = vi
-          .spyOn(result.current, 'internal_execAgentRuntime')
+        const executeClientAgentSpy = vi
+          .spyOn(result.current, 'executeClientAgent')
           .mockResolvedValue(undefined);
 
         await act(async () => {
@@ -674,7 +674,7 @@ describe('ConversationControl actions', () => {
             },
           }),
         );
-        expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+        expect(executeClientAgentSpy).not.toHaveBeenCalled();
 
         // Fallback guard: the paused `execServerAgentRuntime` op in this
         // context must be completed so the loading state doesn't bleed
@@ -736,8 +736,8 @@ describe('ConversationControl actions', () => {
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
           .mockResolvedValue({} as any);
-        const internal_execAgentRuntimeSpy = vi
-          .spyOn(result.current, 'internal_execAgentRuntime')
+        const executeClientAgentSpy = vi
+          .spyOn(result.current, 'executeClientAgent')
           .mockResolvedValue(undefined);
 
         await act(async () => {
@@ -756,7 +756,7 @@ describe('ConversationControl actions', () => {
             }),
           }),
         );
-        expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+        expect(executeClientAgentSpy).not.toHaveBeenCalled();
 
         executeGatewayAgentSpy.mockRestore();
       });
@@ -851,8 +851,8 @@ describe('ConversationControl actions', () => {
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
           .mockResolvedValue({} as any);
-        const internal_execAgentRuntimeSpy = vi
-          .spyOn(result.current, 'internal_execAgentRuntime')
+        const executeClientAgentSpy = vi
+          .spyOn(result.current, 'executeClientAgent')
           .mockResolvedValue(undefined);
 
         await act(async () => {
@@ -860,7 +860,7 @@ describe('ConversationControl actions', () => {
         });
 
         expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
-        expect(internal_execAgentRuntimeSpy).toHaveBeenCalled();
+        expect(executeClientAgentSpy).toHaveBeenCalled();
 
         executeGatewayAgentSpy.mockRestore();
       });
@@ -908,8 +908,8 @@ describe('ConversationControl actions', () => {
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
           .mockResolvedValue({} as any);
-        const internal_execAgentRuntimeSpy = vi
-          .spyOn(result.current, 'internal_execAgentRuntime')
+        const executeClientAgentSpy = vi
+          .spyOn(result.current, 'executeClientAgent')
           .mockResolvedValue(undefined);
 
         await act(async () => {
@@ -927,7 +927,7 @@ describe('ConversationControl actions', () => {
             resumeApproval: expect.objectContaining({ decision: 'approved' }),
           }),
         );
-        expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+        expect(executeClientAgentSpy).not.toHaveBeenCalled();
 
         executeGatewayAgentSpy.mockRestore();
       });
@@ -1026,8 +1026,8 @@ describe('ConversationControl actions', () => {
       const executeGatewayAgentSpy = vi
         .spyOn(result.current, 'executeGatewayAgent')
         .mockResolvedValue({} as any);
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
       // Ensure client rejectToolCalling is NOT invoked in server-mode path —
       // otherwise the server would see a duplicate halting `reject` before
@@ -1052,7 +1052,7 @@ describe('ConversationControl actions', () => {
           },
         }),
       );
-      expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+      expect(executeClientAgentSpy).not.toHaveBeenCalled();
       expect(rejectToolCallingSpy).not.toHaveBeenCalled();
 
       executeGatewayAgentSpy.mockRestore();
@@ -1132,8 +1132,8 @@ describe('ConversationControl actions', () => {
           context: initialContext,
           state: {} as any,
         });
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
 
       await act(async () => {
@@ -1159,7 +1159,7 @@ describe('ConversationControl actions', () => {
         }),
       );
 
-      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           initialContext,
           parentMessageId: userMessageId,
@@ -1239,8 +1239,8 @@ describe('ConversationControl actions', () => {
           context: initialContext,
           state: {} as any,
         });
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
 
       await act(async () => {
@@ -1266,7 +1266,7 @@ describe('ConversationControl actions', () => {
         }),
       );
 
-      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           initialContext,
           parentMessageId: userMessageId,
@@ -1323,8 +1323,8 @@ describe('ConversationControl actions', () => {
           context: { phase: 'init' } as any,
           agentConfig: createMockResolvedAgentConfig(),
         });
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
 
       // Call with builder context
@@ -1346,8 +1346,8 @@ describe('ConversationControl actions', () => {
         }),
       );
 
-      // Verify internal_execAgentRuntime was called with builder context (now wrapped in context object)
-      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+      // Verify executeClientAgent was called with builder context (now wrapped in context object)
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.objectContaining({
             agentId: builderAgentId,
@@ -1397,8 +1397,8 @@ describe('ConversationControl actions', () => {
           context: { phase: 'init' } as any,
           agentConfig: createMockResolvedAgentConfig(),
         });
-      const internal_execAgentRuntimeSpy = vi
-        .spyOn(result.current, 'internal_execAgentRuntime')
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
         .mockResolvedValue(undefined);
 
       // Call without context
@@ -1414,8 +1414,8 @@ describe('ConversationControl actions', () => {
         }),
       );
 
-      // Verify internal_execAgentRuntime was called with global context
-      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+      // Verify executeClientAgent was called with global context
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           context: expect.objectContaining({
             agentId: globalAgentId,

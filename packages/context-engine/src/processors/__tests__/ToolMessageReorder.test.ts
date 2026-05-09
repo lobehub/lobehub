@@ -48,7 +48,7 @@ describe('ToolMessageReorder', () => {
             function: {
               arguments:
                 '{"query":"LobeChat","searchEngines":["brave","google","duckduckgo","qwant"]}',
-              name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+              name: 'lobe-web-browsing____searchWithSearXNG',
             },
             id: 'call_6xCmrOtFOyBAcqpqO1TGfw2B',
             type: 'function',
@@ -57,7 +57,7 @@ describe('ToolMessageReorder', () => {
             function: {
               arguments:
                 '{"query":"LobeChat","searchEngines":["brave","google","duckduckgo","qwant"]}',
-              name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+              name: 'lobe-web-browsing____searchWithSearXNG',
             },
             id: 'tool_call_nXxXHW8Z',
             type: 'function',
@@ -66,7 +66,7 @@ describe('ToolMessageReorder', () => {
       },
       {
         content: '[]',
-        name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+        name: 'lobe-web-browsing____searchWithSearXNG',
         role: 'tool',
         tool_call_id: 'call_6xCmrOtFOyBAcqpqO1TGfw2B',
       },
@@ -76,13 +76,13 @@ describe('ToolMessageReorder', () => {
       },
       {
         content: '[]',
-        name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+        name: 'lobe-web-browsing____searchWithSearXNG',
         role: 'tool',
         tool_call_id: 'tool_call_nXxXHW8Z',
       },
       {
         content: '[]',
-        name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+        name: 'lobe-web-browsing____searchWithSearXNG',
         role: 'tool',
         tool_call_id: 'tool_call_2f3CEKz9',
       },
@@ -109,7 +109,7 @@ describe('ToolMessageReorder', () => {
             function: {
               arguments:
                 '{"query":"LobeChat","searchEngines":["brave","google","duckduckgo","qwant"]}',
-              name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+              name: 'lobe-web-browsing____searchWithSearXNG',
             },
             id: 'call_6xCmrOtFOyBAcqpqO1TGfw2B',
             type: 'function',
@@ -118,7 +118,7 @@ describe('ToolMessageReorder', () => {
             function: {
               arguments:
                 '{"query":"LobeChat","searchEngines":["brave","google","duckduckgo","qwant"]}',
-              name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+              name: 'lobe-web-browsing____searchWithSearXNG',
             },
             id: 'tool_call_nXxXHW8Z',
             type: 'function',
@@ -127,13 +127,13 @@ describe('ToolMessageReorder', () => {
       },
       {
         content: '[]',
-        name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+        name: 'lobe-web-browsing____searchWithSearXNG',
         role: 'tool',
         tool_call_id: 'call_6xCmrOtFOyBAcqpqO1TGfw2B',
       },
       {
         content: '[]',
-        name: 'lobe-web-browsing____searchWithSearXNG____builtin',
+        name: 'lobe-web-browsing____searchWithSearXNG',
         role: 'tool',
         tool_call_id: 'tool_call_nXxXHW8Z',
       },

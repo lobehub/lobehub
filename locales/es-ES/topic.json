@@ -56,6 +56,7 @@
   "renameModal.title": "Renombrar tema",
   "searchPlaceholder": "Buscar temas...",
   "searchResultEmpty": "No se encontraron resultados de búsqueda.",
+  "taskManager.agent": "Agente de Tareas",
   "taskManager.welcome": "Pregúntame sobre tus tareas",
   "temp": "Temporal",
   "title": "Tema"

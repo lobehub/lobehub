@@ -314,7 +314,7 @@ export const fileRouter = router({
         resultItems.push({
           ...item,
           editorData: null,
-          url: getFileProxyUrl(item.id),
+          url: getFileProxyUrl(item.fileId || item.id),
           ...status,
         } as FileListItem);
       } else {
@@ -423,7 +423,7 @@ export const fileRouter = router({
     }),
 
   recentFiles: fileProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Query recent items and filter for files only (exclude documents/pages)
@@ -475,7 +475,7 @@ export const fileRouter = router({
           embeddingStatus: embeddingTask?.status as AsyncTaskStatus,
           finishEmbedding: embeddingTask?.status === AsyncTaskStatus.Success,
           sourceType: 'file' as const,
-          url: getFileProxyUrl(item.id),
+          url: getFileProxyUrl(item.fileId || item.id),
         } as FileListItem);
       }
 
@@ -483,7 +483,7 @@ export const fileRouter = router({
     }),
 
   recentPages: fileProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Query recent items and filter for pages (documents) only, exclude folders

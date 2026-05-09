@@ -1,0 +1,31 @@
+---
+title: 在 LobeHub 中调度 Claude Code 与 Codex
+description: 在 LobeHub 中直接调度 Claude Code 与 Codex，全新首页、批量 git diff 的 Review 标签页、视觉理解工具，以及一批新模型。
+tags:
+  - 编程 Agent
+  - Claude Code
+  - 首页
+  - Review
+  - 模型
+---
+
+# 在 LobeHub 中调度 Claude Code 与 Codex
+
+## 新功能
+
+- 新增：在 LobeHub 中调度 Claude Code 与 Codex
+- 按 Agent 分组话题：可将话题列表切换为按 Agent 分组，并带有更友好的空状态
+- Review 标签页：新增 Review 标签页，可聚合树级别的批量 git diff，大型仓库下速度提升约 9 倍
+- 本地文件提及快照：将文件拖入聊天即可生成快照供模型理解
+- 视觉理解工具：内置的图像分析与视觉推理工具
+- Line Bot 接入：可将 Line 频道作为 Agent 接入端
+- 新模型：`grok-4.3`、DeepSeek Anthropic 运行时，以及模型库新增的 `gpt-image-2` 和 Grok 4.20
+
+## 体验优化与修复
+
+- DeepSeek 模型卡片展示价格并尊重模型默认配置。
+- 文档弹窗在标题加载时显示骨架，并在 Space 中展示文档更新时间。
+- Agent 文档可作为虚拟文件系统暴露，输出兼容 fs 接口。
+- 重置密码后会立即吊销已有会话，tRPC 分页接口新增最大条数限制。
+- 在桌面端跳过 Skill OAuth 的 `redirectUri`，避免应用进入异常状态。
+- 登录流程中的 CAPTCHA 重试可正常处理，不再直接失败。

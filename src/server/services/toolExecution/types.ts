@@ -9,14 +9,24 @@ export interface ToolExecutionContext {
   agentId?: string;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
+  /** Current group ID for group chat context */
+  groupId?: string | null;
   /** Memory tool permission from agent chat config */
   memoryToolPermission?: 'read-only' | 'read-write';
+  /** Source user message ID used by Agent Signal procedure suppression. */
+  messageId?: string;
+  /** Agent runtime operation ID for structured tool outcome identity. */
+  operationId?: string;
   /** Conversation scope captured when the operation was created */
   scope?: string | null;
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
   /** Task ID when executing within the Task system */
   taskId?: string;
+  /** Current thread ID for thread-scoped conversations */
+  threadId?: string | null;
+  /** Stable LLM tool call ID for structured tool outcome identity. */
+  toolCallId?: string;
   toolManifestMap: Record<string, LobeToolManifest>;
   /**
    * Maximum length for tool execution result content (in characters)

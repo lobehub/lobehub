@@ -75,4 +75,20 @@ describe('overlaySnapshot', () => {
       },
     ]);
   });
+
+  it('preserves heterogeneousType for overlay agent options', () => {
+    const agentOptions = resolveOverlayAgentOptions({
+      agents: [{ avatar: 'A', heterogeneousType: 'codex', id: 'agent-1', title: 'Agent 1' }],
+    });
+
+    expect(agentOptions).toEqual([
+      {
+        avatar: 'A',
+        backgroundColor: undefined,
+        heterogeneousType: 'codex',
+        id: 'agent-1',
+        title: 'Agent 1',
+      },
+    ]);
+  });
 });

@@ -610,6 +610,22 @@ describe('thinkingConfig includeThoughts logic', () => {
     const config = callArgs[0].config as any;
     expect(config.thinkingConfig?.thinkingLevel).toBe('high');
   });
+
+  it('should add thinkingLevel to config for gemma-4 models when provided', async () => {
+    const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemma-4-31b-it',
+      thinkingLevel: 'low',
+      temperature: 0,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.thinkingConfig?.thinkingLevel).toBe('low');
+  });
 });
 
 describe('buildGoogleToolsWithSearch', () => {

@@ -229,6 +229,7 @@ export class MessageModel {
         createdAt: messages.createdAt,
         updatedAt: messages.updatedAt,
 
+        sessionId: messages.sessionId,
         topicId: messages.topicId,
         parentId: messages.parentId,
         threadId: messages.threadId,
@@ -568,6 +569,7 @@ export class MessageModel {
         createdAt: messages.createdAt,
         updatedAt: messages.updatedAt,
 
+        sessionId: messages.sessionId,
         topicId: messages.topicId,
         parentId: messages.parentId,
         threadId: messages.threadId,

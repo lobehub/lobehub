@@ -15,12 +15,14 @@ import {
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryInterventions, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
 import { MessageInterventions, MessageManifest } from '@lobechat/builtin-tool-message/client';
-import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
-import { NotebookInterventions } from '@lobechat/builtin-tool-notebook/client';
 import {
   UserInteractionIdentifier,
   UserInteractionInterventions,
 } from '@lobechat/builtin-tool-user-interaction/client';
+import {
+  AgentMarketplaceInterventions,
+  AgentMarketplaceManifest,
+} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/client';
 import {
   WebOnboardingInterventions,
   WebOnboardingManifest,
@@ -34,13 +36,13 @@ import { type BuiltinIntervention } from '@lobechat/types';
  */
 export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInterventions,
+  [AgentMarketplaceManifest.identifier]: AgentMarketplaceInterventions,
   [CloudSandboxManifest.identifier]: CloudSandboxInterventions,
   [GroupManagementManifest.identifier]: GroupManagementInterventions,
   [GTDManifest.identifier]: GTDInterventions,
   [LocalSystemIdentifier]: LocalSystemInterventions,
   [MemoryManifest.identifier]: MemoryInterventions,
   [MessageManifest.identifier]: MessageInterventions,
-  [NotebookManifest.identifier]: NotebookInterventions,
   [UserInteractionIdentifier]: UserInteractionInterventions,
   [WebOnboardingManifest.identifier]: WebOnboardingInterventions,
 };

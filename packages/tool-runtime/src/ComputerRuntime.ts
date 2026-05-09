@@ -464,8 +464,16 @@ export abstract class ComputerRuntime {
   }
 
   private errorOutput(result: ServiceResult, state: any): BuiltinServerRuntimeOutput {
+    // Defensive fallback: when a service reports success: false without an
+    // error object, JSON.stringify(undefined) returns the value `undefined`
+    // (not the string "undefined"), which collapsed downstream into an empty
+    // tool-message content while pluginState still got persisted.
+    const errorText =
+      result.error?.message ||
+      (result.error !== undefined ? JSON.stringify(result.error) : undefined) ||
+      'Tool execution failed';
     return {
-      content: result.error?.message || JSON.stringify(result.error),
+      content: errorText,
       state,
       success: true,
     };

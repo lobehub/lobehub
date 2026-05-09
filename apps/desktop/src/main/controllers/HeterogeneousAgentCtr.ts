@@ -1,9 +1,10 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
-import { access, appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { access, appendFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
+import { finished as streamFinished } from 'node:stream/promises';
 
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import {
@@ -13,14 +14,17 @@ import {
   CODEX_CLI_INSTALL_DOCS_URL,
   HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
+import type { AgentContentBlock } from '@lobechat/heterogeneous-agents/spawn';
+import {
+  AgentStreamPipeline,
+  buildAgentInput,
+  materializeImageToPath,
+  normalizeImage,
+} from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
-import { CodexFileChangeTracker } from '@/modules/heterogeneousAgent/codexFileChangeTracker';
-import type {
-  HeterogeneousAgentImageAttachment,
-  HeterogeneousAgentParsedOutput,
-} from '@/modules/heterogeneousAgent/types';
+import type { HeterogeneousAgentImageAttachment } from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
 import { createLogger } from '@/utils/logger';
@@ -52,16 +56,6 @@ const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
 /** Directory under appStoragePath for caching downloaded files */
 const FILE_CACHE_DIR = 'heteroAgent/files';
 const CLI_TRACE_DIR = '.heerogeneous-tracing';
-const IMAGE_EXTENSIONS_BY_MIME = {
-  'image/gif': '.gif',
-  'image/jpg': '.jpg',
-  'image/jpeg': '.jpg',
-  'image/pjpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-  'image/x-png': '.png',
-} as const satisfies Record<string, string>;
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
 const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
 const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WARN)\s+/;
@@ -91,6 +85,12 @@ interface StartSessionResult {
 interface SendPromptParams {
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
   imageList?: HeterogeneousAgentImageAttachment[];
+  /**
+   * Renderer-side operation id stamped onto every emitted `AgentStreamEvent`.
+   * Required: producer-side conversion is the V3 contract — by the time events
+   * reach the renderer they must already carry the operation they belong to.
+   */
+  operationId: string;
   prompt: string;
   sessionId: string;
 }
@@ -148,7 +148,7 @@ interface CliTraceSession {
  * prompt transport, resume semantics, and raw stream shape without turning
  * this controller into a giant `switch`.
  *
- * Lifecycle: startSession → sendPrompt → (heteroAgentRawLine broadcasts) → stopSession
+ * Lifecycle: startSession → sendPrompt → (heteroAgentEvent broadcasts) → stopSession
  */
 export default class HeterogeneousAgentCtr extends ControllerModule {
   static override readonly groupName = 'heterogeneousAgent';
@@ -574,125 +574,56 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Derive a filesystem-safe cache key for attachments.
-   *
-   * Never use the raw image id as a path segment — upstream callers can persist
-   * arbitrary ids and path.join would treat traversal sequences as real
-   * directories. A stable hash preserves cache hits without trusting the id as a
-   * filename.
+   * Convert a desktop image attachment list into shared content blocks. Each
+   * attachment's id is preserved as the cache key so repeated prompts hit the
+   * same on-disk entries.
    */
-  private getImageCacheKey(imageId: string): string {
-    return createHash('sha256').update(imageId).digest('hex');
+  private toImageContentBlocks(
+    imageList: HeterogeneousAgentImageAttachment[],
+  ): AgentContentBlock[] {
+    return imageList.map((image) => ({
+      source: { id: image.id, type: 'url', url: image.url },
+      type: 'image',
+    }));
   }
 
   /**
-   * Download an image by URL, with local disk cache keyed by id.
+   * Build a Claude Code stream-json user message with text + base64 images.
+   * Delegates to the shared `buildAgentInput`; the desktop wrapper exists only
+   * to preserve the helper signature consumed by existing drivers.
    */
-  private async resolveImage(
-    image: HeterogeneousAgentImageAttachment,
-  ): Promise<{ buffer: Buffer; mimeType: string }> {
-    const cacheDir = this.fileCacheDir;
-    const cacheKey = this.getImageCacheKey(image.id);
-    const metaPath = path.join(cacheDir, `${cacheKey}.meta`);
-    const dataPath = path.join(cacheDir, cacheKey);
+  private async buildStreamJsonInput(
+    prompt: string,
+    imageList: HeterogeneousAgentImageAttachment[] = [],
+  ): Promise<string> {
+    const blocks: AgentContentBlock[] = [];
+    if (prompt && prompt.length > 0) blocks.push({ text: prompt, type: 'text' });
+    blocks.push(...this.toImageContentBlocks(imageList));
 
-    // Check cache first
-    try {
-      const metaRaw = await readFile(metaPath, 'utf8');
-      const meta = JSON.parse(metaRaw);
-      const buffer = await readFile(dataPath);
-      logger.debug('Image cache hit:', image.id);
-      return { buffer, mimeType: meta.mimeType || 'image/png' };
-    } catch {
-      // Cache miss — download
-    }
-
-    logger.info('Downloading image:', image.id);
-
-    const res = await fetch(image.url);
-    if (!res.ok)
-      throw new Error(`Failed to download image ${image.id}: ${res.status} ${res.statusText}`);
-
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = res.headers.get('content-type') || 'image/png';
-
-    // Write to cache
-    await mkdir(cacheDir, { recursive: true });
-    await writeFile(dataPath, buffer);
-    await writeFile(metaPath, JSON.stringify({ id: image.id, mimeType }));
-    logger.debug('Image cached:', image.id, `${buffer.length} bytes`);
-
-    return { buffer, mimeType };
-  }
-
-  private normalizeMimeType(mimeType: string): string {
-    return mimeType.split(';')[0]?.trim().toLowerCase() || '';
-  }
-
-  private guessImageExtensionByBuffer(buffer: Buffer): string | undefined {
-    if (buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return '.png';
-    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return '.jpg';
-
-    const gifSignature = buffer.subarray(0, 6).toString('ascii');
-    if (gifSignature === 'GIF87a' || gifSignature === 'GIF89a') return '.gif';
-
-    if (
-      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
-      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
-    ) {
-      return '.webp';
-    }
-  }
-
-  private guessImageExtension(
-    mimeType: string,
-    image: HeterogeneousAgentImageAttachment,
-    buffer: Buffer,
-  ): string | undefined {
-    const knownByMime = IMAGE_EXTENSIONS_BY_MIME[this.normalizeMimeType(mimeType)];
-    if (knownByMime) return knownByMime;
-
-    try {
-      const pathname = new URL(image.url).pathname;
-      const ext = path.extname(pathname).toLowerCase();
-      if (ext) return ext === '.jpeg' ? '.jpg' : ext;
-    } catch {
-      // Fall through to byte sniffing below.
-    }
-
-    return this.guessImageExtensionByBuffer(buffer);
+    const plan = await buildAgentInput('claude-code', blocks, { cacheDir: this.fileCacheDir });
+    return plan.stdin;
   }
 
   /**
-   * Materialize an image attachment into a stable local file path so CLIs like
-   * Codex can consume it through `--image <file>`.
+   * Materialize image attachments into stable filesystem paths for path-mode
+   * agents (Codex `--image <file>`). Fails the prompt if any image cannot be
+   * fetched / decoded — partially-attached prompts confuse the agent more
+   * than they help.
    */
-  private async resolveCliImagePath(image: HeterogeneousAgentImageAttachment): Promise<string> {
-    const { buffer, mimeType } = await this.resolveImage(image);
-    const cacheKey = this.getImageCacheKey(image.id);
-    const ext = this.guessImageExtension(mimeType, image, buffer);
-    if (!ext) {
-      throw new Error(`Unsupported image type for ${image.id}`);
-    }
-
-    const filePath = path.join(this.fileCacheDir, `${cacheKey}${ext}`);
-
-    try {
-      await access(filePath);
-    } catch {
-      await mkdir(this.fileCacheDir, { recursive: true });
-      await writeFile(filePath, buffer);
-    }
-
-    return filePath;
-  }
-
   private async resolveCliImagePaths(
     imageList: HeterogeneousAgentImageAttachment[] = [],
   ): Promise<string[]> {
+    if (imageList.length === 0) return [];
+
+    const cacheDir = this.fileCacheDir;
     const results = await Promise.allSettled(
-      imageList.map((image) => this.resolveCliImagePath(image)),
+      imageList.map(async (image) => {
+        const normalized = await normalizeImage(
+          { id: image.id, type: 'url', url: image.url },
+          { cacheDir },
+        );
+        return materializeImageToPath(normalized, cacheDir);
+      }),
     );
 
     const imagePaths: string[] = [];
@@ -716,37 +647,6 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
 
     return imagePaths;
-  }
-
-  /**
-   * Build a stream-json user message with text + optional image content blocks.
-   */
-  private async buildStreamJsonInput(
-    prompt: string,
-    imageList: HeterogeneousAgentImageAttachment[] = [],
-  ): Promise<string> {
-    const content: any[] = [{ text: prompt, type: 'text' }];
-
-    for (const image of imageList) {
-      try {
-        const { buffer, mimeType } = await this.resolveImage(image);
-        content.push({
-          source: {
-            data: buffer.toString('base64'),
-            media_type: mimeType,
-            type: 'base64',
-          },
-          type: 'image',
-        });
-      } catch (err) {
-        logger.error(`Failed to resolve image ${image.id}:`, err);
-      }
-    }
-
-    return `${JSON.stringify({
-      message: { content, role: 'user' },
-      type: 'user',
-    })}\n`;
   }
 
   // ─── IPC methods ───
@@ -779,8 +679,9 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   /**
    * Send a prompt to an agent session.
    *
-   * Spawns the CLI process with preset flags. Broadcasts each stdout line
-   * as an `heteroAgentRawLine` event — Renderer side parses and adapts.
+   * Spawns the CLI process with preset flags. Pipes each stdout chunk through
+   * the shared `AgentStreamPipeline` (JSONL → adapter → toStreamEvent) and
+   * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
    */
   @IpcMethod()
   async sendPrompt(params: SendPromptParams): Promise<void> {
@@ -852,42 +753,49 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       }
 
       session.process = proc;
-      const streamProcessor = driver.createStreamProcessor();
-      const codexFileChangeTracker =
-        session.agentType === 'codex' ? new CodexFileChangeTracker() : undefined;
+
+      // Producer-side conversion (V3 contract): JSONL framing + adapter +
+      // toStreamEvent all run inside the shared pipeline, so renderer + future
+      // server `heteroIngest` see the same `AgentStreamEvent` wire shape with
+      // no per-consumer adapter. The pipeline auto-wires the Codex
+      // file-change line-stat tracker when `agentType === 'codex'`, so this
+      // controller stays agent-agnostic.
+      const pipeline = new AgentStreamPipeline({
+        agentType: session.agentType,
+        operationId: params.operationId,
+      });
       let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
 
-      const broadcastParsedOutputs = (parsedOutputs: HeterogeneousAgentParsedOutput[]) => {
+      const broadcastPipelineBatch = (produce: () => ReturnType<AgentStreamPipeline['push']>) => {
         stdoutBroadcastQueue = stdoutBroadcastQueue
           .then(async () => {
-            for (const parsedOutput of parsedOutputs) {
-              if (parsedOutput.agentSessionId) {
-                session.agentSessionId = parsedOutput.agentSessionId;
-              }
-
-              const line = codexFileChangeTracker
-                ? await codexFileChangeTracker.track(parsedOutput.payload)
-                : parsedOutput.payload;
-
-              this.broadcast('heteroAgentRawLine', {
-                line,
+            const events = await produce();
+            // Adapter-extracted CC/Codex session id powers `--resume` on the
+            // next prompt; surface it through the existing `getSessionInfo`
+            // IPC by mirroring the freshest value onto the session record.
+            if (pipeline.sessionId && pipeline.sessionId !== session.agentSessionId) {
+              session.agentSessionId = pipeline.sessionId;
+            }
+            for (const event of events) {
+              this.broadcast('heteroAgentEvent', {
+                event,
                 sessionId: session.sessionId,
               });
             }
           })
           .catch((error) => {
-            logger.error('Failed to broadcast parsed agent output:', error);
+            logger.error('Failed to broadcast agent stream batch:', error);
           });
       };
 
-      // Stream stdout events as raw provider payloads to Renderer.
+      // Stream stdout events through the producer pipeline.
       const stdout = proc.stdout as Readable;
       stdout.on('data', (chunk: Buffer) => {
         void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
-        broadcastParsedOutputs(streamProcessor.push(chunk));
+        broadcastPipelineBatch(() => pipeline.push(chunk));
       });
       stdout.on('end', () => {
-        broadcastParsedOutputs(streamProcessor.flush());
+        broadcastPipelineBatch(() => pipeline.flush());
       });
 
       // Capture stderr
@@ -914,44 +822,59 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       });
 
       proc.on('exit', (code, signal) => {
-        void stdoutBroadcastQueue.finally(async () => {
-          void this.writeCliTraceJson(traceSession, 'exit.json', {
-            code,
-            finishedAt: new Date().toISOString(),
-            signal,
-          });
-          await this.flushCliTrace(traceSession);
-
-          logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
-          session.process = undefined;
-
-          // If *we* killed it (cancel / stop / before-quit), treat the non-zero
-          // exit as a clean shutdown — surfacing it as an error would make a
-          // user-initiated cancel look like an agent failure, and an Electron
-          // shutdown affecting OTHER running CC sessions would pollute their
-          // topics with a misleading "Agent exited with code 143" message.
-          if (session.cancelledByUs) {
-            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-            resolve();
-            return;
-          }
-
-          if (code === 0) {
-            this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-            resolve();
-          } else {
-            const stderrOutput = stderrChunks.join('').trim();
-            const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
-            const sessionError = this.getSessionErrorPayload(errorMsg, session);
-            this.broadcast('heteroAgentSessionError', {
-              error: sessionError,
-              sessionId: session.sessionId,
-            });
-            reject(
-              new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
-            );
-          }
+        // Node may emit `'exit'` BEFORE stdio finishes draining (documented:
+        // child_process docs note "stdio streams might still be open" at exit
+        // time). Wait for stdout to fully end/close so the `stdout.on('end')`
+        // handler has scheduled `pipeline.flush()` onto `stdoutBroadcastQueue`,
+        // THEN wait for the queue itself to settle. Without this two-step
+        // gate, trailing flushed events (final synthesized tool_end /
+        // tool_result) would race against — and lose to — the
+        // `heteroAgentSessionComplete` broadcast, leaving renderer-side
+        // persistence to finalize on incomplete state.
+        const stdoutDrained = streamFinished(stdout, { writable: false }).catch(() => {
+          /* end / close / error are all "done"; we still want to settle. */
         });
+
+        void stdoutDrained
+          .then(() => stdoutBroadcastQueue)
+          .finally(async () => {
+            void this.writeCliTraceJson(traceSession, 'exit.json', {
+              code,
+              finishedAt: new Date().toISOString(),
+              signal,
+            });
+            await this.flushCliTrace(traceSession);
+
+            logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
+            session.process = undefined;
+
+            // If *we* killed it (cancel / stop / before-quit), treat the non-zero
+            // exit as a clean shutdown — surfacing it as an error would make a
+            // user-initiated cancel look like an agent failure, and an Electron
+            // shutdown affecting OTHER running CC sessions would pollute their
+            // topics with a misleading "Agent exited with code 143" message.
+            if (session.cancelledByUs) {
+              this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+              resolve();
+              return;
+            }
+
+            if (code === 0) {
+              this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+              resolve();
+            } else {
+              const stderrOutput = stderrChunks.join('').trim();
+              const errorMsg = this.getExitErrorMessage(code, session, stderrOutput);
+              const sessionError = this.getSessionErrorPayload(errorMsg, session);
+              this.broadcast('heteroAgentSessionError', {
+                error: sessionError,
+                sessionId: session.sessionId,
+              });
+              reject(
+                new Error(typeof sessionError === 'string' ? sessionError : sessionError.message),
+              );
+            }
+          });
       });
     });
   }

@@ -97,6 +97,7 @@ export const createServerAgentToolsEngine = (
     agentConfig,
     clientRuntime,
     deviceContext,
+    disableLocalSystem = false,
     globalMemoryEnabled = false,
     hasAgentDocuments = false,
     hasEnabledKnowledgeBases = false,
@@ -173,6 +174,7 @@ export const createServerAgentToolsEngine = (
         //    prerequisite needed;
         //  - legacy device-proxy with an online & auto-activated device.
         [LocalSystemManifest.identifier]:
+          !disableLocalSystem &&
           runtimeMode === 'local' &&
           (hasClientExecutor ||
             (hasDeviceProxy && !!deviceContext?.deviceOnline && !!deviceContext?.autoActivated)),

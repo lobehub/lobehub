@@ -12,6 +12,8 @@
 import path from 'node:path';
 
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
+import { createAdapter } from '@lobechat/heterogeneous-agents';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
@@ -81,14 +83,60 @@ function setupIpcCapture() {
     },
   };
 
-  // After subscribeBroadcasts is called, extract the callbacks
-  // by intercepting the IPC .on() calls
+  /**
+   * Per-IPC-session adapter — mimics the desktop main pipeline:
+   *   raw stdout JSON → adapter.adapt() → AgentStreamEvent → broadcast.
+   * Test fixtures still feed raw CC/Codex events, so the existing ~2.8k lines
+   * of stream-shape tests stay intact while the renderer's input boundary
+   * becomes the new `heteroAgentEvent` channel.
+   */
+  const adapters = new Map<string, AgentEventAdapter>();
+  /**
+   * IPC-session → agent type. Defaults to `claude-code` so tests that don't
+   * explicitly register codex still work; the multi-session resume test (and
+   * any codex-only suite) registers explicitly via `setAgentType`.
+   */
+  const sessionAgentType = new Map<string, string>();
+
+  const getAdapter = (sessionId: string) => {
+    if (!adapters.has(sessionId)) {
+      adapters.set(sessionId, createAdapter(sessionAgentType.get(sessionId) ?? 'claude-code'));
+    }
+    return adapters.get(sessionId)!;
+  };
+
   return {
     getListeners: () => listeners,
-    /** Simulate a raw line broadcast from Electron main */
-    emitRawLine: (sessionId: string, line: any) => {
-      const handler = listeners.get('heteroAgentRawLine');
-      handler?.(null, { line, sessionId });
+    /** Register the agent type for an IPC session before emitting raw events. */
+    setAgentType: (sessionId: string, type: string) => {
+      sessionAgentType.set(sessionId, type);
+    },
+    /**
+     * Look up the underlying adapter for an IPC session — used by the
+     * `getSessionInfo` mock to mirror what main's `AgentStreamPipeline.sessionId`
+     * returns to the renderer's post-prompt session-id sync.
+     */
+    getAdapterSessionId: (sessionId: string) => adapters.get(sessionId)?.sessionId,
+    /**
+     * Simulate the desktop main's per-stdout-line forwarding: feed `raw`
+     * through the session's adapter, then broadcast each resulting
+     * `AgentStreamEvent` over the `heteroAgentEvent` channel.
+     */
+    emitRawLine: (sessionId: string, raw: any) => {
+      const handler = listeners.get('heteroAgentEvent');
+      const adapter = getAdapter(sessionId);
+      for (const event of adapter.adapt(raw)) {
+        handler?.(null, {
+          event: {
+            data: event.data,
+            operationId: defaultParams.operationId,
+            stepIndex: event.stepIndex,
+            timestamp: event.timestamp,
+            type: event.type,
+          },
+          sessionId,
+        });
+      }
     },
     /** Simulate session completion */
     emitComplete: (sessionId: string) => {
@@ -322,10 +370,25 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ipc = setupIpcCapture();
-    mockStartSession.mockResolvedValue({ sessionId: 'ipc-sess-1' });
+    // Register the IPC session's agent type from the params the executor
+    // hands to startSession, so the helper picks the right adapter when the
+    // test starts emitting raw events.
+    mockStartSession.mockImplementation(async (params: any) => {
+      ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
+      return { sessionId: 'ipc-sess-1' };
+    });
     mockSendPrompt.mockResolvedValue(undefined);
     mockStopSession.mockResolvedValue(undefined);
-    mockGetSessionInfo.mockResolvedValue({ agentSessionId: 'cc-sess-1' });
+    // Mirror the desktop main: `getSessionInfo` returns whatever the producer
+    // pipeline's adapter has extracted from the JSONL stream so far. Tests
+    // that never emit an init / thread.started event get `agentSessionId:
+    // undefined`, matching pre-Phase-0 behavior where the renderer-side
+    // adapter never observed one either. The renderer service hands the raw
+    // sessionId string straight to the mock — it's the underlying IPC handler
+    // that wraps `{ sessionId }`, and that's stubbed here.
+    mockGetSessionInfo.mockImplementation(async (sessionId: string) => ({
+      agentSessionId: ipc.getAdapterSessionId(sessionId),
+    }));
     mockGetMessages.mockResolvedValue([]);
     mockCreateMessage.mockImplementation(async (params: any) => ({
       id: `created-${params.role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1111,7 +1174,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         imageList,
       });
 
-      expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', imageList);
+      expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', 'op-1', imageList);
     });
 
     it('should clear stale resume metadata and retry once without resume for recoverable Codex errors', async () => {
@@ -1122,9 +1185,17 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         { reject: (reason?: unknown) => void; resolve: () => void }
       >();
 
-      mockStartSession
-        .mockResolvedValueOnce({ sessionId: 'ipc-sess-1' })
-        .mockResolvedValueOnce({ sessionId: 'ipc-sess-2' });
+      // Both spawned IPC sessions are codex; register so the helper's adapter
+      // pipeline yields the right shape when the test emits raw codex events.
+      ipc.setAgentType('ipc-sess-1', 'codex');
+      ipc.setAgentType('ipc-sess-2', 'codex');
+      let startCount = 0;
+      mockStartSession.mockImplementation(async (params: any) => {
+        startCount += 1;
+        const sid = startCount === 1 ? 'ipc-sess-1' : 'ipc-sess-2';
+        ipc.setAgentType(sid, params.agentType ?? 'claude-code');
+        return { sessionId: sid };
+      });
       mockSendPrompt.mockImplementation(
         (sessionId: string) =>
           new Promise<void>((resolve, reject) => {

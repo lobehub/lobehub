@@ -60,17 +60,28 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
               alignItems: 'center',
               display: 'inline-flex',
               gap: 6,
-              lineHeight: 1,
+              maxWidth: '100%',
               minWidth: 0,
-              overflow: 'hidden',
             }}
           >
             {taskIdentifier && (
-              <Text color={'inherit'} style={{ flexShrink: 0 }} type={'secondary'} weight={500}>
+              <Text
+                as={'span'}
+                color={'inherit'}
+                style={{ flexShrink: 0 }}
+                type={'secondary'}
+                weight={500}
+              >
                 {taskIdentifier}
               </Text>
             )}
-            <Text ellipsis color={'inherit'} style={{ maxWidth: 240 }} weight={500}>
+            <Text
+              ellipsis
+              as={'span'}
+              color={'inherit'}
+              style={{ flex: '1 1 auto', maxWidth: 240, minWidth: 0 }}
+              weight={500}
+            >
               {taskTitle || taskId}
             </Text>
           </span>

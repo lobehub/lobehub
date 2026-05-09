@@ -17,6 +17,7 @@ import {
   KeyIcon,
   KeyRound,
   Map,
+  MessageCircleIcon,
   PaletteIcon,
   Sparkles,
   TerminalSquare,
@@ -34,6 +35,7 @@ import {
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
@@ -67,6 +69,7 @@ export const useCategory = () => {
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const enableMessenger = useUserStore(labPreferSelectors.enableMessenger);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -84,7 +87,7 @@ export const useCategory = () => {
       {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : undefined,
         key: SettingsTabs.Profile,
-        label: username ? username : tAuth('tab.profile'),
+        label: username || tAuth('tab.profile'),
       },
       {
         icon: ChartColumnBigIcon,
@@ -163,6 +166,13 @@ export const useCategory = () => {
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
       },
+      // Gated by Labs → Messenger; the lab flag also controls whether the
+      // verify-im binding flow is reachable.
+      enableMessenger && {
+        icon: MessageCircleIcon,
+        key: SettingsTabs.Messenger,
+        label: t('tab.messenger'),
+      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -221,6 +231,7 @@ export const useCategory = () => {
     mobile,
     showApiKeyManage,
     isDevMode,
+    enableMessenger,
     avatarUrl,
     username,
   ]);

@@ -484,8 +484,8 @@ export const connectorHidden = style({
 });
 
 const fadeIn = keyframes({
-  from: { opacity: 0, transform: 'translate(-50%, 8px)' },
-  to: { opacity: 1, transform: 'translate(-50%, 0)' },
+  from: { opacity: 0, transform: 'translateY(8px)' },
+  to: { opacity: 1, transform: 'translateY(0)' },
 });
 
 const spin = keyframes({

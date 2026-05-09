@@ -1,25 +1,21 @@
 'use client';
 
-import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 
-import { useScenarioEnabledTools } from '@/hooks/useScenarioEnabledTools';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import AgentTaskManager from '@/features/AgentTaskManager';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 const AllTasksLayout = memo(() => {
-  useScenarioEnabledTools(TaskIdentifier);
-  const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
-
-  if (serverConfigInit && !enableAgentTask) {
-    return <Navigate replace to="/" />;
-  }
+  const isMobile = useIsMobile();
 
   return (
-    <Flexbox flex={1} height={'100%'} width={'100%'}>
-      <Outlet />
+    <Flexbox flex={1} height={'100%'} horizontal={!isMobile} width={'100%'}>
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
+        <Outlet />
+      </Flexbox>
+      {!isMobile && <AgentTaskManager />}
     </Flexbox>
   );
 });

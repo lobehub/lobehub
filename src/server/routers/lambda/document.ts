@@ -229,7 +229,7 @@ export const documentRouter = router({
         .object({
           current: z.number().optional(),
           fileTypes: z.array(z.string()).optional(),
-          pageSize: z.number().optional(),
+          pageSize: z.number().max(100).optional(),
           sourceTypes: z.array(z.string()).optional(),
         })
         .optional(),

@@ -240,7 +240,7 @@ export const topicRouter = router({
         groupId: z.string().nullable().optional(),
         includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
-        pageSize: z.number().optional(),
+        pageSize: z.number().max(100).optional(),
         sessionId: z.string().nullable().optional(),
         triggers: z.array(z.string()).optional(),
       }),
@@ -340,12 +340,12 @@ export const topicRouter = router({
       return result;
     }),
 
-  rankTopics: topicProcedure.input(z.number().optional()).query(async ({ ctx, input }) => {
+  rankTopics: topicProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
     return ctx.topicModel.rank(input);
   }),
 
   recentTopics: topicProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
     .query(async ({ ctx, input }): Promise<RecentTopic[]> => {
       const recentTopics = await ctx.topicModel.queryRecent(input?.limit ?? 12);
 
@@ -594,14 +594,26 @@ export const topicRouter = router({
           onboardingSession: z
             .object({
               agentIdentityCompletedAt: z.string().optional(),
+              agentMarketplacePick: z
+                .object({
+                  categoryHints: z.array(z.string()),
+                  installedAgentIds: z.array(z.string()).optional(),
+                  requestId: z.string(),
+                  resolvedAt: z.string(),
+                  selectedTemplateIds: z.array(z.string()).optional(),
+                  skipReason: z.string().optional(),
+                  skippedAgentIds: z.array(z.string()).optional(),
+                  status: z.enum(['cancelled', 'skipped', 'submitted']),
+                })
+                .optional(),
               discoveryCompletedAt: z.string().optional(),
               finalAgentNames: z.array(z.string()).optional(),
               finishedAt: z.string().optional(),
-              lastActiveAt: z.string(),
-              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']),
-              startedAt: z.string(),
+              lastActiveAt: z.string().optional(),
+              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']).optional(),
+              startedAt: z.string().optional(),
               userIdentityCompletedAt: z.string().optional(),
-              version: z.number(),
+              version: z.number().optional(),
             })
             .optional(),
           provider: z.string().optional(),

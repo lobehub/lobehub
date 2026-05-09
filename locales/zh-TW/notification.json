@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "您的排程任務「{{jobName}}」已失敗。開啟任務以查看完整錯誤內容。",
+  "agent_cron_job_failed_insufficient_budget": "您的排程任務「{{jobName}}」無法執行，因為您的帳戶點數不足。請儲值或升級方案以恢復後續執行。",
+  "agent_cron_job_failed_insufficient_budget_title": "排程任務已暫停：點數不足",
+  "agent_cron_job_failed_title": "排程任務失敗",
   "billboard.learnMore": "了解更多",
   "billboard.menuLabel": "公告",
+  "image_generation_completed": "您的圖片「{{prompt}}」已完成。",
+  "image_generation_completed_title": "圖片生成完成",
   "inbox.archiveAll": "全部歸檔",
   "inbox.empty": "尚無通知",
   "inbox.emptyUnread": "沒有未讀通知",
   "inbox.filterUnread": "僅顯示未讀",
   "inbox.markAllRead": "全部標記為已讀",
-  "inbox.title": "通知"
+  "inbox.title": "通知",
+  "video_generation_completed": "您的影片「{{prompt}}」已完成。",
+  "video_generation_completed_title": "影片生成完成"
 }

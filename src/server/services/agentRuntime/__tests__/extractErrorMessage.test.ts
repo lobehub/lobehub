@@ -133,3 +133,42 @@ describe('AgentRuntimeService.extractErrorMessage', () => {
     expect(result).toBe('Budget exceeded');
   });
 });
+
+describe('AgentRuntimeService.extractErrorType', () => {
+  const createService = () => {
+    return new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+  };
+
+  it('extracts errorType from ChatCompletionErrorPayload', () => {
+    const service = createService();
+    const error = {
+      error: { message: 'empty providers' },
+      errorType: 'NoAvailableProvider',
+      provider: 'lobehub',
+    };
+
+    expect((service as any).extractErrorType(error)).toBe('NoAvailableProvider');
+  });
+
+  it('extracts type from formatted ChatMessageError', () => {
+    const service = createService();
+    const error = {
+      body: { message: 'Rate limit exceeded' },
+      message: 'Rate limit exceeded',
+      type: 'TooManyRequests',
+    };
+
+    expect((service as any).extractErrorType(error)).toBe('TooManyRequests');
+  });
+
+  it('returns undefined for plain Error without a code', () => {
+    const service = createService();
+    expect((service as any).extractErrorType(new Error('oops'))).toBeUndefined();
+  });
+
+  it('returns undefined for null/undefined', () => {
+    const service = createService();
+    expect((service as any).extractErrorType(null)).toBeUndefined();
+    expect((service as any).extractErrorType(undefined)).toBeUndefined();
+  });
+});

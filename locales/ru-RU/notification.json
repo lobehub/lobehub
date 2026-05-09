@@ -1,10 +1,18 @@
 {
+  "agent_cron_job_failed": "Запланированная задача «{{jobName}}» завершилась с ошибкой. Откройте задачу, чтобы увидеть подробности.",
+  "agent_cron_job_failed_insufficient_budget": "Запланированная задача «{{jobName}}» не была выполнена, так как на вашем счёте недостаточно средств. Пополните баланс или обновите тариф, чтобы возобновить будущие запуски.",
+  "agent_cron_job_failed_insufficient_budget_title": "Задача приостановлена: недостаточно средств",
+  "agent_cron_job_failed_title": "Сбой запланированной задачи",
   "billboard.learnMore": "Подробнее",
   "billboard.menuLabel": "Объявления",
+  "image_generation_completed": "Ваше изображение «{{prompt}}» готово.",
+  "image_generation_completed_title": "Создание изображения завершено",
   "inbox.archiveAll": "Архивировать все",
   "inbox.empty": "Уведомлений пока нет",
   "inbox.emptyUnread": "Нет непрочитанных уведомлений",
   "inbox.filterUnread": "Показать только непрочитанные",
   "inbox.markAllRead": "Отметить все как прочитанные",
-  "inbox.title": "Уведомления"
+  "inbox.title": "Уведомления",
+  "video_generation_completed": "Ваше видео «{{prompt}}» готово.",
+  "video_generation_completed_title": "Создание видео завершено"
 }

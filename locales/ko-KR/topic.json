@@ -56,6 +56,7 @@
   "renameModal.title": "토픽 이름 변경",
   "searchPlaceholder": "주제 검색...",
   "searchResultEmpty": "검색 결과가 없습니다.",
+  "taskManager.agent": "작업 에이전트",
   "taskManager.welcome": "작업에 대해 물어보세요",
   "temp": "임시",
   "title": "주제"

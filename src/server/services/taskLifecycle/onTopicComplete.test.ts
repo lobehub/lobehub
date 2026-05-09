@@ -132,6 +132,75 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     });
   });
 
+  describe('reason=done with brief.mode', () => {
+    it('calls synthesizeTopicBrief by default (auto mode) when content is substantive', async () => {
+      const task = baseTask({ automationMode: null });
+      findById.mockResolvedValue(task);
+      const synthesize = vi
+        .spyOn(service as any, 'synthesizeTopicBrief')
+        .mockResolvedValue(undefined);
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+
+      await service.onTopicComplete({
+        lastAssistantContent:
+          'I have completed the analysis and produced a multi-page report covering all sections.',
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(synthesize).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call synthesizeTopicBrief when brief.mode=agent (legacy escape hatch)', async () => {
+      const task = baseTask({
+        automationMode: null,
+        config: { brief: { mode: 'agent' } },
+      });
+      findById.mockResolvedValue(task);
+      const synthesize = vi
+        .spyOn(service as any, 'synthesizeTopicBrief')
+        .mockResolvedValue(undefined);
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+
+      await service.onTopicComplete({
+        lastAssistantContent: 'enough content to count as substantive output',
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(synthesize).not.toHaveBeenCalled();
+    });
+
+    it('does not call synthesizeTopicBrief when judge terminates (review enabled + passed)', async () => {
+      const task = baseTask({ automationMode: null });
+      findById.mockResolvedValue(task);
+      // runAutoReview returns true → onTopicComplete returns early before
+      // reaching synthesizeTopicBrief.
+      vi.spyOn(service as any, 'runAutoReview').mockResolvedValue(true);
+      const synthesize = vi
+        .spyOn(service as any, 'synthesizeTopicBrief')
+        .mockResolvedValue(undefined);
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+
+      await service.onTopicComplete({
+        lastAssistantContent: 'enough content to count as substantive output',
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(synthesize).not.toHaveBeenCalled();
+    });
+  });
+
   describe('reason=error', () => {
     it('automation task → status="paused" (error always pauses)', async () => {
       const task = baseTask({ automationMode: 'heartbeat' });

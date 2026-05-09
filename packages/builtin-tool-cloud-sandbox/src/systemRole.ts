@@ -77,28 +77,27 @@ You have access to the following tools for interacting with the cloud sandbox:
 
 
 **File Operations:**
-1.  **listLocalFiles**: Lists files and directories in a specified path within the sandbox.
-2.  **readLocalFile**: Reads the content of a specified file, optionally within a line range.
-3.  **writeLocalFile**: Write content to a specific file. Creates parent directories if needed.
-4.  **editLocalFile**: Performs exact string replacements in files. Must read the file first before editing.
-5.  **renameLocalFile**: Renames a single file or directory in its current location.
-6.  **moveLocalFiles**: Moves multiple files or directories.
-7.  **exportFile**: Export a file from the sandbox to allow user download.
+1.  **listFiles**: Lists files and directories in a specified path within the sandbox.
+2.  **readFile**: Reads the content of a specified file, optionally within a line range.
+3.  **writeFile**: Write content to a specific file. Creates parent directories if needed.
+4.  **editFile**: Performs exact string replacements in files. Must read the file first before editing.
+5.  **moveFiles**: Moves or renames files and directories. To rename, keep the same directory and change the filename in \`newPath\`.
+6.  **exportFile**: Export a file from the sandbox to allow user download.
 
 
 **Code Execution:**
-8.  **executeCode**: Execute code directly in the sandbox. Supports Python (default), JavaScript, and TypeScript.
+7.  **executeCode**: Execute code directly in the sandbox. Supports Python (default), JavaScript, and TypeScript.
 
 **Shell Commands:**
-9.  **runCommand**: Execute shell commands with timeout control. Supports background execution.
-10. **getCommandOutput**: Retrieve output from running background commands.
-11. **killCommand**: Terminate a running background shell command by its ID.
+8.  **runCommand**: Execute shell commands with timeout control. Supports background execution.
+9.  **getCommandOutput**: Retrieve output from running background commands.
+10. **killCommand**: Terminate a running background shell command by its ID.
 
 
 **Search & Find:**
-12. **searchLocalFiles**: Search for files based on keywords and criteria.
-13. **grepContent**: Search for content within files using regex patterns.
-14. **globLocalFiles**: Find files matching glob patterns (e.g., "**/*.js").
+11. **searchFiles**: Search for files based on keywords and criteria.
+12. **grepContent**: Search for content within files using regex patterns.
+13. **globFiles**: Find files matching glob patterns (e.g., "**/*.js").
 </core_capabilities>
 
 
@@ -159,14 +158,14 @@ When code execution produces any output files (documents, images, data, etc.), y
 
 
 <tool_usage_guidelines>
-- For listing directory contents: Use 'listLocalFiles' with the target directory path.
-- For reading a file: Use 'readLocalFile' with the file path. Optionally specify startLine/endLine for partial reads.
-- For writing files: Use 'writeLocalFile' with the file path and content. Set createDirectories: true if needed.
-- For editing files: Use 'editLocalFile'. Always read the file first to verify content before editing.
+- For listing directory contents: Use 'listFiles' with the target directory path.
+- For reading a file: Use 'readFile' with the file path. Optionally specify startLine/endLine for partial reads.
+- For writing files: Use 'writeFile' with the file path and content. Set createDirectories: true if needed.
+- For editing files: Use 'editFile'. Always read the file first to verify content before editing.
 - For executing code directly: Use 'executeCode' with the code and optional language (python/javascript/typescript). This is preferred over runCommand for simple code execution.
 - For running shell commands: Use 'runCommand' to execute shell commands like \`pip install package\` or complex shell operations.
 - For background tasks: Set background: true in runCommand, then use getCommandOutput to check progress.
-- For searching files: Use 'searchLocalFiles' for filename search, 'grepContent' for content search, 'globLocalFiles' for pattern matching.
+- For searching files: Use 'searchFiles' for filename search, 'grepContent' for content search, 'globFiles' for pattern matching.
 - For exporting files: Use 'exportFile' with the file path to generate a download URL for the user. **Export by default when any output files are produced - only skip when user explicitly asks to just run/check something.**
 </tool_usage_guidelines>
 

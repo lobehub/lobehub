@@ -5,7 +5,7 @@ import { ArrowUpRightIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ChangelogService } from '@/server/services/changelog';
+import { lambdaClient } from '@/libs/trpc/client';
 
 import ChangelogContent from './ChangelogContent';
 
@@ -23,9 +23,8 @@ const ChangelogModal = memo<ChangelogModalProps>(({ open, onClose, shouldLoad })
   useEffect(() => {
     if (shouldLoad && data.length === 0) {
       setIsLoading(true);
-      const changelogService = new ChangelogService();
-      changelogService
-        .getChangelogIndex()
+      lambdaClient.changelog.getIndex
+        .query()
         .then((result) => {
           setData(result);
         })

@@ -5,22 +5,26 @@ import { type PendingIntervention } from '../store/slices/data/pendingInterventi
 import { styles } from './style';
 
 interface InterventionContentProps {
+  actionsPortalTarget: HTMLDivElement | null;
   intervention: PendingIntervention;
 }
 
-const InterventionContent = memo<InterventionContentProps>(({ intervention }) => {
-  return (
-    <div className={styles.content}>
-      <Intervention
-        apiName={intervention.apiName}
-        assistantGroupId={intervention.assistantGroupId}
-        id={intervention.toolMessageId}
-        identifier={intervention.identifier}
-        requestArgs={intervention.requestArgs}
-        toolCallId={intervention.toolCallId}
-      />
-    </div>
-  );
-});
+const InterventionContent = memo<InterventionContentProps>(
+  ({ intervention, actionsPortalTarget }) => {
+    return (
+      <div className={styles.content}>
+        <Intervention
+          actionsPortalTarget={actionsPortalTarget}
+          apiName={intervention.apiName}
+          assistantGroupId={intervention.assistantGroupId}
+          id={intervention.toolMessageId}
+          identifier={intervention.identifier}
+          requestArgs={intervention.requestArgs}
+          toolCallId={intervention.toolCallId}
+        />
+      </div>
+    );
+  },
+);
 
 export default InterventionContent;

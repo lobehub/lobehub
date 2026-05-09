@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요",
   "codes.SESSION_EXPIRED": "세션이 만료되었습니다. 다시 로그인해 주세요",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "해당 소셜 계정은 이미 다른 사용자와 연결되어 있습니다",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "임시 이메일 주소는 지원되지 않습니다. 일반 이메일 주소를 사용해 주세요. 반복적인 시도는 이 네트워크를 차단할 수 있습니다.",
   "codes.UNEXPECTED_ERROR": "알 수 없는 오류가 발생했습니다. 다시 시도해 주세요",
   "codes.UNKNOWN": "알 수 없는 오류가 발생했습니다. 다시 시도하거나 지원팀에 문의해 주세요",
   "codes.USER_ALREADY_EXISTS": "이미 존재하는 사용자입니다",

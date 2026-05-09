@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users } from '../../schemas';
+import { agents, tasks, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { BriefModel } from '../brief';
 
@@ -44,7 +44,12 @@ describe('BriefModel', () => {
       const brief = await model.create({
         actions: [{ label: 'Approve', type: 'approve' }],
         agentId: 'agent-1',
-        artifacts: ['doc-1', 'doc-2'],
+        artifacts: {
+          documents: [
+            { id: 'doc-1', kind: null, title: null },
+            { id: 'doc-2', kind: null, title: null },
+          ],
+        },
         priority: 'urgent',
         summary: 'Chapter too long, suggest splitting',
         taskId: null,
@@ -56,7 +61,12 @@ describe('BriefModel', () => {
       expect(brief.priority).toBe('urgent');
       expect(brief.agentId).toBe('agent-1');
       expect(brief.actions).toEqual([{ label: 'Approve', type: 'approve' }]);
-      expect(brief.artifacts).toEqual(['doc-1', 'doc-2']);
+      expect(brief.artifacts).toEqual({
+        documents: [
+          { id: 'doc-1', kind: null, title: null },
+          { id: 'doc-2', kind: null, title: null },
+        ],
+      });
     });
   });
 
@@ -111,10 +121,15 @@ describe('BriefModel', () => {
     });
   });
 
-  describe('listUnresolved', () => {
-    it('should return unresolved briefs sorted by priority', async () => {
+  describe('listUnresolvedEnriched', () => {
+    it('should return unresolved briefs sorted by priority and exclude resolved ones', async () => {
       const model = new BriefModel(serverDB, userId);
-      await model.create({ priority: 'info', summary: 'Low', title: 'Info', type: 'result' });
+      const b1 = await model.create({
+        priority: 'info',
+        summary: 'Low',
+        title: 'Info',
+        type: 'result',
+      });
       await model.create({
         priority: 'urgent',
         summary: 'High',
@@ -127,23 +142,91 @@ describe('BriefModel', () => {
         title: 'Normal',
         type: 'insight',
       });
-
-      const unresolved = await model.listUnresolved();
-      expect(unresolved).toHaveLength(3);
-      expect(unresolved[0].priority).toBe('urgent');
-      expect(unresolved[1].priority).toBe('normal');
-      expect(unresolved[2].priority).toBe('info');
-    });
-
-    it('should exclude resolved briefs', async () => {
-      const model = new BriefModel(serverDB, userId);
-      const b1 = await model.create({ summary: 'A', title: 'Brief 1', type: 'result' });
-      await model.create({ summary: 'B', title: 'Brief 2', type: 'result' });
-
       await model.resolve(b1.id);
 
-      const unresolved = await model.listUnresolved();
-      expect(unresolved).toHaveLength(1);
+      const rows = await model.listUnresolvedEnriched();
+      expect(rows).toHaveLength(2);
+      expect(rows[0].brief.priority).toBe('urgent');
+      expect(rows[1].brief.priority).toBe('normal');
+    });
+
+    it('should join the producing agent and parent task status in one query', async () => {
+      await serverDB.insert(agents).values({
+        avatar: '🤖',
+        backgroundColor: '#fff',
+        id: 'agent-x',
+        title: 'Agent X',
+        userId,
+      });
+      await serverDB.insert(tasks).values({
+        createdByUserId: userId,
+        id: 'task-x',
+        identifier: 'TASK-X',
+        instruction: 'do work',
+        name: 'Task X',
+        seq: 1,
+        status: 'paused',
+      });
+
+      const model = new BriefModel(serverDB, userId);
+      await model.create({
+        agentId: 'agent-x',
+        priority: 'urgent',
+        summary: 'Has agent + task',
+        taskId: 'task-x',
+        title: 'Joined',
+        type: 'decision',
+      });
+      await model.create({
+        priority: 'info',
+        summary: 'Bare brief',
+        title: 'No agent',
+        type: 'insight',
+      });
+
+      const rows = await model.listUnresolvedEnriched();
+      expect(rows).toHaveLength(2);
+
+      const joined = rows.find((r) => r.brief.title === 'Joined')!;
+      expect(joined.agentRowId).toBe('agent-x');
+      expect(joined.agentAvatar).toBe('🤖');
+      expect(joined.agentTitle).toBe('Agent X');
+      expect(joined.taskStatus).toBe('paused');
+
+      const bare = rows.find((r) => r.brief.title === 'No agent')!;
+      expect(bare.agentRowId).toBeNull();
+      expect(bare.taskStatus).toBeNull();
+    });
+
+    it('should still return briefs whose producing agent has been deleted', async () => {
+      const model = new BriefModel(serverDB, userId);
+      // agentId points at a row that doesn't exist — LEFT JOIN should keep
+      // the brief and surface null agent fields rather than dropping it.
+      await model.create({
+        agentId: 'agent-ghost',
+        summary: 'Producer gone',
+        title: 'Ghost',
+        type: 'result',
+      });
+
+      const rows = await model.listUnresolvedEnriched();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].brief.title).toBe('Ghost');
+      expect(rows[0].agentRowId).toBeNull();
+      expect(rows[0].agentAvatar).toBeNull();
+    });
+
+    it('should respect the default cap of 20 and a caller-provided limit', async () => {
+      const model = new BriefModel(serverDB, userId);
+      for (let i = 0; i < 25; i++) {
+        await model.create({ summary: `S${i}`, title: `Brief ${i}`, type: 'insight' });
+      }
+
+      const capped = await model.listUnresolvedEnriched();
+      expect(capped).toHaveLength(20);
+
+      const trimmed = await model.listUnresolvedEnriched({ limit: 3 });
+      expect(trimmed).toHaveLength(3);
     });
   });
 

@@ -6,15 +6,13 @@ import {
   AgentDocumentsIdentifier,
   type CopyDocumentArgs,
   type CreateDocumentArgs,
-  type EditDocumentArgs,
   type ListDocumentsArgs,
   type ModifyDocumentNodesArgs,
   type ReadDocumentArgs,
-  type ReadDocumentByFilenameArgs,
   type RemoveDocumentArgs,
   type RenameDocumentArgs,
+  type ReplaceDocumentContentArgs,
   type UpdateLoadRuleArgs,
-  type UpsertDocumentByFilenameArgs,
 } from '../types';
 
 export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsApiName> {
@@ -40,28 +38,6 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
     });
   };
 
-  readDocumentByFilename = async (
-    params: ReadDocumentByFilenameArgs,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    return this.runtime.readDocumentByFilename(params, {
-      agentId: ctx.agentId,
-      currentDocumentId: ctx.documentId,
-      scope: ctx.scope,
-    });
-  };
-
-  upsertDocumentByFilename = async (
-    params: UpsertDocumentByFilenameArgs,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    return this.runtime.upsertDocumentByFilename(params, {
-      agentId: ctx.agentId,
-      currentDocumentId: ctx.documentId,
-      scope: ctx.scope,
-    });
-  };
-
   createDocument = async (
     params: CreateDocumentArgs,
     ctx: BuiltinToolContext,
@@ -69,7 +45,11 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
     return this.runtime.createDocument(params, {
       agentId: ctx.agentId,
       currentDocumentId: ctx.documentId,
+      messageId: ctx.sourceMessageId,
+      operationId: ctx.operationId,
       scope: ctx.scope,
+      taskId: ctx.taskId,
+      toolCallId: ctx.toolCallId,
       topicId: ctx.topicId,
     });
   };
@@ -85,11 +65,11 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
     });
   };
 
-  editDocument = async (
-    params: EditDocumentArgs,
+  replaceDocumentContent = async (
+    params: ReplaceDocumentContentArgs,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    return this.runtime.editDocument(params, {
+    return this.runtime.replaceDocumentContent(params, {
       agentId: ctx.agentId,
       currentDocumentId: ctx.documentId,
       scope: ctx.scope,
@@ -156,16 +136,14 @@ const fallbackRuntime = new AgentDocumentsExecutionRuntime({
   copyDocument: async ({ agentId: _agentId }) => undefined,
   createDocument: async () => undefined,
   createTopicDocument: async () => undefined,
-  editDocument: async ({ agentId: _agentId }) => undefined,
   listDocuments: async () => [],
   listTopicDocuments: async () => [],
   modifyNodes: async ({ agentId: _agentId }) => undefined,
   readDocument: async ({ agentId: _agentId }) => undefined,
-  readDocumentByFilename: async () => undefined,
   removeDocument: async ({ agentId: _agentId }) => false,
   renameDocument: async ({ agentId: _agentId }) => undefined,
+  replaceDocumentContent: async ({ agentId: _agentId }) => undefined,
   updateLoadRule: async ({ agentId: _agentId }) => undefined,
-  upsertDocumentByFilename: async () => undefined,
 });
 
 export const agentDocumentsExecutor = new AgentDocumentsExecutor(fallbackRuntime);

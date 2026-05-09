@@ -21,6 +21,7 @@ import knowledgeBase from './knowledgeBase';
 import labs from './labs';
 import marketAuth from './marketAuth';
 import memory from './memory';
+import messenger from './messenger';
 import metadata from './metadata';
 import migration from './migration';
 import modelProvider from './modelProvider';
@@ -36,6 +37,7 @@ import setting from './setting';
 import spend from './spend';
 import subscription from './subscription';
 import suggestQuestions from './suggestQuestions';
+import taskTemplate from './taskTemplate';
 import thread from './thread';
 import tool from './tool';
 import topic from './topic';
@@ -56,19 +58,18 @@ const resources = {
   'desktop-onboarding': desktopOnboarding,
   discover,
   editor,
-  'eval': eval_,
   electron,
   error,
+  'eval': eval_,
   file,
   home,
   hotkey,
-
   image,
   knowledgeBase,
-
   labs,
   marketAuth,
   memory,
+  messenger,
   metadata,
   migration,
   modelProvider,
@@ -84,6 +85,7 @@ const resources = {
   spend,
   subscription,
   suggestQuestions,
+  taskTemplate,
   thread,
   tool,
   topic,

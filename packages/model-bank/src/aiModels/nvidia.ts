@@ -7,11 +7,8 @@ const nvidiaChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description:
-      'MiniMax-M2.5 is the latest large language model from MiniMax, featuring a Mixture-of-Experts (MoE) architecture with 229 billion total parameters. It achieves industry-leading performance in programming, agent tool calling, search tasks, and office scenarios.',
-    displayName: 'MiniMax-M2.5',
-    enabled: true,
-    id: 'minimaxai/minimax-m2.5',
+    displayName: 'MiniMax-M2.7',
+    id: 'minimaxai/minimax-m2.7',
     maxOutput: 131_072,
     type: 'chat',
   },
@@ -19,19 +16,11 @@ const nvidiaChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true,
-      video: true,
     },
-    contextWindowTokens: 1_010_000,
-    description:
-      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
-    displayName: 'Qwen3.5-397B-A17B',
-    enabled: true,
-    id: 'qwen/qwen3.5-397b-a17b',
-    maxOutput: 65_536,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
+    contextWindowTokens: 204_800,
+    displayName: 'MiniMax-M2.5',
+    id: 'minimaxai/minimax-m2.5',
+    maxOutput: 131_072,
     type: 'chat',
   },
   {
@@ -76,7 +65,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       "GLM-5 is Zhipu AI's new flagship foundation model for agent engineering, achieving open-source SOTA performance in coding and agent capabilities. It matches Claude Opus 4.5 in performance.",
     displayName: 'GLM-5',
-    enabled: true,
     id: 'z-ai/glm5',
     maxOutput: 131_072,
     settings: {
@@ -111,22 +99,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
       'DeepSeek V3.1 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought for deep analysis tasks.',
     displayName: 'DeepSeek V3.1 Terminus',
     id: 'deepseek-ai/deepseek-v3.1-terminus',
-    maxOutput: 16_384,
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.1 is a next-gen reasoning model with stronger complex reasoning and chain-of-thought for deep analysis tasks.',
-    displayName: 'DeepSeek V3.1',
-    id: 'deepseek-ai/deepseek-v3.1',
     maxOutput: 16_384,
     settings: {
       extendParams: ['enableReasoning'],
@@ -204,17 +176,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'An advanced LLM supporting synthetic data generation, knowledge distillation, and reasoning for chatbots, coding, and domain tasks.',
-    displayName: 'Llama 3.1 405B Instruct',
-    id: 'meta/llama-3.1-405b-instruct',
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 32_768,
     description: 'A distinctive language model delivering exceptional accuracy and efficiency.',
     displayName: 'Llama 3.1 Nemotron 51B Instruct',
@@ -234,22 +195,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description: 'An advanced small language model designed for edge applications.',
     displayName: 'Gemma 2 2B Instruct',
     id: 'google/gemma-2-2b-it',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'A frontier text generation model strong in understanding, transformation, and code generation.',
-    displayName: 'Gemma 2 9B Instruct',
-    id: 'google/gemma-2-9b-it',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'A frontier text generation model strong in understanding, transformation, and code generation.',
-    displayName: 'Gemma 2 27B Instruct',
-    id: 'google/gemma-2-27b-it',
     type: 'chat',
   },
   {

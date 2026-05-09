@@ -7,15 +7,15 @@ import { describe, expect, it } from 'vitest';
 describe('web onboarding tool result helpers', () => {
   it('keeps tool action content message-first', () => {
     const result = createWebOnboardingToolResult({
-      content: 'Saved interests and response language.',
-      savedFields: ['interests', 'responseLanguage'],
+      content: 'Saved full name and interests.',
+      savedFields: ['fullName', 'interests'],
       success: true,
     });
 
-    expect(result.content).toBe('Saved interests and response language.');
+    expect(result.content).toBe('Saved full name and interests.');
     expect(result.state).toEqual({
       isError: false,
-      savedFields: ['interests', 'responseLanguage'],
+      savedFields: ['fullName', 'interests'],
       success: true,
     });
     expect(result.content.trim().startsWith('{')).toBe(false);
@@ -33,7 +33,7 @@ describe('web onboarding tool result helpers', () => {
     expect(message).toContain('Structured fields still needed: interests.');
     expect(message).toContain('Phase: Discovery');
     expect(message).toContain(
-      'Questioning rule: prefer the `lobe-user-interaction____askUserQuestion____builtin` tool call for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
+      'Questioning rule: prefer the `lobe-user-interaction____askUserQuestion` tool call for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
     );
   });
 

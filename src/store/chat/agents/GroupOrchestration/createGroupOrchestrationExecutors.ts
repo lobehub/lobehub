@@ -52,7 +52,7 @@ export interface GroupOrchestrationExecutorsContext {
  *                │
  *                └─► call_supervisor Executor
  *                        │
- *                        ├─► internal_execAgentRuntime(Supervisor)
+ *                        ├─► executeClientAgent(Supervisor)
  *                        │        │
  *                        │        ├─► Supervisor calls speak tool
  *                        │        │        │
@@ -123,7 +123,7 @@ export const createGroupOrchestrationExecutors = (
       // Mark isSupervisor=true so assistant messages get metadata.isSupervisor for UI rendering
       // Note: Don't pass operationId - let it create a new child operation (same as call_agent)
       // This ensures each call has its own immutable context with isSupervisor properly set
-      await get().internal_execAgentRuntime({
+      await get().executeClientAgent({
         context: { ...messageContext, agentId: supervisorAgentId, isSupervisor: true },
         messages,
         parentMessageId: lastMessage.id,
@@ -200,7 +200,7 @@ export const createGroupOrchestrationExecutors = (
       // Execute target Agent with subAgentId for agent config retrieval
       // - messageContext keeps the group's main conversation context (for message storage)
       // - subAgentId specifies which agent's config to use
-      await get().internal_execAgentRuntime({
+      await get().executeClientAgent({
         context: { ...messageContext, subAgentId: agentId },
         messages: messagesWithInstruction,
         parentMessageId: lastMessage.id,
@@ -282,7 +282,7 @@ export const createGroupOrchestrationExecutors = (
       // - disableTools prevents broadcast agents from calling tools (expected behavior for broadcast)
       await Promise.all(
         agentIds.map(async (agentId) => {
-          await get().internal_execAgentRuntime({
+          await get().executeClientAgent({
             context: { ...messageContext, subAgentId: agentId },
             disableTools,
             messages: messagesWithInstruction,
@@ -334,7 +334,7 @@ export const createGroupOrchestrationExecutors = (
       }
 
       // Execute delegated Agent
-      await get().internal_execAgentRuntime({
+      await get().executeClientAgent({
         context: { ...messageContext, subAgentId: agentId },
         messages,
         parentMessageId: lastMessage.id,
@@ -595,7 +595,7 @@ export const createGroupOrchestrationExecutors = (
      * Flow:
      * 1. Create a task message (role: 'task') as placeholder
      * 2. Create Thread via API (to get threadId for operation context)
-     * 3. Execute using internal_execAgentRuntime (client-side with local tools access)
+     * 3. Execute using executeClientAgent (client-side with local tools access)
      * 4. Update Thread status via API on completion
      * 5. Update task message content with result
      *
@@ -733,10 +733,10 @@ export const createGroupOrchestrationExecutors = (
         );
         get().replaceMessages(threadMessages, { context: subContext });
 
-        // 6. Execute using internal_execAgentRuntime (client-side with local tools access)
+        // 6. Execute using executeClientAgent (client-side with local tools access)
         log(`[${sessionLogId}] Starting client-side AgentRuntime execution`);
 
-        const runtimeResult = await get().internal_execAgentRuntime({
+        const runtimeResult = await get().executeClientAgent({
           context: subContext,
           messages: threadMessages,
           parentMessageId: userMessageId, // Use server-returned userMessageId

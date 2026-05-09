@@ -19,7 +19,7 @@ export const BriefManifest: BuiltinToolManifest = {
             items: {
               properties: {
                 key: { description: 'Action identifier, e.g. "approve", "split"', type: 'string' },
-                label: { description: 'Display label, e.g. "✅ 同意拆分"', type: 'string' },
+                label: { description: 'Display label, e.g. "✅ Agree to split"', type: 'string' },
                 type: {
                   description: '"resolve" closes the brief, "comment" prompts for text input',
                   enum: ['resolve', 'comment'],

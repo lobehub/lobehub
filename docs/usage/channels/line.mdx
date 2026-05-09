@@ -1,0 +1,198 @@
+---
+title: Connect LobeHub to LINE
+description: >-
+  Learn how to connect a LINE Messaging API bot to your LobeHub agent,
+  enabling your AI assistant to chat with users in LINE direct messages and
+  group conversations.
+tags:
+  - LINE
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to LINE
+
+By connecting a LINE channel to your LobeHub agent, users can interact with the AI assistant through LINE direct messages, group chats, and multi-person rooms. The integration uses the official **LINE Messaging API** — there is no third-party broker between LINE and LobeHub.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A [LINE Business ID](https://account.line.biz/signup) (sign up with a LINE account or email)
+- A **LINE Official Account** — every Messaging API channel must be attached to one
+
+> **Important change (since 2024-09-04):** LINE no longer lets you create a Messaging API channel directly from the LINE Developers Console. You must first create a LINE Official Account and enable the Messaging API on it from LINE Official Account Manager — the channel then appears automatically in the Developers Console.
+
+## Step 1: Create a LINE Official Account and Enable the Messaging API
+
+<Steps>
+  ### Create a LINE Official Account
+
+  Open [entry.line.biz](https://entry.line.biz/form/entry/unverified) and sign in with your LINE Business ID. Fill in the account name, business category, and region, then submit. Confirm the new account appears in [LINE Official Account Manager](https://manager.line.biz/).
+
+  ### Enable the Messaging API in Official Account Manager
+
+  Open the new account → **Settings → Messaging API** → click **Enable Messaging API**. You will be asked to:
+
+  - Register developer information (first-time only).
+  - Pick a **Provider** that will own this channel in the Developers Console — reuse an existing one, or create a fresh one (e.g. "LobeHub").
+
+  > **Heads-up:** the provider assignment is **permanent**. If you manage multiple unrelated services, give each one its own provider.
+
+  ### Find the channel in the Developers Console
+
+  Sign in to [LINE Developers Console](https://developers.line.biz/console/) with the same LINE Business ID, open the provider you just chose, and the Messaging API channel will appear automatically.
+
+  ### Note the channel identifiers
+
+  Open the **Basic settings** tab and copy the **Channel secret** — LobeHub uses it to verify webhook signatures in Step 4.
+
+  > **Note:** the **"Your user ID"** field on the same tab is **your own** LINE user ID, **not** the bot's destination user ID. Both have the identical `U` + 32 hex format, but LobeHub needs the bot's, which is resolved automatically from the Channel Access Token in Step 4.
+
+  Then open the **Messaging API** tab and note:
+
+  - **Bot basic ID** — the `@xxxx` short ID users will search for.
+</Steps>
+
+## Step 2: Issue a Channel Access Token
+
+<Steps>
+  ### Open the Messaging API tab
+
+  Scroll to the bottom of the **Messaging API** tab. You will see a **Channel access token** section.
+
+  ### Issue a long-lived token
+
+  Click **Issue** under "Channel access token (long-lived)". Copy the token immediately — LINE only shows it once.
+
+  > **Important:** The Channel Access Token and Channel Secret are sensitive credentials. Never commit them to source control or share them in screenshots.
+</Steps>
+
+## Step 3: Disable LINE's Built-in Auto-reply and Greeting
+
+By default the LINE Official Account Manager auto-replies to user messages and sends a greeting on first contact. These compete with LobeHub's responses, so they must be turned off.
+
+<Steps>
+  ### Open the LINE Official Account Manager
+
+  In the **Messaging API** tab, click the **LINE Official Account Manager** link to open the management UI for the channel's Official Account.
+
+  ### Switch the response modes
+
+  Go to **Settings → Messaging API** (or **Response settings**) and set:
+
+  - **Greeting message:** Disabled
+  - **Auto-response messages:** Disabled
+  - **Webhooks:** Enabled
+
+  This leaves your bot to handle every inbound message itself.
+</Steps>
+
+## Step 4: Configure LINE in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **LINE** from the platform list.
+
+  ### Fill in the credentials
+
+  Recommended order — paste the token first so LobeHub can auto-fill the Destination User ID:
+
+  1. **Channel Access Token** — paste the long-lived token issued in Step 2.
+  2. **Destination User ID** — click **Fetch from LINE** next to this field. LobeHub calls `GET /v2/bot/info` with the token you just pasted and fills in the bot's `userId` (33 chars, starts with `U`) for you. You can also type/paste it manually if you already have it.
+  3. **Channel Secret** — paste the Channel secret from the **Basic settings** tab.
+
+  > **Why the auto-fetch?** The LINE Developers Console does **not** display the bot's destination user ID anywhere — `/v2/bot/info` is the only way to read it. The **Fetch from LINE** button removes the manual `curl` step.
+  >
+  > <details>
+  >   <summary>Manual alternative (if the button is unavailable)</summary>
+  >
+  >   ```bash
+  >   curl -H "Authorization: Bearer <YOUR_CHANNEL_ACCESS_TOKEN>" \
+  >     https://api.line.me/v2/bot/info
+  >   ```
+  >
+  >   Copy the `userId` field from the response into the **Destination User ID** field.
+  > </details>
+
+  ### Save Configuration
+
+  Click **Save Configuration**. LobeHub will encrypt your credentials, call `GET /v2/bot/info` once to verify the token works and that the bot user ID matches your Destination User ID, and surface a **Webhook URL** for the next step.
+
+  > **Note:** Unlike Telegram, the LINE Messaging API does not allow programmatic webhook registration. LobeHub cannot wire the URL for you — you must paste it in the LINE Developers Console yourself in Step 5.
+</Steps>
+
+## Step 5: Wire the Webhook in the LINE Developers Console
+
+<Steps>
+  ### Copy the Webhook URL
+
+  In LobeHub's LINE channel detail page, copy the **Webhook URL** displayed under the credentials section. It looks like `https://app.lobehub.com/api/agent/webhooks/line/<your-destination-user-id>`.
+
+  ### Paste it in the LINE Developers Console
+
+  Back in the **Messaging API** tab of your channel:
+
+  - **Webhook URL:** paste the LobeHub Webhook URL.
+  - Click **Update**.
+  - Click **Verify**. LINE sends a signed `POST` with `events: []` to LobeHub, which responds 200 if the Channel Secret matches.
+  - Toggle **Use webhook** to **ON**.
+</Steps>
+
+## Step 6: Test the Connection
+
+<Steps>
+  ### Add the bot as a friend
+
+  Open the **Messaging API** tab in the LINE Developers Console and scan the bot's **QR code** with your phone, or search for the **Bot basic ID** (e.g. `@abc1234x`) in LINE.
+
+  ### Send a real message
+
+  Send any message to the bot in LINE. Within a few seconds your LobeHub agent should reply.
+
+  ### Run Test Connection (optional)
+
+  Click **Test Connection** in LobeHub's channel settings to re-verify the token and the bot identity match. Errors are surfaced with the exact LINE error message.
+</Steps>
+
+## Adding the Bot to Group Chats
+
+To use the bot in LINE group chats or multi-person rooms:
+
+1. Add the bot as a friend (Step 6).
+2. Create a group or room and invite the bot, **or** invite the bot to an existing group from the bot's profile screen (`...` → **Invite**).
+3. Mention the bot or send a message — the bot will reply in the group or room.
+
+> **Note:** Allowing your bot to join groups and rooms requires enabling **"Allow bot to join group chats"** in the LINE Official Account Manager (**Response settings**). It is off by default.
+
+## Configuration Reference
+
+| Field                    | Required | Description                                                                                                                                                                                                                                                        |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Destination User ID**  | Yes      | The bot's user ID (`U` + 32 hex chars). LobeHub auto-fills this via the **Fetch from LINE** button (calls `GET /v2/bot/info` with the access token); the LINE Developers Console UI does not display the value. Used as the bot identity and webhook path segment. |
+| **Channel Access Token** | Yes      | Long-lived token issued from the **Messaging API** tab. Used as the bearer header on every LINE API call.                                                                                                                                                          |
+| **Channel Secret**       | Yes      | From the **Basic settings** tab. Used to verify `X-Line-Signature` on every inbound webhook delivery.                                                                                                                                                              |
+
+## Feature Notes
+
+LINE's Messaging API has a few specifics that LobeHub maps as follows:
+
+- **Markdown** — LINE renders text messages as **plain text** only. LobeHub strips Markdown markup before sending so emphasis / heading / list markers are removed.
+- **Message editing** — the Messaging API does not support editing sent messages, so LobeHub only sends the **final reply**, not per-step progress edits.
+- **Typing indicator** — the loading animation is shown in 1:1 user chats only. Group and multi-person room threads silently no-op.
+- **Reactions** — LINE bots cannot send message reactions today, so the 👀 / ✏️ status reactions used on Discord and Slack are not surfaced.
+- **Outbound** — LobeHub uses the **push API** (`/v2/bot/message/push`) rather than the reply API, because the reply token expires in \~60s while agent generation can take longer. Push messages count against your channel's monthly quota for paid plans; the free Developer Trial is unlimited.
+- **Attachments** — inbound images, video, audio, and files are downloaded on demand from the LINE data domain and forwarded to the model. Outbound replies are text-only today.
+
+## Troubleshooting
+
+- **"Verify" fails in the LINE Developers Console.** The Channel Secret in LobeHub must match the value shown on the LINE Developers Console **Basic settings** tab exactly. Re-paste it, save, and try again.
+- **`Authentication failed.` on Save / Test Connection.** Your Channel Access Token is invalid or expired. Re-issue the long-lived token in the Messaging API tab and paste the new value into LobeHub.
+- **`Channel access token belongs to bot Uxxx, not Uyyy`.** The Destination User ID does not match the token. Easiest fix: clear the field and click **Fetch from LINE** to re-pull the correct `userId`. The `Uxxx` shown in the error is also the userId the token actually belongs to — you can paste it in directly. (Manual check: `curl -H "Authorization: Bearer <token>" https://api.line.me/v2/bot/info`.)
+- **Webhook delivery is rejected with `401 Invalid signature`.** The Channel Secret in LobeHub doesn't match the one in LINE. Update LobeHub with the correct Channel Secret.
+- **Bot doesn't respond.** Check that:
+  1. **Use webhook** is toggled **ON** in the Messaging API tab.
+  2. **Auto-response messages** and **Greeting message** are disabled in the LINE Official Account Manager.
+  3. The user has added the bot as a friend (LINE will not deliver messages from non-friends).
+- **Bot doesn't respond in groups.** Make sure **"Allow bot to join group chats"** is enabled in the Official Account Manager's **Response settings**, then re-invite the bot to the group.

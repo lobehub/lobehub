@@ -9,6 +9,11 @@ import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 
+type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
+type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
+  onboardingSession?: OnboardingSessionMetadataPatch;
+};
+
 export interface CreateTopicParams {
   agentId?: string | null;
   favorite?: boolean;
@@ -703,17 +708,26 @@ export class TopicModel {
    * Update topic metadata with merge logic
    * This method merges new metadata with existing metadata instead of replacing it
    */
-  updateMetadata = async (id: string, metadata: Partial<ChatTopicMetadata>) => {
+  updateMetadata = async (id: string, metadata: TopicMetadataPatch) => {
     // Get existing topic to merge metadata
     const existing = await this.db.query.topics.findFirst({
       columns: { metadata: true },
       where: and(eq(topics.id, id), eq(topics.userId, this.userId)),
     });
 
-    const mergedMetadata: ChatTopicMetadata = {
+    const mergedOnboardingSession =
+      existing?.metadata?.onboardingSession && metadata.onboardingSession
+        ? {
+            ...existing.metadata.onboardingSession,
+            ...metadata.onboardingSession,
+          }
+        : metadata.onboardingSession;
+
+    const mergedMetadata = {
       ...existing?.metadata,
       ...metadata,
-    };
+      ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
+    } as ChatTopicMetadata;
 
     return this.db
       .update(topics)

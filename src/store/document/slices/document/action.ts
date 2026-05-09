@@ -9,6 +9,7 @@ import { type SWRResponse } from 'swr';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
+import { usePageStore } from '@/store/page';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -231,6 +232,13 @@ export class DocumentActionImpl {
             sourceType,
             topicId: topicId ?? undefined,
           });
+
+          // Mirror page metadata (title/emoji) into pageStore so PageExplorer
+          // selectors resolve correctly when the page is opened from a context
+          // that didn't pre-load the documents list (e.g. task workspace modal).
+          if (sourceType === 'page') {
+            usePageStore.getState().upsertDocument(document);
+          }
         },
         revalidateOnFocus: true,
       },

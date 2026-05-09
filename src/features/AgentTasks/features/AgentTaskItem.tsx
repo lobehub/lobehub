@@ -1,3 +1,4 @@
+import type { TaskStatus } from '@lobechat/types';
 import { Block, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
-import TaskScheduleConfig from '../AgentTaskDetail/TaskScheduleConfig';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
@@ -22,22 +22,22 @@ interface TaskItemProps {
   variant?: 'compact' | 'default';
 }
 
-const TASK_STATUS_SET = new Set([
+const TASK_STATUS_SET = new Set<TaskStatus>([
   'backlog',
   'canceled',
   'completed',
   'failed',
   'paused',
   'running',
+  'scheduled',
 ]);
 
-type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
-
 const toTaskStatus = (status: string): TaskStatus =>
-  TASK_STATUS_SET.has(status) ? (status as TaskStatus) : 'backlog';
+  TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
-  const { t } = useTranslation('discover');
+  const { t } = useTranslation('common');
+  const { t: tChat } = useTranslation('chat');
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(task.identifier);
 
@@ -64,6 +64,23 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
     [navigate],
   );
 
+  const scheduledBadge =
+    status === 'scheduled' ? (
+      <Block
+        horizontal
+        align={'center'}
+        flex={'none'}
+        height={20}
+        paddingInline={8}
+        style={{ borderRadius: 24 }}
+        variant={'outlined'}
+      >
+        <Text fontSize={12} type={'secondary'}>
+          {tChat('taskDetail.status.scheduled', { defaultValue: 'Scheduled' })}
+        </Text>
+      </Block>
+    ) : null;
+
   const titleRow = (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
@@ -82,6 +99,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
           {task.identifier}
         </Text>
       )}
+      {scheduledBadge}
       <TaskSubtaskProgressTag
         currentIdentifier={task.identifier}
         subtasks={taskDetail?.subtasks}
@@ -101,23 +119,19 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   );
 
   const scheduleNode = task.automationMode ? (
-    <TaskScheduleConfig
-      currentInterval={taskDetail?.heartbeat?.interval ?? 0}
-      taskId={task.identifier}
-    >
-      <TaskTriggerTag
-        heartbeatInterval={taskDetail?.heartbeat?.interval}
-        schedulePattern={task.schedulePattern}
-        scheduleTimezone={task.scheduleTimezone}
-      />
-    </TaskScheduleConfig>
+    <TaskTriggerTag
+      automationMode={task.automationMode}
+      heartbeatInterval={taskDetail?.heartbeat?.interval}
+      schedulePattern={task.schedulePattern}
+      scheduleTimezone={task.scheduleTimezone}
+    />
   ) : null;
 
   const timeNode = time ? (
     <Text
       align={'right'}
       fontSize={12}
-      style={{ whiteSpace: 'nowrap', width: variant === 'compact' ? undefined : 76 }}
+      style={{ whiteSpace: 'nowrap', width: variant === 'compact' ? undefined : 48 }}
       type={'secondary'}
     >
       {time}
@@ -139,6 +153,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
             <Text ellipsis style={{ minWidth: 0 }} weight={500}>
               {hasName ? task.name : task.identifier}
             </Text>
+            {scheduledBadge}
             <TaskSubtaskProgressTag
               currentIdentifier={task.identifier}
               subtasks={taskDetail?.subtasks}

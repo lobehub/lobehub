@@ -20,6 +20,7 @@ import {
 import Conversation from '../Copilot/Conversation';
 import HistoryPanel from '../History';
 import { selectors, usePageEditorStore } from '../store';
+import { usePageAgentPanelControl } from './OverrideContext';
 
 const styles = createStaticStyles(({ css }) => ({
   inner: css`
@@ -103,6 +104,7 @@ const PageEditorRightPanelContent = memo(() => {
 PageEditorRightPanelContent.displayName = 'PageEditorRightPanelContent';
 
 const PageEditorRightPanel = memo(() => {
+  const { expand, toggle } = usePageAgentPanelControl();
   const [width, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pageAgentPanelWidth(s),
     s.updateSystemStatus,
@@ -111,6 +113,8 @@ const PageEditorRightPanel = memo(() => {
   return (
     <RightPanel
       defaultWidth={width}
+      expand={expand}
+      onExpandChange={(next) => toggle(next)}
       onSizeChange={(size) => {
         if (size?.width) {
           const nextWidth =

@@ -339,6 +339,12 @@ export const desktopRoutes: RouteObject[] = [
             element: <SettingsTabPage />,
             path: ':tab',
           },
+          // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
+          // the same tab page; nested feature components read `:sub` via useParams.
+          {
+            element: <SettingsTabPage />,
+            path: ':tab/:sub',
+          },
         ],
         element: <SettingsLayout />,
         errorElement: <ErrorBoundary />,

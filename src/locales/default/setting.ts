@@ -468,11 +468,9 @@ export default {
   'notification.email.title': 'Email Notifications',
   'notification.inbox.desc': 'Show notifications in the in-app inbox',
   'notification.inbox.title': 'Inbox Notifications',
-  'notification.category.generation.desc': 'Image and video completion notifications',
   'notification.category.generation.title': 'Generation',
-  'notification.category.schedule.desc': 'Scheduled agent run failures and pauses',
   'notification.category.schedule.title': 'Scheduled tasks',
-  'notification.item.agent_cron_job_failed': 'Scheduled task failures',
+  'notification.item.agent_cron_job_failed': 'Scheduled task failed',
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.video_generation_completed': 'Video generation completed',
   'notification.title': 'Notification Channels',
@@ -551,6 +549,9 @@ export default {
   'settingAgent.tag.placeholder': 'Enter tag',
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
+  'settingAppearance.appTray.desc':
+    'Show the LobeHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
+  'settingAppearance.appTray.title': 'Show App Tray',
   'settingAppearance.animationMode.agile': 'Agile',
   'settingAppearance.animationMode.desc':
     'Select the animation speed for application response actions',
@@ -561,6 +562,7 @@ export default {
   'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
+  'settingAppearance.desktop.title': 'Desktop',
   'settingAppearance.neutralColor.desc': 'Custom grayscale with different color tendencies',
   'settingAppearance.neutralColor.title': 'Neutral Color',
   'settingAppearance.noAnimation.desc': 'Disable all animation effects in the application',
@@ -598,6 +600,10 @@ export default {
   'settingChat.inputTemplate.placeholder':
     'Preprocessing template {{text}} will be replaced with real-time input information',
   'settingChat.inputTemplate.title': 'User Input Preprocessing',
+  'settingChat.selfIteration.enabled.desc':
+    'Allow this assistant to review recent signals and improve its own skills when the lab workflow runs',
+  'settingChat.selfIteration.enabled.title': 'Enable Self-Iteration',
+  'settingChat.selfIteration.title': 'Advanced Labs',
   'settingChat.submit': 'Update Chat Preferences',
   'settingChat.title': 'Chat Settings',
   'settingChatAppearance.autoScrollOnStreaming.desc':
@@ -977,6 +983,7 @@ When I am ___, I need ___
   'tab.manualFill': 'Manually Fill In',
   'tab.manualFill.desc': 'Configure a custom MCP skill manually',
   'tab.memory': 'Memory',
+  'tab.messenger': 'Messenger',
   'tab.notification': 'Notifications',
   'tab.profile': 'My Account',
   'tab.provider': 'Provider',
@@ -1045,6 +1052,9 @@ When I am ___, I need ___
   'tools.builtins.lobe-agent-documents.title': 'Documents',
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
+  'tools.builtins.lobe-agent-marketplace.description':
+    'Show users a curated Agent Marketplace card and record which templates they pick.',
+  'tools.builtins.lobe-agent-marketplace.title': 'Agent Marketplace',
   'tools.builtins.lobe-brief.description':
     'Report progress, deliver results, and request user decisions',
   'tools.builtins.lobe-brief.title': 'Brief Tools',

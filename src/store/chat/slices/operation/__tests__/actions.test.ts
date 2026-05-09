@@ -57,6 +57,35 @@ describe('Operation Actions', () => {
       );
       expect(merged.editorData?.root.children[2]).toEqual(secondParagraph);
     });
+
+    it('should flatten file ids and filesPreview snapshots from queued messages', () => {
+      const merged = mergeQueuedMessages([
+        {
+          content: 'first',
+          createdAt: 1,
+          files: ['f1'],
+          filesPreview: [{ id: 'f1', mimeType: 'image/png', name: 'a.png', url: 'blob:1' }],
+          id: 'q1',
+          interruptMode: 'soft',
+        },
+        {
+          content: 'second',
+          createdAt: 2,
+          files: ['f2', 'f3'],
+          filesPreview: [
+            { id: 'f2', mimeType: 'image/jpeg', name: 'b.jpg', url: 'blob:2' },
+            { id: 'f3', mimeType: 'application/pdf', name: 'c.pdf', url: 'https://x/c.pdf' },
+          ],
+          id: 'q2',
+          interruptMode: 'soft',
+        },
+      ]);
+
+      expect(merged.files).toEqual(['f1', 'f2', 'f3']);
+      expect(merged.filesPreview).toHaveLength(3);
+      expect(merged.filesPreview[0]).toMatchObject({ id: 'f1', name: 'a.png' });
+      expect(merged.filesPreview[2]).toMatchObject({ id: 'f3', mimeType: 'application/pdf' });
+    });
   });
 
   describe('startOperation', () => {

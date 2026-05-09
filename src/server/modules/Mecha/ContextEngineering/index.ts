@@ -89,8 +89,8 @@ export const serverMessagesEngine = async ({
     // Agent configuration
     enableHistoryCount,
 
-    // File context configuration (server always includes file URLs)
-    fileContext: { enabled: true, includeFileUrl: true },
+    // File context refs must stay stable; media URLs are sent through structured parts.
+    fileContext: { enabled: true, includeFileUrl: false },
 
     // Force finish mode (inject summary prompt when maxSteps exceeded)
     forceFinish,
