@@ -10,7 +10,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { CircleDot, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,6 +37,7 @@ interface TopicCardProps {
 const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
+  const cancelTopic = useTaskStore((s) => s.cancelTopic);
   const isRunning = activity.status === 'running';
 
   const finalDuration =
@@ -68,6 +69,10 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
   }, [activity.operationId]);
 
+  const handleStop = useCallback(() => {
+    if (activity.id) void cancelTopic(activity.id);
+  }, [activity.id, cancelTopic]);
+
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
     ? formatDuration(elapsed)
@@ -76,6 +81,18 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       : '';
 
   const menuItems: DropdownItem[] = [
+    ...(isRunning && activity.id
+      ? [
+          {
+            danger: true,
+            icon: CircleStop,
+            key: 'stop',
+            label: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop run' }),
+            onClick: handleStop,
+          },
+          { type: 'divider' as const },
+        ]
+      : []),
     {
       icon: ExternalLink,
       key: 'open',
