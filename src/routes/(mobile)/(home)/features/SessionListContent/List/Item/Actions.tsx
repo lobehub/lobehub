@@ -1,6 +1,6 @@
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from 'antd/es/menu/interface';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
@@ -20,9 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { isDesktop } from '@/const/index';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
-import { useSessionStore } from '@/store/session';
-import { sessionHelpers } from '@/store/session/helpers';
-import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 import { SessionDefaultGroup } from '@/types/index';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -36,50 +34,91 @@ interface ActionProps {
   id: string;
   openCreateGroupModal: () => void;
   parentType: 'agent' | 'group';
+  pinned: boolean;
   setOpen: (open: boolean) => void;
 }
 
-const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType, setOpen }) => {
-  const { t } = useTranslation('chat');
+const Actions = memo<ActionProps>(
+  ({ group, id, openCreateGroupModal, parentType, pinned, setOpen }) => {
+    const { t } = useTranslation('chat');
 
-  const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
+    const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
-  const sessionCustomGroups = useSessionStore(sessionGroupSelectors.sessionGroupItems, isEqual);
-  const [pin, removeSession, pinSession, sessionType, duplicateSession, updateSessionGroup] =
-    useSessionStore((s) => {
-      const session = sessionSelectors.getSessionById(id)(s);
-      return [
-        sessionHelpers.getSessionPinned(session),
-        s.removeSession,
-        s.pinSession,
-        session.type,
-        s.duplicateSession,
-        s.updateSessionGroupId,
-      ];
-    });
+    const customAgentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+    const [
+      pinAgent,
+      pinAgentGroup,
+      duplicateAgent,
+      duplicateAgentGroup,
+      removeAgent,
+      removeAgentGroup,
+      updateAgentGroup,
+    ] = useHomeStore((s) => [
+      s.pinAgent,
+      s.pinAgentGroup,
+      s.duplicateAgent,
+      s.duplicateAgentGroup,
+      s.removeAgent,
+      s.removeAgentGroup,
+      s.updateAgentGroup,
+    ]);
 
-  const [pinAgentGroup, removeAgentGroup] = useHomeStore((s) => [
-    s.pinAgentGroup,
-    s.removeAgentGroup,
-  ]);
+    const { modal, message } = App.useApp();
 
-  const { modal, message } = App.useApp();
+    const isDefault = group === SessionDefaultGroup.Default;
 
-  const isDefault = group === SessionDefaultGroup.Default;
+    const items = useMemo(
+      () => {
+        const moveGroupItems: ItemType[] =
+          parentType === 'agent'
+            ? [
+                {
+                  children: [
+                    ...customAgentGroups.map(({ id: groupId, name }) => ({
+                      icon: group === groupId ? <Icon icon={Check} /> : <div />,
+                      key: groupId,
+                      label: name,
+                      onClick: () => updateAgentGroup(id, groupId),
+                    })),
+                    {
+                      icon: isDefault ? <Icon icon={Check} /> : <div />,
+                      key: 'defaultList',
+                      label: t('defaultList'),
+                      onClick: () => updateAgentGroup(id, SessionDefaultGroup.Default),
+                    },
+                    {
+                      type: 'divider' as const,
+                    },
+                    {
+                      icon: <Icon icon={LucidePlus} />,
+                      key: 'createGroup',
+                      label: <div>{t('sessionGroup.createGroup')}</div>,
+                      onClick: ({ domEvent }: { domEvent: Event }) => {
+                        domEvent.stopPropagation();
+                        openCreateGroupModal();
+                      },
+                    },
+                  ],
+                  icon: <Icon icon={ListTree} />,
+                  key: 'moveGroup',
+                  label: t('sessionGroup.moveGroup'),
+                },
+                {
+                  type: 'divider' as const,
+                },
+              ]
+            : [];
 
-  const items = useMemo(
-    () =>
-      (
-        [
+        return [
           {
-            icon: <Icon icon={pin ? PinOff : Pin} />,
+            icon: <Icon icon={pinned ? PinOff : Pin} />,
             key: 'pin',
-            label: t(pin ? 'pinOff' : 'pin'),
+            label: t(pinned ? 'pinOff' : 'pin'),
             onClick: () => {
               if (parentType === 'group') {
-                pinAgentGroup(id, !pin);
+                pinAgentGroup(id, !pinned);
               } else {
-                pinSession(id, !pin);
+                pinAgent(id, !pinned);
               }
             },
           },
@@ -90,7 +129,11 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
 
-              duplicateSession(id);
+              if (parentType === 'group') {
+                duplicateAgentGroup(id);
+              } else {
+                duplicateAgent(id);
+              }
             },
           },
           ...(isDesktop
@@ -103,50 +146,13 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                     domEvent.stopPropagation();
                     openAgentInNewWindow(id);
                   },
-                },
+                } satisfies ItemType,
               ]
             : []),
           {
-            type: 'divider',
+            type: 'divider' as const,
           },
-          {
-            children: [
-              ...sessionCustomGroups.map(({ id: groupId, name }) => ({
-                icon: group === groupId ? <Icon icon={Check} /> : <div />,
-                key: groupId,
-                label: name,
-                onClick: () => {
-                  updateSessionGroup(id, groupId);
-                },
-              })),
-              {
-                icon: isDefault ? <Icon icon={Check} /> : <div />,
-                key: 'defaultList',
-                label: t('defaultList'),
-                onClick: () => {
-                  updateSessionGroup(id, SessionDefaultGroup.Default);
-                },
-              },
-              {
-                type: 'divider',
-              },
-              {
-                icon: <Icon icon={LucidePlus} />,
-                key: 'createGroup',
-                label: <div>{t('sessionGroup.createGroup')}</div>,
-                onClick: ({ domEvent }) => {
-                  domEvent.stopPropagation();
-                  openCreateGroupModal();
-                },
-              },
-            ],
-            icon: <Icon icon={ListTree} />,
-            key: 'moveGroup',
-            label: t('sessionGroup.moveGroup'),
-          },
-          {
-            type: 'divider',
-          },
+          ...moveGroupItems,
           {
             danger: true,
             icon: <Icon icon={Trash} />,
@@ -165,33 +171,53 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
                     await removeAgentGroup(id);
                     message.success(t('confirmRemoveGroupSuccess'));
                   } else {
-                    await removeSession(id);
+                    await removeAgent(id);
                     message.success(t('confirmRemoveSessionSuccess'));
                   }
                 },
                 title:
-                  sessionType === 'group'
+                  parentType === 'group'
                     ? t('confirmRemoveChatGroupItemAlert')
                     : t('confirmRemoveSessionItemAlert'),
               });
             },
           },
-        ] as ItemType[]
-      ).filter(Boolean),
-    [id, pin, openAgentInNewWindow],
-  );
+        ] as ItemType[];
+      },
+      [
+        duplicateAgent,
+        duplicateAgentGroup,
+        group,
+        id,
+        isDefault,
+        message,
+        modal,
+        openAgentInNewWindow,
+        openCreateGroupModal,
+        parentType,
+        pinAgent,
+        pinAgentGroup,
+        pinned,
+        removeAgent,
+        removeAgentGroup,
+        customAgentGroups,
+        t,
+        updateAgentGroup,
+      ],
+    );
 
-  return (
-    <DropdownMenu items={items} onOpenChange={setOpen}>
-      <ActionIcon
-        icon={MoreVertical}
-        size={{
-          blockSize: 28,
-          size: 16,
-        }}
-      />
-    </DropdownMenu>
-  );
-});
+    return (
+      <DropdownMenu items={items} onOpenChange={setOpen}>
+        <ActionIcon
+          icon={MoreVertical}
+          size={{
+            blockSize: 28,
+            size: 16,
+          }}
+        />
+      </DropdownMenu>
+    );
+  },
+);
 
 export default Actions;

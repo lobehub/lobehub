@@ -3,16 +3,23 @@ import { Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SESSION_CHAT_URL } from '@/const/url';
+import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useActionSWR } from '@/libs/swr';
+import { useAgentStore } from '@/store/agent';
+import { useHomeStore } from '@/store/home';
 import { useServerConfigStore } from '@/store/serverConfig';
-import { useSessionStore } from '@/store/session';
 
 const AddButton = memo<{ groupId?: string }>(({ groupId }) => {
   const { t } = useTranslation('chat');
-  const createSession = useSessionStore((s) => s.createSession);
+  const router = useQueryRoute();
+  const createAgent = useAgentStore((s) => s.createAgent);
+  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { mutate, isValidating } = useActionSWR(['session.createSession', groupId], () => {
-    return createSession({ group: groupId });
+  const { mutate, isValidating } = useActionSWR(['agent.createAgent', groupId], async () => {
+    const result = await createAgent({ groupId });
+    await refreshAgentList();
+    router.push(SESSION_CHAT_URL(result.agentId, mobile));
   });
 
   return (

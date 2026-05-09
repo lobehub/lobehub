@@ -1,7 +1,8 @@
-import { type ListItemProps } from '@lobehub/ui';
+import type { ListItemProps } from '@lobehub/ui';
 import { Avatar, List } from '@lobehub/ui';
 import { useHover } from 'ahooks';
 import { createStaticStyles, cx } from 'antd-style';
+import type { ReactNode } from 'react';
 import { memo, useMemo, useRef } from 'react';
 
 import GroupAvatar from '@/features/GroupAvatar';
@@ -32,14 +33,17 @@ const ListItem = memo<
   ListItemProps & {
     avatar: string | { avatar: string; background?: string }[];
     avatarBackground?: string;
+    customAvatar?: ReactNode;
     type?: 'agent' | 'group' | 'inbox';
   }
->(({ avatar, avatarBackground, active, showAction, actions, title, type, ...props }) => {
+>(({ avatar, avatarBackground, customAvatar, active, showAction, actions, title, type, ...props }) => {
   const ref = useRef(null);
   const isHovering = useHover(ref);
   const mobile = useServerConfigStore((s) => s.isMobile);
 
   const avatarRender = useMemo(() => {
+    if (customAvatar) return customAvatar;
+
     if (type === 'group') {
       const avatars = Array.isArray(avatar) ? avatar : [avatar];
       return <GroupAvatar avatars={avatars} size={40} />;
@@ -49,7 +53,7 @@ const ListItem = memo<
     return (
       <Avatar animation={isHovering} avatar={avatar} background={avatarBackground} size={40} />
     );
-  }, [isHovering, avatar, avatarBackground, type]);
+  }, [isHovering, avatar, avatarBackground, customAvatar, type]);
 
   return (
     <Item

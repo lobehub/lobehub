@@ -2,11 +2,11 @@
 
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { SearchBar } from '@lobehub/ui';
-import { type ChangeEvent } from 'react';
+import type { ChangeEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSessionStore } from '@/store/session';
+import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -15,13 +15,13 @@ const SessionSearchBar = memo<{ mobile?: boolean }>(({ mobile }) => {
   const isLoaded = useUserStore((s) => s.isLoaded);
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.Search));
 
-  const [keywords, useSearchSessions, updateSearchKeywords] = useSessionStore((s) => [
-    s.sessionSearchKeywords,
-    s.useSearchSessions,
-    s.updateSearchKeywords,
+  const [keywords, useSearchAgents, updateSearchKeywords] = useHomeStore((s) => [
+    s.agentSearchKeywords,
+    s.useSearchAgents,
+    s.updateAgentSearchKeywords,
   ]);
 
-  const { isValidating } = useSearchSessions(keywords);
+  const { isValidating } = useSearchAgents(keywords);
 
   const handleChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -38,7 +38,7 @@ const SessionSearchBar = memo<{ mobile?: boolean }>(({ mobile }) => {
       placeholder={t('searchAgentPlaceholder')}
       shortKey={hotkey}
       spotlight={!mobile}
-      value={keywords}
+      value={keywords || ''}
       variant={'filled'}
       onChange={handleChange}
     />
