@@ -102,6 +102,44 @@ export class BriefModel {
       .limit(limit);
   }
 
+  /**
+   * Lists unresolved briefs for one agent and trigger before applying the read cap.
+   *
+   * Use when:
+   * - Server-side collectors need a bounded, purpose-specific Daily Brief read
+   * - Callers must not let unrelated unresolved briefs consume the limit
+   *
+   * Expects:
+   * - `agentId` and `trigger` identify the proposal or signal boundary
+   * - `limit` is a small bounded read budget
+   *
+   * Returns:
+   * - Matching unresolved brief rows ordered newest first
+   */
+  async listUnresolvedByAgentAndTrigger({
+    agentId,
+    limit = 20,
+    trigger,
+  }: {
+    agentId: string;
+    limit?: number;
+    trigger: string;
+  }): Promise<BriefItem[]> {
+    return this.db
+      .select()
+      .from(briefs)
+      .where(
+        and(
+          eq(briefs.userId, this.userId),
+          eq(briefs.agentId, agentId),
+          eq(briefs.trigger, trigger),
+          isNull(briefs.resolvedAt),
+        ),
+      )
+      .orderBy(desc(briefs.createdAt))
+      .limit(limit);
+  }
+
   async findByTaskId(taskId: string): Promise<BriefItem[]> {
     return this.db
       .select()
@@ -168,6 +206,29 @@ export class BriefModel {
         resolvedAt: new Date(),
         resolvedComment: options?.comment,
       })
+      .where(and(eq(briefs.id, id), eq(briefs.userId, this.userId)))
+      .returning();
+
+    return result[0] || null;
+  }
+
+  /**
+   * Updates freeform brief metadata without resolving the brief.
+   *
+   * Use when:
+   * - Server workflows need to persist intermediate Daily Brief state
+   * - A proposal approve attempt must remain visible after stale or failed preflight
+   *
+   * Expects:
+   * - `metadata` is already validated by the caller-owned feature boundary
+   *
+   * Returns:
+   * - The updated brief row, or `null` when the brief no longer exists
+   */
+  async updateMetadata(id: string, metadata: BriefItem['metadata']): Promise<BriefItem | null> {
+    const result = await this.db
+      .update(briefs)
+      .set({ metadata })
       .where(and(eq(briefs.id, id), eq(briefs.userId, this.userId)))
       .returning();
 

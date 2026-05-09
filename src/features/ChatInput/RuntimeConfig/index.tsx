@@ -23,6 +23,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useAgentId } from '../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../hooks/useUpdateAgentConfig';
 import ApprovalMode from './ApprovalMode';
+import CloudRepoSwitcher from './CloudRepoSwitcher';
 import GitStatus from './GitStatus';
 import { useRepoType } from './useRepoType';
 import WorkingDirectory from './WorkingDirectory';
@@ -104,9 +105,10 @@ const RuntimeConfig = memo(() => {
   const [dirPopoverOpen, setDirPopoverOpen] = useState(false);
   const [modePopoverOpen, setModePopoverOpen] = useState(false);
 
-  const [isLoading, runtimeMode] = useAgentStore((s) => [
+  const [isLoading, runtimeMode, isHeterogeneous] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
     chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
+    agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   ]);
 
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
@@ -227,6 +229,13 @@ const RuntimeConfig = memo(() => {
   );
 
   const rightContent = () => {
+    // Web + heterogeneous agent always shows the cloud repo switcher,
+    // regardless of the stored runtimeMode (which may be 'local' from desktop).
+    if (!isDesktop && isHeterogeneous && agentId) {
+      return <CloudRepoSwitcher agentId={agentId} />;
+    }
+
+    // Desktop local mode: show working directory picker
     if (runtimeMode === 'local') {
       return (
         <>

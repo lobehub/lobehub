@@ -4,6 +4,7 @@ import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 
 import { defineSourceHandler } from '../../runtime/middleware';
+import type { MaintenanceAgentRunResult } from '../../services/maintenance/agentRunner';
 import type { MaintenanceBriefProjection } from '../../services/maintenance/brief';
 import { createBriefMaintenanceService } from '../../services/maintenance/brief';
 import type {
@@ -13,15 +14,9 @@ import type {
 import type {
   EvidenceRef,
   MaintenancePlan,
-  MaintenancePlanDraft,
-  MaintenancePlanRequest,
   MaintenanceReviewRunResult,
 } from '../../services/maintenance/types';
-import {
-  buildNightlyReviewSourceId,
-  MaintenanceReviewScope,
-  ReviewRunStatus,
-} from '../../services/maintenance/types';
+import { buildNightlyReviewSourceId, ReviewRunStatus } from '../../services/maintenance/types';
 import type { AgentSignalReceipt } from '../../services/receiptService';
 import { createMaintenanceReviewReceipts } from '../../services/receiptService';
 
@@ -97,12 +92,13 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
   canRunReview: (input: NightlyReviewSourceGuardInput) => Promise<boolean>;
   /** Collects bounded digest context without mutating maintenance resources. */
   collectContext: (input: CollectNightlyReviewContextInput) => Promise<NightlyReviewContext>;
-  /** Applies only the planner-approved maintenance plan mutations. */
-  executePlan: (plan: MaintenancePlan) => Promise<MaintenanceReviewRunResult>;
-  /** Converts reviewer output into a deterministic maintenance plan. */
-  planReviewOutput: (request: MaintenancePlanRequest) => MaintenancePlan | Promise<MaintenancePlan>;
-  /** Runs the bounded maintenance reviewer against collected digest context. */
-  runMaintenanceReviewAgent: (context: NightlyReviewContext) => Promise<MaintenancePlanDraft>;
+  /** Runs the bounded maintenance agent and returns execution plus the frozen projection plan. */
+  runMaintenanceReviewAgent: (input: {
+    context: NightlyReviewContext;
+    localDate: string;
+    sourceId: string;
+    userId: string;
+  }) => Promise<MaintenanceAgentRunResult>;
   /** Writes a Daily Brief payload for user-visible nightly outcomes. */
   writeDailyBrief?: (brief: MaintenanceBriefProjection) => Promise<{ id?: string } | void>;
   /** Writes durable receipts for the review summary and action outcomes. */
@@ -322,7 +318,7 @@ const writeNightlyBrief = async (
  * - `agent.nightly_review.requested`
  *
  * Downstream:
- * - injected `executePlan`
+ * - injected bounded maintenance agent runner
  *
  * Use when:
  * - Tests need to run the nightly review orchestration without DB or LLM dependencies
@@ -330,7 +326,7 @@ const writeNightlyBrief = async (
  *
  * Expects:
  * - `source` is an `agent.nightly_review.requested` source with scheduler-produced payload
- * - Dependencies enforce gates, idempotency, reviewer limits, and executor persistence
+ * - Dependencies enforce gates, idempotency, runner limits, and persistence
  *
  * Returns:
  * - A run result with status and enough plan metadata for future brief builders
@@ -433,8 +429,8 @@ export const createNightlyReviewSourceHandler = (
             );
           },
         );
-        const draft = await runNightlyReviewSpan(
-          'agent_signal.nightly_review.run_reviewer',
+        const agentResult = await runNightlyReviewSpan(
+          'agent_signal.nightly_review.run_agent',
           {
             'agent.signal.agent_id': payload.agentId,
             'agent.signal.nightly.document_skill_event_count':
@@ -448,38 +444,29 @@ export const createNightlyReviewSourceHandler = (
             'agent.signal.source_id': source.sourceId,
             'agent.signal.user_id': payload.userId,
           },
-          () => deps.runMaintenanceReviewAgent(context),
-        );
-        const plan = await runNightlyReviewSpan(
-          'agent_signal.nightly_review.plan',
-          {
-            'agent.signal.agent_id': payload.agentId,
-            'agent.signal.nightly.draft_action_count': draft.actions.length,
-            'agent.signal.nightly.finding_count': draft.findings.length,
-            'agent.signal.source_id': source.sourceId,
-            'agent.signal.user_id': payload.userId,
-          },
           () =>
-            Promise.resolve(
-              deps.planReviewOutput({
-                draft,
-                localDate: payload.localDate,
-                reviewScope: MaintenanceReviewScope.Nightly,
-                sourceId: source.sourceId,
-                userId: payload.userId,
-              }),
-            ),
-        );
-        const execution = await runNightlyReviewSpan(
-          'agent_signal.nightly_review.execute_plan',
-          {
-            'agent.signal.agent_id': payload.agentId,
-            'agent.signal.nightly.plan_action_count': plan.actions.length,
-            'agent.signal.source_id': source.sourceId,
-            'agent.signal.user_id': payload.userId,
+            deps.runMaintenanceReviewAgent({
+              context,
+              localDate: payload.localDate,
+              sourceId: source.sourceId,
+              userId: payload.userId,
+            }),
+          (span, result) => {
+            span.setAttribute(
+              'agent.signal.nightly.plan_action_count',
+              result.projectionPlan.actions.length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.execution_action_count',
+              result.execution.actions.length,
+            );
+            if (typeof result.stepCount === 'number') {
+              span.setAttribute('agent.signal.nightly.agent_step_count', result.stepCount);
+            }
           },
-          () => deps.executePlan(plan),
         );
+        const plan = agentResult.projectionPlan;
+        const execution = agentResult.execution;
         const receipts = createMaintenanceReviewReceipts({
           agentId: payload.agentId,
           createdAt: source.timestamp,
@@ -508,6 +495,7 @@ export const createNightlyReviewSourceHandler = (
           agentId: payload.agentId,
           evidenceRefs: collectPlanEvidenceRefs(plan),
           localDate: payload.localDate,
+          plan,
           result: executionWithReceipts,
           reviewWindowEnd: payload.reviewWindowEnd,
           reviewWindowStart: payload.reviewWindowStart,

@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -14,6 +15,7 @@ import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import CloudRepoSwitcher from '@/features/ChatInput/RuntimeConfig/CloudRepoSwitcher';
 import GitStatus from '@/features/ChatInput/RuntimeConfig/GitStatus';
 import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import WorkingDirectoryContent from '@/features/ChatInput/RuntimeConfig/WorkingDirectory';
@@ -69,6 +71,7 @@ const WorkingDirectoryBar = memo(() => {
   const agentId = useAgentId();
   const [open, setOpen] = useState(false);
 
+  // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
   const agentWorkingDirectory = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
@@ -84,6 +87,16 @@ const WorkingDirectoryBar = memo(() => {
     if (repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
     return <Icon icon={FolderIcon} size={14} />;
   }, [effectiveWorkingDirectory, repoType]);
+
+  // On web, show the cloud repo switcher instead of the local directory picker
+  if (!isDesktop) {
+    if (!agentId) return null;
+    return (
+      <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
+        <CloudRepoSwitcher agentId={agentId} />
+      </Flexbox>
+    );
+  }
 
   if (!agentId || isLoading) {
     return (

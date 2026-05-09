@@ -114,6 +114,7 @@
   "response.ProviderBizError": "Lỗi khi yêu cầu dịch vụ {{provider}}, vui lòng kiểm tra và thử lại dựa trên thông tin sau",
   "response.ProviderContentModeration": "Kiểm tra chính sách nội dung không thành công. Hãy chỉnh sửa yêu cầu của bạn và thử lại.",
   "response.ProviderContentModerationWarning": "Phát hiện các vi phạm chính sách lặp lại. Việc tiếp tục sử dụng sai có thể dẫn đến hạn chế tài khoản của bạn.",
+  "response.ProviderImageContentModerationWarning": "Phát hiện nhiều lần từ chối an toàn hình ảnh. Các yêu cầu tương tự có thể tạm thời dừng việc tạo hình ảnh.",
   "response.QuotaLimitReached": "Xin lỗi, số lượng token hoặc số lần yêu cầu đã đạt giới hạn của khóa này. Vui lòng tăng hạn mức hoặc thử lại sau.",
   "response.QuotaLimitReachedCloud": "Dịch vụ mô hình hiện đang chịu tải nặng. Vui lòng thử lại sau.",
   "response.ServerAgentRuntimeError": "Xin lỗi, dịch vụ Agent hiện không khả dụng. Vui lòng thử lại sau hoặc liên hệ với chúng tôi qua email để được hỗ trợ.",

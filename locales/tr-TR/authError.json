@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "Çok fazla istek yapıldı, lütfen daha sonra tekrar deneyin",
   "codes.SESSION_EXPIRED": "Oturum süresi doldu, lütfen tekrar giriş yapın",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "Bu sosyal medya hesabı zaten başka bir kullanıcıya bağlı",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "Geçici e-posta adresleri desteklenmemektedir. Lütfen normal bir e-posta adresi kullanın. Tekrarlanan denemeler bu ağı engelleyebilir.",
   "codes.UNEXPECTED_ERROR": "Beklenmeyen bir hata oluştu, lütfen tekrar deneyin",
   "codes.UNKNOWN": "Bilinmeyen bir hata oluştu, lütfen tekrar deneyin veya destekle iletişime geçin",
   "codes.USER_ALREADY_EXISTS": "Kullanıcı zaten mevcut",

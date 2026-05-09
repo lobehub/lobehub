@@ -2,11 +2,11 @@
  * @vitest-environment happy-dom
  */
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TaskAgentProvider } from './TaskAgentProvider';
+import { TaskAgentProvider, useTaskAgentSelection } from './TaskAgentProvider';
 
 const mocks = vi.hoisted(() => {
   const agentState = {
@@ -89,6 +89,11 @@ vi.mock('react-router-dom', () => ({
   useMatch: () => mocks.routeMatch,
 }));
 
+const SelectAgentButton = ({ agentId }: { agentId: string }) => {
+  const selectTaskAgent = useTaskAgentSelection();
+  return <button onClick={() => selectTaskAgent(agentId)}>select agent</button>;
+};
+
 describe('TaskAgentProvider', () => {
   beforeEach(() => {
     mocks.agentState.activeAgentId = undefined;
@@ -101,6 +106,10 @@ describe('TaskAgentProvider', () => {
     mocks.initBuiltinAgent.mockClear();
     mocks.providerContexts = [];
     mocks.routeMatch = undefined;
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('initializes builtin agents and builds task list context', () => {
@@ -133,6 +142,28 @@ describe('TaskAgentProvider', () => {
     expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
   });
 
+  it('defaults to the task agent when the global active agent comes from another page', async () => {
+    mocks.agentState.activeAgentId = 'agt_lobe';
+    mocks.chatState.activeAgentId = 'agt_lobe';
+    mocks.chatState.activeTopicId = 'tpc_lobe';
+
+    render(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_task');
+    });
+    expect(mocks.agentState.setActiveAgentId).toHaveBeenCalledWith('agt_task');
+    expect(mocks.chatState.activeAgentId).toBe('agt_task');
+    expect(mocks.chatState.switchTopic).toHaveBeenCalledWith(null, {
+      scope: 'task',
+      skipRefreshMessage: true,
+    });
+  });
+
   it('clears a stale topic only once for the selected agent', async () => {
     mocks.chatState.activeTopicId = 'tpc_stale';
 
@@ -162,6 +193,101 @@ describe('TaskAgentProvider', () => {
       expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
     });
     expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
+  });
+
+  it('keeps the current task topic when switching between task list and detail', async () => {
+    const { rerender } = render(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.chatState.activeAgentId).toBe('agt_task');
+    });
+
+    mocks.chatState.switchTopic.mockClear();
+    mocks.chatState.activeTopicId = 'tpc_created';
+    mocks.routeMatch = { params: { taskId: 'T-1' } };
+
+    rerender(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
+    });
+    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
+    expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
+  });
+
+  it('resets the scoped agent when the task workspace remounts', async () => {
+    const firstRender = render(
+      <TaskAgentProvider>
+        <SelectAgentButton agentId="agt_custom" />
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.chatState.activeAgentId).toBe('agt_task');
+    });
+
+    fireEvent.click(screen.getByText('select agent'));
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_custom');
+    });
+
+    firstRender.unmount();
+    mocks.providerContexts = [];
+    mocks.agentState.activeAgentId = 'agt_lobe';
+    mocks.chatState.activeAgentId = 'agt_lobe';
+    mocks.chatState.activeTopicId = 'tpc_lobe';
+    mocks.chatState.switchTopic.mockClear();
+
+    render(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_task');
+    });
+    expect(mocks.agentState.setActiveAgentId).toHaveBeenLastCalledWith('agt_task');
+    expect(mocks.chatState.switchTopic).toHaveBeenCalledWith(null, {
+      scope: 'task',
+      skipRefreshMessage: true,
+    });
+  });
+
+  it('allows the task manager selector to switch the scoped agent', async () => {
+    render(
+      <TaskAgentProvider>
+        <SelectAgentButton agentId="agt_custom" />
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.chatState.activeAgentId).toBe('agt_task');
+    });
+
+    mocks.chatState.switchTopic.mockClear();
+    mocks.chatState.activeTopicId = 'tpc_task';
+
+    fireEvent.click(screen.getByText('select agent'));
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_custom');
+    });
+    expect(mocks.agentState.setActiveAgentId).toHaveBeenLastCalledWith('agt_custom');
+    expect(mocks.chatState.activeAgentId).toBe('agt_custom');
+    expect(mocks.chatState.switchTopic).toHaveBeenCalledWith(null, {
+      scope: 'task',
+      skipRefreshMessage: true,
+    });
   });
 
   it('resets transient state on scoped agent sync even without an active topic', async () => {

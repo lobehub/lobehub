@@ -3,7 +3,7 @@ import type { CredType } from '@lobechat/types';
 export const CredsApiName = {
   /**
    * Connect a Klavis integration service via OAuth
-   * Initiates Klavis OAuth flow for third-party services like Notion, Gmail, etc.
+   * Initiates Klavis OAuth flow for third-party services like Gmail, Google Calendar, etc.
    */
   connectKlavisService: 'connectKlavisService',
 
@@ -34,6 +34,18 @@ export const CredsApiName = {
 
 export type CredsApiNameType = (typeof CredsApiName)[keyof typeof CredsApiName];
 
+export const LOBEHUB_OAUTH_PROVIDER_IDS = [
+  'github',
+  'linear',
+  'microsoft',
+  'notion',
+  'twitter',
+] as const;
+
+export const LOBEHUB_OAUTH_PROVIDER_LIST = LOBEHUB_OAUTH_PROVIDER_IDS.join(', ');
+
+export type LobehubOAuthProviderId = (typeof LOBEHUB_OAUTH_PROVIDER_IDS)[number];
+
 // ==================== Tool Parameter Types ====================
 
 export interface GetPlaintextCredParams {
@@ -49,9 +61,9 @@ export interface GetPlaintextCredParams {
 
 export interface InitiateOAuthConnectParams {
   /**
-   * The OAuth provider ID (e.g., 'linear', 'microsoft', 'twitter')
+   * The OAuth provider ID (e.g., 'linear', 'microsoft', 'notion', 'twitter')
    */
-  provider: string;
+  provider: LobehubOAuthProviderId;
 }
 
 export interface InitiateOAuthConnectState {
@@ -148,7 +160,7 @@ export interface SaveCredsState {
 
 export interface ConnectKlavisServiceParams {
   /**
-   * The Klavis service identifier to connect (e.g., 'notion', 'gmail', 'google-calendar')
+   * The Klavis service identifier to connect (e.g., 'gmail', 'google-calendar')
    */
   service: string;
 }

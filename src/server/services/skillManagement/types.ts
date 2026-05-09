@@ -52,6 +52,22 @@ export interface SkillDetail extends SkillSummary {
   frontmatter: SkillFrontmatter;
 }
 
+/** Current managed skill target snapshot used by proposal merge preflight checks. */
+export interface SkillTargetSnapshot {
+  /** Managed skill bundle agent document id. */
+  agentDocumentId: string;
+  /** Compare-and-set hash of the current SKILL.md content. */
+  contentHash?: string;
+  /** Managed skill bundle backing document id. */
+  documentId?: string;
+  /** Whether the target is still managed by the skill-management service. */
+  managed: boolean;
+  /** Human-readable skill title. */
+  targetTitle?: string;
+  /** Whether the target can currently be mutated. */
+  writable: boolean;
+}
+
 /**
  * Input used to list managed skill bundles for an agent.
  */

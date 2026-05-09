@@ -155,6 +155,39 @@ describe('deriveNightlyMaintenanceSignals', () => {
 
   /**
    * @example
+   * Explicit future preference corrections become durable memory review signals.
+   */
+  it('creates durable user preference signals from correction-bearing topics', () => {
+    expect(
+      deriveNightlyMaintenanceSignals({
+        documentActivity: createEmptyDocumentActivityForTest(),
+        feedbackActivity: createEmptyFeedbackActivityForTest(),
+        receiptActivity: createEmptyReceiptActivityForTest(),
+        toolActivity: [],
+        topics: [
+          {
+            correctionCount: 1,
+            correctionIds: ['msg-preference'],
+            evidenceRefs: [{ id: 'msg-preference', type: 'message' }],
+            highSignalReasons: ['correction'],
+            id: 'topic-preference',
+            messageCount: 2,
+            reviewScore: 3002,
+            summary: 'User explicitly asked future summaries to be concise and conclusion-first.',
+          },
+        ],
+      }),
+    ).toContainEqual(
+      expect.objectContaining({
+        evidenceRefs: [{ id: 'msg-preference', type: 'message' }],
+        kind: 'durable_user_preference',
+        strength: 'strong',
+      }),
+    );
+  });
+
+  /**
+   * @example
    * Two skill bucket documents produce an overlap review signal.
    */
   it('creates possible skill overlap signals from multiple skill document events', () => {

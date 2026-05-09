@@ -89,7 +89,7 @@ RUN set -e && \
     pnpm i && \
     mkdir -p /deps && \
     cd /deps && \
-    pnpm init && \
+    echo '{"name":"deps","private":true}' > package.json && \
     pnpm add pg drizzle-orm
 
 COPY . .

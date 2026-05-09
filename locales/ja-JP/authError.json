@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "リクエストが多すぎます。しばらくしてから再試行してください",
   "codes.SESSION_EXPIRED": "セッションの有効期限が切れました。再ログインしてください",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "このソーシャルアカウントは他のユーザーにすでにリンクされています",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "一時的なメールアドレスは使用できません。通常のメールアドレスをご利用ください。繰り返し試行すると、このネットワークがブロックされる可能性があります。",
   "codes.UNEXPECTED_ERROR": "予期しないエラーが発生しました。再試行してください",
   "codes.UNKNOWN": "不明なエラーが発生しました。再試行するかサポートにお問い合わせください",
   "codes.USER_ALREADY_EXISTS": "ユーザーはすでに存在します",
