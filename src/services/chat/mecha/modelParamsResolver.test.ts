@@ -1274,7 +1274,7 @@ describe('resolveModelExtendParams', () => {
           provider: 'anthropic',
         });
 
-        expect(result.thinking).toEqual({ type: 'adaptive' });
+        expect(result.thinking).toEqual({ display: 'summarized', type: 'adaptive' });
       });
 
       it('should disable adaptive thinking when off', () => {

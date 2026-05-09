@@ -231,8 +231,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
           ? {
               budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
               type: 'enabled' as const,
+              ...(thinking.display ? { display: thinking.display } : {}),
             }
-          : { type: 'adaptive' as const };
+          : { type: 'adaptive' as const, display: thinking.display ?? 'summarized' };
 
       anthropicPayload = {
         ...anthropicBase,

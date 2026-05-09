@@ -155,10 +155,11 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     };
   }
 
-  // Adaptive thinking (Claude Opus/Sonnet 4.6)
+  // Adaptive thinking (Claude Opus/Sonnet 4.6+)
   if (modelExtendParams.includes('enableAdaptiveThinking')) {
     if (chatConfig.enableAdaptiveThinking) {
       extendParams.thinking = {
+        display: 'summarized',
         type: 'adaptive',
       };
     } else if (!modelExtendParams.includes('enableReasoning')) {

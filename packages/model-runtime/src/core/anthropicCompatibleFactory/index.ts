@@ -182,8 +182,9 @@ export const buildDefaultAnthropicPayload = async (
         ? {
             budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
             type: 'enabled',
+            ...(thinking.display ? { display: thinking.display } : {}),
           }
-        : { type: 'adaptive' };
+        : { type: 'adaptive', display: thinking.display ?? 'summarized' };
 
     return {
       max_tokens: resolvedMaxTokens,
