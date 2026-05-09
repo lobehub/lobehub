@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Ayarlar",
   "detailModal.title": "Yetenek detayları",
   "dev.confirmDeleteDevPlugin": "Bu yerel Yetenek kalıcı olarak silinecek. Devam edilsin mi?",
-  "dev.customParams.useProxy.label": "Proxy ile yükle (CORS hatası alıyorsanız etkinleştirin ve tekrar deneyin)",
   "dev.deleteSuccess": "Yetenek silindi",
   "dev.manifest.identifier.desc": "Yetenek için benzersiz tanımlayıcı",
   "dev.manifest.identifier.label": "Tanımlayıcı",

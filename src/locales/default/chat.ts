@@ -166,6 +166,10 @@ export default {
     'Claude Code sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.',
   'heteroAgent.switchCwd.ok': 'Switch and start new session',
   'heteroAgent.switchCwd.title': 'Switch working directory?',
+  'heteroAgent.cloudRepo.sectionTitle': 'Repositories',
+  'heteroAgent.cloudRepo.notSet': 'No repo selected',
+  'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
+  'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
   'history.title': 'The Agent will keep only the latest {{count}} messages.',

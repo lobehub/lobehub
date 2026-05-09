@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Instellingen",
   "detailModal.title": "Skill-details",
   "dev.confirmDeleteDevPlugin": "Deze lokale Skill wordt permanent verwijderd. Doorgaan?",
-  "dev.customParams.useProxy.label": "Installeren via proxy (inschakelen bij CORS-fouten, probeer daarna opnieuw)",
   "dev.deleteSuccess": "Skill verwijderd",
   "dev.manifest.identifier.desc": "Unieke identificatie voor de Skill",
   "dev.manifest.identifier.label": "Identificatie",

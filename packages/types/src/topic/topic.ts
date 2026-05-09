@@ -31,6 +31,15 @@ export interface TopicUserMemoryExtractRunState {
 
 export interface ChatTopicBotContext {
   applicationId: string;
+  /**
+   * Set when the run originated from the shared Messenger bot (Telegram global
+   * token, Slack per-workspace install, Discord global token). The value is
+   * the messenger installation key (`<platform>:<tenantId>` or
+   * `<platform>:singleton`) — `BotCallbackService` uses its presence as the
+   * deterministic switch to resolve credentials via the messenger install
+   * store instead of `agent_bot_providers`.
+   */
+  messengerInstallationKey?: string;
   platform: string;
   platformThreadId: string;
 }
@@ -106,6 +115,12 @@ export interface ChatTopicMetadata {
   onboardingSession?: OnboardingSessionSnapshot;
   provider?: string;
   /**
+   * Web (cloud) only. Ordered list of GitHub repos selected for this topic.
+   * Each repo will be cloned into the Gateway sandbox before execution.
+   * `workingDirectory` is kept in sync with repos[0] (the primary repo).
+   */
+  repos?: string[];
+  /**
    * Currently running Gateway operation on this topic.
    * Set when agent execution starts, cleared when it completes/fails.
    * Used to reconnect WebSocket after page reload.
@@ -119,10 +134,13 @@ export interface ChatTopicMetadata {
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
-   * Topic-level working directory (desktop only).
+   * Topic-level working directory.
+   * On desktop: local filesystem path for the CC session cwd.
+   * On web (cloud): URL of the primary GitHub repo (first item of `repos`).
    * Priority is higher than Agent-level settings. Also serves as the
    * binding cwd for a CC session — written on first CC execution and
    * checked on subsequent turns to decide whether `--resume` is safe.
+   * For sidebar grouping, topics are bucketed by this field (byProject mode).
    */
   workingDirectory?: string;
 }

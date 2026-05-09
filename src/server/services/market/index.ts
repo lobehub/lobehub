@@ -542,6 +542,7 @@ export class MarketService {
             github: 'GitHub',
             linear: 'Linear',
             microsoft: 'Outlook Calendar',
+            notion: 'Notion',
             twitter: 'X (Twitter)',
             vercel: 'Vercel',
           };

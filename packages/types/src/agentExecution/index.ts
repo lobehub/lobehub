@@ -11,6 +11,14 @@ export interface ExecAgentAppContext {
   documentId?: string | null;
   /** Group ID for group chat */
   groupId?: string | null;
+  /**
+   * Initial metadata to merge into the topic when a new topic is created for
+   * this execution. Ignored when a topicId is already provided (existing topic).
+   */
+  initialTopicMetadata?: {
+    repos?: string[];
+    workingDirectory?: string;
+  };
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */

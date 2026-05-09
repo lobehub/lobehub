@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Einstellungen",
   "detailModal.title": "Skill-Details",
   "dev.confirmDeleteDevPlugin": "Dieser lokale Skill wird dauerhaft gelöscht. Fortfahren?",
-  "dev.customParams.useProxy.label": "Über Proxy installieren (aktivieren bei CORS-Fehlern, dann erneut versuchen)",
   "dev.deleteSuccess": "Skill gelöscht",
   "dev.manifest.identifier.desc": "Eindeutige Kennung für den Skill",
   "dev.manifest.identifier.label": "Kennung",

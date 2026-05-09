@@ -356,7 +356,6 @@
   "detailModal.tabs.settings": "Настройки",
   "detailModal.title": "Детайли за умението",
   "dev.confirmDeleteDevPlugin": "Това локално умение ще бъде изтрито завинаги. Продължиш ли?",
-  "dev.customParams.useProxy.label": "Инсталирай чрез прокси (активирай при CORS грешки, след това опитай отново)",
   "dev.deleteSuccess": "Умението е изтрито",
   "dev.manifest.identifier.desc": "Уникален идентификатор за умението",
   "dev.manifest.identifier.label": "Идентификатор",

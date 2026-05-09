@@ -9,8 +9,9 @@ import {
   stopPropagation,
   Text,
 } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CircleDot, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { CircleDot, CircleStop, Copy, ExternalLink, MoreHorizontal } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,6 +38,7 @@ interface TopicCardProps {
 const TopicCard = memo<TopicCardProps>(({ activity }) => {
   const { t } = useTranslation('chat');
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
+  const cancelTopic = useTaskStore((s) => s.cancelTopic);
   const isRunning = activity.status === 'running';
 
   const finalDuration =
@@ -68,6 +70,23 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     if (activity.operationId) void navigator.clipboard.writeText(activity.operationId);
   }, [activity.operationId]);
 
+  const handleStop = useCallback(() => {
+    if (!activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.stopConfirm.content', {
+        defaultValue:
+          'The current run will be canceled. Generated messages are kept and you can re-run the task later.',
+      }),
+      okText: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop run' }),
+      onOk: async () => {
+        await cancelTopic(topicId);
+      },
+      title: t('taskDetail.topicMenu.stopConfirm.title', { defaultValue: 'Stop run?' }),
+    });
+  }, [activity.id, cancelTopic, t]);
+
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
     ? formatDuration(elapsed)
@@ -76,6 +95,18 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
       : '';
 
   const menuItems: DropdownItem[] = [
+    ...(isRunning && activity.id
+      ? [
+          {
+            danger: true,
+            icon: CircleStop,
+            key: 'stop',
+            label: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop run' }),
+            onClick: handleStop,
+          },
+          { type: 'divider' as const },
+        ]
+      : []),
     {
       icon: ExternalLink,
       key: 'open',

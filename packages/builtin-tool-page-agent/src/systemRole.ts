@@ -98,7 +98,7 @@ This is a paragraph with **bold** and *italic* text.
 | A1    | B1    |
 \`
 })
-// Creates a full document structure from the Markdown
+// Converts the provided Markdown input into a structured XML document
 \`\`\`
 
 ## Unified Node Operations

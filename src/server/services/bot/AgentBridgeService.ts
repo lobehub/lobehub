@@ -759,6 +759,11 @@ export class AgentBridgeService {
     const callbackUrl = '/api/agent/webhooks/bot-callback';
     const webhookBody = {
       applicationId: botContext?.applicationId,
+      // Forward the messenger discriminator (set by MessengerRouter for runs
+      // originated by the shared Messenger bot). The callback uses this — not
+      // the synthetic applicationId shape — to decide which credential source
+      // to read from.
+      messengerInstallationKey: botContext?.messengerInstallationKey,
       platformThreadId: botContext?.platformThreadId,
       progressMessageId: progressMessage?.id,
       // Pass thread name only if it's user-set.
