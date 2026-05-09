@@ -23,6 +23,10 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
   }
 
   protected shouldSkip(_context: PipelineContext): boolean {
+    if (this.config.onboardingContext?.finished) {
+      log('Onboarding completed, skipping action hint injection');
+      return true;
+    }
     if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
       log('Disabled or no phaseGuidance configured, skipping');
       return true;
