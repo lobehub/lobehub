@@ -20,13 +20,14 @@ import {
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import ChangelogModal from '@/components/ChangelogModal';
 import HighlightNotification from '@/components/HighlightNotification';
 import { DOCUMENTS_REFER_URL, GITHUB } from '@/const/url';
 import Billboard from '@/features/Billboard';
 import { useBillboardMenuItems } from '@/features/Billboard/MenuItems';
+import { useActiveNavKey } from '@/features/NavPanel';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 import { useNavLayout } from '@/hooks/useNavLayout';
@@ -66,8 +67,8 @@ const Footer = memo(() => {
   const navigate = useNavigate();
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
-  const { pathname } = useLocation();
-  const isHomeRoute = pathname === '/';
+  const activeNavKey = useActiveNavKey();
+  const isHomeSidebar = activeNavKey === 'home';
   const billboardMenuItems = useBillboardMenuItems();
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const isMobile = useServerConfigStore((s) => !!s.isMobile);
@@ -337,7 +338,7 @@ const Footer = memo(() => {
             },
           ]
         : []),
-      ...(isHomeRoute && billboardMenuItems && billboardMenuItems.length > 0
+      ...(isHomeSidebar && billboardMenuItems && billboardMenuItems.length > 0
         ? [{ type: 'divider' as const }, ...billboardMenuItems]
         : []),
     ],
@@ -352,7 +353,7 @@ const Footer = memo(() => {
       shouldShowProductHuntMenuEntry,
       t,
       billboardMenuItems,
-      isHomeRoute,
+      isHomeSidebar,
     ],
   );
 
@@ -416,7 +417,7 @@ const Footer = memo(() => {
           onClose={activePromotion.onClose}
         />
       )}
-      {isHomeRoute && <Billboard />}
+      {isHomeSidebar && <Billboard />}
     </>
   );
 });
