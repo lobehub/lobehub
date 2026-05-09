@@ -22,7 +22,9 @@ export const truncateOutput = (str: string, maxLength: number = MAX_OUTPUT_LENGT
 /** Get cross-platform shell configuration */
 export const getShellConfig = (command: string) =>
   process.platform === 'win32'
-    ? { args: ['/c', command], cmd: 'cmd.exe' }
+    ? // Use PowerShell on Windows: supports &&, ||, pipes, $env:, and all modern shell features.
+      // cmd.exe /c breaks on &&, complex pipes and quoted paths even with windowsVerbatimArguments.
+      { args: ['-NoProfile', '-NonInteractive', '-Command', command], cmd: 'powershell.exe' }
     : { args: ['-c', command], cmd: '/bin/sh' };
 
 /**

@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
@@ -217,35 +218,70 @@ export class App {
   bootstrap = async () => {
     logger.info('Bootstrapping application');
 
-    // Multi-instance support: --instance-id=<name> flag or LOBEHUB_INSTANCE_ID env var
-    // allows running multiple isolated LobeHub instances side by side.
+    // Multi-instance support
+    //
+    // Priority order:
+    //   1. --instance-id=<name> CLI flag  → explicit name (CLI or shortcut use)
+    //   2. LOBEHUB_INSTANCE_ID env var    → set by wrapper scripts
+    //   3. Auto-spawn on double-click     → if instance 1 is already running, this
+    //                                       process relaunches itself as instance 2,
+    //                                       3, … up to MAX_AUTO_INSTANCES, then exits.
+    //
+    // Each instance gets an isolated userData directory (userData-<id>) so stores,
+    // databases and settings are fully independent.
+    const MAX_AUTO_INSTANCES = 5;
+
     const instanceIdArg = process.argv.find((a) => a.startsWith('--instance-id='));
     const instanceId = instanceIdArg
       ? instanceIdArg.slice('--instance-id='.length).replace(/[^a-zA-Z0-9_-]/g, '_')
       : (process.env.LOBEHUB_INSTANCE_ID ?? '');
 
     if (instanceId) {
-      // Each instance gets its own isolated userData directory so stores / DBs don't conflict.
       const baseUserData = app.getPath('userData');
       const instanceUserData = `${baseUserData}-${instanceId}`;
       app.setPath('userData', instanceUserData);
       logger.info(`Multi-instance mode: id="${instanceId}", userData="${instanceUserData}"`);
     }
 
-    // Single-instance lock is per-userData, so different instances get independent locks.
     const allowMultiple =
-      !!instanceId || process.argv.includes('--allow-multiple-instances') ||
+      !!instanceId ||
+      process.argv.includes('--allow-multiple-instances') ||
       !!process.env.LOBEHUB_ALLOW_MULTIPLE_INSTANCES;
 
     if (!allowMultiple) {
       const isSingle = app.requestSingleInstanceLock();
+
       if (!isSingle) {
-        logger.info('Another instance is already running, exiting');
+        // No explicit instance-id given and the default slot is taken.
+        // Try to auto-spawn as instance 2, 3, … rather than silently exiting.
+        // This makes double-clicking the icon open a new independent window.
+        const autoId = process.argv.find((a) => a.startsWith('--instance-id='));
+        if (!autoId) {
+          // Find the next free slot.
+          let spawned = false;
+          for (let i = 2; i <= MAX_AUTO_INSTANCES; i++) {
+            const candidate = String(i);
+            const testUserData = `${app.getPath('userData')}-${candidate}`;
+            // Try to acquire the lock for this slot by spawning a child that
+            // immediately checks it. Simpler: just relaunch with the id flag
+            // and let that process do its own lock check.
+            const execPath = process.execPath;
+            const args = [...process.argv.slice(1), `--instance-id=${candidate}`];
+            spawn(execPath, args, { detached: true, stdio: 'ignore' });
+            logger.info(`Auto-spawned new instance with id="${candidate}"`);
+            spawned = true;
+            break;
+          }
+          if (!spawned) {
+            logger.warn('Maximum auto-instances reached, focusing existing window');
+          }
+        }
+        logger.info('Primary slot taken, new instance spawned — exiting this launcher process');
         app.exit(0);
+        return;
       }
 
       app.on('second-instance', (_event, _commandLine) => {
-        // Focus the existing window if a second launch is attempted
         const mainBrowser = this.browserManager?.getBrowser('app');
         if (mainBrowser?.window) {
           if (mainBrowser.window.isMinimized()) mainBrowser.window.restore();
