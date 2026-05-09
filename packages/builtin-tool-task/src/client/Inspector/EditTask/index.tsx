@@ -2,10 +2,14 @@
 
 import { priorityLabel } from '@lobechat/prompts';
 import type { BuiltinInspectorProps } from '@lobechat/types';
+import { Avatar } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { EditTaskParams, EditTaskState } from '../../../types';
@@ -23,6 +27,32 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorSuccess};
 
     background: ${cssVar.colorSuccessBg};
+  `,
+  assigneeAvatar: css`
+    flex-shrink: 0;
+  `,
+  assigneeChip: css`
+    overflow: hidden;
+    display: inline-flex;
+    flex-shrink: 1;
+    gap: 6px;
+    align-items: center;
+
+    min-width: 0;
+    max-width: 220px;
+    padding-block: 1px;
+    padding-inline: 4px 8px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  assigneeName: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   chip: css`
     overflow: hidden;
@@ -84,6 +114,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const AssigneeChip = memo<{ agentId: string }>(({ agentId }) => {
+  const agentMeta = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s));
+  const displayName = agentMeta?.title?.trim() || agentId;
+
+  return (
+    <span className={styles.assigneeChip} title={displayName}>
+      {agentMeta && (
+        <Avatar
+          avatar={agentMeta.avatar || displayName}
+          background={agentMeta.backgroundColor || cssVar.colorBgContainer}
+          className={styles.assigneeAvatar}
+          shape={'circle'}
+          size={16}
+          title={displayName}
+        />
+      )}
+      <span className={styles.assigneeName}>{displayName}</span>
+    </span>
+  );
+});
+
+AssigneeChip.displayName = 'AssigneeChip';
+
 export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, EditTaskState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
     const { t } = useTranslation('plugin');
@@ -91,7 +144,7 @@ export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, Edit
     const params = args || partialArgs || ({} as Partial<EditTaskParams>);
     const identifier = params.identifier;
 
-    const segments: { content: React.ReactNode; key: string }[] = [];
+    const segments: { content: ReactNode; key: string }[] = [];
 
     if (params.name !== undefined) {
       segments.push({
@@ -154,7 +207,7 @@ export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, Edit
           ) : (
             <>
               <span className={styles.label}>{t('builtins.lobe-task.edit.assign')}</span>
-              <span className={styles.chip}>{params.assigneeAgentId}</span>
+              <AssigneeChip agentId={params.assigneeAgentId} />
             </>
           ),
         key: 'assignee',
