@@ -879,6 +879,14 @@ export class MessengerRouter {
         applicationId: link.tenantId
           ? `messenger-${platform}-${link.tenantId}`
           : `messenger-${platform}`,
+        // Explicit, deterministic marker that this run originated from the
+        // shared Messenger bot. `BotCallbackService` uses the presence of this
+        // field to resolve credentials via the messenger install store instead
+        // of `agent_bot_providers` (which has no row for messenger flows).
+        // Format matches `MessengerInstallationStore.resolveByKey` keys.
+        messengerInstallationKey: link.tenantId
+          ? `${platform}:${link.tenantId}`
+          : `${platform}:singleton`,
         platform,
         platformThreadId: thread.id,
       },

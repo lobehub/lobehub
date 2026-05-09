@@ -1,11 +1,14 @@
 import debug from 'debug';
 
+import type { MessengerPlatform } from '@/config/messenger';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
+import { getInstallationStore } from '@/server/services/messenger/installations';
+import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
@@ -46,6 +49,13 @@ export interface BotCallbackBody {
   lastLLMContent?: string;
   lastToolsCalling?: any;
   llmCalls?: number;
+  /**
+   * When set, this run originated from the shared Messenger bot — credentials
+   * live in the messenger installation store, not `agent_bot_providers`.
+   * Format: `<platform>:<tenantId>` or `<platform>:singleton`. See
+   * `ChatTopicBotContext.messengerInstallationKey`.
+   */
+  messengerInstallationKey?: string;
   operationId?: string;
   platformThreadId: string;
   progressMessageId?: string;
@@ -82,14 +92,16 @@ export class BotCallbackService {
   }
 
   async handleCallback(body: BotCallbackBody): Promise<void> {
-    const { type, applicationId, platformThreadId, progressMessageId } = body;
+    const { type, applicationId, platformThreadId, progressMessageId, messengerInstallationKey } =
+      body;
     const platform = platformThreadId.split(':')[0];
 
-    const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger(
-      platform,
+    const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger({
       applicationId,
+      messengerInstallationKey,
+      platform,
       platformThreadId,
-    );
+    });
 
     const entry = platformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
@@ -131,17 +143,28 @@ export class BotCallbackService {
     }
   }
 
-  private async createMessenger(
-    platform: string,
-    applicationId: string,
-    platformThreadId: string,
-  ): Promise<{
+  private async createMessenger(params: {
+    applicationId: string;
+    messengerInstallationKey?: string;
+    platform: string;
+    platformThreadId: string;
+  }): Promise<{
     charLimit?: number;
     connectionId: string;
     client: PlatformClient;
     messenger: PlatformMessenger;
     settings: Record<string, unknown>;
   }> {
+    const { applicationId, messengerInstallationKey, platform, platformThreadId } = params;
+
+    // Deterministic discriminator: any run originated from the shared
+    // Messenger bot is tagged by `MessengerRouter` with the install key. We
+    // never inspect the applicationId shape — that's a runtime bookkeeping
+    // handle, not a routing key.
+    if (messengerInstallationKey) {
+      return this.createMessengerClient(platform, messengerInstallationKey, platformThreadId);
+    }
+
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
       this.db,
       platform,
@@ -178,6 +201,54 @@ export class BotCallbackService {
     const messenger = client.getMessenger(platformThreadId);
 
     return { charLimit, connectionId: row.id, messenger, client, settings };
+  }
+
+  /**
+   * Build a PlatformClient for messenger-originated runs. Mirrors what
+   * `MessengerRouter.loadBot` does — installation store → binder.createClient —
+   * but skips the Chat SDK + handler registration since the callback only
+   * needs outbound messaging (edit / post / react), not webhook routing.
+   *
+   * `connectionId` is returned empty: messenger runs don't have an
+   * `agent_bot_providers.id`, so gateway typing is skipped (see
+   * `renewGatewayTyping` / `stopGatewayTyping`).
+   */
+  private async createMessengerClient(
+    platform: string,
+    installationKey: string,
+    platformThreadId: string,
+  ): Promise<{
+    charLimit?: number;
+    connectionId: string;
+    client: PlatformClient;
+    messenger: PlatformMessenger;
+    settings: Record<string, unknown>;
+  }> {
+    const store = getInstallationStore(platform as MessengerPlatform);
+    if (!store) {
+      throw new Error(`Unsupported messenger platform: ${platform}`);
+    }
+
+    const creds = await store.resolveByKey(installationKey);
+    if (!creds) {
+      throw new Error(`Messenger install not found for ${platform} (key=${installationKey})`);
+    }
+
+    const binder = messengerPlatformRegistry.createBinder(creds);
+    if (!binder) {
+      throw new Error(`Messenger binder not registered for platform=${platform}`);
+    }
+
+    const client = await binder.createClient();
+    if (!client) {
+      throw new Error(
+        `Messenger binder returned no client for ${platform} (key=${installationKey})`,
+      );
+    }
+
+    const messenger = client.getMessenger(platformThreadId);
+
+    return { charLimit: undefined, client, connectionId: '', messenger, settings: {} };
   }
 
   private async handleStep(
@@ -404,8 +475,12 @@ export class BotCallbackService {
   /**
    * Renew typing on the message-gateway. Each POST resets the 30s auto-stop timeout.
    * Fire-and-forget — typing is best-effort.
+   *
+   * Skipped when `connectionId` is empty (messenger-originated runs have no
+   * `agent_bot_providers.id` to register against the gateway).
    */
   private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
+    if (!connectionId) return;
     const client = getMessageGatewayClient();
     if (!client.isEnabled) return;
 
@@ -415,6 +490,7 @@ export class BotCallbackService {
   }
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
+    if (!connectionId) return;
     const client = getMessageGatewayClient();
     if (!client.isEnabled) return;
 
