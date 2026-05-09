@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { AgentSignalNightlyReviewModel } from '@/database/models/agentSignal/nightlyReview';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
+import { BriefModel } from '@/database/models/brief';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
@@ -30,6 +31,7 @@ import { redisPolicyStateStore } from '../../store/adapters/redis/policyStateSto
 import { redisSourceEventStore } from '../../store/adapters/redis/sourceEventStore';
 import { persistAgentSignalReceipts } from '../receiptService';
 import { createSelfReflectionService } from '../selfReflection';
+import { createMaintenanceAgentRunner } from './agentRunner';
 import { createServerMaintenanceBriefWriter } from './brief';
 import { createMaintenanceExecutorService } from './executor';
 import { createMemoryMaintenanceService } from './memory';
@@ -39,13 +41,16 @@ import type {
   NightlyReviewManagedSkillSummary,
   NightlyReviewRelevantMemorySummary,
   NightlyReviewTopicActivityRow,
+  ProposalActivityDigest,
   ReceiptActivityDigest,
   ToolActivityDigest,
 } from './nightlyCollector';
 import { createNightlyReviewService } from './nightlyCollector';
 import { mapNightlyDocumentActivityRows } from './nightlyDocumentActivity';
 import { createMaintenancePlannerService } from './planner';
+import { getMaintenanceProposalFromBriefMetadata } from './proposal';
 import { createSkillManagementService } from './skill';
+import { createMaintenanceTools } from './tools';
 import type {
   EvidenceRef,
   MaintenanceActionDraft,
@@ -237,6 +242,22 @@ const NIGHTLY_REVIEW_AGENT_SCHEMA = {
   strict: true,
 } satisfies GenerateObjectSchema;
 
+/** Bounded unresolved Daily Brief read budget for proposal activity digesting. */
+const NIGHTLY_PROPOSAL_ACTIVITY_LIMIT = 20;
+
+/** Daily Brief trigger used by Agent Signal nightly maintenance proposals. */
+const NIGHTLY_REVIEW_BRIEF_TRIGGER = 'agent-signal:nightly-review';
+
+const ACTIVE_PROPOSAL_STATUSES = new Set(['accepted', 'applying', 'pending']);
+
+interface ProposalBriefReader {
+  listUnresolvedByAgentAndTrigger: (options: {
+    agentId: string;
+    limit?: number;
+    trigger: string;
+  }) => Promise<Awaited<ReturnType<BriefModel['listUnresolvedByAgentAndTrigger']>>>;
+}
+
 // Runtime parser for model output after structured generation. This mirrors the
 // model-facing schema above, but the two schemas serve different boundaries.
 const EvidenceRefSchema = z
@@ -423,11 +444,7 @@ const createServerMaintenanceExecutor = (input: {
         };
       },
       refineSkill: async ({ input: skillInput }) => {
-        const bodyMarkdown =
-          getStringField(skillInput, 'bodyMarkdown') ??
-          getStringField(skillInput, 'patch') ??
-          getStringField(skillInput, 'content') ??
-          '';
+        const bodyMarkdown = getStringField(skillInput, 'bodyMarkdown') ?? '';
         const result = await input.skillDocumentService.replaceSkillIndex({
           agentId: input.agentId ?? '',
           agentDocumentId: skillInput.skillDocumentId,
@@ -548,6 +565,172 @@ const collectSelfReflectionContext = async (
     })),
   };
 };
+
+const getProposalTargetDigest = (
+  proposal: NonNullable<ReturnType<typeof getMaintenanceProposalFromBriefMetadata>>,
+): Pick<ProposalActivityDigest['active'][number], 'targetId' | 'targetTitle'> => {
+  const action = proposal.actions[0];
+  const target = action?.target;
+
+  return {
+    ...(target?.skillDocumentId
+      ? { targetId: target.skillDocumentId }
+      : target?.memoryId
+        ? { targetId: target.memoryId }
+        : target?.skillName
+          ? { targetId: target.skillName }
+          : {}),
+    ...(action?.baseSnapshot?.targetTitle ? { targetTitle: action.baseSnapshot.targetTitle } : {}),
+  };
+};
+
+const getProposalEvidenceCount = (
+  proposal: NonNullable<ReturnType<typeof getMaintenanceProposalFromBriefMetadata>>,
+) => {
+  const evidenceRefs = new Map<string, EvidenceRef>();
+
+  for (const evidenceRef of proposal.evidenceRefs ?? []) {
+    evidenceRefs.set(`${evidenceRef.type}:${evidenceRef.id}`, evidenceRef);
+  }
+
+  for (const action of proposal.actions) {
+    for (const evidenceRef of action.evidenceRefs) {
+      evidenceRefs.set(`${evidenceRef.type}:${evidenceRef.id}`, evidenceRef);
+    }
+  }
+
+  return evidenceRefs.size;
+};
+
+const hasPendingProposalExpired = ({ expiresAt, now }: { expiresAt: string; now: string }) => {
+  const expiresAtMs = new Date(expiresAt).getTime();
+  const nowMs = new Date(now).getTime();
+
+  return Number.isFinite(expiresAtMs) && Number.isFinite(nowMs) && expiresAtMs <= nowMs;
+};
+
+const isNoopProposal = (
+  proposal: NonNullable<ReturnType<typeof getMaintenanceProposalFromBriefMetadata>>,
+) =>
+  proposal.actionType === 'noop' ||
+  proposal.actions.every((action) => action.actionType === 'noop');
+
+/**
+ * Lists existing server-side maintenance proposal activity for one agent.
+ *
+ * Use when:
+ * - Nightly review context needs unresolved proposal state
+ * - Tests need the server adapter behavior without booting the full runtime
+ *
+ * Expects:
+ * - `briefModel` applies user, agent, trigger, and unresolved filters before the limit
+ * - `now` is an ISO timestamp used to treat expired pending proposals as inactive
+ * - Stored metadata may be malformed and must be treated as absent
+ *
+ * Returns:
+ * - Active unresolved proposal digests plus unresolved status counts
+ */
+export const listServerProposalActivity = async ({
+  agentId,
+  briefModel,
+  now = new Date().toISOString(),
+  userId,
+}: {
+  agentId: string;
+  briefModel: ProposalBriefReader;
+  now?: string;
+  userId: string;
+}): Promise<ProposalActivityDigest> =>
+  tracer.startActiveSpan(
+    'agent_signal.nightly_review.collector.list_proposal_activity',
+    {
+      attributes: {
+        'agent.signal.agent_id': agentId,
+        'agent.signal.nightly.proposal_read_limit': NIGHTLY_PROPOSAL_ACTIVITY_LIMIT,
+        'agent.signal.user_id': userId,
+      },
+    },
+    async (span) => {
+      try {
+        const rows = await briefModel.listUnresolvedByAgentAndTrigger({
+          agentId,
+          limit: NIGHTLY_PROPOSAL_ACTIVITY_LIMIT,
+          trigger: NIGHTLY_REVIEW_BRIEF_TRIGGER,
+        });
+        const digest: ProposalActivityDigest = {
+          active: [],
+          dismissedCount: 0,
+          expiredCount: 0,
+          staleCount: 0,
+          supersededCount: 0,
+        };
+        let validProposalCount = 0;
+
+        for (const brief of rows) {
+          if (brief.agentId !== agentId) continue;
+          if (brief.trigger !== NIGHTLY_REVIEW_BRIEF_TRIGGER) continue;
+
+          const proposal = getMaintenanceProposalFromBriefMetadata(brief.metadata);
+          if (!proposal) continue;
+          if (isNoopProposal(proposal)) continue;
+
+          validProposalCount += 1;
+
+          if (proposal.status === 'dismissed') digest.dismissedCount += 1;
+          if (proposal.status === 'expired') digest.expiredCount += 1;
+          if (proposal.status === 'stale') digest.staleCount += 1;
+          if (proposal.status === 'superseded') digest.supersededCount += 1;
+
+          if (
+            proposal.status === 'pending' &&
+            hasPendingProposalExpired({ expiresAt: proposal.expiresAt, now })
+          ) {
+            digest.expiredCount += 1;
+            continue;
+          }
+
+          if (!ACTIVE_PROPOSAL_STATUSES.has(proposal.status)) continue;
+
+          digest.active.push({
+            actionType: proposal.actionType,
+            createdAt: proposal.createdAt,
+            evidenceCount: getProposalEvidenceCount(proposal),
+            expiresAt: proposal.expiresAt,
+            proposalId: brief.id,
+            proposalKey: proposal.proposalKey,
+            status: proposal.status,
+            summary: brief.summary,
+            ...getProposalTargetDigest(proposal),
+            updatedAt: proposal.updatedAt,
+          });
+        }
+
+        span.setAttribute('agent.signal.nightly.proposal_unresolved_row_count', rows.length);
+        span.setAttribute('agent.signal.nightly.proposal_valid_count', validProposalCount);
+        span.setAttribute('agent.signal.nightly.proposal_active_count', digest.active.length);
+        span.setAttribute('agent.signal.nightly.proposal_dismissed_count', digest.dismissedCount);
+        span.setAttribute('agent.signal.nightly.proposal_expired_count', digest.expiredCount);
+        span.setAttribute('agent.signal.nightly.proposal_stale_count', digest.staleCount);
+        span.setAttribute('agent.signal.nightly.proposal_superseded_count', digest.supersededCount);
+        span.setStatus({ code: SpanStatusCode.OK });
+
+        return digest;
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message:
+            error instanceof Error
+              ? error.message
+              : 'AgentSignal nightly proposal activity read failed',
+        });
+        span.recordException(error as Error);
+
+        throw error;
+      } finally {
+        span.end();
+      }
+    },
+  );
 
 /**
  * Creates server runtime handlers for the self-reflection source handler.
@@ -745,6 +928,7 @@ export const createServerNightlyReviewPolicyOptions = ({
   const planner = createMaintenancePlannerService();
   const nightlyReviewModel = new AgentSignalNightlyReviewModel(db);
   const reviewContextModel = new AgentSignalReviewContextModel(db, userId);
+  const briefModel = new BriefModel(db, userId);
   const skillDocumentService = new SkillManagementDocumentService(db, userId);
   const collector = createNightlyReviewService({
     listDocumentActivity: async ({ agentId: targetAgentId, reviewWindowEnd, reviewWindowStart }) =>
@@ -826,6 +1010,12 @@ export const createServerNightlyReviewPolicyOptions = ({
         readonly: false,
       }));
     },
+    listProposalActivity: ({ agentId: targetAgentId }) =>
+      listServerProposalActivity({
+        agentId: targetAgentId,
+        briefModel,
+        userId,
+      }),
     listRelevantMemories: async ({ limit = 20 }) => {
       const rows = await reviewContextModel.listRelevantMemories({ limit });
 
@@ -928,6 +1118,8 @@ export const createServerNightlyReviewPolicyOptions = ({
       });
 
       return rows.map<NightlyReviewTopicActivityRow>((row) => ({
+        correctionCount: row.correctionCount,
+        correctionIds: row.correctionIds,
         evidenceRefs: row.topicId ? [{ id: row.topicId, type: 'topic' }] : [],
         failedMessages: row.failedMessages,
         failedToolCount: row.failedToolCount,
@@ -946,6 +1138,31 @@ export const createServerNightlyReviewPolicyOptions = ({
     db,
     skillDocumentService,
     userId,
+  });
+  const maintenanceTools = createMaintenanceTools({
+    reserveOperation: async () => ({ reserved: true }),
+    writeReceipt: async () => ({}),
+  });
+  const maintenanceAgentRunner = createMaintenanceAgentRunner({
+    maxSteps: 10,
+    run: async ({ context, localDate, reviewScope, sourceId }) => {
+      const draft = await runServerMaintenanceReviewAgent(db, userId, context);
+      const projectionPlan = planner.plan({
+        draft,
+        localDate,
+        reviewScope,
+        sourceId,
+        userId,
+      });
+      const execution = await executor.execute(projectionPlan);
+
+      return {
+        execution,
+        projectionPlan,
+        stepCount: 1,
+      };
+    },
+    tools: maintenanceTools,
   });
   const briefWriter = createServerMaintenanceBriefWriter(db, userId);
 
@@ -972,9 +1189,13 @@ export const createServerNightlyReviewPolicyOptions = ({
       return targets.length > 0;
     },
     collectContext: (input) => collector.collectNightlyReviewContext(input),
-    executePlan: (plan) => executor.execute(plan),
-    planReviewOutput: (request) => planner.plan(request),
-    runMaintenanceReviewAgent: (context) => runServerMaintenanceReviewAgent(db, userId, context),
+    runMaintenanceReviewAgent: ({ context, localDate, sourceId, userId: runnerUserId }) =>
+      maintenanceAgentRunner.run({
+        context,
+        localDate,
+        sourceId,
+        userId: runnerUserId,
+      }),
     writeDailyBrief: (brief) => briefWriter.writeDailyBrief(brief),
     writeReceipts: (receipts) => persistAgentSignalReceipts(receipts),
   };

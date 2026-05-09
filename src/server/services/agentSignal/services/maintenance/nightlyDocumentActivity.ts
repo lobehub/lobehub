@@ -43,7 +43,11 @@ export const mapNightlyDocumentActivityRows = (
       continue;
     }
 
-    if (row.templateId === 'skills/index' || row.templateId === 'skills/bundle') {
+    if (
+      row.templateId === 'agent-skill' ||
+      row.templateId === 'skills/index' ||
+      row.templateId === 'skills/bundle'
+    ) {
       digest.skillBucket.push({
         ...base,
         hintIsSkill: false,
