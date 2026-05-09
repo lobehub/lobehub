@@ -44,15 +44,27 @@ describe('formatCommandResult', () => {
     `);
   });
 
-  it('should format successful command with exit code', () => {
+  it('should suppress the Exit code line when exitCode is 0', () => {
     const result = formatCommandResult({
       exitCode: 0,
+      success: true,
+    });
+    expect(result).toMatchInlineSnapshot(`"Command completed successfully."`);
+  });
+
+  it('should include the Exit code line for non-zero exit codes', () => {
+    const result = formatCommandResult({
+      exitCode: 137,
+      stdout: 'partial output',
       success: true,
     });
     expect(result).toMatchInlineSnapshot(`
       "Command completed successfully.
 
-      Exit code: 0"
+      Output:
+      partial output
+
+      Exit code: 137"
     `);
   });
 

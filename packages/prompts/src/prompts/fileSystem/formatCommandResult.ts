@@ -29,7 +29,10 @@ export const formatCommandResult = ({
 
   if (stdout) parts.push(`Output:\n${stdout}`);
   if (stderr) parts.push(`Stderr:\n${stderr}`);
-  if (exitCode !== undefined) parts.push(`Exit code: ${exitCode}`);
+  // Suppress the redundant `Exit code: 0` tail — "Command completed successfully."
+  // already conveys the same signal. Non-zero codes stay because they carry
+  // diagnostic info the LLM may need (e.g. 137=OOM, 130=SIGINT).
+  if (exitCode !== undefined && exitCode !== 0) parts.push(`Exit code: ${exitCode}`);
 
   return parts.join('\n\n');
 };
