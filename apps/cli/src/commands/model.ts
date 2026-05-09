@@ -1,10 +1,11 @@
 import type { Command } from 'commander';
-import { isAiModelVisible } from 'model-bank';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+
+const isVisibleModel = (model: { visible?: boolean }) => model.visible !== false;
 
 export function registerModelCommand(program: Command) {
   const model = program.command('model').description('Manage AI models');
@@ -35,7 +36,7 @@ export function registerModelCommand(program: Command) {
 
         const result = await client.aiModel.getAiProviderModelList.query(input as any);
         let items = (Array.isArray(result) ? result : ((result as any).items ?? [])).filter(
-          isAiModelVisible,
+          isVisibleModel,
         );
 
         if (options.type) {
