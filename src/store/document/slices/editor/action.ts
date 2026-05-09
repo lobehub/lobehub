@@ -8,6 +8,7 @@ import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { documentService } from '@/services/document';
 import type { StoreSetter } from '@/store/types';
+import { composeSkillMarkdown, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
@@ -43,14 +44,23 @@ export class EditorActionImpl {
     this.#get = get;
   }
 
+  private getPersistedMarkdown = (documentId: string | undefined, markdown: string): string => {
+    if (!documentId) return markdown;
+
+    const doc = this.#get().documents[documentId];
+    if (doc?.contentFormat !== 'skillMarkdown') return markdown;
+
+    return composeSkillMarkdown(doc.skillFrontmatter, markdown);
+  };
+
   getEditorContent = (): { editorData: any; markdown: string } | null => {
-    const { editor } = this.#get();
+    const { activeDocumentId, editor } = this.#get();
     if (!editor) return null;
 
     try {
       const markdown = (editor.getDocument('markdown') as unknown as string) || '';
       const editorData = editor.getDocument('json');
-      return { editorData, markdown };
+      return { editorData, markdown: this.getPersistedMarkdown(activeDocumentId, markdown) };
     } catch (error) {
       console.error('[DocumentStore] Failed to get editor content:', error);
       return null;
@@ -70,7 +80,8 @@ export class EditorActionImpl {
     if (!doc) return false;
 
     try {
-      const markdown = (editor.getDocument('markdown') as unknown as string) || '';
+      const editorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
+      const markdown = this.getPersistedMarkdown(id, editorMarkdown);
       const editorData = editor.getDocument('json');
 
       const markdownChanged = markdown !== doc.lastSavedContent;
@@ -113,6 +124,44 @@ export class EditorActionImpl {
     this.syncEditorContent(undefined, { triggerAutoSave: true });
   };
 
+  updateSkillFrontmatter = (documentId: string, frontmatter: string): boolean => {
+    const { activeDocumentId, documents, editor, internal_dispatchDocument } = this.#get();
+    const doc = documents[documentId];
+
+    if (!doc || doc.contentFormat !== 'skillMarkdown') return false;
+
+    try {
+      const isActiveDocument = activeDocumentId === documentId;
+      const body =
+        isActiveDocument && editor
+          ? (editor.getDocument('markdown') as unknown as string) || ''
+          : parseSkillMarkdownFrontmatter(doc.content).body;
+      const editorData = isActiveDocument && editor ? editor.getDocument('json') : doc.editorData;
+      const content = composeSkillMarkdown(frontmatter, body);
+      const contentChanged = content !== doc.lastSavedContent;
+      const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
+
+      internal_dispatchDocument(
+        {
+          id: documentId,
+          type: 'updateDocument',
+          value: {
+            content,
+            editorData,
+            isDirty: contentChanged || editorDataChanged,
+            skillFrontmatter: frontmatter,
+          },
+        },
+        'updateSkillFrontmatter',
+      );
+
+      return true;
+    } catch (error) {
+      console.error('[DocumentStore] Failed to update SKILL.md frontmatter:', error);
+      return false;
+    }
+  };
+
   internal_dispatchDocument = (payload: DocumentDispatch, action?: string): void => {
     const { documents } = this.#get();
     const nextDocuments = documentReducer(documents, payload);
@@ -146,6 +195,31 @@ export class EditorActionImpl {
       doc.editorData &&
       typeof doc.editorData === 'object' &&
       Object.keys(doc.editorData).length > 0;
+
+    // SKILL.md frontmatter is metadata, not editable document body. Keep it out of the rich
+    // Markdown editor because `---` fences are otherwise parsed as Markdown dividers/headings,
+    // then stitch the same YAML back into the persisted content during save.
+    if (doc.contentFormat === 'skillMarkdown') {
+      if (hasValidEditorData) {
+        try {
+          editor.setDocument('json', JSON.stringify(doc.editorData));
+          return;
+        } catch {
+          console.warn(
+            '[DocumentStore] Failed to load SKILL.md editorData, falling back to markdown',
+          );
+        }
+      }
+
+      try {
+        editor.setDocument('markdown', parseSkillMarkdownFrontmatter(doc.content).body);
+        this.#set({ editor });
+      } catch (err) {
+        console.error('[DocumentStore] Failed to load SKILL.md content:', err);
+      }
+
+      return;
+    }
 
     // Set content from document state
     if (hasValidEditorData) {
@@ -193,7 +267,8 @@ export class EditorActionImpl {
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
 
     try {
-      const currentContent = (editor.getDocument('markdown') as unknown as string) || '';
+      const currentEditorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
+      const currentContent = this.getPersistedMarkdown(id, currentEditorMarkdown);
       const currentEditorData = editor.getDocument('json');
 
       if (!isValidEditorData(currentEditorData)) {
@@ -220,6 +295,7 @@ export class EditorActionImpl {
         id,
         type: 'updateDocument',
         value: {
+          content: currentContent,
           editorData: structuredClone(currentEditorData),
 
           isDirty: false,
