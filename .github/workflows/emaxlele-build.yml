@@ -90,7 +90,10 @@ jobs:
             echo "release_notes<<EOF"
             echo "## emaxlele-dev Build — ${{ steps.version.outputs.tag }}"
             echo
-            echo "> Personal fork build — emaxlele. Based on ${compare_from}."
+            upstream_ver=$(node -p "require('./package.json').version" 2>/dev/null || echo 'unknown')
+            echo "> Personal fork build — emaxlele."
+            echo "> **Upstream canary: ${upstream_ver}**"
+            echo "> Based on ${compare_from}."
             echo
             printf '%s\n' "$commits"
             echo "EOF"
