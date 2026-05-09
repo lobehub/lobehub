@@ -1,6 +1,11 @@
 name: Test CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - canary
+      - main
+  pull_request:
 
 permissions:
   actions: write
