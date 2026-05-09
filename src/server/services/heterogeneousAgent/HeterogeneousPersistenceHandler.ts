@@ -258,9 +258,30 @@ export class HeterogeneousPersistenceHandler {
     // already read the message in `loadOrCreateState` — the second read is
     // redundant but harmless and keeps the logic uniform).
     const refreshed = await this.deps.messageModel.findById(state.currentAssistantMessageId);
-    state.accumulatedContent = (refreshed?.content ?? '') as string;
-    state.accumulatedReasoning =
-      (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
+    const dbContent = (refreshed?.content ?? '') as string;
+    const dbReasoning = (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
+
+    // Adopt DB value only when it is LONGER than what this instance holds in memory.
+    // This correctly handles two competing cases without introducing a dirty flag:
+    //
+    //   1. Multi-replica stale (the problem this refresh was added to fix):
+    //      Another replica flushed more content to DB than this warm instance
+    //      has in memory → dbContent is longer → adopt it so new text in this
+    //      batch extends the correct full string rather than a stale partial.
+    //
+    //   2. flushBatchContent retry on the same warm instance (P1 concern):
+    //      Events were already processed and marked in processedKeys, but the
+    //      end-of-batch flush threw a transient DB error. DB still holds the
+    //      shorter pre-batch value; in-memory already has the correct result.
+    //      Unconditionally overwriting with the DB value would wipe those
+    //      chunks permanently (processedKeys prevents replay). Taking the
+    //      longer in-memory value keeps them safe.
+    if (dbContent.length > state.accumulatedContent.length) {
+      state.accumulatedContent = dbContent;
+    }
+    if (dbReasoning.length > state.accumulatedReasoning.length) {
+      state.accumulatedReasoning = dbReasoning;
+    }
 
     for (const event of params.events) {
       const key = eventKey(event);
