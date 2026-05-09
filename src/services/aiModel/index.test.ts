@@ -1,4 +1,5 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_SETTINGS } from '@lobechat/config';
 import { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from '@lobechat/const';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
@@ -69,6 +70,15 @@ describe('Default model configuration', () => {
     expect(
       match,
       `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" not found in DEFAULT_MODEL_PROVIDER_LIST`,
+    ).toBeDefined();
+    expect(match!.enabled, `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" is not enabled`).toBe(true);
+  });
+
+  it('DEFAULT_PROVIDER should be enabled in DEFAULT_SETTINGS language model config', () => {
+    const match = DEFAULT_SETTINGS.languageModel[DEFAULT_PROVIDER];
+    expect(
+      match,
+      `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" not found in DEFAULT_SETTINGS language model config`,
     ).toBeDefined();
     expect(match!.enabled, `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" is not enabled`).toBe(true);
   });
