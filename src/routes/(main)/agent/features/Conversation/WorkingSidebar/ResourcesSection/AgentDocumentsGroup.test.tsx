@@ -159,6 +159,54 @@ describe('AgentDocumentsGroup', () => {
     expect(openDocument).toHaveBeenCalledWith('doc-content-1');
   });
 
+  it('opens a managed skill bundle card through its SKILL.md document and hides the duplicate file', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-05-09T00:00:00Z'),
+          description: 'Use for YouTube comments',
+          documentId: 'skill-bundle-doc',
+          fileType: 'skills/bundle',
+          filename: 'youtube-comment-retrieval-workflow',
+          id: 'skill-bundle-row',
+          parentId: null,
+          sourceType: 'agent-signal',
+          templateId: 'agent-skill',
+          title: 'YouTube Comment Retrieval Workflow',
+          updatedAt: new Date(),
+        },
+        {
+          createdAt: new Date('2026-05-09T00:00:00Z'),
+          description: 'Use for YouTube comments',
+          documentId: 'skill-index-doc',
+          fileType: 'skills/index',
+          filename: 'SKILL.md',
+          id: 'skill-index-row',
+          parentId: 'skill-bundle-doc',
+          sourceType: 'agent-signal',
+          templateId: 'agent-skill',
+          title: 'SKILL.md',
+          updatedAt: new Date(),
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    const bundle = screen.getByText('YouTube Comment Retrieval Workflow');
+    expect(bundle).toBeInTheDocument();
+    expect(screen.queryByText('SKILL.md')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('delete')).not.toBeInTheDocument();
+
+    fireEvent.click(bundle);
+
+    expect(openDocument).toHaveBeenCalledWith('skill-index-doc');
+    expect(openDocument).not.toHaveBeenCalledWith('skill-bundle-doc');
+  });
+
   it('filters documents by source type via segmented tabs', () => {
     useClientDataSWR.mockReturnValue({
       data: [
@@ -238,6 +286,16 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByLabelText('delete'));
+
+    expect(modalConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelText: 'cancel',
+        centered: true,
+        okButtonProps: { danger: true, type: 'primary' },
+        okText: 'delete',
+        title: 'workingPanel.resources.deleteTitle',
+      }),
+    );
 
     const [firstConfirmCall] = modalConfirm.mock.calls;
     const [{ onOk }] = firstConfirmCall;

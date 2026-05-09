@@ -1,25 +1,28 @@
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
-import { type CSSProperties, memo, useCallback, useMemo, useRef } from 'react';
+import type { CSSProperties } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router-dom';
 import type { KeyedMutator } from 'swr';
 
-import {
-  ExplorerTree,
-  type ExplorerTreeCanDropCtx,
-  type ExplorerTreeHandle,
-  type ExplorerTreeNode,
+import type {
+  ExplorerTreeCanDropCtx,
+  ExplorerTreeHandle,
+  ExplorerTreeNode,
 } from '@/features/ExplorerTree';
+import { ExplorerTree } from '@/features/ExplorerTree';
 import { useChatStore } from '@/store/chat';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
-import { type AgentDocumentItem, isFolderItem } from './types';
+import type { AgentDocumentItem } from './types';
+import { isFolderItem, isManagedSkillItem, isSkillIndexItem } from './types';
 import { canDropDocument } from './utils/canDrop';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
+const SKILL_INDEX_FILENAME = 'SKILL.md';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   tree: css`
@@ -86,7 +89,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         data: doc,
         id: doc.id,
         isFolder: isFolderItem(doc),
-        name: doc.title || doc.filename || '',
+        name: isSkillIndexItem(doc) ? SKILL_INDEX_FILENAME : doc.title || doc.filename || '',
         parentId: resolveParentRowId(doc.parentId),
       })),
     [documents, resolveParentRowId],
@@ -145,12 +148,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   const canDrag = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => node.data?.sourceType !== 'web',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.sourceType !== 'web' && !isManagedSkillItem(node.data),
     [],
   );
 
   const canRename = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => node.data?.sourceType !== 'web',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.sourceType !== 'web' && !isManagedSkillItem(node.data),
     [],
   );
 
@@ -161,6 +166,8 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
   const getContextMenuItems = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>): MenuProps['items'] => {
+      if (node.data && isManagedSkillItem(node.data)) return [];
+
       const isFolder = !!node.isFolder;
       const targetParentId = isFolder ? node.id : (node.parentId ?? null);
 
