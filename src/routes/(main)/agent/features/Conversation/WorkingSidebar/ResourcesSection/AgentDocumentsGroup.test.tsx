@@ -207,6 +207,34 @@ describe('AgentDocumentsGroup', () => {
     expect(openDocument).not.toHaveBeenCalledWith('skill-bundle-doc');
   });
 
+  it('renders the empty state when only hidden managed skill index documents are available', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-05-09T00:00:00Z'),
+          description: 'Use for YouTube comments',
+          documentId: 'skill-index-doc',
+          fileType: 'skills/index',
+          filename: 'SKILL.md',
+          id: 'skill-index-row',
+          parentId: 'missing-skill-bundle-doc',
+          sourceType: 'agent-signal',
+          templateId: 'agent-skill',
+          title: 'SKILL.md',
+          updatedAt: new Date(),
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    expect(screen.getByText('No agent documents yet')).toBeInTheDocument();
+    expect(screen.queryByText('SKILL.md')).not.toBeInTheDocument();
+  });
+
   it('navigates to the page route when opening from a topic page', () => {
     useMatchMock.mockReturnValue({
       params: { aid: 'agent-1', topicId: 'topic-1' },

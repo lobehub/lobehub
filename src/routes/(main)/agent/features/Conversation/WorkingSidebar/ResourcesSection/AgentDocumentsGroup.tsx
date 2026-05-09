@@ -365,7 +365,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
             style={{ height: '100%' }}
           />
         </Flexbox>
-      ) : filteredData.length === 0 ? (
+      ) : visibleFlatData.length === 0 ? (
         <Center flex={1} gap={8} paddingBlock={24}>
           <Empty
             description={t('workingPanel.resources.empty')}
