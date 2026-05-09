@@ -92,11 +92,18 @@ const AssistantMessage = memo<AssistantMessageProps>(
       [id, index, setMessageItemActionElementPortialContext, setMessageItemActionTypeContext],
     );
 
+    const hasEmptyErrorMessage = Boolean(
+      errorContent &&
+      error &&
+      (message === LOADING_FLAT || !message || String(message).trim() === ''),
+    );
+
     return (
       <ChatItem
         showTitle
         aboveMessage={null}
         avatar={avatar}
+        belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
         customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
         editing={editing}
         id={id}
@@ -123,6 +130,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
         }
         messageExtra={
           <>
+            {footerRender}
             {interrupted && <InterruptedHint />}
             <AssistantMessageExtra
               content={content}
@@ -140,7 +148,6 @@ const AssistantMessage = memo<AssistantMessageProps>(
         onMouseEnter={onMouseEnter}
       >
         <MessageContent {...item} />
-        {footerRender}
       </ChatItem>
     );
   },

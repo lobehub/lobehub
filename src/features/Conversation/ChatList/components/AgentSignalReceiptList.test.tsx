@@ -101,7 +101,7 @@ describe('AgentSignalReceiptList', () => {
     );
 
     expect(screen.getByText('Future reply preference')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
     expect(screen.queryByText('agentSignal.receipts.recentActivity')).not.toBeInTheDocument();
   });
 
@@ -131,7 +131,7 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
 
     expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
   });
@@ -159,7 +159,8 @@ describe('AgentSignalReceiptList', () => {
 
     fireEvent.click(screen.getByText('Self-review completed'));
 
-    expect(screen.queryByRole('button', { name: 'Open' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByText('Open')).not.toBeInTheDocument();
     expect(
       screen.getByText('Reviewed recent activity and found no follow-up action.'),
     ).toBeInTheDocument();
@@ -226,7 +227,7 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
 
     expect(mocks.openDocument).toHaveBeenCalledWith('index-document-1');
   });
@@ -256,7 +257,7 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    fireEvent.click(screen.getByRole('button', { name: /Decision-first PR review preference/ }));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/memory');
   });

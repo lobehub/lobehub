@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { FileText } from 'lucide-react';
@@ -25,10 +25,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorFillQuaternary};
   `,
-  button: css`
+  openLabel: css`
+    display: flex;
+    align-items: center;
+
     height: 28px;
     padding-inline: 12px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: 6px;
+
     font-size: 13px;
+    line-height: 1;
+    color: ${cssVar.colorText};
+    white-space: nowrap;
+
+    background: ${cssVar.colorBgContainer};
   `,
   container: css`
     width: 100%;
@@ -101,17 +112,9 @@ const PortalResourceCard = memo<PortalResourceCardProps>(
         </Flexbox>
         {onOpen && openLabel && (
           <Flexbox flex={'none'} style={{ paddingInlineEnd: 10 }}>
-            <Button
-              className={styles.button}
-              size={'small'}
-              variant={'outlined'}
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpen();
-              }}
-            >
+            <div aria-hidden className={styles.openLabel}>
               {openLabel}
-            </Button>
+            </div>
           </Flexbox>
         )}
       </Flexbox>
