@@ -110,6 +110,10 @@ export default {
   'verify.confirm.fields.workspace': 'Workspace',
   'verify.confirm.noAgents':
     "You don't have any agents yet. Create one in LobeHub, then come back to finish linking.",
+  'verify.confirm.relink.description':
+    'This LobeHub account is already linked to {{platform}} account {{account}}. To link a different {{platform}} account, disconnect the current one first in Settings → Messenger.',
+  'verify.confirm.relink.manage': 'Open Messenger settings',
+  'verify.confirm.relink.title': 'Another {{platform}} account is already linked',
   'verify.confirm.title': 'Confirm linking',
   'verify.confirm.workspace': 'Workspace: {{workspace}}',
   'verify.error.alreadyLinkedToOther':
@@ -118,6 +122,8 @@ export default {
   'verify.error.generic': 'Something went wrong. Please try again.',
   'verify.error.missingToken': 'Invalid link. Open this page from the bot.',
   'verify.error.title': 'Unable to confirm link',
+  'verify.error.unlinkBeforeRelink':
+    'This LobeHub account is already linked to another account on this platform. Disconnect it in Settings → Messenger before linking a new one.',
   'verify.labRequired.description':
     'Messenger is currently a Labs feature. Enable it in Settings → Advanced → Labs and reload this page.',
   'verify.labRequired.openSettings': 'Open Labs settings',

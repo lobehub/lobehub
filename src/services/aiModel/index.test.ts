@@ -1,5 +1,8 @@
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_SETTINGS } from '@lobechat/config';
 import { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from '@lobechat/const';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testService } from '~test-utils';
@@ -62,13 +65,36 @@ describe('AiModelService', () => {
 });
 
 describe('Default model configuration', () => {
-  it('DEFAULT_MODEL should be enabled in LOBE_DEFAULT_MODEL_LIST', () => {
-    const match = LOBE_DEFAULT_MODEL_LIST.find((m) => m.id === DEFAULT_MODEL);
+  it('DEFAULT_PROVIDER should be enabled in DEFAULT_MODEL_PROVIDER_LIST', () => {
+    const match = DEFAULT_MODEL_PROVIDER_LIST.find((provider) => provider.id === DEFAULT_PROVIDER);
     expect(
       match,
-      `DEFAULT_MODEL "${DEFAULT_MODEL}" not found in LOBE_DEFAULT_MODEL_LIST`,
+      `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" not found in DEFAULT_MODEL_PROVIDER_LIST`,
     ).toBeDefined();
-    expect(match!.enabled, `DEFAULT_MODEL "${DEFAULT_MODEL}" is not enabled`).toBe(true);
+    expect(match!.enabled, `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" is not enabled`).toBe(true);
+  });
+
+  it('DEFAULT_PROVIDER should be enabled in DEFAULT_SETTINGS language model config', () => {
+    const match = DEFAULT_SETTINGS.languageModel[DEFAULT_PROVIDER];
+    expect(
+      match,
+      `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" not found in DEFAULT_SETTINGS language model config`,
+    ).toBeDefined();
+    expect(match!.enabled, `DEFAULT_PROVIDER "${DEFAULT_PROVIDER}" is not enabled`).toBe(true);
+  });
+
+  it('DEFAULT_MODEL should be enabled in LOBE_DEFAULT_MODEL_LIST', () => {
+    const match = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.id === DEFAULT_MODEL && m.providerId === DEFAULT_PROVIDER,
+    );
+    expect(
+      match,
+      `DEFAULT_MODEL "${DEFAULT_PROVIDER}/${DEFAULT_MODEL}" not found in LOBE_DEFAULT_MODEL_LIST`,
+    ).toBeDefined();
+    expect(
+      match!.enabled,
+      `DEFAULT_MODEL "${DEFAULT_PROVIDER}/${DEFAULT_MODEL}" is not enabled`,
+    ).toBe(true);
   });
 
   it('DEFAULT_MINI_MODEL should be enabled in LOBE_DEFAULT_MODEL_LIST', () => {

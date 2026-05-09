@@ -12,6 +12,7 @@ import {
   type PlatformMeta,
   SuccessCard,
 } from './shared';
+import { isSingleAccountRebindBlocked, shouldShowSingleAccountSuccess } from './singleAccountState';
 
 interface SlackBodyProps {
   existingLink?: ExistingLink | null;
@@ -28,12 +29,13 @@ const SlackBody = memo<SlackBodyProps>(
     const [done, setDone] = useState(false);
 
     const platformLabel = platformMeta?.name ?? 'Slack';
+    const rebindBlocked = isSingleAccountRebindBlocked(existingLink, tokenData);
     // Slack uses tenant from the existing link (post-confirm/refresh) or the
     // pending token (pre-confirm). Without a tenant, the workspace deep-link
     // can't be built, so the success state hides the CTA.
     const tenantId = existingLink?.tenantId ?? tokenData?.tenantId ?? undefined;
 
-    if (existingLink || done) {
+    if (shouldShowSingleAccountSuccess(existingLink, tokenData, done)) {
       return (
         <SuccessCard
           openBotUrl={tenantId ? buildSlackOpenBotUrl(tenantId, platformMeta?.appId) : null}
@@ -58,12 +60,33 @@ const SlackBody = memo<SlackBodyProps>(
 
     return (
       <ConfirmCard
-        conflictEmail={tokenData.linkedToEmail ?? undefined}
         infoRows={infoRows}
         platform="slack"
-        platformLabel={platformLabel}
         randomId={randomId}
-        signInUrl={signInUrl}
+        blockingNotice={
+          rebindBlocked
+            ? {
+                ctaHref: '/settings/messenger/slack',
+                ctaLabel: t('verify.confirm.relink.manage'),
+                description: t('verify.confirm.relink.description', {
+                  account:
+                    existingLink?.platformUsername ?? `ID ${existingLink?.platformUserId ?? ''}`,
+                  platform: platformLabel,
+                }),
+                title: t('verify.confirm.relink.title', { platform: platformLabel }),
+              }
+            : tokenData.linkedToEmail
+              ? {
+                  ctaHref: signInUrl,
+                  ctaLabel: t('verify.confirm.conflict.switchAccount'),
+                  description: t('verify.confirm.conflict.description', {
+                    email: tokenData.linkedToEmail,
+                    platform: platformLabel,
+                  }),
+                  title: t('verify.confirm.conflict.title'),
+                }
+              : undefined
+        }
         onSuccess={() => setDone(true)}
       />
     );

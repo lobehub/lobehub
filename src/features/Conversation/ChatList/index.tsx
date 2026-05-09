@@ -97,14 +97,14 @@ const ChatList = memo<ChatListProps>(
           anchoredReceipts.length > 0 || latestUnanchoredReceipts.length > 0 ? (
             <>
               <AgentSignalReceiptList receipts={anchoredReceipts} />
-              <AgentSignalReceiptList showRecentLabel receipts={latestUnanchoredReceipts} />
+              <AgentSignalReceiptList receipts={latestUnanchoredReceipts} />
             </>
           ) : undefined;
 
         return (
           <MessageItem
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
-            endRender={receiptRender}
+            footerRender={receiptRender}
             id={id}
             index={index}
             isLatestItem={isLatestItem}

@@ -14,6 +14,7 @@ import {
 import {
   MessengerAccountLinkConflictError,
   MessengerAccountLinkModel,
+  MessengerAccountLinkRelinkRequiredError,
 } from '@/database/models/messengerAccountLink';
 import type { DecryptedMessengerInstallation } from '@/database/models/messengerInstallation';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
@@ -245,6 +246,21 @@ export const messengerRouter = router({
         });
       }
 
+      // The verify-im flow should never silently replace an existing binding
+      // for the same scope. For Slack the scope is one workspace (tenantId);
+      // for Discord/Telegram it is the whole platform. Require an explicit
+      // unlink first so account switches stay deliberate.
+      const existingUserLink = await ctx.messengerLinkModel.findByPlatform(
+        peeked.platform,
+        peeked.tenantId ?? '',
+      );
+      if (existingUserLink && existingUserLink.platformUserId !== peeked.platformUserId) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'verify.error.unlinkBeforeRelink',
+        });
+      }
+
       const [agentRow] = await ctx.serverDB
         .select({ id: agents.id, title: agents.title })
         .from(agents)
@@ -283,6 +299,12 @@ export const messengerRouter = router({
           throw new TRPCError({
             code: 'CONFLICT',
             message: 'verify.error.alreadyLinkedToOther',
+          });
+        }
+        if (error instanceof MessengerAccountLinkRelinkRequiredError) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'verify.error.unlinkBeforeRelink',
           });
         }
         throw error;
