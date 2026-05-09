@@ -588,14 +588,20 @@ export class AiAgentService {
         throw new Error('Resume mode requires the parent message to belong to a topic');
       }
 
-      // Prepare metadata with cronJobId, taskId, botContext, and bound device if provided
+      // Prepare metadata with cronJobId, taskId, botContext, bound device, and any
+      // client-supplied initial metadata (e.g. repos selected before first message).
+      const initialTopicMeta = appContext?.initialTopicMetadata;
       const metadata =
-        cronJobId || operationTaskId || botContext || requestedDeviceId
+        cronJobId || operationTaskId || botContext || requestedDeviceId || initialTopicMeta
           ? {
               bot: botContext,
               boundDeviceId: requestedDeviceId,
               cronJobId: cronJobId || undefined,
               taskId: operationTaskId,
+              ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
+              ...(initialTopicMeta?.workingDirectory && {
+                workingDirectory: initialTopicMeta.workingDirectory,
+              }),
             }
           : undefined;
 
@@ -674,12 +680,47 @@ export class AiAgentService {
         throw new Error('Failed to sign operation JWT for hetero agent', { cause: err });
       }
 
+      // Read repos from topic metadata for sandbox setup (web/cloud only).
+      const topic = await this.topicModel.findById(topicId);
+      const topicRepos: string[] = topic?.metadata?.repos ?? [];
+
+      // Resolve GitHub OAuth token so the sandbox can clone private repos.
+      let githubToken: string | undefined;
+      if (topicRepos.length > 0) {
+        const githubCredKey = agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY;
+        if (githubCredKey) {
+          try {
+            const list = await this.marketService.market.creds.list();
+            const cred = list.data?.find((c: { key: string }) => c.key === githubCredKey);
+            if (cred) {
+              const full = await this.marketService.market.creds.get(cred.id, { decrypt: true });
+              const vals = (full as any).plaintext ?? (full as any).values ?? {};
+              githubToken = vals.access_token ?? vals.token;
+            }
+          } catch (err) {
+            log('execAgent: failed to resolve GitHub token for repo clone: %O', err);
+          }
+        }
+      }
+
+      // Build cloud-specific system context (repo list + workspace info + optional agent-level static context).
+      const { buildCloudHeteroContext } =
+        await import('@/server/services/heterogeneousAgent/cloudHeteroContext');
+      const systemContext = buildCloudHeteroContext({
+        agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        githubToken,
+        repos: topicRepos,
+      });
+
       const heteroParams = {
         agentType: heteroType,
+        githubToken,
         jwt: operationJwt,
         operationId,
         prompt,
+        repos: topicRepos,
         resumeSessionId,
+        systemContext,
         topicId,
         userId: this.userId,
       };

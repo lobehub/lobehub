@@ -219,6 +219,31 @@ export default {
   'heterogeneousStatus.plan.label': 'Plan',
   'heterogeneousStatus.redetect': 'Re-detect',
   'heterogeneousStatus.unavailable': '{{name}} CLI not found. Please install or configure it.',
+
+  // Heterogeneous agent — Cloud tab (web environment config)
+  'heterogeneousStatus.cloud.tabLabel': 'Cloud',
+  'heterogeneousStatus.cloud.tokenLabel': 'Claude Code Token',
+  'heterogeneousStatus.cloud.tokenDesc':
+    'Your Claude Code OAuth token. Saved securely to Credentials once submitted. Run `claude setup-token` in your terminal to generate one.',
+  'heterogeneousStatus.cloud.tokenPlaceholder': 'Paste your OAuth token here',
+  'heterogeneousStatus.cloud.tokenChange': 'Change',
+  'heterogeneousStatus.cloud.tokenSave': 'Save',
+  'heterogeneousStatus.cloud.tokenCancel': 'Cancel',
+  'heterogeneousStatus.cloud.githubLabel': 'GitHub Connection',
+  'heterogeneousStatus.cloud.githubDesc':
+    'Select a GitHub OAuth credential to allow the sandbox to clone your private repositories.',
+  'heterogeneousStatus.cloud.githubPlaceholder': 'Select a GitHub credential...',
+  'heterogeneousStatus.cloud.githubNoCreds': 'No GitHub credentials found.',
+  'heterogeneousStatus.cloud.manageCredentials': 'Manage Credentials →',
+  'heterogeneousStatus.cloud.repoLabel': 'Repositories',
+  'heterogeneousStatus.cloud.repoDesc':
+    'Add repositories to the list. Switch the active one from the bottom bar in the chat view.',
+  'heterogeneousStatus.cloud.repoPlaceholder': 'owner/repo or https://github.com/owner/repo',
+  'heterogeneousStatus.cloud.repoAdd': 'Add',
+
+  // Heterogeneous agent — Desktop tab
+  'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+
   'checking': 'Checking...',
 
   // Credentials Management
