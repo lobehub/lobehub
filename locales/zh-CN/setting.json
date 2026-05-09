@@ -1062,6 +1062,8 @@
   "tools.lobehubSkill.providers.linear.readme": "将 Linear 的强大功能引入您的 AI 助手。创建和更新问题、管理冲刺、跟踪项目进度，并通过自然对话优化开发流程。",
   "tools.lobehubSkill.providers.microsoft.description": "Outlook 日历是 Microsoft Outlook 中集成的日程安排工具，用户可创建约会、组织会议并高效管理时间和事件。",
   "tools.lobehubSkill.providers.microsoft.readme": "集成 Outlook 日历以无缝查看、创建和管理事件。安排会议、查看可用时间、设置提醒，并通过自然语言指令协调时间。",
+  "tools.lobehubSkill.providers.notion.description": "Notion 是一款协作型效率与笔记应用。",
+  "tools.lobehubSkill.providers.notion.readme": "连接 Notion 以访问和管理您的工作区。创建页面、搜索内容、更新数据库，并通过与 AI 助手的自然对话组织知识库。",
   "tools.lobehubSkill.providers.twitter.description": "X（原 Twitter）是一个社交媒体平台，用于分享实时动态、新闻，并通过推文、回复和私信与受众互动。",
   "tools.lobehubSkill.providers.twitter.readme": "连接 X（原 Twitter）以发布推文、管理时间线并与受众互动。创建内容、安排发布、监控提及，并通过对话式 AI 构建社交媒体影响力。",
   "tools.lobehubSkill.providers.vercel.description": "Vercel 是一个面向前端开发者的云平台，提供托管服务和无服务器函数，可轻松部署 Web 应用。",

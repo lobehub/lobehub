@@ -11,14 +11,14 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { CredsIdentifier } from '../manifest';
-import {
-  type ConnectKlavisServiceParams,
-  CredsApiName,
-  type GetPlaintextCredParams,
-  type InitiateOAuthConnectParams,
-  type InjectCredsToSandboxParams,
-  type SaveCredsParams,
+import type {
+  ConnectKlavisServiceParams,
+  GetPlaintextCredParams,
+  InitiateOAuthConnectParams,
+  InjectCredsToSandboxParams,
+  SaveCredsParams,
 } from '../types';
+import { CredsApiName, LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
 
 const log = debug('lobe-creds:executor');
 
@@ -170,7 +170,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       if (!providerConfig) {
         return {
           error: {
-            message: `Unknown OAuth provider: ${provider}. Available providers: github, linear, microsoft, twitter`,
+            message: `Unknown OAuth provider: ${provider}. Available providers: ${LOBEHUB_OAUTH_PROVIDER_LIST}`,
             type: 'UnknownProvider',
           },
           success: false,
