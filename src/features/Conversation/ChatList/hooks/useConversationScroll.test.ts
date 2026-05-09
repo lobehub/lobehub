@@ -64,6 +64,7 @@ describe('useConversationScroll — helpers', () => {
       getConversationSpacerScrollEffect({
         delta: -24,
         hasPrevOffset: true,
+        hasUserIntent: true,
         isAIGenerating: true,
         isMounted: true,
       }),
@@ -75,6 +76,7 @@ describe('useConversationScroll — helpers', () => {
       getConversationSpacerScrollEffect({
         delta: -24,
         hasPrevOffset: true,
+        hasUserIntent: true,
         isAIGenerating: false,
         isMounted: true,
       }),
@@ -86,6 +88,19 @@ describe('useConversationScroll — helpers', () => {
       getConversationSpacerScrollEffect({
         delta: -999,
         hasPrevOffset: false,
+        hasUserIntent: true,
+        isAIGenerating: false,
+        isMounted: true,
+      }),
+    ).toEqual({ cancelPin: false, shrinkSpacer: false });
+  });
+
+  it('ignores layout-driven negative offsets without user scroll intent', () => {
+    expect(
+      getConversationSpacerScrollEffect({
+        delta: -24,
+        hasPrevOffset: true,
+        hasUserIntent: false,
         isAIGenerating: false,
         isMounted: true,
       }),
@@ -288,7 +303,7 @@ describe('useConversationScroll — pin behavior', () => {
       // simulate viewport mount via prev offset seeding: first call seeds prev=0
       result.current.onScrollOffset(0);
       // then user scrolls up (negative delta)
-      result.current.onScrollOffset(-50);
+      result.current.onScrollOffset(-50, true);
     });
 
     // Simulate a later layout bump that would have re-fired a scroll before.
