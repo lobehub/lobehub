@@ -1127,30 +1127,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 144_000,
-    description:
-      'DeepSeek R1 (current 250120) is a deep reasoning model with open chain-of-thought output.',
-    displayName: 'DeepSeek R1 250120',
-    id: 'deepseek-r1',
-    maxOutput: 32_768,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
     },
     contextWindowTokens: 32_768,
     description:
