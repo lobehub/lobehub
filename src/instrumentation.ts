@@ -1,4 +1,17 @@
 export async function register() {
+  // Defense in depth against process-killing exceptions (LOBE-8704):
+  // an unhandled NeonPool/NodePool 'error' would otherwise exit the Lambda.
+  // The pool error listeners in packages/database/src/core/web-server.ts are the
+  // primary fix; this is a backstop for anything else that slips past.
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    process.on('uncaughtException', (err) => {
+      console.error('[uncaughtException]', err);
+    });
+    process.on('unhandledRejection', (reason) => {
+      console.error('[unhandledRejection]', reason);
+    });
+  }
+
   // In local development, write debug logs to logs/server.log
   if (process.env.NODE_ENV !== 'production' && process.env.NEXT_RUNTIME === 'nodejs') {
     await import('./libs/debug-file-logger');
