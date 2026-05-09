@@ -5,6 +5,7 @@ import { googleChatModels } from './google';
 import { minimaxChatModels } from './minimax';
 import { moonshotChatModels } from './moonshot';
 import { openaiChatModels } from './openai';
+import { runtimeOnlyChatModels } from './runtimeOnly';
 import { xaiChatModels } from './xai';
 import { xiaomimimoChatModels } from './xiaomimimo';
 import { zhipuChatModels } from './zhipu';
@@ -19,6 +20,7 @@ export const lobehubChatModels: AIChatModelCard[] = [
   ...minimaxChatModels,
   ...zhipuChatModels,
   ...xiaomimimoChatModels,
+  ...runtimeOnlyChatModels,
 ];
 
 export { anthropicChatModels } from './anthropic';
@@ -27,6 +29,7 @@ export { googleChatModels } from './google';
 export { minimaxChatModels } from './minimax';
 export { moonshotChatModels } from './moonshot';
 export { openaiChatModels } from './openai';
+export { runtimeOnlyChatModels } from './runtimeOnly';
 export { xaiChatModels } from './xai';
 export { xiaomimimoChatModels } from './xiaomimimo';
 export { zhipuChatModels } from './zhipu';
