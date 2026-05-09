@@ -14,6 +14,7 @@ import {
 import {
   MessengerAccountLinkConflictError,
   MessengerAccountLinkModel,
+  MessengerAccountLinkRelinkRequiredError,
 } from '@/database/models/messengerAccountLink';
 import type { DecryptedMessengerInstallation } from '@/database/models/messengerInstallation';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
@@ -298,6 +299,12 @@ export const messengerRouter = router({
           throw new TRPCError({
             code: 'CONFLICT',
             message: 'verify.error.alreadyLinkedToOther',
+          });
+        }
+        if (error instanceof MessengerAccountLinkRelinkRequiredError) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'verify.error.unlinkBeforeRelink',
           });
         }
         throw error;
