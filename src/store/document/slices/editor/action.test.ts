@@ -198,6 +198,40 @@ describe('DocumentStore - Editor Actions', () => {
       expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', '# Hello World');
     });
 
+    it('should load only the editable body for SKILL.md frontmatter documents', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createMockEditor() as any;
+      const skillContent = `---
+description: >-
+  Retrieves comments from YouTube videos.
+name: youtube-comment-retrieval-workflow
+---
+
+# YouTube Comment Retrieval Workflow`;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: skillContent,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'notebook',
+        });
+      });
+
+      act(() => {
+        result.current.onEditorInit(mockEditor);
+      });
+
+      expect(mockEditor.setDocument).toHaveBeenCalledWith(
+        'markdown',
+        '# YouTube Comment Retrieval Workflow',
+      );
+      expect(result.current.documents['doc-1'].skillFrontmatter).toContain(
+        'youtube-comment-retrieval-workflow',
+      );
+    });
+
     it('should load editorData as json into editor', () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createMockEditor() as any;
@@ -363,6 +397,102 @@ describe('DocumentStore - Editor Actions', () => {
         content: '# Test',
         editorData: { type: 'doc', updated: true },
         isDirty: true,
+      });
+    });
+
+    it('should preserve SKILL.md frontmatter when syncing editor body changes', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const editorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Updated Skill';
+          if (type === 'json') return editorData;
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Skill metadata
+name: skill-name
+---
+
+# Original Skill`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData,
+          sourceType: 'notebook',
+        });
+      });
+
+      act(() => {
+        result.current.handleContentChange();
+      });
+
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: `---
+description: Skill metadata
+name: skill-name
+---
+
+# Updated Skill`,
+        isDirty: true,
+      });
+    });
+
+    it('should update SKILL.md frontmatter while preserving the editor body', () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const editorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Current Body';
+          if (type === 'json') return editorData;
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Old metadata
+name: old-skill
+---
+
+# Original Body`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData,
+          sourceType: 'notebook',
+        });
+      });
+
+      act(() => {
+        result.current.updateSkillFrontmatter(
+          'doc-1',
+          `description: New metadata
+name: new-skill`,
+        );
+      });
+
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: `---
+description: New metadata
+name: new-skill
+---
+
+# Current Body`,
+        isDirty: true,
+        skillFrontmatter: `description: New metadata
+name: new-skill`,
       });
     });
   });
@@ -639,6 +769,61 @@ describe('DocumentStore - Editor Actions', () => {
         }),
       );
       expect(result.current.documents['doc-1'].isDirty).toBe(false);
+    });
+
+    it('should save SKILL.md with its original frontmatter restored', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const editorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Updated Skill';
+          if (type === 'json') return editorData;
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: `---
+description: Skill metadata
+name: skill-name
+---
+
+# Original Skill`,
+          contentFormat: 'skillMarkdown',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'notebook',
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      const expectedContent = `---
+description: Skill metadata
+name: skill-name
+---
+
+# Updated Skill`;
+
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: expectedContent,
+          editorData: JSON.stringify(editorData),
+          id: 'doc-1',
+        }),
+      );
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: expectedContent,
+        isDirty: false,
+        lastSavedContent: expectedContent,
+      });
     });
   });
 });
