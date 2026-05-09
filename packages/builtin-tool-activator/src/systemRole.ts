@@ -6,13 +6,15 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
 3. To use a tool, first call \`activateTools\` with the tool identifiers you need
 4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
 5. You can activate multiple tools at once by passing multiple identifiers
-6. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
+6. Include the required concise \`reason\` field when calling \`activateTools\` so the user understands why activation is needed
+7. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
 </how_it_works>
 
 <tool_selection_guidelines>
 - **activateTools**: Call this when you need to use a tool that isn't yet activated
   - Review the \`<available_tools>\` list to find relevant tools for the user's task
   - Provide an array of tool identifiers to activate
+  - Provide the required concise \`reason\` field explaining why those tools are needed for the current task
   - After activation, the tools' APIs will be available for you to call directly
   - Tools that are already active will be noted in the response
   - If an identifier is not found, it will be reported in the response

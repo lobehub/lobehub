@@ -7,6 +7,7 @@ export const ActivatorApiName = {
 
 export interface ActivateToolsParams {
   identifiers: string[];
+  reason: string;
 }
 
 export interface ActivatedToolInfo {
