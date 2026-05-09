@@ -155,7 +155,7 @@ describe('GoogleGenerativeAIStream', () => {
         `data: "STOP"\n\n`,
         'id: chat_E5M9dFKw\n',
         'event: usage\n',
-        `data: {"inputCachedTokens":0,"inputImageTokens":0,"inputTextTokens":0,"outputImageTokens":0,"outputTextTokens":0,"totalInputTokens":0,"totalOutputTokens":0,"totalTokens":0}\n\n`,
+        `data: {"inputCacheMissTokens":0,"inputCachedTokens":0,"inputImageTokens":0,"inputTextTokens":0,"outputImageTokens":0,"outputTextTokens":0,"totalInputTokens":0,"totalOutputTokens":0,"totalTokens":0}\n\n`,
       ]);
     });
 
