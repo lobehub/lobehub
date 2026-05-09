@@ -18,10 +18,10 @@ export const RECOMMENDED_SKILLS: RecommendedSkillItem[] = [
   { id: 'lobe-agent-documents', type: RecommendedSkillType.Builtin },
   { id: 'lobe-message', type: RecommendedSkillType.Builtin },
   // LobeHub skills
+  { id: 'notion', type: RecommendedSkillType.Lobehub },
   { id: 'twitter', type: RecommendedSkillType.Lobehub },
   // Klavis skills
   { id: 'gmail', type: RecommendedSkillType.Klavis },
-  { id: 'notion', type: RecommendedSkillType.Klavis },
   { id: 'google-drive', type: RecommendedSkillType.Klavis },
   { id: 'google-calendar', type: RecommendedSkillType.Klavis },
   { id: 'slack', type: RecommendedSkillType.Klavis },

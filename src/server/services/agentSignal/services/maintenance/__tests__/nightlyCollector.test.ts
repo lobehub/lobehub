@@ -118,6 +118,12 @@ describe('nightlyReviewService', () => {
         'failed_tool',
         'receipt',
       ]);
+      expect(context.maintenanceSignals).toContainEqual(
+        expect.objectContaining({
+          kind: 'durable_user_preference',
+          strength: 'strong',
+        }),
+      );
       expect(context.topics[0]).not.toHaveProperty('rawMessages');
       expect(context.topics[1]).not.toHaveProperty('rawMessages');
     });
@@ -142,6 +148,13 @@ describe('nightlyReviewService', () => {
         },
         feedbackActivity: { neutralCount: 0, notSatisfied: [], satisfied: [] },
         maintenanceSignals: [],
+        proposalActivity: {
+          active: [],
+          dismissedCount: 0,
+          expiredCount: 0,
+          staleCount: 0,
+          supersededCount: 0,
+        },
         receiptActivity: {
           appliedCount: 0,
           duplicateGroups: [],
@@ -151,6 +164,45 @@ describe('nightlyReviewService', () => {
           reviewCount: 0,
         },
         toolActivity: [],
+      });
+    });
+
+    it('includes pending proposal activity from the proposal adapter', async () => {
+      /**
+       * @example
+       * expect(context.proposalActivity.active[0].proposalId).toBe('brf_1').
+       */
+      const service = createNightlyReviewService({
+        listManagedSkills: async () => [],
+        listProposalActivity: async () => ({
+          active: [
+            {
+              actionType: 'refine_skill',
+              createdAt: '2026-05-09T00:00:00.000Z',
+              evidenceCount: 2,
+              expiresAt: '2026-05-12T00:00:00.000Z',
+              proposalId: 'brf_1',
+              proposalKey: 'agt_1:refine_skill:agent_document:adoc_1',
+              status: 'pending',
+              summary: 'Existing skill refinement proposal.',
+              targetId: 'adoc_1',
+              targetTitle: 'Skill Index',
+              updatedAt: '2026-05-09T00:00:00.000Z',
+            },
+          ],
+          dismissedCount: 0,
+          expiredCount: 0,
+          staleCount: 0,
+          supersededCount: 0,
+        }),
+        listRelevantMemories: async () => [],
+        listTopicActivity: async () => [],
+      });
+
+      await expect(service.collectNightlyReviewContext(REVIEW_INPUT)).resolves.toMatchObject({
+        proposalActivity: {
+          active: [{ proposalId: 'brf_1', status: 'pending' }],
+        },
       });
     });
 

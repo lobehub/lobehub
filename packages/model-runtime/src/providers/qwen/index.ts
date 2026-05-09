@@ -27,8 +27,18 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
   baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { model, presence_penalty, temperature, thinking, top_p, enabledSearch, ...rest } =
-        payload;
+      const {
+        model,
+        presence_penalty,
+        reasoning_effort,
+        temperature,
+        thinking,
+        top_p,
+        enabledSearch,
+        ...rest
+      } = payload;
+      const isDeepSeekV4Model = model.startsWith('deepseek-v4');
+      const thinkingExplicitlyDisabled = thinking?.type === 'disabled';
 
       // Resolve parameters with model-specific constraints
       const resolvedParams = resolveParameters(
@@ -46,21 +56,28 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
-        ...(model.includes('-thinking')
+        ...(isDeepSeekV4Model
           ? {
-              enable_thinking: true,
-              thinking_budget:
-                thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+              ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
+                ? { enable_thinking: !thinkingExplicitlyDisabled }
+                : {}),
+              ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
             }
-          : thinking
+          : model.includes('-thinking')
             ? {
-                ...(thinking.type !== undefined && {
-                  enable_thinking: thinking.type === 'enabled',
-                }),
+                enable_thinking: true,
                 thinking_budget:
                   thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
               }
-            : {}),
+            : thinking
+              ? {
+                  ...(thinking.type !== undefined && {
+                    enable_thinking: thinking.type === 'enabled',
+                  }),
+                  thinking_budget:
+                    thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+                }
+              : {}),
         frequency_penalty: undefined,
         model,
         presence_penalty: resolvedParams.presence_penalty,

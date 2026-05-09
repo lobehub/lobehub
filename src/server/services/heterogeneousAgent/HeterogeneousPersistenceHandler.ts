@@ -349,9 +349,25 @@ export class HeterogeneousPersistenceHandler {
       if (plugin.toolCallId) toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
     }
 
+    // Restore in-progress accumulators and tool state from the current assistant
+    // message so a cold replica (Vercel serverless — each request is a new process)
+    // continues from where the previous request left off rather than overwriting
+    // with an empty/shorter value. Without this, every ingest call would reset
+    // accumulatedContent to '' and toolState.payloads to [], causing:
+    //   - content truncation: warm instance writes "hello world", cold instance
+    //     accumulates only " more text" and overwrites with that shorter string.
+    //   - tool duplication: cold instance sees persistedIds={}, re-creates already-
+    //     persisted tool messages, and overwrites assistant.tools[] with only the
+    //     current batch's tools (losing all previous ones).
+    const currentMsg = await this.deps.messageModel.findById(currentAssistantMessageId);
+    const restoredContent = (currentMsg?.content ?? '') as string;
+    const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
+    const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
+    const restoredPersistedIds = new Set(restoredTools.map((t) => t.id));
+
     state = {
-      accumulatedContent: '',
-      accumulatedReasoning: '',
+      accumulatedContent: restoredContent,
+      accumulatedReasoning: restoredReasoning,
       agentId: topic.agentId ?? null,
       currentAssistantMessageId,
       lastModel: undefined,
@@ -360,16 +376,18 @@ export class HeterogeneousPersistenceHandler {
       processedKeys: new Set(),
       subagentRuns: new Map(),
       toolMsgIdByCallId,
-      toolState: { payloads: [], persistedIds: new Set() },
+      toolState: { payloads: restoredTools, persistedIds: restoredPersistedIds },
       topicId,
     };
     operationStates.set(operationId, state);
     log(
-      'created state for operation %s on topic %s msgId=%s tools=%d',
+      'created state for operation %s on topic %s msgId=%s tools=%d restored(content=%d tools=%d)',
       operationId,
       topicId,
       currentAssistantMessageId,
       toolMsgIdByCallId.size,
+      restoredContent.length,
+      restoredTools.length,
     );
     return state;
   }

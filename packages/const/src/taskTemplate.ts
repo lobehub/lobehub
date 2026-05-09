@@ -121,7 +121,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'content-creation',
     cronPattern: '0 20 * * 0',
     interests: ['writing', 'creator'],
-    optionalSkills: [{ provider: 'notion', source: 'klavis' }],
+    optionalSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
 
   // engineering
@@ -363,7 +363,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'product',
     cronPattern: '0 15 * * 5',
     interests: ['product'],
-    requiresSkills: [{ provider: 'notion', source: 'klavis' }],
+    requiresSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
 
   // sales-customer
@@ -445,7 +445,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'hr',
     cronPattern: '0 9 * * 1',
     interests: ['hr'],
-    requiresSkills: [{ provider: 'notion', source: 'klavis' }],
+    requiresSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
   {
     id: 'team-status-weekly',
@@ -480,7 +480,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'finance-legal',
     cronPattern: '0 9 * * 1',
     interests: ['finance-legal'],
-    requiresSkills: [{ provider: 'notion', source: 'klavis' }],
+    requiresSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
   {
     id: 'regulation-watch-weekly',
@@ -645,7 +645,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'personal-life',
     cronPattern: '0 22 * * *',
     interests: ['personal'],
-    optionalSkills: [{ provider: 'notion', source: 'klavis' }],
+    optionalSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
 ];
 

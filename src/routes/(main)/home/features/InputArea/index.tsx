@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
@@ -94,6 +95,12 @@ const InputArea = () => {
     [],
   );
 
+  // Daily-generated input hint paired with the home WelcomeText. The hint
+  // tracks whichever pair the WelcomeText typewriter is currently showing,
+  // via the shared rotating index inside `useHomeDailyBrief`.
+  const { currentPair } = useHomeDailyBrief();
+  const dailyHint = currentPair?.hint;
+
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
       <Flexbox
@@ -129,6 +136,7 @@ const InputArea = () => {
             <DesktopChatInput
               dropdownPlacement="bottomLeft"
               inputContainerProps={inputContainerProps}
+              placeholder={dailyHint}
               showRuntimeConfig={false}
             />
           </ChatInputProvider>

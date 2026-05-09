@@ -108,7 +108,7 @@ export class BotCallbackService {
     const replyLocale = getBotReplyLocale(platform);
 
     if (type === 'step') {
-      if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
+      if (canEdit && progressMessageId && settings.displayToolCalls === true) {
         await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
       }
       // Swap the user-message reaction to match the current step type (tool
