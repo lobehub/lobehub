@@ -22,6 +22,12 @@ let taskAgentProviderMountCount = 0;
 let taskAgentScopeResetScheduled = false;
 let taskAgentScopedAgentId: string | undefined;
 
+const isTaskAgentRoutePath = (pathname: string | undefined) =>
+  pathname === '/tasks' ||
+  pathname?.startsWith('/tasks/') ||
+  pathname === '/task' ||
+  pathname?.startsWith('/task/');
+
 const TaskAgentSelectionContext = createContext<(agentId: string) => void>(() => {});
 
 export const useTaskAgentSelection = () => use(TaskAgentSelectionContext);
@@ -56,13 +62,19 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>(({ children }) => 
     return () => {
       taskAgentProviderMountCount = Math.max(0, taskAgentProviderMountCount - 1);
 
-      // `/tasks` and `/task/:taskId` have separate layouts, so internal task navigation
-      // remounts this provider. Delay clearing the retained scope by one microtask so the
-      // next task-layout mount can keep the current task topic instead of starting over.
+      // `/tasks` and `/task/:taskId` have separate lazy layouts, so internal task navigation
+      // can leave a short gap between unmount and the next provider mount while the route
+      // chunk resolves. For example, `/tasks` -> `/task/T-1` should retain the active task
+      // topic, but `/tasks` -> `/agent/agt_xxx` should clear the task-scoped selection.
       if (taskAgentScopeResetScheduled) return;
       taskAgentScopeResetScheduled = true;
       queueMicrotask(() => {
-        if (taskAgentProviderMountCount === 0) taskAgentScopedAgentId = undefined;
+        if (
+          taskAgentProviderMountCount === 0 &&
+          !isTaskAgentRoutePath(globalThis.location?.pathname)
+        ) {
+          taskAgentScopedAgentId = undefined;
+        }
         taskAgentScopeResetScheduled = false;
       });
     };

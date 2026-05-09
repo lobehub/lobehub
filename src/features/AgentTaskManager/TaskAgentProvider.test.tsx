@@ -94,8 +94,11 @@ const SelectAgentButton = ({ agentId }: { agentId: string }) => {
   return <button onClick={() => selectTaskAgent(agentId)}>select agent</button>;
 };
 
+const flushMicrotasks = () => new Promise((resolve) => queueMicrotask(resolve));
+
 describe('TaskAgentProvider', () => {
   beforeEach(() => {
+    window.history.pushState(null, '', '/tasks');
     mocks.agentState.activeAgentId = undefined;
     mocks.agentState.setActiveAgentId.mockClear();
     mocks.chatState.activeAgentId = undefined;
@@ -109,6 +112,7 @@ describe('TaskAgentProvider', () => {
   });
 
   afterEach(async () => {
+    window.history.pushState(null, '', '/agent/cleanup');
     cleanup();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -211,6 +215,36 @@ describe('TaskAgentProvider', () => {
     mocks.chatState.activeTopicId = 'tpc_created';
 
     firstRender.unmount();
+
+    render(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
+    });
+    expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
+  });
+
+  it('keeps the current task topic when lazy task navigation remounts after cleanup runs', async () => {
+    const firstRender = render(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.chatState.activeAgentId).toBe('agt_task');
+    });
+
+    mocks.chatState.switchTopic.mockClear();
+    mocks.chatState.activeTopicId = 'tpc_created';
+    window.history.pushState(null, '', '/task/T-1');
+
+    firstRender.unmount();
+    await flushMicrotasks();
 
     render(
       <TaskAgentProvider>
