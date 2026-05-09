@@ -45,8 +45,6 @@ const REVOKED_SLACK_AUTH_ERRORS = new Set([
   'token_revoked',
 ]);
 
-const singleAccountRebindPlatforms = new Set<MessengerPlatform>(['discord', 'telegram']);
-
 const extractSlackAuthErrorCode = (error: unknown): string | null => {
   if (!(error instanceof Error)) return null;
 
@@ -247,18 +245,15 @@ export const messengerRouter = router({
         });
       }
 
-      // Single-account personal bindings must not silently hop between IM
-      // identities for the same LobeHub account. Require an explicit unlink
-      // first so a Discord/Telegram account switch is always deliberate.
+      // The verify-im flow should never silently replace an existing binding
+      // for the same scope. For Slack the scope is one workspace (tenantId);
+      // for Discord/Telegram it is the whole platform. Require an explicit
+      // unlink first so account switches stay deliberate.
       const existingUserLink = await ctx.messengerLinkModel.findByPlatform(
         peeked.platform,
         peeked.tenantId ?? '',
       );
-      if (
-        singleAccountRebindPlatforms.has(peeked.platform) &&
-        existingUserLink &&
-        existingUserLink.platformUserId !== peeked.platformUserId
-      ) {
+      if (existingUserLink && existingUserLink.platformUserId !== peeked.platformUserId) {
         throw new TRPCError({
           code: 'CONFLICT',
           message: 'verify.error.unlinkBeforeRelink',
