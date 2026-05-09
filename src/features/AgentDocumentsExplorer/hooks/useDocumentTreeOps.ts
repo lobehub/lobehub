@@ -6,7 +6,12 @@ import type { KeyedMutator } from 'swr';
 import { agentDocumentService } from '@/services/agentDocument';
 
 import type { AgentDocumentItem } from '../types';
-import { FOLDER_FILE_TYPE, isManagedSkillItem, isSkillBundleItem } from '../types';
+import {
+  FOLDER_FILE_TYPE,
+  isManagedSkillItem,
+  isProtectedManagedSkillItem,
+  isSkillBundleItem,
+} from '../types';
 
 interface UseDocumentTreeOpsArgs {
   agentId: string;
@@ -275,7 +280,7 @@ export const useDocumentTreeOps = ({
     (id: string) => {
       const target = dataRef.current.find((doc) => doc.id === id);
       if (!target) return;
-      if (isManagedSkillItem(target)) return;
+      if (isProtectedManagedSkillItem(target, dataRef.current)) return;
 
       modal.confirm({
         cancelText: t('cancel', { ns: 'common' }),

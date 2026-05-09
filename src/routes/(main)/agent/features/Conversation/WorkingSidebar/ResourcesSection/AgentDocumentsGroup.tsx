@@ -13,6 +13,7 @@ import { useMatch, useNavigate } from 'react-router-dom';
 import { DocumentExplorerTree } from '@/features/AgentDocumentsExplorer';
 import {
   isManagedSkillItem,
+  isOrphanSkillBundleItem,
   isSkillBundleItem,
   isSkillIndexItem,
 } from '@/features/AgentDocumentsExplorer/types';
@@ -127,7 +128,9 @@ const DocumentItem = memo<DocumentItemProps>(
     const description = document.description ?? undefined;
     const isWeb = document.sourceType === 'web';
     const isSkillBundle = isSkillBundleItem(document);
-    const targetDocumentId = isSkillBundle ? openDocumentId : document.documentId;
+    const targetDocumentId = isSkillBundle
+      ? (openDocumentId ?? document.documentId)
+      : document.documentId;
     const IconComponent: LucideIcon = isWeb ? GlobeIcon : isSkillBundle ? FolderIcon : FileTextIcon;
     const updatedAtLabel = document.updatedAt
       ? t('workingPanel.resources.updatedAt', {
@@ -264,8 +267,11 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
 
   const getOpenDocumentId = (document: AgentDocumentListItem): string | undefined =>
     isSkillBundleItem(document)
-      ? skillIndexDocumentIdByBundleDocumentId.get(document.documentId)
+      ? (skillIndexDocumentIdByBundleDocumentId.get(document.documentId) ?? document.documentId)
       : document.documentId;
+
+  const shouldHideDelete = (document: AgentDocumentListItem): boolean =>
+    isManagedSkillItem(document) && !isOrphanSkillBundleItem(document, data);
 
   const treeGroups = useMemo(() => {
     const docs = data.filter((doc) => doc.sourceType !== 'web' && !isSkillIndexItem(doc));
@@ -319,7 +325,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
                 <DocumentItem
                   agentId={agentId}
                   document={doc}
-                  hideDelete={isManagedSkillItem(doc)}
+                  hideDelete={shouldHideDelete(doc)}
                   key={doc.id}
                   mutate={mutate}
                   openDocumentId={getOpenDocumentId(doc)}
@@ -372,7 +378,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, viewMode = 
             <DocumentItem
               agentId={agentId}
               document={doc}
-              hideDelete={isManagedSkillItem(doc)}
+              hideDelete={shouldHideDelete(doc)}
               key={doc.id}
               mutate={mutate}
               openDocumentId={getOpenDocumentId(doc)}

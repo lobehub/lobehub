@@ -18,7 +18,12 @@ import { useChatStore } from '@/store/chat';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem } from './types';
-import { isFolderItem, isManagedSkillItem, isSkillIndexItem } from './types';
+import {
+  isFolderItem,
+  isManagedSkillItem,
+  isOrphanSkillBundleItem,
+  isSkillIndexItem,
+} from './types';
 import { canDropDocument } from './utils/canDrop';
 
 const PAGE_ROUTE_PATTERN = '/agent/:aid/:topicId/page/:docId?';
@@ -101,6 +106,11 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     return map;
   }, [documents, resolveParentRowId]);
 
+  const isRecoverableSkillBundle = useCallback(
+    (doc: AgentDocumentItem) => isOrphanSkillBundleItem(doc, documents),
+    [documents],
+  );
+
   const handleCreateFolder = useCallback(
     (parentId: string | null) => ops.createFolder(parentId),
     [ops],
@@ -166,14 +176,16 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
   const getContextMenuItems = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>): MenuProps['items'] => {
-      if (node.data && isManagedSkillItem(node.data)) return [];
+      if (node.data && isManagedSkillItem(node.data) && !isRecoverableSkillBundle(node.data)) {
+        return [];
+      }
 
       const isFolder = !!node.isFolder;
       const targetParentId = isFolder ? node.id : (node.parentId ?? null);
 
       const items: NonNullable<MenuProps['items']> = [];
 
-      if (isFolder) {
+      if (isFolder && (!node.data || !isManagedSkillItem(node.data))) {
         items.push(
           {
             key: 'new-folder',
@@ -189,24 +201,25 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         );
       }
 
-      items.push(
-        {
+      if (!node.data || !isManagedSkillItem(node.data)) {
+        items.push({
           key: 'rename',
           label: t('workingPanel.resources.tree.rename'),
           onClick: () => startInlineRename(node.id),
-        },
-        {
-          danger: true,
-          icon: <Trash2Icon size={14} />,
-          key: 'delete',
-          label: t('delete', { ns: 'common' }),
-          onClick: () => ops.deleteDocument(node.id),
-        },
-      );
+        });
+      }
+
+      items.push({
+        danger: true,
+        icon: <Trash2Icon size={14} />,
+        key: 'delete',
+        label: t('delete', { ns: 'common' }),
+        onClick: () => ops.deleteDocument(node.id),
+      });
 
       return items;
     },
-    [handleCreateDocument, handleCreateFolder, ops, startInlineRename, t],
+    [handleCreateDocument, handleCreateFolder, isRecoverableSkillBundle, ops, startInlineRename, t],
   );
 
   return (

@@ -18,6 +18,11 @@ const { navigate, openDocument, useMatchMock } = vi.hoisted(() => ({
   openDocument: vi.fn(),
   useMatchMock: vi.fn(),
 }));
+const messageError = vi.hoisted(() => vi.fn());
+const messageSuccess = vi.hoisted(() => vi.fn());
+const messageWarning = vi.hoisted(() => vi.fn());
+const modalConfirm = vi.hoisted(() => vi.fn());
+const removeDocumentMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui', () => ({
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
@@ -27,6 +32,21 @@ vi.mock('@lobehub/ui', () => ({
   ),
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('antd', () => ({
+  App: {
+    useApp: () => ({
+      message: { error: messageError, success: messageSuccess, warning: messageWarning },
+      modal: { confirm: modalConfirm },
+    }),
+  },
+}));
+
+vi.mock('@/services/agentDocument', () => ({
+  agentDocumentService: {
+    removeDocument: removeDocumentMock,
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -54,6 +74,12 @@ vi.mock('@/features/ExplorerTree', () => {
     onNodeClick?: (node: ExplorerTreeNode<unknown>, event: ReactMouseEvent<HTMLElement>) => void;
   }
 
+  interface MockMenuItem {
+    key?: number | string;
+    onClick?: () => void;
+    type?: string;
+  }
+
   const ExplorerTree = ({
     canDrag,
     getContextMenuItems,
@@ -65,7 +91,7 @@ vi.mock('@/features/ExplorerTree', () => {
       nodes
         .filter((node) => (node.parentId ?? null) === parentId)
         .map((node) => {
-          const menuItems = getContextMenuItems?.(node) ?? [];
+          const menuItems = (getContextMenuItems?.(node) ?? []) as MockMenuItem[];
           return (
             <div
               data-can-drag={String(canDrag?.(node) ?? true)}
@@ -83,6 +109,17 @@ vi.mock('@/features/ExplorerTree', () => {
               {node.isFolder && (
                 <div data-testid={`tree-node-children-${node.id}`}>{renderNodes(node.id)}</div>
               )}
+              {menuItems
+                .filter((item) => item.type !== 'divider' && item.key !== undefined)
+                .map((item) => (
+                  <button
+                    data-testid={`tree-menu-${node.id}-${String(item.key)}`}
+                    key={item.key}
+                    onClick={() => item.onClick?.()}
+                  >
+                    {item.key}
+                  </button>
+                ))}
             </div>
           );
         });
@@ -136,7 +173,13 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
 describe('DocumentExplorerTree', () => {
   beforeEach(() => {
     navigate.mockReset();
+    messageError.mockReset();
+    messageSuccess.mockReset();
+    messageWarning.mockReset();
+    modalConfirm.mockReset();
     openDocument.mockReset();
+    removeDocumentMock.mockReset();
+    removeDocumentMock.mockResolvedValue({ deleted: true, id: 'skill-bundle-row' });
     useMatchMock.mockReset();
     useMatchMock.mockReturnValue(null);
   });
@@ -211,5 +254,43 @@ describe('DocumentExplorerTree', () => {
 
     fireEvent.click(screen.getByTestId('tree-node-button-skill-index-row'));
     expect(openDocument).toHaveBeenCalledWith('skill-index-doc');
+  });
+
+  it('shows delete recovery action for a managed skill bundle without SKILL.md', async () => {
+    const mutate = vi.fn().mockResolvedValue(undefined);
+    const data = [
+      createDocument({
+        documentId: 'skill-bundle-doc',
+        fileType: SKILL_BUNDLE_FILE_TYPE,
+        filename: 'youtube-comment-retrieval-workflow',
+        id: 'skill-bundle-row',
+        templateId: AGENT_SKILL_TEMPLATE_ID,
+        title: 'YouTube Comment Retrieval Workflow',
+      }),
+    ];
+
+    render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={mutate} />);
+
+    const bundleNode = screen.getByTestId('tree-node-skill-bundle-row');
+    expect(bundleNode).toHaveAttribute('data-folder', 'true');
+    expect(bundleNode).toHaveAttribute('data-can-drag', 'false');
+    expect(bundleNode).toHaveAttribute('data-menu-count', '1');
+    expect(screen.queryByTestId('tree-menu-skill-bundle-row-rename')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tree-menu-skill-bundle-row-delete')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('tree-menu-skill-bundle-row-delete'));
+
+    const [firstConfirmCall] = modalConfirm.mock.calls;
+    const [{ onOk }] = firstConfirmCall;
+    await onOk();
+
+    expect(removeDocumentMock).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      documentId: 'skill-bundle-doc',
+      id: 'skill-bundle-row',
+      topicId: undefined,
+    });
+    expect(mutate).toHaveBeenCalled();
+    expect(messageSuccess).toHaveBeenCalledWith('workingPanel.resources.deleteSuccess');
   });
 });
