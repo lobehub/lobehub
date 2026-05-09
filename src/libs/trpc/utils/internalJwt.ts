@@ -83,6 +83,10 @@ export const signInternalJWT = async (): Promise<string> => {
  * Sign a short-lived OIDC-compatible JWT for a given user.
  * Used by server-side sandbox execution to authenticate CLI commands.
  * The token contains `sub: userId` and passes standard OIDC JWT validation.
+ *
+ * ⚠️ 5-minute expiry is intentionally short: this token is for gateway
+ * WebSocket auth and quick CLI operations — NOT for long-running jobs.
+ * For hetero-agent operations (Claude Code / Codex), use signOperationJwt().
  */
 export const signUserJWT = async (userId: string): Promise<string> => {
   const { key, kid } = await getSigningKey();
@@ -92,6 +96,29 @@ export const signUserJWT = async (userId: string): Promise<string> => {
     .setSubject(userId)
     .setIssuedAt()
     .setExpirationTime('5m')
+    .sign(key);
+};
+
+/**
+ * Sign a long-lived operation-scoped JWT for hetero-agent execution.
+ *
+ * Unlike signUserJWT (5-minute expiry for gateway / quick CLI auth), this
+ * produces a token valid for 4 hours — enough for a Claude Code or Codex
+ * session to run multiple tool calls without 401 errors on heteroIngest /
+ * heteroFinish.
+ *
+ * The token contains `sub: userId` and `purpose: 'hetero-operation'` so
+ * the validation middleware can distinguish operation tokens from short-lived
+ * gateway tokens when minimum-scope enforcement is needed.
+ */
+export const signOperationJwt = async (userId: string): Promise<string> => {
+  const { key, kid } = await getSigningKey();
+
+  return new SignJWT({ purpose: 'hetero-operation' })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime('4h')
     .sign(key);
 };
 

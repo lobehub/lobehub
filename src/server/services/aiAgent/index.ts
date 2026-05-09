@@ -53,7 +53,7 @@ import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { toolsEnv } from '@/envs/tools';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
-import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -666,9 +666,11 @@ export class AiAgentService {
       const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
       // Sign an operation-scoped JWT so the CLI can authenticate against
       // heteroIngest / heteroFinish without full user credentials.
+      // Uses 4h expiry (signOperationJwt) — a Claude Code task may exceed the
+      // default 5m signUserJWT lifetime, causing heteroIngest 401 mid-task.
       let operationJwt: string;
       try {
-        operationJwt = await signUserJWT(this.userId);
+        operationJwt = await signOperationJwt(this.userId);
       } catch (err) {
         log('execAgent: failed to sign operation JWT for hetero run: %O', err);
         throw new Error('Failed to sign operation JWT for hetero agent', { cause: err });
