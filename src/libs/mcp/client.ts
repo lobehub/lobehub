@@ -28,6 +28,13 @@ const MCP_TOOL_TIMEOUT = (() => {
   return Number.isFinite(val) && val > 0 ? val : 60_000;
 })();
 
+// MCP stdio pre-check startup timeout (milliseconds), configurable via MCP_STARTUP_TIMEOUT.
+// Default is 60s to allow npx/bunx to download the package on first run (can take 15-60+ seconds).
+const MCP_STARTUP_TIMEOUT = (() => {
+  const val = Number(process.env.MCP_STARTUP_TIMEOUT);
+  return Number.isFinite(val) && val > 0 ? val : 60_000;
+})();
+
 /**
  * Pre-check stdio command to capture detailed error information
  */
@@ -55,14 +62,17 @@ async function preCheckStdioCommand(params: {
     let stderr = '';
     let resolved = false;
 
-    // Set timeout (5 seconds)
+    // Pre-check startup timeout: configurable via MCP_STARTUP_TIMEOUT env var.
+    // Default is 60s to allow npx/bunx to download the package on first run.
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true;
         child.kill('SIGTERM');
         resolve({
           error: createMCPError('INITIALIZATION_TIMEOUT', 'MCP service initialization timeout', {
-            errorLog: stderr || 'No stderr output',
+            errorLog:
+              stderr ||
+              'No stderr output (package may still be downloading — try increasing MCP_STARTUP_TIMEOUT)',
             params: {
               args: params.args,
               command: params.command,
@@ -72,7 +82,7 @@ async function preCheckStdioCommand(params: {
           success: false,
         });
       }
-    }, 5000);
+    }, MCP_STARTUP_TIMEOUT);
 
     // Collect stdout
     child.stdout?.on('data', (data) => {
