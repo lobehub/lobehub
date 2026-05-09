@@ -101,6 +101,7 @@ const createHarness = (params: {
         return { success: true };
       },
     ),
+    findById: vi.fn(async (id: string) => messages.get(id) ?? null),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
@@ -713,6 +714,114 @@ describe('HeterogeneousPersistenceHandler', () => {
           topicId: 'topic-2',
         }),
       ).resolves.not.toThrow();
+    });
+  });
+
+  describe('cold replica state restoration (Vercel serverless)', () => {
+    it('restores accumulatedContent from DB so a cold instance does not truncate previous text', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Batch 1 (warm instance): stream two text chunks, flush happens via flushBatchContent
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'hello ' }, 1000),
+          buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'world' }, 1001),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // DB should have the partial content written by flushBatchContent
+      expect(h.messages.get('asst-1')?.content).toBe('hello world');
+
+      // Simulate cold replica: drop the in-memory operation state
+      __resetOperationStatesForTesting();
+
+      // Batch 2 (cold instance): receives more text.
+      // Without restoration the new instance would start with accumulatedContent='' and
+      // write only " more" — truncating "hello world".
+      await h.handler.ingest({
+        events: [buildEvent('agent_runtime_end', 0, { reason: 'success' }, 2000)],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // The terminal flush should preserve the previously accumulated content.
+      expect(h.messages.get('asst-1')?.content).toBe('hello world');
+    });
+
+    it('restores toolState.payloads and persistedIds so cold replica does not duplicate tools or overwrite tools[]', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Batch 1 (warm): persist tool1
+      const tool1: any = {
+        apiName: 'tool1',
+        arguments: '{}',
+        id: 'tc-1',
+        identifier: 'tool1',
+        type: 'default',
+      };
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            { chunkType: 'tools_calling', toolsCalling: [tool1] },
+            1000,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // assistant.tools[] should have tool1
+      const asstAfterBatch1 = h.messages.get('asst-1')!;
+      expect(asstAfterBatch1.tools).toHaveLength(1);
+      expect(asstAfterBatch1.tools![0].id).toBe('tc-1');
+      // tool message created for tool1
+      const toolMsgsBatch1 = [...h.messages.values()].filter((m) => m.role === 'tool');
+      expect(toolMsgsBatch1).toHaveLength(1);
+
+      // Simulate cold replica: drop in-memory state
+      __resetOperationStatesForTesting();
+
+      // Batch 2 (cold): receives tool2 — should ADD to tools[], not overwrite
+      const tool2: any = {
+        apiName: 'tool2',
+        arguments: '{}',
+        id: 'tc-2',
+        identifier: 'tool2',
+        type: 'default',
+      };
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            1,
+            { chunkType: 'tools_calling', toolsCalling: [tool2] },
+            2000,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asstAfterBatch2 = h.messages.get('asst-1')!;
+      // Both tools should be present — cold restore kept tool1 in payloads
+      expect(asstAfterBatch2.tools).toHaveLength(2);
+
+      // tool1 should NOT be duplicated — persistedIds was restored
+      const allToolMsgs = [...h.messages.values()].filter((m) => m.role === 'tool');
+      const tool1Msgs = allToolMsgs.filter((m) => m.tool_call_id === 'tc-1');
+      expect(tool1Msgs).toHaveLength(1);
     });
   });
 });

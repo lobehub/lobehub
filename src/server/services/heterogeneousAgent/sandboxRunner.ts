@@ -90,10 +90,11 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     userId,
   } = params;
 
-  // cwd is only set when explicitly passed (e.g. desktop local path).
-  // For cloud sandbox, CC always runs in the sandbox root (/workspace); repos are cloned
-  // as subdirectories there and CC navigates into them via its own tools.
-  const { cwd } = params;
+  // For cloud sandbox, default cwd is /workspace — must be explicit so CC stores and
+  // finds session files at the same path on every invocation (session files live under
+  // ~/.claude/projects/<encoded-cwd>/). Without a consistent --cwd the session id stored
+  // in topic.metadata.heteroSessionId can't be resolved on --resume after a page reload.
+  const cwd = params.cwd ?? '/workspace';
 
   // Build the `lh hetero exec` command string.
   // Prompt is passed via --input-json stdin ('-') to avoid shell quoting issues
@@ -116,9 +117,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   if (resumeSessionId) {
     args.push('--resume', resumeSessionId);
   }
-  if (cwd) {
-    args.push('--cwd', cwd);
-  }
+  args.push('--cwd', cwd);
 
   // Encode the prompt as base64 to avoid all shell quoting issues.
   // echo + shell quoting mangled inner JSON quotes; base64 is quote-safe.
