@@ -8,8 +8,7 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { EditTaskParams, EditTaskState } from '../../../types';
@@ -115,15 +114,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const AssigneeChip = memo<{ agentId: string }>(({ agentId }) => {
-  const agentMeta = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s));
-  const displayName = agentMeta?.title?.trim() || agentId;
+  const agentMeta = useAgentDisplayMeta(agentId);
+  const displayName = agentMeta?.title || agentId;
 
   return (
     <span className={styles.assigneeChip} title={displayName}>
       {agentMeta && (
         <Avatar
           avatar={agentMeta.avatar || displayName}
-          background={agentMeta.backgroundColor || cssVar.colorBgContainer}
+          background={agentMeta.backgroundColor}
           className={styles.assigneeAvatar}
           shape={'circle'}
           size={16}

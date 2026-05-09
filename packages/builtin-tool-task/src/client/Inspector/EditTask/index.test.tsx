@@ -7,14 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditTaskParams } from '../../../types';
 import { EditTaskInspector } from './index';
 
-interface AgentMeta {
+interface AgentDisplayMeta {
   avatar?: string;
   backgroundColor?: string;
   title?: string;
 }
 
 const mocks = vi.hoisted(() => ({
-  agentMetaById: {} as Record<string, AgentMeta | undefined>,
+  agentMetaById: {} as Record<string, AgentDisplayMeta | undefined>,
 }));
 
 vi.mock('@lobehub/ui', () => ({
@@ -31,14 +31,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    getAgentMetaById: (id: string) => () => mocks.agentMetaById[id],
-  },
+vi.mock('@/features/AgentTasks/shared/useAgentDisplayMeta', () => ({
+  useAgentDisplayMeta: (id: string) => mocks.agentMetaById[id],
 }));
 
 vi.mock('@/styles', () => ({
@@ -83,5 +77,19 @@ describe('EditTaskInspector', () => {
 
     expect(screen.queryByTestId('agent-avatar')).toBeNull();
     expect(screen.getByText('agt_missing')).toBeTruthy();
+  });
+
+  it('renders the resolved agent name instead of the raw assignee id', () => {
+    mocks.agentMetaById.agt_lobe = {
+      avatar: 'lobe-avatar',
+      backgroundColor: '#123456',
+      title: 'Lobe AI',
+    };
+
+    renderInspector({ assigneeAgentId: 'agt_lobe' });
+
+    expect(screen.getByTestId('agent-avatar').textContent).toBe('lobe-avatar');
+    expect(screen.getByText('Lobe AI')).toBeTruthy();
+    expect(screen.queryByText('agt_lobe')).toBeNull();
   });
 });
