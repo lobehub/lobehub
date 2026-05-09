@@ -29,7 +29,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     user-select: none;
 
     padding-block: 6px;
-    padding-inline: 16px;
+    padding-inline: 10px;
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
@@ -41,7 +41,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
     padding-block: 8px;
     padding-inline: 16px;
+
     font-size: 14px;
+    font-weight: 600;
     color: ${cssVar.colorText};
   `,
 }));
