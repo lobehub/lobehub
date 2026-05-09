@@ -332,8 +332,14 @@ export class HeterogeneousPersistenceHandler {
     // Prefer the latest step's assistant message id (written by handleStepStart)
     // over the initial placeholder — so a new replica after a step boundary uses
     // the correct message rather than the stale initial one.
+    // Guard: only use heteroCurrentMsgId when it belongs to THIS operation.
+    // A stale value from a previous run must not override the new operation's
+    // seeded assistantMessageId (P1 fix).
+    const stored = topic.metadata?.heteroCurrentMsgId;
     const currentAssistantMessageId =
-      (topic.metadata?.heteroCurrentMsgId as string | undefined) ?? running.assistantMessageId;
+      stored?.operationId === running.operationId
+        ? (stored.msgId ?? running.assistantMessageId)
+        : running.assistantMessageId;
 
     // Restore toolMsgIdByCallId from the DB so tool_results that arrive on a
     // different replica than their tool_use can still be matched and persisted.
@@ -460,18 +466,21 @@ export class HeterogeneousPersistenceHandler {
       role: 'assistant',
       topicId: state.topicId,
     });
-    state.currentAssistantMessageId = newMsg.id;
 
+    // Persist BEFORE advancing in-memory state (P2 fix). If this write fails
+    // transiently and the event is retried, state is still at the previous step
+    // so handleStepStart re-creates the new message with the correct parent
+    // rather than chaining off the partially-created one. The first attempt's
+    // empty message becomes an orphan but does not corrupt the turn chain.
+    await this.deps.topicModel.updateMetadata(state.topicId, {
+      heteroCurrentMsgId: { msgId: newMsg.id, operationId: state.operationId },
+    });
+
+    // Advance state only after the DB write lands.
+    state.currentAssistantMessageId = newMsg.id;
     state.accumulatedContent = '';
     state.accumulatedReasoning = '';
     state.toolState = { payloads: [], persistedIds: new Set() };
-
-    // Persist the new assistant message id so a subsequent replica can
-    // reconstruct `currentAssistantMessageId` from topic metadata instead of
-    // falling back to the stale initial placeholder.
-    await this.deps.topicModel.updateMetadata(state.topicId, {
-      heteroCurrentMsgId: newMsg.id,
-    });
   }
 
   private async handleStreamChunk(state: OperationState, event: AgentStreamEvent) {

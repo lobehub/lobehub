@@ -73,12 +73,13 @@ export interface ChatTopicMetadata {
    */
   cronJobId?: string;
   /**
-   * ID of the currently active assistant message for a running heterogeneous
-   * agent operation. Updated on every step boundary so a new server replica
-   * can reconstruct `currentAssistantMessageId` from topic metadata rather
-   * than falling back to the stale initial placeholder.
+   * Scoped pointer to the currently active assistant message for a running
+   * heterogeneous agent operation. Includes `operationId` so cold-start
+   * replicas only use the value when it belongs to the current operation —
+   * preventing a stale pointer from a previous run from corrupting a new one.
+   * Updated on every step boundary.
    */
-  heteroCurrentMsgId?: string;
+  heteroCurrentMsgId?: { msgId: string; operationId: string };
   /**
    * Persistent session id for a heterogeneous agent.
    * Saved after each turn so the next message in the same topic can resume

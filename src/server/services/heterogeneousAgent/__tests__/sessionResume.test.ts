@@ -31,7 +31,10 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
 
       // Real handler so we exercise the persistSessionId path end-to-end
       const handler = new HeterogeneousPersistenceHandler({
-        messageModel: { update: vi.fn(async () => ({ success: true })) } as any,
+        messageModel: {
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
         threadModel: {} as any,
         topicModel: { findById, updateMetadata } as any,
       });
@@ -83,7 +86,10 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       }));
 
       const handler = new HeterogeneousPersistenceHandler({
-        messageModel: { update: vi.fn(async () => ({ success: true })) } as any,
+        messageModel: {
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
         threadModel: {} as any,
         topicModel: { findById, updateMetadata } as any,
       });
@@ -131,7 +137,10 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       }));
 
       const handler = new HeterogeneousPersistenceHandler({
-        messageModel: { update: vi.fn(async () => ({ success: true })) } as any,
+        messageModel: {
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
         threadModel: {} as any,
         topicModel: { findById, updateMetadata } as any,
       });
@@ -186,7 +195,10 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       }));
 
       const handler = new HeterogeneousPersistenceHandler({
-        messageModel: { update: vi.fn(async () => ({ success: true })) } as any,
+        messageModel: {
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
         threadModel: {} as any,
         topicModel: { findById, updateMetadata } as any,
       });
@@ -244,7 +256,10 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       }));
 
       const handler = new HeterogeneousPersistenceHandler({
-        messageModel: { update: vi.fn(async () => ({ success: true })) } as any,
+        messageModel: {
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
         threadModel: {} as any,
         topicModel: { findById, updateMetadata } as any,
       });
