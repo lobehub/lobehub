@@ -1,6 +1,6 @@
 import type { AIChatModelCard } from '../../../types/aiModel';
 
-export const runtimeOnlyChatModels: AIChatModelCard[] = [
+export const mappingChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
