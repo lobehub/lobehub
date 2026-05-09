@@ -2,7 +2,7 @@ name: Sync Fork with Upstream
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # ogni 30 minuti
+    - cron: '0 */3 * * *'  # ogni 3 ore
   workflow_dispatch:               # bottone manuale disponibile
 
 jobs:
