@@ -139,6 +139,7 @@ function projectToExecutionResult(
     content: payload.content ?? '',
     error: payload.error,
     executionTime,
+    state: payload.state,
     success: payload.success,
   };
 }
