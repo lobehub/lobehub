@@ -52,6 +52,10 @@ jobs:
           echo "should_build=true" >> $GITHUB_OUTPUT
           echo "Build always enabled on emaxlele-dev"
 
+      # Schema versione:
+      #   upstream canary X.Y.Z → nostra X.Y.Z-emaxlele.1, .2, ...
+      #   quando upstream passa a X.Y.(Z+1) → ricominciamo da X.Y.(Z+1)-emaxlele.1
+      # Schema: upstream X.Y.Z → emaxlele X.Y.Z-emaxlele.N
       - name: Calculate version
         if: steps.check.outputs.should_build == 'true'
         id: version

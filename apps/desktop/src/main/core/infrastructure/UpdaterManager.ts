@@ -399,7 +399,7 @@ export class UpdaterManager {
       );
 
       autoUpdater.setFeedURL({
-        owner: 'lobehub',
+        owner: 'emaxlele',
         provider: 'github',
         repo: 'lobehub',
       });

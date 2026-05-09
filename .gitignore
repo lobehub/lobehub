@@ -1,6 +1,9 @@
 # Gitignore for LobeHub
 ################################################################
 
+# emaxlele-dev personal tooling — not pushed upstream
+fixPatch/
+
 # System files
 .DS_Store
 Thumbs.db
