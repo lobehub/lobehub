@@ -80,6 +80,19 @@ type ResponseCreateParamsWithPromptCacheKey = (
   | OpenAI.Responses.ResponseCreateParams
 ) &
   OpenAIExtraParams;
+
+interface PromptCacheScope {
+  agentId: string;
+  topicId: string;
+}
+
+interface ChatRequestMetadata {
+  chat?: {
+    agentId?: unknown;
+    topicId?: unknown;
+  };
+}
+
 export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
@@ -89,6 +102,44 @@ export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> & {
   apiKey: string;
   provider: string;
 };
+
+const isPromptCacheSupportedModel = (model?: string) =>
+  model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest';
+
+const resolvePromptCacheScope = (
+  metadata?: Record<string, unknown>,
+): PromptCacheScope | undefined => {
+  const chat = (metadata as ChatRequestMetadata | undefined)?.chat;
+
+  if (!chat) return;
+
+  const { agentId, topicId } = chat;
+
+  if (typeof agentId !== 'string' || typeof topicId !== 'string') return;
+
+  return { agentId, topicId };
+};
+
+const createStableHash = (value: string) => {
+  let hash1 = 0xdeadbeef ^ value.length;
+  let hash2 = 0x41c6ce57 ^ value.length;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    hash1 = Math.imul(hash1 ^ code, 2654435761);
+    hash2 = Math.imul(hash2 ^ code, 1597334677);
+  }
+
+  hash1 =
+    Math.imul(hash1 ^ (hash1 >>> 16), 2246822507) ^ Math.imul(hash2 ^ (hash2 >>> 13), 3266489909);
+  hash2 =
+    Math.imul(hash2 ^ (hash2 >>> 16), 2246822507) ^ Math.imul(hash1 ^ (hash1 >>> 13), 3266489909);
+
+  return `${(hash2 >>> 0).toString(36)}${(hash1 >>> 0).toString(36)}`;
+};
+
+const createPromptCacheKey = ({ agentId, topicId }: PromptCacheScope) =>
+  `lobe_${createStableHash(JSON.stringify([topicId, agentId]))}`;
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createChatCompletionStream?: (
@@ -352,23 +403,24 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return false;
     }
 
-    private resolvePromptCacheKey(model?: string, user?: string) {
-      if (!user) return;
+    private resolvePromptCacheKey(model?: string, metadata?: Record<string, unknown>) {
+      if (!isPromptCacheSupportedModel(model)) return;
 
-      // Keep the default key at {userId}:{model}; {agentId} can be added later if a narrower cache bucket is needed.
-      if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
-        return `lobe:${user}:${model}`;
-      }
+      const scope = resolvePromptCacheScope(metadata);
+
+      if (!scope) return;
+
+      return createPromptCacheKey(scope);
     }
 
     private resolvePromptCacheKeyParams(
       model?: string,
-      user?: string,
+      metadata?: Record<string, unknown>,
       existingPromptCacheKey?: string,
     ) {
       if (existingPromptCacheKey !== undefined) return {};
 
-      const promptCacheKey = this.resolvePromptCacheKey(model, user);
+      const promptCacheKey = this.resolvePromptCacheKey(model, metadata);
 
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
     }
@@ -514,7 +566,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             ...(chatCompletion?.noUserId ? {} : { user: options?.user }),
             ...this.resolvePromptCacheKeyParams(
               cleanedPayload.model,
-              options?.user,
+              options?.metadata,
               cleanedPayload.prompt_cache_key,
             ),
             stream_options:
@@ -779,7 +831,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             {
               messages,
               model,
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
+              ...this.resolvePromptCacheKeyParams(model, options?.metadata),
               tool_choice: { function: { name: tool.function.name }, type: 'function' },
               tools: [tool],
               user: options?.user,
@@ -834,7 +886,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             {
               input: messages,
               model,
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
+              ...this.resolvePromptCacheKeyParams(model, options?.metadata),
               text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
               // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
               safety_identifier: options?.user,
@@ -865,7 +917,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             messages,
             model,
             response_format: { json_schema: processedSchema, type: 'json_schema' },
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
+            ...this.resolvePromptCacheKeyParams(model, options?.metadata),
             user: options?.user,
           },
           { headers: options?.headers, signal: options?.signal },
@@ -1147,7 +1199,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         tools: tools?.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
         ...this.resolvePromptCacheKeyParams(
           res.model,
-          options?.user,
+          options?.metadata,
           (res as OpenAIExtraParams).prompt_cache_key,
         ),
         // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
@@ -1274,7 +1326,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           {
             input,
             model,
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
+            ...this.resolvePromptCacheKeyParams(model, options?.metadata),
             tool_choice: 'required',
             tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
             // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
@@ -1316,7 +1368,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         {
           messages: msgs,
           model,
-          ...this.resolvePromptCacheKeyParams(model, options?.user),
+          ...this.resolvePromptCacheKeyParams(model, options?.metadata),
           tool_choice: 'required',
           tools,
           user: options?.user,

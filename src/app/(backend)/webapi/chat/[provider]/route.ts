@@ -12,6 +12,15 @@ import { getTracePayload } from '@/utils/trace';
 // this enforce user to enable fluid compute
 export const maxDuration = 300;
 
+const getChatRequestMetadata = (req: Request) => {
+  const agentId = req.headers.get('x-agent-id') || undefined;
+  const topicId = req.headers.get('x-topic-id') || undefined;
+
+  if (!agentId || !topicId) return;
+
+  return { chat: { agentId, topicId } };
+};
+
 export const POST = checkAuth(async (req: Request, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 
@@ -24,6 +33,7 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
     const data = (await req.json()) as ChatStreamPayload;
 
     const tracePayload = getTracePayload(req);
+    const metadata = getChatRequestMetadata(req);
 
     let traceOptions = {};
     // If user enable trace
@@ -34,6 +44,7 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
     return await modelRuntime.chat(data, {
       user: userId,
       ...traceOptions,
+      ...(metadata && { metadata }),
       signal: req.signal,
     });
   } catch (e) {
