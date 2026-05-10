@@ -1,16 +1,12 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
-import type { BriefArtifactDocument, BriefMetadata } from '@lobechat/types';
+import type { BriefMetadata } from '@lobechat/types';
 
 import { BriefModel } from '@/database/models/brief';
 import type { BriefItem, NewBrief } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import type {
-  MaintenanceProposalMetadata,
-  MaintenanceProposalPlan,
-  MaintenanceReviewIdea,
-} from './proposal';
+import type { MaintenanceProposalMetadata, MaintenanceProposalPlan } from './proposal';
 import {
   AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS,
   buildMaintenanceProposalFromPlan,
@@ -49,7 +45,7 @@ export interface MaintenanceBriefMetadata {
   /** Frozen maintenance proposal state for approve/dismiss flows. */
   maintenanceProposal?: MaintenanceProposalMetadata;
   /** Coarse user-visible outcome selected by the projection service. */
-  outcome: 'applied' | 'error' | 'ideas' | 'proposal';
+  outcome: 'applied' | 'error' | 'proposal';
   /** Durable receipt ids linked to this brief. */
   receiptIds: string[];
   /** Review source id that produced this brief. */
@@ -134,7 +130,6 @@ const createNightlySelfReviewBriefMetadata = ({
     nightlySelfReview: {
       actionCounts,
       evidenceRefs,
-      ...(input.ideas?.length ? { ideas: input.ideas } : {}),
       localDate: input.localDate,
       outcome,
       ...(proposal ? { maintenanceProposal: proposal } : {}),
@@ -578,7 +573,6 @@ export const createBriefMaintenanceService = () => ({
     return {
       ...(proposal ? { actions: AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS } : {}),
       agentId: input.agentId,
-      ...(artifacts ? { artifacts } : {}),
       metadata: createNightlySelfReviewBriefMetadata({
         actionCounts,
         evidenceRefs: input.evidenceRefs ?? [],

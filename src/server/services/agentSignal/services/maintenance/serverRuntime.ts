@@ -997,9 +997,6 @@ const getRecord = (value: unknown): Record<string, unknown> =>
 const getString = (value: unknown) =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 
-const getStringArray = (value: unknown) =>
-  Array.isArray(value) ? value.flatMap((item) => (getString(item) ? [getString(item)!] : [])) : [];
-
 const getProposalActionSnapshotInput = (action: Record<string, unknown>) => {
   const operation = getRecord(action.operation);
   const operationInput = getRecord(operation.input);
@@ -1032,44 +1029,6 @@ const withCompleteProposalSnapshots = async ({
     input.actions.map(async (rawAction) => {
       const action = getRecord(rawAction);
       const actionType = action.actionType;
-
-      if (actionType === 'consolidate_skill') {
-        const operation = getRecord(action.operation);
-        const operationInput = getRecord(operation.input);
-        const canonicalSkillDocumentId = getString(operationInput.canonicalSkillDocumentId);
-        const sourceSkillIds = getStringArray(operationInput.sourceSkillIds);
-        const sourceSnapshots = await Promise.all(
-          sourceSkillIds.map((skillDocumentId) =>
-            snapshotService.captureActionSnapshot({
-              actionType: 'refine_skill',
-              agentId,
-              input: { skillDocumentId },
-              userId,
-            }),
-          ),
-        );
-
-        return {
-          ...action,
-          ...(canonicalSkillDocumentId
-            ? {
-                baseSnapshot: await snapshotService.captureActionSnapshot({
-                  actionType: 'refine_skill',
-                  agentId,
-                  input: { skillDocumentId: canonicalSkillDocumentId },
-                  userId,
-                }),
-              }
-            : {}),
-          operation: {
-            ...operation,
-            input: {
-              ...operationInput,
-              sourceSnapshots,
-            },
-          },
-        };
-      }
 
       if (actionType !== 'create_skill' && actionType !== 'refine_skill') return rawAction;
 
@@ -1156,7 +1115,6 @@ const createProposalProjectionFromToolInput = ({
 }) =>
   projectMaintenanceToolRuntimeRun({
     content: input.summary,
-    includeProposalLifecycleActions: true,
     localDate,
     outcomes: [
       {
@@ -1319,7 +1277,6 @@ const createServerMaintenanceToolset = ({
       const brief = createBriefMaintenanceService().projectNightlyReviewBrief({
         agentId,
         evidenceRefs: collectPlanEvidenceRefs(projection.projectionPlan),
-        ideas: projection.ideas,
         localDate,
         plan: projection.projectionPlan,
         result: projection.execution,
