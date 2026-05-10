@@ -45,6 +45,12 @@ interface FakeTopicMetadata {
   };
 }
 
+interface FakeTopic {
+  agentId: string | null;
+  id: string;
+  metadata: FakeTopicMetadata;
+}
+
 const createHarness = (params: {
   assistantMessageId: string;
   operationId: string;
@@ -135,7 +141,7 @@ const createHarness = (params: {
   };
 
   const topicModel = {
-    findById: vi.fn(async (id: string) => {
+    findById: vi.fn(async (id: string): Promise<FakeTopic | null> => {
       if (id !== params.topicId) return null;
       return {
         agentId: params.topicAgentId ?? null,
