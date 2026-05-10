@@ -345,7 +345,7 @@ export class DeviceGatewayDO extends DurableObject<Env> {
     const sockets = this.getAuthenticatedSockets();
     if (sockets.length === 0) {
       return Response.json(
-        { content: '桌面设备不在线', error: 'DEVICE_OFFLINE', success: false },
+        { content: 'Desktop device offline', error: 'DEVICE_OFFLINE', success: false },
         { status: 503 },
       );
     }
@@ -395,7 +395,7 @@ export class DeviceGatewayDO extends DurableObject<Env> {
     } catch (err) {
       return Response.json(
         {
-          content: `工具调用超时（${timeout / 1000}s）`,
+          content: `Tool call timed out (${timeout / 1000}s)`,
           error: (err as Error).message,
           success: false,
         },

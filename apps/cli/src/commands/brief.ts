@@ -120,14 +120,14 @@ export function registerBriefCommand(program: Command) {
           for (const a of actions) {
             const cmd =
               a.type === 'comment'
-                ? `lh brief resolve ${b.id} --action ${a.key} -m "内容"`
+                ? `lh brief resolve ${b.id} --action ${a.key} -m "message"`
                 : `lh brief resolve ${b.id} --action ${a.key}`;
             console.log(`  ${a.label}  ${pc.dim(cmd)}`);
           }
         } else {
           console.log(pc.dim('Actions:'));
-          console.log(pc.dim(`  lh brief resolve ${b.id}                   # 确认通过`));
-          console.log(pc.dim(`  lh brief resolve ${b.id} --reply "修改意见"  # 反馈修改`));
+          console.log(pc.dim(`  lh brief resolve ${b.id}                   # Approve`));
+          console.log(pc.dim(`  lh brief resolve ${b.id} --reply "revision notes"  # Request revision`));
         }
       } else if ((b as any).resolvedComment) {
         console.log(`${pc.dim('Comment:')} ${(b as any).resolvedComment}`);
