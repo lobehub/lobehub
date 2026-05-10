@@ -5,9 +5,6 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import type { BriefItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/services/maintenance/brief';
-import type { MaintenanceProposalMetadata } from '@/server/services/agentSignal/services/maintenance/proposal';
-import { getMaintenanceProposalFromBriefMetadata } from '@/server/services/agentSignal/services/maintenance/proposal';
 
 export interface AgentAvatarInfo {
   avatar: string | null;
@@ -25,196 +22,26 @@ export type BriefWithAgent = BriefItem & {
   taskStatus: TaskStatus | null;
 };
 
-export interface MaintenanceProposalBriefResolutionInput {
-  /** User action requested by the Daily Brief card. */
-  action: 'approve' | 'dismiss';
-  /** Brief row that stores the pending proposal metadata. */
-  brief: BriefItem;
-  /** Frozen proposal metadata extracted from the brief. */
-  proposal: MaintenanceProposalMetadata;
+export interface BriefResolveOptions {
+  /** User action selected from a Daily Brief card. */
+  action?: string;
+  /** Optional user comment attached to the resolution. */
+  comment?: string;
 }
-
-export interface MaintenanceProposalBriefResolutionResult {
-  /** Latest brief row after proposal metadata updates. */
-  brief: BriefItem | null;
-  /** Resolution action to store when it differs from the requested action. */
-  resolveAction?: string;
-  /** Resolve the brief after proposal handling succeeds. */
-  shouldResolve: boolean;
-}
-
-export interface BriefServiceOptions {
-  /** Optional override used by tests or alternate runtimes for Agent Signal proposal approval. */
-  maintenanceProposalResolver?: (
-    input: MaintenanceProposalBriefResolutionInput,
-  ) => Promise<MaintenanceProposalBriefResolutionResult>;
-}
-
-const asMetadataRecord = (metadata: BriefItem['metadata']): Record<string, unknown> =>
-  metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? (metadata as Record<string, unknown>)
-    : {};
-
-const getOptionalString = (value: unknown): string | undefined =>
-  typeof value === 'string' ? value : undefined;
 
 export class BriefService {
   private agentModel: AgentModel;
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
-  private maintenanceProposalResolver?: BriefServiceOptions['maintenanceProposalResolver'];
   private taskModel: TaskModel;
   private userId: string;
 
-  constructor(db: LobeChatDatabase, userId: string, options: BriefServiceOptions = {}) {
+  constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
     this.agentModel = new AgentModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
-    this.maintenanceProposalResolver = options.maintenanceProposalResolver;
     this.taskModel = new TaskModel(db, userId);
-  }
-
-  private async resolveMaintenanceProposalBrief(
-    input: MaintenanceProposalBriefResolutionInput,
-  ): Promise<MaintenanceProposalBriefResolutionResult> {
-    if (this.maintenanceProposalResolver) return this.maintenanceProposalResolver(input);
-
-    const { createBriefMaintenanceService } =
-      await import('@/server/services/agentSignal/services/maintenance/brief');
-    const { createMaintenanceExecutorService } =
-      await import('@/server/services/agentSignal/services/maintenance/executor');
-    const { createMaintenanceProposalApplyService } =
-      await import('@/server/services/agentSignal/services/maintenance/proposalApply');
-    const { createMaintenanceProposalPreflightService } =
-      await import('@/server/services/agentSignal/services/maintenance/proposalPreflight');
-    const { createSkillManagementService } =
-      await import('@/server/services/agentSignal/services/maintenance/skill');
-    const { createMaintenanceReviewReceipts, persistAgentSignalReceipts } =
-      await import('@/server/services/agentSignal/services/receiptService');
-    const { AgentSignalReviewContextModel } =
-      await import('@/database/models/agentSignal/reviewContext');
-    const { isAgentSignalEnabledForUser } =
-      await import('@/server/services/agentSignal/featureGate');
-    const { SkillManagementDocumentService } =
-      await import('@/server/services/skillManagement/SkillManagementDocumentService');
-
-    const { action, brief, proposal } = input;
-    const metadata = asMetadataRecord(brief.metadata);
-    const updateProposal = async (nextProposal: MaintenanceProposalMetadata) =>
-      this.briefModel.updateMetadata(brief.id, { ...metadata, proposal: nextProposal });
-
-    if (action === 'dismiss') {
-      const now = new Date().toISOString();
-      const updatedBrief = await updateProposal({
-        ...proposal,
-        status: 'dismissed',
-        updatedAt: now,
-      });
-
-      return { brief: updatedBrief, shouldResolve: true };
-    }
-
-    if (!brief.agentId) return { brief, shouldResolve: false };
-
-    const skillDocumentService = new SkillManagementDocumentService(this.db, this.userId);
-    const preflight = createMaintenanceProposalPreflightService({
-      readSkillTarget: (agentDocumentId) =>
-        skillDocumentService.readSkillTargetSnapshot({
-          agentDocumentId,
-          agentId: brief.agentId ?? '',
-        }),
-    });
-    const executor = createMaintenanceExecutorService({
-      memory: {
-        writeMemory: async () => {
-          throw new Error('Memory proposal apply is not supported yet');
-        },
-      },
-      skill: createSkillManagementService({
-        refineSkill: async ({ input: skillInput }) => {
-          const skillPayload = skillInput as unknown as Record<string, unknown>;
-          const bodyMarkdown =
-            getOptionalString(skillPayload.bodyMarkdown) ??
-            skillInput.patch ??
-            getOptionalString(skillPayload.content) ??
-            '';
-          const result = await skillDocumentService.replaceSkillIndex({
-            agentId: brief.agentId ?? '',
-            agentDocumentId: skillInput.skillDocumentId,
-            bodyMarkdown,
-            description: getOptionalString(skillPayload.description),
-          });
-
-          if (!result) throw new Error('Skill target not found');
-
-          return {
-            skillDocumentId: result.bundle.agentDocumentId,
-            summary: `Refined managed skill ${result.name}.`,
-          };
-        },
-      }),
-    });
-    const briefMaintenance = createBriefMaintenanceService();
-    const applyService = createMaintenanceProposalApplyService({
-      checkAction: preflight.checkAction,
-      checkGates: () =>
-        briefMaintenance.canApplyMaintenanceProposal({
-          checkAgentGate: () =>
-            new AgentSignalReviewContextModel(this.db, this.userId).canAgentRunSelfIteration(
-              brief.agentId ?? '',
-            ),
-          checkServerGate: () => true,
-          checkUserGate: () => isAgentSignalEnabledForUser(this.db, this.userId),
-        }),
-      executePlan: executor.execute,
-      updateProposal: async (nextProposal) => {
-        await updateProposal(nextProposal);
-      },
-      writeReceipts: async (receiptInput) => {
-        await persistAgentSignalReceipts(createMaintenanceReviewReceipts(receiptInput));
-      },
-    });
-    const sourceId =
-      typeof metadata.sourceId === 'string'
-        ? metadata.sourceId
-        : `maintenance-proposal-approve:${brief.id}`;
-    const applyInput = {
-      agentId: brief.agentId,
-      proposal,
-      sourceId,
-      sourceType: 'agent.maintenance_proposal.approved',
-      userId: this.userId,
-      ...(typeof metadata.localDate === 'string' ? { localDate: metadata.localDate } : {}),
-      ...(typeof metadata.timezone === 'string' ? { timezone: metadata.timezone } : {}),
-    };
-    const result = await applyService.apply(applyInput);
-    const updatedBrief = await this.briefModel.findById(brief.id);
-
-    if (result.proposal.status === 'applied') {
-      return { brief: updatedBrief, shouldResolve: true };
-    }
-
-    if (result.proposal.status === 'partially_failed') {
-      return { brief: updatedBrief, resolveAction: 'approve_partial', shouldResolve: true };
-    }
-
-    return { brief: updatedBrief, shouldResolve: false };
-  }
-
-  private async maybeResolveMaintenanceProposalBrief(
-    id: string,
-    action: string | undefined,
-  ): Promise<MaintenanceProposalBriefResolutionResult | undefined> {
-    if (action !== 'approve' && action !== 'dismiss') return;
-
-    const brief = await this.briefModel.findById(id);
-    if (!brief || brief.trigger !== NIGHTLY_REVIEW_BRIEF_TRIGGER) return;
-
-    const proposal = getMaintenanceProposalFromBriefMetadata(brief.metadata);
-    if (!proposal || proposal.status !== 'pending') return;
-
-    return this.resolveMaintenanceProposalBrief({ action, brief, proposal });
   }
 
   /**
@@ -367,20 +194,7 @@ export class BriefService {
    * recurring task — which leaves the task in `scheduled` between runs — is
    * handled the same way.
    */
-  async resolve(
-    id: string,
-    options?: { action?: string; comment?: string },
-  ): Promise<BriefItem | null> {
-    const proposalResult = await this.maybeResolveMaintenanceProposalBrief(id, options?.action);
-    if (proposalResult) {
-      if (!proposalResult.shouldResolve) return proposalResult.brief;
-
-      return this.briefModel.resolve(id, {
-        ...options,
-        action: proposalResult.resolveAction ?? options?.action,
-      });
-    }
-
+  async resolve(id: string, options?: BriefResolveOptions): Promise<BriefItem | null> {
     const brief = await this.briefModel.resolve(id, options);
     if (!brief) return null;
 

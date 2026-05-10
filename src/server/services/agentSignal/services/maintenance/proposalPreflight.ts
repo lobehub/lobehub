@@ -1,29 +1,26 @@
-import type { MaintenanceProposalAction, MaintenanceProposalConflictReason } from './proposal';
+import type {
+  MaintenanceProposalAction,
+  MaintenanceProposalBaseSnapshot,
+  MaintenanceProposalConflictReason,
+} from './proposal';
 
 export type MaintenanceProposalPreflightReason = MaintenanceProposalConflictReason | 'unsupported';
 
-/** Snapshot of a managed skill target used for approve-time freshness checks. */
-export interface MaintenanceProposalSkillTargetSnapshot {
-  /** Current agent document binding id. */
-  agentDocumentId: string;
-  /** Current hash of the skill body or normalized content. */
-  contentHash?: string;
-  /** Current backing document id. */
-  documentId?: string;
-  /** Whether the target is still managed by Agent Signal. */
-  managed: boolean;
-  /** Current human-readable title. */
-  targetTitle?: string;
-  /** Whether the target may still be mutated. */
-  writable: boolean;
-}
-
 /** Adapters required by proposal apply preflight. */
 export interface MaintenanceProposalPreflightAdapters {
+  /** Checks whether a proposed stable skill name is still absent. */
+  isSkillNameAvailable: (input: {
+    /** Agent namespace when the caller can provide it. */
+    agentId?: string;
+    /** Stable skill name requested by the proposal. */
+    name: string;
+    /** User namespace when the caller can provide it. */
+    userId?: string;
+  }) => Promise<boolean>;
   /** Reads current managed skill target state by agent document id. */
-  readSkillTarget: (
-    agentDocumentId: string,
-  ) => Promise<MaintenanceProposalSkillTargetSnapshot | undefined>;
+  readSkillTargetSnapshot: (
+    skillDocumentId: string,
+  ) => Promise<MaintenanceProposalBaseSnapshot | undefined>;
 }
 
 /** Successful proposal preflight result. */
@@ -53,10 +50,10 @@ export type MaintenanceProposalPreflightResult =
  *
  * Expects:
  * - Proposal actions include the base snapshot captured when the proposal was created
- * - `readSkillTarget` returns current truth for the same user/agent boundary
+ * - Adapters return current truth for the same user/agent boundary
  *
  * Returns:
- * - A service that accepts unchanged `refine_skill` targets and rejects drifted targets
+ * - A service that accepts fresh create/refine skill proposals and rejects stale targets
  */
 export const createMaintenanceProposalPreflightService = (
   adapters: MaintenanceProposalPreflightAdapters,
@@ -64,35 +61,119 @@ export const createMaintenanceProposalPreflightService = (
   checkAction: async (
     action: MaintenanceProposalAction,
   ): Promise<MaintenanceProposalPreflightResult> => {
-    if (action.actionType !== 'refine_skill') {
-      return { allowed: false, reason: 'unsupported' };
+    if (action.actionType === 'refine_skill') {
+      return checkRefineSkillAction(action, adapters);
     }
 
-    const targetId = action.target?.skillDocumentId;
-    if (!targetId || !action.baseSnapshot) {
-      return { allowed: false, reason: 'target_deleted' };
+    if (action.actionType === 'create_skill') {
+      return checkCreateSkillAction(action, adapters);
     }
 
-    const current = await adapters.readSkillTarget(targetId);
-    if (!current) {
-      return { allowed: false, reason: 'target_deleted' };
-    }
-
-    if (!current.writable || !current.managed) {
-      return { allowed: false, reason: 'target_not_writable' };
-    }
-
-    if (action.baseSnapshot.documentId && current.documentId !== action.baseSnapshot.documentId) {
-      return { allowed: false, reason: 'target_type_changed' };
-    }
-
-    if (
-      action.baseSnapshot.contentHash &&
-      current.contentHash !== action.baseSnapshot.contentHash
-    ) {
-      return { allowed: false, reason: 'document_changed' };
-    }
-
-    return { allowed: true };
+    return { allowed: false, reason: 'unsupported' };
   },
 });
+
+const hasRequiredString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const getOperationInputString = (action: MaintenanceProposalAction, key: string) => {
+  const input = action.operation?.input;
+
+  if (!input || typeof input !== 'object' || !(key in input)) return;
+
+  const record = input as unknown as Record<string, unknown>;
+  const value = record[key];
+
+  return hasRequiredString(value) ? value.trim() : undefined;
+};
+
+const isCompleteRefineSnapshot = (
+  snapshot: MaintenanceProposalBaseSnapshot,
+): snapshot is MaintenanceProposalBaseSnapshot & {
+  agentDocumentId: string;
+  contentHash: string;
+  documentId: string;
+} =>
+  snapshot.targetType === 'skill' &&
+  hasRequiredString(snapshot.agentDocumentId) &&
+  hasRequiredString(snapshot.contentHash) &&
+  hasRequiredString(snapshot.documentId) &&
+  snapshot.managed === true &&
+  snapshot.writable === true;
+
+const checkRefineSkillAction = async (
+  action: MaintenanceProposalAction,
+  adapters: MaintenanceProposalPreflightAdapters,
+): Promise<MaintenanceProposalPreflightResult> => {
+  const { baseSnapshot } = action;
+  if (!baseSnapshot) return { allowed: false, reason: 'snapshot_missing' };
+  if (!isCompleteRefineSnapshot(baseSnapshot)) {
+    return { allowed: false, reason: 'snapshot_incomplete' };
+  }
+
+  if (
+    action.target?.skillDocumentId &&
+    action.target.skillDocumentId !== baseSnapshot.agentDocumentId
+  ) {
+    return { allowed: false, reason: 'target_type_changed' };
+  }
+
+  const operationSkillDocumentId = getOperationInputString(action, 'skillDocumentId');
+  if (operationSkillDocumentId && operationSkillDocumentId !== baseSnapshot.agentDocumentId) {
+    return { allowed: false, reason: 'target_type_changed' };
+  }
+
+  const current = await adapters.readSkillTargetSnapshot(baseSnapshot.agentDocumentId);
+  if (!current) return { allowed: false, reason: 'target_deleted' };
+
+  if (current.managed !== true) return { allowed: false, reason: 'target_unmanaged' };
+  if (current.writable !== true) return { allowed: false, reason: 'target_not_writable' };
+
+  if (current.agentDocumentId && current.agentDocumentId !== baseSnapshot.agentDocumentId) {
+    return { allowed: false, reason: 'document_changed' };
+  }
+
+  if (current.documentId !== baseSnapshot.documentId) {
+    return { allowed: false, reason: 'target_type_changed' };
+  }
+
+  if (current.contentHash !== baseSnapshot.contentHash) {
+    return { allowed: false, reason: 'content_changed' };
+  }
+
+  return { allowed: true };
+};
+
+const checkCreateSkillAction = async (
+  action: MaintenanceProposalAction,
+  adapters: MaintenanceProposalPreflightAdapters,
+): Promise<MaintenanceProposalPreflightResult> => {
+  const { baseSnapshot } = action;
+  if (!baseSnapshot) return { allowed: false, reason: 'snapshot_missing' };
+  if (
+    baseSnapshot.targetType !== 'skill' ||
+    baseSnapshot.absent !== true ||
+    !hasRequiredString(baseSnapshot.skillName)
+  ) {
+    return { allowed: false, reason: 'snapshot_incomplete' };
+  }
+
+  const skillName = baseSnapshot.skillName.trim();
+
+  if (action.target?.skillName && action.target.skillName !== skillName) {
+    return { allowed: false, reason: 'target_type_changed' };
+  }
+
+  const operationName = getOperationInputString(action, 'name');
+  if (operationName && operationName !== skillName) {
+    return { allowed: false, reason: 'target_type_changed' };
+  }
+
+  const available = await adapters.isSkillNameAvailable({
+    agentId: getOperationInputString(action, 'agentId'),
+    name: skillName,
+    userId: getOperationInputString(action, 'userId'),
+  });
+
+  return available ? { allowed: true } : { allowed: false, reason: 'target_conflict' };
+};

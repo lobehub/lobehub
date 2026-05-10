@@ -1,6 +1,9 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 
+import type { MaintenanceProposalBaseSnapshot } from './proposal';
+import type { EvidenceRef } from './types';
+
 /** Terminal status emitted by safe maintenance write tools. */
 export type MaintenanceToolWriteStatus =
   | 'applied'
@@ -55,6 +58,8 @@ export interface MaintenanceToolWriteInput {
 
 /** Input for replacing one managed skill using compare-and-swap safety checks. */
 export interface ReplaceSkillContentCASInput extends MaintenanceToolWriteInput {
+  /** Complete target snapshot captured when the proposal was created. */
+  baseSnapshot?: MaintenanceProposalBaseSnapshot;
   /** Replacement skill body. */
   bodyMarkdown: string;
   /** Optional replacement description. */
@@ -66,13 +71,57 @@ export interface ReplaceSkillContentCASInput extends MaintenanceToolWriteInput {
 /** Input for creating one skill when no existing skill has been selected. */
 export interface CreateSkillIfAbsentInput extends MaintenanceToolWriteInput {
   /** Skill body or authoring payload. */
-  bodyMarkdown?: string;
+  bodyMarkdown: string;
   /** Optional skill description. */
   description?: string;
   /** Stable skill name. */
-  name?: string;
+  name: string;
   /** Optional skill title. */
   title?: string;
+}
+
+/** Input for writing one durable memory candidate from explicit nightly evidence. */
+export interface WriteMemoryInput extends MaintenanceToolWriteInput {
+  /** Candidate durable memory content. */
+  content: string;
+  /** Evidence supporting this memory write. */
+  evidenceRefs: EvidenceRef[];
+}
+
+/** Input for listing managed skills in one agent scope. */
+export interface ListManagedSkillsInput {
+  /** Agent whose managed skills are visible to the tool call. */
+  agentId: string;
+  /** User that owns the read operation. */
+  userId: string;
+}
+
+/** Input for reading one managed skill in one agent scope. */
+export interface GetManagedSkillInput extends ListManagedSkillsInput {
+  /** Existing managed skill document id. */
+  skillDocumentId: string;
+}
+
+/** Input for listing maintenance proposals in one agent scope. */
+export interface ListMaintenanceProposalsInput {
+  /** Agent whose proposals are visible to the tool call. */
+  agentId: string;
+  /** User that owns the read operation. */
+  userId: string;
+}
+
+/** Input for reading an evidence digest in one agent scope. */
+export interface GetEvidenceDigestInput {
+  /** Agent whose evidence is visible to the tool call. */
+  agentId: string;
+  /** Optional bounded evidence ids selected by the caller. */
+  evidenceIds?: string[];
+  /** Optional inclusive review window end timestamp. */
+  reviewWindowEnd?: string;
+  /** Optional inclusive review window start timestamp. */
+  reviewWindowStart?: string;
+  /** User that owns the read operation. */
+  userId: string;
 }
 
 /** Input for creating one user-visible maintenance proposal. */
@@ -174,12 +223,24 @@ export interface MaintenanceToolsAdapters {
    * mutation or leave reservations stuck in an in-progress state.
    */
   completeOperation?: (input: MaintenanceToolOperationLifecycleInput) => Promise<void>;
+  /** Completes server-owned CAS metadata before validating an existing skill replacement. */
+  completeReplaceSkillInput?: (
+    input: ReplaceSkillContentCASInput,
+  ) => Promise<ReplaceSkillContentCASInput>;
   /** Creates one user-visible maintenance proposal. */
   createProposal?: (
     input: CreateMaintenanceProposalInput,
   ) => Promise<MaintenanceToolMutationResult & { proposalId?: string }>;
   /** Creates one managed skill. */
   createSkill?: (input: CreateSkillIfAbsentInput) => Promise<MaintenanceToolMutationResult>;
+  /** Reads a bounded evidence digest for maintenance planning. */
+  getEvidenceDigest?: (input: GetEvidenceDigestInput) => Promise<unknown | undefined>;
+  /** Reads one managed skill in the requested agent scope. */
+  getManagedSkill?: (input: GetManagedSkillInput) => Promise<unknown | undefined>;
+  /** Lists maintenance proposals in the requested agent scope. */
+  listMaintenanceProposals?: (input: ListMaintenanceProposalsInput) => Promise<unknown[]>;
+  /** Lists managed skills in the requested agent scope. */
+  listManagedSkills?: (input: ListManagedSkillsInput) => Promise<unknown[]>;
   /**
    * Marks or releases a reserved operation when its terminal receipt cannot be persisted.
    *
@@ -214,6 +275,8 @@ export interface MaintenanceToolsAdapters {
   supersedeProposal?: (
     input: SupersedeMaintenanceProposalInput,
   ) => Promise<MaintenanceToolMutationResult>;
+  /** Writes one durable memory candidate. */
+  writeMemory?: (input: WriteMemoryInput) => Promise<MaintenanceToolMutationResult>;
   /** Writes the audit receipt for a terminal maintenance tool status. */
   writeReceipt: (input: MaintenanceToolReceiptInput) => Promise<MaintenanceToolReceiptResult>;
 }
@@ -244,6 +307,30 @@ const errorSummary = (error: unknown) =>
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+const hasNonBlankString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const isCompleteRefineBaseSnapshot = (
+  snapshot: unknown,
+): snapshot is MaintenanceProposalBaseSnapshot & {
+  agentDocumentId: string;
+  contentHash: string;
+  documentId: string;
+} => {
+  if (!snapshot || typeof snapshot !== 'object') return false;
+
+  const record = snapshot as Record<string, unknown>;
+
+  return (
+    record.targetType === 'skill' &&
+    hasNonBlankString(record.agentDocumentId) &&
+    hasNonBlankString(record.documentId) &&
+    hasNonBlankString(record.contentHash) &&
+    record.managed === true &&
+    record.writable === true
+  );
+};
 
 const getResultWithReceipt = async (
   adapters: MaintenanceToolsAdapters,
@@ -342,6 +429,7 @@ const runWriteTool = async <TInput extends MaintenanceToolWriteInput>({
   successStatus,
   toolName,
   unsupportedSummary,
+  validate,
 }: {
   adapters: MaintenanceToolsAdapters;
   input: TInput;
@@ -355,6 +443,7 @@ const runWriteTool = async <TInput extends MaintenanceToolWriteInput>({
   >;
   toolName: string;
   unsupportedSummary: string;
+  validate?: () => MaintenanceToolWriteResult | undefined;
 }) => {
   return withWriteSpan(toolName, input, async (recordConvertedException) => {
     let operationReserved = false;
@@ -371,6 +460,9 @@ const runWriteTool = async <TInput extends MaintenanceToolWriteInput>({
         }
 
         operationReserved = true;
+
+        const validationResult = validate?.();
+        if (validationResult) return validationResult;
 
         if (!mutate) {
           return {
@@ -502,6 +594,49 @@ export const createMaintenanceTools = (adapters: MaintenanceToolsAdapters) => ({
       successStatus: 'applied',
       toolName: 'createSkillIfAbsent',
       unsupportedSummary: 'Skill creation is not supported.',
+      validate: () => {
+        if (hasNonBlankString(input.name) && hasNonBlankString(input.bodyMarkdown)) {
+          return undefined;
+        }
+
+        return {
+          status: 'skipped_unsupported',
+          summary: 'Skill creation requires a non-empty name and body.',
+        };
+      },
+    }),
+  writeMemory: async (input: WriteMemoryInput) =>
+    runWriteTool({
+      adapters,
+      input,
+      mutate: adapters.writeMemory ? () => adapters.writeMemory!(input) : undefined,
+      successStatus: 'applied',
+      toolName: 'writeMemory',
+      unsupportedSummary: 'Memory writing is not supported.',
+    }),
+  getEvidenceDigest: async (input: GetEvidenceDigestInput) =>
+    withReadSpan('getEvidenceDigest', undefined, async () => {
+      if (!adapters.getEvidenceDigest) return undefined;
+
+      return adapters.getEvidenceDigest(input);
+    }),
+  getManagedSkill: async (input: GetManagedSkillInput) =>
+    withReadSpan('getManagedSkill', undefined, async () => {
+      if (!adapters.getManagedSkill) return undefined;
+
+      return adapters.getManagedSkill(input);
+    }),
+  listMaintenanceProposals: async (input: ListMaintenanceProposalsInput) =>
+    withReadSpan('listMaintenanceProposals', undefined, async () => {
+      if (!adapters.listMaintenanceProposals) return [];
+
+      return adapters.listMaintenanceProposals(input);
+    }),
+  listManagedSkills: async (input: ListManagedSkillsInput) =>
+    withReadSpan('listManagedSkills', undefined, async () => {
+      if (!adapters.listManagedSkills) return [];
+
+      return adapters.listManagedSkills(input);
     }),
   readMaintenanceProposal: async (input: {
     proposalId?: string;
@@ -525,18 +660,40 @@ export const createMaintenanceTools = (adapters: MaintenanceToolsAdapters) => ({
       toolName: 'refreshMaintenanceProposal',
       unsupportedSummary: 'Maintenance proposal refresh is not supported.',
     }),
-  replaceSkillContentCAS: async (input: ReplaceSkillContentCASInput) =>
-    runWriteTool({
+  replaceSkillContentCAS: async (input: ReplaceSkillContentCASInput) => {
+    const enrichedInput = adapters.completeReplaceSkillInput
+      ? await adapters.completeReplaceSkillInput(input)
+      : input;
+
+    return runWriteTool({
       adapters,
-      input,
-      mutate: adapters.replaceSkill ? () => adapters.replaceSkill!(input) : undefined,
-      preflight: adapters.preflight ? () => adapters.preflight!(input) : undefined,
+      input: enrichedInput,
+      mutate: adapters.replaceSkill ? () => adapters.replaceSkill!(enrichedInput) : undefined,
+      preflight: adapters.preflight ? () => adapters.preflight!(enrichedInput) : undefined,
       preflightRequired: true,
-      resourceId: input.skillDocumentId,
+      resourceId: enrichedInput.skillDocumentId,
       successStatus: 'applied',
       toolName: 'replaceSkillContentCAS',
       unsupportedSummary: 'Skill replacement is not supported.',
-    }),
+      validate: () => {
+        if (!hasNonBlankString(enrichedInput.bodyMarkdown)) {
+          return {
+            resourceId: enrichedInput.skillDocumentId,
+            status: 'skipped_unsupported',
+            summary: 'Skill replacement requires a non-empty body.',
+          };
+        }
+
+        if (isCompleteRefineBaseSnapshot(enrichedInput.baseSnapshot)) return undefined;
+
+        return {
+          resourceId: enrichedInput.skillDocumentId,
+          status: 'skipped_unsupported',
+          summary: 'Skill replacement requires a complete base snapshot.',
+        };
+      },
+    });
+  },
   supersedeMaintenanceProposal: async (input: SupersedeMaintenanceProposalInput) =>
     runWriteTool({
       adapters,

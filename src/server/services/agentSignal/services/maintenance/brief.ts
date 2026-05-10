@@ -1,11 +1,12 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import type { BriefMetadata } from '@lobechat/types';
 
 import { BriefModel } from '@/database/models/brief';
 import type { BriefItem, NewBrief } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import type { MaintenanceProposalMetadata } from './proposal';
+import type { MaintenanceProposalMetadata, MaintenanceProposalPlan } from './proposal';
 import {
   AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS,
   buildMaintenanceProposalFromPlan,
@@ -15,7 +16,7 @@ import {
   shouldSupersedeMaintenanceProposal,
   supersedeMaintenanceProposal,
 } from './proposal';
-import type { EvidenceRef, MaintenancePlan, MaintenanceReviewRunResult } from './types';
+import type { EvidenceRef, MaintenanceReviewRunResult } from './types';
 import { MaintenanceActionStatus, ReviewRunStatus } from './types';
 
 export const NIGHTLY_REVIEW_BRIEF_TRIGGER = 'agent-signal:nightly-review';
@@ -39,10 +40,10 @@ export interface MaintenanceBriefMetadata {
   evidenceRefs: EvidenceRef[];
   /** User-local review date in YYYY-MM-DD form. */
   localDate: string;
+  /** Frozen maintenance proposal state for approve/dismiss flows. */
+  maintenanceProposal?: MaintenanceProposalMetadata;
   /** Coarse user-visible outcome selected by the projection service. */
   outcome: 'applied' | 'error' | 'proposal';
-  /** Frozen maintenance proposal state for approve/dismiss flows. */
-  proposal?: MaintenanceProposalMetadata;
   /** Durable receipt ids linked to this brief. */
   receiptIds: string[];
   /** Review source id that produced this brief. */
@@ -55,9 +56,20 @@ export interface MaintenanceBriefMetadata {
   windowStart: string;
 }
 
+/** Namespaced metadata payload stored by Agent Signal nightly self-review briefs. */
+export interface AgentSignalNightlySelfReviewBriefMetadata extends BriefMetadata {
+  /** Agent Signal-owned metadata namespace. */
+  agentSignal: {
+    /** Nightly self-review status, receipts, and optional frozen proposal. */
+    nightlySelfReview: MaintenanceBriefMetadata;
+    /** Future Agent Signal domains can live beside nightly self-review. */
+    [key: string]: unknown;
+  };
+}
+
 /** Create payload for a maintenance Daily Brief. */
 export type MaintenanceBriefProjection = Omit<NewBrief, 'id' | 'userId'> & {
-  metadata: MaintenanceBriefMetadata;
+  metadata: AgentSignalNightlySelfReviewBriefMetadata;
   trigger: typeof NIGHTLY_REVIEW_BRIEF_TRIGGER;
 };
 
@@ -68,11 +80,160 @@ const updateBriefProposalMetadata = (
   brief: BriefItem,
   proposal: MaintenanceProposalMetadata,
 ): BriefItem['metadata'] => ({
-  ...(brief.metadata && typeof brief.metadata === 'object' && !Array.isArray(brief.metadata)
-    ? (brief.metadata as Record<string, unknown>)
-    : {}),
-  proposal,
+  ...asMetadataRecord(brief.metadata),
+  agentSignal: {
+    ...asMetadataRecord(asMetadataRecord(brief.metadata).agentSignal),
+    nightlySelfReview: {
+      ...asMetadataRecord(
+        asMetadataRecord(asMetadataRecord(brief.metadata).agentSignal).nightlySelfReview,
+      ),
+      maintenanceProposal: proposal,
+    },
+  },
 });
+
+const asMetadataRecord = (metadata: unknown): Record<string, unknown> =>
+  metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)
+    : {};
+
+/** Reads Agent Signal nightly self-review metadata from a namespaced Brief payload. */
+export const getNightlySelfReviewBriefMetadata = (
+  metadata: unknown,
+): MaintenanceBriefMetadata | undefined => {
+  const agentSignal = asMetadataRecord(asMetadataRecord(metadata).agentSignal);
+  const nightlySelfReview = agentSignal.nightlySelfReview;
+
+  return nightlySelfReview &&
+    typeof nightlySelfReview === 'object' &&
+    !Array.isArray(nightlySelfReview)
+    ? (nightlySelfReview as MaintenanceBriefMetadata)
+    : undefined;
+};
+
+const createNightlySelfReviewBriefMetadata = ({
+  actionCounts,
+  evidenceRefs,
+  input,
+  outcome,
+  proposal,
+}: {
+  actionCounts: MaintenanceBriefActionCounts;
+  evidenceRefs: EvidenceRef[];
+  input: ProjectNightlyReviewBriefInput;
+  outcome: MaintenanceBriefMetadata['outcome'];
+  proposal?: MaintenanceProposalMetadata;
+}): AgentSignalNightlySelfReviewBriefMetadata => ({
+  agentSignal: {
+    nightlySelfReview: {
+      actionCounts,
+      evidenceRefs,
+      localDate: input.localDate,
+      outcome,
+      ...(proposal ? { maintenanceProposal: proposal } : {}),
+      receiptIds: getReceiptIds(input.result),
+      ...(input.result.sourceId ? { sourceId: input.result.sourceId } : {}),
+      timezone: input.timezone,
+      windowEnd: input.reviewWindowEnd,
+      windowStart: input.reviewWindowStart,
+    },
+  },
+});
+
+const ACTIVE_PROPOSAL_REFRESH_STATUSES = new Set<MaintenanceProposalMetadata['status']>([
+  'expired',
+  'pending',
+  'stale',
+]);
+
+const findExistingProposalBrief = async ({
+  agentId,
+  incomingProposal,
+  model,
+  trigger,
+}: {
+  agentId: string;
+  incomingProposal: MaintenanceProposalMetadata;
+  model: BriefModel;
+  trigger: typeof NIGHTLY_REVIEW_BRIEF_TRIGGER;
+}) => {
+  const rows = await model.listUnresolvedByAgentAndTrigger({
+    agentId,
+    limit: 20,
+    trigger,
+  });
+
+  return rows.find((row) => {
+    const proposal = getMaintenanceProposalFromBriefMetadata(row.metadata);
+
+    return (
+      proposal?.proposalKey === incomingProposal.proposalKey &&
+      ACTIVE_PROPOSAL_REFRESH_STATUSES.has(proposal.status)
+    );
+  });
+};
+
+const updateProposalMetadata = async (
+  model: BriefModel,
+  brief: BriefItem,
+  proposal: MaintenanceProposalMetadata,
+) => model.updateMetadata(brief.id, updateBriefProposalMetadata(brief, proposal));
+
+const refreshProposalBrief = ({
+  fallbackBrief,
+  model,
+  proposal,
+  targetBrief,
+}: {
+  fallbackBrief: MaintenanceBriefProjection;
+  model: BriefModel;
+  proposal: MaintenanceProposalMetadata;
+  targetBrief: BriefItem;
+}) =>
+  tracer.startActiveSpan(
+    'agent_signal.maintenance_proposal.refresh',
+    {
+      attributes: {
+        'agent.signal.proposal.key': proposal.proposalKey,
+        'agent.signal.proposal.status': proposal.status,
+      },
+    },
+    async (span) => {
+      try {
+        const updatedBrief = await updateProposalMetadata(model, targetBrief, proposal);
+
+        return updatedBrief ?? model.create(fallbackBrief);
+      } finally {
+        span.end();
+      }
+    },
+  );
+
+const supersedeProposalBrief = ({
+  model,
+  proposal,
+  targetBrief,
+}: {
+  model: BriefModel;
+  proposal: MaintenanceProposalMetadata;
+  targetBrief: BriefItem;
+}) =>
+  tracer.startActiveSpan(
+    'agent_signal.maintenance_proposal.supersede',
+    {
+      attributes: {
+        'agent.signal.proposal.key': proposal.proposalKey,
+        'agent.signal.proposal.status': proposal.status,
+      },
+    },
+    async (span) => {
+      try {
+        await updateProposalMetadata(model, targetBrief, proposal);
+      } finally {
+        span.end();
+      }
+    },
+  );
 
 /** Input used to project one nightly maintenance result to a Daily Brief payload. */
 export interface ProjectNightlyReviewBriefInput {
@@ -83,7 +244,7 @@ export interface ProjectNightlyReviewBriefInput {
   /** User-local date reviewed by the nightly run. */
   localDate: string;
   /** Frozen maintenance plan used to preserve proposal actions. */
-  plan?: MaintenancePlan;
+  plan?: MaintenanceProposalPlan;
   /** Executor result for the nightly maintenance run. */
   result: MaintenanceReviewRunResult;
   /** Review window end ISO timestamp. */
@@ -124,14 +285,14 @@ export interface MaintenanceProposalVisibilityInput {
   trigger?: string | null;
 }
 
-const getPlanActionByIdempotencyKey = (plan?: MaintenancePlan) =>
+const getPlanActionByIdempotencyKey = (plan?: MaintenanceProposalPlan) =>
   new Map(plan?.actions.map((action) => [action.idempotencyKey, action]));
 
 const isVisibleProposalResult = (
   action: MaintenanceReviewRunResult['actions'][number],
   planActionByIdempotencyKey: Map<
     string,
-    MaintenancePlan['actions'][number]
+    MaintenanceProposalPlan['actions'][number]
   > = getPlanActionByIdempotencyKey(),
 ) => {
   if (action.status !== MaintenanceActionStatus.Proposed || !action.receiptId) return false;
@@ -143,7 +304,7 @@ const isVisibleProposalResult = (
 
 const countActions = (
   result: MaintenanceReviewRunResult,
-  plan?: MaintenancePlan,
+  plan?: MaintenanceProposalPlan,
 ): MaintenanceBriefActionCounts => {
   const counts: MaintenanceBriefActionCounts = {
     applied: 0,
@@ -188,7 +349,7 @@ const formatActionSummaries = (
   result: MaintenanceReviewRunResult,
   status: MaintenanceActionStatus,
   heading: string,
-  plan?: MaintenancePlan,
+  plan?: MaintenanceProposalPlan,
 ) => {
   const planActionByIdempotencyKey = getPlanActionByIdempotencyKey(plan);
   const summaries = result.actions
@@ -210,7 +371,7 @@ const createDetailedSummary = (
   result: MaintenanceReviewRunResult,
   status: MaintenanceActionStatus,
   heading: string,
-  plan?: MaintenancePlan,
+  plan?: MaintenanceProposalPlan,
 ) => {
   const details = formatActionSummaries(result, status, heading, plan);
 
@@ -221,7 +382,7 @@ const createBriefCopy = (
   outcome: MaintenanceBriefMetadata['outcome'],
   counts: MaintenanceBriefActionCounts,
   result: MaintenanceReviewRunResult,
-  plan?: MaintenancePlan,
+  plan?: MaintenanceProposalPlan,
 ) => {
   if (outcome === 'proposal') {
     const summary = `${counts.proposed} maintenance proposal${counts.proposed === 1 ? '' : 's'} need review.`;
@@ -353,18 +514,13 @@ export const createBriefMaintenanceService = () => ({
     return {
       ...(proposal ? { actions: AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS } : {}),
       agentId: input.agentId,
-      metadata: {
+      metadata: createNightlySelfReviewBriefMetadata({
         actionCounts,
         evidenceRefs: input.evidenceRefs ?? [],
-        localDate: input.localDate,
+        input,
         outcome,
-        ...(proposal ? { proposal } : {}),
-        receiptIds: getReceiptIds(input.result),
-        ...(input.result.sourceId ? { sourceId: input.result.sourceId } : {}),
-        timezone: input.timezone,
-        windowEnd: input.reviewWindowEnd,
-        windowStart: input.reviewWindowStart,
-      },
+        proposal,
+      }),
       priority: copy.priority,
       summary: copy.summary,
       title: copy.title,
@@ -391,42 +547,34 @@ export const createServerMaintenanceBriefWriter = (db: LobeChatDatabase, userId:
   const model = new BriefModel(db, userId);
 
   return {
-    writeDailyBrief: (brief: MaintenanceBriefProjection) =>
-      tracer.startActiveSpan(
+    writeDailyBrief: (brief: MaintenanceBriefProjection) => {
+      const incomingProposal = brief.metadata.agentSignal.nightlySelfReview.maintenanceProposal;
+
+      return tracer.startActiveSpan(
         'agent_signal.maintenance_brief.write',
         {
           attributes: {
             'agent.signal.agent_id': brief.agentId ?? '',
             'agent.signal.brief.trigger': brief.trigger,
             'agent.signal.user_id': userId,
-            ...(brief.metadata.proposal
+            ...(incomingProposal
               ? {
-                  'agent.signal.proposal.action_count': brief.metadata.proposal.actions.length,
-                  'agent.signal.proposal.key': brief.metadata.proposal.proposalKey,
+                  'agent.signal.proposal.action_count': incomingProposal.actions.length,
+                  'agent.signal.proposal.key': incomingProposal.proposalKey,
                 }
               : {}),
           },
         },
         async (span) => {
           try {
-            const incomingProposal = brief.metadata.proposal;
             if (!incomingProposal || !brief.agentId) return model.create(brief);
 
             const now = incomingProposal.updatedAt;
-            const rows = await model.listUnresolvedByAgentAndTrigger({
+            const existingBrief = await findExistingProposalBrief({
               agentId: brief.agentId,
-              limit: 20,
+              incomingProposal,
+              model,
               trigger: brief.trigger,
-            });
-            const existingBrief = rows.find((row) => {
-              const proposal = getMaintenanceProposalFromBriefMetadata(row.metadata);
-
-              return (
-                proposal?.proposalKey === incomingProposal.proposalKey &&
-                (proposal.status === 'pending' ||
-                  proposal.status === 'expired' ||
-                  proposal.status === 'stale')
-              );
             });
 
             if (!existingBrief) return model.create(brief);
@@ -442,10 +590,7 @@ export const createServerMaintenanceBriefWriter = (db: LobeChatDatabase, userId:
                 status: 'expired',
                 updatedAt: now,
               };
-              await model.updateMetadata(
-                existingBrief.id,
-                updateBriefProposalMetadata(existingBrief, expiredProposal),
-              );
+              await updateProposalMetadata(model, existingBrief, expiredProposal);
               span.setAttribute('agent.signal.proposal.status', 'expired');
 
               return model.create(brief);
@@ -471,27 +616,12 @@ export const createServerMaintenanceBriefWriter = (db: LobeChatDatabase, userId:
               });
               span.setAttribute('agent.signal.proposal.status', 'refreshed');
 
-              return tracer.startActiveSpan(
-                'agent_signal.maintenance_proposal.refresh',
-                {
-                  attributes: {
-                    'agent.signal.proposal.key': refreshedProposal.proposalKey,
-                    'agent.signal.proposal.status': refreshedProposal.status,
-                  },
-                },
-                async (refreshSpan) => {
-                  try {
-                    const updatedBrief = await model.updateMetadata(
-                      existingBrief.id,
-                      updateBriefProposalMetadata(existingBrief, refreshedProposal),
-                    );
-
-                    return updatedBrief ?? model.create(brief);
-                  } finally {
-                    refreshSpan.end();
-                  }
-                },
-              );
+              return refreshProposalBrief({
+                fallbackBrief: brief,
+                model,
+                proposal: refreshedProposal,
+                targetBrief: existingBrief,
+              });
             }
 
             const supersede = shouldSupersedeMaintenanceProposal({
@@ -505,25 +635,11 @@ export const createServerMaintenanceBriefWriter = (db: LobeChatDatabase, userId:
                 now,
                 supersededBy: incomingProposal.proposalKey,
               });
-              await tracer.startActiveSpan(
-                'agent_signal.maintenance_proposal.supersede',
-                {
-                  attributes: {
-                    'agent.signal.proposal.key': supersededProposal.proposalKey,
-                    'agent.signal.proposal.status': supersededProposal.status,
-                  },
-                },
-                async (supersedeSpan) => {
-                  try {
-                    await model.updateMetadata(
-                      existingBrief.id,
-                      updateBriefProposalMetadata(existingBrief, supersededProposal),
-                    );
-                  } finally {
-                    supersedeSpan.end();
-                  }
-                },
-              );
+              await supersedeProposalBrief({
+                model,
+                proposal: supersededProposal,
+                targetBrief: existingBrief,
+              });
               span.setAttribute('agent.signal.proposal.status', 'superseded');
 
               return model.create(brief);
@@ -541,6 +657,7 @@ export const createServerMaintenanceBriefWriter = (db: LobeChatDatabase, userId:
             span.end();
           }
         },
-      ),
+      );
+    },
   };
 };

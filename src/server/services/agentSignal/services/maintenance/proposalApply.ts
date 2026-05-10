@@ -1,7 +1,6 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 
-import type { CreateMaintenanceReviewReceiptsInput } from '../receiptService';
 import type { MaintenanceProposalApplyGateResult } from './brief';
 import type {
   MaintenanceProposalAction,
@@ -11,14 +10,9 @@ import type {
   MaintenanceProposalMetadata,
 } from './proposal';
 import type { MaintenanceProposalPreflightResult } from './proposalPreflight';
-import type { MaintenanceActionResult, MaintenancePlan, MaintenanceReviewRunResult } from './types';
-import {
-  MaintenanceActionStatus,
-  MaintenanceApplyMode,
-  MaintenanceReviewScope,
-  MaintenanceRisk,
-  ReviewRunStatus,
-} from './types';
+import type { MaintenanceTools, MaintenanceToolWriteResult } from './tools';
+import type { MaintenanceReviewRunResult } from './types';
+import { MaintenanceActionStatus, ReviewRunStatus } from './types';
 
 export interface ApplyMaintenanceProposalInput {
   /** Agent that owns the proposal target. */
@@ -40,7 +34,7 @@ export interface ApplyMaintenanceProposalInput {
 export interface ApplyMaintenanceProposalResult {
   /** Proposal metadata after the apply attempt has been recorded. */
   proposal: MaintenanceProposalMetadata;
-  /** Executor result for mergeable actions, or a synthetic result for skipped-only attempts. */
+  /** Synthetic review result projected from approve-time tool outcomes. */
   result: MaintenanceReviewRunResult;
 }
 
@@ -49,39 +43,18 @@ export interface MaintenanceProposalApplyAdapters {
   checkAction: (action: MaintenanceProposalAction) => Promise<MaintenanceProposalPreflightResult>;
   /** Re-checks feature/user/agent gates immediately before mutation. */
   checkGates: () => Promise<MaintenanceProposalApplyGateResult>;
-  /** Executes the fresh subset through the normal maintenance executor. */
-  executePlan: (plan: MaintenancePlan) => Promise<MaintenanceReviewRunResult>;
   /** Clock injected for deterministic apply-attempt metadata. */
   now?: () => string;
+  /** Safe maintenance write tools used for approve-time proposal application. */
+  tools: Pick<MaintenanceTools, 'createSkillIfAbsent' | 'replaceSkillContentCAS'>;
   /** Persists updated proposal metadata. */
   updateProposal: (proposal: MaintenanceProposalMetadata) => Promise<void>;
-  /** Persists approve-time receipts for the executed subset. */
-  writeReceipts?: (input: CreateMaintenanceReviewReceiptsInput) => Promise<void>;
 }
 
-interface PreparedAction {
+interface PreparedToolAction {
   action: MaintenanceProposalAction;
-  planAction: MaintenancePlan['actions'][number];
+  apply: () => Promise<MaintenanceToolWriteResult>;
 }
-
-const toPlanAction = (
-  action: MaintenanceProposalAction,
-): MaintenancePlan['actions'][number] | undefined => {
-  if (!action.operation) return;
-
-  return {
-    actionType: action.actionType,
-    applyMode: MaintenanceApplyMode.AutoApply,
-    confidence: 1,
-    dedupeKey: action.idempotencyKey,
-    evidenceRefs: action.evidenceRefs,
-    idempotencyKey: action.idempotencyKey,
-    operation: action.operation,
-    rationale: action.rationale,
-    risk: action.risk ?? MaintenanceRisk.Medium,
-    ...(action.target ? { target: action.target } : {}),
-  };
-};
 
 const toApplyResult = (
   action: MaintenanceProposalAction,
@@ -93,12 +66,22 @@ const toApplyResult = (
   summary,
 });
 
-const mapExecutionStatus = (
-  result: MaintenanceActionResult,
+const getOptionalString = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+const getRequiredString = (value: unknown) => {
+  const text = getOptionalString(value)?.trim();
+
+  return text || undefined;
+};
+
+const mapToolStatus = (
+  result: MaintenanceToolWriteResult,
 ): MaintenanceProposalActionApplyResult['status'] => {
-  if (result.status === MaintenanceActionStatus.Applied) return 'applied';
-  if (result.status === MaintenanceActionStatus.Deduped) return 'deduped';
-  if (result.status === MaintenanceActionStatus.Failed) return 'failed';
+  if (result.status === 'applied') return 'applied';
+  if (result.status === 'deduped') return 'deduped';
+  if (result.status === 'failed') return 'failed';
+  if (result.status === 'skipped_stale') return 'skipped_stale';
+  if (result.status === 'skipped_unsupported') return 'skipped_unsupported';
 
   return 'skipped_unsupported';
 };
@@ -155,8 +138,109 @@ const buildSyntheticResult = (
   })),
   status: actionResults.some((result) => result.status === 'failed')
     ? ReviewRunStatus.Failed
-    : ReviewRunStatus.Skipped,
+    : actionResults.some((result) => result.status === 'applied' || result.status === 'deduped')
+      ? ReviewRunStatus.Completed
+      : ReviewRunStatus.Skipped,
 });
+
+const buildUnsupportedResult = (action: MaintenanceProposalAction) =>
+  toApplyResult(
+    action,
+    'skipped_unsupported',
+    'Proposal action is not supported by approve-time apply.',
+  );
+
+const prepareToolAction = (
+  action: MaintenanceProposalAction,
+  input: ApplyMaintenanceProposalInput,
+  adapters: MaintenanceProposalApplyAdapters,
+): MaintenanceProposalActionApplyResult | PreparedToolAction => {
+  if (action.actionType === 'consolidate_skill') return buildUnsupportedResult(action);
+
+  if (action.actionType === 'refine_skill') {
+    if (
+      action.operation?.domain !== 'skill' ||
+      action.operation.operation !== 'refine' ||
+      !action.baseSnapshot
+    ) {
+      return toApplyResult(
+        action,
+        'skipped_unsupported',
+        'Proposal action is missing an executable operation.',
+      );
+    }
+
+    const operation = action.operation;
+    const operationInput = operation.input as unknown as Record<string, unknown>;
+    const bodyMarkdown = getRequiredString(operation.input.bodyMarkdown);
+    const description = getOptionalString(operationInput.description);
+    const skillDocumentId = getRequiredString(operation.input.skillDocumentId);
+
+    if (!bodyMarkdown || !skillDocumentId) {
+      return toApplyResult(
+        action,
+        'skipped_unsupported',
+        'Proposal action is missing an executable operation.',
+      );
+    }
+
+    return {
+      action,
+      apply: () =>
+        adapters.tools.replaceSkillContentCAS({
+          baseSnapshot: action.baseSnapshot!,
+          bodyMarkdown,
+          ...(description ? { description } : {}),
+          idempotencyKey: action.idempotencyKey,
+          proposalKey: input.proposal.proposalKey,
+          skillDocumentId,
+          summary: action.rationale,
+          userId: input.userId,
+        }),
+    };
+  }
+
+  if (action.actionType === 'create_skill') {
+    if (action.operation?.domain !== 'skill' || action.operation.operation !== 'create') {
+      return toApplyResult(
+        action,
+        'skipped_unsupported',
+        'Proposal action is missing an executable operation.',
+      );
+    }
+
+    const operation = action.operation;
+    const bodyMarkdown = getRequiredString(operation.input.bodyMarkdown);
+    const description = getOptionalString(operation.input.description);
+    const name = getRequiredString(operation.input.name);
+    const title = getOptionalString(operation.input.title);
+
+    if (!bodyMarkdown || !name) {
+      return toApplyResult(
+        action,
+        'skipped_unsupported',
+        'Proposal action is missing an executable operation.',
+      );
+    }
+
+    return {
+      action,
+      apply: () =>
+        adapters.tools.createSkillIfAbsent({
+          bodyMarkdown,
+          ...(description ? { description } : {}),
+          idempotencyKey: action.idempotencyKey,
+          name,
+          proposalKey: input.proposal.proposalKey,
+          summary: action.rationale,
+          ...(title ? { title } : {}),
+          userId: input.userId,
+        }),
+    };
+  }
+
+  return buildUnsupportedResult(action);
+};
 
 /**
  * Creates the approve-time merge path for Agent Signal maintenance proposals.
@@ -167,7 +251,7 @@ const buildSyntheticResult = (
  *
  * Expects:
  * - Callers persist proposal metadata through `updateProposal`
- * - `executePlan` is the same executor family used by nightly maintenance
+ * - `tools` are safe maintenance write tools with their own idempotency and mutation guards
  *
  * Returns:
  * - A service that records one apply attempt and never reruns reviewer/planner
@@ -192,7 +276,7 @@ export const createMaintenanceProposalApplyService = (
           const now = adapters.now?.() ?? new Date().toISOString();
           const gateResult = await adapters.checkGates();
           const skippedResults: MaintenanceProposalActionApplyResult[] = [];
-          const executableActions: PreparedAction[] = [];
+          const executableActions: PreparedToolAction[] = [];
           let conflictReason: MaintenanceProposalConflictReason | undefined;
 
           if (!gateResult.allowed) {
@@ -219,49 +303,27 @@ export const createMaintenanceProposalApplyService = (
                 continue;
               }
 
-              const planAction = toPlanAction(action);
-              if (!planAction) {
-                skippedResults.push(
-                  toApplyResult(
-                    action,
-                    'skipped_unsupported',
-                    'Proposal action is missing an executable operation.',
-                  ),
-                );
+              const prepared = prepareToolAction(action, input, adapters);
+              if ('status' in prepared) {
+                skippedResults.push(prepared);
                 continue;
               }
 
-              executableActions.push({ action, planAction });
+              executableActions.push(prepared);
             }
           }
 
-          const plan: MaintenancePlan = {
-            actions: executableActions.map(({ planAction }) => planAction),
-            plannerVersion: 'maintenance-proposal-apply-v1',
-            reviewScope: MaintenanceReviewScope.Nightly,
-            summary: `Apply maintenance proposal ${input.proposal.proposalKey}.`,
-            ...(input.localDate ? { localDate: input.localDate } : {}),
-          };
-          const execution =
-            plan.actions.length > 0
-              ? await adapters.executePlan(plan)
-              : buildSyntheticResult(skippedResults);
-          const executionByKey = new Map(
-            execution.actions.map((result) => [result.idempotencyKey, result]),
-          );
-          const executedResults = executableActions.map(({ action }) => {
-            const result = executionByKey.get(action.idempotencyKey);
-            if (!result) {
-              return toApplyResult(action, 'failed', 'Executor did not return an action result.');
-            }
-
-            return {
+          const executedResults = [];
+          for (const { action, apply } of executableActions) {
+            const result = await apply();
+            executedResults.push({
               idempotencyKey: action.idempotencyKey,
               ...(result.resourceId ? { resourceId: result.resourceId } : {}),
-              status: mapExecutionStatus(result),
+              status: mapToolStatus(result),
               ...(result.summary ? { summary: result.summary } : {}),
-            };
-          });
+            });
+          }
+
           const applyResultByKey = new Map(
             [...executedResults, ...skippedResults].map((result) => [
               result.idempotencyKey,
@@ -286,24 +348,14 @@ export const createMaintenanceProposalApplyService = (
             status: getProposalStatus(attemptStatus),
             updatedAt: now,
           };
-
-          if (plan.actions.length > 0 && adapters.writeReceipts) {
-            await adapters.writeReceipts({
-              agentId: input.agentId,
-              createdAt: Date.parse(now),
-              ...(input.localDate ? { localDate: input.localDate } : {}),
-              plan,
-              result: execution,
-              sourceId: input.sourceId,
-              sourceType: input.sourceType,
-              ...(input.timezone ? { timezone: input.timezone } : {}),
-              userId: input.userId,
-            });
-          }
+          const execution = buildSyntheticResult(actionResults);
 
           await adapters.updateProposal(proposal);
           span.setAttribute('agent.signal.proposal.apply_status', proposal.status);
-          span.setAttribute('agent.signal.proposal.executable_action_count', plan.actions.length);
+          span.setAttribute(
+            'agent.signal.proposal.executable_action_count',
+            executableActions.length,
+          );
           if (conflictReason) {
             span.setAttribute('agent.signal.proposal.conflict_reason', conflictReason);
           }
