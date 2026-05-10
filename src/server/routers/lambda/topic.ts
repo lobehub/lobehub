@@ -218,12 +218,6 @@ export const topicRouter = router({
     return ctx.topicModel.queryAll();
   }),
 
-  getCronTopicsGroupedByCronJob: topicProcedure
-    .input(z.object({ agentId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      return ctx.topicModel.getCronTopicsGroupedByCronJob(input.agentId);
-    }),
-
   getShareInfo: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {

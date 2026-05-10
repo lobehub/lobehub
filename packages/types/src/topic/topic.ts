@@ -77,9 +77,6 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
-  /**
-   * Cron job ID that triggered this topic creation (if created by scheduled task)
-   */
   cronJobId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running
