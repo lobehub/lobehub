@@ -12,24 +12,25 @@ const CopyableLabel = memo<CopyableLabelProps>(({ className, style, value = '--'
   return (
     <Flexbox
       horizontal
-      align={'center'}
+      align={'flex-start'}
       className={className}
       gap={4}
       style={{
-        overflow: 'hidden',
         position: 'relative',
+        width: '100%',
         ...style,
       }}
     >
       <Text
-        ellipsis
         style={{
           color: 'inherit',
+          flex: 1,
           fontFamily: 'inherit',
           fontSize: 'inherit',
           margin: 0,
-          overflow: 'hidden',
-          width: '100%',
+          minWidth: 0,
+          overflowWrap: 'anywhere',
+          whiteSpace: 'pre-wrap',
         }}
       >
         {value || '--'}
