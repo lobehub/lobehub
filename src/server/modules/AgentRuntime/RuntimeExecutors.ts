@@ -11,11 +11,6 @@ import {
 } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
-import {
-  CronIdentifier,
-  type CronJobSummaryForContext,
-  generateCronJobsList,
-} from '@lobechat/builtin-tool-cron';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
@@ -38,7 +33,6 @@ import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
-import { AgentCronJobModel } from '@/database/models/agentCronJob';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -527,7 +521,7 @@ export const createRuntimeExecutors = (
         // and lambdaClient. In execAgent (server/bot) mode we must fetch from DB
         // directly. Each block is gated on the relevant tool being enabled.
 
-        // {{username}} / {{language}} — used by memory, cron, and creds system roles.
+        // {{username}} / {{language}} — used by memory and creds system roles.
         // Single indexed DB lookup; cheap enough to run on each call_llm step.
         let serverUsername = '';
         let serverLanguage = '';
@@ -575,35 +569,6 @@ export const createRuntimeExecutors = (
           }
         }
 
-        // {{CRON_JOBS_LIST}} — used by lobe-cron system role.
-        // Mirrors client-side: lambdaClient.agentCronJob.list.query({ agentId, limit: 4 })
-        const isCronEnabled = resolved.enabledToolIds.includes(CronIdentifier);
-        let cronJobsListStr = '';
-        if (isCronEnabled && lobehubSkillAgentId && ctx.serverDB && ctx.userId) {
-          try {
-            const cronJobModel = new AgentCronJobModel(ctx.serverDB, ctx.userId);
-            const { jobs, total } = await cronJobModel.findWithPagination({
-              agentId: lobehubSkillAgentId,
-              limit: 4,
-            });
-            const summaries: CronJobSummaryForContext[] = jobs.map((job) => ({
-              cronPattern: job.cronPattern,
-              description: job.description ?? undefined,
-              enabled: job.enabled ?? false,
-              id: job.id,
-              lastExecutedAt: job.lastExecutedAt?.toISOString() ?? null,
-              name: job.name ?? null,
-              remainingExecutions: job.remainingExecutions ?? null,
-              timezone: job.timezone ?? 'UTC',
-              totalExecutions: job.totalExecutions ?? 0,
-            }));
-            cronJobsListStr = generateCronJobsList(summaries, total);
-            log('Fetched %d cron jobs for {{CRON_JOBS_LIST}} substitution', jobs.length);
-          } catch (error) {
-            log('Failed to fetch cron jobs for {{CRON_JOBS_LIST}} substitution: %O', error);
-          }
-        }
-
         const contextEngineInput = {
           agentDocuments,
           additionalVariables: {
@@ -617,8 +582,6 @@ export const createRuntimeExecutors = (
             ...(isCredsEnabled && { CREDS_LIST: credsListStr }),
             // Memory tool variables
             memory_effort: memoryEffort,
-            // Cron tool variables
-            ...(isCronEnabled && { CRON_JOBS_LIST: cronJobsListStr }),
           },
           userTimezone: ctx.userTimezone,
           capabilities: {

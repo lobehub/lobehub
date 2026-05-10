@@ -55,7 +55,7 @@ export function registerBriefCommand(program: Command) {
           typeBadge(b.type, b.priority),
           truncate(b.title, 40),
           truncate(b.summary, 50),
-          b.taskId ? pc.dim(b.taskId) : b.cronJobId ? pc.dim(b.cronJobId) : '-',
+          b.taskId ? pc.dim(b.taskId) : '-',
           b.resolvedAt ? pc.green('resolved') : b.readAt ? pc.dim('read') : 'new',
           timeAgo(b.createdAt),
         ]);
@@ -102,7 +102,6 @@ export function registerBriefCommand(program: Command) {
       console.log(`${pc.dim('Type:')} ${b.type}  ${pc.dim('Created:')} ${timeAgo(b.createdAt)}`);
       if (b.agentId) console.log(`${pc.dim('Agent:')} ${b.agentId}`);
       if (b.taskId) console.log(`${pc.dim('Task:')} ${b.taskId}`);
-      if (b.cronJobId) console.log(`${pc.dim('CronJob:')} ${b.cronJobId}`);
       if (b.topicId) console.log(`${pc.dim('Topic:')} ${b.topicId}`);
       console.log(`\n${b.summary}`);
 
