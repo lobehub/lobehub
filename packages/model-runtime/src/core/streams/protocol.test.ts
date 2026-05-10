@@ -321,6 +321,60 @@ describe('convertIterableToStream', () => {
     expect(chunks[1].causeName).toBe('SyntaxError');
     expect(chunks[1].causeMessage).toBe('inner parse failure');
   });
+
+  it('should extract parsePosition from a wrapped SyntaxError cause', async () => {
+    // Many provider SDKs rethrow JSON.parse failures wrapped in their own
+    // error class (e.g. APIError) — the outer name is no longer
+    // 'SyntaxError', so the offset has to be pulled from `cause`.
+    class APIError extends Error {
+      constructor(message: string, options?: { cause?: unknown }) {
+        super(message, options);
+        this.name = 'APIError';
+      }
+    }
+
+    async function* erroringStream() {
+      yield 'first';
+      throw new APIError('upstream failed', {
+        cause: new SyntaxError(
+          'Bad escaped character in JSON at position 160050 (line 1 column 160051)',
+        ),
+      });
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[1].name).toBe('APIError');
+    expect(chunks[1].causeName).toBe('SyntaxError');
+    expect(chunks[1].parsePosition).toBe(160050);
+  });
+
+  it('should not throw when cause contains BigInt or circular refs', async () => {
+    // structuredClone accepts both of these; JSON.stringify does not. If the
+    // outer stringify in buildStreamErrorPayload fails, the FIRST_CHUNK_ERROR
+    // chunk is never emitted and the stream silently dies — test that the
+    // diagnostic path stays intact.
+    const circular: Record<string, unknown> = { kind: 'detail' };
+    circular.self = circular;
+    const badCause = { big: 9_007_199_254_740_993n, ref: circular };
+
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('upstream blew up', { cause: badCause });
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[1].message).toBe('upstream blew up');
+    // Cause is an object, not an Error, so it goes through `toJsonSafe`.
+    expect(chunks[1].cause).toBeDefined();
+    expect(chunks[1].cause.big).toBe('9007199254740993');
+    expect(chunks[1].cause.ref.self).toBe('[Circular]');
+  });
 });
 
 describe('createSSEProtocolTransformer', () => {

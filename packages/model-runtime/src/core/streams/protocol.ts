@@ -166,7 +166,10 @@ export type StreamErrorContext = {
  *   in `cause` and the bare triplet drops it
  * - `parsePosition` extracted from V8 JSON SyntaxError messages
  *   (e.g. `"Bad escaped character in JSON at position 160050"`) so we can
- *   group by failure offset and confirm the same chunk class is recurring
+ *   group by failure offset and confirm the same chunk class is recurring.
+ *   Walks both the outer error and any Error cause — SDKs commonly wrap
+ *   the SyntaxError in an APIError, and the wrapped case is exactly the
+ *   one this enrichment is meant to diagnose.
  */
 const buildStreamErrorPayload = (error: Error, context?: StreamErrorContext): string => {
   const payload: Record<string, unknown> = {
@@ -179,24 +182,74 @@ const buildStreamErrorPayload = (error: Error, context?: StreamErrorContext): st
   if (context?.model) payload.model = context.model;
 
   const cause = (error as { cause?: unknown }).cause;
-  if (cause instanceof Error) {
-    payload.causeName = cause.name;
-    payload.causeMessage = cause.message;
+  const causeAsError = cause instanceof Error ? cause : undefined;
+
+  if (causeAsError) {
+    payload.causeName = causeAsError.name;
+    payload.causeMessage = causeAsError.message;
   } else if (cause !== undefined && cause !== null) {
-    payload.cause = typeof cause === 'object' ? safeStringifyCause(cause) : String(cause);
+    payload.cause = typeof cause === 'object' ? toJsonSafe(cause) : String(cause);
   }
 
-  if (error.name === 'SyntaxError') {
-    const match = /position\s+(\d+)/i.exec(error.message);
-    if (match) payload.parsePosition = Number(match[1]);
-  }
+  const parsePosition = extractParsePosition(error) ?? extractParsePosition(causeAsError);
+  if (parsePosition !== undefined) payload.parsePosition = parsePosition;
 
-  return ERROR_CHUNK_PREFIX + JSON.stringify(payload);
+  return ERROR_CHUNK_PREFIX + safeJsonStringify(payload);
 };
 
-const safeStringifyCause = (cause: object): unknown => {
+/**
+ * Extract a JSON parse offset from V8's `SyntaxError` message format
+ * (`"... in JSON at position N (line ... column ...)"`). Accepts either a
+ * `SyntaxError` directly or any `Error` whose message still carries the
+ * `"JSON at position"` signature — wrapped errors routinely lose the
+ * `SyntaxError` name but preserve the offset in the message string.
+ */
+const extractParsePosition = (error: Error | undefined): number | undefined => {
+  if (!error) return undefined;
+  const isJsonParseError = error.name === 'SyntaxError' || /JSON at position/i.test(error.message);
+  if (!isJsonParseError) return undefined;
+  const match = /position\s+(\d+)/i.exec(error.message);
+  return match ? Number(match[1]) : undefined;
+};
+
+/**
+ * `JSON.stringify` with a replacer that handles `BigInt` and circular refs
+ * so the outer stringify in `buildStreamErrorPayload` never throws.
+ *
+ * If this throws, the FIRST_CHUNK_ERROR chunk never gets emitted and a
+ * diagnostic path turns into a hard stream failure — `safeJsonStringify`
+ * is the difference between "consumer sees a typed error" and "consumer
+ * sees the stream just stop".
+ */
+const safeJsonStringify = (value: unknown): string => {
+  const seen = new WeakSet<object>();
   try {
-    return structuredClone(cause);
+    return JSON.stringify(value, (_key, val) => {
+      if (typeof val === 'bigint') return val.toString();
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val as object)) return '[Circular]';
+        seen.add(val as object);
+      }
+      return val;
+    });
+  } catch {
+    return JSON.stringify({
+      message: 'Failed to serialize error payload',
+      name: 'StreamErrorSerializationFailure',
+    });
+  }
+};
+
+/**
+ * Reduce an arbitrary cause object to a JSON-safe shape. `structuredClone`
+ * succeeds on values that `JSON.stringify` later chokes on (cycles, BigInt,
+ * functions in nested values), so the clone alone isn't enough — we run
+ * the result through `safeJsonStringify` and parse it back so consumers
+ * always receive plain JSON.
+ */
+const toJsonSafe = (cause: object): unknown => {
+  try {
+    return JSON.parse(safeJsonStringify(cause));
   } catch {
     return String(cause);
   }
