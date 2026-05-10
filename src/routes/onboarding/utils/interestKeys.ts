@@ -1,10 +1,7 @@
-import type { InterestAreaKey } from '../config';
-import { INTEREST_AREAS } from '../config';
+import type { InterestAreaKey } from '@lobechat/const';
+import { isInterestAreaKey } from '@lobechat/const';
 
-const interestAreaKeys = new Set<string>(INTEREST_AREAS.map((area) => area.key));
-
-export const isInterestAreaKey = (value: string): value is InterestAreaKey =>
-  interestAreaKeys.has(value);
+export { isInterestAreaKey } from '@lobechat/const';
 
 export const resolveInterestAreaKey = (value: string): InterestAreaKey | undefined => {
   const normalized = value.trim();
