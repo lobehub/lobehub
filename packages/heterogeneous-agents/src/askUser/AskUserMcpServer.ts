@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import type { InterventionAnswer } from './AskUserBridge';
@@ -69,6 +70,11 @@ interface RegisteredOperation {
   bridge: AskUserBridge;
 }
 
+interface SessionEntry {
+  mcp: McpServer;
+  transport: StreamableHTTPServerTransport;
+}
+
 /**
  * Process-wide MCP server that exposes a single `ask_user_question` tool to
  * CC over HTTP/SSE. One server, many concurrent operations — each spawn
@@ -82,11 +88,21 @@ interface RegisteredOperation {
  *   ...spawn CC pointing at server.url + ?op=opId...
  *   server.unregisterOperation(opId)    // releases bridge resources
  *   server.stop()                       // on app shutdown
+ *
+ * ## Per-session transport
+ *
+ * Each MCP `initialize` from a new CC subprocess gets its own
+ * `StreamableHTTPServerTransport` + `McpServer` pair. The SDK's transport
+ * stores `_initialized=true` and a `sessionId` per instance, so reusing a
+ * single transport across sequential ops makes the second `initialize` fail
+ * with `Invalid Request: Server already initialized`. Subsequent requests
+ * from the same CC subprocess (carrying `mcp-session-id`) route back to the
+ * matching transport via `sessionTransports` lookup.
  */
 export class AskUserMcpServer {
   private httpServer?: http.Server;
-  private readonly transport: StreamableHTTPServerTransport;
-  private readonly mcp: McpServer;
+  /** sessionId → transport+mcp pair. Populated on initialize, removed on session close. */
+  private readonly sessionTransports = new Map<string, SessionEntry>();
   private readonly operations = new Map<string, RegisteredOperation>();
   /**
    * MCP session id → operationId. Populated when a CC initialize POST
@@ -104,25 +120,6 @@ export class AskUserMcpServer {
   constructor(private readonly options: AskUserMcpServerOptions = {}) {
     this.pendingTimeoutMs = options.pendingTimeoutMs ?? 5 * 60 * 1000;
     this.progressIntervalMs = options.progressIntervalMs ?? 30_000;
-
-    this.mcp = new McpServer(
-      { name: ASK_USER_MCP_SERVER_NAME, version: '1.0.0' },
-      { capabilities: { tools: {} } },
-    );
-
-    // Stateful session id is required — empirically CC rejects the
-    // stateless mode (no session id returned on initialize → all
-    // subsequent requests fail). The session→op binding is set the moment
-    // the SDK generates a fresh sessionId for an initialize request.
-    this.transport = new StreamableHTTPServerTransport({
-      onsessioninitialized: (sessionId: string) => {
-        const opId = this.opIdContext.getStore();
-        if (opId) this.sessionIdToOpId.set(sessionId, opId);
-      },
-      sessionIdGenerator: () => randomUUID(),
-    });
-
-    this.registerAskUserTool();
   }
 
   /** URL only valid after `start()` resolves. */
@@ -138,8 +135,6 @@ export class AskUserMcpServer {
       // idempotent — repeat calls return the existing started state.
       return { port: (this.httpServer.address() as AddressInfo).port, url: this.url };
     }
-
-    await this.mcp.connect(this.transport);
 
     const httpServer = http.createServer(async (req, res) => {
       // Only the `/mcp` path is part of our contract. Anything else is
@@ -166,7 +161,22 @@ export class AskUserMcpServer {
 
       await this.opIdContext.run(opId, async () => {
         try {
-          await this.transport.handleRequest(req, res, body);
+          const transport = await this.resolveTransport(req, body);
+          if (!transport) {
+            res.writeHead(400, { 'content-type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error: {
+                  code: -32_000,
+                  message: 'Bad Request: no session and no initialize request',
+                },
+                id: null,
+                jsonrpc: '2.0',
+              }),
+            );
+            return;
+          }
+          await transport.handleRequest(req, res, body);
         } catch (err) {
           if (!res.headersSent) {
             res.writeHead(500, { 'content-type': 'text/plain' });
@@ -193,7 +203,12 @@ export class AskUserMcpServer {
   async stop(): Promise<void> {
     // Close all bridges first so pending MCP handlers return quickly.
     for (const [opId] of this.operations) this.unregisterOperation(opId);
-    await this.transport.close().catch(() => {});
+    // Tear down every per-session transport + MCP server pair.
+    for (const [, entry] of this.sessionTransports) {
+      await entry.transport.close().catch(() => {});
+      await entry.mcp.close().catch(() => {});
+    }
+    this.sessionTransports.clear();
     await new Promise<void>((resolve) => {
       if (!this.httpServer) {
         resolve();
@@ -247,8 +262,76 @@ export class AskUserMcpServer {
     return this.operations.size;
   }
 
-  private registerAskUserTool() {
-    this.mcp.registerTool(
+  /** Active MCP session count (initialize succeeded, not yet closed). */
+  get sessionCount(): number {
+    return this.sessionTransports.size;
+  }
+
+  /**
+   * Locate (or build) the transport that should handle this request.
+   *
+   * - Existing session id (header) → matching stored transport
+   * - No session id + initialize body → fresh transport+mcp pair, registered
+   *   on `onsessioninitialized` so the very next message from this client
+   *   finds its session
+   * - Anything else → null (caller responds with 400)
+   */
+  private async resolveTransport(
+    req: http.IncomingMessage,
+    body: unknown,
+  ): Promise<StreamableHTTPServerTransport | undefined> {
+    const sessionId = (req.headers['mcp-session-id'] as string | undefined) ?? undefined;
+    if (sessionId) {
+      const entry = this.sessionTransports.get(sessionId);
+      if (entry) return entry.transport;
+      // Unknown session id — let the SDK respond 404; we still return the
+      // transport-less response below.
+      return undefined;
+    }
+
+    if (body && isInitializeRequest(body)) {
+      return this.createSessionTransport();
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Build a fresh `StreamableHTTPServerTransport` + `McpServer` pair for a
+   * new MCP session. The pair is registered into `sessionTransports` from
+   * the `onsessioninitialized` callback, so every subsequent request
+   * tagged with that sessionId routes back here without reconstruction.
+   */
+  private createSessionTransport(): StreamableHTTPServerTransport {
+    const mcp = new McpServer(
+      { name: ASK_USER_MCP_SERVER_NAME, version: '1.0.0' },
+      { capabilities: { tools: {} } },
+    );
+    this.registerAskUserTool(mcp);
+
+    const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
+      onsessionclosed: (sessionId: string) => {
+        this.sessionTransports.delete(sessionId);
+        this.sessionIdToOpId.delete(sessionId);
+      },
+      onsessioninitialized: (sessionId: string) => {
+        this.sessionTransports.set(sessionId, { mcp, transport });
+        const opId = this.opIdContext.getStore();
+        if (opId) this.sessionIdToOpId.set(sessionId, opId);
+      },
+      sessionIdGenerator: () => randomUUID(),
+    });
+
+    // Connect synchronously so the first request's body can be processed
+    // by the same transport we just built. `mcp.connect(transport)` is
+    // idempotent at this stage and resolves before `handleRequest` is
+    // called by the caller.
+    void mcp.connect(transport);
+    return transport;
+  }
+
+  private registerAskUserTool(mcp: McpServer) {
+    mcp.registerTool(
       ASK_USER_TOOL_NAME,
       {
         description: ASK_USER_TOOL_DESCRIPTION,

@@ -198,6 +198,54 @@ describe('AskUserMcpServer', () => {
       }
       await producerLoop;
     });
+
+    /**
+     * Regression: a single shared `StreamableHTTPServerTransport` rejects the
+     * second `initialize` with `Server already initialized`, breaking every
+     * op after the first. Ensures we mint one transport+McpServer per session.
+     */
+    it('handles sequential ops on independent sessions', async () => {
+      server = new AskUserMcpServer({ pendingTimeoutMs: 30_000, progressIntervalMs: 1000 });
+      await server.start();
+
+      for (const opId of ['op-seq-1', 'op-seq-2', 'op-seq-3']) {
+        const bridge = server.registerOperation(opId);
+        const producerLoop = (async () => {
+          for await (const e of bridge.events()) {
+            if (e.type === 'agent_intervention_request') {
+              bridge.resolve(e.data.toolCallId, { result: { pick: 'A' } });
+              break;
+            }
+          }
+        })();
+
+        const client = await connectClient(server.urlForOperation(opId));
+        try {
+          const callResult = (await client.callTool({
+            arguments: {
+              questions: [
+                {
+                  header: opId,
+                  options: [
+                    { description: 'a', label: 'A' },
+                    { description: 'b', label: 'B' },
+                  ],
+                  question: 'pick',
+                },
+              ],
+            },
+            name: ASK_USER_TOOL_NAME,
+          })) as { content: Array<{ text: string }>; isError?: boolean };
+
+          expect(callResult.isError).toBeFalsy();
+          expect(callResult.content[0].text).toContain('pick: A');
+        } finally {
+          await client.close();
+        }
+        await producerLoop;
+        server.unregisterOperation(opId);
+      }
+    });
   });
 });
 
