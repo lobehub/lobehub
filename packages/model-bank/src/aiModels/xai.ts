@@ -47,6 +47,7 @@ const xaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-01',
     settings: {
+      extendParams: ['grok4_3ReasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
