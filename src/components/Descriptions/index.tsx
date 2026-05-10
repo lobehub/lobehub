@@ -46,7 +46,7 @@ export interface DescriptionItem {
   value: ReactNode;
 }
 
-interface DescriptionsProps extends Omit<GridProps, 'children'> {
+interface DescriptionsProps extends Omit<GridProps, 'children' | 'wrap'> {
   bordered?: boolean;
   classNames?: {
     item?: string;
@@ -60,6 +60,7 @@ interface DescriptionsProps extends Omit<GridProps, 'children'> {
     label?: CSSProperties;
     value?: CSSProperties;
   };
+  wrap?: boolean;
 }
 
 const Descriptions = memo<DescriptionsProps>(
@@ -71,6 +72,7 @@ const Descriptions = memo<DescriptionsProps>(
     items,
     classNames,
     styles: customStyles,
+    wrap,
     ...rest
   }) => {
     return (
@@ -85,12 +87,12 @@ const Descriptions = memo<DescriptionsProps>(
           {items.map((item) => (
             <Flexbox
               horizontal
-              align={'center'}
+              align={wrap ? 'flex-start' : 'center'}
               className={cx(bordered && styles.cell, item.className, classNames?.item)}
               flex={1}
               key={item.key}
               style={{
-                overflow: 'hidden',
+                overflow: wrap ? undefined : 'hidden',
                 position: 'relative',
                 ...customStyles?.item,
                 ...item.style,
@@ -122,24 +124,37 @@ const Descriptions = memo<DescriptionsProps>(
               </Flexbox>
               <Flexbox
                 horizontal
-                align={'center'}
+                align={wrap ? 'flex-start' : 'center'}
                 flex={1}
                 justify={'flex-start'}
                 paddingBlock={bordered ? 12 : 4}
                 paddingInline={16}
-                style={{ height: '100%', overflow: 'hidden', position: 'relative' }}
+                style={{
+                  height: '100%',
+                  overflow: wrap ? undefined : 'hidden',
+                  position: 'relative',
+                }}
               >
                 {item.copyable ? (
                   <CopyableLabel
                     className={cx(classNames?.value, item.classNames?.value)}
                     style={{ ...customStyles?.value, ...item.styles?.value }}
                     value={item.value ? String(item.value) : '--'}
+                    wrap={wrap}
                   />
                 ) : (
                   <Text
-                    ellipsis
                     className={cx(classNames?.value, item.classNames?.value)}
-                    style={{ ...customStyles?.value, ...item.styles?.value }}
+                    ellipsis={!wrap}
+                    style={{
+                      ...(wrap && {
+                        overflowWrap: 'anywhere',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }),
+                      ...customStyles?.value,
+                      ...item.styles?.value,
+                    }}
                   >
                     {item.value}
                   </Text>
