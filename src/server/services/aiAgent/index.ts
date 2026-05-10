@@ -684,23 +684,23 @@ export class AiAgentService {
       const topic = await this.topicModel.findById(topicId);
       const topicRepos: string[] = topic?.metadata?.repos ?? [];
 
-      // Resolve GitHub OAuth token so the sandbox can clone private repos.
+      // Resolve GitHub OAuth token for the sandbox. Always attempt so CC can use
+      // git / gh CLI even when no repos are pre-selected. Falls back to the
+      // standard 'github' key (LobeHub OAuth connector default); agent config can
+      // override via GITHUB_CRED_KEY.
       let githubToken: string | undefined;
-      if (topicRepos.length > 0) {
-        const githubCredKey = agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY;
-        if (githubCredKey) {
-          try {
-            const list = await this.marketService.market.creds.list();
-            const cred = list.data?.find((c: { key: string }) => c.key === githubCredKey);
-            if (cred) {
-              const full = await this.marketService.market.creds.get(cred.id, { decrypt: true });
-              const vals = (full as any).plaintext ?? (full as any).values ?? {};
-              githubToken = vals.access_token ?? vals.token;
-            }
-          } catch (err) {
-            log('execAgent: failed to resolve GitHub token for repo clone: %O', err);
-          }
+      const githubCredKey =
+        agentConfig.agencyConfig?.heterogeneousProvider?.env?.GITHUB_CRED_KEY ?? 'github';
+      try {
+        const list = await this.marketService.market.creds.list();
+        const cred = list.data?.find((c: { key: string }) => c.key === githubCredKey);
+        if (cred) {
+          const full = await this.marketService.market.creds.get(cred.id, { decrypt: true });
+          const vals = (full as any).plaintext ?? (full as any).values ?? {};
+          githubToken = vals.access_token ?? vals.token;
         }
+      } catch (err) {
+        log('execAgent: failed to resolve GitHub token: %O', err);
       }
 
       // Build cloud-specific system context (repo list + workspace info + optional agent-level static context).

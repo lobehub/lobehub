@@ -79,13 +79,6 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/agent/cron/[cronId]'),
-                  'Desktop > Chat > Cron Detail',
-                ),
-                path: 'cron/:cronId',
-              },
-              {
-                element: dynamicElement(
                   () => import('@/routes/(main)/agent/channel'),
                   'Desktop > Chat > Channel',
                 ),
