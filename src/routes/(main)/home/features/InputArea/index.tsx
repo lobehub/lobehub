@@ -14,6 +14,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import BotIntegrationBanner, { BOT_INTEGRATION_BANNER_ID } from './BotIntegrationBanner';
+import { stripMarkdownLinks } from './hintFormat';
 import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
@@ -99,7 +100,7 @@ const InputArea = () => {
   // tracks whichever pair the WelcomeText typewriter is currently showing,
   // via the shared rotating index inside `useHomeDailyBrief`.
   const { currentPair } = useHomeDailyBrief();
-  const dailyHint = currentPair?.hint;
+  const dailyHint = currentPair?.hint ? stripMarkdownLinks(currentPair.hint) : undefined;
 
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>

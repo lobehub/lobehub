@@ -1,10 +1,11 @@
+import { INTEREST_AREA_KEYS } from '@lobechat/const';
 import type { BuiltinToolManifest, HumanInterventionRule } from '@lobechat/types';
 
 import { toolSystemPrompt } from './toolSystemRole';
 import { WebOnboardingApiName, WebOnboardingIdentifier } from './types';
 
 // Agent identity (name/emoji) surface a confirmation card;
-// user profile fields (fullName) and interests saves bypass intervention.
+// user profile fields (fullName) and interest saves bypass intervention.
 const saveUserQuestionConfirmationRules: HumanInterventionRule[] = [
   {
     match: {
@@ -25,7 +26,7 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Persist structured onboarding fields. agentName and agentEmoji (updates inbox agent title/avatar) require user confirmation; interests-only saves run without confirmation.',
+        'Persist structured onboarding fields. agentName and agentEmoji (updates inbox agent title/avatar) require user confirmation; interests/customInterests saves run without confirmation.',
       humanIntervention: saveUserQuestionConfirmationRules,
       name: WebOnboardingApiName.saveUserQuestion,
       parameters: {
@@ -42,8 +43,18 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
           fullName: {
             type: 'string',
           },
-          interests: {
+          customInterests: {
+            description:
+              'Specific freeform user interests that do not fit the predefined interest keys.',
             items: {
+              type: 'string',
+            },
+            type: 'array',
+          },
+          interests: {
+            description: 'Predefined interest keys selected from the supported enum values.',
+            items: {
+              enum: [...INTEREST_AREA_KEYS],
               type: 'string',
             },
             type: 'array',

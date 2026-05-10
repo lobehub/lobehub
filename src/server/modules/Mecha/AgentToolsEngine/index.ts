@@ -95,6 +95,7 @@ export const createServerAgentToolsEngine = (
   const {
     additionalManifests,
     agentConfig,
+    canUseDevice = false,
     clientRuntime,
     deviceContext,
     disableLocalSystem = false,
@@ -139,7 +140,7 @@ export const createServerAgentToolsEngine = (
   const isSearchEnabled = searchMode !== 'off';
 
   log(
-    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasClientExecutor=%s hasDeviceProxy=%s',
+    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasClientExecutor=%s hasDeviceProxy=%s canUseDevice=%s',
     model,
     provider,
     searchMode,
@@ -148,6 +149,7 @@ export const createServerAgentToolsEngine = (
     additionalManifests?.length ?? 0,
     hasClientExecutor,
     hasDeviceProxy,
+    canUseDevice,
   );
 
   return createServerToolsEngine(context, {
@@ -166,14 +168,16 @@ export const createServerAgentToolsEngine = (
         // System-level rules (may override user selection for specific tools)
         [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
         [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
-        // Local-system: user must have opted into local runtime on this
-        // platform (`runtimeMode === 'local'`), AND one execution channel
-        // must exist:
+        // Local-system: gated by `canUseDevice` (resolveDeviceAccessPolicy)
+        // first — keeps external bot senders out before runtime checks even
+        // run. Then user must have opted into local runtime on this platform
+        // (`runtimeMode === 'local'`), AND one execution channel must exist:
         //  - `hasClientExecutor` — Phase 6.4 dispatch over the Agent Gateway
         //    WS that this request is already riding on; no extra server-side
         //    prerequisite needed;
         //  - legacy device-proxy with an online & auto-activated device.
         [LocalSystemManifest.identifier]:
+          canUseDevice &&
           !disableLocalSystem &&
           runtimeMode === 'local' &&
           (hasClientExecutor ||
@@ -186,19 +190,13 @@ export const createServerAgentToolsEngine = (
         // the caller itself can execute `executor: 'client'` tools, the
         // proxy is redundant — local-system goes directly to the caller.
         //
-        // Bot conversations (Telegram/Discord/Slack/…) never have a
-        // client-executor by definition, which would otherwise make
-        // RemoteDevice permanently auto-enabled there. Its systemRole
-        // tells the model to "inform the user to open their desktop
-        // application" when no device is online, overriding the
-        // Activator's own guidance and blocking discovery of cloud tools
-        // (e.g. Klavis Gmail). Keep RemoteDevice discoverable via the
-        // Activator in bot flows, but don't inject it by default.
+        // `canUseDevice` is the first short-circuit: external bot senders
+        // (and unconfigured bot owners) never reach the proxy, both because
+        // it would let them poke at the owner's machine AND because its
+        // systemRole would otherwise leak the device list into the LLM
+        // context — see the gated injection in `aiAgent.execAgent`.
         [RemoteDeviceManifest.identifier]:
-          hasDeviceProxy &&
-          !deviceContext?.autoActivated &&
-          !hasClientExecutor &&
-          !isBotConversation,
+          canUseDevice && hasDeviceProxy && !deviceContext?.autoActivated && !hasClientExecutor,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
       },

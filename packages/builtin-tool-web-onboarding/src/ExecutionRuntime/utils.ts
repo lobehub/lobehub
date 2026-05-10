@@ -15,6 +15,7 @@ interface WebOnboardingToolActionResult {
 const FIELD_LABELS: Record<SaveUserQuestionField, string> = {
   agentEmoji: 'agent emoji',
   agentName: 'agent name',
+  customInterests: 'custom interests',
   fullName: 'full name',
   interests: 'interests',
 };

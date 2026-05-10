@@ -16,6 +16,7 @@ import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools'
 import { LOADING_FLAT } from '@lobechat/const';
 import type {
   AgentManagementContext,
+  BotPlatformContext,
   LobeToolManifest,
   ToolExecutor,
   ToolSource,
@@ -74,6 +75,7 @@ import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
 
+import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { ingestAttachment } from './ingestAttachment';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -141,7 +143,7 @@ interface InternalExecAgentParams extends ExecAgentParams {
   /** Bot context for topic metadata (platform, applicationId, platformThreadId) */
   botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
-  botPlatformContext?: any;
+  botPlatformContext?: BotPlatformContext;
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
@@ -836,6 +838,23 @@ export class AiAgentService {
     let hasEnabledKnowledgeBases = false;
     const isBotConversation = !!(botContext || discordContext);
 
+    // Resolve device-tool access ONCE per turn. The decision flows into both
+    // the engine's enable gates (LocalSystem / RemoteDevice) and the
+    // RemoteDevice systemRole injection below. Discord-only flows (no
+    // botContext) keep the legacy first-party allow path; an external bot
+    // sender returns canUseDevice=false and reason='bot-external-sender',
+    // which both denies the tools and stops the device list from leaking
+    // into the LLM context.
+    const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
+      botContext,
+    });
+    log(
+      'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
+      canUseDevice,
+      deviceAccessReason,
+      !!botContext,
+    );
+
     // These are needed outside the tools block (for agent management context, skill engine, etc.)
     let lobehubSkillManifests: LobeToolManifest[] = [];
     let klavisManifests: LobeToolManifest[] = [];
@@ -983,18 +1002,26 @@ export class AiAgentService {
         ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
       ];
 
-      // Derive activeDeviceId from device context:
+      // Derive activeDeviceId from device context. Gated on `canUseDevice`
+      // first — without this guard, an external bot sender's turn would still
+      // populate `state.metadata.activeDeviceId`, and `buildStepToolDelta`
+      // re-injects `LocalSystemManifest` whenever activeDeviceId is set,
+      // bypassing the engine's enabledToolIds exclusion. Skipping the
+      // assignment here closes that bypass at the source.
+      //
       // 1. If this run explicitly requested a device and that device is online, use it
       // 2. Otherwise, if the current topic has a bound device and it is online, use that
       // 3. Otherwise, fall back to the agent-level bound device when it is online
       // 4. Otherwise, in IM/Bot scenarios, auto-activate only when exactly one device is online
-      activeDeviceId = boundDeviceId
-        ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
-          ? boundDeviceId
-          : undefined
-        : (discordContext || botContext) && onlineDevices.length === 1
-          ? onlineDevices[0].deviceId
-          : undefined;
+      activeDeviceId = !canUseDevice
+        ? undefined
+        : boundDeviceId
+          ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
+            ? boundDeviceId
+            : undefined
+          : (discordContext || botContext) && onlineDevices.length === 1
+            ? onlineDevices[0].deviceId
+            : undefined;
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
         additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
@@ -1002,6 +1029,7 @@ export class AiAgentService {
           chatConfig: agentConfig.chatConfig ?? undefined,
           plugins: agentPlugins,
         },
+        canUseDevice,
         clientRuntime,
         deviceContext: gatewayConfigured
           ? {
@@ -1176,9 +1204,14 @@ export class AiAgentService {
       toolsResult.enabledToolIds.push(CLIENT_FN_IDENTIFIER);
     }
 
-    // Override RemoteDevice manifest's systemRole with dynamic device list prompt
-    // The manifest is already included/excluded by ToolsEngine enableChecker
-    if (toolManifestMap[RemoteDeviceManifest.identifier]) {
+    // Override RemoteDevice manifest's systemRole with the dynamic device
+    // list prompt. Gated on `canUseDevice` so an external bot sender's turn
+    // never sees the owner's device inventory in the LLM system prompt — the
+    // engine gate above already drops the manifest, but other paths (e.g.
+    // discoverable manifests for the activator) still leave the entry in
+    // `toolManifestMap`. Without this guard, the device list leaks into the
+    // context regardless of whether the tool was actually enabled.
+    if (canUseDevice && toolManifestMap[RemoteDeviceManifest.identifier]) {
       toolManifestMap[RemoteDeviceManifest.identifier] = {
         ...toolManifestMap[RemoteDeviceManifest.identifier],
         systemRole: generateSystemPrompt(onlineDevices),
@@ -1858,7 +1891,9 @@ export class AiAgentService {
           trigger,
         },
         autoStart,
+        botContext,
         botPlatformContext,
+        deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
         discordContext,
         evalContext,
         initialContext,
