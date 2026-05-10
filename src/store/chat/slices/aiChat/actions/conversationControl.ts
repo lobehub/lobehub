@@ -694,6 +694,11 @@ export class ConversationControlActionImpl {
         { intervention: { status: 'approved' } },
         optimisticContext,
       );
+      // Persist the structured `{ [questionText]: selectedLabel(s) }` answers
+      // to `pluginState.askUserAnswers` so the Render component can show
+      // Q&A pairs instead of parsing the bridge's prose `User answers:`
+      // dump out of `content`. Best-effort — never block the IPC submit.
+      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
       // Bridge formats its own "User answers:" string for CC, so the eventual
       // tool_result re-rewrites this content. The optimistic write is just
       // for the brief gap between Submit and CC echoing the result back.
@@ -747,9 +752,9 @@ export class ConversationControlActionImpl {
    * intervention is pending (5 min cap), and the canonical pluginState
    * mirror is enough to survive HMR / panel re-mounts.
    *
-   * On the eventual `tool_result`, the executor's `persistToolResult`
-   * overwrites pluginState with whatever the tool returned (typically the
-   * formatted answer text), so stale drafts naturally evaporate.
+   * `askUserDraft` is irrelevant after submit (the form unmounts), so we
+   * don't bother clearing it — it stays buried under `askUserAnswers` in
+   * `pluginState` and never affects the completed Render.
    */
   setInterventionDraft = (toolMessageId: string, draft: Record<string, unknown>): void => {
     this.#get().internal_dispatchMessage({
@@ -758,6 +763,45 @@ export class ConversationControlActionImpl {
       type: 'updatePluginState',
       value: draft,
     });
+  };
+
+  /**
+   * Persist the structured intervention answers (`{ questionText:
+   * selectedLabel | selectedLabel[] }`) to the tool message's
+   * `pluginState.askUserAnswers`. Drives structured Q&A rendering on the
+   * `Render` component without re-parsing the bridge's prose tool_result.
+   *
+   * Both writes are merge-style by key — the in-memory `updatePluginState`
+   * reducer (`message/reducer.ts:142`) and the DB
+   * `messageModel.updatePluginState` shallow-merge so co-existing keys
+   * (`askUserDraft` etc.) survive. DB write is best-effort: a slow lambda
+   * must not strand the IPC submit that follows.
+   */
+  setInterventionAnswers = async (
+    toolMessageId: string,
+    answers: Record<string, unknown>,
+    context?: OptimisticUpdateContext,
+  ): Promise<void> => {
+    this.#get().internal_dispatchMessage(
+      {
+        id: toolMessageId,
+        key: 'askUserAnswers',
+        type: 'updatePluginState',
+        value: answers,
+      },
+      context,
+    );
+    try {
+      const { messageService } = await import('@/services/message');
+      const ctx = this.#get().internal_getConversationContext(context);
+      await messageService.updateMessagePluginState(
+        toolMessageId,
+        { askUserAnswers: answers },
+        ctx,
+      );
+    } catch (err) {
+      console.warn('[setInterventionAnswers] persist failed:', err);
+    }
   };
 
   rejectToolCalling = async (
