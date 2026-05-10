@@ -23,6 +23,13 @@ export interface SpawnAgentOptions {
   /** Extra CLI arguments appended after the agent's preset flags. */
   extraArgs?: string[];
   /**
+   * (Claude Code only) Pass `--include-partial-messages` so the CLI streams
+   * delta chunks instead of only complete blocks. Off by default — terminal
+   * runs and bulk-ingest flows usually want fewer events. Turn on when a
+   * connected client renders live token streaming.
+   */
+  includePartialMessages?: boolean;
+  /**
    * Image normalization options (URL fetch + on-disk cache + path
    * materialization). Forwarded to `buildAgentInput`. When `prompt` is a
    * plain string this is unused.
@@ -82,19 +89,26 @@ export interface SpawnAgentHandle {
   stderr: NodeJS.ReadableStream;
 }
 
-const CLAUDE_CODE_BASE_ARGS = [
+/**
+ * Invariant Claude Code CLI flags shared by every spawn site (desktop driver,
+ * `lh hetero exec`). Permission mode and `--include-partial-messages` vary by
+ * caller — the desktop UI wants live deltas + user-mode bypassPermissions, the
+ * sandbox CLI may run as root and skip partials — so they're composed on top
+ * of this base.
+ *
+ * `AskUserQuestion` is disabled because CC's CLI self-injects an
+ * `is_error: "Answer questions?"` tool_result in `-p` mode before the host
+ * can surface the questions, so the model falls back to plain-text prompting
+ * anyway. Remove this once a local MCP-backed replacement is wired to
+ * LobeHub's intervention UI.
+ */
+export const CLAUDE_CODE_BASE_ARGS = [
   '-p',
   '--input-format',
   'stream-json',
   '--output-format',
   'stream-json',
   '--verbose',
-  '--include-partial-messages',
-  // CC's built-in `AskUserQuestion` self-injects an `is_error: "Answer questions?"`
-  // tool_result inside the CLI before the host gets a chance to surface the
-  // questions, leaving the model to fall back to plain-text prompting anyway.
-  // Disable it so the model just asks in text. Re-enable once we wire a
-  // local MCP-backed replacement that bridges to LobeHub's intervention UI.
   '--disallowedTools',
   'AskUserQuestion',
 ] as const;
@@ -120,8 +134,10 @@ const buildClaudeCodeArgs = (
   resumeSessionId: string | undefined,
   inputArgs: string[],
   extraArgs: string[],
+  includePartialMessages: boolean,
 ) => [
   ...CLAUDE_CODE_BASE_ARGS,
+  ...(includePartialMessages ? ['--include-partial-messages'] : []),
   ...CLAUDE_CODE_PERMISSION_ARGS(),
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ...inputArgs,
@@ -142,10 +158,11 @@ const buildSpawnArgs = (
   resumeSessionId: string | undefined,
   inputArgs: string[],
   extraArgs: string[],
+  includePartialMessages: boolean,
 ): string[] => {
   switch (agentType) {
     case 'claude-code': {
-      return buildClaudeCodeArgs(resumeSessionId, inputArgs, extraArgs);
+      return buildClaudeCodeArgs(resumeSessionId, inputArgs, extraArgs, includePartialMessages);
     }
     case 'codex': {
       return buildCodexArgs(resumeSessionId, inputArgs, extraArgs);
@@ -207,6 +224,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     options.resumeSessionId,
     inputPlan.args,
     options.extraArgs ?? [],
+    options.includePartialMessages ?? false,
   );
   const cwd = options.cwd || process.cwd();
 
