@@ -483,7 +483,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         expect(mockCreateMethod).toHaveBeenCalledWith(
           expect.objectContaining({
-            prompt_cache_key: 'lobe_bv9fvv1ahw1te',
+            prompt_cache_key: 'lobe_agt_1_tpc_1',
           }),
           expect.anything(),
         );
@@ -556,7 +556,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         expect(mockCreateMethod).toHaveBeenCalledWith(
           expect.objectContaining({
-            prompt_cache_key: 'lobe_10t0z0z1pxx69q',
+            prompt_cache_key: 'lobe_agt_2_tpc_2',
           }),
           expect.anything(),
         );
@@ -1968,7 +1968,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
       expect(instance['client'].responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          prompt_cache_key: 'lobe_bv9fvv1ahw1te',
+          prompt_cache_key: 'lobe_agt_1_tpc_1',
         }),
         expect.anything(),
       );
@@ -2267,7 +2267,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
           expect.objectContaining({
-            prompt_cache_key: 'lobe_bv9fvv1ahw1te',
+            prompt_cache_key: 'lobe_agt_1_tpc_1',
           }),
           expect.anything(),
         );

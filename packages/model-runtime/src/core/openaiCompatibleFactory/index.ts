@@ -120,26 +120,8 @@ const resolvePromptCacheScope = (
   return { agentId, topicId };
 };
 
-const createStableHash = (value: string) => {
-  let hash1 = 0xdeadbeef ^ value.length;
-  let hash2 = 0x41c6ce57 ^ value.length;
-
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    hash1 = Math.imul(hash1 ^ code, 2654435761);
-    hash2 = Math.imul(hash2 ^ code, 1597334677);
-  }
-
-  hash1 =
-    Math.imul(hash1 ^ (hash1 >>> 16), 2246822507) ^ Math.imul(hash2 ^ (hash2 >>> 13), 3266489909);
-  hash2 =
-    Math.imul(hash2 ^ (hash2 >>> 16), 2246822507) ^ Math.imul(hash1 ^ (hash1 >>> 13), 3266489909);
-
-  return `${(hash2 >>> 0).toString(36)}${(hash1 >>> 0).toString(36)}`;
-};
-
 const createPromptCacheKey = ({ agentId, topicId }: PromptCacheScope) =>
-  `lobe_${createStableHash(JSON.stringify([topicId, agentId]))}`;
+  `lobe_${agentId}_${topicId}`;
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createChatCompletionStream?: (
