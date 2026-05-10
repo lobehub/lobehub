@@ -198,6 +198,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.calculate-version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: 'emaxlele-dev ${{ needs.calculate-version.outputs.tag }}'
           prerelease: true
           body: ${{ needs.calculate-version.outputs.release_notes }}
