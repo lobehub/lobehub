@@ -1,12 +1,13 @@
+import { CLAUDE_CODE_BASE_ARGS } from '@lobechat/heterogeneous-agents/spawn';
+
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
-const CLAUDE_CODE_BASE_ARGS = [
-  '-p',
-  '--input-format',
-  'stream-json',
-  '--output-format',
-  'stream-json',
-  '--verbose',
+// Desktop runs CC as the user (never root, so bypassPermissions is fine) and
+// renders the chat bubble live, so it always wants partial deltas. Compose
+// the shared invariant base args (`@lobechat/heterogeneous-agents/spawn`)
+// with those caller-specific flags.
+const DESKTOP_CLAUDE_CODE_ARGS = [
+  ...CLAUDE_CODE_BASE_ARGS,
   '--include-partial-messages',
   '--permission-mode',
   'bypassPermissions',
@@ -24,7 +25,7 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
 
     return {
       args: [
-        ...CLAUDE_CODE_BASE_ARGS,
+        ...DESKTOP_CLAUDE_CODE_ARGS,
         ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
         ...args,
       ],
