@@ -115,6 +115,18 @@ jobs:
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} canary
 
+      - name: Inject desktop app version
+        # patch_10: inject desktop version into apps/desktop/package.json
+        # so electron-updater knows the real installed version for update comparison
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'apps/desktop/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            pkg.version = '${{ needs.calculate-version.outputs.version }}';
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Desktop package.json version set to:', pkg.version);
+          "
       - name: Build Windows artifact
         run: npm run desktop:package:app
         env:
@@ -153,6 +165,18 @@ jobs:
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} canary
 
+      - name: Inject desktop app version
+        # patch_10: inject desktop version into apps/desktop/package.json
+        # so electron-updater knows the real installed version for update comparison
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'apps/desktop/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            pkg.version = '${{ needs.calculate-version.outputs.version }}';
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Desktop package.json version set to:', pkg.version);
+          "
       - name: Build Linux artifact
         run: npm run desktop:package:app
         env:
