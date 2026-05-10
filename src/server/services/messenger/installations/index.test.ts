@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { getInstallationStore } from './index';
+import { getInstallationStore, messengerConnectionIdForUser } from './index';
 
 vi.mock('./slack', () => ({
   SlackInstallationStore: vi.fn().mockImplementation(() => ({ kind: 'slack' })),
@@ -41,5 +41,25 @@ describe('getInstallationStore', () => {
 
   it('returns null for an unknown platform', () => {
     expect(getInstallationStore('unknown' as any)).toBeNull();
+  });
+});
+
+describe('messengerConnectionIdForUser', () => {
+  it('drops the :singleton segment for telegram (no tenant)', () => {
+    expect(
+      messengerConnectionIdForUser({ installationKey: 'telegram:singleton', userId: 'u_abc' }),
+    ).toBe('messenger:telegram:user-u_abc');
+  });
+
+  it('drops the :singleton segment for discord (no tenant)', () => {
+    expect(
+      messengerConnectionIdForUser({ installationKey: 'discord:singleton', userId: 'u_abc' }),
+    ).toBe('messenger:discord:user-u_abc');
+  });
+
+  it('preserves the tenantId for slack workspaces', () => {
+    expect(messengerConnectionIdForUser({ installationKey: 'slack:T0123', userId: 'u_abc' })).toBe(
+      'messenger:slack:T0123:user-u_abc',
+    );
   });
 });

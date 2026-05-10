@@ -14,7 +14,9 @@ describe('agent signal nightly review prompt', () => {
     expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
       'Use noop for ordinary successful days',
     );
-    expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain('Noop is silent maintenance state');
+    expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
+      'noop is silent and must not create a Daily Brief or proposal',
+    );
     expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
       'Auto-safe memory candidates must be explicit',
     );
@@ -38,8 +40,28 @@ describe('agent signal nightly review prompt', () => {
     expect(system.content).toContain('Do not re-judge satisfaction');
     expect(system.content).toContain('Tool activity alone must not trigger skill consolidation');
     expect(system.content).toContain(
-      'Use proposalActivity for unresolved proposal refresh, stale proposal, and duplicate proposal checks',
+      'Use proposalActivity for unresolved proposal refresh, stale proposal, duplicate proposal checks',
     );
+  });
+
+  /**
+   * @example
+   * expect(prompt).toContain('write tools')
+   */
+  it('instructs nightly maintenance to use tools as the only mutation boundary', () => {
+    const prompt = createAgentSignalNightlyReviewMessages({ maintenanceSignals: [] })
+      .map((message) => message.content)
+      .join('\n');
+
+    expect(prompt).toContain('Mutations only count through write tools');
+    expect(prompt).toContain(
+      'this structured review may only emit candidate write actions for the server maintenance runtime',
+    );
+    expect(prompt).toContain(
+      'Never infer intent with regexp, keyword lists, or hard-coded content heuristics',
+    );
+    expect(prompt).toContain('refine_skill requires complete replacement bodyMarkdown');
+    expect(prompt).toContain('do not emit patch-only');
   });
 
   /**
@@ -68,9 +90,9 @@ describe('agent signal nightly review prompt', () => {
     expect(system.content).toContain(
       'value.bodyMarkdown must contain the complete replacement Markdown body',
     );
-    expect(system.content).toContain('Structural or destructive changes must become proposals');
+    expect(system.content).toContain('Proposal only: structural/destructive changes');
     expect(system.content).toContain(
-      'Use safe write tools for mutations; every write tool performs freshness and idempotency checks',
+      'Plan only mutations that can be routed through safe write tools',
     );
   });
 

@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
@@ -12,6 +13,7 @@ import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import {
   isCustomInteractionIdentifier,
+  isHeteroInteractionIdentifier,
   prepareCustomInteractionSubmit,
   recordCustomInteractionResolution,
 } from './customInteractionHandlers';
@@ -98,6 +100,11 @@ const Intervention = memo<InterventionProps>(
     const submitToolInteraction = useConversationStore((s) => s.submitToolInteraction);
     const skipToolInteraction = useConversationStore((s) => s.skipToolInteraction);
     const cancelToolInteraction = useConversationStore((s) => s.cancelToolInteraction);
+    // Hetero (CC / Codex) interventions ship the answer back through IPC to a
+    // running CLI subprocess instead of starting a fresh `executeClientAgent`
+    // turn. Pull the chat-store action lazily so non-hetero interactions stay
+    // on the existing path with no behavior change.
+    const submitHeteroIntervention = useChatStore((s) => s.submitHeteroIntervention);
 
     const handleInteractionAction = useCallback(
       async (
@@ -106,6 +113,10 @@ const Intervention = memo<InterventionProps>(
           | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
           | { type: 'cancel'; payload?: Record<string, unknown> },
       ) => {
+        if (isHeteroInteractionIdentifier(identifier)) {
+          await submitHeteroIntervention(id, action.type, action.payload);
+          return;
+        }
         switch (action.type) {
           case 'submit': {
             const { payload, options } = await prepareCustomInteractionSubmit(
@@ -149,6 +160,7 @@ const Intervention = memo<InterventionProps>(
         identifier,
         parsedArgs,
         skipToolInteraction,
+        submitHeteroIntervention,
         submitToolInteraction,
         topicId,
       ],

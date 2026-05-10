@@ -76,7 +76,9 @@ find_project_pids() {
   port_pid=$(lsof -ti tcp:"$CDP_PORT" -sTCP:LISTEN 2>/dev/null || true)
   pids="$pids $port_pid"
 
-  echo "$pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' '
+  # `|| true` because `grep -v '^$'` exits 1 when input has no non-empty
+  # lines, which (with pipefail + set -e) silently kills the caller.
+  echo "$pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' || true
 }
 
 # Wait for the CDP HTTP endpoint to respond, with a deadline + early bail-out
@@ -146,7 +148,7 @@ do_stop() {
   for pid in $seed_pids; do
     all_pids="$all_pids $(expand_descendants "$pid")"
   done
-  all_pids=$(echo "$all_pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
+  all_pids=$(echo "$all_pids" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' || true)
 
   if [ -z "$all_pids" ]; then
     echo "[electron-dev] No project Electron/vite processes found."
@@ -270,10 +272,17 @@ do_start() {
   # Launch in a new session (setsid) so the whole process tree shares a PGID
   # we can later signal in one shot. `setsid bash -c '... exec ...' &` keeps
   # the bash shell as the session leader; its PID is what we save.
-  setsid bash -c "
+  # macOS doesn't ship setsid by default — fall back to plain bash; cleanup
+  # still works via `expand_descendants` walking the process tree.
+  local launch_cmd="
     cd '$PROJECT_ROOT/apps/desktop'
     exec npx electron-vite dev -- --remote-debugging-port=$CDP_PORT
-  " >> "$ELECTRON_LOG" 2>&1 < /dev/null &
+  "
+  if command -v setsid >/dev/null 2>&1; then
+    setsid bash -c "$launch_cmd" >> "$ELECTRON_LOG" 2>&1 < /dev/null &
+  else
+    bash -c "$launch_cmd" >> "$ELECTRON_LOG" 2>&1 < /dev/null &
+  fi
   local launcher_pid=$!
   echo "$launcher_pid" > "$PIDFILE"
   echo "[electron-dev] Launcher PID (session leader): $launcher_pid"

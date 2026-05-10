@@ -291,7 +291,7 @@
   "heterogeneousStatus.auth.api": "API",
   "heterogeneousStatus.auth.label": "认证方式",
   "heterogeneousStatus.auth.subscription": "订阅",
-  "heterogeneousStatus.cloud.githubDesc": "选择 GitHub 凭证，让沙箱能够克隆你的私有仓库。",
+  "heterogeneousStatus.cloud.githubDesc": "选择一个 GitHub OAuth 凭据，以允许沙箱克隆您的私有存储库。",
   "heterogeneousStatus.cloud.githubLabel": "GitHub 连接",
   "heterogeneousStatus.cloud.githubNoCreds": "未找到 GitHub 凭证。",
   "heterogeneousStatus.cloud.githubPlaceholder": "选择 GitHub 凭证…",

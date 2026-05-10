@@ -49,3 +49,19 @@ export interface BriefArtifactDocument {
 export interface BriefArtifacts {
   documents?: BriefArtifactDocument[];
 }
+
+/** Agent Signal-owned Brief metadata namespace. */
+export interface BriefAgentSignalMetadata {
+  /** Future Agent Signal domains can extend this namespace without top-level collisions. */
+  [key: string]: unknown;
+  /** Nightly self-review state written by Agent Signal maintenance runs. */
+  nightlySelfReview?: unknown;
+}
+
+/** Freeform Brief metadata namespaced by feature owner. */
+export interface BriefMetadata {
+  /** Other feature namespaces remain possible without schema churn. */
+  [key: string]: unknown;
+  /** Agent Signal extension metadata. */
+  agentSignal?: BriefAgentSignalMetadata;
+}

@@ -11,6 +11,7 @@ import type {
 } from '../../../runtime/middleware';
 import type { MaintenanceAgentRunResult } from '../../../services/maintenance/agentRunner';
 import type { NightlyReviewContext } from '../../../services/maintenance/nightlyCollector';
+import type { MaintenanceProposalPlan } from '../../../services/maintenance/proposal';
 import type {
   MaintenancePlan,
   MaintenanceReviewRunResult,
@@ -194,9 +195,9 @@ describe('nightly review source handler', () => {
         execution: {
           actions: [
             {
-              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1',
               status: MaintenanceActionStatus.Proposed,
-              summary: 'Review the skill consolidation proposal.',
+              summary: 'Review the skill refinement proposal.',
             },
           ],
           status: ReviewRunStatus.Completed,
@@ -206,15 +207,33 @@ describe('nightly review source handler', () => {
           actions: [
             {
               ...reviewPlan.actions[0],
-              actionType: 'proposal_only',
+              actionType: 'refine_skill',
               applyMode: MaintenanceApplyMode.ProposalOnly,
-              dedupeKey: 'proposal_only:skill-doc-1',
-              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
-              rationale: 'Review the skill consolidation proposal.',
+              baseSnapshot: {
+                agentDocumentId: 'skill-doc-1',
+                contentHash: 'sha256:workflow-summary',
+                documentId: 'doc-skill-doc-1',
+                managed: true,
+                targetType: 'skill',
+                writable: true,
+              },
+              dedupeKey: 'refine_skill:skill-doc-1',
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1',
+              operation: {
+                domain: 'skill',
+                input: {
+                  bodyMarkdown: 'Use the updated workflow summary wording.',
+                  skillDocumentId: 'skill-doc-1',
+                  userId: 'user-1',
+                },
+                operation: 'refine',
+              },
+              rationale: 'Review the skill refinement proposal.',
               risk: MaintenanceRisk.Medium,
+              target: { skillDocumentId: 'skill-doc-1' },
             },
           ],
-        } satisfies MaintenancePlan,
+        } satisfies MaintenanceProposalPlan,
       })),
       writeDailyBrief: vi.fn(async () => {
         calls.push('brief');
@@ -233,14 +252,35 @@ describe('nightly review source handler', () => {
     expect(deps.writeReceipts).toHaveBeenCalledWith([
       expect.objectContaining({ id: 'nightly-review:user-1:agent-1:2026-05-04:review-summary' }),
       expect.objectContaining({
-        id: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1:action',
+        id: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1:action',
       }),
     ]);
     expect(deps.writeDailyBrief).toHaveBeenCalledWith(
       expect.objectContaining({
         agentId: 'agent-1',
         metadata: expect.objectContaining({
-          evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
+          agentSignal: expect.objectContaining({
+            nightlySelfReview: expect.objectContaining({
+              evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
+              maintenanceProposal: expect.objectContaining({
+                actions: [
+                  expect.objectContaining({
+                    actionType: 'refine_skill',
+                    baseSnapshot: expect.objectContaining({
+                      contentHash: 'sha256:workflow-summary',
+                    }),
+                    operation: expect.objectContaining({
+                      domain: 'skill',
+                      input: expect.objectContaining({
+                        bodyMarkdown: 'Use the updated workflow summary wording.',
+                      }),
+                      operation: 'refine',
+                    }),
+                  }),
+                ],
+              }),
+            }),
+          }),
         }),
         trigger: 'agent-signal:nightly-review',
         type: 'decision',
@@ -314,8 +354,12 @@ describe('nightly review source handler', () => {
     expect(deps.writeDailyBrief).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
-          actionCounts: { applied: 1, failed: 0, proposed: 0, skipped: 0 },
-          outcome: 'applied',
+          agentSignal: expect.objectContaining({
+            nightlySelfReview: expect.objectContaining({
+              actionCounts: { applied: 1, failed: 0, proposed: 0, skipped: 0 },
+              outcome: 'applied',
+            }),
+          }),
         }),
         title: 'Agent self-review updated resources',
         trigger: 'agent-signal:nightly-review',
@@ -355,7 +399,7 @@ describe('nightly review source handler', () => {
 
   /**
    * @example
-   * expect(brief.metadata.proposal.actions[0].operation).toBeDefined();
+   * expect(brief.metadata.agentSignal.nightlySelfReview.maintenanceProposal.actions[0].operation).toBeDefined();
    */
   it('projects frozen proposal action operations from the runner projection plan', async () => {
     const proposedSkillPlan = {
@@ -364,21 +408,32 @@ describe('nightly review source handler', () => {
         {
           ...reviewPlan.actions[0],
           actionType: 'refine_skill',
+          applyMode: MaintenanceApplyMode.ProposalOnly,
+          baseSnapshot: {
+            agentDocumentId: 'skill-doc-1',
+            contentHash: 'sha256:workflow-summary',
+            documentId: 'doc-skill-doc-1',
+            managed: true,
+            targetType: 'skill',
+            writable: true,
+          },
           dedupeKey: 'refine_skill:skill-doc-1',
           idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1',
           operation: {
             domain: 'skill',
             input: {
-              patch: 'Use the newer workflow summary wording.',
+              bodyMarkdown: 'Use the newer workflow summary wording.',
               skillDocumentId: 'skill-doc-1',
               userId: 'user-1',
             },
             operation: 'refine',
           },
+          rationale: 'Review the workflow summary skill refinement.',
+          risk: MaintenanceRisk.Medium,
           target: { skillDocumentId: 'skill-doc-1' },
         },
       ],
-    } satisfies MaintenancePlan;
+    } satisfies MaintenanceProposalPlan;
     const deps = createDependencies({
       runMaintenanceReviewAgent: vi.fn(async () => ({
         execution: {
@@ -403,16 +458,20 @@ describe('nightly review source handler', () => {
     expect(deps.writeDailyBrief).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
-          proposal: expect.objectContaining({
-            actions: [
-              expect.objectContaining({
-                actionType: 'refine_skill',
-                operation: expect.objectContaining({
-                  domain: 'skill',
-                  operation: 'refine',
-                }),
+          agentSignal: expect.objectContaining({
+            nightlySelfReview: expect.objectContaining({
+              maintenanceProposal: expect.objectContaining({
+                actions: [
+                  expect.objectContaining({
+                    actionType: 'refine_skill',
+                    operation: expect.objectContaining({
+                      domain: 'skill',
+                      operation: 'refine',
+                    }),
+                  }),
+                ],
               }),
-            ],
+            }),
           }),
         }),
       }),
@@ -431,9 +490,9 @@ describe('nightly review source handler', () => {
         execution: {
           actions: [
             {
-              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1',
               status: MaintenanceActionStatus.Proposed,
-              summary: 'Review the skill consolidation proposal.',
+              summary: 'Review the skill refinement proposal.',
             },
           ],
           status: ReviewRunStatus.Completed,
@@ -443,15 +502,33 @@ describe('nightly review source handler', () => {
           actions: [
             {
               ...reviewPlan.actions[0],
-              actionType: 'proposal_only',
+              actionType: 'refine_skill',
               applyMode: MaintenanceApplyMode.ProposalOnly,
-              dedupeKey: 'proposal_only:skill-doc-1',
-              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:proposal_only:skill-doc-1',
-              rationale: 'Review the skill consolidation proposal.',
+              baseSnapshot: {
+                agentDocumentId: 'skill-doc-1',
+                contentHash: 'sha256:workflow-summary',
+                documentId: 'doc-skill-doc-1',
+                managed: true,
+                targetType: 'skill',
+                writable: true,
+              },
+              dedupeKey: 'refine_skill:skill-doc-1',
+              idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:refine_skill:skill-doc-1',
+              operation: {
+                domain: 'skill',
+                input: {
+                  bodyMarkdown: 'Use the updated workflow summary wording.',
+                  skillDocumentId: 'skill-doc-1',
+                  userId: 'user-1',
+                },
+                operation: 'refine',
+              },
+              rationale: 'Review the skill refinement proposal.',
               risk: MaintenanceRisk.Medium,
+              target: { skillDocumentId: 'skill-doc-1' },
             },
           ],
-        } satisfies MaintenancePlan,
+        } satisfies MaintenanceProposalPlan,
       })),
       writeDailyBrief: vi.fn(async () => {
         throw briefError;

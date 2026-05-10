@@ -66,6 +66,7 @@ const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions
     contentNode = (
       <Flexbox paddingBlock={4} paddingInline={16}>
         <Descriptions
+          wrap
           bordered={false}
           items={items}
           labelWidth={140}

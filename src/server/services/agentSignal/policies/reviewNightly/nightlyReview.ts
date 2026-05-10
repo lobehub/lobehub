@@ -6,11 +6,15 @@ import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { defineSourceHandler } from '../../runtime/middleware';
 import type { MaintenanceAgentRunResult } from '../../services/maintenance/agentRunner';
 import type { MaintenanceBriefProjection } from '../../services/maintenance/brief';
-import { createBriefMaintenanceService } from '../../services/maintenance/brief';
+import {
+  createBriefMaintenanceService,
+  getNightlySelfReviewBriefMetadata,
+} from '../../services/maintenance/brief';
 import type {
   CollectNightlyReviewContextInput,
   NightlyReviewContext,
 } from '../../services/maintenance/nightlyCollector';
+import type { MaintenanceProposalPlan } from '../../services/maintenance/proposal';
 import type {
   EvidenceRef,
   MaintenancePlan,
@@ -230,6 +234,22 @@ const collectPlanEvidenceRefs = (plan: MaintenancePlan): EvidenceRef[] => {
   return [...evidenceRefs.values()];
 };
 
+const isMergeableProposalAction = (actionType: string) =>
+  actionType === 'create_skill' || actionType === 'refine_skill';
+
+const hasProjectionBaseSnapshot = (action: MaintenancePlan['actions'][number]) => {
+  if (!isMergeableProposalAction(action.actionType)) return true;
+
+  const actionWithSnapshot = action as MaintenancePlan['actions'][number] & {
+    baseSnapshot?: unknown;
+  };
+
+  return actionWithSnapshot.baseSnapshot !== undefined;
+};
+
+const isSnapshotAwareProposalPlan = (plan: MaintenancePlan): plan is MaintenanceProposalPlan =>
+  plan.actions.every(hasProjectionBaseSnapshot);
+
 const writeNightlyReceipts = async (
   deps: CreateNightlyReviewSourceHandlerDependencies,
   receipts: AgentSignalReceipt[],
@@ -269,16 +289,18 @@ const writeNightlyBrief = async (
 ) => {
   if (!deps.writeDailyBrief || !brief) return {};
 
+  const metadata = getNightlySelfReviewBriefMetadata(brief.metadata);
+
   return tracer.startActiveSpan(
     'agent_signal.nightly_review.write_brief',
     {
       attributes: {
         'agent.signal.agent_id': brief.agentId ?? '',
-        'agent.signal.nightly.applied_count': brief.metadata.actionCounts.applied,
-        'agent.signal.nightly.failed_count': brief.metadata.actionCounts.failed,
-        'agent.signal.nightly.outcome': brief.metadata.outcome,
-        'agent.signal.nightly.proposed_count': brief.metadata.actionCounts.proposed,
-        'agent.signal.nightly.skipped_count': brief.metadata.actionCounts.skipped,
+        'agent.signal.nightly.applied_count': metadata?.actionCounts.applied ?? 0,
+        'agent.signal.nightly.failed_count': metadata?.actionCounts.failed ?? 0,
+        'agent.signal.nightly.outcome': metadata?.outcome ?? 'unknown',
+        'agent.signal.nightly.proposed_count': metadata?.actionCounts.proposed ?? 0,
+        'agent.signal.nightly.skipped_count': metadata?.actionCounts.skipped ?? 0,
       },
     },
     async (span) => {
@@ -466,6 +488,7 @@ export const createNightlyReviewSourceHandler = (
           },
         );
         const plan = agentResult.projectionPlan;
+        const proposalPlan = isSnapshotAwareProposalPlan(plan) ? plan : undefined;
         const execution = agentResult.execution;
         const receipts = createMaintenanceReviewReceipts({
           agentId: payload.agentId,
@@ -495,7 +518,7 @@ export const createNightlyReviewSourceHandler = (
           agentId: payload.agentId,
           evidenceRefs: collectPlanEvidenceRefs(plan),
           localDate: payload.localDate,
-          plan,
+          ...(proposalPlan ? { plan: proposalPlan } : {}),
           result: executionWithReceipts,
           reviewWindowEnd: payload.reviewWindowEnd,
           reviewWindowStart: payload.reviewWindowStart,

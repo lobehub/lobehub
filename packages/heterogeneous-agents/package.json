@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./askUser": "./src/askUser/index.ts",
     "./client": "./src/client/index.ts",
     "./spawn": "./src/spawn/index.ts"
   },
@@ -15,7 +16,9 @@
   "dependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobehub/icons": "^5.4.0",
-    "diff": "^8.0.4"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "diff": "^8.0.4",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

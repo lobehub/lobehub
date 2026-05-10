@@ -1,4 +1,5 @@
 import type { BriefAction } from '@lobechat/types';
+import { z } from 'zod';
 
 import type {
   EvidenceRef,
@@ -54,8 +55,13 @@ const MAINTENANCE_RISKS = [
 
 export type MaintenanceProposalConflictReason =
   | 'agent_gate_disabled'
+  | 'content_changed'
   | 'document_changed'
+  | 'snapshot_incomplete'
+  | 'snapshot_missing'
+  | 'target_conflict'
   | 'target_deleted'
+  | 'target_unmanaged'
   | 'target_not_writable'
   | 'target_type_changed'
   | 'user_gate_disabled'
@@ -73,6 +79,8 @@ export interface BuildMaintenanceProposalKeyInput {
 }
 
 export interface MaintenanceProposalBaseSnapshot {
+  /** Whether the target was absent when the proposal was approved for creation. */
+  absent?: boolean;
   /** Agent document id when the proposal targets managed skill/document state. */
   agentDocumentId?: string;
   /** Content hash observed when the proposal was created. */
@@ -83,8 +91,12 @@ export interface MaintenanceProposalBaseSnapshot {
   documentUpdatedAt?: string;
   /** Whether the target was managed by Agent Signal. */
   managed?: boolean;
+  /** Stable skill name observed or reserved when the proposal was created. */
+  skillName?: string;
   /** Human-readable target title observed at proposal time. */
   targetTitle?: string;
+  /** Target domain captured by the proposal snapshot. */
+  targetType?: 'skill';
   /** Whether the target was writable at proposal time. */
   writable?: boolean;
 }
@@ -107,6 +119,45 @@ export interface MaintenanceProposalAction {
   /** Bounded target identity from the original plan. */
   target?: MaintenanceActionTarget;
 }
+
+/**
+ * Proposal projection action for mergeable skill mutations.
+ *
+ * @param TActionType - Mergeable action type that must carry a complete base snapshot.
+ */
+export type MergeableMaintenanceProposalActionPlan<
+  TActionType extends 'create_skill' | 'refine_skill' = 'create_skill' | 'refine_skill',
+> = MaintenanceActionPlan & {
+  /** Mergeable action type that will be applied from a frozen proposal. */
+  actionType: TActionType;
+  /** Complete merge base captured before proposal projection. */
+  baseSnapshot: MaintenanceProposalBaseSnapshot;
+};
+
+/**
+ * Proposal projection action for non-mergeable maintenance mutations.
+ */
+export type NonMergeableMaintenanceProposalActionPlan = MaintenanceActionPlan & {
+  /** Non-mergeable action type that can use legacy title-only fallback snapshots. */
+  actionType: Exclude<MaintenanceActionType, 'create_skill' | 'refine_skill'>;
+  /** Optional proposal snapshot supplied by callers before projection. */
+  baseSnapshot?: MaintenanceProposalBaseSnapshot;
+};
+
+/**
+ * Snapshot-aware action accepted by proposal metadata projection.
+ */
+export type MaintenanceProposalActionPlan =
+  | MergeableMaintenanceProposalActionPlan
+  | NonMergeableMaintenanceProposalActionPlan;
+
+/**
+ * Snapshot-aware maintenance plan accepted by proposal metadata projection.
+ */
+export type MaintenanceProposalPlan = Omit<MaintenancePlan, 'actions'> & {
+  /** Planned actions with required base snapshots for mergeable proposal mutations. */
+  actions: MaintenanceProposalActionPlan[];
+};
 
 export interface MaintenanceProposalActionApplyResult {
   /** Frozen action idempotency key this apply result belongs to. */
@@ -160,6 +211,16 @@ export interface MaintenanceProposalMetadata {
 }
 
 export interface MaintenanceProposalBriefMetadata {
+  /** Namespaced Agent Signal metadata stored inside Daily Brief metadata. */
+  agentSignal?: {
+    /** Nightly self-review metadata owned by Agent Signal maintenance. */
+    nightlySelfReview?: {
+      /** Frozen maintenance proposal state for approve/dismiss flows. */
+      maintenanceProposal?: MaintenanceProposalMetadata;
+      /** Legacy transition field accepted while local data is migrated. */
+      proposal?: MaintenanceProposalMetadata;
+    };
+  };
   /** Agent Signal maintenance proposal metadata stored inside Daily Brief metadata. */
   proposal?: MaintenanceProposalMetadata;
 }
@@ -170,33 +231,100 @@ export const AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS = [
   { key: 'feedback', label: 'Request changes', type: 'comment' },
 ] satisfies BriefAction[];
 
-const isEvidenceRefArray = (value: unknown): value is EvidenceRef[] =>
-  Array.isArray(value) &&
-  value.every((item) => {
-    if (!item || typeof item !== 'object') return false;
+const EvidenceRefSchema = z
+  .object({
+    id: z.string(),
+    summary: z.string().optional(),
+    type: z.enum([
+      'topic',
+      'message',
+      'operation',
+      'source',
+      'receipt',
+      'tool_call',
+      'task',
+      'agent_document',
+      'memory',
+    ]),
+  })
+  .passthrough();
 
-    const evidenceRef = item as Record<string, unknown>;
+const MaintenanceProposalBaseSnapshotSchema = z
+  .object({
+    absent: z.boolean().optional(),
+    agentDocumentId: z.string().optional(),
+    contentHash: z.string().optional(),
+    documentId: z.string().optional(),
+    documentUpdatedAt: z.string().optional(),
+    managed: z.boolean().optional(),
+    skillName: z.string().optional(),
+    targetTitle: z.string().optional(),
+    targetType: z.literal('skill').optional(),
+    writable: z.boolean().optional(),
+  })
+  .passthrough();
 
-    return typeof evidenceRef.id === 'string' && typeof evidenceRef.type === 'string';
-  });
+const MaintenanceProposalActionSchema = z
+  .object({
+    actionType: z.enum(MAINTENANCE_ACTION_TYPES),
+    baseSnapshot: MaintenanceProposalBaseSnapshotSchema.optional(),
+    evidenceRefs: z.array(EvidenceRefSchema),
+    idempotencyKey: z.string(),
+    operation: z.unknown().optional(),
+    rationale: z.string(),
+    risk: z.enum(MAINTENANCE_RISKS),
+    target: z.unknown().optional(),
+  })
+  .passthrough();
 
-const isKnownStringValue = <TValue extends string>(
-  value: unknown,
-  allowedValues: readonly TValue[],
-): value is TValue => typeof value === 'string' && allowedValues.includes(value as TValue);
+const MaintenanceProposalMetadataSchema = z
+  .object({
+    actions: z.array(MaintenanceProposalActionSchema),
+    actionType: z.enum(MAINTENANCE_ACTION_TYPES),
+    applyAttempts: z.unknown().optional(),
+    conflictReason: z.unknown().optional(),
+    createdAt: z.string(),
+    evidenceRefs: z.array(EvidenceRefSchema).optional(),
+    evidenceWindowEnd: z.string(),
+    evidenceWindowStart: z.string(),
+    expiresAt: z.string(),
+    proposalKey: z.string(),
+    status: z.enum(MAINTENANCE_PROPOSAL_STATUSES),
+    supersededBy: z.string().optional(),
+    updatedAt: z.string(),
+    version: z.literal(MAINTENANCE_PROPOSAL_VERSION),
+  })
+  .passthrough();
 
-const isMaintenanceProposalAction = (value: unknown): value is MaintenanceProposalAction => {
-  if (!value || typeof value !== 'object') return false;
+const getMergeableProposalSnapshotError = (action: MaintenanceProposalActionPlan) =>
+  `Mergeable proposal action requires a complete base snapshot. actionType=${action.actionType}`;
 
-  const action = value as Record<string, unknown>;
+const isMergeableProposalAction = (actionType: string) =>
+  actionType === 'create_skill' || actionType === 'refine_skill';
 
-  return (
-    isKnownStringValue(action.actionType, MAINTENANCE_ACTION_TYPES) &&
-    isEvidenceRefArray(action.evidenceRefs) &&
-    typeof action.idempotencyKey === 'string' &&
-    typeof action.rationale === 'string' &&
-    isKnownStringValue(action.risk, MAINTENANCE_RISKS)
-  );
+const hasRequiredString = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
+
+const hasCompleteMergeableSnapshot = (
+  actionType: string,
+  snapshot: MaintenanceProposalBaseSnapshot | undefined,
+) => {
+  if (!snapshot || snapshot.targetType !== 'skill') return false;
+
+  if (actionType === 'refine_skill') {
+    return (
+      hasRequiredString(snapshot.agentDocumentId) &&
+      hasRequiredString(snapshot.documentId) &&
+      hasRequiredString(snapshot.contentHash) &&
+      snapshot.managed === true &&
+      snapshot.writable === true
+    );
+  }
+
+  if (actionType === 'create_skill') {
+    return snapshot.absent === true && hasRequiredString(snapshot.skillName);
+  }
+
+  return false;
 };
 
 /**
@@ -257,26 +385,8 @@ export const getNextProposalExpiry = ({ createdAt, now }: { createdAt: string; n
  */
 export const isMaintenanceProposalMetadata = (
   value: unknown,
-): value is MaintenanceProposalMetadata => {
-  if (!value || typeof value !== 'object') return false;
-
-  const payload = value as Record<string, unknown>;
-
-  return (
-    payload.version === MAINTENANCE_PROPOSAL_VERSION &&
-    isKnownStringValue(payload.actionType, MAINTENANCE_ACTION_TYPES) &&
-    typeof payload.proposalKey === 'string' &&
-    isKnownStringValue(payload.status, MAINTENANCE_PROPOSAL_STATUSES) &&
-    typeof payload.createdAt === 'string' &&
-    typeof payload.updatedAt === 'string' &&
-    typeof payload.expiresAt === 'string' &&
-    typeof payload.evidenceWindowStart === 'string' &&
-    typeof payload.evidenceWindowEnd === 'string' &&
-    (payload.evidenceRefs === undefined || isEvidenceRefArray(payload.evidenceRefs)) &&
-    Array.isArray(payload.actions) &&
-    payload.actions.every(isMaintenanceProposalAction)
-  );
-};
+): value is MaintenanceProposalMetadata =>
+  MaintenanceProposalMetadataSchema.safeParse(value).success;
 
 /**
  * Reads proposal metadata from a Daily Brief metadata object.
@@ -296,7 +406,11 @@ export const getMaintenanceProposalFromBriefMetadata = (
 ): MaintenanceProposalMetadata | undefined => {
   if (!metadata || typeof metadata !== 'object') return;
 
-  const proposal = (metadata as MaintenanceProposalBriefMetadata).proposal;
+  const payload = metadata as MaintenanceProposalBriefMetadata;
+  const proposal =
+    payload.agentSignal?.nightlySelfReview?.maintenanceProposal ??
+    payload.agentSignal?.nightlySelfReview?.proposal ??
+    payload.proposal;
 
   return isMaintenanceProposalMetadata(proposal) ? proposal : undefined;
 };
@@ -323,11 +437,19 @@ const getOperationTargetTitle = (action: MaintenanceActionPlan) => {
 };
 
 const getProposalBaseSnapshot = (
-  action: MaintenanceActionPlan,
+  action: MaintenanceProposalActionPlan,
 ): MaintenanceProposalBaseSnapshot | undefined => {
+  if (isMergeableProposalAction(action.actionType)) {
+    if (!hasCompleteMergeableSnapshot(action.actionType, action.baseSnapshot)) {
+      throw new Error(getMergeableProposalSnapshotError(action));
+    }
+
+    return action.baseSnapshot;
+  }
+
   const targetTitle = getOperationTargetTitle(action) ?? action.target?.skillName;
 
-  return targetTitle ? { targetTitle } : undefined;
+  return action.baseSnapshot ?? (targetTitle ? { targetTitle } : undefined);
 };
 
 export interface BuildMaintenanceProposalFromPlanInput {
@@ -339,8 +461,8 @@ export interface BuildMaintenanceProposalFromPlanInput {
   evidenceWindowStart: string;
   /** Stable timestamp to use for created/updated proposal metadata. */
   now: string;
-  /** Frozen maintenance plan generated before execution. */
-  plan: MaintenancePlan;
+  /** Snapshot-aware maintenance plan generated before proposal projection. */
+  plan: MaintenanceProposalPlan;
   /** Execution results that identify which actions stayed proposed. */
   results: MaintenanceActionResult[];
 }
