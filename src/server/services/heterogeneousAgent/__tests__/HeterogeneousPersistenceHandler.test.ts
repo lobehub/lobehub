@@ -689,7 +689,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       await h.handler.finish({ operationId: 'op-1', result: 'success' });
 
       // Same operationId on a different topic should now succeed (state was dropped)
-      h.topicModel.findById.mockResolvedValueOnce({
+      h.topicModel.findById.mockResolvedValue({
         agentId: null,
         id: 'topic-2',
         metadata: {
@@ -822,6 +822,52 @@ describe('HeterogeneousPersistenceHandler', () => {
       const allToolMsgs = [...h.messages.values()].filter((m) => m.role === 'tool');
       const tool1Msgs = allToolMsgs.filter((m) => m.tool_call_id === 'tc-1');
       expect(tool1Msgs).toHaveLength(1);
+    });
+  });
+
+  describe('warm replica step resync', () => {
+    it('switches to the DB-persisted step assistant when a later-step batch lands on a stale warm replica', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'step1' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      h.messages.set('asst-2', {
+        agentId: null,
+        content: '',
+        id: 'asst-2',
+        parentId: 'asst-1',
+        role: 'assistant',
+        topicId: 'topic-1',
+      });
+
+      h.topicModel.findById.mockResolvedValue({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'asst-2', operationId: 'op-1' },
+          runningOperation: {
+            assistantMessageId: 'asst-1',
+            operationId: 'op-1',
+          },
+        },
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'step2' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(h.messages.get('asst-1')?.content).toBe('step1');
+      expect(h.messages.get('asst-2')?.content).toBe('step2');
     });
   });
 });

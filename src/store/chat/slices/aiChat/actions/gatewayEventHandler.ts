@@ -21,6 +21,21 @@ import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNo
 const fetchAndReplaceMessages = async (get: () => ChatStore, context: ConversationContext) => {
   const messages = await messageService.getMessages(context);
   get().replaceMessages(messages, { context });
+  return messages;
+};
+
+const findLatestAssistantMessageId = (
+  messages: Array<{ id: string; role?: string }> | undefined,
+  currentAssistantMessageId: string,
+) => {
+  if (!messages?.length) return;
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === 'assistant' && message.id !== currentAssistantMessageId) {
+      return message.id;
+    }
+  }
 };
 
 const toChatMessageError = (data: unknown): ChatMessageError => {
@@ -119,11 +134,33 @@ export const createGatewayEventHandler = (
           accumulatedContent = '';
           accumulatedReasoning = '';
 
-          // Fetch from DB so the new message exists in dbMessagesMap before chunks arrive
+          // Heterogeneous CLI adapters emit `stream_start { newStep: true }`
+          // without a server-side assistant id. Pull the freshly created step
+          // assistant from DB so subsequent live chunks update the RIGHT row
+          // instead of appending onto the previous step's assistant.
+          const messages = await fetchAndReplaceMessages(get, context).catch((error) => {
+            console.error(error);
+            return undefined;
+          });
+
+          if (!newAssistantMessageId && data?.newStep) {
+            const resolvedAssistantMessageId = findLatestAssistantMessageId(
+              messages as Array<{ id: string; role?: string }> | undefined,
+              currentAssistantMessageId,
+            );
+
+            if (resolvedAssistantMessageId) {
+              currentAssistantMessageId = resolvedAssistantMessageId;
+              get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+            }
+          }
+
           void emitClientAgentSignalSourceEvent({
             payload: {
               agentId: context.agentId,
-              ...(newAssistantMessageId ? { assistantMessageId: newAssistantMessageId } : {}),
+              ...(currentAssistantMessageId
+                ? { assistantMessageId: currentAssistantMessageId }
+                : {}),
               operationId,
               stepIndex: event.stepIndex,
               topicId: context.topicId ?? undefined,
@@ -131,7 +168,6 @@ export const createGatewayEventHandler = (
             sourceId: `${operationId}:gateway:start:${event.stepIndex}`,
             sourceType: 'client.gateway.stream_start',
           });
-          await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
       }
