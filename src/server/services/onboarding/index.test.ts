@@ -211,8 +211,9 @@ describe('OnboardingService', () => {
   it('persists fullName and interests through saveUserQuestion', async () => {
     const service = new OnboardingService(mockDb, userId);
     const result = await service.saveUserQuestion({
+      customInterests: ['AI tooling'],
       fullName: 'Ada Lovelace',
-      interests: ['AI tooling'],
+      interests: ['coding'],
     });
 
     expect(result).toEqual({
@@ -223,7 +224,7 @@ describe('OnboardingService', () => {
       unchangedFields: [],
     });
     expect(persistedUserState.fullName).toBe('Ada Lovelace');
-    expect(persistedUserState.interests).toEqual(['AI tooling']);
+    expect(persistedUserState.interests).toEqual(['coding', 'AI tooling']);
   });
 
   it('ignores responseLanguage if the agent still tries to send it', async () => {
