@@ -71,7 +71,7 @@ export const agentCronJobs = pgTable(
 export type NewAgentCronJob = typeof agentCronJobs.$inferInsert;
 export type AgentCronJob = typeof agentCronJobs.$inferSelect;
 export type CreateAgentCronJobData = Partial<NewAgentCronJob> &
-  Pick<NewAgentCronJob, 'agentId' | 'cronPattern' | 'content' | 'userId'>;
+  Pick<NewAgentCronJob, 'agentId' | 'cronPattern' | 'content'>;
 export type UpdateAgentCronJobData = Partial<AgentCronJob>;
 
 export type { ExecutionConditions };

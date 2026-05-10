@@ -736,6 +736,37 @@ export class TopicModel {
       .returning();
   };
 
+  getCronTopicsGroupedByCronJob = async (
+    agentId: string,
+  ): Promise<{ cronJobId: string; topics: TopicItem[] }[]> => {
+    const rows = await this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          eq(topics.userId, this.userId),
+          eq(topics.agentId, agentId),
+          eq(topics.trigger, 'cron'),
+          sql`(${topics.metadata}->>'cronJobId') IS NOT NULL`,
+        ),
+      )
+      .orderBy(desc(topics.createdAt));
+
+    const grouped = new Map<string, TopicItem[]>();
+    for (const topic of rows) {
+      const cronJobId = (topic.metadata as { cronJobId?: string } | null)?.cronJobId;
+      if (!cronJobId) continue;
+      const group = grouped.get(cronJobId) ?? [];
+      group.push(topic);
+      grouped.set(cronJobId, group);
+    }
+
+    return [...grouped.entries()].map(([cronJobId, topicList]) => ({
+      cronJobId,
+      topics: topicList,
+    }));
+  };
+
   // **************** Helper *************** //
 
   private genId = () => idGenerator('topics');
