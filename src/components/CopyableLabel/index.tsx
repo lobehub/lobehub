@@ -6,31 +6,63 @@ interface CopyableLabelProps {
   className?: string;
   style?: CSSProperties;
   value?: string | null;
+  wrap?: boolean;
 }
 
-const CopyableLabel = memo<CopyableLabelProps>(({ className, style, value = '--' }) => {
+const CopyableLabel = memo<CopyableLabelProps>(({ className, style, value = '--', wrap }) => {
+  if (wrap) {
+    return (
+      <Flexbox
+        horizontal
+        align={'flex-start'}
+        className={className}
+        gap={4}
+        style={{
+          position: 'relative',
+          width: '100%',
+          ...style,
+        }}
+      >
+        <Text
+          style={{
+            color: 'inherit',
+            flex: 1,
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+            margin: 0,
+            minWidth: 0,
+            overflowWrap: 'anywhere',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {value || '--'}
+        </Text>
+        <CopyButton content={value || '--'} size={'small'} />
+      </Flexbox>
+    );
+  }
+
   return (
     <Flexbox
       horizontal
-      align={'flex-start'}
+      align={'center'}
       className={className}
       gap={4}
       style={{
+        overflow: 'hidden',
         position: 'relative',
-        width: '100%',
         ...style,
       }}
     >
       <Text
+        ellipsis
         style={{
           color: 'inherit',
-          flex: 1,
           fontFamily: 'inherit',
           fontSize: 'inherit',
           margin: 0,
-          minWidth: 0,
-          overflowWrap: 'anywhere',
-          whiteSpace: 'pre-wrap',
+          overflow: 'hidden',
+          width: '100%',
         }}
       >
         {value || '--'}
