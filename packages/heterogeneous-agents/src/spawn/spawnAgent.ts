@@ -130,12 +130,24 @@ const CLAUDE_CODE_PERMISSION_ARGS = (): string[] =>
 
 const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check', '--full-auto'] as const;
 
-const buildClaudeCodeArgs = (
-  resumeSessionId: string | undefined,
-  inputArgs: string[],
-  extraArgs: string[],
-  includePartialMessages: boolean,
-) => [
+interface BuildSpawnArgsParams {
+  agentType: string;
+  /** Extra CLI arguments appended after the agent's preset flags. */
+  extraArgs: string[];
+  /** (Claude Code only) Stream `--include-partial-messages` deltas. */
+  includePartialMessages: boolean;
+  /** Per-agent input args produced by `buildAgentInput` (e.g. Codex `--image`). */
+  inputArgs: string[];
+  /** Native session id for resume; undefined for fresh runs. */
+  resumeSessionId: string | undefined;
+}
+
+const buildClaudeCodeArgs = ({
+  extraArgs,
+  includePartialMessages,
+  inputArgs,
+  resumeSessionId,
+}: BuildSpawnArgsParams) => [
   ...CLAUDE_CODE_BASE_ARGS,
   ...(includePartialMessages ? ['--include-partial-messages'] : []),
   ...CLAUDE_CODE_PERMISSION_ARGS(),
@@ -144,31 +156,21 @@ const buildClaudeCodeArgs = (
   ...extraArgs,
 ];
 
-const buildCodexArgs = (
-  resumeSessionId: string | undefined,
-  inputArgs: string[],
-  extraArgs: string[],
-) =>
+const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) =>
   resumeSessionId
     ? ['exec', 'resume', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs, resumeSessionId, '-']
     : ['exec', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs];
 
-const buildSpawnArgs = (
-  agentType: string,
-  resumeSessionId: string | undefined,
-  inputArgs: string[],
-  extraArgs: string[],
-  includePartialMessages: boolean,
-): string[] => {
-  switch (agentType) {
+const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
+  switch (params.agentType) {
     case 'claude-code': {
-      return buildClaudeCodeArgs(resumeSessionId, inputArgs, extraArgs, includePartialMessages);
+      return buildClaudeCodeArgs(params);
     }
     case 'codex': {
-      return buildCodexArgs(resumeSessionId, inputArgs, extraArgs);
+      return buildCodexArgs(params);
     }
     default: {
-      throw new Error(`spawnAgent: unsupported agent type "${agentType}"`);
+      throw new Error(`spawnAgent: unsupported agent type "${params.agentType}"`);
     }
   }
 };
@@ -219,13 +221,13 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   const command = options.command || defaultCommand(options.agentType);
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
-  const args = buildSpawnArgs(
-    options.agentType,
-    options.resumeSessionId,
-    inputPlan.args,
-    options.extraArgs ?? [],
-    options.includePartialMessages ?? false,
-  );
+  const args = buildSpawnArgs({
+    agentType: options.agentType,
+    extraArgs: options.extraArgs ?? [],
+    includePartialMessages: options.includePartialMessages ?? false,
+    inputArgs: inputPlan.args,
+    resumeSessionId: options.resumeSessionId,
+  });
   const cwd = options.cwd || process.cwd();
 
   const proc = spawn(command, args, {
