@@ -291,7 +291,7 @@
   "heterogeneousStatus.auth.api": "API",
   "heterogeneousStatus.auth.label": "Auth Method",
   "heterogeneousStatus.auth.subscription": "Subscription",
-  "heterogeneousStatus.cloud.githubDesc": "Select a GitHub credential to allow the sandbox to clone your private repositories.",
+  "heterogeneousStatus.cloud.githubDesc": "Select a GitHub OAuth credential to allow the sandbox to clone your private repositories.",
   "heterogeneousStatus.cloud.githubLabel": "GitHub Connection",
   "heterogeneousStatus.cloud.githubNoCreds": "No GitHub credentials found.",
   "heterogeneousStatus.cloud.githubPlaceholder": "Select a GitHub credential...",

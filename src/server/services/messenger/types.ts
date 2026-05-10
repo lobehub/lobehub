@@ -5,6 +5,13 @@ import type { PlatformClient } from '@/server/services/bot/platforms';
 export interface UnlinkedMessageContext {
   authorUserId: string;
   authorUserName?: string;
+  /** When set, the inbound was a non-DM `@mention` (Slack channel today).
+   *  The binder should respond ephemerally so the verify-im URL isn't
+   *  broadcast to the rest of the channel. The raw chat-sdk `thread.id`
+   *  carries the platform's thread anchor — Slack encodes it as the third
+   *  colon-segment of `slack:<channel>:<threadTs>` so the ephemeral can be
+   *  posted in-thread next to the mention. */
+  channelMentionThreadId?: string;
   chatId: string;
   /** Original inbound chat-sdk message. Absent on slash-command paths
    *  (Slack `/start`) where there is no underlying Message instance. */
@@ -105,6 +112,22 @@ export interface MessengerPlatformBinder {
   }) => Promise<void>;
 
   /**
+   * Post an ephemeral message visible only to `userId` in `channelId` —
+   * used by the channel-mention link flow so an unlinked mentioner sees
+   * the verify-im URL without leaking it to the rest of the channel. When
+   * `threadTs` is supplied the ephemeral is anchored in that Slack thread
+   * so it appears next to the mention rather than at the bottom of the
+   * channel. Platforms without an ephemeral primitive (Telegram) leave
+   * this unset and the router falls back to `handleUnlinkedMessage`.
+   */
+  replyEphemeral?: (params: {
+    channelId: string;
+    text: string;
+    threadTs?: string;
+    userId: string;
+  }) => Promise<void>;
+
+  /**
    * Send a private response back to the invoker of a chat-sdk interaction
    * (slash command today; modal submit / action follow-up tomorrow). The
    * binder picks the most-private channel the platform offers — Slack uses
@@ -130,10 +153,15 @@ export interface MessengerPlatformBinder {
    * without typing a number. Optional — platforms that don't support
    * tap-to-select keyboards (e.g. plain Slack DMs) can leave this unset and
    * the router will fall back to the text-based `/agents <n>` flow.
+   *
+   * `ephemeralTo` (when supported) renders the picker as a private message
+   * visible only to that user — used when `/agents` is invoked from a
+   * public channel so the personal agent list isn't broadcast. Platforms
+   * without an ephemeral primitive ignore the field and post normally.
    */
   sendAgentPicker?: (
     chatId: string,
-    params: { entries: AgentPickerEntry[]; text: string },
+    params: { entries: AgentPickerEntry[]; ephemeralTo?: string; text: string },
   ) => Promise<void>;
 
   /** Plain DM reply (used by /agents and various command help texts). */

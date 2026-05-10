@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "یک حساب تلگرام دیگر قبلاً متصل شده است",
   "verify.confirm.title": "تأیید لینک",
   "verify.confirm.workspace": "فضای کاری: {{workspace}}",
+  "verify.error.alreadyConsumed": "این لینک قبلاً برای اتصال به یک حساب کاربری استفاده شده است. وارد حساب LobeHub خود شوید تا اتصال را مدیریت کنید، یا به ربات بازگردید و دوباره /start را ارسال کنید تا یک لینک جدید صادر شود.",
+  "verify.error.alreadyConsumedTitle": "این لینک قبلاً استفاده شده است",
   "verify.error.alreadyLinkedToOther": "این حساب قبلاً به یک حساب دیگر LobeHub لینک شده است. ابتدا وارد آن حساب شوید.",
   "verify.error.expired": "این لینک منقضی شده است. لطفاً به ربات بازگردید و دوباره دستور /start را ارسال کنید.",
   "verify.error.generic": "مشکلی پیش آمد. لطفاً دوباره امتحان کنید.",

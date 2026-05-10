@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "تم ربط حساب Telegram آخر بالفعل",
   "verify.confirm.title": "تأكيد الربط",
   "verify.confirm.workspace": "مساحة العمل: {{workspace}}",
+  "verify.error.alreadyConsumed": "تم استخدام هذا الرابط بالفعل لربط حساب. قم بتسجيل الدخول إلى حساب LobeHub الخاص بك لإدارة الاتصال، أو عد إلى البوت وأرسل /start مرة أخرى لإصدار رابط جديد.",
+  "verify.error.alreadyConsumedTitle": "تم استخدام هذا الرابط بالفعل",
   "verify.error.alreadyLinkedToOther": "هذا الحساب مرتبط بالفعل بحساب LobeHub مختلف. قم بتسجيل الدخول إلى هذا الحساب أولاً.",
   "verify.error.expired": "انتهت صلاحية هذا الرابط. يرجى العودة إلى البوت وإرسال /start مرة أخرى.",
   "verify.error.generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",

@@ -48,6 +48,10 @@ const MessengerVerifyPage = memo(() => {
     messengerService.peekLinkToken(randomId),
   );
 
+  const tokenStatus = tokenSWR.data?.status;
+  const activeToken = tokenSWR.data?.status === 'active' ? tokenSWR.data : null;
+  const consumedToken = tokenSWR.data?.status === 'consumed' ? tokenSWR.data : null;
+
   // Refresh-friendly: if the user already has a link for *this* (platform,
   // tenant) pair, skip the token flow entirely and jump to the success state.
   // Without this, refreshing the page after a successful link looks like an
@@ -55,16 +59,21 @@ const MessengerVerifyPage = memo(() => {
   //
   // Scoping by tenant is critical for Slack multi-workspace: a user already
   // linked to workspace A must not short-circuit when verifying workspace B,
-  // otherwise confirmLink for B never runs. We wait for the token payload to
-  // resolve so we know the tenant. If the token is gone (expired/consumed,
-  // typical of a post-confirm refresh), fall back to the unscoped lookup so
-  // the refresh still lands on success.
+  // otherwise confirmLink for B never runs. We prefer the live token's
+  // tenantId; if the token was already consumed we use the consumed-marker's
+  // tenantId so the success state still scopes correctly. Falling back to
+  // an unscoped (`__any__`) lookup is reserved for the genuine expired case.
   const tokenResolved = !tokenSWR.isLoading;
-  const tokenTenantId = tokenSWR.data?.tenantId;
-  const tokenScopeKey = tokenSWR.data ? (tokenTenantId ?? '') : '__any__';
+  const scopedTenantId = activeToken?.tenantId ?? consumedToken?.tenantId;
+  const tokenScopeKey =
+    tokenStatus === 'active' || tokenStatus === 'consumed' ? (scopedTenantId ?? '') : '__any__';
   const existingLinkSWR = useSWR(
     isSignedIn && tokenResolved && platform ? ['messenger:myLink', platform, tokenScopeKey] : null,
-    async () => messengerService.getMyLink(platform!, tokenSWR.data ? tokenTenantId : undefined),
+    async () =>
+      messengerService.getMyLink(
+        platform!,
+        tokenStatus === 'active' || tokenStatus === 'consumed' ? scopedTenantId : undefined,
+      ),
   );
 
   if (!randomId) {
@@ -128,22 +137,51 @@ const MessengerVerifyPage = memo(() => {
     );
   }
 
-  // Token may be expired/consumed on a post-confirm refresh. We only block on
-  // token errors when there's no existing link to fall back on; otherwise the
-  // body's success state handles the refresh case below.
-  if (!existingLinkSWR.data && (tokenSWR.error || !tokenSWR.data)) {
+  // No active token. Two sub-cases the user needs to tell apart:
+  // - `consumed`: a previous confirmLink succeeded and burned the token.
+  //   If the current account has the matching link, fall through to the
+  //   body's success state (refresh-after-link). Otherwise the user is
+  //   signed into a different LobeHub account than the one they linked
+  //   with — surface the dedicated "alreadyConsumed" copy so they know
+  //   the link did succeed (and they need to switch accounts).
+  // - `expired`: TTL ran out before binding. Show the existing copy.
+  if (!existingLinkSWR.data && tokenStatus !== 'active') {
+    if (tokenSWR.error) {
+      return (
+        <Flexbox align="center" className={styles.card} gap={24}>
+          <Heading
+            subtitle={getMessengerErrorMessage(tokenSWR.error, t, 'verify.error.expired')}
+            title={t('verify.error.title')}
+          />
+        </Flexbox>
+      );
+    }
+
+    if (tokenStatus === 'consumed') {
+      return (
+        <Flexbox align="center" className={styles.card} gap={24}>
+          <Heading
+            subtitle={t('verify.error.alreadyConsumed')}
+            title={t('verify.error.alreadyConsumedTitle')}
+          />
+        </Flexbox>
+      );
+    }
+
     return (
       <Flexbox align="center" className={styles.card} gap={24}>
-        <Heading
-          subtitle={getMessengerErrorMessage(tokenSWR.error, t, 'verify.error.expired')}
-          title={t('verify.error.title')}
-        />
+        <Heading subtitle={t('verify.error.expired')} title={t('verify.error.title')} />
       </Flexbox>
     );
   }
 
   const platformMeta = platformsSWR.data?.find(
-    (p) => p.id === (existingLinkSWR.data?.platform ?? tokenSWR.data?.platform ?? platform),
+    (p) =>
+      p.id ===
+      (existingLinkSWR.data?.platform ??
+        activeToken?.platform ??
+        consumedToken?.platform ??
+        platform),
   );
   const lobeAccount = session?.user?.email ?? session?.user?.name ?? '';
 
@@ -155,7 +193,7 @@ const MessengerVerifyPage = memo(() => {
       platformMeta={platformMeta}
       randomId={randomId}
       signInUrl={signInUrl}
-      tokenData={tokenSWR.data ?? null}
+      tokenData={activeToken}
     />
   );
 });

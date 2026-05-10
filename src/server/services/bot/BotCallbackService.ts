@@ -7,7 +7,10 @@ import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
-import { getInstallationStore } from '@/server/services/messenger/installations';
+import {
+  getInstallationStore,
+  messengerConnectionIdForUser,
+} from '@/server/services/messenger/installations';
 import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -92,8 +95,14 @@ export class BotCallbackService {
   }
 
   async handleCallback(body: BotCallbackBody): Promise<void> {
-    const { type, applicationId, platformThreadId, progressMessageId, messengerInstallationKey } =
-      body;
+    const {
+      type,
+      applicationId,
+      platformThreadId,
+      progressMessageId,
+      messengerInstallationKey,
+      userId,
+    } = body;
     const platform = platformThreadId.split(':')[0];
 
     const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger({
@@ -101,6 +110,7 @@ export class BotCallbackService {
       messengerInstallationKey,
       platform,
       platformThreadId,
+      userId,
     });
 
     const entry = platformRegistry.getPlatform(platform);
@@ -148,6 +158,7 @@ export class BotCallbackService {
     messengerInstallationKey?: string;
     platform: string;
     platformThreadId: string;
+    userId?: string;
   }): Promise<{
     charLimit?: number;
     connectionId: string;
@@ -155,14 +166,19 @@ export class BotCallbackService {
     messenger: PlatformMessenger;
     settings: Record<string, unknown>;
   }> {
-    const { applicationId, messengerInstallationKey, platform, platformThreadId } = params;
+    const { applicationId, messengerInstallationKey, platform, platformThreadId, userId } = params;
 
     // Deterministic discriminator: any run originated from the shared
     // Messenger bot is tagged by `MessengerRouter` with the install key. We
     // never inspect the applicationId shape — that's a runtime bookkeeping
     // handle, not a routing key.
     if (messengerInstallationKey) {
-      return this.createMessengerClient(platform, messengerInstallationKey, platformThreadId);
+      return this.createMessengerClient(
+        platform,
+        messengerInstallationKey,
+        platformThreadId,
+        userId,
+      );
     }
 
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
@@ -209,14 +225,18 @@ export class BotCallbackService {
    * but skips the Chat SDK + handler registration since the callback only
    * needs outbound messaging (edit / post / react), not webhook routing.
    *
-   * `connectionId` is returned empty: messenger runs don't have an
-   * `agent_bot_providers.id`, so gateway typing is skipped (see
-   * `renewGatewayTyping` / `stopGatewayTyping`).
+   * `connectionId` resolves to the per-user gateway shard
+   * (`messenger:<platform>[:<tenant>]:user-<userId>`) when both the install
+   * key and the userId are known — that lets `stopGatewayTyping` target the
+   * exact same DO that started typing in `AgentBridgeService`. Falls back to
+   * `''` (typing skipped) when the userId is missing, which preserves
+   * pre-PR2 behavior for any in-flight callbacks queued before the upgrade.
    */
   private async createMessengerClient(
     platform: string,
     installationKey: string,
     platformThreadId: string,
+    userId?: string,
   ): Promise<{
     charLimit?: number;
     connectionId: string;
@@ -248,7 +268,9 @@ export class BotCallbackService {
 
     const messenger = client.getMessenger(platformThreadId);
 
-    return { charLimit: undefined, client, connectionId: '', messenger, settings: {} };
+    const connectionId = userId ? messengerConnectionIdForUser({ installationKey, userId }) : '';
+
+    return { charLimit: undefined, client, connectionId, messenger, settings: {} };
   }
 
   private async handleStep(

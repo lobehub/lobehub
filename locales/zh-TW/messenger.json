@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "已連結至其他 Telegram 帳戶",
   "verify.confirm.title": "確認連結",
   "verify.confirm.workspace": "工作區：{{workspace}}",
+  "verify.error.alreadyConsumed": "此連結已被用來連結帳戶。請登入該 LobeHub 帳戶以管理連結，或返回機器人並再次發送 /start 以生成新的連結。",
+  "verify.error.alreadyConsumedTitle": "此連結已被使用",
   "verify.error.alreadyLinkedToOther": "此帳戶已連接到其他 LobeHub 帳戶。請先登入該帳戶。",
   "verify.error.expired": "此連結已過期。請返回機器人並再次發送 /start。",
   "verify.error.generic": "發生錯誤。請重試。",

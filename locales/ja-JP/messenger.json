@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "別のTelegramアカウントがすでにリンクされています",
   "verify.confirm.title": "リンクを確認",
   "verify.confirm.workspace": "ワークスペース: {{workspace}}",
+  "verify.error.alreadyConsumed": "このリンクはすでにアカウントを接続するために使用されています。そのLobeHubアカウントにサインインして接続を管理するか、ボットに戻って「/start」を送信し、新しいリンクを発行してください。",
+  "verify.error.alreadyConsumedTitle": "このリンクはすでに使用されています",
   "verify.error.alreadyLinkedToOther": "このアカウントは別の LobeHub アカウントにすでにリンクされています。最初にそのアカウントにサインインしてください。",
   "verify.error.expired": "このリンクは期限切れです。ボットに戻り、/start を再度送信してください。",
   "verify.error.generic": "問題が発生しました。もう一度お試しください。",
