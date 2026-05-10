@@ -368,13 +368,15 @@ export class MessagesEngine {
       // =============================================
 
       // Onboarding synthetic state (fake getOnboardingState tool call pair to drive action loop)
+      // Disabled when finished=true
       new OnboardingSyntheticStateInjector({
-        enabled: !!onboardingContext?.phaseGuidance,
+        enabled: !!onboardingContext?.phaseGuidance && !onboardingContext?.finished,
         onboardingContext,
       }),
       // Onboarding action hints (phase-specific tool call reminders)
+      // Disabled when finished=true so <next_actions> stops injecting after onboarding
       new OnboardingActionHintInjector({
-        enabled: !!onboardingContext?.phaseGuidance,
+        enabled: !!onboardingContext?.phaseGuidance && !onboardingContext?.finished,
         onboardingContext,
       }),
 
