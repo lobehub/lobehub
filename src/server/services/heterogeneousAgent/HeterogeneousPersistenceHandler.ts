@@ -156,6 +156,7 @@ interface OperationState {
   currentAssistantMessageId: string;
   lastModel: string | undefined;
   lastProvider: string | undefined;
+  lastStepIndex: number;
   operationId: string;
   processedKeys: Set<string>;
   subagentRuns: Map<string, SubagentRunState>;
@@ -238,6 +239,60 @@ export class HeterogeneousPersistenceHandler {
     topicId: string;
   }): Promise<void> {
     const state = await this.loadOrCreateState(params.operationId, params.topicId);
+    const batchMaxStepIndex = Math.max(...params.events.map((event) => event.stepIndex));
+
+    // A different Lambda may have already processed `stream_start { newStep }`
+    // and persisted `heteroCurrentMsgId` for this operation. Warm instances keep
+    // their operation state in memory, so without an explicit resync they would
+    // keep appending later-step chunks to the PREVIOUS assistant row. Only resync
+    // when the incoming batch advances beyond the step this instance has seen.
+    if (batchMaxStepIndex > state.lastStepIndex) {
+      await this.syncAssistantPointerForAdvancedStep(state);
+    }
+
+    // Refresh content/reasoning baseline from DB before processing this batch.
+    //
+    // Root cause of truncation: Vercel serverless routes consecutive batches to
+    // different Lambda instances. A warm replica's in-memory `accumulatedContent`
+    // reflects only the batches IT processed — it has no visibility into batches
+    // handled by other replicas. When that warm replica later processes a
+    // tools_calling event, `persistMainToolBatch` writes the stale short content
+    // alongside the new tools, overwriting the correct (longer) DB value.
+    //
+    // Fix: re-read the current assistant message from DB at the start of every
+    // ingest call. Since `flushBatchContent` always writes at the end of each
+    // batch, DB is authoritative. Reading here gives us the freshest flushed
+    // content as the new baseline, so any text accumulated in this batch extends
+    // the correct full string rather than a stale partial.
+    //
+    // Cost: one extra `findById` round-trip per warm ingest call (cold calls
+    // already read the message in `loadOrCreateState` — the second read is
+    // redundant but harmless and keeps the logic uniform).
+    const refreshed = await this.deps.messageModel.findById(state.currentAssistantMessageId);
+    const dbContent = (refreshed?.content ?? '') as string;
+    const dbReasoning = (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
+
+    // Adopt DB value only when it is LONGER than what this instance holds in memory.
+    // This correctly handles two competing cases without introducing a dirty flag:
+    //
+    //   1. Multi-replica stale (the problem this refresh was added to fix):
+    //      Another replica flushed more content to DB than this warm instance
+    //      has in memory → dbContent is longer → adopt it so new text in this
+    //      batch extends the correct full string rather than a stale partial.
+    //
+    //   2. flushBatchContent retry on the same warm instance (P1 concern):
+    //      Events were already processed and marked in processedKeys, but the
+    //      end-of-batch flush threw a transient DB error. DB still holds the
+    //      shorter pre-batch value; in-memory already has the correct result.
+    //      Unconditionally overwriting with the DB value would wipe those
+    //      chunks permanently (processedKeys prevents replay). Taking the
+    //      longer in-memory value keeps them safe.
+    if (dbContent.length > state.accumulatedContent.length) {
+      state.accumulatedContent = dbContent;
+    }
+    if (dbReasoning.length > state.accumulatedReasoning.length) {
+      state.accumulatedReasoning = dbReasoning;
+    }
 
     for (const event of params.events) {
       const key = eventKey(event);
@@ -252,6 +307,7 @@ export class HeterogeneousPersistenceHandler {
       // only on success so a retry can complete the lost write.
       await this.handleEvent(state, event);
       state.processedKeys.add(key);
+      state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
     }
 
     // Flush accumulated content after every batch so a subsequent replica
@@ -372,6 +428,7 @@ export class HeterogeneousPersistenceHandler {
       currentAssistantMessageId,
       lastModel: undefined,
       lastProvider: undefined,
+      lastStepIndex: 0,
       operationId,
       processedKeys: new Set(),
       subagentRuns: new Map(),
@@ -390,6 +447,49 @@ export class HeterogeneousPersistenceHandler {
       restoredTools.length,
     );
     return state;
+  }
+
+  private async syncAssistantPointerForAdvancedStep(state: OperationState): Promise<void> {
+    const topic = await this.deps.topicModel.findById(state.topicId);
+    const running = topic?.metadata?.runningOperation;
+
+    if (!running || running.operationId !== state.operationId) {
+      throw new Error(
+        `No matching runningOperation on topic ${state.topicId} for operation ${state.operationId} — orchestrator must seed topic.metadata.runningOperation before ingest`,
+      );
+    }
+
+    const stored = topic.metadata?.heteroCurrentMsgId;
+    const authoritativeAssistantMessageId =
+      stored?.operationId === state.operationId
+        ? (stored.msgId ?? running.assistantMessageId)
+        : running.assistantMessageId;
+
+    if (
+      !authoritativeAssistantMessageId ||
+      authoritativeAssistantMessageId === state.currentAssistantMessageId
+    ) {
+      return;
+    }
+
+    const currentMsg = await this.deps.messageModel.findById(authoritativeAssistantMessageId);
+    const restoredContent = (currentMsg?.content ?? '') as string;
+    const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
+    const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
+
+    state.currentAssistantMessageId = authoritativeAssistantMessageId;
+    state.accumulatedContent = restoredContent;
+    state.accumulatedReasoning = restoredReasoning;
+    state.toolState = {
+      payloads: restoredTools,
+      persistedIds: new Set(restoredTools.map((tool) => tool.id)),
+    };
+
+    log(
+      'synced warm state op=%s to assistant=%s after step advance',
+      state.operationId,
+      authoritativeAssistantMessageId,
+    );
   }
 
   // ─── Event dispatch ──────────────────────────────────────────────────────

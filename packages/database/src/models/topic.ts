@@ -736,6 +736,37 @@ export class TopicModel {
       .returning();
   };
 
+  getCronTopicsGroupedByCronJob = async (
+    agentId: string,
+  ): Promise<{ cronJobId: string; topics: TopicItem[] }[]> => {
+    const rows = await this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          eq(topics.userId, this.userId),
+          eq(topics.agentId, agentId),
+          eq(topics.trigger, 'cron'),
+          sql`(${topics.metadata}->>'cronJobId') IS NOT NULL`,
+        ),
+      )
+      .orderBy(desc(topics.createdAt));
+
+    const grouped = new Map<string, TopicItem[]>();
+    for (const topic of rows) {
+      const cronJobId = (topic.metadata as { cronJobId?: string } | null)?.cronJobId;
+      if (!cronJobId) continue;
+      const group = grouped.get(cronJobId) ?? [];
+      group.push(topic);
+      grouped.set(cronJobId, group);
+    }
+
+    return [...grouped.entries()].map(([cronJobId, topicList]) => ({
+      cronJobId,
+      topics: topicList,
+    }));
+  };
+
   // **************** Helper *************** //
 
   private genId = () => idGenerator('topics');
@@ -820,53 +851,5 @@ export class TopicModel {
       );
 
     return result[0]?.total ?? 0;
-  };
-
-  /**
-   * Get cron topics grouped by cronJob for a specific agent
-   * Returns topics where trigger='cron' and metadata contains cronJobId
-   */
-  getCronTopicsGroupedByCronJob = async (agentId: string) => {
-    const cronTopics = await this.db
-      .select({
-        createdAt: topics.createdAt,
-        favorite: topics.favorite,
-        historySummary: topics.historySummary,
-        id: topics.id,
-        metadata: topics.metadata,
-        title: topics.title,
-        trigger: topics.trigger,
-        updatedAt: topics.updatedAt,
-      })
-      .from(topics)
-      .where(
-        and(
-          eq(topics.userId, this.userId),
-          eq(topics.agentId, agentId),
-          eq(topics.trigger, 'cron'),
-          // Check if metadata contains cronJobId (use ? operator to avoid Neon rt_fetch bug with ->>)
-          sql`${topics.metadata} ? 'cronJobId'`,
-        ),
-      )
-      .orderBy(desc(topics.updatedAt));
-
-    // Group topics by cronJobId
-    const groupedTopics = new Map<string, typeof cronTopics>();
-
-    cronTopics.forEach((topic) => {
-      const cronJobId = topic.metadata?.cronJobId;
-      if (cronJobId) {
-        if (!groupedTopics.has(cronJobId)) {
-          groupedTopics.set(cronJobId, []);
-        }
-        groupedTopics.get(cronJobId)!.push(topic);
-      }
-    });
-
-    // Convert Map to array of grouped objects
-    return Array.from(groupedTopics.entries()).map(([cronJobId, topicList]) => ({
-      cronJobId,
-      topics: topicList,
-    }));
   };
 }

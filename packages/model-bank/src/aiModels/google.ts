@@ -301,11 +301,13 @@ const googleChatModels: AIChatModelCard[] = [
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'imageInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'videoInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-05-07',

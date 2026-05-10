@@ -39,6 +39,32 @@ function repoToLocalDir(repo: string): string {
 }
 
 /**
+ * Write GitHub credentials into the sandbox in the same format produced by
+ * `injectCredsToSandbox(["github"])` so CC can source them from sub-shells:
+ *
+ *   source ~/.creds/env          # exports GITHUB_ACCESS_TOKEN
+ *   echo $GITHUB_ACCESS_TOKEN | gh auth login --hostname github.com --with-token
+ *
+ * Also authenticates the `gh` CLI upfront so all `gh` commands work out of
+ * the box without CC having to call inject first.
+ *
+ * Returns null when no token is available.
+ */
+function buildCredsSetupScript(githubToken?: string): string | null {
+  if (!githubToken) return null;
+  const tokenJson = JSON.stringify(githubToken);
+  return [
+    'mkdir -p ~/.creds',
+    // Write GITHUB_ACCESS_TOKEN matching the injectCredsToSandbox oauth naming scheme
+    `printf 'GITHUB_ACCESS_TOKEN=%s\\n' ${tokenJson} > ~/.creds/env`,
+    // Pre-authenticate gh CLI so CC can use it immediately (gh also picks up
+    // GITHUB_TOKEN from env, but explicit login ensures ~/.config/gh/hosts.yml
+    // is populated for cases where env is reset in a sub-shell)
+    `echo ${tokenJson} | gh auth login --hostname github.com --with-token 2>/dev/null || true`,
+  ].join(' && \\\n');
+}
+
+/**
  * Build an idempotent setup script that clones each repo if not already present.
  * Uses `[ -d <dir> ] || git clone ...` so re-runs on the same sandbox are no-ops.
  * Returns null when repos is empty.
@@ -145,8 +171,12 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     ...(githubToken ? [`GITHUB_TOKEN=${JSON.stringify(githubToken)}`] : []),
   ].join(' ');
   const mainCommand = `echo ${base64Payload} | base64 -d | ${envVars} ${args.join(' ')}`;
-  const setupScript = buildRepoSetupScript(repos ?? [], githubToken);
-  const shellCommand = setupScript ? `${setupScript} && \\\n${mainCommand}` : mainCommand;
+  // Creds first (writes ~/.creds/env + authenticates gh CLI), then repo clone.
+  const credsScript = buildCredsSetupScript(githubToken);
+  const repoScript = buildRepoSetupScript(repos ?? [], githubToken);
+  const setupParts = [credsScript, repoScript].filter(Boolean);
+  const shellCommand =
+    setupParts.length > 0 ? `${setupParts.join(' && \\\n')} && \\\n${mainCommand}` : mainCommand;
 
   log(
     'spawnHeteroSandbox: userId=%s op=%s type=%s topic=%s',

@@ -29,7 +29,7 @@
   "batchDelete": "一括削除",
   "blog": "製品ブログ",
   "botIntegrationBanner.dismiss": "閉じる",
-  "botIntegrationBanner.title": "LobeAI にチャネルを追加",
+  "botIntegrationBanner.title": "お気に入りのメッセージアプリで Lobe AI と会話",
   "branching": "サブトピックを作成",
   "branchingDisable": "現在のモードでは「サブトピック」機能は利用できません。この機能を使用するには、Postgres/Pglite DB モードに切り替えるか、LobeHub Cloud をご利用ください",
   "branchingRequiresSavedTopic": "現在のトピックが保存されていません。保存後にサブトピック機能を使用できます",

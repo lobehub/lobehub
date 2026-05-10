@@ -681,7 +681,7 @@
   "skillDetail.tools": "工具",
   "skillDetail.trustWarning": "請僅使用您信任的開發者所提供的連接器。LobeHub 無法控制開發者提供的工具內容，也無法保證其功能如預期運作，或不會發生變更。",
   "skillInstallBanner.dismiss": "關閉",
-  "skillInstallBanner.title": "新增技能至 Lobe AI",
+  "skillInstallBanner.title": "將你常用的應用連接到 Lobe AI",
   "store.actions.cancel": "取消安裝",
   "store.actions.configure": "設定",
   "store.actions.confirmUninstall": "即將卸載該插件，卸載後將清除該插件配置，請確認你的操作",
