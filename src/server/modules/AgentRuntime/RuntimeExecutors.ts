@@ -477,6 +477,7 @@ export const createRuntimeExecutors = (
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
               soulContent: soulDoc?.content ?? null,
               userInfo,
+              finished: onboardingState.finished,
             };
             log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
           } catch (error) {
