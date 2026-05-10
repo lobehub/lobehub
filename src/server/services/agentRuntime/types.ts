@@ -161,8 +161,21 @@ export interface OperationCreationParams {
     trigger?: string;
   };
   autoStart?: boolean;
+  /**
+   * Sender/owner identity for bot-originated runs. Forwarded into
+   * `state.metadata.botContext` so device-tool dispatch can audit who
+   * triggered the call. `undefined` for first-party (web/desktop) callers.
+   */
+  botContext?: any;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: any;
+  /**
+   * Device-access policy decision computed once per turn by
+   * `resolveDeviceAccessPolicy`. Forwarded into `state.metadata.deviceAccessPolicy`
+   * so the dispatch site can include `reason` in the audit entry without
+   * re-deriving it.
+   */
+  deviceAccessPolicy?: { canUseDevice: boolean; reason: string };
   /** Device system info for placeholder variable replacement in Local System systemRole */
   deviceSystemInfo?: Record<string, string>;
   /** Discord context for injecting channel/guild info into agent system message */

@@ -48,6 +48,11 @@ import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/type
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
+import {
+  type DeviceAccessReason,
+  isDeviceToolIdentifier,
+  logDeviceToolAudit,
+} from '@/server/services/aiAgent/deviceToolAudit';
 import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -1617,6 +1622,28 @@ export const createRuntimeExecutors = (
         : null;
 
       let execution: { result: ToolExecutionResultResponse; attempts: number };
+      if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
+        // Per-call audit for device tools (local-system / remote-device).
+        // Emitted before dispatch so the record exists even if dispatch
+        // throws. We rely on the engine's enable gate to keep `canUseDevice`
+        // true here; recording the policy reason inline lets an operator
+        // distinguish first-party vs bot-owner runs without joining logs.
+        const policy = state.metadata?.deviceAccessPolicy as
+          | { canUseDevice: boolean; reason: DeviceAccessReason }
+          | undefined;
+        logDeviceToolAudit({
+          apiName: chatToolPayload.apiName,
+          botContext: state.metadata?.botContext,
+          canUseDevice: policy?.canUseDevice ?? true,
+          messageId: state.metadata?.sourceMessageId,
+          operationId,
+          reason: policy?.reason ?? 'first-party',
+          toolIdentifier: chatToolPayload.identifier,
+          topicId: ctx.topicId,
+          userId: ctx.userId,
+        });
+      }
+
       if (hookResult?.isMocked) {
         log(`[${operationLogId}] Tool ${toolName} mocked by beforeToolCall hook`);
         toolCallMocked = true;
@@ -2053,6 +2080,23 @@ export const createRuntimeExecutors = (
                 });
               })()
             : null;
+
+          if (isDeviceToolIdentifier(chatToolPayload.identifier) && !batchHookResult?.isMocked) {
+            const policy = state.metadata?.deviceAccessPolicy as
+              | { canUseDevice: boolean; reason: DeviceAccessReason }
+              | undefined;
+            logDeviceToolAudit({
+              apiName: chatToolPayload.apiName,
+              botContext: state.metadata?.botContext,
+              canUseDevice: policy?.canUseDevice ?? true,
+              messageId: state.metadata?.sourceMessageId,
+              operationId,
+              reason: policy?.reason ?? 'first-party',
+              toolIdentifier: chatToolPayload.identifier,
+              topicId: ctx.topicId,
+              userId: ctx.userId,
+            });
+          }
 
           let execution: { result: ToolExecutionResultResponse; attempts: number };
           if (batchHookResult?.isMocked) {

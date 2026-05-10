@@ -871,6 +871,14 @@ export class MessengerRouter {
     const serverDB = await getServerDB();
     const bridge = new AgentBridgeService(serverDB, link.userId);
 
+    // Messenger account-link routing already binds platform sender →
+    // LobeHub user; the dispatch only fires for the linked sender. So
+    // `isOwner` is true iff the inbound message's `author.userId` matches
+    // the linked `platformUserId`. Falls back to false when either is
+    // missing (fail-closed — never default device access to "trusted").
+    const senderExternalUserId = message.author?.userId ?? '';
+    const isOwner = !!link.platformUserId && senderExternalUserId === link.platformUserId;
+
     await bridge.handleMention(thread, message, {
       agentId,
       botContext: {
@@ -879,6 +887,7 @@ export class MessengerRouter {
         applicationId: link.tenantId
           ? `messenger-${platform}-${link.tenantId}`
           : `messenger-${platform}`,
+        isOwner,
         // Explicit, deterministic marker that this run originated from the
         // shared Messenger bot. `BotCallbackService` uses the presence of this
         // field to resolve credentials via the messenger install store instead
@@ -889,6 +898,7 @@ export class MessengerRouter {
           : `${platform}:singleton`,
         platform,
         platformThreadId: thread.id,
+        senderExternalUserId,
       },
       client,
     });

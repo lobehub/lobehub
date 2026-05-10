@@ -715,6 +715,70 @@ describe('BotMessageRouter', () => {
       expect(thread.post.mock.calls[0][0]).toContain("isn't accepting direct messages");
     });
 
+    it('should propagate sender + isOwner=true on botContext when the owner @s the bot', async () => {
+      const handler = await loadMentionHandler({ dmPolicy: 'open', userId: 'owner-platform-id' });
+      const thread = {
+        id: 'telegram:group-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'owner-platform-id', userName: 'owner' },
+        isMention: true,
+        text: '@bot run a tool',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      const opts = mockHandleMention.mock.calls[0][2];
+      expect(opts.botContext.senderExternalUserId).toBe('owner-platform-id');
+      expect(opts.botContext.isOwner).toBe(true);
+    });
+
+    it('should propagate sender + isOwner=false on botContext when an external user @s the bot', async () => {
+      const handler = await loadMentionHandler({ dmPolicy: 'open', userId: 'owner-platform-id' });
+      const thread = {
+        id: 'telegram:group-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'random-user-id', userName: 'random' },
+        isMention: true,
+        text: '@bot rm -rf',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      const opts = mockHandleMention.mock.calls[0][2];
+      expect(opts.botContext.senderExternalUserId).toBe('random-user-id');
+      expect(opts.botContext.isOwner).toBe(false);
+    });
+
+    it('should fall back to isOwner=false when settings.userId is missing (fail-closed)', async () => {
+      // No `userId` configured on the bot — even a sender who happens to
+      // share an ID with the operator can't claim owner status.
+      const handler = await loadMentionHandler({ dmPolicy: 'open' });
+      const thread = {
+        id: 'telegram:group-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'someone', userName: 'someone' },
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      const opts = mockHandleMention.mock.calls[0][2];
+      expect(opts.botContext.isOwner).toBe(false);
+    });
+
     it('should block DM @-mentions from users outside the allowlist and notify the sender', async () => {
       const handler = await loadMentionHandler({
         allowFrom: 'bob-id',
