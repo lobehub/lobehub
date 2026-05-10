@@ -90,7 +90,7 @@ jobs:
             echo "release_notes<<EOF"
             echo "## emaxlele-dev Build — ${{ steps.version.outputs.tag }}"
             echo
-            upstream_ver=$(node -p "require('./package.json').version" 2>/dev/null || echo 'unknown')
+            upstream_ver=$(git describe --tags --abbrev=0 --match 'v*' origin/canary 2>/dev/null | sed 's/^v//' || git tag --sort=-version:refname --merged origin/canary 2>/dev/null | grep -E 'canary' | head -1 | sed 's/^v//' || node -p "require('./package.json').version" 2>/dev/null || echo 'unknown')
             echo "> Personal fork build — emaxlele."
             echo "> **Upstream canary: ${upstream_ver}**"
             echo "> Based on ${compare_from}."
