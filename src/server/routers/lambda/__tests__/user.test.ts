@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { Plans } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -54,7 +55,7 @@ describe('userRouter', () => {
     mockAfterTasks.length = 0;
     vi.clearAllMocks();
     vi.mocked(getReferralStatus).mockResolvedValue(undefined);
-    vi.mocked(getSubscriptionPlan).mockResolvedValue(undefined);
+    vi.mocked(getSubscriptionPlan).mockResolvedValue(Plans.Free);
     vi.mocked(onUserActivityForBusiness).mockResolvedValue(undefined);
   });
 
