@@ -37,6 +37,14 @@ interface FakeThread {
   type: string;
 }
 
+interface FakeTopicMetadata {
+  heteroCurrentMsgId?: { msgId: string; operationId: string };
+  runningOperation: {
+    assistantMessageId: string;
+    operationId: string;
+  };
+}
+
 const createHarness = (params: {
   assistantMessageId: string;
   operationId: string;
@@ -137,7 +145,7 @@ const createHarness = (params: {
             assistantMessageId: params.assistantMessageId,
             operationId: params.operationId,
           },
-        },
+        } satisfies FakeTopicMetadata,
       };
     }),
     updateMetadata: vi.fn(async (_topicId: string, _patch: any) => {}),
@@ -857,7 +865,7 @@ describe('HeterogeneousPersistenceHandler', () => {
             assistantMessageId: 'asst-1',
             operationId: 'op-1',
           },
-        },
+        } satisfies FakeTopicMetadata,
       });
 
       await h.handler.ingest({

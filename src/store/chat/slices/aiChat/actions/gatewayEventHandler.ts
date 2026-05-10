@@ -24,15 +24,21 @@ const fetchAndReplaceMessages = async (get: () => ChatStore, context: Conversati
   return messages;
 };
 
-const findLatestAssistantMessageId = (
-  messages: Array<{ id: string; role?: string }> | undefined,
+type GatewayMessageLike = { id: string; role?: string };
+type HeteroStreamStartData = StreamStartData & { newStep?: boolean };
+
+const findNextAssistantMessageId = (
+  messages: GatewayMessageLike[] | undefined,
   currentAssistantMessageId: string,
 ) => {
   if (!messages?.length) return;
 
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
+  const currentIndex = messages.findIndex((message) => message.id === currentAssistantMessageId);
+  if (currentIndex === -1) return;
+
+  for (let index = currentIndex + 1; index < messages.length; index += 1) {
     const message = messages[index];
-    if (message.role === 'assistant' && message.id !== currentAssistantMessageId) {
+    if (message.role === 'assistant') {
       return message.id;
     }
   }
@@ -119,7 +125,7 @@ export const createGatewayEventHandler = (
     switch (event.type) {
       case 'stream_start': {
         enqueue(async () => {
-          const data = event.data as StreamStartData | undefined;
+          const data = event.data as HeteroStreamStartData | undefined;
 
           const newAssistantMessageId = data?.assistantMessage?.id;
 
@@ -144,8 +150,8 @@ export const createGatewayEventHandler = (
           });
 
           if (!newAssistantMessageId && data?.newStep) {
-            const resolvedAssistantMessageId = findLatestAssistantMessageId(
-              messages as Array<{ id: string; role?: string }> | undefined,
+            const resolvedAssistantMessageId = findNextAssistantMessageId(
+              messages as GatewayMessageLike[] | undefined,
               currentAssistantMessageId,
             );
 
