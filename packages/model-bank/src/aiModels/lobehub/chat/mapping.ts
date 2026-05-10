@@ -9,12 +9,6 @@ export const mappingChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'lobehub-onboarding-v1',
     settings: {
-      extendParamOptions: {
-        enableReasoning: {
-          defaultValue: true,
-          includeBudget: false,
-        },
-      },
       extendParams: ['enableReasoning'],
     },
     type: 'chat',
