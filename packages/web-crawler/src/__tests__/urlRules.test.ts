@@ -31,15 +31,6 @@ describe('urlRules', () => {
   });
 
   describe('specific URL patterns', () => {
-    it('should match WeChat Sogou links', () => {
-      const wechatRule = crawUrlRules.find(
-        (rule) => rule.urlPattern === 'https://weixin.sogou.com/link(.*)',
-      );
-
-      expect(wechatRule).toBeDefined();
-      expect(wechatRule?.impls).toEqual(['search1api']);
-    });
-
     it('should match Sogou links', () => {
       const sogouRule = crawUrlRules.find(
         (rule) => rule.urlPattern === 'https://sogou.com/link(.*)',
@@ -65,15 +56,6 @@ describe('urlRules', () => {
 
       expect(redditRule).toBeDefined();
       expect(redditRule?.impls).toEqual(['search1api']);
-    });
-
-    it('should match WeChat public account links', () => {
-      const wechatPublicRule = crawUrlRules.find(
-        (rule) => rule.urlPattern === 'https://mp.weixin.qq.com(.*)',
-      );
-
-      expect(wechatPublicRule).toBeDefined();
-      expect(wechatPublicRule?.impls).toEqual(['search1api', 'jina']);
     });
 
     it('should match GitHub blob links with URL transformation', () => {
@@ -250,7 +232,6 @@ describe('urlRules', () => {
       const patterns = crawUrlRules.map((rule) => rule.urlPattern);
 
       // Check for Chinese platforms
-      expect(patterns.some((p) => p.includes('weixin.sogou.com'))).toBe(true);
       expect(patterns.some((p) => p.includes('xiaohongshu.com'))).toBe(true);
       expect(patterns.some((p) => p.includes('feishu.cn'))).toBe(true);
     });
