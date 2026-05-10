@@ -144,7 +144,68 @@ const chatStreamable = async function* <T>(stream: AsyncIterable<T>) {
 
 const ERROR_CHUNK_PREFIX = '%FIRST_CHUNK_ERROR%: ';
 
-export function readableFromAsyncIterable<T>(iterable: AsyncIterable<T>) {
+/**
+ * Optional diagnostic context attached to errors that surface from the
+ * provider SDK iterator. Lets the FIRST_CHUNK_ERROR payload carry
+ * provider/model identifiers so log triage can correlate identical
+ * upstream failures across operations.
+ */
+export type StreamErrorContext = {
+  model?: string;
+  provider?: string;
+};
+
+/**
+ * Build the FIRST_CHUNK_ERROR payload string for a thrown error.
+ *
+ * Beyond `message`/`name`/`stack`, this surfaces:
+ * - `provider`/`model` from the caller, so error-log consumers know which
+ *   upstream blew up without grepping for the operation
+ * - `causeMessage`/`causeName` when `error.cause` is set — many wrapped
+ *   errors (e.g. APIError around a SyntaxError) bury the actionable detail
+ *   in `cause` and the bare triplet drops it
+ * - `parsePosition` extracted from V8 JSON SyntaxError messages
+ *   (e.g. `"Bad escaped character in JSON at position 160050"`) so we can
+ *   group by failure offset and confirm the same chunk class is recurring
+ */
+const buildStreamErrorPayload = (error: Error, context?: StreamErrorContext): string => {
+  const payload: Record<string, unknown> = {
+    message: error.message,
+    name: error.name,
+    stack: error.stack,
+  };
+
+  if (context?.provider) payload.provider = context.provider;
+  if (context?.model) payload.model = context.model;
+
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    payload.causeName = cause.name;
+    payload.causeMessage = cause.message;
+  } else if (cause !== undefined && cause !== null) {
+    payload.cause = typeof cause === 'object' ? safeStringifyCause(cause) : String(cause);
+  }
+
+  if (error.name === 'SyntaxError') {
+    const match = /position\s+(\d+)/i.exec(error.message);
+    if (match) payload.parsePosition = Number(match[1]);
+  }
+
+  return ERROR_CHUNK_PREFIX + JSON.stringify(payload);
+};
+
+const safeStringifyCause = (cause: object): unknown => {
+  try {
+    return structuredClone(cause);
+  } catch {
+    return String(cause);
+  }
+};
+
+export function readableFromAsyncIterable<T>(
+  iterable: AsyncIterable<T>,
+  context?: StreamErrorContext,
+) {
   const it = iterable[Symbol.asyncIterator]();
   return new ReadableStream<T>({
     async cancel(reason) {
@@ -157,12 +218,7 @@ export function readableFromAsyncIterable<T>(iterable: AsyncIterable<T>) {
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        const error = e as Error;
-
-        controller.enqueue(
-          (ERROR_CHUNK_PREFIX +
-            JSON.stringify({ message: error.message, name: error.name, stack: error.stack })) as T,
-        );
+        controller.enqueue(buildStreamErrorPayload(e as Error, context) as T);
         controller.close();
       }
     },
@@ -170,7 +226,10 @@ export function readableFromAsyncIterable<T>(iterable: AsyncIterable<T>) {
 }
 
 // make the response to the streamable format
-export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
+export const convertIterableToStream = <T>(
+  stream: AsyncIterable<T>,
+  context?: StreamErrorContext,
+) => {
   const iterable = chatStreamable(stream);
 
   // copy from https://github.com/vercel/ai/blob/d3aa5486529e3d1a38b30e3972b4f4c63ea4ae9a/packages/ai/streams/ai-stream.ts#L284
@@ -187,12 +246,7 @@ export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        const error = e as Error;
-
-        controller.enqueue(
-          (ERROR_CHUNK_PREFIX +
-            JSON.stringify({ message: error.message, name: error.name, stack: error.stack })) as T,
-        );
+        controller.enqueue(buildStreamErrorPayload(e as Error, context) as T);
         controller.close();
       }
     },
@@ -203,12 +257,7 @@ export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        const error = e as Error;
-
-        controller.enqueue(
-          (ERROR_CHUNK_PREFIX +
-            JSON.stringify({ message: error.message, name: error.name, stack: error.stack })) as T,
-        );
+        controller.enqueue(buildStreamErrorPayload(e as Error, context) as T);
         controller.close();
       }
     },

@@ -243,28 +243,83 @@ describe('createTokenSpeedCalculator', async () => {
 });
 
 describe('convertIterableToStream', () => {
+  const drain = async (readable: ReadableStream<any>) => {
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    return chunks;
+  };
+
   it('should surface errors from subsequent pulls as error chunks', async () => {
     async function* erroringStream() {
       yield 'first';
       throw new Error('rate limit');
     }
 
-    const readable = convertIterableToStream(erroringStream()).pipeThrough(
-      createFirstErrorHandleTransformer(),
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
     );
-
-    const reader = readable.getReader();
-    const chunks: any[] = [];
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
 
     expect(chunks[0]).toBe('first');
     expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
     expect(chunks[1].message).toBe('rate limit');
+  });
+
+  it('should enrich error chunks with provider/model context', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('connection reset');
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream(), {
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      }).pipeThrough(createFirstErrorHandleTransformer(undefined, 'lobehub')),
+    );
+
+    expect(chunks[1].message).toBe('connection reset');
+    expect(chunks[1].provider).toBe('lobehub');
+    expect(chunks[1].model).toBe('deepseek-v4-flash');
+  });
+
+  it('should extract parse position from JSON SyntaxError messages', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      // Reproduce the V8 JSON.parse SyntaxError shape that surfaces from the
+      // OpenAI SDK iterator when an upstream SSE chunk contains an illegal
+      // backslash escape — see LobeHub op_1778403331540 for a real instance.
+      throw new SyntaxError(
+        'Bad escaped character in JSON at position 160050 (line 1 column 160051)',
+      );
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream(), { provider: 'lobehub' }).pipeThrough(
+        createFirstErrorHandleTransformer(undefined, 'lobehub'),
+      ),
+    );
+
+    expect(chunks[1].name).toBe('SyntaxError');
+    expect(chunks[1].parsePosition).toBe(160050);
+  });
+
+  it('should surface error.cause when present', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('wrapper', { cause: new SyntaxError('inner parse failure') });
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[1].causeName).toBe('SyntaxError');
+    expect(chunks[1].causeMessage).toBe('inner parse failure');
   });
 });
 
