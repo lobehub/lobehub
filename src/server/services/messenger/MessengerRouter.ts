@@ -351,17 +351,36 @@ export class MessengerRouter {
         if (parsed) {
           const command = this.commands.find((c) => c.name === parsed.name);
           if (command) {
+            // Text-path command reply: in a DM `chat.postMessage` is fine
+            // (the conversation is private already). In a channel `@mention`
+            // we must NOT broadcast — `/new`, `/stop`, `/start` etc. all
+            // surface user-private state. Route the reply through
+            // `replyEphemeral` so only the invoker sees it. Anchor in the
+            // mention's thread (Slack `thread_ts`) so the response sits next
+            // to the trigger. Platforms without `replyEphemeral` (Telegram)
+            // fall back to the regular DM path.
+            const channelThreadTs = isChannelMention ? String(thread.id).split(':')[2] : undefined;
+            const reply =
+              isChannelMention && binder.replyEphemeral
+                ? (text: string) =>
+                    binder.replyEphemeral!({
+                      channelId: chatId,
+                      text,
+                      threadTs: channelThreadTs,
+                      userId: senderId,
+                    })
+                : (text: string) => binder.sendDmText(chatId, text);
             await command.handler({
               args: parsed.args,
               authorUserId: senderId,
               authorUserName: message.author.userName,
               binder,
               chatId,
-              isDM: thread.isDM !== false,
+              isDM: !isChannelMention,
               link,
               message,
               platform,
-              reply: (text) => binder.sendDmText(chatId, text),
+              reply,
               serverDB,
               source: 'text',
               tenantId,
@@ -523,20 +542,21 @@ export class MessengerRouter {
       {
         description: 'Bind your account to LobeHub',
         handler: async (ctx) => {
-          // For slash invocations the slash may have come from a public
-          // channel — route the link button privately to the user's DM so
-          // the one-shot link token isn't leaked. Slack accepts a user id
-          // as the `chatId` (`chat.postMessage` auto-opens the IM with
-          // `im:write` scope), so we pass `authorUserId`. Text invocations
-          // already arrive in a DM thread, so we use the inbound `chatId`.
-          const linkChatId = ctx.source === 'slash' ? ctx.authorUserId : ctx.chatId;
+          // The verify-im URL is one-shot and account-binding — never post
+          // it to a public channel. Anything outside a 1:1 DM (slash from a
+          // public channel, or `@LobeHub /start` typed inside a channel
+          // thread) routes the link button into the invoker's DM instead.
+          // Slack accepts a user id as the `chatId` and auto-opens the IM
+          // (requires `im:write`); Discord's binder treats the user id the
+          // same way; Telegram uses the user's chat id directly.
+          const linkChatId = ctx.isDM ? ctx.chatId : ctx.authorUserId;
           await ctx.binder.handleUnlinkedMessage({
             authorUserId: ctx.authorUserId,
             authorUserName: ctx.authorUserName,
             chatId: linkChatId,
             message: ctx.message,
           });
-          if (ctx.source === 'slash') {
+          if (!ctx.isDM) {
             await ctx.reply('Check your DM with LobeHub for the link button.');
           }
         },
