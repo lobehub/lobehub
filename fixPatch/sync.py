@@ -138,6 +138,42 @@ def merge_canary():
 
 # ── step 2: carica e applica patch ─────────────────────────────────────────
 
+
+# ━━ step 1b: pulisce .github/workflows/ lasciando solo emaxlele-build.yml ━━━━━
+
+EMAXLELE_WORKFLOW = "emaxlele-build.yml"
+
+def clean_workflows():
+    section("STEP 1b — Pulizia .github/workflows/ (tieni solo emaxlele-build.yml)")
+
+    workflows_dir = REPO / ".github" / "workflows"
+    if not workflows_dir.exists():
+        print("  .github/workflows/ non esiste — skip")
+        return
+
+    kept = []
+    removed = []
+    for f in workflows_dir.iterdir():
+        if f.is_file():
+            if f.name == EMAXLELE_WORKFLOW:
+                kept.append(f.name)
+            else:
+                if DRY_RUN:
+                    removed.append(f.name)
+                else:
+                    f.unlink()
+                    removed.append(f.name)
+
+    print(f"  Tenuto:  {kept}")
+    if removed:
+        if DRY_RUN:
+            print(f"  [DRY RUN] Eliminerebbe {len(removed)} workflow: {removed[:5]}{'...' if len(removed)>5 else ''}")
+        else:
+            print(f"  Eliminati {len(removed)} workflow upstream: {removed[:5]}{'...' if len(removed)>5 else ''}")
+    else:
+        print("  Nessun workflow upstream da eliminare")
+
+
 def load_patches():
     patches = []
     for f in sorted(PATCHES_DIR.glob("patch_*.py")):
@@ -292,6 +328,7 @@ if __name__ == "__main__":
     canary_ver = get_canary_version()
     print(f"  upstream canary version: {canary_ver}")
     merge_canary()
+    clean_workflows()
     applied = apply_patches()
     commit_and_ensure_exclusive(applied)
     pull_rebase()
