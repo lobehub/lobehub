@@ -244,6 +244,9 @@ class LobeAgentExecutionRuntime {
         onCompletion: (data) => {
           usage = data.usage;
         },
+        onContentPart: (part) => {
+          if (part.partType === 'text') content += part.content;
+        },
         onText: (text) => {
           content += text;
         },
