@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeInterestsForStorage, resolveInterestAreaKey } from './interestKeys';
+import { normalizeInterestsForStorage, resolveInterestAreaKey } from './interests';
 
-describe('interestKeys', () => {
+describe('interests', () => {
   it('resolves canonical keys only', () => {
     expect(resolveInterestAreaKey('coding')).toBe('coding');
     expect(resolveInterestAreaKey(' coding ')).toBe('coding');

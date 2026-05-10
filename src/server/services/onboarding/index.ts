@@ -82,6 +82,14 @@ const normalizeUserInfoField = (value: unknown) => {
   return trimmed || undefined;
 };
 
+const normalizeStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : undefined;
+
 const parseToolArguments = (value?: string) => {
   if (!value) return undefined;
 
@@ -600,18 +608,8 @@ export class OnboardingService {
       }
     }
 
-    const interestKeys = Array.isArray(parsed.interests)
-      ? parsed.interests
-          .filter((item): item is string => typeof item === 'string')
-          .map((item) => item.trim())
-          .filter(Boolean)
-      : undefined;
-    const customInterests = Array.isArray(parsed.customInterests)
-      ? parsed.customInterests
-          .filter((item): item is string => typeof item === 'string')
-          .map((item) => item.trim())
-          .filter(Boolean)
-      : undefined;
+    const interestKeys = normalizeStringArray(parsed.interests);
+    const customInterests = normalizeStringArray(parsed.customInterests);
     const hasInterestInput = Boolean(interestKeys || customInterests);
     const interests = hasInterestInput
       ? [...new Set([...(interestKeys ?? []), ...(customInterests ?? [])])]

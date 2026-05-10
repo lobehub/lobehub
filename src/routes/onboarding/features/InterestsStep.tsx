@@ -1,5 +1,6 @@
 'use client';
 
+import { normalizeInterestsForStorage } from '@lobechat/const';
 import { Block, Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon, Undo2Icon } from 'lucide-react';
@@ -12,7 +13,6 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import LobeMessage from '../components/LobeMessage';
 import type { InterestAreaKey } from '../config';
 import { INTEREST_AREAS } from '../config';
-import { normalizeInterestsForStorage } from '../utils/interestKeys';
 
 interface InterestsStepProps {
   onBack: () => void;

@@ -1,5 +1,7 @@
 'use client';
 
+import type { InterestAreaKey } from '@lobechat/const';
+import { normalizeInterestsForStorage, resolveInterestAreaKey } from '@lobechat/const';
 import { Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { BriefcaseIcon } from 'lucide-react';
@@ -7,12 +9,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
-import type { InterestAreaKey } from '@/routes/onboarding/config';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
-import {
-  normalizeInterestsForStorage,
-  resolveInterestAreaKey,
-} from '@/routes/onboarding/utils/interestKeys';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -27,6 +24,24 @@ const InterestsRow = () => {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [saving, setSaving] = useState(false);
   const normalizedInterests = useMemo(() => normalizeInterestsForStorage(interests), [interests]);
+
+  const saveInterests = useCallback(
+    async (updated: string[]) => {
+      try {
+        setSaving(true);
+        await updateInterests(updated);
+      } catch (error) {
+        console.error('Failed to update interests:', error);
+        fetchErrorNotification.error({
+          errorMessage: error instanceof Error ? error.message : String(error),
+          status: 500,
+        });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [updateInterests],
+  );
 
   const areas = useMemo(
     () =>
@@ -43,40 +58,18 @@ const InterestsRow = () => {
         ? normalizedInterests.filter((i) => i !== key)
         : [...normalizedInterests, key];
 
-      try {
-        setSaving(true);
-        await updateInterests(updated);
-      } catch (error) {
-        console.error('Failed to update interests:', error);
-        fetchErrorNotification.error({
-          errorMessage: error instanceof Error ? error.message : String(error),
-          status: 500,
-        });
-      } finally {
-        setSaving(false);
-      }
+      await saveInterests(updated);
     },
-    [normalizedInterests, updateInterests],
+    [normalizedInterests, saveInterests],
   );
 
   const removeCustomInterest = useCallback(
     async (interest: string) => {
       const updated = normalizedInterests.filter((i) => i !== interest);
 
-      try {
-        setSaving(true);
-        await updateInterests(updated);
-      } catch (error) {
-        console.error('Failed to update interests:', error);
-        fetchErrorNotification.error({
-          errorMessage: error instanceof Error ? error.message : String(error),
-          status: 500,
-        });
-      } finally {
-        setSaving(false);
-      }
+      await saveInterests(updated);
     },
-    [normalizedInterests, updateInterests],
+    [normalizedInterests, saveInterests],
   );
 
   const handleAddCustom = useCallback(async () => {
@@ -86,19 +79,8 @@ const InterestsRow = () => {
     const updated = [...normalizedInterests, trimmed];
     setCustomInput('');
 
-    try {
-      setSaving(true);
-      await updateInterests(updated);
-    } catch (error) {
-      console.error('Failed to update interests:', error);
-      fetchErrorNotification.error({
-        errorMessage: error instanceof Error ? error.message : String(error),
-        status: 500,
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [customInput, normalizedInterests, updateInterests]);
+    await saveInterests(updated);
+  }, [customInput, normalizedInterests, saveInterests]);
 
   return (
     <ProfileRow label={t('profile.interests')}>
