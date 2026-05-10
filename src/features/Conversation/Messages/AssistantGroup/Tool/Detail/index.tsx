@@ -1,4 +1,3 @@
-import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
@@ -97,40 +96,6 @@ const Render = memo<RenderProps>(
         toolCallId={toolCallId}
       />
     );
-
-    // Some tool calls need user input mid-flight (e.g. CC's AskUserQuestion
-    // delivered through the local MCP server, LOBE-8725). The producer
-    // stamps `pluginState.askUserQuestion.status = 'pending'` on the tool
-    // message, but the wider framework intervention plumbing isn't engaged
-    // (no `intervention` field on the tool payload). Reach the registered
-    // custom render directly so the UI can collect the answer rather than
-    // showing the loading placeholder for the whole timeout window.
-    const askUserPending =
-      isToolCalling &&
-      identifier === 'claude-code' &&
-      apiName === 'askUserQuestion' &&
-      (result?.state as { askUserQuestion?: { status?: string } } | undefined)?.askUserQuestion
-        ?.status === 'pending';
-    if (askUserPending) {
-      const InlineRender = getBuiltinRender(identifier, apiName);
-      if (InlineRender) {
-        return (
-          <Suspense fallback={placeholder}>
-            <Flexbox gap={8}>
-              <InlineRender
-                apiName={apiName}
-                args={safeParsePartialJSON(requestArgs)}
-                content={result?.content || ''}
-                identifier={identifier}
-                messageId={toolMessageId || messageId}
-                pluginState={result?.state}
-                toolCallId={toolCallId}
-              />
-            </Flexbox>
-          </Suspense>
-        );
-      }
-    }
 
     if (isToolCalling) return placeholder;
 

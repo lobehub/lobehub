@@ -631,6 +631,115 @@ export class ConversationControlActionImpl {
     completeOperation(operationId);
   };
 
+  /**
+   * Resolve a heterogeneous-runtime intervention (CC AskUserQuestion, …).
+   *
+   * Why this action exists separately from `submitToolInteraction`:
+   * - The CC subprocess is already running and blocked on an MCP call —
+   *   we need to feed the answer back through the IPC bridge, not spawn
+   *   a fresh `executeClientAgent` turn.
+   * - Once the answer ships, CC's existing stream emits `tool_result` and
+   *   keeps going on its own; no synthetic user message, no new op.
+   *
+   * The framework's intervention surface still drives the UI: we just
+   * stamp `pluginIntervention.status` and the eventual `tool_result`
+   * content via the same optimistic primitives, so the InterventionBar /
+   * inline tool body update synchronously and the answered Render takes
+   * over once `pluginIntervention.status === 'approved' | 'rejected'`.
+   *
+   * `actionType`:
+   *   - `'submit'` → mark approved, ship `payload` as the answer
+   *   - `'skip' | 'cancel'` → mark rejected, ship `cancelled: true` so the
+   *     bridge resolves with `cancelReason` and CC sees an isError result
+   *     (it'll fall back to plain-text questioning)
+   */
+  submitHeteroIntervention = async (
+    toolMessageId: string,
+    actionType: 'submit' | 'skip' | 'cancel',
+    payload?: Record<string, unknown>,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+    if (!toolMessage) return;
+
+    const toolCallId = toolMessage.tool_call_id;
+    if (!toolCallId) {
+      console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
+      return;
+    }
+
+    // Walk up to the assistant that owns this tool — its operation is the
+    // running CC stream we need to address. Falls through to the tool
+    // message id itself if a producer ever associated it directly.
+    const { messageOperationMap } = this.#get();
+    const operationId =
+      (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
+      messageOperationMap?.[toolMessageId];
+
+    if (!operationId) {
+      console.warn('[submitHeteroIntervention] no operationId for', toolMessageId);
+      return;
+    }
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+    const optimisticContext: OptimisticUpdateContext = { operationId };
+
+    if (actionType === 'submit') {
+      await this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: { status: 'approved' } },
+        optimisticContext,
+      );
+      // Bridge formats its own "User answers:" string for CC, so the eventual
+      // tool_result re-rewrites this content. The optimistic write is just
+      // for the brief gap between Submit and CC echoing the result back.
+      const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
+      await this.#get().optimisticUpdateMessageContent(
+        toolMessageId,
+        summary,
+        undefined,
+        optimisticContext,
+      );
+    } else {
+      const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
+      await this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: { rejectedReason: reason, status: 'rejected' } },
+        optimisticContext,
+      );
+      await this.#get().optimisticUpdateMessageContent(
+        toolMessageId,
+        `${reason} this interaction.`,
+        undefined,
+        optimisticContext,
+      );
+    }
+
+    // Forward to the producer (Electron main → bridge.resolve). Dynamic
+    // import keeps `@/services/electron/*` out of non-Electron bundles.
+    try {
+      const { heterogeneousAgentService } = await import('@/services/electron/heterogeneousAgent');
+      await heterogeneousAgentService.submitIntervention(
+        actionType === 'submit'
+          ? { operationId, result: payload ?? {}, toolCallId }
+          : {
+              cancelReason: actionType === 'skip' ? 'user_cancelled' : 'user_cancelled',
+              cancelled: true,
+              operationId,
+              toolCallId,
+            },
+      );
+    } catch (err) {
+      console.error('[submitHeteroIntervention] IPC submitIntervention failed:', err);
+    }
+
+    void effectiveContext;
+  };
+
   rejectToolCalling = async (
     messageId: string,
     reason?: string,

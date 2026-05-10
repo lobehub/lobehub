@@ -152,18 +152,3 @@ export interface AskUserQuestionItem {
 export interface AskUserQuestionArgs {
   questions: AskUserQuestionItem[];
 }
-
-/**
- * `pluginState.askUserQuestion` shape stamped by the renderer when an
- * `agent_intervention_request` arrives. The intervention UI consumes it to
- * render the form and run the deadline countdown.
- */
-export interface AskUserQuestionPluginState {
-  apiName: string;
-  /** Unix-ms wall-clock at which the producer will give up waiting. */
-  deadline: number;
-  identifier: string;
-  questions?: AskUserQuestionItem[];
-  status: 'pending';
-  toolCallId: string;
-}
