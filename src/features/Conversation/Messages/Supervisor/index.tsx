@@ -107,6 +107,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
     <ChatItem
       showTitle
       avatar={{ ...avatar, title: groupMeta.title }}
+      id={id}
       placement={'left'}
       time={createdAt}
       titleAddon={<Tag>{t('supervisor.label')}</Tag>}

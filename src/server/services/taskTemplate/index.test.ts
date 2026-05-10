@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { type TaskTemplate, taskTemplates } from '@lobechat/const';
+import type { TaskTemplate } from '@lobechat/const';
+import { TASK_TEMPLATE_FALLBACK_CATEGORIES, taskTemplates } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import { isTemplateSkillSourceEligible, RECOMMEND_COUNT, TaskTemplateService } from './index';
@@ -21,6 +22,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     const picked = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
 
     expect(picked).toHaveLength(RECOMMEND_COUNT);
+    expect(picked.every((p) => p.source === 'matched')).toBe(true);
     const codingMatches = taskTemplates.filter((t) => t.interests.includes('coding'));
     expect(picked.some((p) => codingMatches.some((m) => m.id === p.id))).toBe(true);
   });
@@ -65,7 +67,25 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(picked).toHaveLength(RECOMMEND_COUNT);
     for (const p of picked) {
       expect(taskTemplates.some((t) => t.id === p.id)).toBe(true);
+      expect(p.source).toBe('fallback');
+      expect(p.fallbackPool).toBe('preferred_category');
     }
+  });
+
+  it('marks all-candidate fallback when preferred fallback categories are exhausted', async () => {
+    const service = new TaskTemplateService('user-1');
+    const fallbackCategoryIds = taskTemplates
+      .filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category))
+      .map((t) => t.id);
+
+    const picked = await service.listDailyRecommend([], {
+      excludeIds: fallbackCategoryIds,
+      now: UTC_DAY_1,
+    });
+
+    expect(picked).toHaveLength(RECOMMEND_COUNT);
+    expect(picked.every((p) => p.source === 'fallback')).toBe(true);
+    expect(picked.every((p) => p.fallbackPool === 'all_candidates')).toBe(true);
   });
 
   it('intersection is case-insensitive and trims whitespace', async () => {
@@ -134,20 +154,20 @@ describe('isTemplateSkillSourceEligible', () => {
   });
 
   it('keeps templates whose only source is enabled', () => {
-    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'klavis' }] });
-    expect(isTemplateSkillSourceEligible(t, new Set(['klavis']))).toBe(true);
+    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'lobehub' }] });
+    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(true);
   });
 
   it('drops templates whose source is not in enabledSkillSources', () => {
-    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'klavis' }] });
-    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(false);
+    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'lobehub' }] });
+    expect(isTemplateSkillSourceEligible(t, new Set(['klavis']))).toBe(false);
   });
 
   it('requires every source for multi-skill templates', () => {
     const t = makeTemplate({
       requiresSkills: [
-        { provider: 'github', source: 'lobehub' },
-        { provider: 'notion', source: 'klavis' },
+        { provider: 'notion', source: 'lobehub' },
+        { provider: 'google-calendar', source: 'klavis' },
       ],
     });
     expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(false);

@@ -2,7 +2,7 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import type { JSONSchema7 } from 'json-schema';
 
 import { systemPrompt } from './systemRole';
-import { CredsApiName } from './types';
+import { CredsApiName, LOBEHUB_OAUTH_PROVIDER_IDS, LOBEHUB_OAUTH_PROVIDER_LIST } from './types';
 
 export const CredsIdentifier = 'lobe-creds';
 
@@ -10,14 +10,14 @@ export const CredsManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Connect a Klavis integration service via OAuth. Use this to authorize access to third-party services managed by the Klavis platform (e.g., Notion, Gmail, Google Calendar, Slack). Check the available Klavis services in the credentials context before calling this.',
+        'Connect a Klavis integration service via OAuth. Use this to authorize access to third-party services managed by the Klavis platform (e.g., Gmail, Google Calendar, Slack). Check the available Klavis services in the credentials context before calling this.',
       name: CredsApiName.connectKlavisService,
       parameters: {
         additionalProperties: false,
         properties: {
           service: {
             description:
-              'The Klavis service identifier to connect (e.g., "notion", "gmail", "google-calendar"). See the available Klavis services list in the credentials context.',
+              'The Klavis service identifier to connect (e.g., "gmail", "google-calendar"). See the available Klavis services list in the credentials context.',
             type: 'string',
           },
         },
@@ -27,15 +27,14 @@ export const CredsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Initiate OAuth connection flow for a third-party service (e.g., Linear, Microsoft Outlook, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.',
+        'Initiate OAuth connection flow for a LobeHub Skill provider (e.g., GitHub, Linear, Microsoft Outlook, Notion, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.',
       name: CredsApiName.initiateOAuthConnect,
       parameters: {
         additionalProperties: false,
         properties: {
           provider: {
-            description:
-              'The OAuth provider ID. Available providers: "linear" (issue tracking), "microsoft" (Outlook Calendar), "twitter" (X/Twitter)',
-            enum: ['linear', 'microsoft', 'twitter', 'github'],
+            description: `The OAuth provider ID. Available providers: ${LOBEHUB_OAUTH_PROVIDER_LIST}`,
+            enum: [...LOBEHUB_OAUTH_PROVIDER_IDS],
             type: 'string',
           },
         },

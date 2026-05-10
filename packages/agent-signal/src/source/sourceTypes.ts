@@ -136,9 +136,10 @@ export interface AgentSignalSourcePayloadMap {
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete]: {
     agentId?: string;
+    assistantMessageId?: string;
     operationId: string;
     serializedContext?: string;
-    status?: string;
+    status?: 'cancelled' | 'completed' | 'failed';
     threadId?: string;
     topicId?: string;
   };

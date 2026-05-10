@@ -29,7 +29,7 @@
   "batchDelete": "حذف جماعي",
   "blog": "مدونة المنتج",
   "botIntegrationBanner.dismiss": "إغلاق",
-  "botIntegrationBanner.title": "إضافة قنوات إلى LobeAI",
+  "botIntegrationBanner.title": "تحدث إلى Lobe AI عبر تطبيقات المراسلة المفضلة لديك",
   "branching": "إنشاء موضوع فرعي",
   "branchingDisable": "ميزة \"الموضوع الفرعي\" غير متاحة في الوضع الحالي. لاستخدام هذه الميزة، يرجى التبديل إلى وضع قاعدة بيانات Postgres/Pglite أو استخدام LobeHub Cloud.",
   "branchingRequiresSavedTopic": "الموضوع الحالي غير محفوظ، يرجى حفظه أولاً لاستخدام ميزة الموضوع الفرعي",

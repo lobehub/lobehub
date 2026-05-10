@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   ExternalLink,
+  Hash,
   Link2,
   LucideCopy,
   PanelTop,
@@ -162,6 +163,15 @@ export const useTopicItemDropdownMenu = ({
             },
           ]
         : []),
+      {
+        icon: <Icon icon={Hash} />,
+        key: 'copySessionId',
+        label: t('actions.copySessionId'),
+        onClick: () => {
+          navigator.clipboard.writeText(id);
+          message.success(t('actions.copySessionIdSuccess'));
+        },
+      },
       {
         icon: <Icon icon={Link2} />,
         key: 'copyLink',

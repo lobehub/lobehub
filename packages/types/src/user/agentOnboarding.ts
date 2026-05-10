@@ -5,13 +5,18 @@ export const SAVE_USER_QUESTION_FIELDS = [
   'agentName',
   'fullName',
   'interests',
-  'responseLanguage',
+  'customInterests',
 ] as const;
 
-export const AGENT_ONBOARDING_STRUCTURED_FIELDS = SAVE_USER_QUESTION_FIELDS;
+export const AGENT_ONBOARDING_STRUCTURED_FIELDS = [
+  'agentEmoji',
+  'agentName',
+  'fullName',
+  'interests',
+] as const;
 
 export type SaveUserQuestionField = (typeof SAVE_USER_QUESTION_FIELDS)[number];
-export type AgentOnboardingStructuredField = SaveUserQuestionField;
+export type AgentOnboardingStructuredField = (typeof AGENT_ONBOARDING_STRUCTURED_FIELDS)[number];
 
 export const AGENT_ONBOARDING_NODES = [
   'agentIdentity',
@@ -19,7 +24,6 @@ export const AGENT_ONBOARDING_NODES = [
   'workStyle',
   'workContext',
   'painPoints',
-  'responseLanguage',
   'summary',
 ] as const;
 
@@ -28,9 +32,9 @@ export type UserAgentOnboardingNode = (typeof AGENT_ONBOARDING_NODES)[number];
 export interface SaveUserQuestionInput {
   agentEmoji?: string;
   agentName?: string;
+  customInterests?: string[];
   fullName?: string;
   interests?: string[];
-  responseLanguage?: string;
 }
 
 export interface UserOnboardingAgentIdentity {
@@ -142,7 +146,7 @@ export type OnboardingPhase = (typeof ONBOARDING_PHASES)[number];
 export interface UserAgentOnboardingContext {
   discoveryUserMessageCount?: number;
   finished: boolean;
-  missingStructuredFields: SaveUserQuestionField[];
+  missingStructuredFields: AgentOnboardingStructuredField[];
   phase: OnboardingPhase;
   remainingDiscoveryExchanges?: number;
   topicId?: string;
@@ -167,7 +171,6 @@ export interface UserAgentOnboardingUpdate {
 export interface UserAgentOnboardingDraft {
   agentIdentity?: Partial<UserOnboardingAgentIdentity>;
   painPoints?: Partial<UserOnboardingDimensionPainPoints>;
-  responseLanguage?: string;
   userIdentity?: Partial<UserOnboardingDimensionIdentity>;
   workContext?: Partial<UserOnboardingDimensionWorkContext>;
   workStyle?: Partial<UserOnboardingDimensionWorkStyle>;
@@ -191,16 +194,16 @@ const OptionalTrimmedNonEmptyStringArraySchema = z
   .optional();
 
 export const SaveUserQuestionFieldSchema = z.enum(SAVE_USER_QUESTION_FIELDS);
-export const AgentOnboardingStructuredFieldSchema = SaveUserQuestionFieldSchema;
+export const AgentOnboardingStructuredFieldSchema = z.enum(AGENT_ONBOARDING_STRUCTURED_FIELDS);
 export const UserAgentOnboardingNodeSchema = z.enum(AGENT_ONBOARDING_NODES);
 
 export const SaveUserQuestionInputSchema = z
   .object({
     agentEmoji: OptionalTrimmedNonEmptyStringSchema,
     agentName: OptionalTrimmedNonEmptyStringSchema,
+    customInterests: OptionalTrimmedNonEmptyStringArraySchema,
     fullName: OptionalTrimmedNonEmptyStringSchema,
     interests: OptionalTrimmedNonEmptyStringArraySchema,
-    responseLanguage: OptionalTrimmedNonEmptyStringSchema,
   })
   .strict();
 
@@ -210,7 +213,7 @@ export const UserAgentOnboardingContextSchema = z
   .object({
     discoveryUserMessageCount: z.number().optional(),
     finished: z.boolean(),
-    missingStructuredFields: z.array(SaveUserQuestionFieldSchema),
+    missingStructuredFields: z.array(AgentOnboardingStructuredFieldSchema),
     phase: OnboardingPhaseSchema,
     remainingDiscoveryExchanges: z.number().optional(),
     topicId: z.string().optional(),

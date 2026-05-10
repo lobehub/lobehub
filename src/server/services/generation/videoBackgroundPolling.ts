@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -110,6 +111,7 @@ export async function processBackgroundVideoPolling(
     const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
       error,
       provider,
+      trigger: RequestTrigger.Video,
       userId,
     });
     if (providerContentPolicyMessage) {

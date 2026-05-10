@@ -1,6 +1,11 @@
 import { PLUGIN_SCHEMA_API_MD5_PREFIX, PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
+import type {
+  BuiltinToolContext,
+  ChatToolPayload,
+  MessageToolCall,
+  UIChatMessage,
+} from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +14,20 @@ import { messageService } from '@/services/message';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useToolStore } from '@/store/tool';
+
+vi.mock('@/utils/localStorage', () => {
+  class AsyncLocalStorage<State> {
+    async getFromLocalStorage(): Promise<State> {
+      return {} as State;
+    }
+
+    async saveToLocalStorage(): Promise<void> {
+      return undefined;
+    }
+  }
+
+  return { AsyncLocalStorage };
+});
 
 vi.mock('zustand/traditional');
 
@@ -288,6 +307,107 @@ describe('ChatPluginAction', () => {
         scope: 'page',
         topicId: 'topic-1',
       });
+    });
+
+    it('should pass tool call id and explicit source user message id to Tool Store executor', async () => {
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(true);
+
+      const { result } = renderHook(() => useChatStore());
+      const messageId = 'tool-message-id';
+
+      act(() => {
+        const rootOperationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: {
+            agentId: 'agent-1',
+            messageId: 'assistant-msg-1',
+            sourceMessageId: 'root-user-msg-1',
+          },
+        }).operationId;
+
+        const toolOperationId = result.current.startOperation({
+          type: 'executeToolCall',
+          context: { messageId, sourceMessageId: 'user-msg-1' },
+          parentOperationId: rootOperationId,
+        }).operationId;
+
+        result.current.associateMessageWithOperation(messageId, toolOperationId);
+      });
+
+      let capturedContext: BuiltinToolContext | undefined;
+      vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
+        async (_id, _api, _params, ctx) => {
+          capturedContext = ctx;
+          return { success: true };
+        },
+      );
+
+      const payload = {
+        identifier: 'test-tool',
+        apiName: 'mockBuiltinAction',
+        arguments: JSON.stringify({ input: 'test' }),
+        id: 'tool-call-1',
+        type: 'builtin',
+      } as ChatToolPayload;
+
+      await act(async () => {
+        await result.current.invokeBuiltinTool(messageId, payload);
+      });
+
+      expect(capturedContext?.messageId).toBe(messageId);
+      expect(capturedContext?.sourceMessageId).toBe('user-msg-1');
+      expect(capturedContext?.toolCallId).toBe('tool-call-1');
+    });
+
+    it('should fall back to root operation message id as source message id', async () => {
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockReturnValue(true);
+
+      const { result } = renderHook(() => useChatStore());
+      const messageId = 'tool-message-id';
+
+      act(() => {
+        const rootOperationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: {
+            agentId: 'agent-1',
+            messageId: 'user-msg-1',
+          },
+        }).operationId;
+
+        const toolOperationId = result.current.startOperation({
+          type: 'executeToolCall',
+          context: { messageId },
+          parentOperationId: rootOperationId,
+        }).operationId;
+
+        result.current.associateMessageWithOperation(messageId, toolOperationId);
+      });
+
+      let capturedContext: BuiltinToolContext | undefined;
+      vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
+        async (_id, _api, _params, ctx) => {
+          capturedContext = ctx;
+          return { success: true };
+        },
+      );
+
+      const payload = {
+        identifier: 'test-tool',
+        apiName: 'mockBuiltinAction',
+        arguments: JSON.stringify({ input: 'test' }),
+        id: 'tool-call-1',
+        type: 'builtin',
+      } as ChatToolPayload;
+
+      await act(async () => {
+        await result.current.invokeBuiltinTool(messageId, payload);
+      });
+
+      expect(capturedContext?.messageId).toBe(messageId);
+      expect(capturedContext?.sourceMessageId).toBe('user-msg-1');
+      expect(capturedContext?.toolCallId).toBe('tool-call-1');
     });
 
     describe('registerAfterCompletion with Tool Store executor', () => {

@@ -4,7 +4,6 @@ import { Fragment, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAgentStore } from '@/store/agent';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
@@ -15,9 +14,8 @@ import TaskListHeader from './TaskListHeader';
 const AgentTaskCardList = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   const navigate = useNavigate();
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  useFetchTaskList({ agentId, enabled: !!enableAgentTask });
+  useFetchTaskList({ agentId });
 
   const tasks = useTaskStore(taskListSelectors.taskList);
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);
@@ -29,7 +27,6 @@ const AgentTaskCardList = memo(() => {
   const visibleTasks = useMemo(() => getVisibleTaskCardTasks(tasks), [tasks]);
   const displayTasks = useMemo(() => getDisplayTaskCardTasks(tasks), [tasks]);
 
-  if (!enableAgentTask) return null;
   if (!isInit || visibleTasks.length === 0) return null;
 
   return (

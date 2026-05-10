@@ -12,7 +12,6 @@ import {
   MessageItem,
   useConversationStore,
 } from '@/features/Conversation';
-import FollowUpChips from '@/features/Conversation/FollowUp/FollowUpChips';
 import { dataSelectors, messageStateSelectors } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { OnboardingPhase } from '@/types/user';
@@ -59,11 +58,11 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       (s) => dataSelectors.pendingInterventions(s).length,
     );
 
-    const isGreetingState = useMemo(() => {
-      if (displayMessages.length !== 1) return false;
-      const first = displayMessages[0];
-      return assistantLikeRoles.has(first.role);
-    }, [displayMessages]);
+    // The welcome ("AI opens") is rendered client-side from i18n until the
+    // user sends their first message — at which point the welcome and the
+    // user's reply are persisted together. Greeting state is therefore the
+    // pre-conversation period when no messages have been recorded yet.
+    const isGreetingState = useMemo(() => displayMessages.length === 0, [displayMessages]);
 
     const latestAssistantMessageId = useMemo(() => {
       const latest = displayMessages.at(-1);
@@ -130,12 +129,8 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
 
     const greetingWelcome = useMemo(() => {
       if (!shouldShowGreetingWelcome) return undefined;
-
-      const message = displayMessages[0];
-      if (!message || typeof message.content !== 'string') return undefined;
-
-      return <Welcome content={message.content} />;
-    }, [displayMessages, shouldShowGreetingWelcome]);
+      return <Welcome />;
+    }, [shouldShowGreetingWelcome]);
 
     if (onboardingFinished)
       return (
@@ -151,20 +146,14 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
 
     const itemContent = (index: number, id: string) => {
       const isLatestItem = displayMessages.length === index + 1;
-      const message = displayMessages[index];
-      const showFollowUp =
-        isLatestItem && !!message && assistantLikeRoles.has(message.role) && !!topicId;
 
       return (
-        <Flexbox>
-          <MessageItem
-            defaultWorkflowExpandLevel="collapsed"
-            id={id}
-            index={index}
-            isLatestItem={isLatestItem}
-          />
-          {showFollowUp && <FollowUpChips messageId={id} topicId={topicId!} />}
-        </Flexbox>
+        <MessageItem
+          defaultWorkflowExpandLevel="collapsed"
+          id={id}
+          index={index}
+          isLatestItem={isLatestItem}
+        />
       );
     };
 

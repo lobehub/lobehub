@@ -128,7 +128,7 @@ export interface ChatStreamPayload {
     effort?: string;
     summary?: string;
   };
-  reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   response_format?: ChatResponseFormat;
   responseMode?: 'stream' | 'json';
   /**

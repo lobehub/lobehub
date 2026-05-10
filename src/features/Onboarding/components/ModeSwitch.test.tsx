@@ -7,8 +7,15 @@ import ModeSwitch from './ModeSwitch';
 
 const mockConfig = vi.hoisted(() => ({
   agentOnboardingEnabled: true,
+  AGENT_ONBOARDING_ENABLED: true,
   desktop: false,
   serverConfigInit: true,
+}));
+
+vi.mock('@lobechat/business-const', () => ({
+  get AGENT_ONBOARDING_ENABLED() {
+    return mockConfig.AGENT_ONBOARDING_ENABLED;
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -26,6 +33,7 @@ vi.mock('react-i18next', () => ({
 
 interface RenderModeSwitchOptions {
   actions?: ReactNode;
+  AGENT_ONBOARDING_ENABLED?: boolean;
   desktop?: boolean;
   enabled: boolean;
   entry?: string;
@@ -57,6 +65,7 @@ vi.mock('@/store/serverConfig', () => ({
 
 const renderModeSwitch = ({
   actions,
+  AGENT_ONBOARDING_ENABLED = true,
   desktop = false,
   enabled,
   entry = '/onboarding/agent',
@@ -64,6 +73,7 @@ const renderModeSwitch = ({
   showLabel,
 }: RenderModeSwitchOptions) => {
   mockConfig.agentOnboardingEnabled = enabled;
+  mockConfig.AGENT_ONBOARDING_ENABLED = AGENT_ONBOARDING_ENABLED;
   mockConfig.desktop = desktop;
   mockConfig.serverConfigInit = serverConfigInit;
 
@@ -77,6 +87,7 @@ const renderModeSwitch = ({
 afterEach(() => {
   cleanup();
   mockConfig.agentOnboardingEnabled = true;
+  mockConfig.AGENT_ONBOARDING_ENABLED = true;
   mockConfig.desktop = false;
   mockConfig.serverConfigInit = true;
 });
@@ -131,6 +142,13 @@ describe('ModeSwitch', () => {
 
   it('does not render the switch on desktop builds', () => {
     renderModeSwitch({ desktop: true, enabled: true });
+
+    expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
+  });
+
+  it('hides the switch when AGENT_ONBOARDING_ENABLED master switch is off', () => {
+    renderModeSwitch({ AGENT_ONBOARDING_ENABLED: false, enabled: true });
 
     expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();

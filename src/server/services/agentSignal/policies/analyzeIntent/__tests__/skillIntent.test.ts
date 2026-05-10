@@ -27,79 +27,84 @@ describe('skillIntent classifier', () => {
 
   /**
    * @example
-   * explicit artifact conversion skips the fallback model and routes to direct decision.
+   * explicit artifact conversion is semantic and goes through the fallback model.
    */
-  it('classifies explicit SKILL.md conversion as direct create intent', () => {
+  it('does not hard-code explicit SKILL.md conversion with deterministic rules', () => {
     const result = classifySkillIntentByRules({
       message:
         'The SKILL.md draft from the chat agent is usable. Convert it into a real skills/bundle.',
       serializedContext: 'topic=repo-review',
     });
 
-    expect(result).toEqual({
-      actionIntent: 'create',
-      confidence: 0.92,
-      explicitness: 'explicit_action',
-      reason: 'explicit skill artifact conversion request',
-      route: 'direct_decision',
-    });
+    expect(result).toBeUndefined();
   });
 
   /**
    * @example
-   * named skill edits are explicit refine requests.
+   * named skill edits are semantic and go through the fallback model.
    */
-  it('classifies named skill edit requests as direct refine intent', () => {
+  it('does not hard-code named skill edit requests with deterministic rules', () => {
     const result = classifySkillIntentByRules({
       message: 'Update review-skill to include security checks and rollback checks.',
       serializedContext: 'topic=repo-review',
     });
 
+    expect(result).toBeUndefined();
+  });
+
+  /**
+   * @example
+   * natural-language praise and durable reuse wording goes through semantic fallback.
+   */
+  it('does not hard-code natural-language durable reuse with deterministic rules', async () => {
+    const fallback = {
+      classify: vi.fn().mockResolvedValue({
+        actionIntent: 'create',
+        confidence: 0.86,
+        explicitness: 'implicit_strong_learning',
+        reason: 'semantic classifier recognized durable procedure retention intent',
+        route: 'direct_decision',
+      }),
+    };
+
+    const ruleResult = classifySkillIntentByRules({
+      message: 'Nice work. Can we keep this workflow?',
+      serializedContext: 'topic=youtube-comment-workflow',
+    });
+    const result = await classifySkillIntent(
+      {
+        message: 'Nice work. Can we keep this workflow?',
+        serializedContext: 'topic=youtube-comment-workflow',
+      },
+      { fallback },
+    );
+
+    expect(ruleResult).toBeUndefined();
+    expect(fallback.classify).toHaveBeenCalledWith({
+      message: 'Nice work. Can we keep this workflow?',
+      serializedContext: 'topic=youtube-comment-workflow',
+      topicLabel: 'youtube-comment-workflow',
+    });
     expect(result).toEqual({
-      actionIntent: 'refine',
-      confidence: 0.9,
-      explicitness: 'explicit_action',
-      reason: 'explicit named skill refinement request',
+      actionIntent: 'create',
+      confidence: 0.86,
+      explicitness: 'implicit_strong_learning',
+      reason: 'semantic classifier recognized durable procedure retention intent',
       route: 'direct_decision',
     });
   });
 
   /**
    * @example
-   * generic praise is weak positive and remains accumulator-only.
+   * negative future preference is semantic and goes through the fallback model.
    */
-  it('classifies generic helpful feedback as weak positive accumulation', () => {
-    const result = classifySkillIntentByRules({
-      message: 'This explanation was helpful.',
-      serializedContext: 'topic=debugging-help',
-    });
-
-    expect(result).toEqual({
-      actionIntent: 'maintain',
-      confidence: 0.78,
-      explicitness: 'weak_positive',
-      reason: 'generic positive feedback without durable future-use instruction',
-      route: 'accumulate',
-    });
-  });
-
-  /**
-   * @example
-   * negative future preference is durable, but not skill-management.
-   */
-  it('classifies negative future preference as non-skill preference', () => {
+  it('does not hard-code negative future preference with deterministic rules', () => {
     const result = classifySkillIntentByRules({
       message: 'This approach is not suitable. Please do not do this again.',
       serializedContext: 'topic=database-migration',
     });
 
-    expect(result).toEqual({
-      actionIntent: 'noop',
-      confidence: 0.82,
-      explicitness: 'non_skill_preference',
-      reason: 'negative future preference belongs outside skill management',
-      route: 'non_skill',
-    });
+    expect(result).toBeUndefined();
   });
 
   /**
@@ -205,7 +210,58 @@ describe('skillIntent classifier', () => {
       },
       confidence: 0.35,
       explicitness: 'weak_positive',
-      reason: 'classifier-fallback-failed',
+      reason: 'insufficient-evidence',
+      route: 'accumulate',
+    });
+    expect(diagnostics.recordMalformedOutput).toHaveBeenCalledWith({
+      error: expect.any(Error),
+      reason: 'malformed skill-intent classifier output',
+      scopeKey: 'topic:thread_1',
+      sourceId: 'source_1',
+      stage: 'skill-intent',
+    });
+  });
+
+  /**
+   * @example
+   * weak-positive classifier output cannot directly mutate skills even if the model asks for it.
+   */
+  it('falls back safely when fallback classifier returns an inconsistent direct-decision route', async () => {
+    const diagnostics = {
+      recordMalformedOutput: vi.fn().mockResolvedValue(undefined),
+    };
+    const fallback = {
+      classify: vi.fn().mockResolvedValue({
+        actionIntent: 'create',
+        confidence: 0.9,
+        explicitness: 'weak_positive',
+        reason: 'model mixed weak evidence with direct mutation',
+        route: 'direct_decision',
+      }),
+    };
+
+    const result = await classifySkillIntent(
+      {
+        message: 'Nice work.',
+        serializedContext: 'topic=youtube-comment-workflow',
+      },
+      {
+        diagnostics,
+        fallback,
+        scopeKey: 'topic:thread_1',
+        sourceId: 'source_1',
+      },
+    );
+
+    expect(result).toEqual({
+      actionIntent: 'maintain',
+      classifierError: {
+        message: expect.stringContaining('Weak-positive skill intent must accumulate'),
+        name: 'ZodError',
+      },
+      confidence: 0.35,
+      explicitness: 'weak_positive',
+      reason: 'insufficient-evidence',
       route: 'accumulate',
     });
     expect(diagnostics.recordMalformedOutput).toHaveBeenCalledWith({

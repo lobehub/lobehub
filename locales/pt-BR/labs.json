@@ -9,5 +9,7 @@
   "features.groupChat.title": "Bate-Papo em Grupo (Multiagente)",
   "features.inputMarkdown.desc": "Renderize Markdown na área de entrada em tempo real (texto em negrito, blocos de código, tabelas etc.).",
   "features.inputMarkdown.title": "Renderização de Markdown na Entrada",
+  "features.messenger.desc": "Converse com seus agentes pelo Telegram (e outros mensageiros) através do bot compartilhado LobeHub. Adiciona uma aba Mensageiro nas Configurações para vincular sua conta e escolher qual agente recebe as mensagens.",
+  "features.messenger.title": "Mensageiro",
   "title": "Laboratórios"
 }

@@ -13,8 +13,6 @@ import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 
 import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
-import type { AuthFetchOptions } from '../utils/authFetchOptions';
-import { withCaptchaToken } from '../utils/authFetchOptions';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
@@ -54,14 +52,7 @@ export const useSignIn = () => {
   });
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
-  const {
-    businessElement,
-    ssoProviders,
-    preSocialSigninCheck,
-    getAdditionalData,
-    getCaptchaTokenOnError,
-    getFetchOptions,
-  } = useBusinessSignin();
+  const { getAdditionalData, preSocialSigninCheck, ssoProviders } = useBusinessSignin();
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -230,30 +221,20 @@ export const useSignIn = () => {
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
-      const fetchOptions = await getFetchOptions();
-      const signInWithFetchOptions = async (nextFetchOptions?: AuthFetchOptions) =>
+      const signInWithAdditionalData = async () =>
         isBuiltinProvider(normalizedProvider)
           ? await signIn.social({
               additionalData,
               callbackURL: callbackUrl,
-              fetchOptions: nextFetchOptions,
               provider: normalizedProvider,
             })
           : await signIn.oauth2({
               additionalData,
               callbackURL: callbackUrl,
-              fetchOptions: nextFetchOptions,
               providerId: normalizedProvider,
             });
 
-      let result = await signInWithFetchOptions(fetchOptions);
-      if (result && 'error' in result && result.error) {
-        const captchaToken = await getCaptchaTokenOnError(result.error);
-        if (captchaToken === null) return;
-        if (captchaToken) {
-          result = await signInWithFetchOptions(withCaptchaToken(fetchOptions, captchaToken));
-        }
-      }
+      const result = await signInWithAdditionalData();
 
       if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
@@ -303,7 +284,6 @@ export const useSignIn = () => {
     : resolvedProviders;
 
   return {
-    businessElement,
     disableEmailPassword,
     email,
     form,

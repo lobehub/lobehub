@@ -18,7 +18,8 @@ describe('skillManagementService', () => {
         evidenceRefs: [{ id: 'msg-1', type: 'message' }],
         idempotencyKey: 'source:refine_skill:skill:doc-1',
         input: {
-          patch: 'Add checklist step for failed release note validation.',
+          bodyMarkdown:
+            '# Release notes\n\n- Add checklist step for failed release note validation.',
           skillDocumentId: 'doc-1',
           userId: 'user-1',
         },
@@ -26,6 +27,29 @@ describe('skillManagementService', () => {
     ).resolves.toEqual({ skillDocumentId: 'doc-1', summary: 'Refined skill.' });
 
     expect(refineSkill).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * @example
+   * Patch descriptions are not accepted as complete executable skill replacement bodies.
+   */
+  it('rejects patch-only skill refinements before persistence', async () => {
+    const refineSkill = vi.fn();
+    const service = createSkillManagementService({ refineSkill });
+
+    await expect(
+      service.refineSkill({
+        evidenceRefs: [{ id: 'msg-1', type: 'message' }],
+        idempotencyKey: 'source:refine_skill:skill:doc-1',
+        input: {
+          patch: 'Add a checklist step.',
+          skillDocumentId: 'doc-1',
+          userId: 'user-1',
+        },
+      }),
+    ).rejects.toThrow('Skill refinement requires a complete replacement bodyMarkdown');
+
+    expect(refineSkill).not.toHaveBeenCalled();
   });
 
   /**
@@ -41,7 +65,7 @@ describe('skillManagementService', () => {
         evidenceRefs: [{ id: 'builtin-skill', type: 'agent_document' }],
         idempotencyKey: 'source:refine_skill:skill:builtin',
         input: {
-          patch: 'Change builtin skill.',
+          bodyMarkdown: '# Builtin skill\n\nChange builtin skill.',
           skillDocumentId: 'builtin-skill',
           targetReadonly: true,
           userId: 'user-1',

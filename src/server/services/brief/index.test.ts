@@ -5,6 +5,7 @@ import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
+import { MaintenanceRisk } from '@/server/services/agentSignal/services/maintenance/types';
 
 import { BriefService } from './index';
 
@@ -36,9 +37,12 @@ describe('BriefService', () => {
   };
 
   const mockBriefModel = {
+    findById: vi.fn(),
     list: vi.fn(),
     listUnresolved: vi.fn(),
+    listUnresolvedEnriched: vi.fn(),
     resolve: vi.fn(),
+    updateMetadata: vi.fn(),
   };
 
   const mockTaskModel = {
@@ -56,6 +60,7 @@ describe('BriefService', () => {
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     // Default: no downstream tasks unlocked. Specific tests can override.
     mockTaskModel.getUnlockedTasks.mockResolvedValue([]);
+    mockBriefModel.findById.mockResolvedValue(null);
   });
 
   describe('enrichBriefsWithAgents', () => {
@@ -101,7 +106,7 @@ describe('BriefService', () => {
         { avatar: '🔧', backgroundColor: null, id: 'agent-c', title: 'Agent C' },
       ]);
 
-      const result = await service.enrichBriefsWithAgents(briefs);
+      const result = await service.enrichBriefsWithAgents(briefs, { includeTreeAgents: true });
 
       expect(result[0].agent).toEqual({
         avatar: '🤖',
@@ -191,7 +196,7 @@ describe('BriefService', () => {
         },
       ]);
 
-      const result = await service.enrichBriefsWithAgents(briefs);
+      const result = await service.enrichBriefsWithAgents(briefs, { includeTreeAgents: true });
 
       expect(result[0].agents).toEqual([
         {
@@ -224,9 +229,105 @@ describe('BriefService', () => {
         { avatar: '🧠', backgroundColor: '#fff', id: 'agent-b', title: 'Agent B' },
       ]);
 
-      const result = await service.enrichBriefsWithAgents(briefs);
+      const result = await service.enrichBriefsWithAgents(briefs, { includeTreeAgents: true });
 
       expect(result[0].agents.map((agent) => agent.id)).toEqual(['agent-a', 'agent-b']);
+    });
+
+    it('should default to skipping the task-tree CTE and return empty agents[]', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: 'agent-a', id: 'b1', taskId: 'task-1', title: 'Brief 1' },
+      ] as any[];
+
+      mockTaskModel.findByIds.mockResolvedValue([{ id: 'task-1', status: 'scheduled' }]);
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: '🤖', backgroundColor: null, id: 'agent-a', title: 'Agent A' },
+      ]);
+
+      const result = await service.enrichBriefsWithAgents(briefs);
+
+      expect(result[0].agent).toEqual({
+        avatar: '🤖',
+        backgroundColor: null,
+        id: 'agent-a',
+        title: 'Agent A',
+      });
+      expect(result[0].taskStatus).toBe('scheduled');
+      expect(result[0].agents).toEqual([]);
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+      // direct-agent ids are passed straight through, no need to wait on the CTE.
+      expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(['agent-a']);
+    });
+  });
+
+  describe('enrichBriefAgentOnly', () => {
+    it('should return briefs with null agent when no agentIds and skip db calls', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: null, id: 'b1', taskId: 'task-1', title: 'Brief 1' },
+        { agentId: null, id: 'b2', taskId: null, title: 'Brief 2' },
+      ] as any[];
+
+      const result = await service.enrichBriefAgentOnly(briefs);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].agent).toBeNull();
+      expect(result[1].agent).toBeNull();
+      expect(mockAgentModel.getAgentAvatarsByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+    });
+
+    it('should attach the direct producing agent without calling task tree CTE', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: 'agent-a', id: 'b1', taskId: 'task-1', title: 'Brief 1' },
+        { agentId: 'agent-b', id: 'b2', taskId: 'task-2', title: 'Brief 2' },
+      ] as any[];
+
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: '🤖', backgroundColor: null, id: 'agent-a', title: 'Agent A' },
+        { avatar: '🔧', backgroundColor: null, id: 'agent-b', title: 'Agent B' },
+      ]);
+
+      const result = await service.enrichBriefAgentOnly(briefs);
+
+      expect(result[0].agent).toEqual({
+        avatar: '🤖',
+        backgroundColor: null,
+        id: 'agent-a',
+        title: 'Agent A',
+      });
+      expect(result[1].agent).toEqual({
+        avatar: '🔧',
+        backgroundColor: null,
+        id: 'agent-b',
+        title: 'Agent B',
+      });
+      expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(
+        expect.arrayContaining(['agent-a', 'agent-b']),
+      );
+      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+    });
+
+    it('should leave agent null when the producing agent has been deleted', async () => {
+      const service = new BriefService(db, userId);
+
+      const briefs = [
+        { agentId: 'agent-gone', id: 'b1', taskId: 'task-1', title: 'Brief' },
+      ] as any[];
+
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([]);
+
+      const result = await service.enrichBriefAgentOnly(briefs);
+
+      expect(result[0].agent).toBeNull();
+      expect(mockAgentModel.getAgentAvatarsByIds).toHaveBeenCalledWith(['agent-gone']);
     });
   });
 
@@ -249,22 +350,152 @@ describe('BriefService', () => {
   });
 
   describe('listUnresolved', () => {
-    it('should return enriched unresolved briefs', async () => {
+    it('should map joined rows into BriefWithAgent without re-fetching', async () => {
       const service = new BriefService(db, userId);
 
-      mockBriefModel.listUnresolved.mockResolvedValue([
-        { agentId: null, id: 'b1', taskId: null, title: 'Unresolved' },
+      mockBriefModel.listUnresolvedEnriched.mockResolvedValue([
+        {
+          agentAvatar: null,
+          agentBackgroundColor: null,
+          agentRowId: null,
+          agentTitle: null,
+          brief: { agentId: null, id: 'b1', taskId: null, title: 'Solo' },
+          taskStatus: null,
+        },
+        {
+          agentAvatar: '🤖',
+          agentBackgroundColor: '#fff',
+          agentRowId: 'agent-a',
+          agentTitle: 'Agent A',
+          brief: { agentId: 'agent-a', id: 'b2', taskId: 'task-1', title: 'With Task' },
+          taskStatus: 'scheduled',
+        },
       ]);
 
       const result = await service.listUnresolved();
 
-      expect(result).toHaveLength(1);
-      expect(result[0].agent).toBeNull();
-      expect(mockBriefModel.listUnresolved).toHaveBeenCalled();
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        agent: null,
+        agents: [],
+        id: 'b1',
+        taskStatus: null,
+      });
+      expect(result[1]).toMatchObject({
+        agent: { avatar: '🤖', backgroundColor: '#fff', id: 'agent-a', title: 'Agent A' },
+        agents: [],
+        id: 'b2',
+        taskStatus: 'scheduled',
+      });
+      // No follow-up enrichment SQLs.
+      expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
+      expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
+      expect(mockAgentModel.getAgentAvatarsByIds).not.toHaveBeenCalled();
     });
   });
 
   describe('resolve', () => {
+    const proposalMetadata = {
+      actionType: 'refine_skill' as const,
+      actions: [
+        {
+          actionType: 'refine_skill' as const,
+          evidenceRefs: [],
+          idempotencyKey: 'nightly:refine:adoc_1',
+          rationale: 'Refine a managed skill.',
+          risk: MaintenanceRisk.Medium,
+        },
+      ],
+      createdAt: '2026-05-09T00:00:00.000Z',
+      evidenceWindowEnd: '2026-05-09T00:00:00.000Z',
+      evidenceWindowStart: '2026-05-08T00:00:00.000Z',
+      expiresAt: '2026-05-12T00:00:00.000Z',
+      proposalKey: 'agt_1:refine_skill:agent_document:adoc_1',
+      status: 'pending' as const,
+      updatedAt: '2026-05-09T00:00:00.000Z',
+      version: 1 as const,
+    };
+
+    /**
+     * @example
+     * expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-1', { action: 'approve' });
+     */
+    it('applies a pending maintenance proposal before resolving an approved brief', async () => {
+      const maintenanceProposalResolver = vi.fn().mockResolvedValue({
+        brief: { id: 'proposal-1' },
+        shouldResolve: true,
+      });
+      const service = new BriefService(db, userId, { maintenanceProposalResolver });
+      mockBriefModel.findById.mockResolvedValue({
+        id: 'proposal-1',
+        metadata: { proposal: proposalMetadata },
+        trigger: 'agent-signal:nightly-review',
+      });
+      mockBriefModel.resolve.mockResolvedValue({ id: 'proposal-1', resolvedAction: 'approve' });
+
+      const result = await service.resolve('proposal-1', { action: 'approve' });
+
+      expect(maintenanceProposalResolver).toHaveBeenCalledWith({
+        action: 'approve',
+        brief: expect.objectContaining({ id: 'proposal-1' }),
+        proposal: proposalMetadata,
+      });
+      expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-1', { action: 'approve' });
+      expect(result).toEqual({ id: 'proposal-1', resolvedAction: 'approve' });
+    });
+
+    /**
+     * @example
+     * expect(mockBriefModel.resolve).not.toHaveBeenCalled();
+     */
+    it('keeps stale maintenance proposal briefs unresolved after approve preflight fails', async () => {
+      const unresolvedBrief = {
+        id: 'proposal-2',
+        metadata: { proposal: { ...proposalMetadata, status: 'stale' } },
+        trigger: 'agent-signal:nightly-review',
+      };
+      const maintenanceProposalResolver = vi.fn().mockResolvedValue({
+        brief: unresolvedBrief,
+        shouldResolve: false,
+      });
+      const service = new BriefService(db, userId, { maintenanceProposalResolver });
+      mockBriefModel.findById.mockResolvedValue({
+        id: 'proposal-2',
+        metadata: { proposal: proposalMetadata },
+        trigger: 'agent-signal:nightly-review',
+      });
+
+      const result = await service.resolve('proposal-2', { action: 'approve' });
+
+      expect(result).toBe(unresolvedBrief);
+      expect(mockBriefModel.resolve).not.toHaveBeenCalled();
+    });
+
+    /**
+     * @example
+     * expect(maintenanceProposalResolver).toHaveBeenCalledWith(expect.objectContaining({ action: 'dismiss' }));
+     */
+    it('dismisses pending maintenance proposals through the proposal resolver', async () => {
+      const maintenanceProposalResolver = vi.fn().mockResolvedValue({
+        brief: { id: 'proposal-3' },
+        shouldResolve: true,
+      });
+      const service = new BriefService(db, userId, { maintenanceProposalResolver });
+      mockBriefModel.findById.mockResolvedValue({
+        id: 'proposal-3',
+        metadata: { proposal: proposalMetadata },
+        trigger: 'agent-signal:nightly-review',
+      });
+      mockBriefModel.resolve.mockResolvedValue({ id: 'proposal-3', resolvedAction: 'dismiss' });
+
+      await service.resolve('proposal-3', { action: 'dismiss' });
+
+      expect(maintenanceProposalResolver).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'dismiss' }),
+      );
+      expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-3', { action: 'dismiss' });
+    });
+
     it('should complete the task when approving a result brief on a non-scheduled task', async () => {
       const service = new BriefService(db, userId);
       mockBriefModel.resolve.mockResolvedValue({

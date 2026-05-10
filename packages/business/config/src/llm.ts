@@ -26,6 +26,9 @@ export const DEFAULT_LLM_CONFIG = genUserLLMConfig({
   anthropic: {
     enabled: true,
   },
+  deepseek: {
+    enabled: true,
+  },
   google: {
     enabled: true,
   },

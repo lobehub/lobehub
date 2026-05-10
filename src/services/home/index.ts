@@ -1,12 +1,29 @@
 import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { lambdaClient } from '@/libs/trpc/client';
 
+export interface HomeDailyBriefPair {
+  hint: string;
+  welcome: string;
+}
+
+export interface HomeDailyBriefResponse {
+  pairs: HomeDailyBriefPair[];
+}
+
 export class HomeService {
   /**
    * Get sidebar agent list with pinned, grouped, and ungrouped items
    */
   getSidebarAgentList = (): Promise<SidebarAgentListResponse> => {
     return lambdaClient.home.getSidebarAgentList.query();
+  };
+
+  /**
+   * Get daily brief — paired { welcome, hint } objects for the home page.
+   * Server returns `{ pairs: [] }` when no data is cached.
+   */
+  getDailyBrief = (): Promise<HomeDailyBriefResponse> => {
+    return lambdaClient.home.getDailyBrief.query();
   };
 
   /**

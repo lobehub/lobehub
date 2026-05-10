@@ -1,10 +1,23 @@
 import { and, count, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 
-import { agents, messagePlugins, messages, topics, userMemories } from '../../schemas';
+import {
+  agentDocuments,
+  agents,
+  documents,
+  messagePlugins,
+  messages,
+  topics,
+  userMemories,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 const parseAggregateTimestamp = (value: Date | string) =>
   value instanceof Date ? value : new Date(value);
+
+const explicitPreferenceCue = sql`
+  ${messages.role} = 'user'
+  AND ${messages.content} ~* '(please remember|for future|next time|stable preference|durable preference|\\bprefer\\b|\\bpreference\\b|以后|以后都|记住|偏好)'
+`;
 
 export interface ListAgentSignalTopicActivityOptions {
   agentId: string;
@@ -24,7 +37,17 @@ export interface ListAgentSignalRelevantMemoriesOptions {
   limit: number;
 }
 
+export interface ListAgentSignalActivityWindowOptions {
+  agentId: string;
+  windowEnd: Date;
+  windowStart: Date;
+}
+
 export interface AgentSignalTopicActivityRow {
+  correctionCount: number;
+  correctionIds: string[];
+  failedMessages: AgentSignalFailedMessageSummary[];
+  failedToolCalls: AgentSignalFailedToolCallSummary[];
   failedToolCount: number;
   failureCount: number;
   lastActivityAt: Date | null;
@@ -34,9 +57,45 @@ export interface AgentSignalTopicActivityRow {
   topicId: string | null;
 }
 
+export interface AgentSignalFailedToolCallSummary {
+  apiName: string | null;
+  errorSummary: string | null;
+  identifier: string | null;
+  messageId: string;
+  toolCallId: string | null;
+}
+
+export interface AgentSignalFailedMessageSummary {
+  errorSummary: string | null;
+  messageId: string;
+}
+
 export interface AgentSignalRelevantMemoryRow {
   content: string;
   id: string;
+  updatedAt: Date;
+}
+
+export interface AgentSignalToolActivityRow {
+  apiName: string | null;
+  failedCount: number;
+  firstUsedAt: Date | null;
+  identifier: string | null;
+  lastUsedAt: Date | null;
+  messageIds: string[];
+  sampleArgs: string[];
+  sampleErrors: string[];
+  topicIds: string[];
+  totalCount: number;
+}
+
+export interface AgentSignalDocumentActivityRow {
+  agentDocumentId: string;
+  documentId: string;
+  hintIsSkill: boolean | null;
+  policyLoadFormat: string;
+  templateId: string | null;
+  title: string | null;
   updatedAt: Date;
 }
 
@@ -82,12 +141,144 @@ export class AgentSignalReviewContextModel {
       .limit(options.limit);
   };
 
+  /** Lists grouped review-window tool activity for nightly maintenance context. */
+  listToolActivity = (options: ListAgentSignalActivityWindowOptions) => {
+    const effectiveAgentId = sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`;
+
+    return this.db
+      .select({
+        apiName: messagePlugins.apiName,
+        failedCount:
+          sql<number>`COUNT(${messagePlugins.id}) FILTER (WHERE ${messagePlugins.error} IS NOT NULL)`.mapWith(
+            Number,
+          ),
+        firstUsedAt: sql<Date>`MIN(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
+        identifier: messagePlugins.identifier,
+        lastUsedAt: sql<Date>`MAX(${messages.createdAt})`.mapWith(parseAggregateTimestamp),
+        messageIds: sql<string[]>`
+          COALESCE(
+            jsonb_agg(DISTINCT ${messages.id}) FILTER (WHERE ${messages.id} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
+        sampleArgs: sql<string[]>`
+          COALESCE(
+            jsonb_agg(DISTINCT left(${messagePlugins.arguments}::text, 500))
+              FILTER (WHERE ${messagePlugins.arguments} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
+        sampleErrors: sql<string[]>`
+          COALESCE(
+            jsonb_agg(DISTINCT left(${messagePlugins.error}::text, 500))
+              FILTER (WHERE ${messagePlugins.error} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
+        topicIds: sql<string[]>`
+          COALESCE(
+            jsonb_agg(DISTINCT ${messages.topicId}) FILTER (WHERE ${messages.topicId} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
+        totalCount: count(messagePlugins.id),
+      })
+      .from(messagePlugins)
+      .innerJoin(
+        messages,
+        and(eq(messages.id, messagePlugins.id), eq(messages.userId, this.userId)),
+      )
+      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, this.userId)))
+      .where(
+        and(
+          eq(messagePlugins.userId, this.userId),
+          eq(effectiveAgentId, options.agentId),
+          gte(messages.createdAt, options.windowStart),
+          lte(messages.createdAt, options.windowEnd),
+        ),
+      )
+      .groupBy(messagePlugins.identifier, messagePlugins.apiName)
+      .orderBy(desc(sql`COUNT(${messagePlugins.id})`))
+      .limit(20);
+  };
+
+  /** Lists review-window agent document activity for nightly maintenance context. */
+  listDocumentActivity = (options: ListAgentSignalActivityWindowOptions) => {
+    return this.db
+      .select({
+        agentDocumentId: agentDocuments.id,
+        documentId: agentDocuments.documentId,
+        hintIsSkill: sql<boolean | null>`
+          CASE
+            WHEN ${documents.metadata}->'agentSignal'->>'hintIsSkill' = 'true' THEN true
+            WHEN ${documents.metadata}->'agentSignal'->>'hintIsSkill' = 'false' THEN false
+            ELSE NULL
+          END
+        `,
+        policyLoadFormat: agentDocuments.policyLoadFormat,
+        templateId: agentDocuments.templateId,
+        title: documents.title,
+        updatedAt: agentDocuments.updatedAt,
+      })
+      .from(agentDocuments)
+      .innerJoin(
+        documents,
+        and(eq(documents.id, agentDocuments.documentId), eq(documents.userId, this.userId)),
+      )
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, options.agentId),
+          isNull(agentDocuments.deletedAt),
+          gte(agentDocuments.updatedAt, options.windowStart),
+          lte(agentDocuments.updatedAt, options.windowEnd),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt))
+      .limit(50);
+  };
+
   /** Lists bounded topic activity for nightly review context. */
   listTopicActivity = (options: ListAgentSignalTopicActivityOptions) => {
     const effectiveAgentId = sql<string>`COALESCE(${messages.agentId}, ${topics.agentId})`;
 
     return this.db
       .select({
+        correctionCount:
+          sql<number>`COUNT(${messages.id}) FILTER (WHERE ${explicitPreferenceCue})`.mapWith(
+            Number,
+          ),
+        correctionIds: sql<string[]>`
+          COALESCE(
+            jsonb_agg(DISTINCT ${messages.id}) FILTER (WHERE ${explicitPreferenceCue}),
+            '[]'::jsonb
+          )
+        `,
+        failedMessages: sql<AgentSignalFailedMessageSummary[]>`
+          COALESCE(
+            jsonb_agg(
+              DISTINCT jsonb_build_object(
+                'errorSummary', left(${messages.error}::text, 500),
+                'messageId', ${messages.id}
+              )
+            ) FILTER (WHERE ${messages.error} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
+        failedToolCalls: sql<AgentSignalFailedToolCallSummary[]>`
+          COALESCE(
+            jsonb_agg(
+              DISTINCT jsonb_build_object(
+                'apiName', ${messagePlugins.apiName},
+                'errorSummary', left(${messagePlugins.error}::text, 500),
+                'identifier', ${messagePlugins.identifier},
+                'messageId', ${messages.id},
+                'toolCallId', ${messagePlugins.toolCallId}
+              )
+            ) FILTER (WHERE ${messagePlugins.error} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
         failedToolCount:
           sql<number>`COUNT(${messagePlugins.id}) FILTER (WHERE ${messagePlugins.error} IS NOT NULL)`.mapWith(
             Number,
@@ -125,6 +316,41 @@ export class AgentSignalReviewContextModel {
   listSelfReflectionTopicActivity = (options: ListAgentSignalSelfReflectionTopicOptions) => {
     return this.db
       .select({
+        correctionCount:
+          sql<number>`COUNT(${messages.id}) FILTER (WHERE ${explicitPreferenceCue})`.mapWith(
+            Number,
+          ),
+        correctionIds: sql<string[]>`
+          COALESCE(
+            jsonb_agg(DISTINCT ${messages.id}) FILTER (WHERE ${explicitPreferenceCue}),
+            '[]'::jsonb
+          )
+        `,
+        failedMessages: sql<AgentSignalFailedMessageSummary[]>`
+          COALESCE(
+            jsonb_agg(
+              DISTINCT jsonb_build_object(
+                'errorSummary', left(${messages.error}::text, 500),
+                'messageId', ${messages.id}
+              )
+            ) FILTER (WHERE ${messages.error} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
+        failedToolCalls: sql<AgentSignalFailedToolCallSummary[]>`
+          COALESCE(
+            jsonb_agg(
+              DISTINCT jsonb_build_object(
+                'apiName', ${messagePlugins.apiName},
+                'errorSummary', left(${messagePlugins.error}::text, 500),
+                'identifier', ${messagePlugins.identifier},
+                'messageId', ${messages.id},
+                'toolCallId', ${messagePlugins.toolCallId}
+              )
+            ) FILTER (WHERE ${messagePlugins.error} IS NOT NULL),
+            '[]'::jsonb
+          )
+        `,
         failedToolCount:
           sql<number>`COUNT(${messagePlugins.id}) FILTER (WHERE ${messagePlugins.error} IS NOT NULL)`.mapWith(
             Number,

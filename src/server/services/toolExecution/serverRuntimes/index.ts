@@ -15,7 +15,6 @@ import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
-import { cronRuntime } from './cron';
 import { gtdRuntime } from './gtd';
 import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
@@ -69,7 +68,6 @@ registerRuntimes([
   topicReferenceRuntime,
   userInteractionRuntime,
   credsRuntime,
-  cronRuntime,
   gtdRuntime,
   webOnboardingRuntime,
   agentMarketplaceRuntime,

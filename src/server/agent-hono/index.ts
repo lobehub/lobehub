@@ -6,6 +6,9 @@ import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
 import { gatewayCron } from './handlers/gatewayCron';
 import { gatewayStart } from './handlers/gatewayStart';
+import { messengerInstall } from './handlers/messengerInstall';
+import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
+import { messengerWebhook } from './handlers/messengerWebhook';
 import { platformWebhook } from './handlers/platformWebhook';
 import { runStep, runStepHealth } from './handlers/runStep';
 import { toolResult } from './handlers/toolResult';
@@ -67,5 +70,14 @@ app.post('/webhooks/bot-callback', qstashAuth(), botCallback);
 
 // POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
 app.post('/webhooks/:platform/:appId?', platformWebhook);
+
+// GET /api/agent/messenger/:platform/install — start per-tenant OAuth install
+app.get('/messenger/:platform/install', messengerInstall);
+
+// GET /api/agent/messenger/:platform/oauth/callback — OAuth redirect target
+app.get('/messenger/:platform/oauth/callback', messengerOAuthCallback);
+
+// POST /api/agent/messenger/webhooks/:platform — shared Messenger bot webhook
+app.post('/messenger/webhooks/:platform', messengerWebhook);
 
 export default app;

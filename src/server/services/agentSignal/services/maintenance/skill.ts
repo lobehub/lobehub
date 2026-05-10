@@ -22,7 +22,9 @@ export interface CreateMaintenanceSkillInput extends SkillMaintenanceBaseInput {
 
 /** Input for refining an existing managed skill. */
 export interface RefineMaintenanceSkillInput extends SkillMaintenanceBaseInput {
-  /** Patch, replacement body, or maintainer payload. */
+  /** Full replacement Markdown body without YAML frontmatter. */
+  bodyMarkdown?: string;
+  /** Human-readable proposal patch text, not executable replacement content. */
   patch?: string;
   /** Writable managed skill agent document id. */
   skillDocumentId: string;
@@ -103,6 +105,12 @@ const assertApprovedConsolidation = (input: ConsolidateMaintenanceSkillInput) =>
   }
 };
 
+const assertCompleteRefineBody = (input: RefineMaintenanceSkillInput) => {
+  if (!input.bodyMarkdown?.trim()) {
+    throw new Error('Skill refinement requires a complete replacement bodyMarkdown');
+  }
+};
+
 /**
  * Creates a skill management maintenance service.
  *
@@ -141,6 +149,7 @@ export const createSkillManagementService = (adapters: SkillMaintenanceAdapters 
   },
   refineSkill: async (request: SkillMaintenanceRefineRequest): Promise<SkillMaintenanceResult> => {
     assertWritableSkill(request.input.targetReadonly);
+    assertCompleteRefineBody(request.input);
 
     if (!adapters.refineSkill) {
       throw new Error('Skill refine adapter is required');

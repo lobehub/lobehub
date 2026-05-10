@@ -9,5 +9,7 @@
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
+  "features.messenger.desc": "تحدث إلى وكلائك عبر تطبيق تيليجرام (وتطبيقات المراسلة الأخرى) من خلال روبوت LobeHub المشترك. يضيف علامة تبويب المراسلة في الإعدادات لربط حسابك واختيار الوكيل الذي يتلقى الرسائل.",
+  "features.messenger.title": "المراسلة",
   "title": "المختبرات"
 }

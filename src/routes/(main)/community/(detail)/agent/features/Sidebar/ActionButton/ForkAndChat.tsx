@@ -79,13 +79,22 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
       // Generate a unique identifier for the forked agent
       const newIdentifier = generateMarketIdentifier();
 
-      // Step 2: Fork the agent via Market API
-      const forkResult = await marketApiService.forkAgent(identifier!, {
-        identifier: newIdentifier,
-        name: title,
-        status: 'published',
-        visibility: 'public',
-      });
+      // Step 2: Fork the agent via Market API (single-item batch)
+      const [forkOutcome] = await marketApiService.forkAgent([
+        {
+          identifier: newIdentifier,
+          name: title,
+          sourceIdentifier: identifier!,
+          status: 'published',
+          visibility: 'public',
+        },
+      ]);
+
+      if (!forkOutcome.success) {
+        throw new Error(forkOutcome.error?.message || 'Forking failed');
+      }
+
+      const forkResult = forkOutcome.data;
 
       // Step 3: Create agent config with forked data
       if (!config) throw new Error('Agent config is missing');

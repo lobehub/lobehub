@@ -3,17 +3,26 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface RenderAgentRouteOptions {
+  AGENT_ONBOARDING_ENABLED?: boolean;
+  commonStepsCompleted?: boolean;
   desktop?: boolean;
   enabled: boolean;
+  isUserStateInit?: boolean;
   serverConfigInit?: boolean;
 }
 
 const renderAgentRoute = async ({
+  AGENT_ONBOARDING_ENABLED = true,
+  commonStepsCompleted = true,
   desktop = false,
   enabled,
+  isUserStateInit = true,
   serverConfigInit = true,
 }: RenderAgentRouteOptions) => {
   vi.resetModules();
+  vi.doMock('@lobechat/business-const', () => ({
+    AGENT_ONBOARDING_ENABLED,
+  }));
   vi.doMock('@lobechat/const', () => ({
     isDesktop: desktop,
   }));
@@ -34,6 +43,20 @@ const renderAgentRoute = async ({
     useServerConfigStore: selectFromServerConfigStore,
   }));
 
+  const userState = { isUserStateInit, settings: {} };
+  function selectFromUserStore(selector: (state: Record<string, unknown>) => unknown) {
+    return selector(userState);
+  }
+
+  vi.doMock('@/store/user', () => ({
+    useUserStore: selectFromUserStore,
+  }));
+  vi.doMock('@/store/user/selectors', () => ({
+    onboardingSelectors: {
+      commonStepsCompleted: () => commonStepsCompleted,
+    },
+  }));
+
   const { default: AgentOnboardingRoute } = await import('./index');
 
   render(
@@ -41,16 +64,20 @@ const renderAgentRoute = async ({
       <Routes>
         <Route element={<AgentOnboardingRoute />} path="/onboarding/agent" />
         <Route element={<div>Classic onboarding</div>} path="/onboarding/classic" />
+        <Route element={<div>Common onboarding</div>} path="/onboarding" />
       </Routes>
     </MemoryRouter>,
   );
 };
 
 afterEach(() => {
+  vi.doUnmock('@lobechat/business-const');
   vi.doUnmock('@lobechat/const');
   vi.doUnmock('@/components/Loading/BrandTextLoading');
   vi.doUnmock('@/features/Onboarding/Agent');
   vi.doUnmock('@/store/serverConfig');
+  vi.doUnmock('@/store/user');
+  vi.doUnmock('@/store/user/selectors');
 });
 
 describe('AgentOnboardingRoute', () => {
@@ -66,6 +93,12 @@ describe('AgentOnboardingRoute', () => {
     expect(screen.getByText('AgentOnboardingRoute')).toBeInTheDocument();
   });
 
+  it('shows a loading state before the user state is initialized', async () => {
+    await renderAgentRoute({ enabled: true, isUserStateInit: false });
+
+    expect(screen.getByText('AgentOnboardingRoute')).toBeInTheDocument();
+  });
+
   it('redirects to classic onboarding when the feature is disabled', async () => {
     await renderAgentRoute({ enabled: false });
 
@@ -74,6 +107,18 @@ describe('AgentOnboardingRoute', () => {
 
   it('redirects to classic onboarding on desktop builds', async () => {
     await renderAgentRoute({ desktop: true, enabled: true });
+
+    expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
+  });
+
+  it('redirects to /onboarding when the shared prefix is incomplete', async () => {
+    await renderAgentRoute({ commonStepsCompleted: false, enabled: true });
+
+    expect(screen.getByText('Common onboarding')).toBeInTheDocument();
+  });
+
+  it('redirects to classic when AGENT_ONBOARDING_ENABLED master switch is off', async () => {
+    await renderAgentRoute({ AGENT_ONBOARDING_ENABLED: false, enabled: true });
 
     expect(screen.getByText('Classic onboarding')).toBeInTheDocument();
   });

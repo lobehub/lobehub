@@ -21,7 +21,7 @@ agent-browser snapshot -i
 # Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
 
 agent-browser fill @e1 "user@example.com"
-agent-browser fill @e2 "password123"
+agent-browser fill @e2 "your-password"
 agent-browser click @e3
 agent-browser wait 2000
 agent-browser snapshot -i  # Check result
@@ -36,7 +36,7 @@ Commands can be chained with \`&&\` in a single shell invocation. The browser pe
 agent-browser open https://example.com && agent-browser snapshot -i
 
 # Chain multiple interactions
-agent-browser fill @e1 "user@example.com" && agent-browser fill @e2 "password123" && agent-browser click @e3
+agent-browser fill @e1 "user@example.com" && agent-browser fill @e2 "your-password" && agent-browser click @e3
 
 # Navigate and capture
 agent-browser open https://example.com && agent-browser screenshot
@@ -54,7 +54,7 @@ When automating a site that requires login, choose the approach that fits:
 # Connect to the user's running Chrome (they're already logged in)
 agent-browser --auto-connect state save ./auth.json
 # Use that auth state
-agent-browser --state ./auth.json open https://app.example.com/dashboard
+agent-browser --state ./auth.json open https://example.com/dashboard
 \`\`\`
 
 State files contain session tokens in plaintext -- add to \`.gitignore\` and delete when no longer needed. Set \`AGENT_BROWSER_ENCRYPTION_KEY\` for encryption at rest.
@@ -73,22 +73,22 @@ agent-browser --profile Default open https://gmail.com
 
 \`\`\`bash
 # First run: login manually or via automation
-agent-browser --profile ~/.myapp open https://app.example.com/login
+agent-browser --profile ~/.myapp open https://example.com/login
 # ... fill credentials, submit ...
 
 # All future runs: already authenticated
-agent-browser --profile ~/.myapp open https://app.example.com/dashboard
+agent-browser --profile ~/.myapp open https://example.com/dashboard
 \`\`\`
 
 **Option 4: Session name (auto-save/restore cookies + localStorage)**
 
 \`\`\`bash
-agent-browser --session-name myapp open https://app.example.com/login
+agent-browser --session-name myapp open https://example.com/login
 # ... login flow ...
 agent-browser close  # State auto-saved
 
 # Next time: state auto-restored
-agent-browser --session-name myapp open https://app.example.com/dashboard
+agent-browser --session-name myapp open https://example.com/dashboard
 \`\`\`
 
 **Option 5: Auth vault (credentials stored encrypted, login by name)**
@@ -107,7 +107,7 @@ agent-browser auth login myapp
 agent-browser state save ./auth.json
 # In a future session:
 agent-browser state load ./auth.json
-agent-browser open https://app.example.com/dashboard
+agent-browser open https://example.com/dashboard
 \`\`\`
 
 For OAuth, 2FA, cookie-based auth, and token refresh patterns, see the upstream \`references/authentication.md\` at https://github.com/vercel-labs/agent-browser/tree/main/skills/agent-browser/references.
@@ -317,28 +317,28 @@ agent-browser auth delete github
 
 \`\`\`bash
 # Login once and save state
-agent-browser batch "open https://app.example.com/login" "snapshot -i"
+agent-browser batch "open https://example.com/login" "snapshot -i"
 # Read snapshot to find form refs, then fill and submit
 agent-browser batch "fill @e1 \\"$USERNAME\\"" "fill @e2 \\"$PASSWORD\\"" "click @e3" "wait --url **/dashboard" "state save auth.json"
 
 # Reuse in future sessions
-agent-browser batch "state load auth.json" "open https://app.example.com/dashboard"
+agent-browser batch "state load auth.json" "open https://example.com/dashboard"
 \`\`\`
 
 ### Session Persistence
 
 \`\`\`bash
 # Auto-save/restore cookies and localStorage across browser restarts
-agent-browser --session-name myapp open https://app.example.com/login
+agent-browser --session-name myapp open https://example.com/login
 # ... login flow ...
 agent-browser close  # State auto-saved to ~/.agent-browser/sessions/
 
 # Next time, state is auto-loaded
-agent-browser --session-name myapp open https://app.example.com/dashboard
+agent-browser --session-name myapp open https://example.com/dashboard
 
 # Encrypt state at rest
 export AGENT_BROWSER_ENCRYPTION_KEY=$(openssl rand -hex 32)
-agent-browser --session-name secure open https://app.example.com
+agent-browser --session-name secure open https://example.com
 
 # Manage saved states
 agent-browser state list

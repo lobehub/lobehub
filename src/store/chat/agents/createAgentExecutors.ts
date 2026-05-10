@@ -317,6 +317,58 @@ export const createAgentExecutors = (context: {
       let finalUsage: ModelUsage | undefined;
       let finalToolCalls: MessageToolCall[] | undefined;
 
+      // Expand dynamically activated tools (from lobe-activator activateTools API)
+      // and merge them into the agent config for this LLM call.
+      // Built before the StreamingHandler so we can bind the offered tool
+      // names into the transformToolCalls callback (LOBE-8696).
+      const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
+      let resolvedAgentConfig = context.agentConfig;
+
+      if (activatedToolIds?.length && context.toolsEngine) {
+        const additional = context.toolsEngine.generateToolsDetailed({
+          context: { isExplicitActivation: true },
+          model: agentConfigData.model,
+          provider: agentConfigData.provider!,
+          skipDefaultTools: true,
+          toolIds: activatedToolIds,
+        });
+
+        if (additional.tools?.length) {
+          const mergedEnabledManifests = dedupeBy(
+            [...(context.agentConfig.enabledManifests || []), ...additional.enabledManifests],
+            (manifest) => manifest.identifier,
+          );
+          const mergedEnabledToolIds = [
+            ...new Set([
+              ...(context.agentConfig.enabledToolIds || []),
+              ...additional.enabledToolIds,
+            ]),
+          ];
+          const mergedTools = dedupeBy(
+            [...(context.agentConfig.tools || []), ...additional.tools],
+            (tool) => tool.function.name,
+          );
+
+          resolvedAgentConfig = {
+            ...context.agentConfig,
+            enabledManifests: mergedEnabledManifests,
+            enabledToolIds: mergedEnabledToolIds,
+            tools: mergedTools,
+          };
+
+          log(
+            `${stagePrefix} Injected %d activated tools: %o`,
+            activatedToolIds.length,
+            activatedToolIds,
+          );
+        }
+      }
+
+      // Names of tools actually sent to the LLM this turn. Passed to the
+      // resolver's missing-prefix fallback so a model can't reach tools that
+      // weren't enabled, and disabled duplicates can't shadow enabled calls.
+      const offeredToolNames = (resolvedAgentConfig.tools ?? []).map((tool) => tool.function.name);
+
       // Create streaming handler with callbacks
       const handler = new StreamingHandler(
         {
@@ -404,57 +456,13 @@ export const createAgentExecutors = (context: {
                 url: file?.url,
                 alt: file?.filename || file?.id,
               })),
-          transformToolCalls: context.get().internal_transformToolCalls,
+          transformToolCalls: (calls) =>
+            context.get().internal_transformToolCalls(calls, offeredToolNames),
           toggleToolCallingStreaming: internal_toggleToolCallingStreaming,
         },
       );
 
       const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
-
-      // Expand dynamically activated tools (from lobe-activator activateTools API)
-      // and merge them into the agent config for this LLM call
-      const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
-      let resolvedAgentConfig = context.agentConfig;
-
-      if (activatedToolIds?.length && context.toolsEngine) {
-        const additional = context.toolsEngine.generateToolsDetailed({
-          context: { isExplicitActivation: true },
-          model: agentConfigData.model,
-          provider: agentConfigData.provider!,
-          skipDefaultTools: true,
-          toolIds: activatedToolIds,
-        });
-
-        if (additional.tools?.length) {
-          const mergedEnabledManifests = dedupeBy(
-            [...(context.agentConfig.enabledManifests || []), ...additional.enabledManifests],
-            (manifest) => manifest.identifier,
-          );
-          const mergedEnabledToolIds = [
-            ...new Set([
-              ...(context.agentConfig.enabledToolIds || []),
-              ...additional.enabledToolIds,
-            ]),
-          ];
-          const mergedTools = dedupeBy(
-            [...(context.agentConfig.tools || []), ...additional.tools],
-            (tool) => tool.function.name,
-          );
-
-          resolvedAgentConfig = {
-            ...context.agentConfig,
-            enabledManifests: mergedEnabledManifests,
-            enabledToolIds: mergedEnabledToolIds,
-            tools: mergedTools,
-          };
-
-          log(
-            `${stagePrefix} Injected %d activated tools: %o`,
-            activatedToolIds.length,
-            activatedToolIds,
-          );
-        }
-      }
 
       await chatService.createAssistantMessageStream({
         abortController,
@@ -678,6 +686,27 @@ export const createAgentExecutors = (context: {
 
       // Get context from operation
       const opContext = getOperationContext();
+      // Get assistant message to derive the same-turn source user message when the root
+      // runtime operation is anchored to the assistant message.
+      const latestMessages = context.get().dbMessagesMap[context.messageKey] || [];
+      const existingToolMessage = payload.skipCreateToolMessage
+        ? latestMessages.find((m) => m.id === payload.parentMessageId)
+        : undefined;
+      const assistantMessage =
+        latestMessages.find((m) => m.id === payload.parentMessageId && m.role === 'assistant') ??
+        (existingToolMessage?.parentId
+          ? latestMessages.find(
+              (m) => m.id === existingToolMessage.parentId && m.role === 'assistant',
+            )
+          : undefined) ??
+        (opContext.messageId
+          ? latestMessages.find((m) => m.id === opContext.messageId && m.role === 'assistant')
+          : undefined) ??
+        latestMessages.findLast((m) => m.role === 'assistant');
+      const sourceMessageId =
+        opContext.sourceMessageId ??
+        assistantMessage?.parentId ??
+        (opContext.messageId !== assistantMessage?.id ? opContext.messageId : undefined);
 
       // ============ Create toolCalling operation (top-level) ============
       const { operationId: toolOperationId } = context.get().startOperation({
@@ -686,6 +715,7 @@ export const createAgentExecutors = (context: {
           agentId: opContext.agentId!,
           groupId: opContext.groupId,
           scope: opContext.scope,
+          sourceMessageId,
           topicId: opContext.topicId,
           threadId: opContext.threadId,
           viewedTask: opContext.viewedTask,
@@ -700,24 +730,17 @@ export const createAgentExecutors = (context: {
       });
 
       try {
-        // Get assistant message to extract groupId
-        const latestMessages = context.get().dbMessagesMap[context.messageKey] || [];
-        // Find the last assistant message (should be created by call_llm)
-        const assistantMessage = latestMessages.findLast((m) => m.role === 'assistant');
-
         let toolMessageId: string;
 
         if (payload.skipCreateToolMessage) {
           // Reuse existing tool message (resumption mode)
           toolMessageId = payload.parentMessageId;
-          // Check if tool message already exists (e.g., from human approval flow)
-          const existingToolMessage = latestMessages.find((m) => m.id === toolMessageId)!;
 
           log(
             '[%s][call_tool] Resuming with existing tool message: %s (status: %s)',
             sessionLogId,
             toolMessageId,
-            existingToolMessage.pluginIntervention?.status,
+            existingToolMessage?.pluginIntervention?.status,
           );
         } else {
           // Create new tool message (normal mode)

@@ -9,8 +9,9 @@ import type { RuntimeProcessorContext } from '../../../../runtime/context';
 import {
   collectAgentSkillDecisionCandidates,
   defineSkillManagementActionHandler,
-  handleSkillManagementSignal,
+  executeSkillManagementDecision,
   isAgentDocumentRelatedObject,
+  readAgentSignalHintIsSkill,
   runSkillDecisionAgentRuntime,
 } from '../skillManagement';
 
@@ -123,7 +124,7 @@ describe('defineSkillManagementActionHandler', () => {
   });
 
   it('does not run when self iteration is disabled', async () => {
-    const result = await handleSkillManagementSignal({
+    const result = await executeSkillManagementDecision({
       decide: vi.fn(),
       payload: { agentId: 'agent-1', feedbackMessage: 'Make this a reusable checklist.' },
       selfIterationEnabled: false,
@@ -134,7 +135,7 @@ describe('defineSkillManagementActionHandler', () => {
 
   it('runs the decision step when self iteration is enabled', async () => {
     const decide = vi.fn().mockResolvedValue({ action: 'create', confidence: 0.9 });
-    const result = await handleSkillManagementSignal({
+    const result = await executeSkillManagementDecision({
       decide,
       payload: { agentId: 'agent-1', feedbackMessage: 'Make this a reusable checklist.' },
       selfIterationEnabled: true,
@@ -150,7 +151,7 @@ describe('defineSkillManagementActionHandler', () => {
    */
   it('returns structured results for each v1.2 decision action', async () => {
     for (const action of ['create', 'refine', 'consolidate', 'noop', 'reject'] as const) {
-      const result = await handleSkillManagementSignal({
+      const result = await executeSkillManagementDecision({
         decide: vi.fn().mockResolvedValue({ action, confidence: 0.9 }),
         payload: { agentId: 'agent-1', feedbackMessage: 'Make this reusable.' },
         selfIterationEnabled: true,
@@ -226,6 +227,7 @@ describe('defineSkillManagementActionHandler', () => {
       listSameTurnDocumentOutcomes: vi.fn().mockResolvedValue([
         {
           agentDocumentId: 'agent_doc_1',
+          hintIsSkill: true,
           relation: 'created',
           summary: 'Agent documents created a document.',
         },
@@ -263,11 +265,120 @@ describe('defineSkillManagementActionHandler', () => {
       topicId: 'topic_1',
     });
     expect(tools.readDocument).toHaveBeenCalledWith({ agentDocumentId: 'agent_doc_1' });
+    expect(chat.mock.calls[1]?.[0].messages).toContainEqual(
+      expect.objectContaining({
+        content: expect.stringContaining('"hintIsSkill":true'),
+        role: 'tool',
+      }),
+    );
     expect(result).toMatchObject({
       action: 'reject',
       documentRefs: ['doc_1'],
       reason: 'The same turn created a document and forbids skill conversion.',
     });
+  });
+
+  /**
+   * @example
+   * Only explicit boolean metadata becomes same-turn hint evidence.
+   */
+  it('parses hintIsSkill only from explicit boolean agent-signal metadata', () => {
+    expect(readAgentSignalHintIsSkill({ agentSignal: { hintIsSkill: true } })).toBe(true);
+    expect(readAgentSignalHintIsSkill({ agentSignal: { hintIsSkill: false } })).toBe(false);
+    expect(readAgentSignalHintIsSkill({ agentSignal: { hintIsSkill: 'true' } })).toBeUndefined();
+    expect(readAgentSignalHintIsSkill({ agentSignal: null })).toBeUndefined();
+    expect(readAgentSignalHintIsSkill(undefined)).toBeUndefined();
+  });
+
+  /**
+   * @example
+   * Negative or missing same-turn hints remain evidence only; they do not force mutation actions.
+   */
+  it('does not force refine or consolidate from hintIsSkill false or missing document snapshots', async () => {
+    const response = () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+      );
+    const chat = vi
+      .fn()
+      .mockImplementationOnce(async (_payload, options) => {
+        await options.callback.onToolsCalling({
+          toolsCalling: [
+            {
+              function: {
+                arguments: '{"messageId":"msg_1","scopeKey":"topic:topic_1"}',
+                name: 'agent-signal-skill-decision____listSameTurnDocumentOutcomes',
+              },
+              id: 'call_list_outcomes',
+              type: 'function',
+            },
+          ],
+        });
+        return response();
+      })
+      .mockImplementationOnce(async (_payload, options) => {
+        await options.callback.onToolsCalling({
+          toolsCalling: [
+            {
+              function: {
+                arguments:
+                  '{"action":"noop","confidence":0.7,"documentRefs":[],"reason":"Negative or missing hints are not enough to mutate a skill.","requiredReads":[],"targetSkillRefs":[]}',
+                name: 'agent-signal-skill-decision____submitDecision',
+              },
+              id: 'call_submit_decision',
+              type: 'function',
+            },
+          ],
+        });
+        return response();
+      });
+    const tools = {
+      listCandidateDocuments: vi.fn(),
+      listSameTurnDocumentOutcomes: vi.fn().mockResolvedValue([
+        {
+          agentDocumentId: 'agent_doc_false',
+          hintIsSkill: false,
+          relation: 'created',
+          summary: 'Document outcome explicitly says this is not a skill.',
+        },
+        {
+          agentDocumentId: 'agent_doc_missing_snapshot',
+          relation: 'created',
+          summary: 'Document snapshot is missing metadata.',
+        },
+      ]),
+      readDocument: vi.fn(),
+    };
+
+    const result = await runSkillDecisionAgentRuntime({
+      model: 'test-model',
+      modelRuntime: { chat },
+      payload: {
+        agentId: 'agent_1',
+        feedbackMessage: 'Keep the result around if useful.',
+        messageId: 'msg_1',
+        topicId: 'topic_1',
+      },
+      tools,
+    });
+
+    expect(chat.mock.calls[1]?.[0].messages).toContainEqual(
+      expect.objectContaining({
+        content: expect.stringContaining('"hintIsSkill":false'),
+        role: 'tool',
+      }),
+    );
+    expect(tools.readDocument).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      action: 'noop',
+      reason: 'Negative or missing hints are not enough to mutate a skill.',
+    });
+    expect(result.action).not.toBe('refine');
+    expect(result.action).not.toBe('consolidate');
   });
 
   /**
@@ -285,7 +396,7 @@ describe('defineSkillManagementActionHandler', () => {
    * Removed lifecycle tools must not leak into the action result.
    */
   it('does not return automatic lifecycle tool actions from decision output', async () => {
-    const result = await handleSkillManagementSignal({
+    const result = await executeSkillManagementDecision({
       decide: vi.fn().mockResolvedValue({
         action: 'consolidate',
         archiveSkill: { skillRef: 'skill-1' },
@@ -401,7 +512,7 @@ describe('defineSkillManagementActionHandler', () => {
 
   /**
    * @example
-   * Decision agents receive managed skill candidates so targetSkillRefs can be stable ids.
+   * Decision agents receive managed skill intent records so targetSkillRefs can be stable ids.
    */
   it('passes discovered candidate skills into the decision step', async () => {
     skillDecisionRunner.mockResolvedValue({
@@ -452,6 +563,213 @@ describe('defineSkillManagementActionHandler', () => {
         candidateSkills: [{ id: 'review-skill-bundle-id', name: 'Review Skill', scope: 'agent' }],
       }),
     );
+  });
+
+  /**
+   * @example
+   * Completion-stage skill decisions receive user-stage recorded skill-intent evidence.
+   */
+  it('passes recorded skill intent evidence to the decision runtime on completion-triggered feedback', async () => {
+    skillDecisionRunner.mockResolvedValue({
+      action: 'create',
+      confidence: 0.88,
+      documentRefs: [],
+      reason: 'Completion confirmed hinted workflow document.',
+      requiredReads: [],
+      targetSkillRefs: [],
+    });
+    skillCreateRunner.mockResolvedValue({
+      bodyMarkdown: '# YouTube Comment Fetch Workflow',
+      name: 'youtube-comment-fetch-workflow',
+      reason: 'created reusable workflow',
+      title: 'YouTube Comment Fetch Workflow',
+    });
+    const readCandidate = vi.fn(async (input: { scopeKey: string; sourceId: string }) => {
+      if (input.sourceId !== 'msg_1') return undefined;
+
+      return {
+        actionIntent: 'create' as const,
+        confidence: 0.86,
+        createdAt: 1000,
+        explicitness: 'implicit_strong_learning' as const,
+        feedbackMessageId: 'msg_1',
+        reason: 'User asked to preserve this workflow.',
+        route: 'direct_decision' as const,
+        scopeKey: 'topic:topic-1',
+        sourceId: 'msg_1',
+      };
+    });
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      procedureState: {
+        skillIntentRecords: { read: readCandidate, write: vi.fn() },
+      },
+      selfIterationEnabled: true,
+      skillCreateRunner,
+      skillDecisionRunner,
+      userId: 'user_1',
+    });
+
+    await handler.handle(
+      {
+        actionId: 'act_skill_candidate',
+        actionType: 'action.skill-management.handle',
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: {
+          agentId: 'agent_1',
+          evidence: [{ cue: 'completion', excerpt: 'assistant completed' }],
+          feedbackHint: 'satisfied',
+          idempotencyKey: 'source_1:skill:msg_1',
+          message: 'Nice work. Can we keep this workflow?',
+          messageId: 'msg_1',
+          reason: 'completion-triggered skill feedback',
+          serializedContext: '{"surface":"chat"}',
+          topicId: 'topic_1',
+        },
+        signal: {
+          signalId: 'sig_1',
+          signalType: 'signal.feedback.domain.skill',
+        },
+        source: {
+          payload: {
+            message: 'Nice work. Can we keep this workflow?',
+            messageId: 'msg_1',
+            trigger: 'client.runtime.complete',
+          },
+          sourceId: 'assistant_1:completion:msg_1',
+          sourceType: 'agent.user.message',
+        } as never,
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(readCandidate).toHaveBeenCalledWith({
+      scopeKey: 'topic:topic-1',
+      sourceId: 'msg_1',
+    });
+    expect(skillDecisionRunner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evidence: expect.arrayContaining([
+          expect.objectContaining({
+            cue: 'completion',
+          }),
+          expect.objectContaining({
+            cue: 'recorded_skill_intent',
+            excerpt: expect.stringContaining('User asked to preserve this workflow.'),
+          }),
+        ]),
+      }),
+    );
+  });
+
+  /**
+   * @example
+   * Same-turn hinted document outcomes are resolved before the decision runner is called.
+   */
+  it('eagerly injects hinted same-turn document evidence into the decision step', async () => {
+    skillDecisionRunner.mockResolvedValue({
+      action: 'create',
+      confidence: 0.88,
+      reason: 'Hinted workflow document should be analyzed as skill evidence.',
+    });
+    const listSameTurnDocumentOutcomes = vi.fn(async () => [
+      {
+        agentDocumentId: 'agent-doc-1',
+        hintIsSkill: true,
+        relation: 'created',
+        summary: 'Agent documents created a document.',
+      },
+      {
+        agentDocumentId: 'agent-doc-2',
+        hintIsSkill: true,
+        relation: 'created',
+        summary: 'Agent documents created a documented workflow.',
+      },
+    ]);
+    const readDocument = vi.fn(async ({ agentDocumentId }: { agentDocumentId: string }) =>
+      agentDocumentId === 'agent-doc-2'
+        ? {
+            agentDocumentId: 'agent-doc-2',
+            content: `# Should Not Be Injected\n\n${'This full content must not appear. '.repeat(20)}`,
+            description: 'Reusable workflow description from the document metadata.',
+            documentId: 'doc-2',
+            title: 'Documented Workflow',
+          }
+        : {
+            agentDocumentId: 'agent-doc-1',
+            content: `# YouTube Workflow\n\nFetch comments, summarize them, and keep the process reusable. ${'Detailed implementation step. '.repeat(
+              12,
+            )}TAIL_SHOULD_BE_TRUNCATED`,
+            documentId: 'doc-1',
+            title: 'YouTube Workflow',
+          },
+    );
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      selfIterationEnabled: true,
+      skillCreateRunner,
+      skillDecisionRunner,
+      skillDecisionToolsetFactory: () => ({
+        listCandidateDocuments: vi.fn(),
+        listSameTurnDocumentOutcomes,
+        readDocument,
+      }),
+      userId: 'user_1',
+    });
+
+    await handler.handle(
+      {
+        actionId: 'act_skill_hinted_document',
+        actionType: 'action.skill-management.handle',
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: {
+          agentId: 'agent_1',
+          idempotencyKey: 'source_1:skill:msg_1',
+          message: 'Nice work. Can we keep this workflow?',
+          messageId: 'msg_1',
+          serializedContext: '{"surface":"chat"}',
+          topicId: 'topic_1',
+        },
+        signal: {
+          signalId: 'sig_1',
+          signalType: 'signal.feedback.domain.skill',
+        },
+        source: { sourceId: 'source_1', sourceType: 'agent.user.message' },
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(listSameTurnDocumentOutcomes).toHaveBeenCalledWith({
+      agentId: 'agent_1',
+      messageId: 'msg_1',
+      scopeKey: 'topic:topic-1',
+      topicId: 'topic_1',
+    });
+    expect(readDocument).toHaveBeenCalledWith({ agentDocumentId: 'agent-doc-1' });
+    expect(readDocument).toHaveBeenCalledWith({ agentDocumentId: 'agent-doc-2' });
+    expect(skillDecisionRunner).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evidence: expect.arrayContaining([
+          expect.objectContaining({
+            cue: 'same_turn_hinted_document',
+            excerpt: expect.stringContaining('hintIsSkill=true'),
+          }),
+          expect.objectContaining({
+            cue: 'same_turn_hinted_document_content',
+            excerpt: expect.stringContaining('Fetch comments'),
+          }),
+          expect.objectContaining({
+            cue: 'same_turn_hinted_document_description',
+            excerpt: expect.stringContaining('Reusable workflow description'),
+          }),
+        ]),
+      }),
+    );
+    const decisionInput = skillDecisionRunner.mock.calls[0]?.[0];
+    expect(JSON.stringify(decisionInput?.evidence)).not.toContain('TAIL_SHOULD_BE_TRUNCATED');
+    expect(JSON.stringify(decisionInput?.evidence)).not.toContain('Should Not Be Injected');
   });
 
   /**

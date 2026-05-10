@@ -25,6 +25,12 @@ export const AgentRuntimeErrorType = {
    */
   ConversationParentMissing: 'ConversationParentMissing',
   LocationNotSupportError: 'LocationNotSupportError',
+  /**
+   * No model provider is configured / enabled for the requested model. Surfaces
+   * from `RouterRuntime.resolveRouters` when the router list resolves empty —
+   * typically because the user has not added an API key or enabled a provider.
+   */
+  NoAvailableProvider: 'NoAvailableProvider',
 
   AccountDeactivated: 'AccountDeactivated',
   QuotaLimitReached: 'QuotaLimitReached',

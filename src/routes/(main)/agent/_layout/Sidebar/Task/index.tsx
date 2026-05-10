@@ -9,7 +9,6 @@ import { useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
 import StatusGroup from './StatusGroup';
@@ -31,9 +30,8 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentStore((s) => s.activeAgentId);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
 
-  const enabled = !!enableAgentTask && !isHeterogeneous && !!agentId;
+  const enabled = !isHeterogeneous && !!agentId;
   const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
     enabled ? [FETCH_SIDEBAR_TASK_GROUPS_KEY, agentId] : null,
     async ([, id]: [string, string]) =>
@@ -57,7 +55,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
     [orderedGroups],
   );
 
-  if (!enableAgentTask || isHeterogeneous) return null;
+  if (isHeterogeneous) return null;
 
   const titleNode = (
     <Flexbox horizontal align="center" gap={4}>

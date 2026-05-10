@@ -202,7 +202,9 @@ export default {
   'response.ProviderContentModeration':
     'Content policy check failed. Revise your prompt and try again.',
   'response.ProviderContentModerationWarning':
-    'Repeated policy violations detected. Further misuse may restrict your account.',
+    'Repeated content policy rejections detected. Please revise your prompt before retrying.',
+  'response.ProviderImageContentModerationWarning':
+    'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
   'response.QuotaLimitReached':
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   'response.ServerAgentRuntimeError':

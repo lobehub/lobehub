@@ -11,7 +11,6 @@ import { SESSION_CHAT_TOPIC_PAGE_URL, SESSION_CHAT_TOPIC_URL } from '@/const/url
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 type ViewTab = 'chat' | 'page' | 'task';
 
@@ -57,7 +56,6 @@ const ViewSwitcher = memo(() => {
   const location = useLocation();
   const params = useParams<{ aid?: string; topicId?: string }>();
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const enableAgentTask = useServerConfigStore((s) => featureFlagsSelectors(s).enableAgentTask);
   const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
 
   const aid = params.aid;
@@ -123,7 +121,7 @@ const ViewSwitcher = memo(() => {
     }
   };
 
-  if (!topicId || !enableAgentTask || isHeterogeneousAgent) return null;
+  if (!topicId || isHeterogeneousAgent) return null;
 
   return (
     <Segmented

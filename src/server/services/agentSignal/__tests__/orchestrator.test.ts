@@ -6,37 +6,68 @@ import { BriefModel } from '@/database/models/brief';
 import type { AgentSignalEmitOptions } from '../emitter';
 import { withServerAgentSignalPolicyDefaults } from '../orchestrator';
 import { createBriefMaintenanceService } from '../services/maintenance/brief';
-import { MaintenanceActionStatus, ReviewRunStatus } from '../services/maintenance/types';
+import type { NightlyReviewContext } from '../services/maintenance/nightlyCollector';
+import {
+  MaintenanceActionStatus,
+  MaintenanceReviewScope,
+  ReviewRunStatus,
+} from '../services/maintenance/types';
+
+const createNightlyReviewContext = (): NightlyReviewContext => ({
+  agentId: 'agent-1',
+  documentActivity: {
+    ambiguousBucket: [],
+    excludedSummary: { count: 0, reasons: [] },
+    generalDocumentBucket: [],
+    skillBucket: [],
+  },
+  feedbackActivity: {
+    neutralCount: 0,
+    notSatisfied: [],
+    satisfied: [],
+  },
+  maintenanceSignals: [],
+  managedSkills: [],
+  proposalActivity: {
+    active: [],
+    dismissedCount: 0,
+    expiredCount: 0,
+    staleCount: 0,
+    supersededCount: 0,
+  },
+  receiptActivity: {
+    appliedCount: 0,
+    duplicateGroups: [],
+    failedCount: 0,
+    pendingProposalCount: 0,
+    recentReceipts: [],
+    reviewCount: 0,
+  },
+  relevantMemories: [],
+  reviewWindowEnd: '2026-05-04T14:30:00.000Z',
+  reviewWindowStart: '2026-05-03T16:00:00.000Z',
+  toolActivity: [],
+  topics: [],
+  userId: 'user-1',
+});
 
 const createNightlyReviewOptions = (): NonNullable<
   NonNullable<AgentSignalEmitOptions['policyOptions']>['nightlyReview']
 > => ({
   acquireReviewGuard: vi.fn(async () => true),
   canRunReview: vi.fn(async () => true),
-  collectContext: vi.fn(async () => ({
-    agentId: 'agent-1',
-    managedSkills: [],
-    relevantMemories: [],
-    reviewWindowEnd: '2026-05-04T14:30:00.000Z',
-    reviewWindowStart: '2026-05-03T16:00:00.000Z',
-    topics: [],
-    userId: 'user-1',
-  })),
-  executePlan: vi.fn(async () => ({
-    actions: [],
-    status: ReviewRunStatus.Completed,
-  })),
-  planReviewOutput: vi.fn((request) => ({
-    actions: [],
-    localDate: request.localDate,
-    plannerVersion: 'test',
-    reviewScope: request.reviewScope,
-    summary: request.draft.summary,
-  })),
+  collectContext: vi.fn(async () => createNightlyReviewContext()),
   runMaintenanceReviewAgent: vi.fn(async () => ({
-    actions: [],
-    findings: [],
-    summary: 'Quiet night.',
+    execution: {
+      actions: [],
+      status: ReviewRunStatus.Completed,
+    },
+    projectionPlan: {
+      actions: [],
+      plannerVersion: 'test',
+      reviewScope: MaintenanceReviewScope.Nightly,
+      summary: 'Quiet night.',
+    },
   })),
 });
 

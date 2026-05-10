@@ -1,3 +1,6 @@
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
+import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+
 import type {
   MaintenanceActionDraft,
   MaintenanceActionPlan,
@@ -119,16 +122,14 @@ const createOperation = (
   if (draft.actionType === 'refine_skill') {
     const skillDocumentId =
       getStringField(draft.value, 'skillDocumentId') ?? draft.target?.skillDocumentId;
+    const bodyMarkdown = getStringField(draft.value, 'bodyMarkdown');
 
-    if (!skillDocumentId) return undefined;
+    if (!skillDocumentId || !bodyMarkdown) return undefined;
 
     return {
       domain: 'skill',
       input: {
-        patch:
-          getStringField(draft.value, 'patch') ??
-          getStringField(draft.value, 'bodyMarkdown') ??
-          getStringField(draft.value, 'content'),
+        bodyMarkdown,
         targetReadonly: getTargetReadonly(draft),
         skillDocumentId,
         userId: request.userId,
@@ -182,10 +183,15 @@ const classifyMemoryPlan = (
   return { applyMode: MaintenanceApplyMode.AutoApply, risk: MaintenanceRisk.Low };
 };
 
-const isStrongSmallSkillDraft = (draft: MaintenanceActionDraft) =>
+const isBroadInPlaceRefineDraft = (draft: MaintenanceActionDraft) =>
+  draft.actionType === 'refine_skill' &&
+  draft.policyHints?.mutationScope === 'broad' &&
+  Boolean(draft.target?.skillDocumentId);
+
+const isStrongAutoApplySkillDraft = (draft: MaintenanceActionDraft) =>
   draft.confidence >= SKILL_AUTO_APPLY_CONFIDENCE_THRESHOLD &&
   draft.policyHints?.evidenceStrength === 'strong' &&
-  draft.policyHints?.mutationScope === 'small';
+  (draft.policyHints?.mutationScope === 'small' || isBroadInPlaceRefineDraft(draft));
 
 const hasAutoApplySkillIntent = (draft: MaintenanceActionDraft) =>
   draft.policyHints?.userExplicitness === 'explicit' ||
@@ -205,7 +211,7 @@ const classifySkillPlan = (
     return { applyMode: MaintenanceApplyMode.ProposalOnly, risk: MaintenanceRisk.High };
   }
 
-  if (!isStrongSmallSkillDraft(draft) || !hasAutoApplySkillIntent(draft)) {
+  if (!isStrongAutoApplySkillDraft(draft) || !hasAutoApplySkillIntent(draft)) {
     return { applyMode: MaintenanceApplyMode.ProposalOnly, risk: MaintenanceRisk.Medium };
   }
 
@@ -227,12 +233,16 @@ const classifyInitialPlan = (
   draft: MaintenanceActionDraft,
   reviewScope: MaintenanceReviewScope,
 ): Pick<MaintenanceActionPlan, 'applyMode' | 'risk'> => {
-  if (draft.evidenceRefs.length === 0 || draft.confidence < LOW_RISK_CONFIDENCE_THRESHOLD) {
-    return { applyMode: MaintenanceApplyMode.Skip, risk: MaintenanceRisk.High };
+  if (draft.actionType === 'noop') {
+    return { applyMode: MaintenanceApplyMode.Skip, risk: MaintenanceRisk.Low };
   }
 
-  if (draft.actionType === 'noop' || draft.actionType === 'proposal_only') {
+  if (draft.actionType === 'proposal_only') {
     return { applyMode: MaintenanceApplyMode.ProposalOnly, risk: MaintenanceRisk.Medium };
+  }
+
+  if (draft.evidenceRefs.length === 0 || draft.confidence < LOW_RISK_CONFIDENCE_THRESHOLD) {
+    return { applyMode: MaintenanceApplyMode.Skip, risk: MaintenanceRisk.High };
   }
 
   if (draft.actionType === 'write_memory') {
@@ -262,51 +272,95 @@ export const createMaintenancePlannerService = (options: MaintenancePlannerOptio
 
   return {
     plan: (request: MaintenancePlanRequest): MaintenancePlan => {
-      let autoApplyCount = 0;
+      return tracer.startActiveSpan(
+        'agent_signal.nightly_review.planner.plan',
+        {
+          attributes: {
+            'agent.signal.nightly.draft_action_count': request.draft.actions.length,
+            'agent.signal.nightly.finding_count': request.draft.findings.length,
+            'agent.signal.nightly.max_auto_apply_actions': maxAutoApplyActions,
+            'agent.signal.nightly.review_scope': request.reviewScope,
+            'agent.signal.source_id': request.sourceId,
+            'agent.signal.user_id': request.userId,
+          },
+        },
+        (span) => {
+          try {
+            let autoApplyCount = 0;
 
-      const actions = request.draft.actions.map((draft): MaintenanceActionPlan => {
-        const dedupeKey = createDedupeKey(draft);
-        const initialPlan = classifyInitialPlan(draft, request.reviewScope);
-        const operation = createOperation(draft, request);
-        const applyMode =
-          initialPlan.applyMode === MaintenanceApplyMode.AutoApply &&
-          (autoApplyCount >= maxAutoApplyActions || !operation)
-            ? MaintenanceApplyMode.ProposalOnly
-            : initialPlan.applyMode;
+            const actions = request.draft.actions.map((draft): MaintenanceActionPlan => {
+              const dedupeKey = createDedupeKey(draft);
+              const initialPlan = classifyInitialPlan(draft, request.reviewScope);
+              const operation = createOperation(draft, request);
+              const applyMode =
+                initialPlan.applyMode === MaintenanceApplyMode.AutoApply &&
+                (autoApplyCount >= maxAutoApplyActions || !operation)
+                  ? MaintenanceApplyMode.ProposalOnly
+                  : initialPlan.applyMode;
 
-        if (applyMode === MaintenanceApplyMode.AutoApply) {
-          autoApplyCount += 1;
-        }
+              if (applyMode === MaintenanceApplyMode.AutoApply) {
+                autoApplyCount += 1;
+              }
 
-        return {
-          actionType: draft.actionType,
-          applyMode,
-          confidence: draft.confidence,
-          dedupeKey,
-          evidenceRefs: draft.evidenceRefs,
-          idempotencyKey: buildMaintenanceActionIdempotencyKey({
-            actionType: draft.actionType,
-            dedupeKey,
-            sourceId: request.sourceId,
-          }),
-          operation,
-          rationale: draft.rationale,
-          risk:
-            initialPlan.applyMode === MaintenanceApplyMode.AutoApply &&
-            applyMode === MaintenanceApplyMode.ProposalOnly
-              ? MaintenanceRisk.Medium
-              : initialPlan.risk,
-          target: draft.target,
-        };
-      });
+              return {
+                actionType: draft.actionType,
+                applyMode,
+                confidence: draft.confidence,
+                dedupeKey,
+                evidenceRefs: draft.evidenceRefs,
+                idempotencyKey: buildMaintenanceActionIdempotencyKey({
+                  actionType: draft.actionType,
+                  dedupeKey,
+                  sourceId: request.sourceId,
+                }),
+                operation,
+                rationale: draft.rationale,
+                risk:
+                  initialPlan.applyMode === MaintenanceApplyMode.AutoApply &&
+                  applyMode === MaintenanceApplyMode.ProposalOnly
+                    ? MaintenanceRisk.Medium
+                    : initialPlan.risk,
+                target: draft.target,
+              };
+            });
+            const plan = {
+              actions,
+              localDate: request.localDate,
+              plannerVersion,
+              reviewScope: request.reviewScope,
+              summary: request.draft.summary,
+            };
 
-      return {
-        actions,
-        localDate: request.localDate,
-        plannerVersion,
-        reviewScope: request.reviewScope,
-        summary: request.draft.summary,
-      };
+            span.setAttribute('agent.signal.nightly.plan_action_count', actions.length);
+            span.setAttribute('agent.signal.nightly.auto_apply_count', autoApplyCount);
+            span.setAttribute(
+              'agent.signal.nightly.proposal_count',
+              actions.filter((action) => action.applyMode === MaintenanceApplyMode.ProposalOnly)
+                .length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.skip_count',
+              actions.filter((action) => action.applyMode === MaintenanceApplyMode.Skip).length,
+            );
+            span.setStatus({ code: SpanStatusCode.OK });
+
+            return plan;
+          } catch (error) {
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'AgentSignal nightly review planning failed',
+            });
+            span.recordException(error as Error);
+
+            throw error;
+          } finally {
+            span.end();
+          }
+        },
+      );
     },
   };
 };

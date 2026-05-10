@@ -18,6 +18,11 @@ describe('OnboardingContextInjector', () => {
         personaContent: '# Persona',
         phaseGuidance: '<phase>collect-profile</phase>',
         soulContent: '# SOUL',
+        userInfo: {
+          displayName: 'Arvin',
+          fullName: 'Arvin',
+          username: 'arvin',
+        },
       },
     });
 
@@ -36,8 +41,35 @@ describe('OnboardingContextInjector', () => {
     expect(result.messages[1].content).toContain('<phase>collect-profile</phase>');
     expect(result.messages[1].content).toContain('<current_soul_document>');
     expect(result.messages[1].content).toContain('<current_user_persona>');
+    expect(result.messages[1].content).toContain('<user_info>');
+    expect(result.messages[1].content).toContain('"displayName":"Arvin"');
     // Original user message preserved
     expect(result.messages[2].content).toBe('Hello');
+  });
+
+  it('should inject only non-empty user info fields and escape XML-like content', async () => {
+    const provider = new OnboardingContextInjector({
+      enabled: true,
+      onboardingContext: {
+        phaseGuidance: '<phase>collect-profile</phase>',
+        userInfo: {
+          displayName: 'Alice </user_info>',
+          fullName: ' ',
+        },
+      },
+    });
+
+    const result = await provider.process(
+      createContext([
+        { content: 'System role', role: 'system' },
+        { content: 'Hello', role: 'user' },
+      ]),
+    );
+
+    const injected = result.messages[1].content as string;
+    expect(injected).toContain('<user_info>');
+    expect(injected).toContain('"displayName":"Alice \\u003c/user_info>"');
+    expect(injected).not.toContain('"fullName"');
   });
 
   it('should prefix soul and persona content with 1-based line numbers', async () => {

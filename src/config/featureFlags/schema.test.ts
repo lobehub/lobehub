@@ -120,7 +120,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       rag_eval: true,
       agent_self_iteration: true,
       agent_onboarding: true,
-      agent_task: true,
       auth_captcha: true,
       market: true,
       speech_to_text: true,
@@ -147,7 +146,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       enableRAGEval: true,
       enableAgentSelfIteration: true,
       enableAgentOnboarding: true,
-      enableAgentTask: true,
       enableAuthCaptcha: true,
       showMarket: true,
       enableSTT: true,
@@ -163,7 +161,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       edit_agent: ['user-123', 'user-456'],
       agent_self_iteration: ['user-123'],
       agent_onboarding: ['user-123'],
-      agent_task: ['user-123'],
       auth_captcha: ['user-123'],
       create_session: ['user-789'],
       dalle: true,
@@ -176,7 +173,6 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.enableAgentSelfIteration).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentOnboarding).toBe(true); // user-123 is in allowlist
-    expect(mappedState.enableAgentTask).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAuthCaptcha).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableKnowledgeBase).toBe(true); // user-123 is in allowlist
   });
@@ -198,7 +194,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     const config = {
       agent_self_iteration: ['user-1'],
       agent_onboarding: ['user-1'],
-      agent_task: ['user-1'],
       edit_agent: ['user-123', 'user-456'],
       create_session: true,
     };
@@ -207,7 +202,6 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.enableAgentSelfIteration).toBe(false);
     expect(mappedState.enableAgentOnboarding).toBe(false);
-    expect(mappedState.enableAgentTask).toBe(false);
     expect(mappedState.isAgentEditable).toBe(false);
   });
 
@@ -217,7 +211,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       edit_agent: ['user-123'],
       agent_self_iteration: ['user-123'],
       agent_onboarding: ['user-123'],
-      agent_task: ['user-123'],
       create_session: true,
       dalle: false,
       ai_image: ['user-456'],
@@ -231,7 +224,6 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.enableAgentSelfIteration).toBe(true);
     expect(mappedState.enableAgentOnboarding).toBe(true);
-    expect(mappedState.enableAgentTask).toBe(true);
     expect(mappedState.showAiImage).toBe(false);
     expect(mappedState.enableKnowledgeBase).toBe(true);
     expect(mappedState.enableRAGEval).toBe(true);

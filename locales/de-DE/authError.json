@@ -27,6 +27,7 @@
   "codes.RATE_LIMIT_EXCEEDED": "Zu viele Anfragen, bitte versuche es später erneut",
   "codes.SESSION_EXPIRED": "Sitzung ist abgelaufen, bitte erneut anmelden",
   "codes.SOCIAL_ACCOUNT_ALREADY_LINKED": "Dieses soziale Konto ist bereits mit einem anderen Benutzer verknüpft",
+  "codes.TEMPORARY_EMAIL_NOT_ALLOWED": "Temporäre E-Mail-Adressen werden nicht unterstützt. Bitte verwenden Sie eine reguläre E-Mail-Adresse. Wiederholte Versuche können dieses Netzwerk blockieren.",
   "codes.UNEXPECTED_ERROR": "Ein unerwarteter Fehler ist aufgetreten, bitte versuche es erneut",
   "codes.UNKNOWN": "Ein unbekannter Fehler ist aufgetreten, bitte versuche es erneut oder kontaktiere den Support",
   "codes.USER_ALREADY_EXISTS": "Benutzer existiert bereits",

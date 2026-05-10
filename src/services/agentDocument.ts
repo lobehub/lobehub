@@ -39,6 +39,19 @@ const getAgentDocumentId = (value: unknown) => getStringField(value, 'id');
 
 const getDocumentId = (value: unknown) => getStringField(value, 'documentId');
 
+interface AgentDocumentToolContext {
+  messageId: string;
+  operationId?: string;
+  taskId?: string | null;
+  toolCallId: string;
+  topicId?: string;
+}
+
+interface AgentDocumentToolTriggerInput {
+  toolContext?: AgentDocumentToolContext;
+  trigger?: 'tool';
+}
+
 class AgentDocumentService {
   getTemplates = async () => {
     return lambdaClient.agentDocument.getTemplates.query();
@@ -75,12 +88,14 @@ class AgentDocumentService {
     return result;
   };
 
-  createDocument = async (params: {
-    agentId: string;
-    content: string;
-    hintIsSkill?: boolean;
-    title: string;
-  }) => {
+  createDocument = async (
+    params: {
+      agentId: string;
+      content: string;
+      hintIsSkill?: boolean;
+      title: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.createDocument.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: getAgentDocumentId(result),
@@ -92,13 +107,15 @@ class AgentDocumentService {
     return result;
   };
 
-  createForTopic = async (params: {
-    agentId: string;
-    content: string;
-    hintIsSkill?: boolean;
-    title: string;
-    topicId: string;
-  }) => {
+  createForTopic = async (
+    params: {
+      agentId: string;
+      content: string;
+      hintIsSkill?: boolean;
+      title: string;
+      topicId: string;
+    } & AgentDocumentToolTriggerInput,
+  ) => {
     const result = await lambdaClient.agentDocument.createForTopic.mutate(params);
     await invalidateDocumentMutation({
       agentDocumentId: getAgentDocumentId(result),
@@ -205,6 +222,44 @@ class AgentDocumentService {
       cause: 'agent-document',
       documentId: getDocumentId(result),
     });
+
+    return result;
+  };
+
+  createFolder = async (params: { agentId: string; path: string; recursive?: boolean }) => {
+    const result = await lambdaClient.agentDocument.mkdirDocumentByPath.mutate(params);
+    await revalidateAgentDocuments(params.agentId);
+
+    return result;
+  };
+
+  moveDocument = async (params: {
+    agentId: string;
+    force?: boolean;
+    fromPath: string;
+    toPath: string;
+  }) => {
+    const result = await lambdaClient.agentDocument.renameDocumentByPath.mutate(params);
+    await revalidateAgentDocuments(params.agentId);
+
+    return result;
+  };
+
+  writeByPath = async (params: {
+    agentId: string;
+    content: string;
+    createMode?: 'always-new' | 'if-missing' | 'must-exist';
+    path: string;
+  }) => {
+    const result = await lambdaClient.agentDocument.writeDocumentByPath.mutate(params);
+    await revalidateAgentDocuments(params.agentId);
+
+    return result;
+  };
+
+  deleteByPath = async (params: { agentId: string; path: string; recursive?: boolean }) => {
+    const result = await lambdaClient.agentDocument.deleteDocumentByPath.mutate(params);
+    await revalidateAgentDocuments(params.agentId);
 
     return result;
   };

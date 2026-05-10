@@ -176,6 +176,41 @@ describe('GeneralChatAgent', () => {
       });
     });
 
+    // Regression for LOBE-8696: when the LLM emits tool_calls whose names
+    // can't be resolved (e.g. `activateTools` instead of
+    // `lobe-activator____activateTools`), the agent used to silently finish
+    // with "completed without tool calls". Surface the unresolved names so
+    // dashboards can spot the regression.
+    it('should report unresolvable tool_calls in reasonDetail', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState();
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [],
+        parentMessageId: 'msg-1',
+        result: {
+          content: '',
+          tool_calls: [
+            { id: 't1', type: 'function', function: { name: 'activateTools', arguments: '{}' } },
+            { id: 't2', type: 'function', function: { name: 'activateSkill', arguments: '{}' } },
+          ],
+        },
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual({
+        type: 'finish',
+        reason: 'completed',
+        reasonDetail: 'LLM returned 2 unresolvable tool_calls: activateTools, activateSkill',
+      });
+    });
+
     it('should return call_tool for single tool that does not need intervention', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },

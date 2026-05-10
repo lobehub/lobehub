@@ -35,7 +35,7 @@ export const scoreDomainProcedureBatch = (
 ): DomainProcedureBatchScore => {
   // Scoring is additive per incoming signal record:
   // - context records add 0, so direct tool outcomes are remembered without triggering actions;
-  // - candidate records add `cheapScoreDelta`, so repeated weak feedback can cross the threshold;
+  // - observed records add `cheapScoreDelta`, so repeated weak feedback can cross the threshold;
   // - suggested actions are derived from the aggregate score.
   //
   // Current tunable values are the per-record `cheapScoreDelta`, the aggregate action threshold,
@@ -44,7 +44,7 @@ export const scoreDomainProcedureBatch = (
     const score = record.accumulatorRole === 'candidate' ? (record.cheapScoreDelta ?? 0) : 0;
 
     return {
-      reasons: score > 0 ? ['candidate-record'] : ['context-record'],
+      reasons: score > 0 ? ['observed-record'] : ['context-record'],
       recordId: record.id,
       score,
       suggestedAction: score > 0 ? ('maintain' as const) : undefined,

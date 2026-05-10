@@ -1,7 +1,10 @@
 import type { SourceAgentNightlyReviewRequested } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
+import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 
 import { defineSourceHandler } from '../../runtime/middleware';
+import type { MaintenanceAgentRunResult } from '../../services/maintenance/agentRunner';
 import type { MaintenanceBriefProjection } from '../../services/maintenance/brief';
 import { createBriefMaintenanceService } from '../../services/maintenance/brief';
 import type {
@@ -11,15 +14,9 @@ import type {
 import type {
   EvidenceRef,
   MaintenancePlan,
-  MaintenancePlanDraft,
-  MaintenancePlanRequest,
   MaintenanceReviewRunResult,
 } from '../../services/maintenance/types';
-import {
-  buildNightlyReviewSourceId,
-  MaintenanceReviewScope,
-  ReviewRunStatus,
-} from '../../services/maintenance/types';
+import { buildNightlyReviewSourceId, ReviewRunStatus } from '../../services/maintenance/types';
 import type { AgentSignalReceipt } from '../../services/receiptService';
 import { createMaintenanceReviewReceipts } from '../../services/receiptService';
 
@@ -95,12 +92,13 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
   canRunReview: (input: NightlyReviewSourceGuardInput) => Promise<boolean>;
   /** Collects bounded digest context without mutating maintenance resources. */
   collectContext: (input: CollectNightlyReviewContextInput) => Promise<NightlyReviewContext>;
-  /** Applies only the planner-approved maintenance plan mutations. */
-  executePlan: (plan: MaintenancePlan) => Promise<MaintenanceReviewRunResult>;
-  /** Converts reviewer output into a deterministic maintenance plan. */
-  planReviewOutput: (request: MaintenancePlanRequest) => MaintenancePlan | Promise<MaintenancePlan>;
-  /** Runs the bounded maintenance reviewer against collected digest context. */
-  runMaintenanceReviewAgent: (context: NightlyReviewContext) => Promise<MaintenancePlanDraft>;
+  /** Runs the bounded maintenance agent and returns execution plus the frozen projection plan. */
+  runMaintenanceReviewAgent: (input: {
+    context: NightlyReviewContext;
+    localDate: string;
+    sourceId: string;
+    userId: string;
+  }) => Promise<MaintenanceAgentRunResult>;
   /** Writes a Daily Brief payload for user-visible nightly outcomes. */
   writeDailyBrief?: (brief: MaintenanceBriefProjection) => Promise<{ id?: string } | void>;
   /** Writes durable receipts for the review summary and action outcomes. */
@@ -109,6 +107,38 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
+
+interface NightlyReviewSpanLike {
+  setAttribute: (key: string, value: string | number | boolean) => void;
+}
+
+const runNightlyReviewSpan = async <TResult>(
+  name: string,
+  attributes: Record<string, string | number | boolean>,
+  operation: () => Promise<TResult>,
+  onSuccess?: (span: NightlyReviewSpanLike, result: TResult) => void,
+): Promise<TResult> => {
+  return tracer.startActiveSpan(name, { attributes }, async (span) => {
+    try {
+      const result = await operation();
+
+      onSuccess?.(span, result);
+      span.setStatus({ code: SpanStatusCode.OK });
+
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : `${name} failed`,
+      });
+      span.recordException(error as Error);
+
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+};
 
 const readNightlyReviewPayload = (
   source: SourceAgentNightlyReviewRequested,
@@ -206,11 +236,31 @@ const writeNightlyReceipts = async (
 ) => {
   if (!deps.writeReceipts || receipts.length === 0) return;
 
-  try {
-    await deps.writeReceipts(receipts);
-  } catch (error) {
-    console.error('[AgentSignal] Failed to write nightly review receipts:', error);
-  }
+  return tracer.startActiveSpan(
+    'agent_signal.nightly_review.write_receipts',
+    {
+      attributes: {
+        'agent.signal.nightly.receipt_count': receipts.length,
+        'agent.signal.source_id': receipts[0]?.sourceId ?? '',
+      },
+    },
+    async (span) => {
+      try {
+        await deps.writeReceipts?.(receipts);
+        span.setStatus({ code: SpanStatusCode.OK });
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message:
+            error instanceof Error ? error.message : 'AgentSignal nightly receipts write failed',
+        });
+        span.recordException(error as Error);
+        console.error('[AgentSignal] Failed to write nightly review receipts:', error);
+      } finally {
+        span.end();
+      }
+    },
+  );
 };
 
 const writeNightlyBrief = async (
@@ -219,15 +269,40 @@ const writeNightlyBrief = async (
 ) => {
   if (!deps.writeDailyBrief || !brief) return {};
 
-  try {
-    const result = await deps.writeDailyBrief(brief);
+  return tracer.startActiveSpan(
+    'agent_signal.nightly_review.write_brief',
+    {
+      attributes: {
+        'agent.signal.agent_id': brief.agentId ?? '',
+        'agent.signal.nightly.applied_count': brief.metadata.actionCounts.applied,
+        'agent.signal.nightly.failed_count': brief.metadata.actionCounts.failed,
+        'agent.signal.nightly.outcome': brief.metadata.outcome,
+        'agent.signal.nightly.proposed_count': brief.metadata.actionCounts.proposed,
+        'agent.signal.nightly.skipped_count': brief.metadata.actionCounts.skipped,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await deps.writeDailyBrief?.(brief);
+        span.setAttribute('agent.signal.nightly.brief_id', result?.id ?? '');
+        span.setStatus({ code: SpanStatusCode.OK });
 
-    return result && result.id ? { briefId: result.id } : {};
-  } catch (error) {
-    console.error('[AgentSignal] Failed to write nightly review brief:', error);
+        return result && result.id ? { briefId: result.id } : {};
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message:
+            error instanceof Error ? error.message : 'AgentSignal nightly brief write failed',
+        });
+        span.recordException(error as Error);
+        console.error('[AgentSignal] Failed to write nightly review brief:', error);
 
-    return { briefWriteFailed: true };
-  }
+        return { briefWriteFailed: true };
+      } finally {
+        span.end();
+      }
+    },
+  );
 };
 
 /**
@@ -243,7 +318,7 @@ const writeNightlyBrief = async (
  * - `agent.nightly_review.requested`
  *
  * Downstream:
- * - injected `executePlan`
+ * - injected bounded maintenance agent runner
  *
  * Use when:
  * - Tests need to run the nightly review orchestration without DB or LLM dependencies
@@ -251,7 +326,7 @@ const writeNightlyBrief = async (
  *
  * Expects:
  * - `source` is an `agent.nightly_review.requested` source with scheduler-produced payload
- * - Dependencies enforce gates, idempotency, reviewer limits, and executor persistence
+ * - Dependencies enforce gates, idempotency, runner limits, and persistence
  *
  * Returns:
  * - A run result with status and enough plan metadata for future brief builders
@@ -262,104 +337,186 @@ export const createNightlyReviewSourceHandler = (
   handle: async (
     source: SourceAgentNightlyReviewRequested,
   ): Promise<NightlyReviewSourceHandlerResult> => {
-    const payload = readNightlyReviewPayload(source);
-
-    if (!payload) {
-      return {
-        reason: 'invalid_payload',
-        sourceId: source.sourceId,
-        status: ReviewRunStatus.Skipped,
-      };
-    }
-
-    const guardInput = toGuardInput(payload, source);
-    if (source.sourceId !== guardInput.guardKey) {
-      return {
-        reason: 'invalid_payload',
-        sourceId: source.sourceId,
-        status: ReviewRunStatus.Skipped,
-      };
-    }
-
-    const baseResult = toBaseResult(guardInput);
-
-    if (!(await deps.canRunReview(guardInput))) {
-      return {
-        ...baseResult,
-        reason: 'gate_disabled',
-        status: ReviewRunStatus.Skipped,
-      };
-    }
-
-    if (!(await deps.acquireReviewGuard(guardInput))) {
-      return {
-        ...baseResult,
-        status: ReviewRunStatus.Deduped,
-      };
-    }
-
-    const context = await deps.collectContext({
-      agentId: payload.agentId,
-      reviewWindowEnd: payload.reviewWindowEnd,
-      reviewWindowStart: payload.reviewWindowStart,
-      userId: payload.userId,
-    });
-    const draft = await deps.runMaintenanceReviewAgent(context);
-    const plan = await deps.planReviewOutput({
-      draft,
-      localDate: payload.localDate,
-      reviewScope: MaintenanceReviewScope.Nightly,
-      sourceId: source.sourceId,
-      userId: payload.userId,
-    });
-    const execution = await deps.executePlan(plan);
-    const receipts = createMaintenanceReviewReceipts({
-      agentId: payload.agentId,
-      createdAt: source.timestamp,
-      localDate: payload.localDate,
-      plan,
-      result: {
-        ...execution,
-        sourceId: source.sourceId,
-      },
-      sourceId: source.sourceId,
-      sourceType: source.sourceType,
-      timezone: payload.timezone,
-      userId: payload.userId,
-    });
-    const executionWithReceipts = applyReceiptIdsToExecution(
+    return runNightlyReviewSpan(
+      'agent_signal.nightly_review.handle',
       {
-        ...execution,
-        sourceId: source.sourceId,
+        'agent.signal.source_id': source.sourceId,
+        'agent.signal.source_type': source.sourceType,
       },
-      receipts,
+      async () => {
+        const payload = readNightlyReviewPayload(source);
+
+        if (!payload) {
+          return {
+            reason: 'invalid_payload',
+            sourceId: source.sourceId,
+            status: ReviewRunStatus.Skipped,
+          };
+        }
+
+        const guardInput = toGuardInput(payload, source);
+        if (source.sourceId !== guardInput.guardKey) {
+          return {
+            reason: 'invalid_payload',
+            sourceId: source.sourceId,
+            status: ReviewRunStatus.Skipped,
+          };
+        }
+
+        const baseResult = toBaseResult(guardInput);
+
+        const canRunReview = await runNightlyReviewSpan(
+          'agent_signal.nightly_review.gate',
+          {
+            'agent.signal.agent_id': payload.agentId,
+            'agent.signal.source_id': source.sourceId,
+            'agent.signal.user_id': payload.userId,
+          },
+          () => deps.canRunReview(guardInput),
+        );
+
+        if (!canRunReview) {
+          return {
+            ...baseResult,
+            reason: 'gate_disabled',
+            status: ReviewRunStatus.Skipped,
+          };
+        }
+
+        const guardAcquired = await runNightlyReviewSpan(
+          'agent_signal.nightly_review.guard',
+          {
+            'agent.signal.agent_id': payload.agentId,
+            'agent.signal.source_id': source.sourceId,
+            'agent.signal.user_id': payload.userId,
+          },
+          () => deps.acquireReviewGuard(guardInput),
+        );
+
+        if (!guardAcquired) {
+          return {
+            ...baseResult,
+            status: ReviewRunStatus.Deduped,
+          };
+        }
+
+        const context = await runNightlyReviewSpan(
+          'agent_signal.nightly_review.collect_context',
+          {
+            'agent.signal.agent_id': payload.agentId,
+            'agent.signal.source_id': source.sourceId,
+            'agent.signal.user_id': payload.userId,
+          },
+          () =>
+            deps.collectContext({
+              agentId: payload.agentId,
+              reviewWindowEnd: payload.reviewWindowEnd,
+              reviewWindowStart: payload.reviewWindowStart,
+              userId: payload.userId,
+            }),
+          (span, collectedContext) => {
+            span.setAttribute(
+              'agent.signal.nightly.context_maintenance_signal_count',
+              collectedContext.maintenanceSignals?.length ?? 0,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.context_tool_activity_count',
+              collectedContext.toolActivity?.length ?? 0,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.context_document_skill_event_count',
+              collectedContext.documentActivity?.skillBucket?.length ?? 0,
+            );
+          },
+        );
+        const agentResult = await runNightlyReviewSpan(
+          'agent_signal.nightly_review.run_agent',
+          {
+            'agent.signal.agent_id': payload.agentId,
+            'agent.signal.nightly.document_skill_event_count':
+              context.documentActivity?.skillBucket?.length ?? 0,
+            'agent.signal.nightly.managed_skill_count': context.managedSkills.length,
+            'agent.signal.nightly.maintenance_signal_count':
+              context.maintenanceSignals?.length ?? 0,
+            'agent.signal.nightly.memory_count': context.relevantMemories.length,
+            'agent.signal.nightly.topic_count': context.topics.length,
+            'agent.signal.nightly.tool_activity_count': context.toolActivity?.length ?? 0,
+            'agent.signal.source_id': source.sourceId,
+            'agent.signal.user_id': payload.userId,
+          },
+          () =>
+            deps.runMaintenanceReviewAgent({
+              context,
+              localDate: payload.localDate,
+              sourceId: source.sourceId,
+              userId: payload.userId,
+            }),
+          (span, result) => {
+            span.setAttribute(
+              'agent.signal.nightly.plan_action_count',
+              result.projectionPlan.actions.length,
+            );
+            span.setAttribute(
+              'agent.signal.nightly.execution_action_count',
+              result.execution.actions.length,
+            );
+            if (typeof result.stepCount === 'number') {
+              span.setAttribute('agent.signal.nightly.agent_step_count', result.stepCount);
+            }
+          },
+        );
+        const plan = agentResult.projectionPlan;
+        const execution = agentResult.execution;
+        const receipts = createMaintenanceReviewReceipts({
+          agentId: payload.agentId,
+          createdAt: source.timestamp,
+          localDate: payload.localDate,
+          plan,
+          result: {
+            ...execution,
+            sourceId: source.sourceId,
+          },
+          sourceId: source.sourceId,
+          sourceType: source.sourceType,
+          timezone: payload.timezone,
+          userId: payload.userId,
+        });
+        const executionWithReceipts = applyReceiptIdsToExecution(
+          {
+            ...execution,
+            sourceId: source.sourceId,
+          },
+          receipts,
+        );
+
+        await writeNightlyReceipts(deps, receipts);
+
+        const brief = createBriefMaintenanceService().projectNightlyReviewBrief({
+          agentId: payload.agentId,
+          evidenceRefs: collectPlanEvidenceRefs(plan),
+          localDate: payload.localDate,
+          plan,
+          result: executionWithReceipts,
+          reviewWindowEnd: payload.reviewWindowEnd,
+          reviewWindowStart: payload.reviewWindowStart,
+          timezone: payload.timezone,
+          userId: payload.userId,
+        });
+        const briefResult = await writeNightlyBrief(deps, brief);
+
+        return {
+          ...baseResult,
+          ...briefResult,
+          execution: {
+            ...executionWithReceipts,
+            ...('briefId' in briefResult ? { briefId: briefResult.briefId } : {}),
+          },
+          plannedActionCount: plan.actions.length,
+          planSummary: plan.summary,
+          status: execution.status,
+        };
+      },
     );
-
-    await writeNightlyReceipts(deps, receipts);
-
-    const brief = createBriefMaintenanceService().projectNightlyReviewBrief({
-      agentId: payload.agentId,
-      evidenceRefs: collectPlanEvidenceRefs(plan),
-      localDate: payload.localDate,
-      result: executionWithReceipts,
-      reviewWindowEnd: payload.reviewWindowEnd,
-      reviewWindowStart: payload.reviewWindowStart,
-      timezone: payload.timezone,
-      userId: payload.userId,
-    });
-    const briefResult = await writeNightlyBrief(deps, brief);
-
-    return {
-      ...baseResult,
-      ...briefResult,
-      execution: {
-        ...executionWithReceipts,
-        ...('briefId' in briefResult ? { briefId: briefResult.briefId } : {}),
-      },
-      plannedActionCount: plan.actions.length,
-      planSummary: plan.summary,
-      status: execution.status,
-    };
   },
 });
 

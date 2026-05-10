@@ -80,8 +80,9 @@ describe('emitClientAgentSignalSourceEvent', () => {
     await emitClientAgentSignalSourceEvent({
       payload: {
         agentId: 'agent-1',
+        assistantMessageId: 'asst-1',
         operationId: 'op-1',
-        status: 'done',
+        status: 'completed',
         threadId: 'thread-1',
         topicId: 'topic-1',
       },
@@ -93,8 +94,9 @@ describe('emitClientAgentSignalSourceEvent', () => {
     expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledWith({
       payload: {
         agentId: 'agent-1',
+        assistantMessageId: 'asst-1',
         operationId: 'op-1',
-        status: 'done',
+        status: 'completed',
         threadId: 'thread-1',
         topicId: 'topic-1',
       },

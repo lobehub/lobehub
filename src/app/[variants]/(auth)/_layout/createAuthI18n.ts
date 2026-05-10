@@ -11,6 +11,7 @@ const AUTH_I18N_NAMESPACES = [
   'common',
   'error',
   'marketAuth',
+  'messenger',
   'oauth',
 ] as const;
 type AuthI18nNamespace = (typeof AUTH_I18N_NAMESPACES)[number];
@@ -35,6 +36,9 @@ const loadDefaultNamespace = async (ns: AuthI18nNamespace) => {
     case 'marketAuth': {
       return import('@/locales/default/marketAuth');
     }
+    case 'messenger': {
+      return import('@/locales/default/messenger');
+    }
     case 'oauth': {
       return import('@/locales/default/oauth');
     }
@@ -57,6 +61,9 @@ const loadZhNamespace = async (ns: AuthI18nNamespace) => {
     }
     case 'marketAuth': {
       return import('@/../locales/zh-CN/marketAuth.json');
+    }
+    case 'messenger': {
+      return import('@/../locales/zh-CN/messenger.json');
     }
     case 'oauth': {
       return import('@/../locales/zh-CN/oauth.json');

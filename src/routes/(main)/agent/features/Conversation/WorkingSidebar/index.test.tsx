@@ -10,10 +10,29 @@ import { initialState as initialUserState } from '@/store/user/initialState';
 
 import AgentWorkingSidebar from './index';
 
+const mocks = vi.hoisted(() => ({
+  agentStoreState: {
+    activeAgentId: 'agent-1',
+    agentWorkingDirectoryById: {} as Record<string, string | undefined>,
+  },
+  repoType: undefined as 'git' | 'github' | undefined,
+  topicWorkingDirectory: undefined as string | undefined,
+}));
+
 vi.mock('@/libs/swr', async (importOriginal) => {
   const actual = await importOriginal<typeof swr>();
   return { ...actual, useClientDataSWR: vi.fn() };
 });
+
+vi.mock('./Review', () => ({
+  default: ({ workingDirectory }: { workingDirectory: string }) => (
+    <div data-testid="review-panel">{workingDirectory}</div>
+  ),
+}));
+
+vi.mock('@/features/ChatInput/RuntimeConfig/useRepoType', () => ({
+  useRepoType: (path?: string) => (path ? mocks.repoType : undefined),
+}));
 
 vi.mock('@lobehub/ui', () => ({
   Accordion: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
@@ -117,6 +136,7 @@ vi.mock('react-i18next', () => ({
       (
         ({
           'workingPanel.resources.empty': 'No agent documents yet',
+          'workingPanel.review.title': 'Review',
           'workingPanel.space': 'Space',
         }) as Record<string, string>
       )[key] || key,
@@ -125,9 +145,16 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector?.({
-      activeAgentId: 'agent-1',
-    }),
+    selector?.(mocks.agentStoreState),
+}));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    getAgentWorkingDirectoryById:
+      (agentId: string) =>
+      (state: { agentWorkingDirectoryById?: Record<string, string | undefined> }) =>
+        state.agentWorkingDirectoryById?.[agentId],
+  },
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -146,11 +173,15 @@ vi.mock('@/store/chat/selectors', () => ({
     portalDocumentId: () => null,
   },
   topicSelectors: {
-    currentTopicWorkingDirectory: () => undefined,
+    currentTopicWorkingDirectory: () => mocks.topicWorkingDirectory,
   },
 }));
 
 beforeEach(() => {
+  mocks.agentStoreState.activeAgentId = 'agent-1';
+  mocks.agentStoreState.agentWorkingDirectoryById = {};
+  mocks.repoType = undefined;
+  mocks.topicWorkingDirectory = undefined;
   vi.mocked(swr.useClientDataSWR).mockImplementation((() => ({
     data: [],
     error: undefined,
@@ -190,5 +221,21 @@ describe('AgentWorkingSidebar', () => {
 
     expect(screen.getByTestId('right-panel')).toBeInTheDocument();
     expect(screen.getByTestId('right-panel')).toHaveAttribute('data-stable-layout', 'true');
+  });
+
+  it('shows review when the agent has a git working directory but the topic does not', () => {
+    mocks.agentStoreState.agentWorkingDirectoryById['agent-1'] = '/Users/hai/LobeHub/lobehub';
+    mocks.repoType = 'git';
+    useGlobalStore.setState({
+      status: {
+        ...useGlobalStore.getState().status,
+        workingSidebarTab: 'review',
+      },
+    });
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.getByRole('button', { name: 'Review' })).toBeInTheDocument();
+    expect(screen.getByTestId('review-panel')).toHaveTextContent('/Users/hai/LobeHub/lobehub');
   });
 });

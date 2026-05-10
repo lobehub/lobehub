@@ -121,6 +121,8 @@ const createHarness = (
         return { success: true };
       },
     ),
+    findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
   const threadModel = {
@@ -149,6 +151,7 @@ const createHarness = (
       id: topicId,
       metadata: { runningOperation: { assistantMessageId, operationId } },
     })),
+    updateMetadata: vi.fn(async (_topicId: string, _patch: any) => {}),
   };
 
   const handler = new HeterogeneousPersistenceHandler({
@@ -306,8 +309,10 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
         buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'there' }),
       ]);
 
-      // No update yet — text is held in accumulator
-      expect(h.messageModel.update).not.toHaveBeenCalled();
+      // Text is flushed to DB at end of each batch (multi-replica fix)
+      expect(h.messageModel.update).toHaveBeenCalledWith(h.assistantMessageId, {
+        content: 'hi there',
+      });
     });
 
     it('main-side reasoning accumulates separately from text', async () => {

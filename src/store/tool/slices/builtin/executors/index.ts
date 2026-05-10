@@ -9,7 +9,6 @@ import { agentManagementExecutor } from '@lobechat/builtin-tool-agent-management
 import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
 import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
 import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
-import { cronExecutor } from '@lobechat/builtin-tool-cron/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
 import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
@@ -142,7 +141,6 @@ registerExecutors([
   calculatorExecutor,
   cloudSandboxExecutor,
   credsExecutor,
-  cronExecutor,
   groupAgentBuilderExecutor,
   groupManagementExecutor,
   gtdExecutor,

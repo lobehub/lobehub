@@ -12,6 +12,7 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
@@ -78,6 +79,29 @@ const readFormatSchema = z.enum(['xml', 'markdown', 'both']).optional();
 const writeCreateModeSchema = z.enum(['always-new', 'if-missing', 'must-exist']).optional();
 const recursiveSchema = z.boolean().optional();
 const mountedSkillNamespaceSchema = z.literal('agent');
+const agentDocumentToolContextSchema = z.object({
+  messageId: z.string(),
+  operationId: z.string().optional(),
+  taskId: z.string().nullable().optional(),
+  toolCallId: z.string(),
+  topicId: z.string().optional(),
+});
+const agentDocumentToolTriggerSchema = z
+  .object({
+    // REVIEW: @nekomeowww is not fully certain this attribution boundary is clear enough.
+    // TODO: Remove this explicit parameter threading if gateway-mode migration makes tool execution fully server-attributed.
+    toolContext: agentDocumentToolContextSchema.optional(),
+    trigger: z.literal('tool').optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.trigger === 'tool' && !value.toolContext) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'toolContext is required when trigger is tool',
+        path: ['toolContext'],
+      });
+    }
+  });
 
 const createMountedSkillSchema = z.object({
   agentId: z.string(),
@@ -131,6 +155,43 @@ const agentDocumentProcedure = authedProcedure.use(serverDatabase).use(async (op
     },
   });
 });
+
+const emitCreateDocumentToolOutcome = async (input: {
+  agentDocumentId?: string;
+  agentId: string;
+  apiName: string;
+  errorReason?: string;
+  hintIsSkill?: boolean;
+  status: 'failed' | 'succeeded';
+  toolContext?: z.infer<typeof agentDocumentToolContextSchema>;
+  topicId?: string;
+  userId: string;
+}) => {
+  const { toolContext } = input;
+
+  if (!toolContext) return;
+
+  await emitAgentDocumentToolOutcomeSafely({
+    agentDocumentId: input.agentDocumentId,
+    agentId: input.agentId,
+    apiName: input.apiName,
+    errorReason: input.errorReason,
+    hintIsSkill: input.hintIsSkill,
+    messageId: toolContext.messageId,
+    operationId: toolContext.operationId,
+    relation: 'created',
+    status: input.status,
+    summary:
+      input.status === 'succeeded'
+        ? 'Agent documents created a document.'
+        : 'Agent documents failed to create a document.',
+    taskId: toolContext.taskId,
+    toolAction: 'create',
+    toolCallId: toolContext.toolCallId,
+    topicId: input.topicId ?? toolContext.topicId,
+    userId: input.userId,
+  });
+};
 
 export const agentDocumentRouter = router({
   /**
@@ -655,17 +716,54 @@ export const agentDocumentRouter = router({
    */
   createDocument: agentDocumentProcedure
     .input(
-      z.object({
-        agentId: z.string(),
-        content: z.string(),
-        hintIsSkill: z.boolean().optional(),
-        title: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          content: z.string(),
+          hintIsSkill: z.boolean().optional(),
+          title: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.agentDocumentService.createDocument(input.agentId, input.title, input.content, {
-        hintIsSkill: input.hintIsSkill,
-      });
+      try {
+        const doc = await ctx.agentDocumentService.createDocument(
+          input.agentId,
+          input.title,
+          input.content,
+          {
+            hintIsSkill: input.hintIsSkill,
+          },
+        );
+
+        if (input.trigger === 'tool') {
+          await emitCreateDocumentToolOutcome({
+            agentDocumentId: doc?.id,
+            agentId: input.agentId,
+            apiName: 'createDocument',
+            hintIsSkill: input.hintIsSkill,
+            status: 'succeeded',
+            toolContext: input.toolContext,
+            userId: ctx.userId,
+          });
+        }
+
+        return doc;
+      } catch (error) {
+        if (input.trigger === 'tool') {
+          await emitCreateDocumentToolOutcome({
+            agentId: input.agentId,
+            apiName: 'createDocument',
+            errorReason: error instanceof Error ? error.message : String(error),
+            hintIsSkill: input.hintIsSkill,
+            status: 'failed',
+            toolContext: input.toolContext,
+            userId: ctx.userId,
+          });
+        }
+
+        throw error;
+      }
     }),
 
   /**
@@ -674,26 +772,58 @@ export const agentDocumentRouter = router({
    */
   createForTopic: agentDocumentProcedure
     .input(
-      z.object({
-        agentId: z.string(),
-        content: z.string(),
-        hintIsSkill: z.boolean().optional(),
-        title: z.string(),
-        topicId: z.string(),
-      }),
+      z
+        .object({
+          agentId: z.string(),
+          content: z.string(),
+          hintIsSkill: z.boolean().optional(),
+          title: z.string(),
+          topicId: z.string(),
+        })
+        .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      const topic = input.title.trim() ? undefined : await ctx.topicModel.findById(input.topicId);
-      const title = input.title.trim() || topic?.title || '';
-      const doc = await ctx.agentDocumentService.createForTopic(
-        input.agentId,
-        title,
-        input.content,
-        input.topicId,
-        { hintIsSkill: input.hintIsSkill },
-      );
+      try {
+        const topic = input.title.trim() ? undefined : await ctx.topicModel.findById(input.topicId);
+        const title = input.title.trim() || topic?.title || '';
+        const doc = await ctx.agentDocumentService.createForTopic(
+          input.agentId,
+          title,
+          input.content,
+          input.topicId,
+          { hintIsSkill: input.hintIsSkill },
+        );
 
-      return doc;
+        if (input.trigger === 'tool') {
+          await emitCreateDocumentToolOutcome({
+            agentDocumentId: doc?.id,
+            agentId: input.agentId,
+            apiName: 'createForTopic',
+            hintIsSkill: input.hintIsSkill,
+            status: 'succeeded',
+            toolContext: input.toolContext,
+            topicId: input.topicId,
+            userId: ctx.userId,
+          });
+        }
+
+        return doc;
+      } catch (error) {
+        if (input.trigger === 'tool') {
+          await emitCreateDocumentToolOutcome({
+            agentId: input.agentId,
+            apiName: 'createForTopic',
+            errorReason: error instanceof Error ? error.message : String(error),
+            hintIsSkill: input.hintIsSkill,
+            status: 'failed',
+            toolContext: input.toolContext,
+            topicId: input.topicId,
+            userId: ctx.userId,
+          });
+        }
+
+        throw error;
+      }
     }),
 
   /**

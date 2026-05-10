@@ -148,6 +148,27 @@ describe('aiProvider action helpers', () => {
       const result = await getChatModelList(chatModels, 'nonexistent');
       expect(result).toEqual([]);
     });
+
+    it('filters runtime-only hidden models from visible chat lists', async () => {
+      const result = await getChatModelList(
+        [
+          createChatModel({
+            displayName: 'Visible Model',
+            id: 'visible-model',
+            providerId: 'lobehub',
+          }),
+          createChatModel({
+            displayName: 'Onboarding Alias',
+            id: 'lobehub-onboarding-v1',
+            providerId: 'lobehub',
+            visible: false,
+          }),
+        ],
+        'lobehub',
+      );
+
+      expect(result.map((model) => model.id)).toEqual(['visible-model']);
+    });
   });
 
   describe('getImageModelList', () => {

@@ -8,6 +8,7 @@ import type {
   InjectCredsToSandboxParams,
   SaveCredsParams,
 } from '../types';
+import { LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
 
 /**
  * Service interface for Credentials operations
@@ -154,7 +155,7 @@ export class CredsExecutionRuntime {
       const providerConfig = getLobehubSkillProviderById(provider);
       if (!providerConfig) {
         return {
-          content: `Unknown OAuth provider: ${provider}. Available providers: github, linear, microsoft, twitter, vercel`,
+          content: `Unknown OAuth provider: ${provider}. Available providers: ${LOBEHUB_OAUTH_PROVIDER_LIST}`,
           error: {
             message: `Unknown OAuth provider: ${provider}`,
             type: 'UnknownProvider',

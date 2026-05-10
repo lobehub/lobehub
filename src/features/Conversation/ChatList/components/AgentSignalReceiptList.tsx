@@ -1,12 +1,12 @@
 'use client';
 
-import { Block, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
-import { Activity, CheckCircle, ChevronRight, Sparkles } from 'lucide-react';
-import { AnimatePresence, m as motion } from 'motion/react';
-import { memo, useCallback, useState } from 'react';
+import { createStaticStyles } from 'antd-style';
+import type { LucideIcon } from 'lucide-react';
+import { Brain, ClipboardCheck, FileText, Wrench } from 'lucide-react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PortalResourceCard from '@/features/Conversation/components/PortalResourceCard';
 import { useStableNavigate } from '@/hooks/useStableNavigate';
 import { useChatStore } from '@/store/chat';
 
@@ -14,87 +14,26 @@ import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 
 const PAGE_ROUTE_PATTERN = /^\/agent\/([^/]+)\/([^/]+)\/page(?:\/[^/?#]+)?/;
 
-const useStyles = createStyles(({ css, token }) => ({
-  content: css`
-    overflow: hidden;
-  `,
-  item: css`
-    width: 100%;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: 8px;
-
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${token.colorTextSecondary};
-
-    background: ${token.colorFillQuaternary};
-  `,
-  itemButton: css`
-    cursor: pointer;
-
+const styles = createStaticStyles(({ css }) => ({
+  list: css`
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    align-items: center;
 
     width: 100%;
-    padding: 0;
-    border: 0;
-
-    color: inherit;
-    text-align: start;
-
-    background: transparent;
-  `,
-  label: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    width: fit-content;
-    max-width: min(520px, 100%);
-    margin-block-start: 4px;
-    padding: 0;
-    border: 0;
-
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${token.colorTextTertiary};
-
-    background: transparent;
-  `,
-  labelText: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  labelIcon: css`
-    transition: transform 120ms ease;
-  `,
-  labelIconOpen: css`
-    transform: rotate(90deg);
-  `,
-  title: css`
-    font-weight: 500;
-    color: ${token.colorText};
-  `,
-  titleGroup: css`
-    overflow: hidden;
-    min-width: 0;
+    margin-block-start: 8px;
   `,
 }));
 
-const collapseTransition = {
-  duration: 0.16,
-  ease: [0.4, 0, 0.2, 1],
-} as const;
+const RECEIPT_ICON_BY_KIND = {
+  maintenance: Wrench,
+  memory: Brain,
+  review: ClipboardCheck,
+  skill: FileText,
+} satisfies Record<AgentSignalReceiptView['kind'], LucideIcon>;
 
 interface AgentSignalReceiptListProps {
   receipts: AgentSignalReceiptView[];
-  showRecentLabel?: boolean;
 }
 
 interface AgentSignalReceiptItemProps {
@@ -102,17 +41,19 @@ interface AgentSignalReceiptItemProps {
 }
 
 const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) => {
-  const { styles } = useStyles();
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const navigate = useStableNavigate();
   const openDocument = useChatStore((s) => s.openDocument);
-  const ReceiptIcon = receipt.kind === 'memory' ? CheckCircle : Sparkles;
+  const ReceiptIcon = RECEIPT_ICON_BY_KIND[receipt.kind];
   const fallbackTitle = t(`agentSignal.receipts.${receipt.kind}.title`, receipt.title);
-  const title = receipt.target?.title ?? fallbackTitle;
   const detail = t(`agentSignal.receipts.${receipt.kind}.detail`, receipt.detail);
+  const title = receipt.target?.title ?? fallbackTitle;
+  const description = receipt.target ? fallbackTitle : detail;
   const summary = receipt.target?.summary ?? detail;
   const tooltip = `${fallbackTitle}: ${summary}`;
   const target = receipt.target;
+  const documentId = target?.type === 'skill' ? (target.documentId ?? target.id) : undefined;
+  const canOpen = target?.type === 'memory' || Boolean(documentId);
   const handleOpen = useCallback(() => {
     if (target?.type === 'memory') {
       navigate('/memory');
@@ -120,7 +61,6 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
     }
 
     if (target?.type !== 'skill') return;
-    const documentId = target.documentId ?? target.id;
     if (!documentId) return;
 
     const pathname = globalThis.location?.pathname ?? '';
@@ -132,91 +72,35 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) =
     }
 
     openDocument(documentId);
-  }, [navigate, openDocument, target]);
+  }, [documentId, navigate, openDocument, target]);
 
   return (
-    <div className={styles.item}>
-      <Tooltip placement={'topLeft'} title={tooltip}>
-        <button
-          className={styles.itemButton}
-          type={'button'}
-          // TODO: Replace memory fallback with category/id-aware routes when Agent Signal receipts expose them.
-          onClick={handleOpen}
-        >
-          <Block
-            horizontal
-            align={'center'}
-            flex={'none'}
-            height={24}
-            justify={'center'}
-            style={{ fontSize: 12 }}
-            variant={'outlined'}
-            width={24}
-          >
-            <Icon icon={ReceiptIcon} />
-          </Block>
-          <Flexbox className={styles.titleGroup}>
-            <span className={styles.title}>{title}</span>
-            <span className={styles.labelText}>{fallbackTitle}</span>
-          </Flexbox>
-        </button>
-      </Tooltip>
-    </div>
+    <PortalResourceCard
+      description={description}
+      icon={ReceiptIcon}
+      openLabel={canOpen ? t('common:cmdk.toOpen', 'Open') : undefined}
+      title={title}
+      tooltip={tooltip}
+      // TODO: Replace memory fallback with category/id-aware routes when Agent Signal receipts expose them.
+      onOpen={canOpen ? handleOpen : undefined}
+    />
   );
 });
 
 AgentSignalReceiptItem.displayName = 'AgentSignalReceiptItem';
 
-const AgentSignalReceiptList = memo<AgentSignalReceiptListProps>(
-  ({ receipts, showRecentLabel }) => {
-    const { styles } = useStyles();
-    const { t } = useTranslation('chat');
-    const [open, setOpen] = useState(true);
+const AgentSignalReceiptList = memo<AgentSignalReceiptListProps>(({ receipts }) => {
+  if (receipts.length === 0) return null;
 
-    if (receipts.length === 0) return null;
-
-    // TODO: Migrate this temporary receipt UI into the final Agent Signal feedback surface.
-    return (
-      <Flexbox gap={4}>
-        {showRecentLabel && (
-          <button className={styles.label} type={'button'} onClick={() => setOpen(!open)}>
-            <Block
-              horizontal
-              align={'center'}
-              flex={'none'}
-              height={24}
-              justify={'center'}
-              style={{ fontSize: 12 }}
-              variant={'outlined'}
-              width={24}
-            >
-              <Icon icon={Activity} />
-            </Block>
-            <span className={styles.labelText}>{t('agentSignal.receipts.recentActivity')}</span>
-            <Icon className={open ? styles.labelIconOpen : styles.labelIcon} icon={ChevronRight} />
-          </button>
-        )}
-        <AnimatePresence initial={false}>
-          {(!showRecentLabel || open) && (
-            <motion.div
-              animate={{ height: 'auto', opacity: 1 }}
-              className={styles.content}
-              exit={{ height: 0, opacity: 0 }}
-              initial={{ height: 0, opacity: 0 }}
-              transition={collapseTransition}
-            >
-              <Flexbox gap={4}>
-                {receipts.map((receipt) => (
-                  <AgentSignalReceiptItem key={receipt.id} receipt={receipt} />
-                ))}
-              </Flexbox>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Flexbox>
-    );
-  },
-);
+  // TODO: Migrate this temporary receipt UI into the final Agent Signal feedback surface.
+  return (
+    <div className={styles.list}>
+      {receipts.map((receipt) => (
+        <AgentSignalReceiptItem key={receipt.id} receipt={receipt} />
+      ))}
+    </div>
+  );
+});
 
 AgentSignalReceiptList.displayName = 'AgentSignalReceiptList';
 

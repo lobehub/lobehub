@@ -10,7 +10,10 @@ import type {
 import { spawnAgent } from '@lobechat/heterogeneous-agents/spawn';
 import type { Command } from 'commander';
 
+import { getTrpcClient } from '../api/client';
+import { BatchIngester, NoopIngestSink } from '../utils/BatchIngester';
 import { log } from '../utils/logger';
+import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
 
@@ -21,7 +24,22 @@ interface ExecOptions {
   inputJson?: string;
   operationId?: string;
   prompt?: string;
+  /**
+   * Output rendering mode.
+   *   jsonl — emit each `AgentStreamEvent` as a JSONL line on stdout (default
+   *            when no --topic is set, or when explicitly requested).
+   *   none  — suppress JSONL stdout; only server-ingest mode is active.
+   *           Default when --topic is set and running non-interactively.
+   */
+  render?: 'jsonl' | 'none';
   resume?: string;
+  /**
+   * Server topic id.  When set, enables server-ingest mode: events are
+   * batch-POSTed to `aiAgent.heteroIngest` in addition to (or instead of)
+   * being written to stdout.  Requires `--operation-id` to be a valid
+   * server-allocated operation id.
+   */
+  topic?: string;
   type: string;
 }
 
@@ -171,11 +189,34 @@ const exec = async (options: ExecOptions): Promise<void> => {
     process.exit(2);
   }
 
-  // Standalone (phase 1a): no server ingest, so the operationId is just an
-  // identity stamp on the JSONL stream. Generate a fresh one if the caller
-  // didn't provide --operation-id; phase 1b will require it as a real
-  // server-allocated id.
+  // Server-ingest mode is active when --topic is provided.
+  // --operation-id must be a server-allocated id in this mode (the server
+  // generates it before spawning the process and passes it via CLI args).
+  const serverIngest = !!options.topic;
+  if (serverIngest && !options.operationId) {
+    log.error('--operation-id is required when --topic is set (server-ingest mode).');
+    process.exit(2);
+  }
+
   const operationId = options.operationId || randomUUID();
+
+  // Determine JSONL output mode.
+  // Explicit --render flag always wins. Otherwise: emit JSONL in standalone
+  // mode; suppress in server-ingest mode (sink handles the data path).
+  const emitJsonl = options.render === 'jsonl' || (options.render === undefined && !serverIngest);
+
+  // Build the ingest sink — no-op for standalone mode, real tRPC sink for
+  // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
+  // JWT injected by the server) for authentication.
+  const agentType = options.type as 'claude-code' | 'codex';
+  let sink: InstanceType<typeof TrpcIngestSink> | InstanceType<typeof NoopIngestSink>;
+  if (serverIngest) {
+    const client = await getTrpcClient();
+    sink = new TrpcIngestSink(client, agentType, operationId, options.topic!);
+  } else {
+    sink = new NoopIngestSink();
+  }
+  const ingester = new BatchIngester(sink);
 
   // `spawnAgent` is async and can reject DURING image normalization — fetch
   // failures, missing local --image paths, decode errors. Surface those as a
@@ -203,36 +244,93 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Ctrl-C → SIGINT to the child's process group so the spawned CLI gets a
   // chance to clean up. Repeated Ctrl-C escalates to SIGKILL via the
   // standard "double-tap" pattern most CLIs implement themselves.
+  // In server-ingest mode, drain the ingester and call heteroFinish before
+  // exiting so the server knows the operation was cancelled.
   let interrupted = false;
-  const onSigint = () => {
+  const onSigint = async () => {
     if (interrupted) {
       handle.kill('SIGKILL');
       return;
     }
     interrupted = true;
     handle.kill('SIGINT');
+    if (serverIngest) {
+      try {
+        await ingester.drain();
+        await sink.finish({ result: 'cancelled' });
+      } catch {
+        // best-effort; process is exiting anyway
+      }
+    }
   };
   process.on('SIGINT', onSigint);
-  process.on('SIGTERM', () => handle.kill('SIGTERM'));
+  process.on('SIGTERM', async () => {
+    handle.kill('SIGTERM');
+    if (serverIngest) {
+      try {
+        await ingester.drain();
+        await sink.finish({ result: 'cancelled' });
+      } catch {
+        // best-effort
+      }
+    }
+  });
 
-  // Stream events out as JSONL on stdout. Each line is one `AgentStreamEvent`.
-  // Use raw write (not console.log) so we don't pull in console formatting
-  // and JSONL stays parseable downstream.
+  // Stream events. Each event is optionally written as JSONL and always
+  // pushed into the ingester (which batches and sends to the server).
+  let ingestError = false;
   try {
     for await (const event of handle.events) {
-      process.stdout.write(`${JSON.stringify(event)}\n`);
+      if (emitJsonl) {
+        process.stdout.write(`${JSON.stringify(event)}\n`);
+      }
+      ingester.push(event);
     }
   } catch (err) {
     log.error('Stream error from agent process:', err instanceof Error ? err.message : String(err));
+    if (serverIngest) {
+      try {
+        await ingester.drain();
+        await sink.finish({
+          result: 'error',
+          error: { message: String(err), type: 'stream_error' },
+        });
+      } catch {
+        // best-effort
+      }
+    }
     process.exit(1);
   } finally {
     process.off('SIGINT', onSigint);
   }
 
-  // Pass the child's exit code through. Signal-induced exits (SIGINT etc.)
-  // surface as `code === null` — map to 130 (POSIX convention for SIGINT).
+  // Pass the child's exit code through. In server-ingest mode, drain the
+  // ingester and call heteroFinish before exiting.
   const { code, signal } = await handle.exit;
-  if (code !== null) process.exit(code);
+
+  if (serverIngest) {
+    try {
+      await ingester.drain();
+    } catch (err) {
+      log.error(
+        'Failed to flush events to server:',
+        err instanceof Error ? err.message : String(err),
+      );
+      ingestError = true;
+    }
+
+    const exitedClean = !ingestError && (code === 0 || signal === 'SIGTERM');
+    try {
+      await sink.finish({
+        result: exitedClean ? 'success' : 'error',
+        sessionId: handle.sessionId,
+      });
+    } catch (err) {
+      log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  if (code !== null) process.exit(ingestError ? 1 : code);
   if (signal === 'SIGINT') process.exit(130);
   if (signal === 'SIGTERM') process.exit(143);
   if (signal === 'SIGKILL') process.exit(137);
@@ -268,7 +366,15 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '--operation-id <id>',
-      'Operation id stamped onto every emitted event. Generated as a uuid if omitted (phase 1a).',
+      'Operation id stamped onto every emitted event. Required in server-ingest mode (--topic). Generated as a UUID if omitted (standalone).',
+    )
+    .option(
+      '--topic <topicId>',
+      'Server topic id. Enables server-ingest mode: events are batch-POSTed to aiAgent.heteroIngest. Requires --operation-id.',
+    )
+    .option(
+      '--render <mode>',
+      'Output mode: jsonl (emit events as JSONL on stdout) | none (suppress stdout). Defaults to jsonl in standalone, none in server-ingest mode.',
     )
     .action(exec);
 }

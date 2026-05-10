@@ -284,7 +284,14 @@ export const imageRouter = router({
               model: resolvedModelId,
               params: params as unknown as RuntimeImageGenParams,
             },
-            { metadata: { trigger: RequestTrigger.Image } },
+            {
+              metadata: {
+                generationBatchId,
+                generationId,
+                taskId,
+                trigger: RequestTrigger.Image,
+              },
+            },
           );
 
           if (!response) {
@@ -445,6 +452,7 @@ export const imageRouter = router({
         const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
           error,
           provider,
+          trigger: RequestTrigger.Image,
           userId: ctx.userId,
         });
         const { errorType, errorMessage } = categorizeError(

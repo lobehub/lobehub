@@ -1,11 +1,9 @@
-import { type ToolManifest } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
 import { t } from 'i18next';
 
 import { notification } from '@/components/AntdStaticMethods';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
-import { toolService } from '@/services/tool';
 import { pluginHelpers } from '@/store/tool/helpers';
 import { type StoreSetter } from '@/store/types';
 import { type LobeToolCustomPlugin, type PluginInstallError } from '@/types/tool/plugin';
@@ -44,30 +42,21 @@ export class CustomPluginActionImpl {
 
     const { refreshPlugins, updateInstallLoadingState } = this.#get();
 
+    const url = plugin.customParams?.mcp?.url;
+    if (!plugin.customParams?.mcp || !url) return;
+
     try {
       updateInstallLoadingState(id, true);
-      let manifest: ToolManifest;
-      // mean this is a mcp plugin
-      if (!!plugin.customParams?.mcp) {
-        const url = plugin.customParams?.mcp?.url;
-        if (!url) return;
-
-        manifest = await mcpService.getStreamableMcpServerManifest({
-          auth: plugin.customParams.mcp.auth,
-          headers: plugin.customParams.mcp.headers,
-          identifier: plugin.identifier,
-          metadata: {
-            avatar: plugin.customParams.avatar,
-            description: plugin.customParams.description,
-          },
-          url,
-        });
-      } else {
-        manifest = await toolService.getToolManifest(
-          plugin.customParams?.manifestUrl,
-          plugin.customParams?.useProxy,
-        );
-      }
+      const manifest = await mcpService.getStreamableMcpServerManifest({
+        auth: plugin.customParams.mcp.auth,
+        headers: plugin.customParams.mcp.headers,
+        identifier: plugin.identifier,
+        metadata: {
+          avatar: plugin.customParams.avatar,
+          description: plugin.customParams.description,
+        },
+        url,
+      });
       updateInstallLoadingState(id, false);
 
       await pluginService.updatePluginManifest(id, manifest);

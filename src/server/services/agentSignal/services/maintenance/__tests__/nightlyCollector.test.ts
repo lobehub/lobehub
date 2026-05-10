@@ -118,8 +118,92 @@ describe('nightlyReviewService', () => {
         'failed_tool',
         'receipt',
       ]);
+      expect(context.maintenanceSignals).toContainEqual(
+        expect.objectContaining({
+          kind: 'durable_user_preference',
+          strength: 'strong',
+        }),
+      );
       expect(context.topics[0]).not.toHaveProperty('rawMessages');
       expect(context.topics[1]).not.toHaveProperty('rawMessages');
+    });
+
+    it('returns empty structured maintenance buckets when optional adapters are absent', async () => {
+      /**
+       * @example
+       * expect(context.maintenanceSignals).toEqual([]).
+       */
+      const service = createNightlyReviewService({
+        listManagedSkills: async () => [],
+        listRelevantMemories: async () => [],
+        listTopicActivity: async () => [],
+      });
+
+      await expect(service.collectNightlyReviewContext(REVIEW_INPUT)).resolves.toMatchObject({
+        documentActivity: {
+          ambiguousBucket: [],
+          excludedSummary: { count: 0, reasons: [] },
+          generalDocumentBucket: [],
+          skillBucket: [],
+        },
+        feedbackActivity: { neutralCount: 0, notSatisfied: [], satisfied: [] },
+        maintenanceSignals: [],
+        proposalActivity: {
+          active: [],
+          dismissedCount: 0,
+          expiredCount: 0,
+          staleCount: 0,
+          supersededCount: 0,
+        },
+        receiptActivity: {
+          appliedCount: 0,
+          duplicateGroups: [],
+          failedCount: 0,
+          pendingProposalCount: 0,
+          recentReceipts: [],
+          reviewCount: 0,
+        },
+        toolActivity: [],
+      });
+    });
+
+    it('includes pending proposal activity from the proposal adapter', async () => {
+      /**
+       * @example
+       * expect(context.proposalActivity.active[0].proposalId).toBe('brf_1').
+       */
+      const service = createNightlyReviewService({
+        listManagedSkills: async () => [],
+        listProposalActivity: async () => ({
+          active: [
+            {
+              actionType: 'refine_skill',
+              createdAt: '2026-05-09T00:00:00.000Z',
+              evidenceCount: 2,
+              expiresAt: '2026-05-12T00:00:00.000Z',
+              proposalId: 'brf_1',
+              proposalKey: 'agt_1:refine_skill:agent_document:adoc_1',
+              status: 'pending',
+              summary: 'Existing skill refinement proposal.',
+              targetId: 'adoc_1',
+              targetTitle: 'Skill Index',
+              updatedAt: '2026-05-09T00:00:00.000Z',
+            },
+          ],
+          dismissedCount: 0,
+          expiredCount: 0,
+          staleCount: 0,
+          supersededCount: 0,
+        }),
+        listRelevantMemories: async () => [],
+        listTopicActivity: async () => [],
+      });
+
+      await expect(service.collectNightlyReviewContext(REVIEW_INPUT)).resolves.toMatchObject({
+        proposalActivity: {
+          active: [{ proposalId: 'brf_1', status: 'pending' }],
+        },
+      });
     });
 
     it('clips topic activity to the default max topic budget', async () => {
@@ -200,6 +284,52 @@ describe('nightlyReviewService', () => {
         { id: 'message-1', summary: 'User corrected the answer.', type: 'message' },
       ]);
       expect(context.topics[1].evidenceRefs).toEqual([{ id: 'topic-missing', type: 'topic' }]);
+    });
+
+    it('keeps bounded failed tool evidence and uses it as evidence refs', async () => {
+      /**
+       * @example
+       * expect(context.topics[0].failedToolCalls[0].errorSummary).toContain('timeout').
+       */
+      const deps = createDeps({
+        listTopicActivity: vi.fn().mockResolvedValue([
+          {
+            failedMessages: [{ errorSummary: '{"message":"model failed"}', messageId: 'msg-1' }],
+            failedToolCalls: [
+              {
+                apiName: 'search',
+                errorSummary: '{"message":"timeout"}',
+                identifier: 'web-search',
+                messageId: 'msg-2',
+                toolCallId: 'tool-call-1',
+              },
+            ],
+            id: 'topic-failed-tools',
+            messageCount: 3,
+          },
+        ]),
+      });
+      const service = createNightlyReviewService(deps);
+
+      const context = await service.collectNightlyReviewContext(REVIEW_INPUT);
+
+      expect(context.topics[0]).toMatchObject({
+        failedMessages: [{ errorSummary: '{"message":"model failed"}', messageId: 'msg-1' }],
+        failedToolCalls: [
+          {
+            apiName: 'search',
+            errorSummary: '{"message":"timeout"}',
+            identifier: 'web-search',
+            messageId: 'msg-2',
+            toolCallId: 'tool-call-1',
+          },
+        ],
+      });
+      expect(context.topics[0].evidenceRefs).toEqual([
+        { id: 'topic-failed-tools', type: 'topic' },
+        { id: 'msg-1', type: 'message' },
+        { id: 'tool-call-1', type: 'tool_call' },
+      ]);
     });
 
     it('uses id tie-breakers when last activity timestamps are invalid', async () => {
