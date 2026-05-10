@@ -721,6 +721,13 @@ export class ChatTopicActionImpl {
     // no need to update if is the same
     if (isEqual(nextItems, currentData?.items)) return;
 
+    // Keep `total` in sync with the reducer result so add/delete dispatches
+    // (e.g. the optimistic prepend after `sendMessageInServer`) don't leave
+    // the side-bar counter stale until the next SWR revalidate.
+    const nextTotal = currentData
+      ? currentData.total + (nextItems.length - (currentData.items?.length ?? 0))
+      : nextItems.length;
+
     this.#set(
       {
         topicDataMap: {
@@ -730,7 +737,7 @@ export class ChatTopicActionImpl {
             currentPage: currentData?.currentPage ?? 0,
             hasMore: currentData?.hasMore ?? false,
             items: nextItems,
-            total: currentData?.total ?? nextItems.length,
+            total: nextTotal,
           },
         },
       },

@@ -1149,4 +1149,102 @@ describe('topic action', () => {
       expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
     });
   });
+
+  describe('internal_dispatchTopic', () => {
+    it('should bump total when prepending a new topic via addTopic', () => {
+      // Side-bar "N topics" counter must stay in sync with optimistic prepend.
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [{ id: 'old', title: 'old' } as ChatTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          type: 'addTopic',
+          value: { id: 'fresh', title: 'fresh' },
+        });
+      });
+
+      const next = useChatStore.getState().topicDataMap[key];
+      expect(next.total).toBe(2);
+      expect(next.items.map((i) => i.id)).toEqual(['fresh', 'old']);
+    });
+
+    it('should decrement total when removing a topic via deleteTopic', () => {
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [{ id: 'a', title: 'a' } as ChatTopic, { id: 'b', title: 'b' } as ChatTopic],
+              pageSize: 20,
+              total: 2,
+            },
+          },
+        });
+      });
+
+      act(() => {
+        result.current.internal_dispatchTopic({ type: 'deleteTopic', id: 'a' });
+      });
+
+      const next = useChatStore.getState().topicDataMap[key];
+      expect(next.total).toBe(1);
+      expect(next.items.map((i) => i.id)).toEqual(['b']);
+    });
+
+    it('should leave total unchanged when items length is unchanged (e.g. updateTopic)', () => {
+      const agentId = 'agent-1';
+      const key = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [{ id: 'a', title: 'a' } as ChatTopic],
+              pageSize: 20,
+              total: 5,
+            },
+          },
+        });
+      });
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          type: 'updateTopic',
+          id: 'a',
+          value: { title: 'a-updated' },
+        });
+      });
+
+      expect(useChatStore.getState().topicDataMap[key].total).toBe(5);
+    });
+  });
 });

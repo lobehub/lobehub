@@ -123,6 +123,113 @@ describe('aiChatRouter', () => {
     expect(res.topicId).toBe('t-exist');
   });
 
+  it('should return createdTopic projection when isCreateNewTopic is true', async () => {
+    // Verify the response carries the freshly created topic projected to the
+    // ChatTopic wire shape so the client can prepend it without refetching.
+    const mockCreateTopic = vi.fn().mockResolvedValue({
+      completedAt: null,
+      createdAt: new Date('2026-05-09T15:30:00Z'),
+      favorite: false,
+      historySummary: null,
+      id: 'tpc_new',
+      metadata: { workingDirectory: '/tmp/foo' },
+      status: 'active',
+      title: 'fresh topic',
+      updatedAt: new Date('2026-05-09T15:30:01Z'),
+    });
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({
+      messages: [],
+      topics: { items: [], total: 0 },
+    });
+
+    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+    vi.mocked(MessageModel).mockImplementation(() => ({ create: mockCreateMessage }) as any);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    const res = await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newTopic: { title: 'fresh topic' },
+      newUserMessage: { content: 'hi' },
+      sessionId: 's1',
+    } as any);
+
+    expect(res.createdTopic).toEqual({
+      completedAt: null,
+      createdAt: new Date('2026-05-09T15:30:00Z'),
+      favorite: false,
+      historySummary: undefined,
+      id: 'tpc_new',
+      metadata: { workingDirectory: '/tmp/foo' },
+      status: 'active',
+      title: 'fresh topic',
+      updatedAt: new Date('2026-05-09T15:30:01Z'),
+    });
+    // Legacy `topics` field stays populated for backwards compatibility.
+    expect(res.topics).toEqual({ items: [], total: 0 });
+  });
+
+  it('should cap topic preview pageSize when creating a new topic', async () => {
+    // Without an explicit cap, topicModel.query falls back to its (very
+    // large) default and pulls the entire list back per request.
+    const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't1' });
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({
+      messages: [],
+      topics: { items: [], total: 0 },
+    });
+
+    vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+    vi.mocked(MessageModel).mockImplementation(() => ({ create: mockCreateMessage }) as any);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newTopic: { title: 'T' },
+      newUserMessage: { content: 'hi' },
+      sessionId: 's1',
+    } as any);
+
+    expect(mockGet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeTopic: true,
+        topicPageSize: 20,
+      }),
+    );
+  });
+
+  it('should NOT return createdTopic when reusing existing topic', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    vi.mocked(MessageModel).mockImplementation(() => ({ create: mockCreateMessage }) as any);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    const res = await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newUserMessage: { content: 'hi' },
+      sessionId: 's1',
+      topicId: 't-exist',
+    } as any);
+
+    expect(res.createdTopic).toBeUndefined();
+  });
+
   it('should pass threadId to both user and assistant messages when provided', async () => {
     const mockCreateMessage = vi
       .fn()
