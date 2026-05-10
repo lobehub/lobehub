@@ -1,42 +1,28 @@
 import type { InterestAreaKey } from '../config';
 import { INTEREST_AREAS } from '../config';
 
-export interface InterestAreaTranslator {
-  (key: `interests.area.${InterestAreaKey}`): string;
-}
-
-const normalizeInterestLookupValue = (value: string) =>
-  value.normalize('NFKC').trim().toLocaleLowerCase();
+const interestAreaKeys = new Set<string>(INTEREST_AREAS.map((area) => area.key));
 
 export const isInterestAreaKey = (value: string): value is InterestAreaKey =>
-  INTEREST_AREAS.some((area) => area.key === value);
+  interestAreaKeys.has(value);
 
-export const resolveInterestAreaKey = (
-  value: string,
-  translateArea: InterestAreaTranslator,
-): InterestAreaKey | undefined => {
-  const normalized = normalizeInterestLookupValue(value);
+export const resolveInterestAreaKey = (value: string): InterestAreaKey | undefined => {
+  const normalized = value.trim();
 
-  for (const area of INTEREST_AREAS) {
-    if (normalizeInterestLookupValue(area.key) === normalized) return area.key;
-    if (normalizeInterestLookupValue(`interests.area.${area.key}`) === normalized) return area.key;
-
-    const label = translateArea(`interests.area.${area.key}`);
-    if (label && normalizeInterestLookupValue(label) === normalized) return area.key;
-  }
+  return isInterestAreaKey(normalized) ? normalized : undefined;
 };
 
-export const normalizeInterestsForStorage = (
-  interests: string[],
-  translateArea: InterestAreaTranslator,
-): string[] => {
+export const normalizeInterestsForStorage = (interests: string[]): string[] => {
   const result: string[] = [];
   const seen = new Set<string>();
 
   for (const interest of interests) {
-    const areaKey = resolveInterestAreaKey(interest, translateArea);
-    const normalized = areaKey ?? interest;
-    const dedupeKey = areaKey ? `area:${areaKey}` : `raw:${interest}`;
+    const trimmed = interest.trim();
+    if (!trimmed) continue;
+
+    const areaKey = resolveInterestAreaKey(trimmed);
+    const normalized = areaKey ?? trimmed;
+    const dedupeKey = areaKey ? `area:${areaKey}` : `raw:${trimmed}`;
 
     if (seen.has(dedupeKey)) continue;
 

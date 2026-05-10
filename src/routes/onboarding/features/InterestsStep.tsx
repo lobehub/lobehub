@@ -23,10 +23,9 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('onboarding');
   const existingInterests = useUserStore(userProfileSelectors.interests);
   const updateInterests = useUserStore((s) => s.updateInterests);
-  const translateArea = useCallback((key: `interests.area.${InterestAreaKey}`) => t(key), [t]);
 
   const [selectedInterests, setSelectedInterests] = useState<string[]>(() =>
-    normalizeInterestsForStorage(existingInterests, translateArea),
+    normalizeInterestsForStorage(existingInterests),
   );
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
@@ -68,11 +67,11 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       finalInterests.push(trimmedCustom);
     }
 
-    const uniqueInterests = normalizeInterestsForStorage(finalInterests, translateArea);
+    const uniqueInterests = normalizeInterestsForStorage(finalInterests);
 
     updateInterests(uniqueInterests);
     onNext();
-  }, [selectedInterests, customInput, showCustomInput, translateArea, updateInterests, onNext]);
+  }, [selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
 
   const handleBack = useCallback(() => {
     if (isNavigatingRef.current) return;

@@ -88,10 +88,6 @@ export const isTemplateSkillSourceEligible = (
 export class TaskTemplateService {
   constructor(private userId: string) {}
 
-  /**
-   * Client sends canonical INTEREST_AREAS keys. The UI still resolves legacy
-   * localized labels before calling — see useResolvedInterestKeys.
-   */
   async listDailyRecommend(
     interestKeys: string[],
     options: {

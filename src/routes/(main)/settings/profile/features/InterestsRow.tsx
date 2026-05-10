@@ -26,14 +26,7 @@ const InterestsRow = () => {
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [saving, setSaving] = useState(false);
-  const translateArea = useCallback(
-    (key: `interests.area.${InterestAreaKey}`) => tOnboarding(key),
-    [tOnboarding],
-  );
-  const normalizedInterests = useMemo(
-    () => normalizeInterestsForStorage(interests, translateArea),
-    [interests, translateArea],
-  );
+  const normalizedInterests = useMemo(() => normalizeInterestsForStorage(interests), [interests]);
 
   const areas = useMemo(
     () =>
@@ -140,7 +133,7 @@ const InterestsRow = () => {
             );
           })}
           {normalizedInterests
-            .filter((i) => !resolveInterestAreaKey(i, translateArea))
+            .filter((i) => !resolveInterestAreaKey(i))
             .map((interest) => (
               <Block
                 clickable

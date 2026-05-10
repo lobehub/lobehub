@@ -97,9 +97,9 @@ describe('InterestsRow', () => {
     });
   });
 
-  it('removes current-locale legacy labels by canonical key', async () => {
+  it('removes predefined interests by canonical key', async () => {
     const user = userEvent.setup();
-    mocks.interests = ['编程与开发', '自定义'];
+    mocks.interests = ['coding', '自定义'];
 
     render(<InterestsRow />);
 
