@@ -8,7 +8,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import OnboardingContainer from '@/routes/onboarding/_layout';
-import { deriveOnboardingBranchPath } from '@/routes/onboarding/config';
+import { deriveOnboardingBranchPath } from '@/routes/onboarding/branch';
 import ResponseLanguageStep from '@/routes/onboarding/features/ResponseLanguageStep';
 import TelemetryStep from '@/routes/onboarding/features/TelemetryStep';
 import { useServerConfigStore } from '@/store/serverConfig';

@@ -32,6 +32,9 @@ const renderCommon = async ({
     AGENT_ONBOARDING_ENABLED,
   }));
   vi.doMock('@lobechat/const', () => ({ isDesktop: desktop }));
+  vi.doMock('@lobehub/ui', () => ({
+    Flexbox: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  }));
   vi.doMock('@/components/Loading/BrandTextLoading', () => ({
     default: ({ debugId }: { debugId: string }) => <div>Loading:{debugId}</div>,
   }));
@@ -91,6 +94,7 @@ afterEach(() => {
   cleanup();
   vi.doUnmock('@lobechat/business-const');
   vi.doUnmock('@lobechat/const');
+  vi.doUnmock('@lobehub/ui');
   vi.doUnmock('@/components/Loading/BrandTextLoading');
   vi.doUnmock('@/routes/onboarding/_layout');
   vi.doUnmock('@/routes/onboarding/features/TelemetryStep');

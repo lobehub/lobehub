@@ -1,9 +1,11 @@
+import type { InterestAreaKey } from './interests';
+
 /**
  * Task Template catalog used by home "Try following tasks" recommendation.
  * I18n keys: `taskTemplate:${id}.title|description|prompt`.
  *
- * `interests` values must be keys from `INTEREST_AREAS` in
- * `src/routes/onboarding/config.ts` — that's what `users.interests` stores.
+ * `interests` values must be canonical interest area keys — that's what
+ * predefined `users.interests` entries store.
  */
 
 /**
@@ -21,7 +23,7 @@ export interface TaskTemplate {
   /** Optional icon identifier; consumers resolve it to a component. */
   icon?: TaskTemplateIcon;
   id: string;
-  interests: string[];
+  interests: InterestAreaKey[];
   /** Skills that enrich the brief but are not required to run it. */
   optionalSkills?: TaskTemplateSkillRequirement[];
   /** Skill dependencies. The `source` field routes the connection flow. */
