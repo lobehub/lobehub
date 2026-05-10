@@ -455,43 +455,47 @@ export const createRuntimeExecutors = (
 
         if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
           try {
-            const { formatWebOnboardingStateMessage } =
-              await import('@lobechat/builtin-tool-web-onboarding/utils');
-            const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
             const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-            const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-            const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+            const onboardingState = await onboardingService.getState();
 
-            const [onboardingState, soulDoc, persona, userInfo] = await Promise.all([
-              onboardingService.getState(),
-              onboardingService
-                .getInboxAgentId()
-                .then((inboxAgentId) =>
-                  inboxAgentId ? docService.getDocumentByFilename(inboxAgentId, 'SOUL.md') : null,
-                )
-                .catch((error) => {
-                  log('Failed to fetch SOUL.md for onboarding context: %O', error);
+            if (onboardingState.finished) {
+              log('Onboarding already finished, skipping context injection for agent %s', agentId);
+            } else {
+              const { formatWebOnboardingStateMessage } =
+                await import('@lobechat/builtin-tool-web-onboarding/utils');
+              const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+              const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+              const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+
+              const [soulDoc, persona, userInfo] = await Promise.all([
+                onboardingService
+                  .getInboxAgentId()
+                  .then((inboxAgentId) =>
+                    inboxAgentId ? docService.getDocumentByFilename(inboxAgentId, 'SOUL.md') : null,
+                  )
+                  .catch((error) => {
+                    log('Failed to fetch SOUL.md for onboarding context: %O', error);
+                    return null;
+                  }),
+                personaModel.getLatestPersonaDocument().catch((error) => {
+                  log('Failed to fetch user persona for onboarding context: %O', error);
                   return null;
                 }),
-              personaModel.getLatestPersonaDocument().catch((error) => {
-                log('Failed to fetch user persona for onboarding context: %O', error);
-                return null;
-              }),
-              onboardingService.getInitialUserInfo().catch((error) => {
-                log('Failed to fetch initial user info for onboarding context: %O', error);
-                return undefined;
-              }),
-            ]);
+                onboardingService.getInitialUserInfo().catch((error) => {
+                  log('Failed to fetch initial user info for onboarding context: %O', error);
+                  return undefined;
+                }),
+              ]);
 
-            onboardingContext = {
-              // patch_08: propagate finished so MessagesEngine injectors can gate on it
-              finished: onboardingState.finished,
-              personaContent: persona?.persona ?? null,
-              phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
-              soulContent: soulDoc?.content ?? null,
-              userInfo,
-            };
-            log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
+              onboardingContext = {
+                finished: false,
+                personaContent: persona?.persona ?? null,
+                phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
+                soulContent: soulDoc?.content ?? null,
+                userInfo,
+              };
+              log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
+            }
           } catch (error) {
             log('Failed to build onboarding context: %O', error);
           }
