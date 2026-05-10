@@ -20,6 +20,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
+  type BotPlatformContext,
   buildStepSkillDelta,
   buildStepToolDelta,
   type LobeToolManifest,
@@ -211,7 +212,7 @@ const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToo
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
-  botPlatformContext?: any;
+  botPlatformContext?: BotPlatformContext;
   discordContext?: any;
   evalContext?: EvalContext;
   hookDispatcher?: HookDispatcher;

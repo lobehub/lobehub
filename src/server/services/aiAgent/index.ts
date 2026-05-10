@@ -16,6 +16,7 @@ import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools'
 import { LOADING_FLAT } from '@lobechat/const';
 import type {
   AgentManagementContext,
+  BotPlatformContext,
   LobeToolManifest,
   ToolExecutor,
   ToolSource,
@@ -142,7 +143,7 @@ interface InternalExecAgentParams extends ExecAgentParams {
   /** Bot context for topic metadata (platform, applicationId, platformThreadId) */
   botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
-  botPlatformContext?: any;
+  botPlatformContext?: BotPlatformContext;
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
