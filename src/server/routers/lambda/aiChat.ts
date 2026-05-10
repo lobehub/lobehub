@@ -27,6 +27,9 @@ const TOPIC_PREVIEW_PAGE_SIZE = 20;
 const pickCreatedTopicFields = (
   topic: Awaited<ReturnType<TopicModel['create']>>,
 ): NonNullable<SendMessageServerResponse['createdTopic']> =>
+  // Cast via `unknown` because the wire shape carries `Date`s while the type
+  // declares numeric timestamps — matches the existing convention used by
+  // `topicModel.query` results that flow into the same client store.
   ({
     completedAt: topic.completedAt,
     createdAt: topic.createdAt,
@@ -37,7 +40,7 @@ const pickCreatedTopicFields = (
     status: topic.status,
     title: topic.title ?? '',
     updatedAt: topic.updatedAt,
-  }) as NonNullable<SendMessageServerResponse['createdTopic']>;
+  }) as unknown as NonNullable<SendMessageServerResponse['createdTopic']>;
 
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

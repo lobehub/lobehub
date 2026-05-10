@@ -9,8 +9,16 @@ type AddChatTopicAction = {
    * Accepts `CreateTopicParams` plus optional fields the caller may already
    * know (id, createdAt, updatedAt, etc.). When the reducer is fed a fully-
    * formed topic from the server, those values win over local defaults.
+   *
+   * `trigger` is widened to `string | null | undefined` because
+   * `CreateTopicParams.trigger` is `string | undefined` while `ChatTopic.trigger`
+   * is `string | null`; both shapes need to satisfy the same dispatch type.
    */
-  value: CreateTopicParams & Partial<Omit<ChatTopic, 'sessionId'>> & { id?: string };
+  value: Omit<CreateTopicParams, 'trigger'> &
+    Partial<Omit<ChatTopic, 'sessionId' | 'trigger'>> & {
+      id?: string;
+      trigger?: string | null;
+    };
 };
 
 type UpdateChatTopicAction = {

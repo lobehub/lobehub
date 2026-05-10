@@ -30,8 +30,8 @@ describe('topicReducer', () => {
     it('should prefer caller-provided createdAt/updatedAt/favorite over Date.now()/false', () => {
       // Server-supplied timestamps must win so the side-bar order matches
       // the next SWR fetch result.
-      const createdAt = new Date('2026-05-09T15:00:00Z');
-      const updatedAt = new Date('2026-05-09T15:00:01Z');
+      const createdAt = new Date('2026-05-09T15:00:00Z').getTime();
+      const updatedAt = new Date('2026-05-09T15:00:01Z').getTime();
       const payload: ChatTopicDispatch = {
         type: 'addTopic',
         value: {
