@@ -10,9 +10,7 @@ import { useTranslation } from 'react-i18next';
 import ModelSelect from '@/features/ModelSelect';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import AgentCronJobs from '../AgentCronJobs';
 import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -25,7 +23,6 @@ const ProfileEditor = memo(() => {
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
 
   const updateHeterogeneousCommand = async (command: string) => {
@@ -112,8 +109,6 @@ const ProfileEditor = memo(() => {
       <Divider />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas />
-      {/* Agent Cron Jobs Display (only show if jobs exist) */}
-      {enableBusinessFeatures && <AgentCronJobs />}
       {/* Advanced Settings Modal */}
       <AgentSettings />
     </>
