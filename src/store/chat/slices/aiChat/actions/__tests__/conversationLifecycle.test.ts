@@ -1157,6 +1157,116 @@ describe('ConversationLifecycle actions', () => {
       });
     });
 
+    describe('heterogeneous agent new-topic creation', () => {
+      it('should prefer createdTopic over legacy topics in the hetero branch', async () => {
+        // Mirrors the lambda-path coverage above for the heterogeneous-agent
+        // branch — pinning prepend to the operation's agent and skipping
+        // the bulk write.
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const dispatchTopicSpy = vi.spyOn(result.current, 'internal_dispatchTopic');
+        const updateTopicsSpy = vi.spyOn(result.current, 'internal_updateTopics');
+
+        const createdTopic = {
+          createdAt: new Date('2026-05-09T15:30:00Z').getTime(),
+          favorite: false,
+          id: 'tpc_hetero_new',
+          title: 'fresh hetero',
+          updatedAt: new Date('2026-05-09T15:30:01Z').getTime(),
+        };
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          createdTopic,
+          isCreateNewTopic: true,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: 'tpc_hetero_new',
+          topics: { items: [createdTopic, { id: 'old', title: 'old' }], total: 2 },
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        const addTopicCalls = dispatchTopicSpy.mock.calls.filter(
+          ([payload]) => payload.type === 'addTopic',
+        );
+        expect(addTopicCalls).toHaveLength(1);
+        expect((addTopicCalls[0][0] as any).value).toEqual(createdTopic);
+        expect(addTopicCalls[0][2]).toEqual({
+          agentId: TEST_IDS.SESSION_ID,
+          groupId: undefined,
+        });
+        expect(updateTopicsSpy).not.toHaveBeenCalled();
+      });
+
+      it('should fall back to internal_updateTopics in the hetero branch when only legacy topics is returned', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const dispatchTopicSpy = vi.spyOn(result.current, 'internal_dispatchTopic');
+        const updateTopicsSpy = vi.spyOn(result.current, 'internal_updateTopics');
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          isCreateNewTopic: true,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          // No `createdTopic` — old server build.
+          topicId: 'tpc_hetero_new',
+          topics: { items: [{ id: 'tpc_hetero_new', title: 'fresh hetero' }], total: 1 },
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        const addTopicCalls = dispatchTopicSpy.mock.calls.filter(
+          ([payload]) => payload.type === 'addTopic',
+        );
+        expect(addTopicCalls).toHaveLength(0);
+        expect(updateTopicsSpy).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            items: [{ id: 'tpc_hetero_new', title: 'fresh hetero' }],
+            total: 1,
+          }),
+        );
+      });
+    });
+
     describe('@agent mention delegation', () => {
       it('should NOT set isSupervisor on assistant message when @agent uses supervisor path in non-group chat', async () => {
         const { result } = renderHook(() => useChatStore());
