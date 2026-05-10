@@ -2,7 +2,6 @@
 ################################################################
 
 # emaxlele-dev personal tooling — not pushed upstream
-fixPatch/
 _*.py
 _*.bat
 _*.md
