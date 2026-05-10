@@ -740,6 +740,26 @@ export class ConversationControlActionImpl {
     void effectiveContext;
   };
 
+  /**
+   * In-memory draft store for an intervention form. Backs the renderer's
+   * "remember what I'd partially answered" behaviour without paying for a
+   * DB round-trip on every keystroke — drafts only matter while the
+   * intervention is pending (5 min cap), and the canonical pluginState
+   * mirror is enough to survive HMR / panel re-mounts.
+   *
+   * On the eventual `tool_result`, the executor's `persistToolResult`
+   * overwrites pluginState with whatever the tool returned (typically the
+   * formatted answer text), so stale drafts naturally evaporate.
+   */
+  setInterventionDraft = (toolMessageId: string, draft: Record<string, unknown>): void => {
+    this.#get().internal_dispatchMessage({
+      id: toolMessageId,
+      key: 'askUserDraft',
+      type: 'updatePluginState',
+      value: draft,
+    });
+  };
+
   rejectToolCalling = async (
     messageId: string,
     reason?: string,
