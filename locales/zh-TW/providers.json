@@ -33,7 +33,6 @@
   "jina.description": "Jina AI 成立於 2020 年，是領先的搜尋 AI 公司。其搜尋技術堆疊包含向量模型、重排序器與小型語言模型，打造可靠且高品質的生成式與多模態搜尋應用。",
   "kimicodingplan.description": "來自 Moonshot AI 的 Kimi Code 提供對 Kimi 模型（包括 K2.5）的訪問，用於編碼任務。",
   "lmstudio.description": "LM Studio 是一款桌面應用程式，可在本機開發與實驗大型語言模型。",
-  "lobehub.description": "LobeHub Cloud 使用官方 API 存取 AI 模型，並以與模型代幣相關的點數來計算使用量。",
   "longcat.description": "LongCat 是美團自主研發的一系列生成式 AI 大模型。其設計旨在通過高效的計算架構和強大的多模態能力，提升企業內部生產力並實現創新應用。",
   "minimax.description": "MiniMax 成立於 2021 年，致力於打造通用 AI，擁有多模態基礎模型，包括兆級參數的 MoE 文本模型、語音模型與視覺模型，並推出如海螺 AI 等應用。",
   "minimaxcodingplan.description": "MiniMax 代幣計劃通過固定費用訂閱提供對 MiniMax 模型（包括 M2.7）的訪問，用於編碼任務。",

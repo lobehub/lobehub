@@ -30,6 +30,7 @@ import {
   messengerPlatformRegistry,
   MessengerSlackBinder,
   MessengerTelegramBinder,
+  peekConsumedLinkToken,
   peekLinkToken,
 } from '@/server/services/messenger';
 
@@ -154,6 +155,18 @@ export const messengerRouter = router({
    * a LobeHub account — the page uses it to warn the user before they create
    * a duplicate that would either fail the unique index or shadow another
    * account's binding. Email is partially masked for privacy.
+   *
+   * Returns a discriminated union by `status`:
+   * - `active`: token is live; payload + linkedToEmail accompany it.
+   * - `consumed`: token was already consumed by a successful `confirmLink`.
+   *   The page can show "binding succeeded" instead of a misleading
+   *   "expired" error when the user refreshes after confirming.
+   * - `expired`: no live token and no consumed marker — TTL ran out before
+   *   the user finished binding.
+   *
+   * This procedure intentionally does NOT throw for the `consumed` /
+   * `expired` cases — both are routine user states (post-confirm refresh,
+   * stale tab) and shouldn't be logged as tRPC handler errors.
    */
   peekLinkToken: publicProcedure
     .use(serverDatabase)
@@ -161,10 +174,15 @@ export const messengerRouter = router({
     .query(async ({ input, ctx }) => {
       const payload = await peekLinkToken(input.randomId);
       if (!payload) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'verify.error.expired',
-        });
+        const consumed = await peekConsumedLinkToken(input.randomId);
+        if (consumed) {
+          return {
+            platform: consumed.platform,
+            status: 'consumed' as const,
+            tenantId: consumed.tenantId,
+          };
+        }
+        return { status: 'expired' as const };
       }
 
       const existingLink = await MessengerAccountLinkModel.findByPlatformUser(
@@ -192,6 +210,7 @@ export const messengerRouter = router({
         platform: payload.platform,
         platformUserId: payload.platformUserId,
         platformUsername: payload.platformUsername,
+        status: 'active' as const,
         // Tenant fields are populated by the binder for per-tenant platforms
         // (Slack workspace name) and absent for global-bot platforms; the
         // verify-im page conditionally renders the workspace blurb.

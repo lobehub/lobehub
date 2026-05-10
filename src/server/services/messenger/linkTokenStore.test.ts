@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { consumeLinkToken, issueLinkToken, peekLinkToken } from './linkTokenStore';
+import {
+  consumeLinkToken,
+  issueLinkToken,
+  peekConsumedLinkToken,
+  peekLinkToken,
+} from './linkTokenStore';
 
 vi.mock('@/config/messenger', () => ({
   getMessengerLinkTokenTtl: vi.fn().mockReturnValue(1800),
@@ -110,5 +115,31 @@ describe('linkTokenStore', () => {
       tenantId: 'T_X',
     });
     expect(reissued).not.toBe(token);
+  });
+
+  it('writes a consumed marker after successful consume so the verify-im page can tell apart "burned" vs "expired"', async () => {
+    const token = await issueLinkToken({
+      platform: 'slack',
+      platformUserId: 'U_Y',
+      tenantId: 'T_Y',
+    });
+
+    await consumeLinkToken(token);
+    const marker = await peekConsumedLinkToken(token);
+
+    expect(marker).toMatchObject({
+      platform: 'slack',
+      tenantId: 'T_Y',
+    });
+    expect(typeof marker?.consumedAt).toBe('number');
+  });
+
+  it('returns null from peekConsumedLinkToken when the token was never consumed', async () => {
+    const token = await issueLinkToken({
+      platform: 'telegram',
+      platformUserId: '999',
+    });
+
+    expect(await peekConsumedLinkToken(token)).toBeNull();
   });
 });

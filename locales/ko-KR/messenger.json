@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "다른 Telegram 계정이 이미 연결되어 있습니다",
   "verify.confirm.title": "연결 확인",
   "verify.confirm.workspace": "워크스페이스: {{workspace}}",
+  "verify.error.alreadyConsumed": "이 링크는 이미 계정을 연결하는 데 사용되었습니다. 해당 LobeHub 계정에 로그인하여 연결을 관리하거나, 봇으로 돌아가 /start를 다시 보내 새 링크를 발급받으세요.",
+  "verify.error.alreadyConsumedTitle": "이 링크는 이미 사용되었습니다",
   "verify.error.alreadyLinkedToOther": "이 계정은 이미 다른 LobeHub 계정에 연결되어 있습니다. 먼저 해당 계정에 로그인하세요.",
   "verify.error.expired": "이 링크가 만료되었습니다. 봇으로 돌아가 /start를 다시 전송하세요.",
   "verify.error.generic": "문제가 발생했습니다. 다시 시도하세요.",
