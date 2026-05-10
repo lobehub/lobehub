@@ -29,7 +29,7 @@
   "batchDelete": "Mehrfach löschen",
   "blog": "Produkt-Blog",
   "botIntegrationBanner.dismiss": "Schließen",
-  "botIntegrationBanner.title": "Kanäle zu LobeAI hinzufügen",
+  "botIntegrationBanner.title": "Sprich mit Lobe AI in deinen bevorzugten Messaging-Apps",
   "branching": "Unterthema erstellen",
   "branchingDisable": "Die Funktion „Unterthema“ ist im aktuellen Modus nicht verfügbar. Bitte wechseln Sie in den Postgres/PGlite-DB-Modus oder nutzen Sie LobeHub Cloud.",
   "branchingRequiresSavedTopic": "Das aktuelle Thema ist nicht gespeichert. Bitte speichern Sie es zuerst, um die Unterthema-Funktion zu nutzen.",
