@@ -1,0 +1,68 @@
+name: Claude Translate Non-English Comments
+description: Automatically detect and translate non-English comments to English in codebase
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC (10:00 Beijing Time)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      target_module:
+        description: 'Specific module to translate (e.g., packages/database, apps/desktop/src/modules/auth)'
+        required: false
+        type: string
+
+concurrency:
+  group: translate-comments
+  cancel-in-progress: false
+
+jobs:
+  translate-comments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "claude-bot[bot]"
+          git config --global user.email "claude-bot[bot]@users.noreply.github.com"
+
+      - name: Copy prompts
+        run: |
+          mkdir -p /tmp/claude-prompts
+          cp .claude/prompts/translate-comments.md /tmp/claude-prompts/
+          cp .claude/prompts/security-rules.md /tmp/claude-prompts/
+
+      - name: Run Claude Code for Comment Translation
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GH_TOKEN }}
+          allowed_non_write_users: '*'
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --allowedTools "Bash,Read,Edit,Glob,Grep"
+            --append-system-prompt "$(cat /tmp/claude-prompts/security-rules.md)"
+          prompt: |
+            Follow the translation guide located at:
+            ```bash
+            cat /tmp/claude-prompts/translate-comments.md
+            ```
+
+            ## Task Assignment
+
+            ${{ inputs.target_module && format('Process the specified module: {0}', inputs.target_module) || 'Automatically select one module from the target directories that has not been processed recently' }}
+
+            ## Environment Information
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Target Module: ${{ inputs.target_module || 'Auto-select' }}
+            - Run ID: ${{ github.run_id }}
+
+            **Start the translation process now.**

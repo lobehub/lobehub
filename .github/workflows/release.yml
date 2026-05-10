@@ -1,0 +1,73 @@
+name: Release CI
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: paradedb/paradedb:latest
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+
+
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        run: pnpm install
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test Database Coverage
+        run: bun run --filter @lobechat/database test
+        env:
+          DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          DATABASE_DRIVER: node
+          KEY_VAULTS_SECRET: Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=
+          S3_PUBLIC_DOMAIN: https://example.com
+          APP_URL: https://home.com
+
+      - name: Test App
+        run: bun run test-app
+
+      - name: Workflow
+        run: bun run workflow:readme
+
+      - name: Commit changes
+        run: |-
+          git diff
+          git config --global user.name "lobehubbot"
+          git config --global user.email "i@lobehub.com"
+          git add .
+          git commit -m "📝 docs(bot): Auto sync agents & plugin to readme" || exit 0
+          git push
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}

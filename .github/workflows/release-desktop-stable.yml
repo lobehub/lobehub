@@ -1,0 +1,363 @@
+name: Release Desktop Stable
+
+# ============================================
+# Stable 频道发版工作流
+# ============================================
+# 触发条件: 发布不含 pre-release 后缀的 release (如 v2.0.0)
+#
+# 与 Beta 的区别:
+#   1. 仅响应 stable 版本 tag (不含任何 '-' 后缀)
+#   2. 使用 STABLE 专用的 Umami 配置
+#   3. 额外上传到 S3 更新服务器
+#   4. 构建时注入 UPDATE_SERVER_URL 让客户端从 S3 检查更新
+#
+# 需要配置的 Secrets (S3 相关, 统一 UPDATE_ 前缀):
+#   - UPDATE_AWS_ACCESS_KEY_ID
+#   - UPDATE_AWS_SECRET_ACCESS_KEY
+#   - UPDATE_S3_BUCKET (S3 存储桶名称)
+#   - UPDATE_S3_REGION (可选, 默认 us-east-1)
+#   - UPDATE_S3_ENDPOINT (可选, 用于 R2/MinIO 等 S3 兼容服务)
+#   - UPDATE_SERVER_URL (客户端检查更新的 URL)
+# ============================================
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 2.0.0)'
+        required: true
+        type: string
+      build_mac:
+        description: 'Build macOS (ARM64)'
+        required: false
+        type: boolean
+        default: true
+      build_mac_intel:
+        description: 'Build macOS (Intel x64)'
+        required: false
+        type: boolean
+        default: true
+      build_windows:
+        description: 'Build Windows'
+        required: false
+        type: boolean
+        default: true
+      build_linux:
+        description: 'Build Linux'
+        required: false
+        type: boolean
+        default: true
+      skip_s3_upload:
+        description: 'Skip S3 upload (for testing)'
+        required: false
+        type: boolean
+        default: true
+      skip_github_release:
+        description: 'Skip GitHub release upload (for testing)'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  # ============================================
+  # 检查版本信息
+  # ============================================
+  check-stable:
+    name: Check Release Version
+    runs-on: ubuntu-latest
+    outputs:
+      is_stable: ${{ steps.check.outputs.is_stable }}
+      version: ${{ steps.check.outputs.version }}
+      is_manual: ${{ steps.check.outputs.is_manual }}
+      release_notes: ${{ steps.check.outputs.release_notes }}
+    steps:
+      - name: Check release info
+        id: check
+        env:
+          RELEASE_BODY: ${{ github.event.release.body || '' }}
+        run: |
+          # 判断触发方式
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # 手动触发: 使用输入的版本号
+            version="${{ inputs.version }}"
+            version="${version#v}"
+            echo "is_manual=true" >> $GITHUB_OUTPUT
+            echo "version=${version}" >> $GITHUB_OUTPUT
+            echo "release_notes=" >> $GITHUB_OUTPUT
+            echo "🔧 Manual trigger: version=${version}"
+          else
+            # Release 触发: 从 tag 提取版本号
+            version="${{ github.event.release.tag_name }}"
+            version="${version#v}"
+            echo "is_manual=false" >> $GITHUB_OUTPUT
+            echo "version=${version}" >> $GITHUB_OUTPUT
+            release_body="${RELEASE_BODY:-}"
+            {
+              echo "release_notes<<EOF"
+              printf '%s\n' "$release_body"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+          # 检查是否为 stable 版本 (不含任何 '-' 后缀)
+          if [[ "$version" == *"-"* ]]; then
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping: $version is not a stable release"
+          else
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+            echo "✅ Stable release detected: $version"
+          fi
+
+  # ============================================
+  # 配置构建矩阵 (检查自托管 Runner)
+  # ============================================
+  configure-build:
+    needs: [check-stable]
+    if: needs.check-stable.outputs.is_stable == 'true'
+    name: Configure Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate Matrix
+        id: set-matrix
+        run: |
+          # 基础矩阵
+          static_matrix='[]'
+
+          # Windows
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_windows }}" == "true" ]]; then
+            static_matrix=$(echo "$static_matrix" | jq -c '. + [{"os": "windows-2025", "name": "windows-2025"}]')
+          fi
+
+          # Linux
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_linux }}" == "true" ]]; then
+            static_matrix=$(echo "$static_matrix" | jq -c '. + [{"os": "ubuntu-latest", "name": "ubuntu-latest"}]')
+          fi
+
+          # macOS (ARM64)
+          # 使用 GitHub Hosted Runner (macos-15 修复 hdiutil 问题)
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_mac }}" == "true" ]]; then
+            echo "Using GitHub-Hosted Runner for macOS ARM64"
+            arm_entry='{"os": "macos-15", "name": "macos-arm64"}'
+            static_matrix=$(echo "$static_matrix" | jq -c --argjson entry "$arm_entry" '. + [$entry]')
+          fi
+
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_mac_intel }}" == "true" ]]; then
+            echo "Using GitHub-Hosted Runner for macOS Intel x64"
+            intel_entry='{"os": "macos-15-intel", "name": "macos-intel"}'
+            static_matrix=$(echo "$static_matrix" | jq -c --argjson entry "$intel_entry" '. + [$entry]')
+          fi
+
+          # 输出
+          echo "matrix={\"include\":$static_matrix}" >> $GITHUB_OUTPUT
+
+  # ============================================
+  # 多平台构建
+  # ============================================
+  build:
+    needs: [check-stable, configure-build]
+    if: needs.check-stable.outputs.is_stable == 'true'
+    name: Build Desktop App
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.configure-build.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.check-stable.outputs.version }} stable
+
+      # macOS 构建前清理 (修复 hdiutil 问题 https://github.com/electron-userland/electron-builder/issues/8415)
+      - name: Clean previous build artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sudo rm -rf apps/desktop/release || true
+          sudo rm -rf apps/desktop/dist || true
+          sudo rm -rf /tmp/electron-builder* || true
+
+      # macOS 构建
+      - name: Build artifact on macOS
+        if: runner.os == 'macOS'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: stable
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_FOR_PULL_REQUEST: true
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
+          # Debug hdiutil issues (https://github.com/electron-userland/electron-builder/issues/8415)
+          DEBUG_DMG: true
+
+      # Windows 构建
+      - name: Build artifact on Windows
+        if: runner.os == 'Windows'
+        run: npm run desktop:package:app
+        env:
+          UPDATE_CHANNEL: stable
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
+          TEMP: C:\temp
+          TMP: C:\temp
+
+      # Linux 构建
+      - name: Build artifact on Linux
+        if: runner.os == 'Linux'
+        run: |
+          npm run desktop:package:app
+          test -d apps/desktop/dist/renderer
+          tar -czf apps/desktop/release/lobehub-renderer.tar.gz -C apps/desktop/dist/renderer .
+        env:
+          UPDATE_CHANNEL: stable
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_STABLE_DESKTOP_BASE_URL }}
+
+      - name: Upload artifacts
+        uses: ./.github/actions/desktop-upload-artifacts
+        with:
+          artifact-name: release-${{ matrix.name }}
+
+  # ============================================
+  # 合并 macOS 多架构文件
+  # ============================================
+  merge-mac-files:
+    needs: [build, check-stable]
+    name: Merge macOS Release Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release
+          pattern: release-*
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -R release
+
+      - name: Install yaml only for merge step
+        run: |
+          cd scripts/electronWorkflow
+          if [ ! -f package.json ]; then
+            echo '{"name":"merge-mac-release","private":true}' > package.json
+          fi
+          bun add --no-save yaml@2.8.1
+
+      - name: Merge mac YAML files
+        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+
+      - name: Upload artifacts with merged macOS files
+        uses: actions/upload-artifact@v6
+        with:
+          name: merged-release
+          path: release/
+          retention-days: 1
+
+  # ============================================
+  # 发布到 GitHub Releases
+  # ============================================
+  publish-github:
+    needs: [merge-mac-files, check-stable]
+    name: Publish to GitHub Release
+    runs-on: ubuntu-latest
+    # 手动触发时可选择跳过
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_github_release) }}
+    permissions:
+      contents: write
+    steps:
+      - name: Download merged artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: merged-release
+          path: release
+
+      - name: List final artifacts
+        run: ls -R release
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          # 手动触发时使用输入的版本号创建 tag
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', needs.check-stable.outputs.version) || github.event.release.tag_name }}
+          # 手动触发时创建为 draft
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          files: |
+            release/stable*
+            release/latest*
+            release/*.dmg*
+            release/*.zip*
+            release/*.exe*
+            release/*.AppImage
+            release/*.deb*
+            release/*.snap*
+            release/*.rpm*
+            release/*.tar.gz*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # 发布到 S3 更新服务器
+  # ============================================
+  publish-s3:
+    needs: [merge-mac-files, check-stable]
+    name: Publish to S3
+    runs-on: ubuntu-latest
+    # 手动触发时可选择跳过
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/desktop-publish-s3
+        with:
+          channel: stable
+          version: ${{ needs.check-stable.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}

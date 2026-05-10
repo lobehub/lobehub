@@ -1,0 +1,64 @@
+name: Lighthouse Badger
+
+env:
+  TOKEN_NAME: 'GH_TOKEN'
+  REPO_BRANCH: 'lobehub/lobe-chat lighthouse'
+  USER_NAME: 'lobehubbot'
+  USER_EMAIL: 'i@lobehub.com'
+  AUDIT_TYPE: 'both'
+  MOBILE_LIGHTHOUSE_PARAMS: '--throttling.cpuSlowdownMultiplier=2'
+  DESKTOP_LIGHTHOUSE_PARAMS: '--preset=desktop --throttling.cpuSlowdownMultiplier=1'
+  COMMIT_MESSAGE: '🤖 chore: Lighthouse Results Refreshed'
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # every day
+  workflow_dispatch:
+
+jobs:
+  lighthouse-badger-advanced:
+    name: ${{ matrix.NAME }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - NAME: 'LobeChat | Chat'
+            URLS: 'https://lobechat.com/chat'
+            BADGES_ARGS: '-b pagespeed -o lighthouse/chat -r'
+            COMMIT_MESSAGE: '🤖 chore: Lighthouse Results | Chat'
+          - NAME: 'LobeChat | Market'
+            URLS: 'https://lobechat.com/discover'
+            BADGES_ARGS: '-b pagespeed -o lighthouse/discover -r'
+            COMMIT_MESSAGE: '🤖 chore: Lighthouse Results | Discover'
+
+    steps:
+      - name: Preparatory Tasks
+        run: |
+          REPOSITORY=`expr "${{ env.REPO_BRANCH }}" : "\([^ ]*\)"`
+          BRANCH=`expr "${{ env.REPO_BRANCH }}" : ".* \([^ ]*\)"`
+          echo "REPOSITORY=$REPOSITORY" >> $GITHUB_ENV
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+        env:
+          REPO_BRANCH: ${{ matrix.REPO_BRANCH || env.REPO_BRANCH }}
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.REPOSITORY }}
+          token: ${{ secrets[matrix.TOKEN_NAME] || secrets[env.TOKEN_NAME] }}
+          ref: ${{ env.BRANCH }}
+      - uses: actions/checkout@v6
+        with:
+          repository: 'myactionway/lighthouse-badges'
+          path: temp_lighthouse_badges_nested
+      - uses: myactionway/lighthouse-badger-action@v2.2
+        with:
+          urls: ${{ matrix.URLS }}
+          badges_args: ${{ matrix.BADGES_ARGS }}
+          audit_type: ${{ matrix.AUDIT_TYPE || env.AUDIT_TYPE }}
+          mobile_lighthouse_params: ${{ matrix.MOBILE_LIGHTHOUSE_PARAMS || env.MOBILE_LIGHTHOUSE_PARAMS }}
+          desktop_lighthouse_params: ${{ matrix.DESKTOP_LIGHTHOUSE_PARAMS || env.DESKTOP_LIGHTHOUSE_PARAMS }}
+          user_name: ${{ matrix.USER_NAME || env.USER_NAME }}
+          user_email: ${{ matrix.USER_EMAIL || env.USER_EMAIL }}
+          commit_message: ${{ matrix.COMMIT_MESSAGE || env.COMMIT_MESSAGE }}
+          max_push_attempts: 5

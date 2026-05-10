@@ -1,0 +1,169 @@
+name: Docker PR Build
+
+on:
+  pull_request:
+    types: [synchronize, labeled, unlabeled] # PR 更新或标签变化时触发
+
+# 确保同一 PR 同一时间只运行一个相同的 workflow,取消正在进行的旧的运行
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+# Add default permissions
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  REGISTRY_IMAGE: lobehub/lobehub
+  PR_TAG_PREFIX: pr-
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }} Docker Image
+    # 添加 PR label 或 release/* 分支触发：有 trigger:build-docker 标签或 PR 源分支为 release/* 时触发
+    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-docker') || startsWith(github.event.pull_request.head.ref, 'release/')
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-latest
+          - platform: linux/arm64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 为 PR 生成特殊的 tag,使用 PR 的实际 commit SHA
+      - name: Generate PR metadata
+        id: pr_meta
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          sanitized_branch=$(echo "${BRANCH_NAME}" | sed -E 's/[^a-zA-Z0-9_.-]+/-/g')
+          commit_sha=$(git rev-parse --short HEAD)
+          echo "pr_tag=${sanitized_branch}-${commit_sha}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${commit_sha}" >> $GITHUB_OUTPUT
+          echo "📦 Docker Tag: ${sanitized_branch}-${commit_sha}"
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=${{ env.PR_TAG_PREFIX }}${{ steps.pr_meta.outputs.pr_tag }}
+
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_REGISTRY_USER }}
+          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+
+      - name: Build and export
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: ${{ matrix.platform }}
+          context: .
+          file: ./Dockerfile
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SHA=${{ steps.pr_meta.outputs.commit_sha }}
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          rm -rf /tmp/digests
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: digest-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge and Publish
+    needs: build
+    runs-on: ubuntu-latest
+    # 只为非 fork 的 PR 发布(fork 的 PR 没有写权限)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 为 merge job 添加 PR metadata 生成
+      - name: Generate PR metadata
+        id: pr_meta
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          sanitized_branch=$(echo "${BRANCH_NAME}" | sed -E 's/[^a-zA-Z0-9_.-]+/-/g')
+          commit_sha=$(git rev-parse --short HEAD)
+          echo "pr_tag=${sanitized_branch}-${commit_sha}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${commit_sha}" >> $GITHUB_OUTPUT
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=${{ env.PR_TAG_PREFIX }}${{ steps.pr_meta.outputs.pr_tag }}
+
+      - name: Docker login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_REGISTRY_USER }}
+          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+
+      - name: Comment on PR with Docker build info
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prComment = require('${{ github.workspace }}/.github/scripts/docker-pr-comment.js');
+            const result = await prComment({
+              github,
+              context,
+              dockerMetaJson: ${{ toJSON(steps.meta.outputs.json) }},
+              image: "${{ env.REGISTRY_IMAGE }}",
+              version: "${{ steps.meta.outputs.version }}",
+              dockerhubUrl: "https://hub.docker.com/r/${{ env.REGISTRY_IMAGE }}/tags",
+              platforms: "linux/amd64, linux/arm64",
+            });
+            core.info(`Status: ${result.updated ? 'Updated' : 'Created'}, ID: ${result.id}`);

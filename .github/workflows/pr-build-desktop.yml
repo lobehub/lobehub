@@ -1,0 +1,328 @@
+name: Desktop PR Build
+
+on:
+  pull_request:
+    types: [synchronize, labeled, unlabeled] # PR 更新或标签变化时触发
+
+# 确保同一 PR 同一时间只运行一个相同的 workflow，取消正在进行的旧的运行
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+# Add default permissions
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  PR_TAG_PREFIX: pr- # PR 构建版本的前缀标识
+
+jobs:
+  test:
+    name: Code quality check
+    # 添加 PR label 或 release/* 分支触发：有 trigger:build-desktop 标签或 PR 源分支为 release/* 时触发
+    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-desktop') || startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest # 只在 ubuntu 上运行一次检查
+    steps:
+      - name: Checkout base
+        uses: actions/checkout@v6
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        run: pnpm install
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Lint
+        run: bun run lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+  version:
+    name: Determine version
+    # 与 test job 相同的触发条件
+    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-desktop') || startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest
+    outputs:
+      # 输出版本信息，供后续 job 使用
+      version: ${{ steps.set_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.11.1
+          package-manager-cache: false
+
+      # 主要逻辑：确定构建版本号
+      - name: Set version
+        id: set_version
+        run: |
+          # 从 apps/desktop/package.json 读取基础版本号
+          base_version=$(node -p "require('./apps/desktop/package.json').version")
+
+          # PR 构建：在基础版本号上添加 PR 信息
+          pr_number="${{ github.event.pull_request.number }}"
+          ci_build_number="${{ github.run_number }}" # CI 构建编号
+          version="0.0.0-nightly.pr${pr_number}.${ci_build_number}"
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "📦 Release Version: ${version} (based on base version ${base_version})"
+
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      # 输出版本信息总结，方便在 GitHub Actions 界面查看
+      - name: Version Summary
+        run: |
+          echo "🚦 Release Version: ${{ steps.set_version.outputs.version }}"
+
+  build:
+    needs: [version, test]
+    name: Build Desktop App
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, macos-15-intel, windows-2025, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          node-version: 24.11.1
+
+      # 设置 package.json 的版本号
+      - name: Set package version
+        run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} nightly
+
+      # macOS 构建处理
+      # 注意：fork 的 PR 无法访问 secrets，会构建未签名版本
+      - name: Build artifact on macOS
+        if: runner.os == 'macOS'
+        run: npm run desktop:package:app
+        env:
+          # 设置更新通道，PR构建为nightly，否则为stable
+          UPDATE_CHANNEL: 'nightly'
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          # 默认添加一个加密 SECRET
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          # macOS 签名和公证配置（fork 的 PR 访问不到 secrets，会跳过签名）
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+
+          # allow provisionally
+          CSC_FOR_PULL_REQUEST: true
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Windows 平台构建处理
+      # 注意：fork 的 PR 无法访问 secrets，会构建未签名版本
+      - name: Build artifact on Windows
+        if: runner.os == 'Windows'
+        run: npm run desktop:package:app
+        env:
+          # 设置更新通道，PR构建为nightly，否则为stable
+          UPDATE_CHANNEL: 'nightly'
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+          # 将 TEMP 和 TMP 目录设置到 C 盘
+          TEMP: C:\temp
+          TMP: C:\temp
+
+      # Linux 平台构建处理
+      - name: Build artifact on Linux
+        if: runner.os == 'Linux'
+        run: npm run desktop:package:app
+        env:
+          # 设置更新通道，PR构建为nightly，否则为stable
+          UPDATE_CHANNEL: 'nightly'
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+
+      # 处理 macOS latest-mac.yml 重命名 (避免多架构覆盖)
+      - name: Rename macOS latest-mac.yml for multi-architecture support
+        if: runner.os == 'macOS'
+        run: |
+          cd apps/desktop/release
+          if [ -f "latest-mac.yml" ]; then
+            # 使用系统架构检测，与 electron-builder 输出保持一致
+            SYSTEM_ARCH=$(uname -m)
+            if [[ "$SYSTEM_ARCH" == "arm64" ]]; then
+              ARCH_SUFFIX="arm64"
+            else
+              ARCH_SUFFIX="x64"
+            fi
+
+            mv latest-mac.yml "latest-mac-${ARCH_SUFFIX}.yml"
+            echo "✅ Renamed latest-mac.yml to latest-mac-${ARCH_SUFFIX}.yml (detected: $SYSTEM_ARCH)"
+            ls -la latest-mac-*.yml
+          else
+            echo "⚠️ latest-mac.yml not found, skipping rename"
+            ls -la latest*.yml || echo "No latest*.yml files found"
+          fi
+
+      # 上传构建产物
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ matrix.os }}
+          path: |
+            apps/desktop/release/latest*
+            apps/desktop/release/*.dmg*
+            apps/desktop/release/*.zip*
+            apps/desktop/release/*.exe*
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb*
+            apps/desktop/release/*.snap*
+            apps/desktop/release/*.rpm*
+            apps/desktop/release/*.tar.gz*
+          retention-days: 5
+
+  # 合并 macOS 多架构 latest-mac.yml 文件
+  merge-mac-files:
+    needs: [build, version]
+    name: Merge macOS Release Files for PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      # 下载所有平台的构建产物
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release
+          pattern: release-*
+          merge-multiple: true
+
+      # 列出下载的构建产物
+      - name: List downloaded artifacts
+        run: ls -R release
+
+      # 仅为该步骤在脚本目录安装 yaml 单包，避免安装整个 monorepo 依赖
+      - name: Install yaml only for merge step
+        run: |
+          cd scripts/electronWorkflow
+          if [ ! -f package.json ]; then
+            echo '{"name":"merge-mac-release","private":true}' > package.json
+          fi
+          bun add --no-save yaml@2.8.1
+
+      - name: Merge latest-mac.yml files
+        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+
+      # 上传合并后的构建产物
+      - name: Upload artifacts with merged macOS files
+        uses: actions/upload-artifact@v6
+        with:
+          name: merged-release-pr
+          path: release/
+          retention-days: 1
+
+  publish-pr:
+    needs: [merge-mac-files, version]
+    name: Publish PR Build
+    # 只为非 fork 的 PR 发布（fork 的 PR 没有写权限）
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Grant write permissions for creating release and commenting on PR
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      artifact_path: ${{ steps.set_path.outputs.path }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # 下载合并后的构建产物
+      - name: Download merged artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: merged-release-pr
+          path: release
+
+      # 列出所有构建产物
+      - name: List final artifacts
+        run: ls -R release
+
+      # 生成PR发布描述
+      - name: Generate PR Release Body
+        id: pr_release_body
+        uses: actions/github-script@v8
+        with:
+          result-encoding: string
+          script: |
+            const generateReleaseBody = require('${{ github.workspace }}/.github/scripts/pr-release-body.js');
+
+            const body = generateReleaseBody({
+              version: "${{ needs.version.outputs.version }}",
+              prNumber: "${{ github.event.pull_request.number }}",
+              branch: "${{ github.head_ref }}"
+            });
+
+            return body;
+
+      - name: Create Temporary Release for PR
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: PR Build v${{ needs.version.outputs.version }}
+          tag_name: v${{ needs.version.outputs.version }}
+          #          tag_name: pr-build-${{ github.event.pull_request.number }}-${{ github.sha }}
+          body: ${{ steps.pr_release_body.outputs.result }}
+          draft: false
+          prerelease: true
+          files: |
+            release/latest*
+            release/*.dmg*
+            release/*.zip*
+            release/*.exe*
+            release/*.AppImage
+            release/*.deb*
+            release/*.snap*
+            release/*.rpm*
+            release/*.tar.gz*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Post comment on PR with build info, release download link, and Actions artifacts link
+      - name: Comment on PR
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const releaseUrl = "${{ steps.create_release.outputs.url }}";
+            const artifactsUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}";
+            const prCommentGenerator = require('${{ github.workspace }}/.github/scripts/pr-comment.js');
+
+            const result = await prCommentGenerator({
+              github,
+              context,
+              releaseUrl,
+              artifactsUrl,
+              version: "${{ needs.version.outputs.version }}",
+              tag: "v${{ needs.version.outputs.version }}"
+            });
+
+            console.log(`Comment ${result.updated ? 'updated' : 'created'}, ID: ${result.id}`);

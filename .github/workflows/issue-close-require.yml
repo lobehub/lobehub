@@ -1,0 +1,63 @@
+name: Issue Close Require
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  issue-check-inactive:
+    permissions:
+      issues: write # for actions-cool/issues-helper to update issues
+      pull-requests: write # for actions-cool/issues-helper to update PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: check-inactive
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'check-inactive'
+          token: ${{ secrets.GH_TOKEN }}
+          inactive-label: 'Inactive'
+          inactive-day: 60
+
+  issue-close-require:
+    permissions:
+      issues: write # for actions-cool/issues-helper to update issues
+      pull-requests: write # for actions-cool/issues-helper to update PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: need reproduce
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'close-issues'
+          token: ${{ secrets.GH_TOKEN }}
+          labels: '✅ Fixed'
+          inactive-day: 3
+          body: |
+            👋 @{{ author }}
+            <br/>
+            Since the issue was labeled with `✅ Fixed`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
+      - name: need reproduce
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'close-issues'
+          token: ${{ secrets.GH_TOKEN }}
+          labels: '🤔 Need Reproduce'
+          inactive-day: 3
+          body: |
+            👋 @{{ author }}
+            <br/>
+            Since the issue was labeled with `🤔 Need Reproduce`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
+      - name: need reproduce
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'close-issues'
+          token: ${{ secrets.GH_TOKEN }}
+          labels: "🙅🏻‍♀️ WON'T DO"
+          inactive-day: 3
+          body: |
+            👋 @{{ github.event.issue.user.login }}
+            <br/>
+            Since the issue was labeled with `🙅🏻‍♀️ WON'T DO`, and no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
