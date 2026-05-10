@@ -1,3 +1,4 @@
+import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
 import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import {
   AgentMarketplaceIdentifier,
@@ -117,8 +118,22 @@ const customInteractionSubmitHandlers = new Map<string, CustomInteractionSubmitH
   [AgentMarketplaceIdentifier, handleAgentMarketplaceSubmit],
 ]);
 
+/**
+ * Identifiers whose intervention component renders inline as a form (with
+ * `onInteractionAction` callbacks) rather than the default approve / reject
+ * approval UI. Hetero CLIs (CC AskUserQuestion etc.) need this surface
+ * because the answer ships back through IPC, not through a synthetic user
+ * turn.
+ */
+const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([ClaudeCodeIdentifier]);
+
+export const isHeteroInteractionIdentifier = (identifier: string) =>
+  HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);
+
 export const isCustomInteractionIdentifier = (identifier: string) =>
-  identifier === UserInteractionIdentifier || customInteractionSubmitHandlers.has(identifier);
+  identifier === UserInteractionIdentifier ||
+  isHeteroInteractionIdentifier(identifier) ||
+  customInteractionSubmitHandlers.has(identifier);
 
 export const prepareCustomInteractionSubmit = async (
   identifier: string,

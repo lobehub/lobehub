@@ -61,6 +61,22 @@ import type {
  */
 const CC_TODO_WRITE_TOOL_NAME = 'TodoWrite';
 
+/**
+ * Tool name CC sees for the LobeHub-hosted MCP `ask_user_question` server.
+ * Source of truth lives in `../askUser/constants.ts`; replicated here as a
+ * literal so the adapter compiles in browser bundles without dragging in
+ * any of the askUser package's runtime (node:http, MCP SDK, etc.) by
+ * accident. Keep in sync.
+ */
+const ASK_USER_MCP_TOOL_NAME = 'mcp__lobe_cc__ask_user_question';
+
+/**
+ * apiName the adapter rewrites the MCP tool to so the renderer routes on
+ * a stable key, not the wire-prefixed MCP name. Source of truth same as
+ * above.
+ */
+const ASK_USER_API_NAME = 'askUserQuestion';
+
 /** Status of a single todo item in CC's `TodoWrite` tool_use. */
 type ClaudeCodeTodoStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -414,8 +430,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           break;
         }
         case 'tool_use': {
+          // Rewrite our local MCP `ask_user_question` tool to a stable
+          // apiName so the renderer routes on `askUserQuestion` (clean,
+          // domain-named) instead of the wire-prefixed MCP form. Identifier
+          // stays `claude-code` because this remains a CC-side tool.
+          const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
           newToolCalls.push({
-            apiName: block.name,
+            apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
@@ -507,8 +528,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           break;
         }
         case 'tool_use': {
+          // Rewrite our local MCP `ask_user_question` tool to a stable
+          // apiName so the renderer routes on `askUserQuestion` (clean,
+          // domain-named) instead of the wire-prefixed MCP form. Identifier
+          // stays `claude-code` because this remains a CC-side tool.
+          const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
           newToolCalls.push({
-            apiName: block.name,
+            apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',

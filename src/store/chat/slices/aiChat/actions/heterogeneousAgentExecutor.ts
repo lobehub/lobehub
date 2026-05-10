@@ -1,4 +1,7 @@
-import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type {
+  AgentInterventionRequestData,
+  AgentStreamEvent,
+} from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
 import {
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
@@ -1318,6 +1321,44 @@ export const executeHeterogeneousAgent = async (
 
       // Record for debugging
       trace.push({ event, timestamp: Date.now() });
+
+      // ─── agent_intervention_request: CC AskUserQuestion needs user input ───
+      // Stamp the canonical `pluginIntervention.status='pending'` on the
+      // matching tool message via `optimisticUpdateMessagePlugin` — that
+      // single primitive (1) writes to DB, (2) updates the in-memory
+      // `dbMessagesMap` reducer, AND (3) mirrors the same intervention onto
+      // the parent assistant's `tools[].intervention` so both surfaces
+      // (inline tool body + bottom InterventionBar) light up immediately.
+      // The Intervention component registered under
+      // `BuiltinToolInterventions['claude-code'][askUserQuestion]` is
+      // rendered automatically by the framework while pending; the
+      // eventual `tool_result` content (formatted answer text) gets
+      // overwritten via the existing `tool_result` branch below.
+      // Deferred behind `persistQueue` so it lands AFTER `persistToolBatch`
+      // populates `toolMsgIdByCallId`.
+      if (event.type === 'agent_intervention_request') {
+        const data = event.data as AgentInterventionRequestData;
+        persistQueue = persistQueue.then(async () => {
+          const toolMsgId = toolMsgIdByCallId.get(data.toolCallId);
+          if (!toolMsgId) {
+            console.warn(
+              '[HeterogeneousAgent] intervention_request for unknown toolCallId:',
+              data.toolCallId,
+            );
+            return;
+          }
+          try {
+            await get().optimisticUpdateMessagePlugin(
+              toolMsgId,
+              { intervention: { status: 'pending' } },
+              { operationId },
+            );
+          } catch (err) {
+            console.error('[HeterogeneousAgent] persist intervention pending failed:', err);
+          }
+        });
+        return;
+      }
 
       // ─── tool_result: update tool message content in DB (ACP-only) ───
       if (event.type === 'tool_result') {
