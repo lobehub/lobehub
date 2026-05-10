@@ -157,3 +157,7 @@ docs/superpowers/
 
 # Kagura agent runtime
 .kagura/
+
+# fixPatch tooling cache
+fixPatch/__pycache__/
+fixPatch/patches/__pycache__/
