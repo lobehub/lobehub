@@ -29,7 +29,7 @@
   "batchDelete": "批次刪除",
   "blog": "產品部落格",
   "botIntegrationBanner.dismiss": "關閉",
-  "botIntegrationBanner.title": "為 LobeAI 新增渠道",
+  "botIntegrationBanner.title": "在你喜愛的聊天應用中，與 Lobe AI 暢聊",
   "branching": "建立子主題",
   "branchingDisable": "「子話題」功能在目前模式下無法使用，如需使用此功能，請切換至 Postgres/Pglite 資料庫模式或使用 LobeHub 雲端服務",
   "branchingRequiresSavedTopic": "當前話題未保存，保存後才可以使用子話題功能",
