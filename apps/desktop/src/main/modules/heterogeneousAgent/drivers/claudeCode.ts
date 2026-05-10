@@ -27,6 +27,10 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     return {
       args: [
         ...DESKTOP_CLAUDE_CODE_ARGS,
+        // Wire the controller-managed temp mcp.json (AskUserQuestion server,
+        // see LOBE-8725) when present. Path-based config is required — CC
+        // does not accept inline JSON for `--mcp-config`.
+        ...(mcpConfigPath ? ['--mcp-config', mcpConfigPath] : []),
         ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
         ...args,
       ],
