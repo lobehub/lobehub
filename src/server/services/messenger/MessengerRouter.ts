@@ -502,7 +502,7 @@ export class MessengerRouter {
     if (binder.replyPrivately) {
       const slashPaths = this.commands.map((cmd) => `/${cmd.name}`);
       bot.onSlashCommand(slashPaths, async (event) => {
-        await this.handleSlashCommand({ binder, client, creds, event, serverDB });
+        await this.handleSlashCommand({ binder, bot, client, creds, event, serverDB });
       });
     }
 
@@ -657,12 +657,13 @@ export class MessengerRouter {
    */
   private async handleSlashCommand(params: {
     binder: MessengerPlatformBinder;
+    bot: Chat<any>;
     client: PlatformClient;
     creds: InstallationCredentials;
     event: SlashCommandEvent;
     serverDB: LobeChatDatabase;
   }): Promise<void> {
-    const { binder, client, creds, event, serverDB } = params;
+    const { binder, bot, client, creds, event, serverDB } = params;
     const senderId = event.user.userId;
     if (!senderId) {
       log('handleSlashCommand: missing user id, dropping');
@@ -698,6 +699,34 @@ export class MessengerRouter {
       creds.tenantId,
     );
 
+    // Slash command events have no chat-sdk Thread attached (slash isn't
+    // posted into any specific thread). Worse, chat-sdk's
+    // `handleSlashCommandEvent` constructs the ChannelImpl WITHOUT an
+    // `isDM` flag — it defaults to `false`, so we can't even tell
+    // whether the slash was fired from a DM by inspecting the channel.
+    //
+    // Resolve the user's DM thread on every slash invocation so commands
+    // like `/new` and `/stop` always have a target (the user's canonical
+    // bot conversation). `bot.openDM(userId)` is idempotent — Slack's
+    // `conversations.open` returns the existing IM when one already
+    // exists, so this doesn't create new conversations on each call. If
+    // resolution fails (rate limit, permission), `thread` stays undefined
+    // and handlers fall back to their "open your DM" branch.
+    let thread: any | undefined;
+    try {
+      thread = await bot.openDM(senderId);
+    } catch (error) {
+      log('handleSlashCommand: openDM(%s) failed: %O', senderId, error);
+    }
+
+    // chat-sdk doesn't propagate `isDM` on slash-event Channels (see the
+    // openDM block above). Fall back to a Slack channel-id prefix probe:
+    // raw Slack ids that start with `D` are 1:1 DMs (`G` / `MPDM` are
+    // group DMs, `C` is public). For other platforms (Discord today) the
+    // chat-sdk flag is reliable so we keep that path too.
+    const isDmChannel =
+      event.channel.isDM === true || (creds.platform === 'slack' && chatId.startsWith('D'));
+
     try {
       await command.handler({
         args,
@@ -705,16 +734,17 @@ export class MessengerRouter {
         authorUserName: event.user.userName,
         binder,
         chatId,
-        // Slash invocations carry the chat-sdk Channel that fired them —
-        // `isDM` lets handlers like /agents widen replies into ephemerals
-        // when the command was typed from a public channel.
-        isDM: event.channel.isDM === true,
+        // `isDM` lets handlers like `/agents` keep the picker public in
+        // DMs (so it stays in history) and widen to an ephemeral when
+        // the slash was typed from a public channel.
+        isDM: isDmChannel,
         link,
         platform: creds.platform,
         reply,
         serverDB,
         source: 'slash',
         tenantId: creds.tenantId,
+        thread,
       });
     } catch (error) {
       log('handleSlashCommand: handler error for /%s: %O', cmdName, error);

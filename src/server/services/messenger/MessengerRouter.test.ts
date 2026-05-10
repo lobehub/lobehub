@@ -44,6 +44,11 @@ vi.mock('@/config/messenger', () => ({
 // double as handler registries — tests pull the registered closures back
 // out via `.mock.calls[0][0]` to drive them with fake threads/messages.
 const mockWebhookHandler = vi.fn(async () => new Response('chat-sdk OK', { status: 200 }));
+// `openDM` is what slash-command handlers call to resolve a DM Thread on
+// demand (slash events don't carry one). Tests pulling slash handlers
+// out should pre-populate this with a fake thread so `/new` / `/stop`
+// take the DM path instead of falling back to the "open your DM" branch.
+const mockOpenDM = vi.fn();
 const mockChatBot = {
   initialize: vi.fn().mockResolvedValue(undefined),
   onAction: vi.fn(),
@@ -51,6 +56,7 @@ const mockChatBot = {
   onNewMention: vi.fn(),
   onSlashCommand: vi.fn(),
   onSubscribedMessage: vi.fn(),
+  openDM: mockOpenDM,
   webhooks: {
     slack: mockWebhookHandler,
     telegram: mockWebhookHandler,
@@ -165,6 +171,7 @@ beforeEach(() => {
   };
   mockFindLink.mockReset();
   mockHandleMention.mockReset();
+  mockOpenDM.mockReset();
   mockSlackBinder.handleUnlinkedMessage.mockReset();
   mockSlackBinder.replyEphemeral.mockReset();
   mockSlackBinder.replyPrivately.mockReset();
@@ -492,10 +499,11 @@ describe('MessengerRouter DM dispatch (regression)', () => {
   });
 });
 
-describe('MessengerRouter /agents slash invocation', () => {
-  // `runAgentsCommand` reads the user's agents from the live database via
+describe('MessengerRouter slash command dispatch', () => {
+  // `/agents` reads the user's agents from the live database via
   // `fetchUserAgents` — stub that on the prototype so we don't have to
-  // stand up drizzle / the agent table.
+  // stand up drizzle / the agent table. Other slash tests in this block
+  // simply ignore the spy.
   beforeEach(() => {
     vi.spyOn(MessengerRouter.prototype as any, 'fetchUserAgents').mockResolvedValue([
       { id: 'agt_a', title: 'A' },
@@ -530,6 +538,63 @@ describe('MessengerRouter /agents slash invocation', () => {
       ephemeralTo: 'U_ALICE',
       text: expect.stringContaining('Tap an agent'),
     });
+  });
+
+  it('resolves the DM thread for /new slash and clears topicId (slash from DM)', async () => {
+    // chat-sdk's slash-event ChannelImpl never carries `isDM=true` (see
+    // handleSlashCommand for the workaround). The DM here is detected
+    // via the Slack channel-id prefix (`D...`).
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    const dmThread = { id: 'slack:D_DM:', isDM: true, setState: vi.fn() };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(
+      fakeSlashEvent({
+        // `isDM: false` mirrors what chat-sdk actually delivers — we
+        // detect DM via the channel-id prefix instead.
+        channel: { id: 'slack:D_DM', isDM: false },
+        command: '/new',
+      }),
+    );
+
+    expect(mockOpenDM).toHaveBeenCalledWith('U_ALICE');
+    expect(dmThread.setState).toHaveBeenCalledWith({ topicId: undefined }, { replace: true });
+    expect(mockSlackBinder.replyPrivately).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining('Started a new conversation'),
+    );
+  });
+
+  it('still resolves the DM thread for /new slash fired from a public channel (clears DM topicId)', async () => {
+    // Slash from a public channel can't carry a specific thread anchor,
+    // so the most useful behavior is to clear the user's canonical bot
+    // conversation (the DM) instead of dropping the request. The
+    // confirmation is ephemeral so the channel doesn't see it.
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+    });
+    const dmThread = { id: 'slack:D_DM:', isDM: true, setState: vi.fn() };
+    mockOpenDM.mockResolvedValue(dmThread);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeSlashEvent({ command: '/new' })); // default: channel = C_GENERAL
+
+    expect(mockOpenDM).toHaveBeenCalledWith('U_ALICE');
+    expect(dmThread.setState).toHaveBeenCalledWith({ topicId: undefined }, { replace: true });
   });
 
   it('renders the picker as a regular DM message when /agents is invoked from a DM', async () => {
