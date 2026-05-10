@@ -7,7 +7,12 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
+import type { InterestAreaKey } from '@/routes/onboarding/config';
 import { INTEREST_AREAS } from '@/routes/onboarding/config';
+import {
+  normalizeInterestsForStorage,
+  resolveInterestAreaKey,
+} from '@/routes/onboarding/utils/interestKeys';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -21,6 +26,14 @@ const InterestsRow = () => {
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [saving, setSaving] = useState(false);
+  const translateArea = useCallback(
+    (key: `interests.area.${InterestAreaKey}`) => tOnboarding(key),
+    [tOnboarding],
+  );
+  const normalizedInterests = useMemo(
+    () => normalizeInterestsForStorage(interests, translateArea),
+    [interests, translateArea],
+  );
 
   const areas = useMemo(
     () =>
@@ -32,10 +45,10 @@ const InterestsRow = () => {
   );
 
   const toggleInterest = useCallback(
-    async (label: string) => {
-      const updated = interests.includes(label)
-        ? interests.filter((i) => i !== label)
-        : [...interests, label];
+    async (key: InterestAreaKey) => {
+      const updated = normalizedInterests.includes(key)
+        ? normalizedInterests.filter((i) => i !== key)
+        : [...normalizedInterests, key];
 
       try {
         setSaving(true);
@@ -50,14 +63,34 @@ const InterestsRow = () => {
         setSaving(false);
       }
     },
-    [interests, updateInterests],
+    [normalizedInterests, updateInterests],
+  );
+
+  const removeCustomInterest = useCallback(
+    async (interest: string) => {
+      const updated = normalizedInterests.filter((i) => i !== interest);
+
+      try {
+        setSaving(true);
+        await updateInterests(updated);
+      } catch (error) {
+        console.error('Failed to update interests:', error);
+        fetchErrorNotification.error({
+          errorMessage: error instanceof Error ? error.message : String(error),
+          status: 500,
+        });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [normalizedInterests, updateInterests],
   );
 
   const handleAddCustom = useCallback(async () => {
     const trimmed = customInput.trim();
-    if (!trimmed || interests.includes(trimmed)) return;
+    if (!trimmed || normalizedInterests.includes(trimmed)) return;
 
-    const updated = [...interests, trimmed];
+    const updated = [...normalizedInterests, trimmed];
     setCustomInput('');
 
     try {
@@ -72,14 +105,14 @@ const InterestsRow = () => {
     } finally {
       setSaving(false);
     }
-  }, [customInput, interests, updateInterests]);
+  }, [customInput, normalizedInterests, updateInterests]);
 
   return (
     <ProfileRow label={t('profile.interests')}>
       <Flexbox gap={12}>
         <Flexbox horizontal align="center" gap={8} wrap="wrap">
           {areas.map((item) => {
-            const isSelected = interests.includes(item.label);
+            const isSelected = normalizedInterests.includes(item.key);
             return (
               <Block
                 clickable
@@ -97,7 +130,7 @@ const InterestsRow = () => {
                       }
                     : { opacity: saving ? 0.6 : 1 }
                 }
-                onClick={() => !saving && toggleInterest(item.label)}
+                onClick={() => !saving && toggleInterest(item.key)}
               >
                 <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={14} />
                 <Text fontSize={13} weight={500}>
@@ -106,8 +139,8 @@ const InterestsRow = () => {
               </Block>
             );
           })}
-          {interests
-            .filter((i) => !areas.some((a) => a.label === i))
+          {normalizedInterests
+            .filter((i) => !resolveInterestAreaKey(i, translateArea))
             .map((interest) => (
               <Block
                 clickable
@@ -119,7 +152,7 @@ const InterestsRow = () => {
                   borderColor: cssVar.colorFillSecondary,
                   opacity: saving ? 0.6 : 1,
                 }}
-                onClick={() => !saving && toggleInterest(interest)}
+                onClick={() => !saving && removeCustomInterest(interest)}
               >
                 <Text fontSize={13} weight={500}>
                   {interest}

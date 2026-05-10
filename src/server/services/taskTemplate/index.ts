@@ -89,8 +89,8 @@ export class TaskTemplateService {
   constructor(private userId: string) {}
 
   /**
-   * Client resolves user.interests (localized labels or raw values) to
-   * INTEREST_AREAS keys before calling — see useResolvedInterestKeys in the UI.
+   * Client sends canonical INTEREST_AREAS keys. The UI still resolves legacy
+   * localized labels before calling — see useResolvedInterestKeys.
    */
   async listDailyRecommend(
     interestKeys: string[],

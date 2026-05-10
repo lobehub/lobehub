@@ -10,7 +10,9 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import LobeMessage from '../components/LobeMessage';
+import type { InterestAreaKey } from '../config';
 import { INTEREST_AREAS } from '../config';
+import { normalizeInterestsForStorage } from '../utils/interestKeys';
 
 interface InterestsStepProps {
   onBack: () => void;
@@ -21,8 +23,11 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('onboarding');
   const existingInterests = useUserStore(userProfileSelectors.interests);
   const updateInterests = useUserStore((s) => s.updateInterests);
+  const translateArea = useCallback((key: `interests.area.${InterestAreaKey}`) => t(key), [t]);
 
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(existingInterests);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(() =>
+    normalizeInterestsForStorage(existingInterests, translateArea),
+  );
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -37,9 +42,9 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
     [t],
   );
 
-  const toggleInterest = useCallback((label: string) => {
+  const toggleInterest = useCallback((key: InterestAreaKey) => {
     setSelectedInterests((prev) =>
-      prev.includes(label) ? prev.filter((i) => i !== label) : [...prev, label],
+      prev.includes(key) ? prev.filter((i) => i !== key) : [...prev, key],
     );
   }, []);
 
@@ -63,12 +68,11 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       finalInterests.push(trimmedCustom);
     }
 
-    // Deduplicate
-    const uniqueInterests = [...new Set(finalInterests)];
+    const uniqueInterests = normalizeInterestsForStorage(finalInterests, translateArea);
 
     updateInterests(uniqueInterests);
     onNext();
-  }, [selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
+  }, [selectedInterests, customInput, showCustomInput, translateArea, updateInterests, onNext]);
 
   const handleBack = useCallback(() => {
     if (isNavigatingRef.current) return;
@@ -84,7 +88,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       />
       <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
         {areas.map((item) => {
-          const isSelected = selectedInterests.includes(item.label);
+          const isSelected = selectedInterests.includes(item.key);
           return (
             <Block
               clickable
@@ -101,7 +105,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
                     }
                   : {}
               }
-              onClick={() => toggleInterest(item.label)}
+              onClick={() => toggleInterest(item.key)}
             >
               <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={16} />
               <Text fontSize={15} weight={500}>

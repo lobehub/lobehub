@@ -1,18 +1,18 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { INTEREST_AREAS } from '@/routes/onboarding/config';
+import { resolveInterestAreaKey } from '@/routes/onboarding/utils/interestKeys';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 /**
- * onboarding stores localized labels in `user.interests` (e.g. "内容创作",
- * "Content Creation") plus occasional freeform text. Resolve each entry back
- * to an INTEREST_AREAS key via the current-locale onboarding translations so
- * the server can intersection-match against template.interests (which hold
- * canonical keys). Unresolved entries are lowercased passthroughs — server
- * treats them as non-matching.
+ * New writes store canonical INTEREST_AREAS keys in `user.interests`, but
+ * existing users may still have localized labels (e.g. "内容创作",
+ * "Content Creation") or i18n keys from older builds. Resolve known legacy
+ * values back to canonical keys before matching task templates. Unresolved
+ * freeform entries are lowercased passthroughs — the server treats them as
+ * non-matching.
  *
  * Returns `null` while either:
  *   - the user store hasn't finished hydrating (`interests` is `[]` until then,
@@ -31,15 +31,10 @@ export const useResolvedInterestKeys = (): string[] | null => {
 
   return useMemo(() => {
     if (!isUserLoaded || !ready) return null;
-    const labelToKey = new Map<string, string>();
-    for (const area of INTEREST_AREAS) {
-      labelToKey.set(area.key, area.key);
-      const translated = t(`interests.area.${area.key}`, { defaultValue: '' });
-      if (translated) labelToKey.set(translated.trim().toLowerCase(), area.key);
-    }
+
     return userInterests.map((raw) => {
-      const k = raw.trim().toLowerCase();
-      return labelToKey.get(k) ?? k;
+      const key = resolveInterestAreaKey(raw, (areaKey) => t(areaKey, { defaultValue: '' }));
+      return key ?? raw.trim().toLocaleLowerCase();
     });
   }, [isUserLoaded, userInterests, t, ready]);
 };
