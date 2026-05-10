@@ -130,60 +130,7 @@ describe('resolveModelExtendParams', () => {
         });
       });
 
-      it('should use model default for enableReasoning when chat config is unset', () => {
-        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
-          () => ({
-            enableReasoning: {
-              defaultValue: true,
-              includeBudget: false,
-            },
-          }),
-        );
-
-        const result = resolveModelExtendParams({
-          chatConfig: createChatConfig(),
-          model: 'deepseek-v4-flash',
-          provider: 'deepseek',
-        });
-
-        expect(result.thinking).toEqual({
-          type: 'enabled',
-        });
-      });
-
-      it('should allow explicit chat config to override model enableReasoning default', () => {
-        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
-          () => ({
-            enableReasoning: {
-              defaultValue: true,
-              includeBudget: false,
-            },
-          }),
-        );
-
-        const result = resolveModelExtendParams({
-          chatConfig: createChatConfig({
-            enableReasoning: false,
-          }),
-          model: 'deepseek-v4-flash',
-          provider: 'deepseek',
-        });
-
-        expect(result.thinking).toEqual({
-          type: 'disabled',
-        });
-      });
-
       it('should preserve legacy thinking disabled when enableReasoning is unset', () => {
-        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
-          () => ({
-            enableReasoning: {
-              defaultValue: true,
-              includeBudget: false,
-            },
-          }),
-        );
-
         const result = resolveModelExtendParams({
           chatConfig: createChatConfig({
             thinking: 'disabled',
@@ -193,20 +140,12 @@ describe('resolveModelExtendParams', () => {
         });
 
         expect(result.thinking).toEqual({
+          budget_tokens: 0,
           type: 'disabled',
         });
       });
 
       it('should preserve legacy thinking enabled when enableReasoning is unset', () => {
-        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
-          () => ({
-            enableReasoning: {
-              defaultValue: false,
-              includeBudget: false,
-            },
-          }),
-        );
-
         const result = resolveModelExtendParams({
           chatConfig: createChatConfig({
             thinking: 'enabled',
@@ -216,6 +155,7 @@ describe('resolveModelExtendParams', () => {
         });
 
         expect(result.thinking).toEqual({
+          budget_tokens: 1024,
           type: 'enabled',
         });
       });

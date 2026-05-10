@@ -6,6 +6,7 @@ import deepseekChatModels from 'model-bank/deepseek';
 import googleChatModels from 'model-bank/google';
 import { lobehubChatModels } from 'model-bank/lobehub';
 import openaiChatModels from 'model-bank/openai';
+import vertexAiModels from 'model-bank/vertexai';
 import { describe, expect, it } from 'vitest';
 
 import { computeChatCost } from './computeChatCost';
@@ -334,7 +335,7 @@ describe('computeChatPricing', () => {
 
     it('charges Gemini 3.1 Flash-Lite image, video, and audio input tokens', () => {
       const pricing = googleChatModels.find(
-        (model: { id: string }) => model.id === 'gemini-3.1-flash-lite-preview',
+        (model: { id: string }) => model.id === 'gemini-3.1-flash-lite',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -360,6 +361,55 @@ describe('computeChatPricing', () => {
       expect(breakdown.find((item) => item.unit.name === 'videoInput')?.credits).toBe(297);
       expect(breakdown.find((item) => item.unit.name === 'audioInput')?.credits).toBe(222);
       expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(519);
+    });
+
+    it('charges Gemini 3.1 Flash-Lite cached audio and cache writes across Google cards', () => {
+      const modelLists = [googleChatModels, lobehubChatModels, vertexAiModels];
+
+      for (const models of modelLists) {
+        const pricing = models.find(
+          (model: { id: string }) => model.id === 'gemini-3.1-flash-lite',
+        )?.pricing;
+        expect(pricing).toBeDefined();
+
+        const usage: ModelTokensUsage = {
+          inputAudioTokens: 1000,
+          inputCachedAudioTokens: 400,
+          inputCachedImageTokens: 200,
+          inputCachedTextTokens: 600,
+          inputCachedTokens: 1300,
+          inputCachedVideoTokens: 100,
+          inputImageTokens: 500,
+          inputTextTokens: 1200,
+          inputVideoTokens: 300,
+          inputWriteCacheTokens: 300,
+          outputTextTokens: 100,
+          totalInputTokens: 3000,
+          totalOutputTokens: 100,
+          totalTokens: 3100,
+        };
+
+        const result = computeChatCost(pricing, usage);
+        expect(result).toBeDefined();
+        expect(result?.issues).toHaveLength(0);
+        expect(result?.totalCredits).toBe(1068);
+
+        const { breakdown } = result!;
+        expect(breakdown.find((item) => item.unit.name === 'textInput_cacheRead')?.credits).toBe(
+          23,
+        );
+        expect(breakdown.find((item) => item.unit.name === 'audioInput_cacheRead')?.credits).toBe(
+          20,
+        );
+        expect(breakdown.find((item) => item.unit.name === 'textInput')?.credits).toBe(150);
+        expect(breakdown.find((item) => item.unit.name === 'imageInput')?.credits).toBe(75);
+        expect(breakdown.find((item) => item.unit.name === 'videoInput')?.credits).toBe(50);
+        expect(breakdown.find((item) => item.unit.name === 'audioInput')?.credits).toBe(300);
+        expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(150);
+
+        const cacheWrite = breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
+        expect(cacheWrite?.credits).toBe(300);
+      }
     });
 
     it('charges multimodal input units for LobeHub-hosted Gemini 3 Flash', () => {

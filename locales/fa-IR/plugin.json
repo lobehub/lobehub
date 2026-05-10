@@ -681,7 +681,7 @@
   "skillDetail.tools": "ابزارها",
   "skillDetail.trustWarning": "فقط از کانکتورهایی استفاده کنید که توسط توسعه‌دهندگان مورد اعتماد شما ارائه شده‌اند. LobeHub کنترلی بر ابزارهایی که توسعه‌دهندگان ارائه می‌دهند ندارد و نمی‌تواند تضمین کند که این ابزارها طبق انتظار عمل می‌کنند یا تغییری نخواهند کرد.",
   "skillInstallBanner.dismiss": "بستن",
-  "skillInstallBanner.title": "افزودن مهارت‌ها به Lobe AI",
+  "skillInstallBanner.title": "برنامه‌های مورد علاقه‌تان را به Lobe AI وصل کنید",
   "store.actions.cancel": "لغو",
   "store.actions.configure": "پیکربندی",
   "store.actions.confirmUninstall": "حذف مهارت باعث پاک شدن پیکربندی آن می‌شود. ادامه می‌دهید؟",
