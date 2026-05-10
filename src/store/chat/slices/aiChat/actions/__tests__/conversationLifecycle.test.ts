@@ -1106,6 +1106,12 @@ describe('ConversationLifecycle actions', () => {
         );
         expect(addTopicCalls).toHaveLength(1);
         expect((addTopicCalls[0][0] as any).value).toEqual(createdTopic);
+        // The prepend must be pinned to the operation's original agent so it
+        // lands in the right cache even if the user navigates away.
+        expect(addTopicCalls[0][2]).toEqual({
+          agentId: TEST_IDS.SESSION_ID,
+          groupId: undefined,
+        });
         expect(updateTopicsSpy).not.toHaveBeenCalled();
       });
 

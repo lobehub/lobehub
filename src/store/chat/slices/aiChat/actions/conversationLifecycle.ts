@@ -553,9 +553,12 @@ export class ConversationLifecycleActionImpl {
         // Prefer the lightweight `createdTopic` payload (single-row prepend)
         // over the legacy `topics` bulk write.
         if (heteroData.createdTopic) {
+          // Pin to the operation's original agent/group so the prepend lands
+          // in the right cache even if the user has navigated away.
           this.#get().internal_dispatchTopic(
             { type: 'addTopic', value: heteroData.createdTopic },
             'sendMessageInServer/createTopic',
+            { agentId: operationContext.agentId, groupId: operationContext.groupId },
           );
         } else if (heteroData.topics) {
           // Fallback for older servers without `createdTopic`.
@@ -773,9 +776,12 @@ export class ConversationLifecycleActionImpl {
         finalTopicId = data.topicId;
 
         if (!context.isolatedTopic) {
+          // Pin to the operation's original agent/group so the prepend lands
+          // in the right cache even if the user has navigated away.
           this.#get().internal_dispatchTopic(
             { type: 'addTopic', value: data.createdTopic },
             'sendMessageInServer/createTopic',
+            { agentId: operationContext.agentId, groupId: operationContext.groupId },
           );
 
           // Record the created topicId in metadata (not context)

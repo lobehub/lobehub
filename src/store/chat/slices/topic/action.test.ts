@@ -1246,5 +1246,56 @@ describe('topic action', () => {
 
       expect(useChatStore.getState().topicDataMap[key].total).toBe(5);
     });
+
+    it('should write to the container override instead of the active agent/group', () => {
+      // Guards against the regression where a `sendMessage` started on agent A
+      // resolves after the user navigated to agent B — the optimistic prepend
+      // must still land on agent A's cache.
+      const originAgentId = 'agent-origin';
+      const otherAgentId = 'agent-other';
+      const originKey = topicMapKey({ agentId: originAgentId });
+      const otherKey = topicMapKey({ agentId: otherAgentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          // User has navigated away to a different agent.
+          activeAgentId: otherAgentId,
+          topicDataMap: {
+            [originKey]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [{ id: 'old', title: 'old' } as ChatTopic],
+              pageSize: 20,
+              total: 1,
+            },
+            [otherKey]: {
+              currentPage: 0,
+              hasMore: false,
+              isExpandingPageSize: false,
+              items: [],
+              pageSize: 20,
+              total: 0,
+            },
+          },
+        });
+      });
+
+      act(() => {
+        result.current.internal_dispatchTopic(
+          { type: 'addTopic', value: { id: 'fresh', title: 'fresh' } },
+          'sendMessageInServer/createTopic',
+          { agentId: originAgentId },
+        );
+      });
+
+      const state = useChatStore.getState();
+      expect(state.topicDataMap[originKey].items.map((i) => i.id)).toEqual(['fresh', 'old']);
+      expect(state.topicDataMap[originKey].total).toBe(2);
+      // Currently visible cache must be untouched.
+      expect(state.topicDataMap[otherKey].items).toEqual([]);
+      expect(state.topicDataMap[otherKey].total).toBe(0);
+    });
   });
 });

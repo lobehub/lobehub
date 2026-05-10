@@ -712,9 +712,16 @@ export class ChatTopicActionImpl {
     return topicId;
   };
 
-  internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
+  internal_dispatchTopic = (
+    payload: ChatTopicDispatch,
+    action?: any,
+    container?: { agentId?: string; groupId?: string },
+  ): void => {
     const { activeAgentId, activeGroupId } = this.#get();
-    const key = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
+    const key = topicMapKey({
+      agentId: container?.agentId ?? activeAgentId,
+      groupId: container?.groupId ?? activeGroupId,
+    });
     const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);
 
