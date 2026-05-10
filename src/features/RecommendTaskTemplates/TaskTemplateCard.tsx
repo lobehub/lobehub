@@ -57,12 +57,21 @@ interface TaskTemplateCardProps {
   onDismiss: (templateId: string) => void;
   position: number;
   recommendationBatchId: string;
+  spmRoot: string;
   template: RecommendedTaskTemplate;
   userInterestCount: number;
 }
 
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
-  ({ onCreated, onDismiss, position, recommendationBatchId, template, userInterestCount }) => {
+  ({
+    onCreated,
+    onDismiss,
+    position,
+    recommendationBatchId,
+    spmRoot,
+    template,
+    userInterestCount,
+  }) => {
     const { t } = useTranslation('taskTemplate');
     const { t: tSetting } = useTranslation('setting');
     const { analytics } = useAnalytics();
@@ -96,36 +105,28 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     const handleRequiredConnectResult = useCallback(
       (result: SkillConnectionResult) => {
-        trackCardEvent(
-          'task_template_skill_connect_result',
-          'home.task_templates.skill_connect_result',
-          {
-            duration_ms: result.durationMs,
-            requirement_type: 'required',
-            result: result.result,
-            skill_provider: result.provider,
-            skill_source: result.source,
-          },
-        );
+        trackCardEvent('task_template_skill_connect_result', `${spmRoot}.skill_connect_result`, {
+          duration_ms: result.durationMs,
+          requirement_type: 'required',
+          result: result.result,
+          skill_provider: result.provider,
+          skill_source: result.source,
+        });
       },
-      [trackCardEvent],
+      [spmRoot, trackCardEvent],
     );
 
     const handleOptionalConnectResult = useCallback(
       (result: SkillConnectionResult) => {
-        trackCardEvent(
-          'task_template_skill_connect_result',
-          'home.task_templates.skill_connect_result',
-          {
-            duration_ms: result.durationMs,
-            requirement_type: 'optional',
-            result: result.result,
-            skill_provider: result.provider,
-            skill_source: result.source,
-          },
-        );
+        trackCardEvent('task_template_skill_connect_result', `${spmRoot}.skill_connect_result`, {
+          duration_ms: result.durationMs,
+          requirement_type: 'optional',
+          result: result.result,
+          skill_provider: result.provider,
+          skill_source: result.source,
+        });
       },
-      [trackCardEvent],
+      [spmRoot, trackCardEvent],
     );
 
     const skillConnection = useSkillConnection(template.requiresSkills, {
@@ -160,17 +161,13 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       ) => {
         if (!target) return;
 
-        trackCardEvent(
-          'task_template_skill_connect_clicked',
-          'home.task_templates.skill_connect_clicked',
-          {
-            requirement_type: requirementType,
-            skill_provider: target.provider,
-            skill_source: target.source,
-          },
-        );
+        trackCardEvent('task_template_skill_connect_clicked', `${spmRoot}.skill_connect_clicked`, {
+          requirement_type: requirementType,
+          skill_provider: target.provider,
+          skill_source: target.source,
+        });
       },
-      [trackCardEvent],
+      [spmRoot, trackCardEvent],
     );
 
     useEffect(() => {
@@ -191,7 +188,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         impressedAtRef.current = Date.now();
         trackCardEvent(
           'task_template_card_impression',
-          'home.task_templates.card_impression',
+          `${spmRoot}.card_impression`,
           getCurrentCardStateProperties(),
         );
       };
@@ -213,7 +210,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       observer.observe(node);
 
       return () => observer.disconnect();
-    }, [analytics, getCurrentCardStateProperties, template.id, trackCardEvent, userId]);
+    }, [analytics, getCurrentCardStateProperties, spmRoot, template.id, trackCardEvent, userId]);
 
     const scheduleText = useMemo(() => {
       const parsed = parseCronPattern(template.cronPattern);
@@ -228,7 +225,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     const handleCreate = useCallback(async () => {
       if (!inboxAgentId) return;
       const startedAt = Date.now();
-      trackCardEvent('task_template_create_clicked', 'home.task_templates.create_clicked');
+      trackCardEvent('task_template_create_clicked', `${spmRoot}.create_clicked`);
       setLoading(true);
       try {
         const prompt = t(`${template.id}.prompt`, { defaultValue: '' });
@@ -240,7 +237,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
           schedulePattern: template.cronPattern,
           scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
-        trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
+        trackCardEvent('task_template_create_result', `${spmRoot}.create_result`, {
           duration_ms: Date.now() - startedAt,
           error_type: null,
           result: 'success',
@@ -254,7 +251,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
           navigate(`/task/${createdTask.identifier}`);
         }
       } catch (error) {
-        trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
+        trackCardEvent('task_template_create_result', `${spmRoot}.create_result`, {
           duration_ms: Date.now() - startedAt,
           error_type: resolveTaskTemplateErrorType(error),
           result: 'fail',
@@ -270,6 +267,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       message,
       navigate,
       onCreated,
+      spmRoot,
       t,
       template.cronPattern,
       template.id,
@@ -279,14 +277,14 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     const handleDismiss = useCallback(() => {
       if (loading || created) return;
-      trackCardEvent('task_template_dismissed', 'home.task_templates.dismissed', {
+      trackCardEvent('task_template_dismissed', `${spmRoot}.dismissed`, {
         time_since_impression_ms: impressedAtRef.current
           ? Date.now() - impressedAtRef.current
           : null,
         was_impressed: !!impressedAtRef.current,
       });
       onDismiss(template.id);
-    }, [created, loading, onDismiss, template.id, trackCardEvent]);
+    }, [created, loading, onDismiss, spmRoot, template.id, trackCardEvent]);
 
     const handleConnectError = useCallback(
       (error: unknown) => {

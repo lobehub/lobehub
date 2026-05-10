@@ -221,6 +221,7 @@ const renderCard = (template = makeTemplate()) => {
     <TaskTemplateCard
       position={0}
       recommendationBatchId="batch-1"
+      spmRoot="home.task_templates"
       template={template}
       userInterestCount={1}
       onCreated={onCreated}
@@ -274,6 +275,7 @@ describe('TaskTemplateCard analytics', () => {
       <TaskTemplateCard
         position={0}
         recommendationBatchId="batch-1"
+        spmRoot="home.task_templates"
         template={makeTemplate()}
         userInterestCount={1}
         onCreated={vi.fn()}
@@ -291,6 +293,7 @@ describe('TaskTemplateCard analytics', () => {
       <TaskTemplateCard
         position={0}
         recommendationBatchId="batch-1"
+        spmRoot="home.task_templates"
         template={makeTemplate()}
         userInterestCount={1}
         onCreated={vi.fn()}

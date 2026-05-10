@@ -61,10 +61,12 @@ export const getTaskTemplateCommonAnalyticsProperties = (
 
 export const getTaskTemplateListServedProperties = ({
   recommendationBatchId,
+  spmRoot,
   templates,
   userInterestCount,
 }: {
   recommendationBatchId: string;
+  spmRoot: string;
   templates: RecommendedTaskTemplate[];
   userInterestCount: number;
 }) => {
@@ -82,7 +84,7 @@ export const getTaskTemplateListServedProperties = ({
     matched_count: matchedCount,
     preferred_category_fallback_count: preferredCategoryFallbackCount,
     recommendation_batch_id: recommendationBatchId,
-    spm: 'home.task_templates.list_served',
+    spm: `${spmRoot}.list_served`,
     template_count: templates.length,
     user_interest_count: userInterestCount,
   };

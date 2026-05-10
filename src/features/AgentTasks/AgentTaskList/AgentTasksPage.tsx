@@ -16,6 +16,7 @@ import { taskListSelectors } from '@/store/task/selectors';
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
+import EmptyTasks from './EmptyTasks';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
@@ -29,6 +30,7 @@ const AgentTasksPage = memo(() => {
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ allAgents: true });
+  const isEmpty = useTaskStore(taskListSelectors.isListEmpty);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
@@ -65,7 +67,7 @@ const AgentTasksPage = memo(() => {
         left={<Breadcrumb />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {(inlineCollapsed || viewMode === 'kanban') && (
+            {(inlineCollapsed || viewMode === 'kanban' || isEmpty) && (
               <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
             )}
             <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
@@ -85,7 +87,9 @@ const AgentTasksPage = memo(() => {
           },
         }}
       />
-      {viewMode === 'kanban' ? (
+      {isEmpty ? (
+        <EmptyTasks />
+      ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
           <KanbanBoard />
         </Flexbox>

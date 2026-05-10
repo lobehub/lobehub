@@ -21,6 +21,7 @@ describe('task template analytics helpers', () => {
   it('builds list served properties for matched and fallback recommendations', () => {
     const properties = getTaskTemplateListServedProperties({
       recommendationBatchId: 'batch-1',
+      spmRoot: 'home.task_templates',
       templates: [
         makeTemplate({ id: 'matched', source: 'matched' }),
         makeTemplate({

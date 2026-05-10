@@ -15,7 +15,9 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { createRecommendationBatchId, getTaskTemplateListServedProperties } from './analytics';
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 
-export type DailyBriefRecommendationsUIState =
+const DEFAULT_SPM_ROOT = 'home.task_templates';
+
+export type TaskTemplateRecommendationsState =
   | { mode: 'hidden' }
   | { mode: 'skeleton' }
   | {
@@ -23,11 +25,19 @@ export type DailyBriefRecommendationsUIState =
       onCreated: (templateId: string) => void;
       onDismiss: (templateId: string) => void;
       recommendationBatchId: string;
+      spmRoot: string;
       templates: RecommendedTaskTemplate[];
       userInterestCount: number;
     };
 
-export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUIState {
+interface UseTaskTemplateRecommendationsOptions {
+  spmRoot?: string;
+}
+
+export function useTaskTemplateRecommendations(
+  options?: UseTaskTemplateRecommendationsOptions,
+): TaskTemplateRecommendationsState {
+  const spmRoot = options?.spmRoot ?? DEFAULT_SPM_ROOT;
   const { t } = useTranslation('taskTemplate');
   const { analytics } = useAnalytics();
   const { message } = App.useApp();
@@ -76,12 +86,13 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
       name: 'task_template_list_served',
       properties: getTaskTemplateListServedProperties({
         recommendationBatchId: batch.id,
+        spmRoot,
         templates,
         userInterestCount,
       }),
     });
     batch.served = true;
-  }, [analytics, templates, userInterestCount]);
+  }, [analytics, spmRoot, templates, userInterestCount]);
 
   const removeTemplateFromList = useCallback(
     (templateId: string) => {
@@ -139,6 +150,7 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
     onCreated: handleCreated,
     onDismiss: handleDismiss,
     recommendationBatchId: recommendationBatchId ?? createRecommendationBatchId(),
+    spmRoot,
     templates,
     userInterestCount,
   };

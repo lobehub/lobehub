@@ -4,8 +4,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { DailyBriefRecommendations } from '@/business/client/DailyBriefRecommendations';
-import { useDailyBriefRecommendationsUI } from '@/business/client/useDailyBriefRecommendationsUI';
+import { RecommendedTaskTemplates } from '@/business/client/RecommendedTaskTemplates';
+import { useTaskTemplateRecommendations } from '@/business/client/useTaskTemplateRecommendations';
 import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
 import DocumentPreviewModal from '@/features/DocumentModal/Preview';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
@@ -26,7 +26,7 @@ const DailyBrief = memo(() => {
 
   const briefs = useBriefStore(briefListSelectors.briefs);
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
-  const recState = useDailyBriefRecommendationsUI();
+  const recState = useTaskTemplateRecommendations();
 
   if (!isLogin) return null;
 
@@ -36,7 +36,7 @@ const DailyBrief = memo(() => {
         <Flexbox gap={12}>
           <BriefCardSkeleton />
           <BriefCardSkeleton />
-          <DailyBriefRecommendations state={recState} />
+          <RecommendedTaskTemplates state={recState} />
         </Flexbox>
       </GroupBlock>
     );
@@ -63,7 +63,7 @@ const DailyBrief = memo(() => {
         {briefs.map((brief) => (
           <BriefCard brief={brief} key={brief.id} />
         ))}
-        <DailyBriefRecommendations state={recState} />
+        <RecommendedTaskTemplates state={recState} />
       </Flexbox>
       {briefs.length > 0 && (
         <>

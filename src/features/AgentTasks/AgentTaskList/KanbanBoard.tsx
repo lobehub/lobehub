@@ -9,9 +9,8 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -196,16 +195,6 @@ const KanbanBoard = memo(() => {
           />
         ))}
       </Flexbox>
-    );
-  }
-
-  const totalTasks = taskGroups.reduce((sum, g) => sum + g.total, 0);
-
-  if (totalTasks === 0) {
-    return (
-      <Center height={'80vh'} width={'100%'}>
-        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
-      </Center>
     );
   }
 

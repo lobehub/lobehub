@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-/** @deprecated Recommendations render inside Daily brief via `DailyBriefRecommendations`. */
+/** @deprecated Recommendations render via `RecommendedTaskTemplates`. */
 export const RecommendTaskTemplates = memo(() => null);
 
 RecommendTaskTemplates.displayName = 'RecommendTaskTemplates';

@@ -1,7 +1,7 @@
-import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import { ClipboardCheckIcon, UserRound } from 'lucide-react';
+import { UserRound } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -203,14 +203,6 @@ const TaskList = memo<TaskListProps>(({ onShowHiddenCompleted, options }) => {
           </Fragment>
         ))}
       </Block>
-    );
-  }
-
-  if (tasks.length === 0) {
-    return (
-      <Center height={'80vh'} width={'100%'}>
-        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
-      </Center>
     );
   }
 
