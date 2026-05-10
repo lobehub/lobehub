@@ -1,5 +1,9 @@
 export {
   type AgentArgs,
+  type AskUserQuestionArgs,
+  type AskUserQuestionItem,
+  type AskUserQuestionOption,
+  type AskUserQuestionPluginState,
   ClaudeCodeApiName,
   ClaudeCodeIdentifier,
   type ClaudeCodeTodoItem,
