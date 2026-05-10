@@ -47,7 +47,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read the content of a specific file. Input should be the file path. Output is the file content as a string.',
+        'Read the content of a text or document file (txt/md/json/source code/pdf/docx/etc.). Binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.',
       humanIntervention: {
         dynamic: {
           default: 'never',
