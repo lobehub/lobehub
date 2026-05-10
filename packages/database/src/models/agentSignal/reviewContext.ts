@@ -14,11 +14,6 @@ import type { LobeChatDatabase } from '../../type';
 const parseAggregateTimestamp = (value: Date | string) =>
   value instanceof Date ? value : new Date(value);
 
-const explicitPreferenceCue = sql`
-  ${messages.role} = 'user'
-  AND ${messages.content} ~* '(please remember|for future|next time|stable preference|durable preference|\\bprefer\\b|\\bpreference\\b|以后|以后都|记住|偏好)'
-`;
-
 export interface ListAgentSignalTopicActivityOptions {
   agentId: string;
   limit: number;
@@ -244,16 +239,8 @@ export class AgentSignalReviewContextModel {
 
     return this.db
       .select({
-        correctionCount:
-          sql<number>`COUNT(${messages.id}) FILTER (WHERE ${explicitPreferenceCue})`.mapWith(
-            Number,
-          ),
-        correctionIds: sql<string[]>`
-          COALESCE(
-            jsonb_agg(DISTINCT ${messages.id}) FILTER (WHERE ${explicitPreferenceCue}),
-            '[]'::jsonb
-          )
-        `,
+        correctionCount: sql<number>`0`.mapWith(Number),
+        correctionIds: sql<string[]>`ARRAY[]::text[]`,
         failedMessages: sql<AgentSignalFailedMessageSummary[]>`
           COALESCE(
             jsonb_agg(
@@ -316,16 +303,8 @@ export class AgentSignalReviewContextModel {
   listSelfReflectionTopicActivity = (options: ListAgentSignalSelfReflectionTopicOptions) => {
     return this.db
       .select({
-        correctionCount:
-          sql<number>`COUNT(${messages.id}) FILTER (WHERE ${explicitPreferenceCue})`.mapWith(
-            Number,
-          ),
-        correctionIds: sql<string[]>`
-          COALESCE(
-            jsonb_agg(DISTINCT ${messages.id}) FILTER (WHERE ${explicitPreferenceCue}),
-            '[]'::jsonb
-          )
-        `,
+        correctionCount: sql<number>`0`.mapWith(Number),
+        correctionIds: sql<string[]>`ARRAY[]::text[]`,
         failedMessages: sql<AgentSignalFailedMessageSummary[]>`
           COALESCE(
             jsonb_agg(

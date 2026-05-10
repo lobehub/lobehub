@@ -1,9 +1,93 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BriefItem } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
+import type * as SkillManagementModule from '@/server/services/skillManagement';
 
-import { listServerProposalActivity } from '../serverRuntime';
+import type * as ToolFirstRuntimeModule from '../agent';
+import type { NightlyReviewContext } from '../nightlyCollector';
+import {
+  createServerNightlyReviewPolicyOptions,
+  listServerProposalActivity,
+} from '../serverRuntime';
+import { MaintenanceActionStatus, ReviewRunStatus } from '../types';
+
+const mocks = vi.hoisted(() => ({
+  createMaintenanceExecutorService: vi.fn(() => ({
+    execute: vi.fn(async () => {
+      throw new Error('legacy executor must not execute nightly mutations');
+    }),
+  })),
+  createMaintenancePlannerService: vi.fn(() => ({
+    plan: vi.fn(() => {
+      throw new Error('legacy planner must not plan nightly mutations');
+    }),
+  })),
+  briefCreate: vi.fn(),
+  briefListUnresolvedByAgentAndTrigger: vi.fn(async () => []),
+  briefUpdateMetadata: vi.fn(),
+  initModelRuntimeFromDB: vi.fn(async () => ({ chat: vi.fn() })),
+  runMaintenanceToolFirstRuntime: vi.fn(),
+  skillReadTargetSnapshot: vi.fn(),
+  skillReplaceSkillIndex: vi.fn(),
+}));
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: mocks.initModelRuntimeFromDB,
+}));
+
+vi.mock('../executor', () => ({
+  createMaintenanceExecutorService: mocks.createMaintenanceExecutorService,
+}));
+
+vi.mock('../planner', () => ({
+  createMaintenancePlannerService: mocks.createMaintenancePlannerService,
+}));
+
+vi.mock('../agent', async (importOriginal) => ({
+  ...(await importOriginal<typeof ToolFirstRuntimeModule>()),
+  runMaintenanceToolFirstRuntime: mocks.runMaintenanceToolFirstRuntime,
+}));
+
+vi.mock('@/database/models/agentSignal/nightlyReview', () => ({
+  AgentSignalNightlyReviewModel: class {
+    listActiveAgentTargets = vi.fn(async () => []);
+  },
+}));
+
+vi.mock('@/database/models/agentSignal/reviewContext', () => ({
+  AgentSignalReviewContextModel: class {
+    canAgentRunSelfIteration = vi.fn(async () => true);
+    listDocumentActivity = vi.fn(async () => []);
+    listRelevantMemories = vi.fn(async () => []);
+    listToolActivity = vi.fn(async () => []);
+    listTopicActivity = vi.fn(async () => []);
+  },
+}));
+
+vi.mock('@/database/models/brief', () => ({
+  BriefModel: class {
+    create = mocks.briefCreate;
+    listUnresolvedByAgentAndTrigger = mocks.briefListUnresolvedByAgentAndTrigger;
+    updateMetadata = mocks.briefUpdateMetadata;
+  },
+}));
+
+vi.mock('@/server/services/skillManagement', async (importOriginal) => ({
+  ...(await importOriginal<typeof SkillManagementModule>()),
+  SkillManagementDocumentService: class {
+    createSkill = vi.fn();
+    getSkill = vi.fn();
+    listSkills = vi.fn(async () => []);
+    readSkillTargetSnapshot = mocks.skillReadTargetSnapshot;
+    replaceSkillIndex = mocks.skillReplaceSkillIndex;
+  },
+}));
+
+vi.mock('@/server/services/agentSignal/featureGate', () => ({
+  isAgentSignalEnabledForUser: vi.fn(async () => true),
+}));
 
 const baseBrief = (overrides: Partial<BriefItem>): BriefItem => ({
   actions: null,
@@ -58,6 +142,122 @@ const proposalMetadata = (
     version: 1,
     ...overrides,
   },
+});
+
+const createNightlyContext = (): NightlyReviewContext => ({
+  agentId: 'agent-1',
+  documentActivity: {
+    ambiguousBucket: [],
+    excludedSummary: { count: 0, reasons: [] },
+    generalDocumentBucket: [],
+    skillBucket: [],
+  },
+  feedbackActivity: {
+    neutralCount: 0,
+    notSatisfied: [],
+    satisfied: [],
+  },
+  maintenanceSignals: [],
+  managedSkills: [],
+  proposalActivity: {
+    active: [],
+    dismissedCount: 0,
+    expiredCount: 0,
+    staleCount: 0,
+    supersededCount: 0,
+  },
+  receiptActivity: {
+    appliedCount: 0,
+    duplicateGroups: [],
+    failedCount: 0,
+    pendingProposalCount: 0,
+    recentReceipts: [],
+    reviewCount: 0,
+  },
+  relevantMemories: [],
+  reviewWindowEnd: '2026-05-09T02:00:00.000Z',
+  reviewWindowStart: '2026-05-09T00:00:00.000Z',
+  toolActivity: [],
+  topics: [],
+  userId: 'user-1',
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.briefCreate.mockResolvedValue(baseBrief({ id: 'brief-created' }));
+  mocks.briefListUnresolvedByAgentAndTrigger.mockResolvedValue([]);
+  mocks.briefUpdateMetadata.mockResolvedValue(undefined);
+  mocks.initModelRuntimeFromDB.mockResolvedValue({ chat: vi.fn() });
+  mocks.skillReadTargetSnapshot.mockResolvedValue(undefined);
+  mocks.skillReplaceSkillIndex.mockResolvedValue(undefined);
+  mocks.runMaintenanceToolFirstRuntime.mockResolvedValue({
+    content: 'Created a skill.',
+    stepCount: 3,
+    toolCalls: [
+      {
+        apiName: 'createSkillIfAbsent',
+        arguments: JSON.stringify({
+          bodyMarkdown: 'Use concise answers.',
+          idempotencyKey: 'op-create-skill',
+          name: 'concise-answers',
+          title: 'Concise answers',
+        }),
+        id: 'tool-call-1',
+        identifier: 'agent-signal-maintenance',
+        type: 'builtin',
+      },
+    ],
+    usage: [],
+    writeOutcomes: [
+      {
+        result: {
+          receiptId: 'op-create-skill',
+          resourceId: 'skill-1',
+          status: 'applied',
+          summary: 'Created managed skill concise-answers.',
+        },
+        toolName: 'createSkillIfAbsent',
+      },
+    ],
+  });
+});
+
+afterEach(() => {
+  delete (globalThis as { __agentSignalRedisClient?: unknown }).__agentSignalRedisClient;
+});
+
+const createSkillProposalToolArguments = () => ({
+  actions: [
+    {
+      actionType: 'create_skill',
+      applyMode: 'proposal_only',
+      baseSnapshot: {
+        absent: true,
+        skillName: 'concise-answers',
+        targetType: 'skill',
+      },
+      confidence: 0.9,
+      dedupeKey: 'skill:concise-answers',
+      evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
+      idempotencyKey: 'source-1:create_skill:concise-answers',
+      operation: {
+        domain: 'skill',
+        input: {
+          bodyMarkdown: 'Prefer concise answers.',
+          name: 'concise-answers',
+          title: 'Concise answers',
+          userId: 'user-1',
+        },
+        operation: 'create',
+      },
+      rationale: 'User repeatedly asks for concise answers.',
+      risk: 'low',
+      target: { skillName: 'concise-answers' },
+    },
+  ],
+  idempotencyKey: 'proposal-op-1',
+  proposalKey: 'agent-1:create_skill:skill:concise-answers',
+  summary: 'Review concise answers skill.',
 });
 
 describe('listServerProposalActivity', () => {
@@ -277,5 +477,364 @@ describe('listServerProposalActivity', () => {
     expect(digest.expiredCount).toBe(1);
     expect(digest.staleCount).toBe(1);
     expect(digest.supersededCount).toBe(1);
+  });
+});
+
+describe('createServerNightlyReviewPolicyOptions', () => {
+  /**
+   * @example
+   * createServerNightlyReviewPolicyOptions delegates nightly mutation authority to the
+   * tool-first runtime instead of the legacy reviewer -> planner -> executor chain.
+   */
+  it('runs nightly maintenance through the tool-first runtime with DB model runtime and real tools', async () => {
+    const modelRuntime = { chat: vi.fn() };
+    mocks.initModelRuntimeFromDB.mockResolvedValue(modelRuntime);
+
+    const options = createServerNightlyReviewPolicyOptions({
+      agentId: 'agent-1',
+      db: {} as unknown as LobeChatDatabase,
+      selfIterationEnabled: true,
+      userId: 'user-1',
+    });
+    const result = await options.runMaintenanceReviewAgent({
+      context: createNightlyContext(),
+      localDate: '2026-05-09',
+      sourceId: 'nightly-review:user-1:agent-1:2026-05-09',
+      userId: 'user-1',
+    });
+
+    expect(mocks.initModelRuntimeFromDB).toHaveBeenCalledTimes(1);
+    expect(mocks.runMaintenanceToolFirstRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent-1',
+        maxSteps: 10,
+        modelRuntime,
+        sourceId: 'nightly-review:user-1:agent-1:2026-05-09',
+        userId: 'user-1',
+      }),
+    );
+    expect(mocks.createMaintenancePlannerService).not.toHaveBeenCalled();
+    expect(mocks.createMaintenanceExecutorService).not.toHaveBeenCalled();
+    expect(result.stepCount).toBe(3);
+    expect(result.execution).toMatchObject({
+      actions: [
+        {
+          idempotencyKey: 'op-create-skill',
+          resourceId: 'skill-1',
+          status: MaintenanceActionStatus.Applied,
+        },
+      ],
+      sourceId: 'nightly-review:user-1:agent-1:2026-05-09',
+      status: ReviewRunStatus.Completed,
+    });
+    expect(result.projectionPlan.actions).toHaveLength(1);
+    expect(result.projectionPlan.actions[0]).toMatchObject({
+      actionType: 'create_skill',
+      idempotencyKey: 'op-create-skill',
+    });
+  });
+
+  /**
+   * @example
+   * createServerNightlyReviewPolicyOptions exposes createMaintenanceProposal with real brief
+   * persistence instead of returning an unsupported tool result.
+   */
+  it('persists proposal lifecycle tool writes through Daily Brief proposal metadata', async () => {
+    const modelRuntime = { chat: vi.fn() };
+    const toolArguments = createSkillProposalToolArguments();
+    (globalThis as { __agentSignalRedisClient?: unknown }).__agentSignalRedisClient = {
+      expire: vi.fn(async () => 1),
+      hgetall: vi.fn(async () => ({})),
+      hset: vi.fn(async () => 1),
+      set: vi.fn(async () => 'OK'),
+      zadd: vi.fn(async () => 1),
+    };
+    mocks.initModelRuntimeFromDB.mockResolvedValue(modelRuntime);
+    mocks.runMaintenanceToolFirstRuntime.mockImplementation(async (input) => {
+      const result = await input.tools.createMaintenanceProposal({
+        actions: toolArguments.actions,
+        idempotencyKey: toolArguments.idempotencyKey,
+        metadata: {},
+        proposalKey: toolArguments.proposalKey,
+        summary: toolArguments.summary,
+        userId: 'user-1',
+      });
+
+      return {
+        content: 'Created a proposal.',
+        stepCount: 2,
+        toolCalls: [
+          {
+            apiName: 'createMaintenanceProposal',
+            arguments: JSON.stringify(toolArguments),
+            id: 'call-proposal-1',
+            identifier: 'agent-signal-maintenance',
+            type: 'builtin',
+          },
+        ],
+        usage: [],
+        writeOutcomes: [{ result, toolName: 'createMaintenanceProposal' }],
+      };
+    });
+
+    const options = createServerNightlyReviewPolicyOptions({
+      agentId: 'agent-1',
+      db: {} as unknown as LobeChatDatabase,
+      selfIterationEnabled: true,
+      userId: 'user-1',
+    });
+    const result = await options.runMaintenanceReviewAgent({
+      context: createNightlyContext(),
+      localDate: '2026-05-09',
+      sourceId: 'source-1',
+      userId: 'user-1',
+    });
+
+    expect(mocks.briefCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.briefCreate.mock.calls[0]?.[0]).toMatchObject({
+      metadata: {
+        agentSignal: {
+          nightlySelfReview: {
+            maintenanceProposal: {
+              actions: [
+                {
+                  actionType: 'create_skill',
+                  operation: {
+                    domain: 'skill',
+                    operation: 'create',
+                  },
+                },
+              ],
+              proposalKey: 'agent-1:create_skill:skill:concise-answers',
+              status: 'pending',
+            },
+          },
+        },
+      },
+      type: 'decision',
+    });
+    expect(result.execution.actions[0]).toMatchObject({
+      idempotencyKey: 'source-1:create_skill:concise-answers',
+      resourceId: 'brief-created',
+      status: MaintenanceActionStatus.Proposed,
+    });
+    expect(result.projectionPlan.actions[0]).toMatchObject({
+      actionType: 'create_skill',
+      operation: {
+        domain: 'skill',
+        operation: 'create',
+      },
+    });
+  });
+
+  /**
+   * @example
+   * createMaintenanceProposal({ actions: [{ actionType: 'refine_skill' }] })
+   * snapshots the target skill on the server before creating the approval brief.
+   */
+  it('enriches refine skill proposals with server-side base snapshots', async () => {
+    const modelRuntime = { chat: vi.fn() };
+    const toolArguments = {
+      actions: [
+        {
+          actionType: 'refine_skill',
+          applyMode: 'proposal_only',
+          confidence: 0.9,
+          dedupeKey: 'skill:skill-doc-1',
+          evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
+          idempotencyKey: 'source-1:refine_skill:skill-doc-1',
+          operation: {
+            domain: 'skill',
+            input: {
+              bodyMarkdown: 'Updated skill body.',
+              skillDocumentId: 'skill-doc-1',
+              userId: 'user-1',
+            },
+            operation: 'refine',
+          },
+          rationale: 'Repeated tool failures show this skill needs a safer workflow.',
+          risk: 'low',
+          target: { skillDocumentId: 'skill-doc-1' },
+        },
+      ],
+      idempotencyKey: 'proposal-op-refine-1',
+      proposalKey: 'agent-1:refine_skill:agent_document:skill-doc-1',
+      summary: 'Review skill refinement.',
+    };
+    (globalThis as { __agentSignalRedisClient?: unknown }).__agentSignalRedisClient = {
+      expire: vi.fn(async () => 1),
+      hgetall: vi.fn(async () => ({})),
+      hset: vi.fn(async () => 1),
+      set: vi.fn(async () => 'OK'),
+      zadd: vi.fn(async () => 1),
+    };
+    mocks.initModelRuntimeFromDB.mockResolvedValue(modelRuntime);
+    mocks.skillReadTargetSnapshot.mockResolvedValue({
+      agentDocumentId: 'skill-doc-1',
+      contentHash: 'hash-before',
+      documentId: 'document-1',
+      managed: true,
+      targetTitle: 'Existing skill',
+      writable: true,
+    });
+    mocks.runMaintenanceToolFirstRuntime.mockImplementation(async (input) => {
+      const result = await input.tools.createMaintenanceProposal({
+        actions: toolArguments.actions,
+        idempotencyKey: toolArguments.idempotencyKey,
+        metadata: {},
+        proposalKey: toolArguments.proposalKey,
+        summary: toolArguments.summary,
+        userId: 'user-1',
+      });
+
+      return {
+        content: 'Created a refine proposal.',
+        stepCount: 2,
+        toolCalls: [
+          {
+            apiName: 'createMaintenanceProposal',
+            arguments: JSON.stringify(toolArguments),
+            id: 'call-proposal-refine-1',
+            identifier: 'agent-signal-maintenance',
+            type: 'builtin',
+          },
+        ],
+        usage: [],
+        writeOutcomes: [{ result, toolName: 'createMaintenanceProposal' }],
+      };
+    });
+
+    const options = createServerNightlyReviewPolicyOptions({
+      agentId: 'agent-1',
+      db: {} as unknown as LobeChatDatabase,
+      selfIterationEnabled: true,
+      userId: 'user-1',
+    });
+    const result = await options.runMaintenanceReviewAgent({
+      context: createNightlyContext(),
+      localDate: '2026-05-09',
+      sourceId: 'source-1',
+      userId: 'user-1',
+    });
+
+    expect(mocks.briefCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.briefCreate.mock.calls[0]?.[0]).toMatchObject({
+      metadata: {
+        agentSignal: {
+          nightlySelfReview: {
+            maintenanceProposal: {
+              actions: [
+                {
+                  actionType: 'refine_skill',
+                  baseSnapshot: {
+                    agentDocumentId: 'skill-doc-1',
+                    contentHash: 'hash-before',
+                    documentId: 'document-1',
+                    managed: true,
+                    targetType: 'skill',
+                    writable: true,
+                  },
+                  operation: {
+                    domain: 'skill',
+                    operation: 'refine',
+                  },
+                },
+              ],
+              proposalKey: 'agent-1:refine_skill:agent_document:skill-doc-1',
+              status: 'pending',
+            },
+          },
+        },
+      },
+      type: 'decision',
+    });
+    expect(result.execution.actions[0]).toMatchObject({
+      idempotencyKey: 'proposal-op-refine-1',
+      resourceId: 'brief-created',
+      status: MaintenanceActionStatus.Skipped,
+    });
+  });
+
+  /**
+   * @example
+   * replaceSkillContentCAS({ skillDocumentId: 'skill-index-1', bodyMarkdown: '...' })
+   * captures the CAS snapshot and normalizes index ids to bundle ids before preflight.
+   */
+  it('enriches direct refine skill writes with server-side CAS snapshots', async () => {
+    const modelRuntime = { chat: vi.fn() };
+    (globalThis as { __agentSignalRedisClient?: unknown }).__agentSignalRedisClient = {
+      expire: vi.fn(async () => 1),
+      hgetall: vi.fn(async () => ({})),
+      hset: vi.fn(async () => 1),
+      set: vi.fn(async () => 'OK'),
+      zadd: vi.fn(async () => 1),
+    };
+    mocks.initModelRuntimeFromDB.mockResolvedValue(modelRuntime);
+    mocks.skillReadTargetSnapshot.mockResolvedValue({
+      agentDocumentId: 'skill-bundle-1',
+      contentHash: 'hash-before',
+      documentId: 'document-1',
+      managed: true,
+      targetTitle: 'Existing skill',
+      writable: true,
+    });
+    mocks.skillReplaceSkillIndex.mockResolvedValue({
+      bundle: { agentDocumentId: 'skill-bundle-1' },
+      name: 'existing-skill',
+    });
+    mocks.runMaintenanceToolFirstRuntime.mockImplementation(async (input) => {
+      const result = await input.tools.replaceSkillContentCAS({
+        bodyMarkdown: 'Updated skill body.',
+        idempotencyKey: 'source-1:replaceSkillContentCAS:skill-index-1',
+        skillDocumentId: 'skill-index-1',
+        userId: 'user-1',
+      } as Parameters<typeof input.tools.replaceSkillContentCAS>[0]);
+
+      return {
+        content: 'Updated a skill.',
+        stepCount: 2,
+        toolCalls: [
+          {
+            apiName: 'replaceSkillContentCAS',
+            arguments: JSON.stringify({
+              bodyMarkdown: 'Updated skill body.',
+              idempotencyKey: 'source-1:replaceSkillContentCAS:skill-index-1',
+              skillDocumentId: 'skill-index-1',
+            }),
+            id: 'call-refine-1',
+            identifier: 'agent-signal-maintenance',
+            type: 'builtin',
+          },
+        ],
+        usage: [],
+        writeOutcomes: [{ result, toolName: 'replaceSkillContentCAS' }],
+      };
+    });
+
+    const options = createServerNightlyReviewPolicyOptions({
+      agentId: 'agent-1',
+      db: {} as unknown as LobeChatDatabase,
+      selfIterationEnabled: true,
+      userId: 'user-1',
+    });
+    const result = await options.runMaintenanceReviewAgent({
+      context: createNightlyContext(),
+      localDate: '2026-05-09',
+      sourceId: 'source-1',
+      userId: 'user-1',
+    });
+
+    expect(mocks.skillReplaceSkillIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentDocumentId: 'skill-bundle-1',
+        agentId: 'agent-1',
+        bodyMarkdown: 'Updated skill body.',
+      }),
+    );
+    expect(result.execution.actions[0]).toMatchObject({
+      idempotencyKey: 'source-1:replaceSkillContentCAS:skill-index-1',
+      resourceId: 'skill-bundle-1',
+      status: MaintenanceActionStatus.Applied,
+    });
   });
 });

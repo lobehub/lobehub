@@ -76,6 +76,7 @@ describe('nightlyReviewService', () => {
           },
           {
             correctionCount: 1,
+            correctionIds: [],
             failedToolCount: 1,
             failureCount: 1,
             id: 'topic-high',
@@ -118,11 +119,12 @@ describe('nightlyReviewService', () => {
         'failed_tool',
         'receipt',
       ]);
-      expect(context.maintenanceSignals).toContainEqual(
-        expect.objectContaining({
-          kind: 'durable_user_preference',
-          strength: 'strong',
-        }),
+      expect(context.topics[0]).toMatchObject({
+        correctionCount: 1,
+        correctionIds: [],
+      });
+      expect(context.maintenanceSignals.map((signal) => signal.kind)).not.toContain(
+        'durable_user_preference',
       );
       expect(context.topics[0]).not.toHaveProperty('rawMessages');
       expect(context.topics[1]).not.toHaveProperty('rawMessages');
