@@ -239,6 +239,50 @@ export class HeterogeneousPersistenceHandler {
   }): Promise<void> {
     const state = await this.loadOrCreateState(params.operationId, params.topicId);
 
+    // Refresh content/reasoning baseline from DB before processing this batch.
+    //
+    // Root cause of truncation: Vercel serverless routes consecutive batches to
+    // different Lambda instances. A warm replica's in-memory `accumulatedContent`
+    // reflects only the batches IT processed — it has no visibility into batches
+    // handled by other replicas. When that warm replica later processes a
+    // tools_calling event, `persistMainToolBatch` writes the stale short content
+    // alongside the new tools, overwriting the correct (longer) DB value.
+    //
+    // Fix: re-read the current assistant message from DB at the start of every
+    // ingest call. Since `flushBatchContent` always writes at the end of each
+    // batch, DB is authoritative. Reading here gives us the freshest flushed
+    // content as the new baseline, so any text accumulated in this batch extends
+    // the correct full string rather than a stale partial.
+    //
+    // Cost: one extra `findById` round-trip per warm ingest call (cold calls
+    // already read the message in `loadOrCreateState` — the second read is
+    // redundant but harmless and keeps the logic uniform).
+    const refreshed = await this.deps.messageModel.findById(state.currentAssistantMessageId);
+    const dbContent = (refreshed?.content ?? '') as string;
+    const dbReasoning = (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
+
+    // Adopt DB value only when it is LONGER than what this instance holds in memory.
+    // This correctly handles two competing cases without introducing a dirty flag:
+    //
+    //   1. Multi-replica stale (the problem this refresh was added to fix):
+    //      Another replica flushed more content to DB than this warm instance
+    //      has in memory → dbContent is longer → adopt it so new text in this
+    //      batch extends the correct full string rather than a stale partial.
+    //
+    //   2. flushBatchContent retry on the same warm instance (P1 concern):
+    //      Events were already processed and marked in processedKeys, but the
+    //      end-of-batch flush threw a transient DB error. DB still holds the
+    //      shorter pre-batch value; in-memory already has the correct result.
+    //      Unconditionally overwriting with the DB value would wipe those
+    //      chunks permanently (processedKeys prevents replay). Taking the
+    //      longer in-memory value keeps them safe.
+    if (dbContent.length > state.accumulatedContent.length) {
+      state.accumulatedContent = dbContent;
+    }
+    if (dbReasoning.length > state.accumulatedReasoning.length) {
+      state.accumulatedReasoning = dbReasoning;
+    }
+
     for (const event of params.events) {
       const key = eventKey(event);
       if (state.processedKeys.has(key)) {
