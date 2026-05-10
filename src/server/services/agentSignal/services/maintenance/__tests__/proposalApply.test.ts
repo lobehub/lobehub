@@ -3,12 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MaintenanceProposalMetadata } from '../proposal';
 import { createMaintenanceProposalApplyService } from '../proposalApply';
-import {
-  MaintenanceActionStatus,
-  MaintenanceReviewScope,
-  MaintenanceRisk,
-  ReviewRunStatus,
-} from '../types';
+import type { RefineMaintenanceSkillInput } from '../skill';
+import { MaintenanceRisk } from '../types';
 
 const { spanEnd, spanSetAttribute, spanSetStatus, startActiveSpan } = vi.hoisted(() => {
   interface MockSpan {
@@ -50,14 +46,20 @@ const createProposal = (
         contentHash: 'sha256:base',
         documentId: 'doc_1',
         managed: true,
+        targetType: 'skill',
         writable: true,
       },
       evidenceRefs: [{ id: 'msg_1', type: 'message' }],
       idempotencyKey: 'nightly:refine_skill:adoc_1',
       operation: {
-        domain: 'skill',
-        input: { patch: 'new body', skillDocumentId: 'adoc_1', userId: 'user_1' },
-        operation: 'refine',
+        domain: 'skill' as const,
+        input: {
+          bodyMarkdown: 'new body',
+          description: 'Updated review workflow.',
+          skillDocumentId: 'adoc_1',
+          userId: 'user_1',
+        } as unknown as RefineMaintenanceSkillInput,
+        operation: 'refine' as const,
       },
       rationale: 'Keep the skill up to date.',
       risk: MaintenanceRisk.Medium,
@@ -84,27 +86,23 @@ describe('maintenance proposal apply service', () => {
    * @example
    * expect(result.proposal.status).toBe('applied');
    */
-  it('applies mergeable fresh proposal actions through the executor', async () => {
-    const executePlan = vi.fn().mockResolvedValue({
-      actions: [
-        {
-          idempotencyKey: 'nightly:refine_skill:adoc_1',
-          resourceId: 'adoc_1',
-          status: MaintenanceActionStatus.Applied,
-          summary: 'Refined managed skill.',
-        },
-      ],
-      status: ReviewRunStatus.Completed,
+  it('applies fresh refine_skill proposal actions through replaceSkillContentCAS', async () => {
+    const replaceSkillContentCAS = vi.fn().mockResolvedValue({
+      resourceId: 'adoc_1',
+      status: 'applied',
+      summary: 'Refined managed skill.',
     });
+    const createSkillIfAbsent = vi.fn();
     const updateProposal = vi.fn();
-    const writeReceipts = vi.fn();
     const service = createMaintenanceProposalApplyService({
       checkAction: vi.fn().mockResolvedValue({ allowed: true }),
       checkGates: vi.fn().mockResolvedValue({ allowed: true }),
-      executePlan,
       now: () => '2026-05-09T01:00:00.000Z',
+      tools: {
+        createSkillIfAbsent,
+        replaceSkillContentCAS,
+      },
       updateProposal,
-      writeReceipts,
     });
 
     const result = await service.apply({
@@ -115,23 +113,22 @@ describe('maintenance proposal apply service', () => {
       userId: 'user_1',
     });
 
-    expect(executePlan).toHaveBeenCalledWith(
+    expect(replaceSkillContentCAS).toHaveBeenCalledWith(
       expect.objectContaining({
-        actions: [
-          expect.objectContaining({
-            applyMode: 'auto_apply',
-            idempotencyKey: 'nightly:refine_skill:adoc_1',
-          }),
-        ],
-        reviewScope: MaintenanceReviewScope.Nightly,
+        baseSnapshot: expect.objectContaining({
+          agentDocumentId: 'adoc_1',
+          contentHash: 'sha256:base',
+          documentId: 'doc_1',
+        }),
+        bodyMarkdown: 'new body',
+        description: 'Updated review workflow.',
+        idempotencyKey: 'nightly:refine_skill:adoc_1',
+        proposalKey: 'agt_1:refine_skill:agent_document:adoc_1',
+        skillDocumentId: 'adoc_1',
+        userId: 'user_1',
       }),
     );
-    expect(writeReceipts).toHaveBeenCalledWith(
-      expect.objectContaining({
-        plan: expect.objectContaining({ actions: expect.any(Array) }),
-        result: expect.objectContaining({ actions: expect.any(Array) }),
-      }),
-    );
+    expect(createSkillIfAbsent).not.toHaveBeenCalled();
     expect(result.proposal.status).toBe('applied');
     expect(result.proposal.applyAttempts?.[0].actionResults).toEqual([
       {
@@ -166,15 +163,101 @@ describe('maintenance proposal apply service', () => {
 
   /**
    * @example
+   * expect(tools.createSkillIfAbsent).toHaveBeenCalledWith(expect.objectContaining({ name: 'code-review' }));
+   */
+  it('applies fresh create_skill proposal actions through createSkillIfAbsent', async () => {
+    const createSkillIfAbsent = vi.fn().mockResolvedValue({
+      resourceId: 'adoc_created',
+      status: 'deduped',
+      summary: 'Skill already created.',
+    });
+    const replaceSkillContentCAS = vi.fn();
+    const service = createMaintenanceProposalApplyService({
+      checkAction: vi.fn().mockResolvedValue({ allowed: true }),
+      checkGates: vi.fn().mockResolvedValue({ allowed: true }),
+      now: () => '2026-05-09T01:00:00.000Z',
+      tools: {
+        createSkillIfAbsent,
+        replaceSkillContentCAS,
+      },
+      updateProposal: vi.fn(),
+    });
+
+    const result = await service.apply({
+      agentId: 'agt_1',
+      proposal: createProposal({
+        actionType: 'create_skill',
+        actions: [
+          {
+            actionType: 'create_skill',
+            baseSnapshot: {
+              absent: true,
+              skillName: 'code-review',
+              targetType: 'skill',
+            },
+            evidenceRefs: [],
+            idempotencyKey: 'nightly:create_skill:code-review',
+            operation: {
+              domain: 'skill',
+              input: {
+                bodyMarkdown: 'Review preferences',
+                description: 'Reusable review preferences.',
+                name: 'code-review',
+                title: 'Code Review',
+                userId: 'user_1',
+              },
+              operation: 'create',
+            },
+            rationale: 'Create a managed skill.',
+            risk: MaintenanceRisk.Medium,
+            target: { skillName: 'code-review' },
+          },
+        ],
+        proposalKey: 'agt_1:create_skill:skill:code-review',
+      }),
+      sourceId: 'nightly-review:user_1:agt_1:2026-05-09',
+      sourceType: 'agent.nightly_review.requested',
+      userId: 'user_1',
+    });
+
+    expect(createSkillIfAbsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bodyMarkdown: 'Review preferences',
+        description: 'Reusable review preferences.',
+        idempotencyKey: 'nightly:create_skill:code-review',
+        name: 'code-review',
+        proposalKey: 'agt_1:create_skill:skill:code-review',
+        title: 'Code Review',
+        userId: 'user_1',
+      }),
+    );
+    expect(replaceSkillContentCAS).not.toHaveBeenCalled();
+    expect(result.proposal.status).toBe('applied');
+    expect(result.proposal.applyAttempts?.[0].actionResults).toEqual([
+      {
+        idempotencyKey: 'nightly:create_skill:code-review',
+        resourceId: 'adoc_created',
+        status: 'deduped',
+        summary: 'Skill already created.',
+      },
+    ]);
+  });
+
+  /**
+   * @example
    * expect(result.proposal.conflictReason).toBe('document_changed');
    */
-  it('skips stale proposal actions without calling the executor', async () => {
-    const executePlan = vi.fn();
+  it('skips stale proposal actions without calling safe tools', async () => {
+    const createSkillIfAbsent = vi.fn();
+    const replaceSkillContentCAS = vi.fn();
     const service = createMaintenanceProposalApplyService({
       checkAction: vi.fn().mockResolvedValue({ allowed: false, reason: 'document_changed' }),
       checkGates: vi.fn().mockResolvedValue({ allowed: true }),
-      executePlan,
       now: () => '2026-05-09T01:00:00.000Z',
+      tools: {
+        createSkillIfAbsent,
+        replaceSkillContentCAS,
+      },
       updateProposal: vi.fn(),
     });
 
@@ -186,7 +269,8 @@ describe('maintenance proposal apply service', () => {
       userId: 'user_1',
     });
 
-    expect(executePlan).not.toHaveBeenCalled();
+    expect(createSkillIfAbsent).not.toHaveBeenCalled();
+    expect(replaceSkillContentCAS).not.toHaveBeenCalled();
     expect(result.proposal.status).toBe('stale');
     expect(result.proposal.conflictReason).toBe('document_changed');
     expect(result.proposal.applyAttempts?.[0].actionResults[0]).toMatchObject({
@@ -206,12 +290,16 @@ describe('maintenance proposal apply service', () => {
    * expect(result.proposal.applyAttempts?.[0].actionResults[0].status).toBe('skipped_unsupported');
    */
   it('records unsupported actions without applying them', async () => {
-    const executePlan = vi.fn();
+    const createSkillIfAbsent = vi.fn();
+    const replaceSkillContentCAS = vi.fn();
     const service = createMaintenanceProposalApplyService({
       checkAction: vi.fn().mockResolvedValue({ allowed: false, reason: 'unsupported' }),
       checkGates: vi.fn().mockResolvedValue({ allowed: true }),
-      executePlan,
       now: () => '2026-05-09T01:00:00.000Z',
+      tools: {
+        createSkillIfAbsent,
+        replaceSkillContentCAS,
+      },
       updateProposal: vi.fn(),
     });
 
@@ -235,7 +323,8 @@ describe('maintenance proposal apply service', () => {
       userId: 'user_1',
     });
 
-    expect(executePlan).not.toHaveBeenCalled();
+    expect(createSkillIfAbsent).not.toHaveBeenCalled();
+    expect(replaceSkillContentCAS).not.toHaveBeenCalled();
     expect(result.proposal.status).toBe('failed');
     expect(result.proposal.applyAttempts?.[0].actionResults).toEqual([
       {

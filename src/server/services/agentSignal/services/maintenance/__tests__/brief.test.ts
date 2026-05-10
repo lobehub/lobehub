@@ -16,6 +16,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const completeRefineSkillBaseSnapshot = (agentDocumentId: string) => ({
+  agentDocumentId,
+  contentHash: `sha256:${agentDocumentId}`,
+  documentId: `doc-${agentDocumentId}`,
+  managed: true,
+  targetType: 'skill' as const,
+  writable: true,
+});
+
+const getNightlySelfReview = (
+  brief: ReturnType<ReturnType<typeof createBriefMaintenanceService>['projectNightlyReviewBrief']>,
+) => brief?.metadata.agentSignal.nightlySelfReview;
+
+const getMaintenanceProposal = (
+  brief: ReturnType<ReturnType<typeof createBriefMaintenanceService>['projectNightlyReviewBrief']>,
+) => getNightlySelfReview(brief)?.maintenanceProposal;
+
 describe('briefMaintenanceService', () => {
   /**
    * @example
@@ -52,13 +69,19 @@ describe('briefMaintenanceService', () => {
       type: 'insight',
     });
     expect(brief?.metadata).toMatchObject({
-      actionCounts: { applied: 1, failed: 0, proposed: 0, skipped: 0 },
-      localDate: '2026-05-04',
-      outcome: 'applied',
-      receiptIds: ['receipt-1'],
-      sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
-      timezone: 'Asia/Shanghai',
+      agentSignal: {
+        nightlySelfReview: {
+          actionCounts: { applied: 1, failed: 0, proposed: 0, skipped: 0 },
+          localDate: '2026-05-04',
+          outcome: 'applied',
+          receiptIds: ['receipt-1'],
+          sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+          timezone: 'Asia/Shanghai',
+        },
+      },
     });
+    expect(brief?.metadata).not.toHaveProperty('actionCounts');
+    expect(brief?.metadata).not.toHaveProperty('outcome');
   });
 
   /**
@@ -179,6 +202,7 @@ describe('briefMaintenanceService', () => {
           {
             actionType: 'refine_skill',
             applyMode: MaintenanceApplyMode.ProposalOnly,
+            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
             confidence: 0.91,
             dedupeKey: 'skill:adoc-1',
             evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
@@ -225,12 +249,15 @@ describe('briefMaintenanceService', () => {
       { key: 'dismiss', label: 'Dismiss', type: 'resolve' },
       { key: 'feedback', label: 'Request changes', type: 'comment' },
     ]);
-    expect(projected?.metadata.proposal).toMatchObject({
+    const nightlySelfReview = projected?.metadata.agentSignal?.nightlySelfReview;
+
+    expect(nightlySelfReview?.maintenanceProposal).toMatchObject({
       proposalKey: 'agent-1:refine_skill:agent_document:adoc-1',
       status: 'pending',
       version: 1,
     });
-    expect(projected?.metadata.proposal?.actions[0]).toMatchObject({
+    expect(projected?.metadata).not.toHaveProperty('proposal');
+    expect(nightlySelfReview?.maintenanceProposal?.actions[0]).toMatchObject({
       actionType: 'refine_skill',
       idempotencyKey: 'source:refine_skill:skill:adoc-1',
       operation: {
@@ -264,6 +291,7 @@ describe('briefMaintenanceService', () => {
           {
             actionType: 'refine_skill',
             applyMode: MaintenanceApplyMode.ProposalOnly,
+            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
             confidence: 0.91,
             dedupeKey: 'skill:adoc-1',
             evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
@@ -310,11 +338,11 @@ describe('briefMaintenanceService', () => {
       userId: 'user-1',
     });
 
-    expect(projected?.metadata.actionCounts.proposed).toBe(1);
+    expect(getNightlySelfReview(projected)?.actionCounts.proposed).toBe(1);
     expect(projected?.summary).toContain('1 maintenance proposal need review.');
     expect(projected?.summary).not.toContain('No maintenance change is needed.');
-    expect(projected?.metadata.proposal?.actions).toHaveLength(1);
-    expect(projected?.metadata.proposal?.actions[0]).toMatchObject({
+    expect(getMaintenanceProposal(projected)?.actions).toHaveLength(1);
+    expect(getMaintenanceProposal(projected)?.actions[0]).toMatchObject({
       actionType: 'refine_skill',
       idempotencyKey: 'source:refine_skill:skill:adoc-1',
     });
@@ -351,7 +379,11 @@ describe('briefMaintenanceService', () => {
       type: 'error',
     });
     expect(brief?.metadata).toMatchObject({
-      outcome: 'error',
+      agentSignal: {
+        nightlySelfReview: {
+          outcome: 'error',
+        },
+      },
     });
   });
 
@@ -465,6 +497,7 @@ describe('briefMaintenanceService', () => {
           {
             actionType: 'refine_skill',
             applyMode: MaintenanceApplyMode.ProposalOnly,
+            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
             confidence: 0.91,
             dedupeKey: 'skill:adoc-1',
             evidenceRefs: [{ id: 'msg-new', type: 'message' }],
@@ -499,13 +532,15 @@ describe('briefMaintenanceService', () => {
       userId: 'user-1',
     });
 
-    if (!incoming?.metadata.proposal) throw new Error('Expected projected proposal brief');
+    if (!incoming) throw new Error('Expected projected incoming brief');
+    const incomingProposal = getMaintenanceProposal(incoming);
+    if (!incomingProposal) throw new Error('Expected projected proposal brief');
 
     const existingProposal = {
-      ...incoming.metadata.proposal,
+      ...incomingProposal,
       actions: [
         {
-          ...incoming.metadata.proposal.actions[0],
+          ...incomingProposal.actions[0],
           idempotencyKey: 'source:old',
           rationale: 'Old rationale.',
         },
@@ -517,12 +552,24 @@ describe('briefMaintenanceService', () => {
     const existingBrief = {
       agentId: 'agent-1',
       id: 'brief-old',
-      metadata: { proposal: existingProposal },
+      metadata: {
+        agentSignal: {
+          nightlySelfReview: {
+            maintenanceProposal: existingProposal,
+          },
+        },
+      },
       trigger: 'agent-signal:nightly-review',
     } as Awaited<ReturnType<BriefModel['create']>>;
     const updatedBrief = {
       ...existingBrief,
-      metadata: { proposal: { ...existingProposal, actions: incoming.metadata.proposal.actions } },
+      metadata: {
+        agentSignal: {
+          nightlySelfReview: {
+            maintenanceProposal: { ...existingProposal, actions: incomingProposal.actions },
+          },
+        },
+      },
     } as Awaited<ReturnType<BriefModel['create']>>;
     const create = vi.spyOn(BriefModel.prototype, 'create');
     const listUnresolvedByAgentAndTrigger = vi
@@ -544,9 +591,13 @@ describe('briefMaintenanceService', () => {
     expect(updateMetadata).toHaveBeenCalledWith(
       'brief-old',
       expect.objectContaining({
-        proposal: expect.objectContaining({
-          actions: incoming.metadata.proposal.actions,
-          status: 'pending',
+        agentSignal: expect.objectContaining({
+          nightlySelfReview: expect.objectContaining({
+            maintenanceProposal: expect.objectContaining({
+              actions: incomingProposal.actions,
+              status: 'pending',
+            }),
+          }),
         }),
       }),
     );
@@ -566,6 +617,7 @@ describe('briefMaintenanceService', () => {
           {
             actionType: 'refine_skill',
             applyMode: MaintenanceApplyMode.ProposalOnly,
+            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
             confidence: 0.91,
             dedupeKey: 'skill:adoc-1',
             evidenceRefs: [{ id: 'msg-new', type: 'message' }],
@@ -600,14 +652,16 @@ describe('briefMaintenanceService', () => {
       userId: 'user-1',
     });
 
-    if (!incoming?.metadata.proposal) throw new Error('Expected projected proposal brief');
+    if (!incoming) throw new Error('Expected projected incoming brief');
+    const incomingProposal = getMaintenanceProposal(incoming);
+    if (!incomingProposal) throw new Error('Expected projected proposal brief');
 
-    const existingProposal = incoming.metadata.proposal;
-    incoming.metadata.proposal = {
-      ...incoming.metadata.proposal,
+    const existingProposal = incomingProposal;
+    incoming.metadata.agentSignal.nightlySelfReview.maintenanceProposal = {
+      ...incomingProposal,
       actions: [
         {
-          ...incoming.metadata.proposal.actions[0],
+          ...incomingProposal.actions[0],
           operation: {
             domain: 'skill',
             input: { bodyMarkdown: 'new skill', name: 'new-skill', userId: 'user-1' },
@@ -619,7 +673,13 @@ describe('briefMaintenanceService', () => {
     const existingBrief = {
       agentId: 'agent-1',
       id: 'brief-old',
-      metadata: { proposal: existingProposal },
+      metadata: {
+        agentSignal: {
+          nightlySelfReview: {
+            maintenanceProposal: existingProposal,
+          },
+        },
+      },
       trigger: 'agent-signal:nightly-review',
     } as Awaited<ReturnType<BriefModel['create']>>;
     const createdBrief = { id: 'brief-new' } as Awaited<ReturnType<BriefModel['create']>>;
@@ -637,9 +697,14 @@ describe('briefMaintenanceService', () => {
     expect(updateMetadata).toHaveBeenCalledWith(
       'brief-old',
       expect.objectContaining({
-        proposal: expect.objectContaining({
-          status: 'superseded',
-          supersededBy: incoming.metadata.proposal.proposalKey,
+        agentSignal: expect.objectContaining({
+          nightlySelfReview: expect.objectContaining({
+            maintenanceProposal: expect.objectContaining({
+              status: 'superseded',
+              supersededBy:
+                incoming.metadata.agentSignal.nightlySelfReview.maintenanceProposal?.proposalKey,
+            }),
+          }),
         }),
       }),
     );
@@ -660,6 +725,7 @@ describe('briefMaintenanceService', () => {
           {
             actionType: 'refine_skill',
             applyMode: MaintenanceApplyMode.ProposalOnly,
+            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
             confidence: 0.91,
             dedupeKey: 'skill:adoc-1',
             evidenceRefs: [],
@@ -694,17 +760,25 @@ describe('briefMaintenanceService', () => {
       userId: 'user-1',
     });
 
-    if (!incoming?.metadata.proposal) throw new Error('Expected projected proposal brief');
+    if (!incoming) throw new Error('Expected projected incoming brief');
+    const incomingProposal = getMaintenanceProposal(incoming);
+    if (!incomingProposal) throw new Error('Expected projected proposal brief');
 
     const existingProposal = {
-      ...incoming.metadata.proposal,
+      ...incomingProposal,
       expiresAt: '2026-05-12T00:00:00.000Z',
       updatedAt: '2026-05-09T00:00:00.000Z',
     };
     const existingBrief = {
       agentId: 'agent-1',
       id: 'brief-old',
-      metadata: { proposal: existingProposal },
+      metadata: {
+        agentSignal: {
+          nightlySelfReview: {
+            maintenanceProposal: existingProposal,
+          },
+        },
+      },
       trigger: 'agent-signal:nightly-review',
     } as Awaited<ReturnType<BriefModel['create']>>;
     const createdBrief = { id: 'brief-new' } as Awaited<ReturnType<BriefModel['create']>>;
@@ -722,7 +796,11 @@ describe('briefMaintenanceService', () => {
     expect(updateMetadata).toHaveBeenCalledWith(
       'brief-old',
       expect.objectContaining({
-        proposal: expect.objectContaining({ status: 'expired' }),
+        agentSignal: expect.objectContaining({
+          nightlySelfReview: expect.objectContaining({
+            maintenanceProposal: expect.objectContaining({ status: 'expired' }),
+          }),
+        }),
       }),
     );
     expect(create).toHaveBeenCalledWith(incoming);
