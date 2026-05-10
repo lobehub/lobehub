@@ -31,6 +31,7 @@ export type TaskTemplateRecommendationsState =
     };
 
 interface UseTaskTemplateRecommendationsOptions {
+  limit?: number;
   spmRoot?: string;
 }
 
@@ -38,6 +39,7 @@ export function useTaskTemplateRecommendations(
   options?: UseTaskTemplateRecommendationsOptions,
 ): TaskTemplateRecommendationsState {
   const spmRoot = options?.spmRoot ?? DEFAULT_SPM_ROOT;
+  const limit = options?.limit;
   const { t } = useTranslation('taskTemplate');
   const { analytics } = useAnalytics();
   const { message } = App.useApp();
@@ -60,8 +62,8 @@ export function useTaskTemplateRecommendations(
   >(undefined);
 
   const { data, isLoading, mutate } = useSWR(
-    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey] : null,
-    async () => taskTemplateService.listDailyRecommend(interestKeys ?? []),
+    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey, limit ?? 'default'] : null,
+    async () => taskTemplateService.listDailyRecommend(interestKeys ?? [], { limit }),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );
 

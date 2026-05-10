@@ -1,7 +1,6 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
@@ -13,7 +12,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
-import { createTaskModal } from '../CreateTaskModal';
+import { useCreateTaskAndNavigate } from '../CreateTaskModal/useCreateTaskAndNavigate';
 import Breadcrumb from '../shared/Breadcrumb';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyTasks from './EmptyTasks';
@@ -25,12 +24,12 @@ import TaskList from './TaskList';
 import TasksGroupConfig from './TasksGroupConfig';
 
 const AgentTasksPage = memo(() => {
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ allAgents: true });
   const isEmpty = useTaskStore(taskListSelectors.isListEmpty);
+  const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
@@ -47,13 +46,7 @@ const AgentTasksPage = memo(() => {
     [updateSystemStatus, viewOptions],
   );
 
-  const handleCreateTask = useCallback(() => {
-    createTaskModal({
-      onCreated: (task) => {
-        navigate(`/task/${task.identifier}`);
-      },
-    });
-  }, [navigate]);
+  const handleCreateTask = useCreateTaskAndNavigate();
 
   const handleShowHiddenCompleted = useCallback(() => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
@@ -99,7 +92,7 @@ const AgentTasksPage = memo(() => {
           paddingBlock={16}
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
-          {!inlineCollapsed && <CreateTaskInlineEntry />}
+          {!inlineCollapsed && isTaskListInit && <CreateTaskInlineEntry />}
           <TaskList options={viewOptions} onShowHiddenCompleted={handleShowHiddenCompleted} />
         </WideScreenContainer>
       )}

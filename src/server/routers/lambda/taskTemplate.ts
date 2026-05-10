@@ -3,11 +3,11 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { ENABLED_SKILL_SOURCES, TaskTemplateService } from '@/server/services/taskTemplate';
-
-const listDailyRecommendSchema = z.object({
-  interestKeys: z.array(z.string().max(64)).max(32),
-});
+import {
+  ENABLED_SKILL_SOURCES,
+  listDailyRecommendInputSchema,
+  TaskTemplateService,
+} from '@/server/services/taskTemplate';
 
 const templateIdSchema = z.object({
   templateId: z
@@ -20,12 +20,13 @@ export const taskTemplateRouter = router({
   dismiss: authedProcedure.input(templateIdSchema).mutation(async () => ({ success: true })),
 
   listDailyRecommend: authedProcedure
-    .input(listDailyRecommendSchema)
+    .input(listDailyRecommendInputSchema)
     .query(async ({ input, ctx }) => {
       try {
         const service = new TaskTemplateService(ctx.userId);
         const data = await service.listDailyRecommend(input.interestKeys, {
           enabledSkillSources: ENABLED_SKILL_SOURCES,
+          limit: input.limit,
         });
         return { data, success: true };
       } catch (error) {

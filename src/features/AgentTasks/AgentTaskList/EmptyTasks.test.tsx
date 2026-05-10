@@ -3,8 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createTaskModal: vi.fn(),
-  navigate: vi.fn(),
+  handleCreateTask: vi.fn(),
   recommendationsState: { mode: 'hidden' } as { mode: string; [k: string]: unknown },
 }));
 
@@ -17,21 +16,20 @@ vi.mock('@lobehub/ui', () => {
         {children}
       </button>
     ),
-    Center: Div,
     Flexbox: Div,
     Icon: () => <span data-testid="empty-icon" />,
     Text: ({ children, ...props }: any) => <span {...props}>{children}</span>,
   };
 });
 
+vi.mock('antd', () => ({
+  Divider: ({ children }: any) => <div data-testid="template-divider">{children}</div>,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
-}));
-
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => mocks.navigate,
 }));
 
 vi.mock('@/business/client/useTaskTemplateRecommendations', () => ({
@@ -50,8 +48,8 @@ vi.mock('@/business/client/RecommendedTaskTemplates', () => ({
   ),
 }));
 
-vi.mock('../CreateTaskModal', () => ({
-  createTaskModal: mocks.createTaskModal,
+vi.mock('../CreateTaskModal/useCreateTaskAndNavigate', () => ({
+  useCreateTaskAndNavigate: () => mocks.handleCreateTask,
 }));
 
 const { default: EmptyTasks } = await import('./EmptyTasks');
@@ -78,44 +76,30 @@ describe('EmptyTasks', () => {
     expect(screen.getByText('taskList.empty.subtitle')).toBeInTheDocument();
   });
 
-  it('shows the fallback Create task button when recommendations are hidden', async () => {
+  it('hides recommendations and template divider when the hook is hidden', async () => {
     mocks.recommendationsState = { mode: 'hidden' };
     const user = userEvent.setup();
     render(<EmptyTasks />);
 
     expect(screen.queryByTestId('recommended-task-templates')).not.toBeInTheDocument();
-
-    const button = screen.getByRole('button', { name: 'taskList.empty.createButton' });
-    await user.click(button);
-
-    expect(mocks.createTaskModal).toHaveBeenCalledTimes(1);
-    expect(mocks.createTaskModal.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ onCreated: expect.any(Function) }),
-    );
-  });
-
-  it('navigates to the created task when the fallback CTA succeeds', async () => {
-    mocks.recommendationsState = { mode: 'hidden' };
-    const user = userEvent.setup();
-    render(<EmptyTasks />);
+    expect(screen.queryByTestId('template-divider')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'taskList.empty.createButton' }));
 
-    const onCreated = mocks.createTaskModal.mock.calls[0][0].onCreated;
-    onCreated({ identifier: 'T-42' });
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-42');
+    expect(mocks.handleCreateTask).toHaveBeenCalledTimes(1);
   });
 
-  it('renders RecommendedTaskTemplates and hides the fallback CTA in skeleton mode', () => {
+  it('shows the primary CTA, divider, and recommendations in skeleton mode', () => {
     mocks.recommendationsState = { mode: 'skeleton' };
     render(<EmptyTasks />);
+    expect(screen.getByRole('button', { name: 'taskList.empty.createButton' })).toBeInTheDocument();
+    expect(screen.getByTestId('template-divider')).toHaveTextContent(
+      'taskList.empty.templateDivider',
+    );
     expect(screen.getByTestId('recommended-task-templates')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'taskList.empty.createButton' }),
-    ).not.toBeInTheDocument();
   });
 
-  it('renders RecommendedTaskTemplates and hides the fallback CTA in cards mode', () => {
+  it('shows the primary CTA, divider, and recommendations in cards mode', () => {
     mocks.recommendationsState = {
       mode: 'cards',
       onCreated: vi.fn(),
@@ -126,9 +110,8 @@ describe('EmptyTasks', () => {
       userInterestCount: 0,
     };
     render(<EmptyTasks />);
+    expect(screen.getByRole('button', { name: 'taskList.empty.createButton' })).toBeInTheDocument();
+    expect(screen.getByTestId('template-divider')).toBeInTheDocument();
     expect(screen.getByTestId('recommended-task-templates')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'taskList.empty.createButton' }),
-    ).not.toBeInTheDocument();
   });
 });

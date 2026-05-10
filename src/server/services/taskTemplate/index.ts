@@ -6,11 +6,18 @@ import type {
   TaskTemplateSkillSource,
 } from '@lobechat/const';
 import { TASK_TEMPLATE_FALLBACK_CATEGORIES, taskTemplates } from '@lobechat/const';
+import { z } from 'zod';
 
 import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
 
 export const RECOMMEND_COUNT = 3;
+export const RECOMMEND_COUNT_MAX = 20;
+
+export const listDailyRecommendInputSchema = z.object({
+  interestKeys: z.array(z.string().max(64)).max(32),
+  limit: z.number().int().min(1).max(RECOMMEND_COUNT_MAX).optional(),
+});
 
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();
@@ -93,10 +100,12 @@ export class TaskTemplateService {
     options: {
       enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>;
       excludeIds?: string[];
+      limit?: number;
       now?: Date;
     } = {},
   ): Promise<RecommendedTaskTemplate[]> {
-    const { enabledSkillSources, excludeIds, now = new Date() } = options;
+    const { enabledSkillSources, excludeIds, limit = RECOMMEND_COUNT, now = new Date() } = options;
+    const effectiveLimit = Math.min(Math.max(limit, 1), RECOMMEND_COUNT_MAX);
     const excluded = new Set(excludeIds ?? []);
     const seed = hashString(`${this.userId}:${getUtcDateStr(now)}`);
 
@@ -105,16 +114,16 @@ export class TaskTemplateService {
     );
     const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
     const result: RecommendedTaskTemplate[] = seededShuffle(matched, seed)
-      .slice(0, RECOMMEND_COUNT)
+      .slice(0, effectiveLimit)
       .map((t) => toRecommendedTemplate(t, 'matched'));
 
     const takeFrom = (pool: TaskTemplate[], fallbackPool: TaskTemplateFallbackPool) => {
-      if (result.length >= RECOMMEND_COUNT) return;
+      if (result.length >= effectiveLimit) return;
       const seen = new Set(result.map((t) => t.id));
       const remaining = pool.filter((t) => !seen.has(t.id));
       result.push(
         ...seededShuffle(remaining, seed)
-          .slice(0, RECOMMEND_COUNT - result.length)
+          .slice(0, effectiveLimit - result.length)
           .map((t) => toRecommendedTemplate(t, 'fallback', fallbackPool)),
       );
     };

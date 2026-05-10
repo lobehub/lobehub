@@ -13,7 +13,6 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -21,7 +20,7 @@ import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initialState';
 
-import { createTaskModal } from '../CreateTaskModal';
+import { useCreateTaskAndNavigate } from '../CreateTaskModal/useCreateTaskAndNavigate';
 import AgentTaskItem from '../features/AgentTaskItem';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
@@ -73,8 +72,6 @@ const optimisticMoveTask = (
 
 const KanbanBoard = memo(() => {
   const { t } = useTranslation('chat');
-  const navigate = useNavigate();
-
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   useFetchTaskGroupList({ allAgents: true });
 
@@ -131,14 +128,7 @@ const KanbanBoard = memo(() => {
     setActiveTask(null);
   }, []);
 
-  const handleCreateTask = useCallback(() => {
-    createTaskModal({
-      onCreated: (task) => {
-        navigate(`/task/${task.identifier}`);
-      },
-      showInlineToggle: false,
-    });
-  }, [navigate]);
+  const handleCreateTask = useCreateTaskAndNavigate({ showInlineToggle: false });
 
   const handleHideColumn = useCallback(
     (columnKey: string) => {
