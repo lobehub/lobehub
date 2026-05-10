@@ -45,6 +45,15 @@ export interface ServerCreateAgentToolsEngineParams {
     plugins?: string[];
   };
   /**
+   * Whether device tools (local-system / remote-device) are allowed this turn.
+   * Computed by `resolveDeviceAccessPolicy` from the caller identity:
+   * first-party UI and bot-owner senders pass; external bot senders and
+   * unconfigured bot owners do not. The engine treats this as the FINAL
+   * answer — never re-derive from `isBotConversation` or `botContext`.
+   * Defaults to `false` (fail-closed) when the caller forgets to plumb it.
+   */
+  canUseDevice?: boolean;
+  /**
    * Runtime of the client initiating this request. When `'desktop'`, the
    * caller itself is an Electron client connected via the Agent Gateway WS,
    * so tools with `executor: 'client'` (e.g. local-system, stdio MCP) can be

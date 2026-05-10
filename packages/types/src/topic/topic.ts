@@ -32,6 +32,18 @@ export interface TopicUserMemoryExtractRunState {
 export interface ChatTopicBotContext {
   applicationId: string;
   /**
+   * Whether the message sender is the bot owner. Computed at the bot
+   * router/dispatcher entry point as
+   *   `senderExternalUserId === settings.userId`.
+   *
+   * Downstream policy (`resolveDeviceAccessPolicy`) consumes this directly
+   * and never recomputes — the routers own the owner-identity check.
+   *
+   * Fail-closed: if `settings.userId` is missing or the sender ID can't be
+   * resolved, this MUST be `false`. Never default to `true` "when in doubt".
+   */
+  isOwner: boolean;
+  /**
    * Set when the run originated from the shared Messenger bot (Telegram global
    * token, Slack per-workspace install, Discord global token). The value is
    * the messenger installation key (`<platform>:<tenantId>` or
@@ -42,6 +54,14 @@ export interface ChatTopicBotContext {
   messengerInstallationKey?: string;
   platform: string;
   platformThreadId: string;
+  /**
+   * Platform-assigned ID of the actual sender of the inbound message
+   * (e.g. Discord/Slack `user.id`, Telegram `from.id`). Distinct from
+   * `applicationId` (the bot itself) — required so downstream code can tell
+   * "owner @ bot" apart from "external user @ bot" without re-reading
+   * platform-specific message shapes.
+   */
+  senderExternalUserId: string;
 }
 
 export interface OnboardingFeedbackEntry {
