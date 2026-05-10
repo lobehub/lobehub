@@ -797,6 +797,13 @@ export class AgentBridgeService {
         channelContext?.thread?.name && /^Thread \d/.test(channelContext.thread.name)
           ? undefined
           : channelContext?.thread?.name,
+      // Forward the lobe userId so messenger callbacks can rebuild the same
+      // per-user gateway connectionId (`messenger:<platform>[:<tenant>]:user-<userId>`)
+      // that we used to start typing here. Without it, `BotCallbackService`
+      // falls back to `connectionId: ''` and `stopGatewayTyping` becomes a
+      // no-op — leaving the typing indicator to expire on the gateway's 60s
+      // alarm timeout instead of stopping at completion.
+      userId: this.userId,
       userMessageId: userMessage.id,
     };
 
