@@ -187,7 +187,13 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: { platform: 'discord' } as any,
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild-1:channel-1',
+          senderExternalUserId: 'owner-id',
+        } as any,
         prompt: 'List my files',
       });
 
@@ -202,7 +208,13 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: { platform: 'discord' } as any,
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild-1:channel-1',
+          senderExternalUserId: 'owner-id',
+        } as any,
         prompt: 'List my files',
       });
 
@@ -217,7 +229,13 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: { platform: 'discord' } as any,
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild-1:channel-1',
+          senderExternalUserId: 'owner-id',
+        } as any,
         prompt: 'List my files',
       });
 
@@ -434,7 +452,13 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: { platform: 'discord' } as any,
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild-1:channel-1',
+          senderExternalUserId: 'owner-id',
+        } as any,
         prompt: 'List my files',
       });
 
@@ -531,7 +555,13 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: { platform: 'discord' } as any,
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild-1:channel-1',
+          senderExternalUserId: 'owner-id',
+        } as any,
         prompt: 'List my files',
       });
 
@@ -599,7 +629,13 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: { platform: 'discord' } as any,
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild-1:channel-1',
+          senderExternalUserId: 'owner-id',
+        } as any,
         prompt: 'List my files',
       });
 
@@ -613,7 +649,13 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: { platform: 'discord' } as any,
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: true,
+          platform: 'discord',
+          platformThreadId: 'discord:guild-1:channel-1',
+          senderExternalUserId: 'owner-id',
+        } as any,
         prompt: 'List my files',
       });
 
