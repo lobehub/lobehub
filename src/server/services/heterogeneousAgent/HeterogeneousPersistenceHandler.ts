@@ -156,6 +156,7 @@ interface OperationState {
   currentAssistantMessageId: string;
   lastModel: string | undefined;
   lastProvider: string | undefined;
+  lastStepIndex: number;
   operationId: string;
   processedKeys: Set<string>;
   subagentRuns: Map<string, SubagentRunState>;
@@ -238,6 +239,16 @@ export class HeterogeneousPersistenceHandler {
     topicId: string;
   }): Promise<void> {
     const state = await this.loadOrCreateState(params.operationId, params.topicId);
+    const batchMaxStepIndex = Math.max(...params.events.map((event) => event.stepIndex));
+
+    // A different Lambda may have already processed `stream_start { newStep }`
+    // and persisted `heteroCurrentMsgId` for this operation. Warm instances keep
+    // their operation state in memory, so without an explicit resync they would
+    // keep appending later-step chunks to the PREVIOUS assistant row. Only resync
+    // when the incoming batch advances beyond the step this instance has seen.
+    if (batchMaxStepIndex > state.lastStepIndex) {
+      await this.syncAssistantPointerForAdvancedStep(state);
+    }
 
     // Refresh content/reasoning baseline from DB before processing this batch.
     //
@@ -296,6 +307,7 @@ export class HeterogeneousPersistenceHandler {
       // only on success so a retry can complete the lost write.
       await this.handleEvent(state, event);
       state.processedKeys.add(key);
+      state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
     }
 
     // Flush accumulated content after every batch so a subsequent replica
@@ -416,6 +428,7 @@ export class HeterogeneousPersistenceHandler {
       currentAssistantMessageId,
       lastModel: undefined,
       lastProvider: undefined,
+      lastStepIndex: 0,
       operationId,
       processedKeys: new Set(),
       subagentRuns: new Map(),
@@ -434,6 +447,49 @@ export class HeterogeneousPersistenceHandler {
       restoredTools.length,
     );
     return state;
+  }
+
+  private async syncAssistantPointerForAdvancedStep(state: OperationState): Promise<void> {
+    const topic = await this.deps.topicModel.findById(state.topicId);
+    const running = topic?.metadata?.runningOperation;
+
+    if (!running || running.operationId !== state.operationId) {
+      throw new Error(
+        `No matching runningOperation on topic ${state.topicId} for operation ${state.operationId} — orchestrator must seed topic.metadata.runningOperation before ingest`,
+      );
+    }
+
+    const stored = topic.metadata?.heteroCurrentMsgId;
+    const authoritativeAssistantMessageId =
+      stored?.operationId === state.operationId
+        ? (stored.msgId ?? running.assistantMessageId)
+        : running.assistantMessageId;
+
+    if (
+      !authoritativeAssistantMessageId ||
+      authoritativeAssistantMessageId === state.currentAssistantMessageId
+    ) {
+      return;
+    }
+
+    const currentMsg = await this.deps.messageModel.findById(authoritativeAssistantMessageId);
+    const restoredContent = (currentMsg?.content ?? '') as string;
+    const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
+    const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
+
+    state.currentAssistantMessageId = authoritativeAssistantMessageId;
+    state.accumulatedContent = restoredContent;
+    state.accumulatedReasoning = restoredReasoning;
+    state.toolState = {
+      payloads: restoredTools,
+      persistedIds: new Set(restoredTools.map((tool) => tool.id)),
+    };
+
+    log(
+      'synced warm state op=%s to assistant=%s after step advance',
+      state.operationId,
+      authoritativeAssistantMessageId,
+    );
   }
 
   // ─── Event dispatch ──────────────────────────────────────────────────────
