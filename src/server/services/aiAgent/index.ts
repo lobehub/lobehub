@@ -76,7 +76,6 @@ import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
-import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
 
 const log = debug('lobe-server:ai-agent-service');

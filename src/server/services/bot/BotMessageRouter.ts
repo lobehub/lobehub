@@ -873,16 +873,18 @@ export class BotMessageRouter {
         (context?.skipped?.length ?? 0) + 1,
         ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
       );
+      const senderExternalUserId = merged.author?.userId ?? '';
+      const isOwner = !!operatorUserId && senderExternalUserId === operatorUserId;
       try {
         await bridge.handleMention(thread, merged, {
           agentId,
-          botContext: buildBotContext({
+          botContext: {
             applicationId,
-            authorUserId: merged.author?.userId,
-            operatorUserId,
+            isOwner,
             platform,
             platformThreadId: thread.id,
-          }),
+            senderExternalUserId,
+          },
           charLimit,
           client,
           displayToolCalls,
@@ -993,16 +995,18 @@ export class BotMessageRouter {
         ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
       );
 
+      const senderExternalUserId = merged.author?.userId ?? '';
+      const isOwner = !!operatorUserId && senderExternalUserId === operatorUserId;
       try {
         await bridge.handleSubscribedMessage(thread, merged, {
           agentId,
-          botContext: buildBotContext({
+          botContext: {
             applicationId,
-            authorUserId: merged.author?.userId,
-            operatorUserId,
+            isOwner,
             platform,
             platformThreadId: thread.id,
-          }),
+            senderExternalUserId,
+          },
           charLimit,
           client,
           displayToolCalls,
@@ -1122,16 +1126,18 @@ export class BotMessageRouter {
           ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
         );
 
+        const senderExternalUserId = merged.author?.userId ?? '';
+        const isOwner = !!operatorUserId && senderExternalUserId === operatorUserId;
         try {
           await bridge.handleMention(thread, merged, {
             agentId,
-            botContext: buildBotContext({
+            botContext: {
               applicationId,
-              authorUserId: merged.author?.userId,
-              operatorUserId,
+              isOwner,
               platform,
               platformThreadId: thread.id,
-            }),
+              senderExternalUserId,
+            },
             charLimit,
             client,
             displayToolCalls,
