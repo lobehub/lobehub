@@ -1,4 +1,7 @@
-import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import type {
+  AgentInterventionRequestData,
+  AgentStreamEvent,
+} from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
 import {
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
@@ -1013,6 +1016,61 @@ const persistToolResult = async (
 };
 
 /**
+ * Persist a CC AskUserQuestion intervention request: stamp the existing
+ * tool message's `pluginState.askUserQuestion` with the questions array
+ * and the wall-clock deadline so the UI can render the intervention card
+ * and a countdown.
+ *
+ * Runs only after `persistToolBatch` has populated `toolMsgIdByCallId` for
+ * the matching toolCallId. The MCP server uses CC's tool_use id as the
+ * correlation key (via `_meta.claudecode/toolUseId`) so the lookup hits
+ * the same message that the assistant `tool_use` created. Eventual
+ * `tool_result` clears `pluginState` and reveals the final answer.
+ */
+const persistInterventionRequest = async (
+  data: AgentInterventionRequestData,
+  toolMsgIdByCallId: Map<string, string>,
+  context: ConversationContext,
+) => {
+  const toolMsgId = toolMsgIdByCallId.get(data.toolCallId);
+  if (!toolMsgId) {
+    console.warn(
+      '[HeterogeneousAgent] intervention_request for unknown toolCallId:',
+      data.toolCallId,
+    );
+    return;
+  }
+
+  let questions: unknown;
+  try {
+    questions = (JSON.parse(data.arguments) as { questions?: unknown }).questions;
+  } catch {
+    /* leave undefined — UI falls back to a plain "answer this" prompt */
+  }
+
+  const pluginState = {
+    askUserQuestion: {
+      apiName: data.apiName,
+      deadline: data.deadline,
+      identifier: data.identifier,
+      questions,
+      status: 'pending' as const,
+      toolCallId: data.toolCallId,
+    },
+  };
+
+  try {
+    await messageService.updateToolMessage(
+      toolMsgId,
+      { pluginState },
+      { agentId: context.agentId, topicId: context.topicId },
+    );
+  } catch (err) {
+    console.error('[HeterogeneousAgent] persistInterventionRequest failed:', err);
+  }
+};
+
+/**
  * Execute a prompt via an external agent CLI.
  *
  * Flow:
@@ -1318,6 +1376,50 @@ export const executeHeterogeneousAgent = async (
 
       // Record for debugging
       trace.push({ event, timestamp: Date.now() });
+
+      // ─── agent_intervention_request: CC AskUserQuestion needs user input ───
+      // Stamp pluginState.askUserQuestion on the matching tool message so the
+      // UI lights up the intervention card. Deferred behind persistQueue so
+      // it lands AFTER persistToolBatch (which creates the tool message and
+      // populates toolMsgIdByCallId from the assistant tool_use earlier in
+      // the same stream). Forwarded to the gateway handler is unnecessary —
+      // the persisted DB state and dispatched in-memory update are enough.
+      if (event.type === 'agent_intervention_request') {
+        const data = event.data as AgentInterventionRequestData;
+        persistQueue = persistQueue.then(async () => {
+          await persistInterventionRequest(data, toolMsgIdByCallId, context);
+          // Mirror onto the in-memory message so the UI reacts now without
+          // waiting for the next fetchAndReplaceMessages.
+          const toolMsgId = toolMsgIdByCallId.get(data.toolCallId);
+          if (!toolMsgId) return;
+          let questions: unknown;
+          try {
+            questions = (JSON.parse(data.arguments) as { questions?: unknown }).questions;
+          } catch {
+            /* ignore */
+          }
+          get().internal_dispatchMessage(
+            {
+              id: toolMsgId,
+              type: 'updateMessage',
+              value: {
+                pluginState: {
+                  askUserQuestion: {
+                    apiName: data.apiName,
+                    deadline: data.deadline,
+                    identifier: data.identifier,
+                    questions,
+                    status: 'pending',
+                    toolCallId: data.toolCallId,
+                  },
+                },
+              } as any,
+            },
+            { operationId },
+          );
+        });
+        return;
+      }
 
       // ─── tool_result: update tool message content in DB (ACP-only) ───
       if (event.type === 'tool_result') {

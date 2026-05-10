@@ -275,6 +275,11 @@ export class AskUserMcpServer {
         ];
         const progressToken = (extra?._meta as { progressToken?: string | number } | undefined)
           ?.progressToken;
+        // Use CC's own tool_use id as the bridge correlation key so the
+        // outbound `agent_intervention_request` shares an id with the
+        // existing tool message on the renderer side. Without this the
+        // renderer can't tie the intervention card to its tool bubble.
+        const toolCallId = ccToolUseId;
 
         // SSE keepalive: every progressIntervalMs send a progress
         // notification so CC's transport doesn't time out on long waits.
@@ -301,7 +306,7 @@ export class AskUserMcpServer {
             : undefined;
 
         const answer = await op.bridge.pending(
-          { arguments: args, ccToolUseId },
+          { arguments: args, toolCallId },
           {
             onProgress,
             progressIntervalMs: this.progressIntervalMs,

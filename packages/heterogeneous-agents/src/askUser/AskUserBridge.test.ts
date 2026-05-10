@@ -39,6 +39,32 @@ describe('AskUserBridge', () => {
       await expect(pending).resolves.toEqual({ result: { foo: 'bar' } });
     });
 
+    it('uses caller-supplied toolCallId as the wire correlation key', async () => {
+      const bridge = new AskUserBridge('op-1');
+      const drain = drainEvents(bridge);
+      const pending = bridge.pending({
+        arguments: { questions: [] },
+        toolCallId: 'cc-tool-use-abc',
+      });
+      const event = await drain.firstEvent;
+      expect(event.data.toolCallId).toBe('cc-tool-use-abc');
+
+      bridge.resolve('cc-tool-use-abc', { result: { picked: 'red' } });
+      await expect(pending).resolves.toEqual({ result: { picked: 'red' } });
+      drain.stop();
+    });
+
+    it('rejects pending() when the same toolCallId is already in flight', async () => {
+      const bridge = new AskUserBridge('op-1');
+      const drain = drainEvents(bridge);
+      void bridge.pending({ arguments: {}, toolCallId: 'dup' });
+      await expect(bridge.pending({ arguments: {}, toolCallId: 'dup' })).rejects.toThrow(
+        /duplicate toolCallId/,
+      );
+      bridge.cancelAll();
+      drain.stop();
+    });
+
     it('ignores resolve() for unknown toolCallId', async () => {
       const bridge = new AskUserBridge('op-1');
       // Drain emitted events into the void so pending() can run.

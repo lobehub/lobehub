@@ -23,11 +23,19 @@ export interface PendingArgs {
   /** Whatever the MCP tool's input schema accepted (e.g. `{ questions: [...] }`). */
   arguments: unknown;
   /**
-   * CC's own toolUseId for this call, if known (forwarded from the MCP
-   * `_meta.claudecode/toolUseId`). Only used for telemetry/correlation in
-   * traces — the bridge's own `toolCallId` is the wire correlation key.
+   * Wire correlation key for this intervention. Used as the `toolCallId`
+   * on outbound `agent_intervention_request` events and looked up by
+   * `resolve()` / `cancel()` when the user submits an answer.
+   *
+   * For CC, the producer should pass `extra._meta['claudecode/toolUseId']`
+   * here so it equals the existing tool message id on the renderer side
+   * (the assistant `tool_use` for `mcp__lobe_cc__ask_user_question` and
+   * the intervention request both reference the same tool bubble).
+   *
+   * If omitted, the bridge synthesizes a random UUID — fine for
+   * stand-alone tests, but the renderer won't be able to correlate.
    */
-  ccToolUseId?: string;
+  toolCallId?: string;
 }
 
 export interface PendingOptions {
@@ -114,7 +122,14 @@ export class AskUserBridge {
       return Promise.reject(new Error('AskUserBridge is closed; cannot accept new pending calls'));
     }
 
-    const toolCallId = randomUUID();
+    const toolCallId = args.toolCallId ?? randomUUID();
+    if (this.pending_.has(toolCallId)) {
+      // Two pendings on the same key would clobber each other. Caller bug;
+      // surface it loudly rather than silently lose one resolve.
+      return Promise.reject(
+        new Error(`AskUserBridge: duplicate toolCallId in flight: ${toolCallId}`),
+      );
+    }
     const timeoutMs = options.timeoutMs ?? 5 * 60 * 1000;
     const progressIntervalMs = options.progressIntervalMs ?? 30_000;
     const startedAt = Date.now();
