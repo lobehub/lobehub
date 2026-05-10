@@ -1002,18 +1002,26 @@ export class AiAgentService {
         ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
       ];
 
-      // Derive activeDeviceId from device context:
+      // Derive activeDeviceId from device context. Gated on `canUseDevice`
+      // first — without this guard, an external bot sender's turn would still
+      // populate `state.metadata.activeDeviceId`, and `buildStepToolDelta`
+      // re-injects `LocalSystemManifest` whenever activeDeviceId is set,
+      // bypassing the engine's enabledToolIds exclusion. Skipping the
+      // assignment here closes that bypass at the source.
+      //
       // 1. If this run explicitly requested a device and that device is online, use it
       // 2. Otherwise, if the current topic has a bound device and it is online, use that
       // 3. Otherwise, fall back to the agent-level bound device when it is online
       // 4. Otherwise, in IM/Bot scenarios, auto-activate only when exactly one device is online
-      activeDeviceId = boundDeviceId
-        ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
-          ? boundDeviceId
-          : undefined
-        : (discordContext || botContext) && onlineDevices.length === 1
-          ? onlineDevices[0].deviceId
-          : undefined;
+      activeDeviceId = !canUseDevice
+        ? undefined
+        : boundDeviceId
+          ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
+            ? boundDeviceId
+            : undefined
+          : (discordContext || botContext) && onlineDevices.length === 1
+            ? onlineDevices[0].deviceId
+            : undefined;
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
         additionalManifests: [...lobehubSkillManifests, ...klavisManifests],

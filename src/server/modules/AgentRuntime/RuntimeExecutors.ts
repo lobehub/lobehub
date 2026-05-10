@@ -245,8 +245,19 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
-    // Resolve tools via ToolResolver (unified tool injection)
-    const activeDeviceId = state.metadata?.activeDeviceId;
+    // Resolve tools via ToolResolver (unified tool injection).
+    //
+    // Belt-and-suspenders: even if `aiAgent.execAgent` ever forgets to clear
+    // `state.metadata.activeDeviceId` for a non-trusted sender, swallowing
+    // it here keeps `buildStepToolDelta` from re-injecting `local-system` —
+    // the engine's enabledToolIds exclusion alone is not enough, since the
+    // delta builder treats activeDeviceId as an independent activation
+    // signal and only dedupes against already-enabled tools.
+    const devicePolicy = state.metadata?.deviceAccessPolicy as
+      | { canUseDevice: boolean; reason: DeviceAccessReason }
+      | undefined;
+    const activeDeviceId =
+      devicePolicy?.canUseDevice === false ? undefined : state.metadata?.activeDeviceId;
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
       executorMap: state.toolExecutorMap ?? {},
