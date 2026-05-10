@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as modelParse from '../../utils/modelParse';
 import { LobeAiHubMixAI } from './index';
 
 const mockFetch = vi.fn();
@@ -15,6 +16,7 @@ describe('LobeAiHubMixAI', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     mockFetch.mockReset();
   });
 
@@ -71,12 +73,63 @@ describe('LobeAiHubMixAI', () => {
 
     it('should normalize model_id field to id', async () => {
       mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ data: [{ model_id: 'some-model', object: 'model', created: 1, owned_by: 'test' }] }), { status: 200 }),
+        new Response(
+          JSON.stringify({
+            data: [{ model_id: 'some-model', object: 'model', created: 1, owned_by: 'test' }],
+          }),
+          { status: 200 },
+        ),
       );
 
-      // Should not throw — normalization happens before processMultiProviderModelList
+      // Normalization must set id so processMultiProviderModelList receives a valid model
       const list = await instance.models();
-      expect(Array.isArray(list)).toBe(true);
+      expect(list.some((m) => m.id === 'some-model')).toBe(true);
+    });
+
+    it('should map AiHubMix API fields to LobeHub model card fields', async () => {
+      const spy = vi
+        .spyOn(modelParse, 'processMultiProviderModelList')
+        .mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                model_id: 'test-llm',
+                desc: 'A test LLM',
+                types: 'llm',
+                features: 'tools,function_calling,thinking,web',
+                input_modalities: 'text,image',
+                context_length: 128_000,
+                max_output: 8192,
+                pricing: { input: 1.0, output: 3.0, cache_read: 0.25, cache_write: 0.5 },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await instance.models();
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            contextWindowTokens: 128_000,
+            description: 'A test LLM',
+            functionCall: true,
+            id: 'test-llm',
+            maxOutput: 8192,
+            pricing: { cachedInput: 0.25, input: 1.0, output: 3.0, writeCacheInput: 0.5 },
+            reasoning: true,
+            search: true,
+            type: 'chat',
+            vision: true,
+          }),
+        ]),
+        'aihubmix',
+      );
     });
 
     it('should return empty array when API key is missing', async () => {

@@ -6,14 +6,131 @@ import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
 
+/**
+ * Response schema for GET https://aihubmix.com/api/v1/models
+ * See https://docs.aihubmix.com/cn/api/Models-API
+ */
 export interface AiHubMixModelCard {
-  created: number;
-  id: string;
-  object: string;
-  owned_by: string;
+  /** Context window size in tokens. */
+  context_length?: number;
+  /** Model description (English). */
+  desc?: string;
+  /**
+   * Comma-separated capability flags.
+   * Known values: thinking | tools | function_calling | web | structured_outputs
+   */
+  features?: string;
+  /**
+   * Comma-separated input modalities.
+   * Known values: text | image | audio | video | pdf
+   */
+  input_modalities?: string;
+  /** Maximum output length in tokens. */
+  max_output?: number;
+  /** Unique model identifier (new endpoint uses model_id; legacy endpoint uses id). */
+  model_id?: string;
+  /**
+   * Display name of the model.
+   * Note: not present in official API response examples; kept for forward compatibility.
+   */
+  model_name?: string;
+  /**
+   * Pricing in USD per million tokens.
+   * cache_write is the cache-write price (present in field docs but absent from response examples).
+   */
+  pricing?: {
+    cache_read?: number;
+    cache_write?: number;
+    input?: number;
+    output?: number;
+  };
+  /**
+   * Model type.
+   * Current values: llm | image_generation | video | tts | stt | embedding | rerank
+   * Legacy aliases (auto-mapped by the platform): t2t→llm | t2i→image_generation | t2v→video | reranking→rerank
+   */
+  types?: string;
 }
 
-const baseURL = 'https://api.aihubmix.com';
+/**
+ * Maps AiHubMix `types` field values to LobeHub AiModelType.
+ * Both current identifiers and legacy aliases are included; the platform
+ * auto-maps them server-side, but we handle both defensively on the client.
+ * See https://docs.aihubmix.com/cn/api/Models-API
+ */
+const TYPE_MAP: Record<string, string> = {
+  // Current type identifiers
+  embedding: 'embedding',
+  image_generation: 'image',
+  llm: 'chat',
+  rerank: 'rerank',
+  stt: 'stt',
+  tts: 'tts',
+  video: 'video',
+  // Legacy aliases (platform docs note automatic bidirectional mapping)
+  reranking: 'rerank', // reranking ↔ rerank
+  t2i: 'image',        // t2i ↔ image_generation
+  t2t: 'chat',         // t2t ↔ llm
+  t2v: 'video',        // t2v ↔ video
+};
+
+/**
+ * Map AiHubMix full-catalog API response fields to LobeHub model card fields.
+ * The new endpoint returns its own schema (model_id, desc, types, features, etc.)
+ * which must be normalized before being passed to processMultiProviderModelList.
+ */
+const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
+  const id: string = m.id ?? m.model_id;
+
+  // Parse features into a Set only when the field is present and non-empty
+  const featureList =
+    typeof m.features === 'string' && m.features.trim()
+      ? m.features.split(',').map((s: string) => s.trim())
+      : null;
+  const featureSet = featureList ? new Set(featureList) : null;
+
+  // Parse input_modalities into an array when present
+  const inputModalities =
+    typeof m.input_modalities === 'string'
+      ? m.input_modalities.split(',').map((s: string) => s.trim())
+      : null;
+
+  // Remap pricing field names: cache_read → cachedInput, cache_write → writeCacheInput
+  const rawPricing = m.pricing && typeof m.pricing === 'object' ? m.pricing : null;
+  const pricing = rawPricing
+    ? {
+      ...(typeof rawPricing.input === 'number' && { input: rawPricing.input }),
+      ...(typeof rawPricing.output === 'number' && { output: rawPricing.output }),
+      ...(typeof rawPricing.cache_read === 'number' && { cachedInput: rawPricing.cache_read }),
+      ...(typeof rawPricing.cache_write === 'number' && {
+        writeCacheInput: rawPricing.cache_write,
+      }),
+    }
+    : null;
+
+  return {
+    ...m,
+    id,
+    ...(m.desc !== undefined && { description: m.desc }),
+    ...(m.model_name !== undefined && { displayName: m.model_name }),
+    ...(m.context_length !== undefined && { contextWindowTokens: m.context_length }),
+    ...(m.max_output !== undefined && { maxOutput: m.max_output }),
+    ...(m.types !== undefined && { type: TYPE_MAP[m.types] }),
+    ...(pricing !== null && { pricing }),
+    // Map `features` capabilities only when the field is present; when absent,
+    // processMultiProviderModelList falls back to keyword-based detection.
+    // Known features values: thinking | tools | function_calling | web | structured_outputs
+    // `structured_outputs` has no corresponding LobeHub model card field and is intentionally omitted.
+    ...(featureSet && {
+      functionCall: featureSet.has('tools') || featureSet.has('function_calling'),
+      reasoning: featureSet.has('thinking'),
+      search: featureSet.has('web'),
+    }),
+    ...(inputModalities && { vision: inputModalities.includes('image') }),
+  };
+};
+
+const baseURL = 'https://aihubmix.com';
 
 export const params: CreateRouterRuntimeOptions = {
   debug: {
@@ -24,41 +141,33 @@ export const params: CreateRouterRuntimeOptions = {
   },
   id: ModelProvider.AiHubMix,
   models: async ({ client }) => {
-    try {
-      const apiKey = (client as any).apiKey as string | undefined;
-      if (!apiKey) throw new Error('AiHubMix API key is missing');
+    const apiKey = (client as any).apiKey as string | undefined;
+    if (!apiKey) return [];
 
-      // AiHubMix exposes two model list endpoints:
-      // - https://api.aihubmix.com/v1/models  — returns per-user-group list only (~256 models)
-      // - https://aihubmix.com/api/v1/models  — returns the complete model catalog (800+)
-      // Use the full endpoint so users can access all available models.
-      // Note: this endpoint uses `model_id` instead of `id`; normalize before processing.
-      // 'APP-Code' is an AiHubMix-required client identifier (see https://docs.aihubmix.com/cn/api/Models-API).
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10_000);
-      let response: Response;
-      try {
-        response = await fetch('https://aihubmix.com/api/v1/models', {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'APP-Code': 'LobeHub',
-          },
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+    // AiHubMix exposes two model list endpoints:
+    // - https://aihubmix.com/v1/models     — returns per-user-group list only (~256 models)
+    // - https://aihubmix.com/api/v1/models — returns the complete model catalog (800+)
+    // Use the full endpoint so users can access all available models.
+    // See https://docs.aihubmix.com/cn/api/Models-API
+    // 'APP-Code' is an AiHubMix-required client identifier.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch('https://aihubmix.com/api/v1/models', {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'APP-Code': 'LobeHub',
+        },
+        signal: controller.signal,
+      });
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
         throw new Error(`HTTP ${response.status}: ${text}`);
       }
 
-      const json = (await response.json()) as any;
-      const modelList: AiHubMixModelCard[] = (json.data || []).map((m: any) => ({
-        ...m,
-        id: m.id ?? m.model_id,
-      }));
+      const json = (await response.json()) as { data?: any[] };
+      const modelList = (json.data || []).map((m: any) => mapAiHubMixModel(m));
       return await processMultiProviderModelList(modelList, 'aihubmix');
     } catch (error) {
       console.warn(
@@ -66,6 +175,8 @@ export const params: CreateRouterRuntimeOptions = {
         error,
       );
       return [];
+    } finally {
+      clearTimeout(timeoutId);
     }
   },
   routers: [
