@@ -111,6 +111,7 @@ describe('userRouter', () => {
       vi.mocked(UserModel).mockImplementation(
         () =>
           ({
+            advanceLastActiveAt: vi.fn().mockResolvedValue(undefined),
             getUserState: vi.fn().mockResolvedValue(mockState),
             updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
           }) as any,
@@ -146,7 +147,10 @@ describe('userRouter', () => {
     it('should invoke the user activity hook after winning the lastActiveAt update', async () => {
       const createdAt = new Date('2026-01-01T00:00:00.000Z');
       const previousLastActiveAt = new Date('2026-03-01T00:00:00.000Z');
-      const updateLastActiveAtIfUnchanged = vi.fn().mockResolvedValue(true);
+      const advanceLastActiveAt = vi.fn().mockResolvedValue({
+        previousLastActiveAt,
+        userCreatedAt: createdAt,
+      });
       const mockState = {
         isOnboarded: true,
         preference: {},
@@ -154,15 +158,11 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel.findById).mockResolvedValue({
-        createdAt,
-        lastActiveAt: previousLastActiveAt,
-      } as any);
       vi.mocked(UserModel).mockImplementation(
         () =>
           ({
+            advanceLastActiveAt,
             getUserState: vi.fn().mockResolvedValue(mockState),
-            updateLastActiveAtIfUnchanged,
           }) as any,
       );
       vi.mocked(MessageModel).mockImplementation(
@@ -181,10 +181,7 @@ describe('userRouter', () => {
       await userRouter.createCaller({ ...mockCtx }).getUserState();
       await flushAfterTasks();
 
-      expect(updateLastActiveAtIfUnchanged).toHaveBeenCalledWith(
-        expect.any(Date),
-        previousLastActiveAt,
-      );
+      expect(advanceLastActiveAt).toHaveBeenCalledWith(expect.any(Date));
       expect(onUserActivityForBusiness).toHaveBeenCalledWith({
         currentTime: expect.any(Date),
         previousLastActiveAt,
@@ -194,8 +191,7 @@ describe('userRouter', () => {
     });
 
     it('should skip the user activity hook when a concurrent request already updated lastActiveAt', async () => {
-      const previousLastActiveAt = new Date('2026-03-01T00:00:00.000Z');
-      const updateLastActiveAtIfUnchanged = vi.fn().mockResolvedValue(false);
+      const advanceLastActiveAt = vi.fn().mockResolvedValue(undefined);
       const mockState = {
         isOnboarded: true,
         preference: {},
@@ -203,15 +199,11 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel.findById).mockResolvedValue({
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        lastActiveAt: previousLastActiveAt,
-      } as any);
       vi.mocked(UserModel).mockImplementation(
         () =>
           ({
+            advanceLastActiveAt,
             getUserState: vi.fn().mockResolvedValue(mockState),
-            updateLastActiveAtIfUnchanged,
           }) as any,
       );
       vi.mocked(MessageModel).mockImplementation(
@@ -230,10 +222,7 @@ describe('userRouter', () => {
       await userRouter.createCaller({ ...mockCtx }).getUserState();
       await flushAfterTasks();
 
-      expect(updateLastActiveAtIfUnchanged).toHaveBeenCalledWith(
-        expect.any(Date),
-        previousLastActiveAt,
-      );
+      expect(advanceLastActiveAt).toHaveBeenCalledWith(expect.any(Date));
       expect(onUserActivityForBusiness).not.toHaveBeenCalled();
     });
   });

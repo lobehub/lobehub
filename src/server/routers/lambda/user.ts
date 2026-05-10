@@ -95,20 +95,14 @@ export const userRouter = router({
       after(async () => {
         try {
           const currentTime = new Date();
-          const user = await UserModel.findById(ctx.serverDB, ctx.userId);
+          const transition = await ctx.userModel.advanceLastActiveAt(currentTime);
 
-          if (user?.createdAt && user.lastActiveAt) {
-            const lastActiveAtUpdated = await ctx.userModel.updateLastActiveAtIfUnchanged(
-              currentTime,
-              user.lastActiveAt,
-            );
-            if (!lastActiveAtUpdated) return;
-
+          if (transition) {
             try {
               await onUserActivityForBusiness({
                 currentTime,
-                previousLastActiveAt: user.lastActiveAt,
-                userCreatedAt: user.createdAt,
+                previousLastActiveAt: transition.previousLastActiveAt,
+                userCreatedAt: transition.userCreatedAt,
                 userId: ctx.userId,
               });
             } catch (err) {
