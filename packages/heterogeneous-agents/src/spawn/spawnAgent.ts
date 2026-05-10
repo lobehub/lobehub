@@ -90,6 +90,13 @@ const CLAUDE_CODE_BASE_ARGS = [
   'stream-json',
   '--verbose',
   '--include-partial-messages',
+  // CC's built-in `AskUserQuestion` self-injects an `is_error: "Answer questions?"`
+  // tool_result inside the CLI before the host gets a chance to surface the
+  // questions, leaving the model to fall back to plain-text prompting anyway.
+  // Disable it so the model just asks in text. Re-enable once we wire a
+  // local MCP-backed replacement that bridges to LobeHub's intervention UI.
+  '--disallowedTools',
+  'AskUserQuestion',
 ] as const;
 
 // bypassPermissions is blocked when running as root (e.g. cloud sandbox).
