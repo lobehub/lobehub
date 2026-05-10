@@ -107,7 +107,14 @@ describe('spawnAgent', () => {
     expect(call.args).toContain('--output-format');
     expect(call.args.filter((a) => a === 'stream-json')).toHaveLength(2);
     expect(call.args).toContain('-p');
-    expect(call.args).toContain('--include-partial-messages');
+    // CC's built-in interactive Q&A is disabled at every spawn site so the
+    // model degrades to plain-text questioning instead of stalling on a
+    // synthetic "Answer questions?" tool_result.
+    const disallowedIdx = call.args.indexOf('--disallowedTools');
+    expect(disallowedIdx).toBeGreaterThan(-1);
+    expect(call.args[disallowedIdx + 1]).toBe('AskUserQuestion');
+    // Partial deltas are opt-in — terminal/sandbox callers want fewer events.
+    expect(call.args).not.toContain('--include-partial-messages');
     // Prompt MUST go through stdin as a stream-json user message — never as argv.
     expect(call.args).not.toContain('do a thing');
     expect(fake.stdinWrites).toHaveLength(1);
@@ -119,6 +126,18 @@ describe('spawnAgent', () => {
     // Events flow through the pipeline (session id extracted by adapter).
     expect(events.length).toBeGreaterThan(0);
     for (const event of events) expect(event.operationId).toBe('op-1');
+  });
+
+  it('passes --include-partial-messages only when includePartialMessages=true', async () => {
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'claude-code',
+      includePartialMessages: true,
+      operationId: 'op-1',
+      prompt: 'do a thing',
+    });
+    expect(spawnCalls[0].args).toContain('--include-partial-messages');
   });
 
   it('appends --resume <id> for claude when resuming a session', async () => {
