@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { unlinkSync } from 'node:fs';
 import { access, appendFile, mkdir, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -1150,10 +1151,30 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Cleanup on app quit.
+   * Synchronously unlink every pending intervention's temp `mcp.json`. The
+   * async exit-handler cleanup loses to Electron's main-process teardown
+   * often enough that we'd leak `lobe-cc-mcp-<opId>.json` files into
+   * `os.tmpdir()` on real shutdowns; sync unlink here is the only reliable
+   * guarantee. Safe to call multiple times.
+   */
+  private unlinkPendingInterventionConfigsSync = (): void => {
+    for (const [, intervention] of this.opIdToIntervention) {
+      try {
+        unlinkSync(intervention.tmpConfigPath);
+      } catch {
+        /* file may already be gone — fine */
+      }
+    }
+  };
+
+  /**
+   * Cleanup on app quit. `before-quit` covers the user-driven Cmd+Q /
+   * `app.quit()` path; SIGTERM / SIGINT cover external kills (test
+   * harnesses, OS shutdown) where Electron's lifecycle events never fire.
    */
   afterAppReady() {
     electronApp.on('before-quit', () => {
+      this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
         if (session.process && !session.process.killed) {
           session.cancelledByUs = true;
@@ -1169,5 +1190,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         logger.warn('AskUserQuestion MCP server stop error:', err);
       });
     });
+
+    const onSignal = (signal: NodeJS.Signals) => {
+      this.unlinkPendingInterventionConfigsSync();
+      // Defer to Electron's normal quit flow so the rest of the app gets a
+      // chance to tear down. The `before-quit` handler above is idempotent.
+      try {
+        electronApp.quit();
+      } catch {
+        /* during late shutdown app.quit may throw — fine */
+      }
+      // Last-resort exit if Electron is wedged and won't quit on its own.
+      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 1000).unref();
+    };
+    process.on('SIGTERM', onSignal);
+    process.on('SIGINT', onSignal);
   }
 }
