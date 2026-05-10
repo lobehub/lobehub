@@ -6,6 +6,7 @@ const wenxinChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
       search: true,
     },
     contextWindowTokens: 131_072,
