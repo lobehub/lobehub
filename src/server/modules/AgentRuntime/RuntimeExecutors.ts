@@ -467,6 +467,8 @@ export const createRuntimeExecutors = (
             ]);
 
             onboardingContext = {
+              // patch_08: propagate finished so MessagesEngine injectors can gate on it
+              finished: onboardingState.finished,
               personaContent: persona?.persona ?? null,
               phaseGuidance: formatWebOnboardingStateMessage(onboardingState),
               soulContent: soulDoc?.content ?? null,
