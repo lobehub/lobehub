@@ -101,6 +101,30 @@ describe('createGatewayEventHandler', () => {
       expect(store.replaceMessages).toHaveBeenCalled();
     });
 
+    it('should resolve the new assistant from DB on hetero newStep when the event has no assistantMessage id', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      vi.mocked(messageService.getMessages).mockResolvedValueOnce([
+        { id: 'msg-initial', role: 'assistant' } as any,
+        { id: 'tool-1', role: 'tool' } as any,
+        { id: 'msg-step2', role: 'assistant' } as any,
+      ]);
+
+      handler(makeEvent('stream_start', { newStep: true }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'world' }));
+      await flush();
+
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          id: 'msg-step2',
+          value: { content: 'world' },
+        }),
+        { operationId: 'op-1' },
+      );
+    });
+
     it('should reset accumulators on each stream_start', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
