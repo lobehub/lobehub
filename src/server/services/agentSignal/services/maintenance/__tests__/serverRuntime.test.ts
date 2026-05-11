@@ -613,18 +613,8 @@ describe('createServerNightlyReviewPolicyOptions', () => {
       },
       type: 'decision',
     });
-    expect(result.execution.actions[0]).toMatchObject({
-      idempotencyKey: 'source-1:create_skill:concise-answers',
-      resourceId: 'brief-created',
-      status: MaintenanceActionStatus.Proposed,
-    });
-    expect(result.projectionPlan.actions[0]).toMatchObject({
-      actionType: 'create_skill',
-      operation: {
-        domain: 'skill',
-        operation: 'create',
-      },
-    });
+    expect(result.execution.actions).toEqual([]);
+    expect(result.projectionPlan.actions).toEqual([]);
   });
 
   /**
@@ -748,11 +738,8 @@ describe('createServerNightlyReviewPolicyOptions', () => {
       },
       type: 'decision',
     });
-    expect(result.execution.actions[0]).toMatchObject({
-      idempotencyKey: 'proposal-op-refine-1',
-      resourceId: 'brief-created',
-      status: MaintenanceActionStatus.Skipped,
-    });
+    expect(result.execution.actions).toEqual([]);
+    expect(result.projectionPlan.actions).toEqual([]);
   });
 
   /**

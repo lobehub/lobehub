@@ -37,10 +37,32 @@ export interface ConsolidateMaintenanceSkillInput extends SkillMaintenanceBaseIn
     /** Source of the approval decision. */
     source: 'proposal' | 'same_turn_feedback';
   };
+  /** Full replacement Markdown body for the canonical skill. */
+  bodyMarkdown?: string;
   /** Canonical writable managed skill agent document id. */
   canonicalSkillDocumentId: string;
+  /** Optional description to persist with the canonical skill index. */
+  description?: string;
   /** Source managed skill ids used to build the canonical skill. */
   sourceSkillIds: string[];
+  /** Frozen source snapshots captured when the consolidation was proposed. */
+  sourceSnapshots?: SkillMaintenanceTargetSnapshot[];
+}
+
+/** Frozen managed-skill target state used by approve-time consolidation preflight. */
+export interface SkillMaintenanceTargetSnapshot {
+  /** Managed skill bundle agent document id. */
+  agentDocumentId?: string;
+  /** Content hash observed when the proposal was created. */
+  contentHash?: string;
+  /** Canonical document id observed when the proposal was created. */
+  documentId?: string;
+  /** Whether the target was managed by Agent Signal. */
+  managed?: boolean;
+  /** Target domain captured by the proposal snapshot. */
+  targetType?: 'skill';
+  /** Whether the target was writable at proposal time. */
+  writable?: boolean;
 }
 
 /** Request envelope for creating one skill. */

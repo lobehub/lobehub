@@ -7,7 +7,7 @@ export default {
   'brief.action.acknowledge': 'Acknowledge',
   'brief.action.approve': 'Approve',
   'brief.action.confirm': 'Confirm',
-  'brief.action.confirmDone': 'Confirm',
+  'brief.action.confirmDone': 'Confirm complete',
   'brief.action.feedback': 'Feedback',
   'brief.action.retry': 'Retry',
   'brief.collapse': 'Show less',

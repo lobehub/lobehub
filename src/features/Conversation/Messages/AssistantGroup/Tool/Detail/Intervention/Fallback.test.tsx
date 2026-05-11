@@ -101,6 +101,23 @@ describe('FallbackIntervention', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the activation reason for activateTools interventions', () => {
+    const reason = 'I need GTD tools to create and manage the requested task list.';
+
+    render(
+      <FallbackIntervention
+        apiName="activateTools"
+        assistantGroupId="assistant-group-1"
+        id="message-1"
+        identifier="lobe-activator"
+        requestArgs={JSON.stringify({ identifiers: ['search'], reason })}
+        toolCallId="tool-call-1"
+      />,
+    );
+
+    expect(screen.getByText(reason)).toBeInTheDocument();
+  });
+
   it('renders URL avatars as images instead of visible text', () => {
     const iconUrl = 'https://example.com/icon.png';
     metaMap.search.avatar = iconUrl;
