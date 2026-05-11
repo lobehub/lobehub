@@ -5,7 +5,6 @@ import { Fab } from './Fab';
 import { Modal } from './Modal';
 import { Popover } from './Popover';
 
-const isDevEnv = process.env.NODE_ENV === 'development';
 const STORAGE_KEY = 'LOBE_AGENT_MOCK_ENABLED';
 
 const useDevtoolsEnabled = (): boolean => {
@@ -37,7 +36,7 @@ const useIsAgentTopicRoute = (): boolean => {
 const AgentMockDevtools = memo(() => {
   const enabled = useDevtoolsEnabled();
   const isAgentTopicRoute = useIsAgentTopicRoute();
-  if (!isDevEnv || !enabled || !isAgentTopicRoute) return null;
+  if (!__DEV__ || !enabled || !isAgentTopicRoute) return null;
   return (
     <>
       <Fab />

@@ -83,7 +83,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
             <Suspense>
               <ImportSettings />
               {/* DevPanel disabled in SPA: depends on node:fs */}
-              {process.env.NODE_ENV === 'development' && <AgentMockDevtools />}
+              {__DEV__ && <AgentMockDevtools />}
             </Suspense>
           </ServerConfigStoreProvider>
         </AppTheme>
