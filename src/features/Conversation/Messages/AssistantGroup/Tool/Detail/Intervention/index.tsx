@@ -94,7 +94,7 @@ const Intervention = memo<InterventionProps>(
 
     const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
 
-    const isCustomInteraction = isCustomInteractionIdentifier(identifier);
+    const isCustomInteraction = isCustomInteractionIdentifier(identifier, apiName);
 
     const topicId = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s)?.topicId);
     const submitToolInteraction = useConversationStore((s) => s.submitToolInteraction);
@@ -123,6 +123,7 @@ const Intervention = memo<InterventionProps>(
               identifier,
               action.payload,
               {
+                apiName,
                 requestArgs: parsedArgs,
                 topicId,
               },
@@ -136,6 +137,7 @@ const Intervention = memo<InterventionProps>(
               'skipped',
               action.payload,
               {
+                apiName,
                 requestArgs: parsedArgs,
                 topicId,
               },
@@ -146,6 +148,7 @@ const Intervention = memo<InterventionProps>(
           }
           case 'cancel': {
             await recordCustomInteractionResolution(identifier, 'cancelled', action.payload, {
+              apiName,
               requestArgs: parsedArgs,
               topicId,
             });
@@ -155,6 +158,7 @@ const Intervention = memo<InterventionProps>(
         }
       },
       [
+        apiName,
         cancelToolInteraction,
         id,
         identifier,

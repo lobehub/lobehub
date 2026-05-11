@@ -1,3 +1,4 @@
+import { AgentMarketplaceRenders } from '../../agentMarketplace/client/Render';
 import { WebOnboardingApiName } from '../../types';
 import SaveUserQuestion from './SaveUserQuestion';
 import UpdateDocument from './UpdateDocument';
@@ -7,6 +8,7 @@ export const WebOnboardingRenders = {
   [WebOnboardingApiName.saveUserQuestion]: SaveUserQuestion,
   [WebOnboardingApiName.updateDocument]: UpdateDocument,
   [WebOnboardingApiName.writeDocument]: WriteDocument,
+  ...AgentMarketplaceRenders,
 };
 
 export { default as SaveUserQuestionRender } from './SaveUserQuestion';

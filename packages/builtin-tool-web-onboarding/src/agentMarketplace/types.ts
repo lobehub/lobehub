@@ -1,22 +1,4 @@
 /**
- * Agent Marketplace Tool Identifier
- */
-export const AgentMarketplaceIdentifier = 'lobe-agent-marketplace';
-
-/**
- * Agent Marketplace API Names
- */
-export const AgentMarketplaceApiName = {
-  /** Open the Marketplace picker with category hints. */
-  showAgentMarketplace: 'showAgentMarketplace',
-  /** Record the user's template selection. Usually framework-handled. */
-  submitAgentPick: 'submitAgentPick',
-} as const;
-
-export type AgentMarketplaceApiNameType =
-  (typeof AgentMarketplaceApiName)[keyof typeof AgentMarketplaceApiName];
-
-/**
  * Curated categories sourced from the marketplace onboarding-full API.
  * Slugs match the top-level keys of the API response.
  */
