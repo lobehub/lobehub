@@ -10,7 +10,7 @@ const STORAGE_KEY = 'LOBE_AGENT_MOCK_ENABLED';
 const useDevtoolsEnabled = (): boolean => {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
-    if (!isDevEnv) return;
+    if (!__DEV__) return;
     setEnabled(localStorage.getItem(STORAGE_KEY) === '1');
     const onStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) setEnabled(e.newValue === '1');
