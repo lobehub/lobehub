@@ -37,18 +37,15 @@ export const getShellConfig = (command: string) =>
  *   $env:VAR      -> PowerShell style
  *   $VAR / ${VAR} -> Unix bash/sh style
  *
- * Windows paths (containing backslashes) are wrapped in single quotes
- * so the shell receives a safe literal string regardless of quoting.
- * Unknown variables are left as-is.
+ * The raw value is substituted as-is. The caller is responsible for quoting
+ * (i.e. the variable reference should already be inside quotes in the command
+ * string: Set-Content "$env:USERPROFILE\\file.txt" works correctly because
+ * the double-quotes survive the substitution).
+ * Unknown variables are left as-is (no substitution).
  */
 export const expandEnvVars = (command: string): string => {
-  const replace = (name: string, original: string): string => {
-    const val = process.env[name];
-    if (val === undefined) return original;
-    // Wrap Windows paths in single quotes to prevent shell misinterpretation
-    // of unquoted backslash sequences after variable expansion.
-    return val.includes('\\') ? `'${val}'` : val;
-  };
+  const replace = (name: string, original: string): string =>
+    process.env[name] ?? original;
 
   // %VAR% - Windows cmd
   let result = command.replace(/%([^%]+)%/g, (match, name) => replace(name, match));
