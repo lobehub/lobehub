@@ -1,6 +1,7 @@
 ---
 name: drizzle
-description: Drizzle ORM schema and database guide. Use when working with database schemas (src/database/schemas/*), defining tables, creating migrations, or database model code. Triggers on Drizzle schema definition, database migrations, or ORM usage questions.
+description: "Drizzle ORM schema authoring and query style for LobeHub (postgres, strict mode). Use when editing anything under `src/database/schemas/`, defining `pgTable` columns/indexes/junction tables, spreading `...timestamps`, generating `createInsertSchema`/`$inferSelect`/`$inferInsert` types, writing `db.select().from(...).leftJoin(...)` queries, or deciding when to split a relational `with:` into two queries. Triggers on `pgTable`, `db.select`, `db.query`, `eq()`/`and()`/`inArray()`, `uniqueIndex`, `primaryKey`, `references({ onDelete })`, 'add a column', 'new table', 'foreign key', 'junction table', 'schema field'. For migration files specifically, see the `db-migrations` skill."
+user-invocable: false
 ---
 
 # Drizzle ORM Schema Style Guide
@@ -125,11 +126,7 @@ The relational API generates complex lateral joins with `json_build_array` that 
 
 ```typescript
 // ✅ Good
-const [result] = await this.db
-  .select()
-  .from(agents)
-  .where(eq(agents.id, id))
-  .limit(1);
+const [result] = await this.db.select().from(agents).where(eq(agents.id, id)).limit(1);
 return result;
 
 // ❌ Bad: relational API

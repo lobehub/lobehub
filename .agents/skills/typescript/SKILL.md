@@ -1,6 +1,7 @@
 ---
 name: typescript
-description: TypeScript code style and optimization guidelines. MUST READ before writing or modifying any TypeScript code (.ts, .tsx, .mts files). Also use when reviewing code quality or implementing type-safe patterns. Triggers on any TypeScript file edit, code style discussions, or type safety questions.
+description: "TypeScript code style and type-safety guide for LobeHub. Read before writing or editing any `.ts` / `.tsx` / `.mts` — covers `interface` vs `type`, `Record<PropertyKey, unknown>` over `any`/`object`, `as const satisfies`, `@ts-expect-error` over `@ts-ignore`, `import type` (`separate-type-imports`), `async`/`await` + `Promise.all`, `for…of` over indexed `for`, and the no-silent-`.catch(() => fallback)` rule. Also use when reviewing type quality, deciding module augmentation (`declare module`) over `namespace`, or designing extensible types (e.g. `PipelineContext.metadata`). Triggers on any TypeScript file edit, 'fix the type', 'why is this `any`', 'should this be interface or type', 'eslint type-import', 'ts-expect-error'."
+user-invocable: false
 ---
 
 # TypeScript Code Style Guide
@@ -28,12 +29,16 @@ description: TypeScript code style and optimization guidelines. MUST READ before
 ## Imports
 
 - This project uses `simple-import-sort/imports` and `consistent-type-imports` (`fixStyle: 'separate-type-imports'`)
+
 - **Separate type imports**: always use `import type { ... }` for type-only imports, NOT `import { type ... }` inline syntax
+
 - When a file already has `import type { ... }` from a package and you need to add a value import, keep them as **two separate statements**:
+
   ```ts
   import type { ChatTopicBotContext } from '@lobechat/types';
   import { RequestTrigger } from '@lobechat/types';
   ```
+
 - Within each import statement, specifiers are sorted **alphabetically by name**
 
 ## Code Structure
@@ -42,6 +47,7 @@ description: TypeScript code style and optimization guidelines. MUST READ before
 - Use consistent, descriptive naming; avoid obscure abbreviations
 - Replace magic numbers/strings with well-named constants
 - Defer formatting to tooling
+- Prefer **named exports** over `export default` — keeps refactor renames and IDE auto-import in sync, and avoids the `default` re-naming drift you get with `import Foo from './foo'`. Reserve `export default` for files where the framework requires it (Next.js page/route/layout, React.lazy targets, config files like `vitest.config.ts`)
 
 ## UI and Theming
 
@@ -51,7 +57,6 @@ description: TypeScript code style and optimization guidelines. MUST READ before
 
 ## Performance
 
-- Prefer `for…of` loops over index-based `for` loops
 - Reuse existing utils in `packages/utils` or installed npm packages
 - Query only required columns from database
 
