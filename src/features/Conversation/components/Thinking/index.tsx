@@ -1,6 +1,6 @@
-import { Accordion, AccordionItem, ScrollShadow } from '@lobehub/ui';
+import { Accordion, AccordionItem, ScrollArea } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type CSSProperties, type ReactNode, type RefObject } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useState } from 'react';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
@@ -19,6 +19,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     article * {
       color: ${cssVar.colorTextDescription};
     }
+  `,
+  scrollRoot: css`
+    border-radius: 0;
+    background: transparent;
   `,
 }));
 
@@ -57,12 +61,23 @@ const Thinking = memo<ThinkingProps>((props) => {
         paddingInline={4}
         title={<Title duration={duration} showDetail={showDetail} thinking={thinking} />}
       >
-        <ScrollShadow
-          className={styles.contentScroll}
-          offset={12}
-          ref={ref as RefObject<HTMLDivElement>}
-          size={12}
-          onScroll={handleScroll}
+        <ScrollArea
+          scrollFade
+          className={styles.scrollRoot}
+          contentProps={{
+            style: {
+              color: 'inherit',
+              display: 'block',
+              fontSize: 'inherit',
+              gap: 0,
+              lineHeight: 'inherit',
+            },
+          }}
+          viewportProps={{
+            className: styles.contentScroll,
+            ref: ref as RefObject<HTMLDivElement>,
+            onScroll: handleScroll,
+          }}
         >
           {typeof content === 'string' ? (
             <MarkdownMessage
@@ -78,7 +93,7 @@ const Thinking = memo<ThinkingProps>((props) => {
           ) : (
             content
           )}
-        </ScrollShadow>
+        </ScrollArea>
       </AccordionItem>
     </Accordion>
   );
