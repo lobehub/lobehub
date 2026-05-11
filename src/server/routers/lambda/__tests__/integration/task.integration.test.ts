@@ -800,4 +800,86 @@ describe('Task Router Integration', () => {
       expect(mockExecAgent).toHaveBeenCalled();
     });
   });
+
+  describe('agent model snapshot', () => {
+    const setAgentModel = async (model: string | null, provider: string | null) => {
+      const { agents } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.update(agents).set({ model, provider }).where(eq(agents.id, testAgentId));
+    };
+
+    it('snapshots the agent model into task.config at create time', async () => {
+      await setAgentModel('claude-sonnet-4-6', 'anthropic');
+
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Snapshot at create',
+      });
+
+      expect(task.data.config).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+    });
+
+    it('skips snapshot when the agent has no model configured', async () => {
+      await setAgentModel(null, null);
+
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'No snapshot when agent has none',
+      });
+
+      expect(task.data.config).toEqual({});
+    });
+
+    it('skips snapshot when the task has no assignee', async () => {
+      await setAgentModel('claude-sonnet-4-6', 'anthropic');
+
+      const task = await caller.create({ instruction: 'Unassigned task' });
+
+      expect(task.data.config).toEqual({});
+    });
+
+    it('preserves the snapshotted model when the agent default changes later', async () => {
+      await setAgentModel('claude-sonnet-4-6', 'anthropic');
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Snapshot then drift',
+      });
+
+      // User flips the agent to an expensive chat model.
+      await setAgentModel('gpt-5.4-pro', 'openai');
+
+      await caller.run({ id: task.data.id });
+
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'claude-sonnet-4-6', provider: 'anthropic' }),
+      );
+    });
+
+    it('backfills the snapshot on first run for tasks without config.model', async () => {
+      // Simulate a task that pre-dates this fix: no snapshot yet.
+      await setAgentModel(null, null);
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Pre-fix task',
+      });
+      expect(task.data.config).toEqual({});
+
+      // User later configures the agent model.
+      await setAgentModel('claude-sonnet-4-6', 'anthropic');
+
+      await caller.run({ id: task.data.id });
+
+      const after = await caller.find({ id: task.data.id });
+      expect(after.data.config).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'claude-sonnet-4-6', provider: 'anthropic' }),
+      );
+    });
+  });
 });

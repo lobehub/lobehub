@@ -48,6 +48,29 @@ export class AgentModel {
   };
 
   /**
+   * Lightweight lookup of an agent's currently-configured model + provider,
+   * used to snapshot the model into a task config so later changes to the
+   * agent's default model don't silently affect already-created tasks.
+   * Returns null when the agent has no model/provider set, or the agent
+   * cannot be found for this user.
+   */
+  getAgentModelConfig = async (
+    idOrSlug: string,
+  ): Promise<{ model: string; provider: string } | null> => {
+    const rows = await this.db
+      .select({ model: agents.model, provider: agents.provider })
+      .from(agents)
+      .where(
+        and(eq(agents.userId, this.userId), or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug))),
+      )
+      .limit(1);
+
+    const row = rows[0];
+    if (!row || !row.model || !row.provider) return null;
+    return { model: row.model, provider: row.provider };
+  };
+
+  /**
    * Query non-virtual agents with optional keyword filter.
    * Returns minimal agent info (id, title, description, avatar, backgroundColor).
    * Excludes virtual agents (like inbox, supervisors, etc).
