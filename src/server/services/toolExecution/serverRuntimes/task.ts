@@ -73,9 +73,16 @@ export const createTaskRuntime = ({
     const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
 
+    const resolvedAssigneeAgentId =
+      args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId);
+    const modelSnapshot = resolvedAssigneeAgentId
+      ? await agentModel.getAgentModelConfig(resolvedAssigneeAgentId)
+      : null;
+
     const task = await taskModel.create({
-      assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
+      assigneeAgentId: resolvedAssigneeAgentId,
       createdByAgentId: agentId,
+      ...(modelSnapshot && { config: modelSnapshot }),
       instruction: args.instruction,
       name: args.name,
       parentTaskId,

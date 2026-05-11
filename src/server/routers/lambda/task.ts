@@ -373,10 +373,17 @@ export const taskRouter = router({
       await assertAssigneeAgentBelongsToUser(ctx.agentModel, input.assigneeAgentId);
 
       // Resolve parentTaskId if it's an identifier
-      const createData = { ...input };
+      const createData: typeof input & { config?: Record<string, unknown> } = { ...input };
       if (createData.parentTaskId) {
         const parent = await resolveOrThrow(model, createData.parentTaskId);
         createData.parentTaskId = parent.id;
+      }
+
+      // Snapshot the assignee agent's current model/provider into task.config so
+      // later changes to the agent's default model don't silently affect this task.
+      if (input.assigneeAgentId) {
+        const snapshot = await ctx.agentModel.getAgentModelConfig(input.assigneeAgentId);
+        if (snapshot) createData.config = snapshot;
       }
 
       const task = await model.create(createData);

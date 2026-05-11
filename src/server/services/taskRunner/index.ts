@@ -5,6 +5,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { TopicTrigger } from '@/const/topic';
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -35,6 +36,7 @@ export interface RunTaskResult extends ExecAgentResult {
  *   - `heartbeat-tick` workflow handler (QStash self-rescheduling)
  */
 export class TaskRunnerService {
+  private agentModel: AgentModel;
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
   private taskLifecycle: TaskLifecycleService;
@@ -45,6 +47,7 @@ export class TaskRunnerService {
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
+    this.agentModel = new AgentModel(db, userId);
     this.taskModel = new TaskModel(db, userId);
     this.taskTopicModel = new TaskTopicModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
@@ -149,6 +152,18 @@ export class TaskRunnerService {
       }
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
+
+      // Backfill model snapshot for tasks created before the snapshot logic
+      // landed, or whose assignee was set after creation. Once written, the
+      // task is pinned to this model regardless of later agent default changes.
+      if (typeof taskConfig.model !== 'string' || typeof taskConfig.provider !== 'string') {
+        const snapshot = await this.agentModel.getAgentModelConfig(agentRef);
+        if (snapshot) {
+          await this.taskModel.updateTaskConfig(task.id, snapshot);
+          taskConfig.model = snapshot.model;
+          taskConfig.provider = snapshot.provider;
+        }
+      }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
 
