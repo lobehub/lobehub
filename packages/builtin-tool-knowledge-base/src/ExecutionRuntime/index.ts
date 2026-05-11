@@ -185,7 +185,7 @@ export class KnowledgeBaseExecutionRuntime {
 
   async viewKnowledgeBase(
     args: ViewKnowledgeBaseArgs,
-    options?: { signal?: AbortSignal },
+    _options?: { signal?: AbortSignal },
   ): Promise<BuiltinServerRuntimeOutput> {
     try {
       if (!this.knowledgeBaseService) {
@@ -456,17 +456,7 @@ export class KnowledgeBaseExecutionRuntime {
         content: `Successfully added ${fileIds.length} file(s) to knowledge base \`${knowledgeBaseId}\`.`,
         success: true,
       };
-    } catch (e: any) {
-      // PG unique constraint violation propagates from both the server-side
-      // model and the lambda router (TRPC re-throws with the original cause
-      // chain intact), so checking 23505 here covers both call sites.
-      const pgErrorCode = e?.cause?.cause?.code || e?.cause?.code || e?.code;
-      if (pgErrorCode === '23505') {
-        return {
-          content: 'Error: One or more files are already in this knowledge base.',
-          success: false,
-        };
-      }
+    } catch (e) {
       return {
         content: `Error adding files: ${(e as Error).message}`,
         error: e,

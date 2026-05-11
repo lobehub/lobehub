@@ -10,7 +10,7 @@ import { ragService } from '@/services/rag';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 
-import { KnowledgeBaseExecutionRuntime } from '../../ExecutionRuntime';
+import { KnowledgeBaseExecutionRuntime } from '../ExecutionRuntime';
 import type {
   AddFilesArgs,
   CreateDocumentArgs,
@@ -22,8 +22,8 @@ import type {
   RemoveFilesArgs,
   SearchKnowledgeBaseArgs,
   ViewKnowledgeBaseArgs,
-} from '../../types';
-import { KnowledgeBaseApiName, KnowledgeBaseIdentifier } from '../../types';
+} from '../types';
+import { KnowledgeBaseApiName, KnowledgeBaseIdentifier } from '../types';
 
 class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
   readonly identifier = KnowledgeBaseIdentifier;
@@ -35,8 +35,22 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
       semanticSearchForChat: (params, signal) => ragService.semanticSearchForChat(params, signal),
     },
     {
-      addFilesToKnowledgeBase: (knowledgeBaseId, ids) =>
-        lambdaClient.knowledgeBase.addFilesToKnowledgeBase.mutate({ ids, knowledgeBaseId }),
+      addFilesToKnowledgeBase: async (knowledgeBaseId, ids) => {
+        try {
+          return await lambdaClient.knowledgeBase.addFilesToKnowledgeBase.mutate({
+            ids,
+            knowledgeBaseId,
+          });
+        } catch (e: any) {
+          // Lambda router emits TRPCError(CONFLICT, 'FILE_ALREADY_IN_KNOWLEDGE_BASE')
+          // as an i18n sentinel for resource-manager UI. Translate it to a
+          // human-readable message for the agent.
+          if (e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE') {
+            throw new Error('One or more files are already in this knowledge base.', { cause: e });
+          }
+          throw e;
+        }
+      },
       createKnowledgeBase: (params) =>
         lambdaClient.knowledgeBase.createKnowledgeBase.mutate(params),
       getKnowledgeBaseById: async (id) => {
