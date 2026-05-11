@@ -24,6 +24,19 @@ const currentPortalThread = (s: ChatStoreState): ThreadItem | undefined => {
   return threads.find((t) => t.id === s.portalThreadId);
 };
 
+const currentActiveThread = (s: ChatStoreState): ThreadItem | undefined => {
+  if (!s.activeThreadId) return undefined;
+
+  const threads = currentTopicThreads(s);
+
+  return threads.find((t) => t.id === s.activeThreadId);
+};
+
+const isActiveThreadSubagent = (s: ChatStoreState): boolean => {
+  const thread = currentActiveThread(s);
+  return !!thread?.metadata?.subagentType;
+};
+
 const getThreadsByTopic = (topicId?: string) => (s: ChatStoreState) => {
   if (!topicId) return;
 
@@ -122,11 +135,13 @@ const portalDisplayChatsString = (s: ChatStoreState) => {
 };
 
 export const threadSelectors = {
+  currentActiveThread,
   currentPortalThread,
   currentTopicThreads,
   getThreadsBySourceMsgId,
   getThreadsByTopic,
   hasThreadBySourceMsgId,
+  isActiveThreadSubagent,
   portalAIChats,
   portalAIChatsWithHistoryConfig,
   portalDisplayChatsString,
