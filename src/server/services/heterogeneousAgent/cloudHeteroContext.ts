@@ -66,6 +66,11 @@ export function buildCloudHeteroContext(params: {
       '  ```',
       '',
       'You can use `git push`, `git pull`, `gh pr create`, `gh issue list`, GitHub API calls, etc. directly.',
+      '`gh` is the preferred tool for GitHub operations (PRs, issues, releases); use `git push` for pushing commits.',
+      '',
+      'If `git push` fails with an authentication error, recover with one of these approaches (in order of preference):',
+      '1. `gh auth setup-git` — reconfigures git to use gh as credential helper, then retry `git push`',
+      '2. `git push https://oauth2:$GITHUB_TOKEN@github.com/<owner>/<repo>.git <branch>` — inline token fallback',
       '',
       'Use `gh pr view` or `gh pr list` to confirm that a PR was successfully created after pushing.',
     );
