@@ -389,7 +389,7 @@ export class SlackApi {
     const data = await this.call('conversations.list', {
       exclude_archived: true,
       limit: 200,
-      types: 'public_channel,private_channel',
+      types: 'public_channel,private_channel,mpim',
       ...options,
     });
     return {
