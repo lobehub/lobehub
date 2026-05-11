@@ -289,9 +289,13 @@ describe('maintenance proposal apply service', () => {
    * @example
    * expect(tools.replaceSkillContentCAS).toHaveBeenCalledWith(expect.objectContaining({ skillDocumentId: 'adoc_1' }));
    */
-  it('records unsupported actions without applying them', async () => {
+  it('applies fresh consolidate_skill proposal actions through canonical skill replacement', async () => {
     const createSkillIfAbsent = vi.fn();
-    const replaceSkillContentCAS = vi.fn();
+    const replaceSkillContentCAS = vi.fn().mockResolvedValue({
+      resourceId: 'adoc_1',
+      status: 'applied',
+      summary: 'Consolidated managed skill.',
+    });
     const service = createMaintenanceProposalApplyService({
       checkAction: vi.fn().mockResolvedValue({ allowed: true }),
       checkGates: vi.fn().mockResolvedValue({ allowed: true }),
@@ -343,8 +347,17 @@ describe('maintenance proposal apply service', () => {
     });
 
     expect(createSkillIfAbsent).not.toHaveBeenCalled();
-    expect(replaceSkillContentCAS).not.toHaveBeenCalled();
-    expect(result.proposal.status).toBe('failed');
+    expect(replaceSkillContentCAS).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bodyMarkdown: 'merged body',
+        idempotencyKey: 'nightly:consolidate_skill:adoc_1',
+        proposalKey: 'agt_1:consolidate_skill:agent_document:adoc_1',
+        skillDocumentId: 'adoc_1',
+        summary: 'Merge overlapping skills.',
+        userId: 'user_1',
+      }),
+    );
+    expect(result.proposal.status).toBe('applied');
     expect(result.proposal.applyAttempts?.[0].actionResults).toEqual([
       {
         idempotencyKey: 'nightly:consolidate_skill:adoc_1',
