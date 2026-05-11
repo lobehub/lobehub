@@ -20,12 +20,19 @@ export const truncateOutput = (str: string, maxLength: number = MAX_OUTPUT_LENGT
 };
 
 /** Get cross-platform shell configuration */
-export const getShellConfig = (command: string) =>
-  process.platform === 'win32'
-    ? // Use PowerShell on Windows: supports &&, ||, pipes, $env:, and all modern shell features.
-      // cmd.exe /c breaks on &&, complex pipes and quoted paths even with windowsVerbatimArguments.
-      { args: ['-NoProfile', '-NonInteractive', '-Command', command], cmd: 'powershell.exe' }
-    : { args: ['-c', command], cmd: '/bin/sh' };
+export const getShellConfig = (command: string) => {
+  if (process.platform === 'win32') {
+    // Encode as UTF-16LE -> Base64 to completely bypass Windows
+    // command-line tokenization and CRT argv parsing.
+    // PowerShell decodes -EncodedCommand internally — no quoting issues.
+    const encoded = Buffer.from(command, 'utf16le').toString('base64');
+    return {
+      args: ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+      cmd: 'powershell.exe',
+    };
+  }
+  return { args: ['-c', command], cmd: '/bin/sh' };
+};
 
 /**
  * Pre-expand environment variable references in a command string using
