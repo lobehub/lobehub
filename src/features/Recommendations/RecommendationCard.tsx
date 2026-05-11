@@ -1,4 +1,4 @@
-import { Block, Button, Center, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Tag, Text } from '@lobehub/ui';
 import { App, Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
 import { memo, type ReactNode, useCallback, useState } from 'react';
@@ -59,9 +59,7 @@ export const RecommendationCard = memo<RecommendationCardProps>(
             gap={8}
             style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
           >
-            <Center className={styles.iconTile} height={28} width={28}>
-              {icon}
-            </Center>
+            {icon}
             <Text ellipsis fontSize={16} weight={500}>
               {title}
             </Text>

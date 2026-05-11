@@ -1,7 +1,13 @@
 import { type HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
+import { ClaudeCode, Codex } from '@lobehub/icons';
 import { createElement } from 'react';
 
 import type { RecommendedAction } from './types';
+
+const avatarIcons = {
+  'claude-code': ClaudeCode.Avatar,
+  'codex': Codex.Avatar,
+} as const satisfies Record<HeterogeneousAgentClientConfig['type'], unknown>;
 
 /**
  * Build a "Add <Brand> agent" recommendation card for a heterogeneous CLI agent
@@ -11,14 +17,18 @@ import type { RecommendedAction } from './types';
 export const buildHeteroAgentAction = (
   config: HeterogeneousAgentClientConfig,
 ): RecommendedAction => {
-  const Icon = config.icon;
+  const Avatar = avatarIcons[config.type];
 
   return {
     ctaKey: 'recommendations.heteroAgent.cta',
     descriptionKey: 'recommendations.heteroAgent.description',
     execute: (ctx) => ctx.createHeteroAgent(config),
     i18nValues: { name: config.title },
-    icon: createElement(Icon, { size: 16 }),
+    icon: createElement(Avatar, {
+      shape: 'square',
+      size: 28,
+      style: { borderRadius: 8 },
+    }),
     id: `hetero-agent:${config.type}`,
     isEligible: (ctx) => {
       if (!ctx.isDesktop) return false;

@@ -31,14 +31,9 @@ const Recommendations = memo(() => {
 
   return (
     <Flexbox gap={12}>
-      <Flexbox gap={2}>
-        <Text className={styles.title} fontSize={14} weight={500}>
-          {t('recommendations.title')}
-        </Text>
-        <Text className={styles.subtitle} fontSize={12}>
-          {t('recommendations.subtitle')}
-        </Text>
-      </Flexbox>
+      <Text className={styles.subtitle} fontSize={12}>
+        {t('recommendations.subtitle')}
+      </Text>
       <Flexbox gap={8}>
         {actions.map((action) => (
           <RecommendationCard
