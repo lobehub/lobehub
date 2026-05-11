@@ -29,6 +29,11 @@ export {
   type NormalizeImageOptions,
 } from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
-export { spawnAgent, type SpawnAgentHandle, type SpawnAgentOptions } from './spawnAgent';
+export {
+  CLAUDE_CODE_BASE_ARGS,
+  spawnAgent,
+  type SpawnAgentHandle,
+  type SpawnAgentOptions,
+} from './spawnAgent';
 export { toStreamEvent } from './streamEvent';
 export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';

@@ -37,6 +37,20 @@ interface FakeThread {
   type: string;
 }
 
+interface FakeTopicMetadata {
+  heteroCurrentMsgId?: { msgId: string; operationId: string };
+  runningOperation: {
+    assistantMessageId: string;
+    operationId: string;
+  };
+}
+
+interface FakeTopic {
+  agentId: string | null;
+  id: string;
+  metadata: FakeTopicMetadata;
+}
+
 const createHarness = (params: {
   assistantMessageId: string;
   operationId: string;
@@ -101,6 +115,7 @@ const createHarness = (params: {
         return { success: true };
       },
     ),
+    findById: vi.fn(async (id: string) => messages.get(id) ?? null),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
@@ -126,7 +141,7 @@ const createHarness = (params: {
   };
 
   const topicModel = {
-    findById: vi.fn(async (id: string) => {
+    findById: vi.fn(async (id: string): Promise<FakeTopic | null> => {
       if (id !== params.topicId) return null;
       return {
         agentId: params.topicAgentId ?? null,
@@ -136,7 +151,7 @@ const createHarness = (params: {
             assistantMessageId: params.assistantMessageId,
             operationId: params.operationId,
           },
-        },
+        } satisfies FakeTopicMetadata,
       };
     }),
     updateMetadata: vi.fn(async (_topicId: string, _patch: any) => {}),
@@ -688,7 +703,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       await h.handler.finish({ operationId: 'op-1', result: 'success' });
 
       // Same operationId on a different topic should now succeed (state was dropped)
-      h.topicModel.findById.mockResolvedValueOnce({
+      h.topicModel.findById.mockResolvedValue({
         agentId: null,
         id: 'topic-2',
         metadata: {
@@ -713,6 +728,160 @@ describe('HeterogeneousPersistenceHandler', () => {
           topicId: 'topic-2',
         }),
       ).resolves.not.toThrow();
+    });
+  });
+
+  describe('cold replica state restoration (Vercel serverless)', () => {
+    it('restores accumulatedContent from DB so a cold instance does not truncate previous text', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Batch 1 (warm instance): stream two text chunks, flush happens via flushBatchContent
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'hello ' }, 1000),
+          buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'world' }, 1001),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // DB should have the partial content written by flushBatchContent
+      expect(h.messages.get('asst-1')?.content).toBe('hello world');
+
+      // Simulate cold replica: drop the in-memory operation state
+      __resetOperationStatesForTesting();
+
+      // Batch 2 (cold instance): receives more text.
+      // Without restoration the new instance would start with accumulatedContent='' and
+      // write only " more" — truncating "hello world".
+      await h.handler.ingest({
+        events: [buildEvent('agent_runtime_end', 0, { reason: 'success' }, 2000)],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // The terminal flush should preserve the previously accumulated content.
+      expect(h.messages.get('asst-1')?.content).toBe('hello world');
+    });
+
+    it('restores toolState.payloads and persistedIds so cold replica does not duplicate tools or overwrite tools[]', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Batch 1 (warm): persist tool1
+      const tool1: any = {
+        apiName: 'tool1',
+        arguments: '{}',
+        id: 'tc-1',
+        identifier: 'tool1',
+        type: 'default',
+      };
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            0,
+            { chunkType: 'tools_calling', toolsCalling: [tool1] },
+            1000,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // assistant.tools[] should have tool1
+      const asstAfterBatch1 = h.messages.get('asst-1')!;
+      expect(asstAfterBatch1.tools).toHaveLength(1);
+      expect(asstAfterBatch1.tools![0].id).toBe('tc-1');
+      // tool message created for tool1
+      const toolMsgsBatch1 = [...h.messages.values()].filter((m) => m.role === 'tool');
+      expect(toolMsgsBatch1).toHaveLength(1);
+
+      // Simulate cold replica: drop in-memory state
+      __resetOperationStatesForTesting();
+
+      // Batch 2 (cold): receives tool2 — should ADD to tools[], not overwrite
+      const tool2: any = {
+        apiName: 'tool2',
+        arguments: '{}',
+        id: 'tc-2',
+        identifier: 'tool2',
+        type: 'default',
+      };
+      await h.handler.ingest({
+        events: [
+          buildEvent(
+            'stream_chunk',
+            1,
+            { chunkType: 'tools_calling', toolsCalling: [tool2] },
+            2000,
+          ),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const asstAfterBatch2 = h.messages.get('asst-1')!;
+      // Both tools should be present — cold restore kept tool1 in payloads
+      expect(asstAfterBatch2.tools).toHaveLength(2);
+
+      // tool1 should NOT be duplicated — persistedIds was restored
+      const allToolMsgs = [...h.messages.values()].filter((m) => m.role === 'tool');
+      const tool1Msgs = allToolMsgs.filter((m) => m.tool_call_id === 'tc-1');
+      expect(tool1Msgs).toHaveLength(1);
+    });
+  });
+
+  describe('warm replica step resync', () => {
+    it('switches to the DB-persisted step assistant when a later-step batch lands on a stale warm replica', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'step1' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      h.messages.set('asst-2', {
+        agentId: null,
+        content: '',
+        id: 'asst-2',
+        parentId: 'asst-1',
+        role: 'assistant',
+        topicId: 'topic-1',
+      });
+
+      h.topicModel.findById.mockResolvedValue({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'asst-2', operationId: 'op-1' },
+          runningOperation: {
+            assistantMessageId: 'asst-1',
+            operationId: 'op-1',
+          },
+        } satisfies FakeTopicMetadata,
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'step2' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(h.messages.get('asst-1')?.content).toBe('step1');
+      expect(h.messages.get('asst-2')?.content).toBe('step2');
     });
   });
 });

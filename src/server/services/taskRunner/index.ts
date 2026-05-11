@@ -1,10 +1,12 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { TopicTrigger } from '@/const/topic';
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -35,6 +37,7 @@ export interface RunTaskResult extends ExecAgentResult {
  *   - `heartbeat-tick` workflow handler (QStash self-rescheduling)
  */
 export class TaskRunnerService {
+  private agentModel: AgentModel;
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
   private taskLifecycle: TaskLifecycleService;
@@ -45,6 +48,7 @@ export class TaskRunnerService {
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
+    this.agentModel = new AgentModel(db, userId);
     this.taskModel = new TaskModel(db, userId);
     this.taskTopicModel = new TaskTopicModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
@@ -67,10 +71,15 @@ export class TaskRunnerService {
 
     try {
       if (!task.assigneeAgentId) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Task has no assigned agent. Use --agent when creating or edit the task.',
-        });
+        const inboxAgent = await this.agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+        if (!inboxAgent) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to resolve fallback inbox agent for task',
+          });
+        }
+        await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        task.assigneeAgentId = inboxAgent.id;
       }
 
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);
@@ -149,6 +158,18 @@ export class TaskRunnerService {
       }
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
+
+      // Backfill model snapshot for tasks created before the snapshot logic
+      // landed, or whose assignee was set after creation. Once written, the
+      // task is pinned to this model regardless of later agent default changes.
+      if (typeof taskConfig.model !== 'string' || typeof taskConfig.provider !== 'string') {
+        const snapshot = await this.agentModel.getAgentModelConfig(agentRef);
+        if (snapshot) {
+          await this.taskModel.updateTaskConfig(task.id, snapshot);
+          taskConfig.model = snapshot.model;
+          taskConfig.provider = snapshot.provider;
+        }
+      }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
 

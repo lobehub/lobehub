@@ -96,6 +96,19 @@ describe('toolResult handler', () => {
     expect(mockPipelineExec).toHaveBeenCalled();
   });
 
+  it('preserves the optional state field through validation and into the LPUSHed payload', async () => {
+    const bodyWithState = {
+      ...validBody,
+      state: { cwd: '/Users/x', cursor: 12 },
+    };
+    const { ctx } = buildContext(bodyWithState);
+    const res = await toolResult(ctx);
+    expect(res.status).toBe(204);
+    const args = mockLpush.mock.calls[0] as unknown as [string, string];
+    const persisted = JSON.parse(args[1]);
+    expect(persisted.state).toEqual({ cwd: '/Users/x', cursor: 12 });
+  });
+
   it('returns 503 when Redis pipeline exec throws', async () => {
     mockPipelineExec.mockRejectedValueOnce(new Error('redis down'));
     const { ctx } = buildContext(validBody);

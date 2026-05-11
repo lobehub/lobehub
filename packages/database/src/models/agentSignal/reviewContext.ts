@@ -39,6 +39,8 @@ export interface ListAgentSignalActivityWindowOptions {
 }
 
 export interface AgentSignalTopicActivityRow {
+  correctionCount: number;
+  correctionIds: string[];
   failedMessages: AgentSignalFailedMessageSummary[];
   failedToolCalls: AgentSignalFailedToolCallSummary[];
   failedToolCount: number;
@@ -237,6 +239,8 @@ export class AgentSignalReviewContextModel {
 
     return this.db
       .select({
+        correctionCount: sql<number>`0`.mapWith(Number),
+        correctionIds: sql<string[]>`ARRAY[]::text[]`,
         failedMessages: sql<AgentSignalFailedMessageSummary[]>`
           COALESCE(
             jsonb_agg(
@@ -299,6 +303,8 @@ export class AgentSignalReviewContextModel {
   listSelfReflectionTopicActivity = (options: ListAgentSignalSelfReflectionTopicOptions) => {
     return this.db
       .select({
+        correctionCount: sql<number>`0`.mapWith(Number),
+        correctionIds: sql<string[]>`ARRAY[]::text[]`,
         failedMessages: sql<AgentSignalFailedMessageSummary[]>`
           COALESCE(
             jsonb_agg(

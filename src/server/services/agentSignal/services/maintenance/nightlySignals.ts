@@ -2,6 +2,7 @@ import type {
   DocumentActivityDigest,
   FeedbackActivityDigest,
   MaintenanceSignal,
+  NightlyReviewTopicDigest,
   ReceiptActivityDigest,
   ToolActivityDigest,
 } from './nightlyCollector';
@@ -12,6 +13,7 @@ interface DeriveNightlyMaintenanceSignalsInput {
   feedbackActivity: FeedbackActivityDigest;
   receiptActivity: ReceiptActivityDigest;
   toolActivity: ToolActivityDigest[];
+  topics?: NightlyReviewTopicDigest[];
 }
 
 const pushUniqueRef = (refs: EvidenceRef[], ref: EvidenceRef) => {

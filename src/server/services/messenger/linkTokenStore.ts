@@ -40,6 +40,23 @@ const tokenKey = (token: LinkToken): string => `messenger:link-token:${token}`;
 const reuseKey = (platform: MessengerPlatform, platformUserId: string): string =>
   `messenger:link-token-reuse:${platform}:${platformUserId}`;
 
+/** Marker written when a token is consumed via `confirmLink`. Lets the
+ * verify-im page distinguish "token expired" (TTL ran out before binding)
+ * from "binding succeeded earlier" (token was deliberately consumed) when
+ * the user later refreshes or revisits the URL. */
+const consumedKey = (token: LinkToken): string => `messenger:link-token-consumed:${token}`;
+
+/** TTL for the "consumed" marker. Picked to comfortably outlive the active
+ * token TTL so a refresh after binding still resolves to a "consumed" hit
+ * instead of a misleading "expired" message. */
+const CONSUMED_MARKER_TTL_SECONDS = 24 * 60 * 60;
+
+export interface ConsumedLinkTokenMarker {
+  consumedAt: number;
+  platform: MessengerPlatform;
+  tenantId?: string;
+}
+
 /**
  * Issue a one-shot link token bound to a platform user. If a live token already
  * exists for the same `(platform, platformUserId)`, return it instead of
@@ -113,5 +130,34 @@ export const consumeLinkToken = async (token: LinkToken): Promise<LinkTokenPaylo
 
   await redis.del(tokenKey(token));
   await redis.del(reuseKey(payload.platform, payload.platformUserId));
+
+  const marker: ConsumedLinkTokenMarker = {
+    consumedAt: Date.now(),
+    platform: payload.platform,
+    tenantId: payload.tenantId,
+  };
+  await redis.set(consumedKey(token), JSON.stringify(marker), 'EX', CONSUMED_MARKER_TTL_SECONDS);
+
   return payload;
+};
+
+/**
+ * Read the "consumed" marker for a token. Returns null when the token was
+ * never consumed (or the marker has itself expired). Used by the verify-im
+ * peek endpoint to tell the user whether their binding already succeeded.
+ */
+export const peekConsumedLinkToken = async (
+  token: LinkToken,
+): Promise<ConsumedLinkTokenMarker | null> => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return null;
+
+  const raw = await redis.get(consumedKey(token));
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as ConsumedLinkTokenMarker;
+  } catch {
+    return null;
+  }
 };

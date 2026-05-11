@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "Een ander Telegram-account is al gekoppeld",
   "verify.confirm.title": "Bevestig koppeling",
   "verify.confirm.workspace": "Werkruimte: {{workspace}}",
+  "verify.error.alreadyConsumed": "Deze link is al gebruikt om een account te koppelen. Log in op dat LobeHub-account om de verbinding te beheren, of ga terug naar de bot en stuur /start opnieuw om een nieuwe link aan te vragen.",
+  "verify.error.alreadyConsumedTitle": "Deze link is al gebruikt",
   "verify.error.alreadyLinkedToOther": "Dit account is al gekoppeld aan een ander LobeHub-account. Log eerst in op dat account.",
   "verify.error.expired": "Deze koppeling is verlopen. Ga terug naar de bot en stuur opnieuw /start.",
   "verify.error.generic": "Er is iets misgegaan. Probeer het opnieuw.",

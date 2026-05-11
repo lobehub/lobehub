@@ -40,6 +40,7 @@ LobeHub provides built-in OAuth integrations for the following services:
 - **github**: GitHub repository and code management. Connect to access repositories, create issues, manage pull requests.
 - **linear**: Linear issue tracking and project management. Connect to create/manage issues, track projects.
 - **microsoft**: Microsoft Outlook Calendar. Connect to view/create calendar events, manage meetings.
+- **notion**: Notion workspace and knowledge management. Connect to create pages, search content, update databases, and organize workspace knowledge.
 - **twitter**: X (Twitter) social media. Connect to post tweets, manage timeline, engage with audience.
 
 When a user mentions they want to use one of these services, use \`initiateOAuthConnect\` to provide them with an authorization link. After they authorize, the credential will be automatically saved and available for use.
@@ -136,7 +137,7 @@ runCommand({
 </klavis_integrations>
 
 <klavis_guidelines>
-- **Klavis integrations** are OAuth connections managed by the Klavis platform for third-party services (e.g., Notion, Gmail, Google Calendar, Slack).
+- **Klavis integrations** are OAuth connections managed by the Klavis platform for third-party services (e.g., Gmail, Google Calendar, Slack).
 - For **connected** Klavis services: Use the corresponding tools directly. Do NOT ask users for API keys, tokens, or credentials — the authorization is already handled by Klavis.
 - For **available but not connected** services: Use \`connectKlavisService\` to initiate the OAuth connection flow via Klavis.
 - Klavis credentials **CANNOT** be retrieved via \`getPlaintextCred\` or injected via \`injectCredsToSandbox\` — they are tool-only authorizations managed externally by Klavis.

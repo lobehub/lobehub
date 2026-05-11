@@ -104,6 +104,10 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
    * Block Kit button AND the same URL as a plain inline link below it.
    * Email-style fallback — the button is the primary CTA, the link is the
    * fallback for mobile / copy-paste / weird Block Kit renders.
+   *
+   * Channel `@mention` path: when `channelMentionThreadId` is set we post
+   * an ephemeral instead, so the verify-im URL is visible only to the
+   * mentioner and not broadcast to the channel.
    */
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {
     if (!this.creds) {
@@ -130,10 +134,13 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     } catch (error) {
       log('handleUnlinkedMessage: failed to issue link token: %O', error);
       const api = new SlackApi(this.creds.botToken);
-      await api.postMessage(
-        ctx.chatId,
-        'LobeHub is temporarily unavailable. Please try again in a moment.',
-      );
+      const errorText = 'LobeHub is temporarily unavailable. Please try again in a moment.';
+      if (ctx.channelMentionThreadId) {
+        const [, channelId, threadTs] = ctx.channelMentionThreadId.split(':');
+        await api.postEphemeral(channelId, ctx.authorUserId, errorText, { threadTs });
+      } else {
+        await api.postMessage(ctx.chatId, errorText);
+      }
       return;
     }
 
@@ -158,6 +165,26 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
       slackUserId: ctx.authorUserId,
       thread: '',
     });
+
+    // Channel mention → ephemeral, anchored in the mention's thread so the
+    // prompt sits next to the @mention rather than at the bottom of the
+    // channel. `chat.postEphemeral` doesn't support the same Block Kit
+    // primitive button we use for DMs, so we fall back to a mrkdwn link —
+    // ephemerals are short-lived and self-targeted, so the inline link is
+    // a reasonable fit.
+    if (ctx.channelMentionThreadId) {
+      const [, channelId, threadTs] = ctx.channelMentionThreadId.split(':');
+      const text =
+        "Hi, I'm LobeHub — your AI agent in Slack.\n" +
+        `Link your LobeHub account to start chatting: <${verifyUrl}|click here>`;
+      await this.replyEphemeral({
+        channelId,
+        text,
+        threadTs,
+        userId: ctx.authorUserId,
+      });
+      return;
+    }
 
     const intro =
       "Hi, I'm LobeHub — your AI agent in Slack.\n" + 'To start, link your LobeHub account.';
@@ -235,7 +262,7 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
 
   async sendAgentPicker(
     chatId: string,
-    params: { entries: AgentPickerEntry[]; text: string },
+    params: { entries: AgentPickerEntry[]; ephemeralTo?: string; text: string },
   ): Promise<void> {
     if (!this.creds) {
       log('sendAgentPicker: no creds, skipping');
@@ -243,7 +270,18 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     }
     try {
       const api = new SlackApi(this.creds.botToken);
-      await api.postMessageWithButtonGrid(chatId, params.text, buildSwitchButtons(params.entries));
+      const buttons = buildSwitchButtons(params.entries);
+      // Channel invocation → ephemeral so the user's personal agent list
+      // isn't broadcast. Slack's `chat.postEphemeral` accepts blocks and
+      // delivers interactive button taps just like `chat.postMessage` —
+      // the action callback carries a `response_url` we use later in
+      // `acknowledgeCallback` to replace the ephemeral in place
+      // (`chat.update` cannot edit ephemerals).
+      if (params.ephemeralTo) {
+        await api.postEphemeralWithButtonGrid(chatId, params.ephemeralTo, params.text, buttons);
+        return;
+      }
+      await api.postMessageWithButtonGrid(chatId, params.text, buttons);
     } catch (error) {
       log('sendAgentPicker: failed for chat=%s: %O', chatId, error);
     }
@@ -307,15 +345,25 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     const api = new SlackApi(this.creds.botToken);
 
     // Re-render the picker first so the new active marker shows up before any
-    // ephemeral feedback fires (and even if the ephemeral post fails).
-    if (ack.updatedPicker && action.messageId !== undefined) {
+    // ephemeral feedback fires (and even if the ephemeral post fails). Prefer
+    // the interaction's `response_url` (captured in `callbackId`) — it works
+    // for **both** in-history pickers and ephemeral pickers, whereas
+    // `chat.update` silently fails on ephemerals. Fall back to `chat.update`
+    // only when the response_url is somehow absent and we have a permanent
+    // ts to point at.
+    if (ack.updatedPicker) {
+      const buttons = buildSwitchButtons(ack.updatedPicker.entries);
       try {
-        await api.updateMessageWithButtonGrid(
-          action.chatId,
-          String(action.messageId),
-          ack.updatedPicker.text,
-          buildSwitchButtons(ack.updatedPicker.entries),
-        );
+        if (action.callbackId) {
+          await api.updateEphemeralButtonGrid(action.callbackId, ack.updatedPicker.text, buttons);
+        } else if (action.messageId !== undefined) {
+          await api.updateMessageWithButtonGrid(
+            action.chatId,
+            String(action.messageId),
+            ack.updatedPicker.text,
+            buttons,
+          );
+        }
       } catch (error) {
         log('acknowledgeCallback: update picker failed: %O', error);
       }
@@ -347,6 +395,32 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
       await channel.postEphemeral(user, text, { fallbackToDM: true });
     } catch (error) {
       log('replyPrivately: postEphemeral failed: %O', error);
+    }
+  }
+
+  /**
+   * Channel-mention link flow: post an ephemeral, anchored in the mention's
+   * thread, that only the mentioner sees. Used when an unlinked user pings
+   * `@LobeHub` in a public channel — we want them to get the verify-im URL
+   * without leaking it to the rest of the channel.
+   */
+  async replyEphemeral(params: {
+    channelId: string;
+    text: string;
+    threadTs?: string;
+    userId: string;
+  }): Promise<void> {
+    if (!this.creds) {
+      log('replyEphemeral: no creds, skipping');
+      return;
+    }
+    try {
+      const api = new SlackApi(this.creds.botToken);
+      await api.postEphemeral(params.channelId, params.userId, params.text, {
+        threadTs: params.threadTs,
+      });
+    } catch (error) {
+      log('replyEphemeral: postEphemeral failed: %O', error);
     }
   }
 }

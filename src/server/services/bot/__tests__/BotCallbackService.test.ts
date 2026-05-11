@@ -119,6 +119,18 @@ vi.mock('@/server/services/systemAgent', () => ({
 
 vi.mock('@/server/services/messenger/installations', () => ({
   getInstallationStore: mockMessengerGetInstallationStore,
+  messengerConnectionIdForUser: ({
+    installationKey,
+    userId,
+  }: {
+    installationKey: string;
+    userId: string;
+  }) => {
+    if (installationKey.endsWith(':singleton')) {
+      return `messenger:${installationKey.slice(0, -':singleton'.length)}:user-${userId}`;
+    }
+    return `messenger:${installationKey}:user-${userId}`;
+  },
 }));
 
 vi.mock('@/server/services/messenger/platforms', () => ({
@@ -153,7 +165,15 @@ const FAKE_BOT_TOKEN = 'fake-bot-token-123';
 const FAKE_CREDENTIALS = JSON.stringify({ botToken: FAKE_BOT_TOKEN });
 
 function setupCredentials(credentials = FAKE_CREDENTIALS, extra?: Record<string, unknown>) {
-  mockFindByPlatformAndAppId.mockResolvedValue({ credentials, ...extra });
+  // Step rendering is opt-in (schema default: false). The legacy bot path
+  // tests in this file all exercise step rendering, so the default fixture
+  // turns it on. Tests that need to exercise the off-path can override
+  // `settings` via `extra`.
+  mockFindByPlatformAndAppId.mockResolvedValue({
+    credentials,
+    settings: { displayToolCalls: true },
+    ...extra,
+  });
   mockInitWithEnvKey.mockResolvedValue({ decrypt: mockDecrypt });
   mockDecrypt.mockResolvedValue({ plaintext: credentials });
 }
@@ -276,7 +296,11 @@ describe('BotCallbackService', () => {
       expect(mockMessengerGetInstallationStore).toHaveBeenCalledWith('telegram');
       expect(mockMessengerStoreResolveByKey).toHaveBeenCalledWith('telegram:singleton');
       expect(mockMessengerBinderCreateClient).toHaveBeenCalled();
-      expect(mockEditMessage).toHaveBeenCalled();
+      // `displayToolCalls` defaults to off (schema default + runtime gate),
+      // so step events don't edit the progress message — only completion does.
+      // This test only asserts the credential-resolution path; the gating is
+      // implicit confirmation that no `editMessage` side-effect leaked.
+      expect(mockEditMessage).not.toHaveBeenCalled();
     });
 
     it('should pass through the messenger install key verbatim for slack workspaces', async () => {
@@ -354,7 +378,10 @@ describe('BotCallbackService', () => {
     });
 
     it('should fall back to raw credentials when decryption fails', async () => {
-      mockFindByPlatformAndAppId.mockResolvedValue({ credentials: FAKE_CREDENTIALS });
+      mockFindByPlatformAndAppId.mockResolvedValue({
+        credentials: FAKE_CREDENTIALS,
+        settings: { displayToolCalls: true },
+      });
       mockInitWithEnvKey.mockResolvedValue({
         decrypt: vi.fn().mockRejectedValue(new Error('decrypt failed')),
       });

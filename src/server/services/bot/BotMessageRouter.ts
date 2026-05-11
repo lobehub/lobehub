@@ -14,6 +14,7 @@ import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
+import { buildBotContext } from './buildBotContext';
 import {
   createOrGetPairingRequest,
   deletePairingRequest,
@@ -478,7 +479,7 @@ export class BotMessageRouter {
     const { agentId, applicationId, platform, userId } = info;
     const bridge = new AgentBridgeService(serverDB, userId);
     const charLimit = (info.settings?.charLimit as number) || undefined;
-    const displayToolCalls = info.settings?.displayToolCalls !== false;
+    const displayToolCalls = info.settings?.displayToolCalls === true;
     const dmSettings: DmSettings = extractDmSettings(info.settings);
     const groupSettings: GroupSettings = extractGroupSettings(info.settings);
     const userAllowlist: UserAllowlist = extractUserAllowlist(info.settings);
@@ -875,7 +876,13 @@ export class BotMessageRouter {
       try {
         await bridge.handleMention(thread, merged, {
           agentId,
-          botContext: { applicationId, platform, platformThreadId: thread.id },
+          botContext: buildBotContext({
+            applicationId,
+            authorUserId: merged.author?.userId,
+            operatorUserId,
+            platform,
+            platformThreadId: thread.id,
+          }),
           charLimit,
           client,
           displayToolCalls,
@@ -989,7 +996,13 @@ export class BotMessageRouter {
       try {
         await bridge.handleSubscribedMessage(thread, merged, {
           agentId,
-          botContext: { applicationId, platform, platformThreadId: thread.id },
+          botContext: buildBotContext({
+            applicationId,
+            authorUserId: merged.author?.userId,
+            operatorUserId,
+            platform,
+            platformThreadId: thread.id,
+          }),
           charLimit,
           client,
           displayToolCalls,
@@ -1112,7 +1125,13 @@ export class BotMessageRouter {
         try {
           await bridge.handleMention(thread, merged, {
             agentId,
-            botContext: { applicationId, platform, platformThreadId: thread.id },
+            botContext: buildBotContext({
+              applicationId,
+              authorUserId: merged.author?.userId,
+              operatorUserId,
+              platform,
+              platformThreadId: thread.id,
+            }),
             charLimit,
             client,
             displayToolCalls,

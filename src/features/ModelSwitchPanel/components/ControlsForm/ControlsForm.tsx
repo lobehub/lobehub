@@ -14,12 +14,13 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
-import DeepseekV4ReasoningEffortSlider from './DeepseekV4ReasoningEffortSlider';
+import DeepSeekReasoningEffortSlider from './DeepSeekReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
 import GPT52ReasoningEffortSlider from './GPT52ReasoningEffortSlider';
+import Grok43ReasoningEffortSlider from './Grok43ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from './Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from './Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from './ImageAspectRatio2Select';
@@ -50,16 +51,13 @@ interface ControlsFormProps {
  * Users may still have only `thinking: 'disabled'`; treating that as unset would
  * show the model default and could persist the opposite value on unrelated edits.
  */
-const resolveEnableReasoningInitialValue = (
-  config: LobeAgentChatConfig,
-  defaultValue?: boolean,
-) => {
+const resolveEnableReasoningInitialValue = (config: LobeAgentChatConfig) => {
   if (Object.hasOwn(config, 'enableReasoning')) return config.enableReasoning;
 
   if (config.thinking === 'enabled') return true;
   if (config.thinking === 'disabled') return false;
 
-  return defaultValue;
+  return undefined;
 };
 
 const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: providerProp }) => {
@@ -80,28 +78,21 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   );
 
   const modelExtendParams = useAiInfraStore(aiModelSelectors.modelExtendParams(model, provider));
-  const modelExtendParamOptions = useAiInfraStore(
-    aiModelSelectors.modelExtendParamOptions(model, provider),
-  );
   const initialValues = useMemo(() => {
-    const enableReasoningInitialValue = resolveEnableReasoningInitialValue(
-      config,
-      modelExtendParamOptions?.enableReasoning?.defaultValue,
-    );
+    const enableReasoningInitialValue = resolveEnableReasoningInitialValue(config);
 
     return {
       ...config,
       enableReasoning: enableReasoningInitialValue,
     };
-  }, [config, modelExtendParamOptions?.enableReasoning?.defaultValue]);
+  }, [config]);
 
   useEffect(() => {
     form.setFieldsValue(initialValues);
   }, [form, initialValues]);
 
-  const enableReasoning =
+  const enableReasoningValue =
     AntdForm.useWatch(['enableReasoning'], form) ?? initialValues.enableReasoning;
-  const includeReasoningBudget = modelExtendParamOptions?.enableReasoning?.includeBudget !== false;
 
   const screens = Grid.useBreakpoint();
   const isNarrow = !screens.sm;
@@ -163,8 +154,7 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       minWidth: undefined,
       name: 'enableAdaptiveThinking',
     },
-    ((enableReasoning && includeReasoningBudget) ||
-      modelExtendParams?.includes('reasoningBudgetToken')) && {
+    (enableReasoningValue || modelExtendParams?.includes('reasoningBudgetToken')) && {
       children: <ReasoningTokenSlider />,
       label: t('extendParams.reasoningBudgetToken.title'),
       layout: 'vertical',
@@ -190,6 +180,16 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'vertical',
       minWidth: undefined,
       name: 'reasoningBudgetToken80k',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <DeepSeekReasoningEffortSlider />,
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'deepseekV4ReasoningEffort',
       style: {
         paddingBottom: 0,
       },
@@ -291,34 +291,23 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       },
     },
     {
+      children: <Grok43ReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'grok4_3ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
       children: <Hy3ReasoningEffortSlider />,
       desc: 'reasoning_effort',
       label: t('extendParams.reasoningEffort.title'),
       layout: 'horizontal',
       minWidth: undefined,
       name: 'hy3ReasoningEffort',
-      style: {
-        paddingBottom: 0,
-      },
-    },
-    {
-      children: <DeepseekV4ReasoningEffortSlider />,
-      desc: 'reasoning_effort',
-      label: t('extendParams.reasoningEffort.title'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'deepseekV4ReasoningEffort',
-      style: {
-        paddingBottom: 0,
-      },
-    },
-    {
-      children: <DeepseekV4ReasoningEffortSlider />,
-      desc: 'reasoning_effort',
-      label: t('extendParams.reasoningEffort.title'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'deepseekV4ReasoningEffort',
       style: {
         paddingBottom: 0,
       },

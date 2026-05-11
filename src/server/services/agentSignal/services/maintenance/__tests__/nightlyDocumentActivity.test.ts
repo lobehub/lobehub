@@ -64,12 +64,26 @@ describe('mapNightlyDocumentActivityRows', () => {
           title: 'Skill index',
           updatedAt: new Date('2026-05-09T18:10:00.000Z'),
         },
+        {
+          agentDocumentId: 'agent-doc-managed-skill',
+          documentId: 'doc-managed-skill',
+          hintIsSkill: null,
+          policyLoadFormat: 'raw',
+          templateId: 'agent-skill',
+          title: 'Managed skill',
+          updatedAt: new Date('2026-05-09T18:11:00.000Z'),
+        },
       ]).skillBucket,
     ).toEqual([
       expect.objectContaining({
         agentDocumentId: 'agent-doc-index',
         hintIsSkill: false,
         reason: 'templateId=skills/index',
+      }),
+      expect.objectContaining({
+        agentDocumentId: 'agent-doc-managed-skill',
+        hintIsSkill: false,
+        reason: 'templateId=agent-skill',
       }),
     ]);
   });

@@ -29,7 +29,7 @@
   "batchDelete": "Групово изтриване",
   "blog": "Блог на продукта",
   "botIntegrationBanner.dismiss": "Затвори",
-  "botIntegrationBanner.title": "Добавяне на канали към LobeAI",
+  "botIntegrationBanner.title": "Говорете с Lobe AI в любимите си приложения за съобщения",
   "branching": "Създай подтема",
   "branchingDisable": "Функцията „Подтема“ не е налична в текущия режим. За да я използвате, превключете към режим Postgres/Pglite DB или използвайте LobeHub Cloud.",
   "branchingRequiresSavedTopic": "Текущата тема не е запазена, моля, запазете я, за да използвате функцията за подтема",

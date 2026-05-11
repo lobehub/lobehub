@@ -8,6 +8,7 @@ description: >
   (4) Send interactive cards or stream AI responses to chat platforms.
   Triggers on "chat sdk", "chat bot", "slack bot", "teams bot", "discord bot", "@chat-adapter",
   building bots that work across multiple chat platforms.
+user-invocable: false
 ---
 
 # Chat SDK

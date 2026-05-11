@@ -1575,7 +1575,7 @@ const runMaintainerWorkflow = async (
         evidenceRefs: [],
         idempotencyKey: `same-turn-skill:${canonical.bundle.agentDocumentId}`,
         input: {
-          patch: workflowResult.bodyMarkdown,
+          bodyMarkdown: workflowResult.bodyMarkdown,
           skillDocumentId: canonical.bundle.agentDocumentId,
           userId: options.userId,
         },

@@ -1,16 +1,15 @@
-import type {
-  RecommendedTaskTemplate,
-  TaskTemplate,
-  TaskTemplateFallbackPool,
-  TaskTemplateRecommendationSource,
-  TaskTemplateSkillSource,
+import {
+  TASK_TEMPLATE_FALLBACK_CATEGORIES,
+  type TaskTemplate,
+  taskTemplates,
+  type TaskTemplateSkillSource,
 } from '@lobechat/const';
-import { TASK_TEMPLATE_FALLBACK_CATEGORIES, taskTemplates } from '@lobechat/const';
 
 import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
 
 export const RECOMMEND_COUNT = 3;
+export const RECOMMEND_COUNT_MAX = 20;
 
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();
@@ -60,16 +59,6 @@ const hasIntersection = (template: TaskTemplate, userInterests: string[]): boole
 
 const getUtcDateStr = (now: Date): string => now.toISOString().slice(0, 10);
 
-const toRecommendedTemplate = (
-  template: TaskTemplate,
-  source: TaskTemplateRecommendationSource,
-  fallbackPool?: TaskTemplateFallbackPool,
-): RecommendedTaskTemplate => ({
-  ...template,
-  ...(fallbackPool ? { fallbackPool } : {}),
-  source,
-});
-
 /**
  * A template is eligible only if every `requiresSkills[].source` is enabled
  * server-side. When a template declares no skill requirement, it is always
@@ -88,46 +77,53 @@ export const isTemplateSkillSourceEligible = (
 export class TaskTemplateService {
   constructor(private userId: string) {}
 
-  /**
-   * Client resolves user.interests (localized labels or raw values) to
-   * INTEREST_AREAS keys before calling — see useResolvedInterestKeys in the UI.
-   */
   async listDailyRecommend(
     interestKeys: string[],
     options: {
+      count?: number;
       enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>;
       excludeIds?: string[];
       now?: Date;
+      refreshSeed?: string;
     } = {},
-  ): Promise<RecommendedTaskTemplate[]> {
-    const { enabledSkillSources, excludeIds, now = new Date() } = options;
+  ): Promise<TaskTemplate[]> {
+    const {
+      count = RECOMMEND_COUNT,
+      enabledSkillSources,
+      excludeIds,
+      now = new Date(),
+      refreshSeed,
+    } = options;
+    const limit = Math.max(1, Math.min(count, RECOMMEND_COUNT_MAX));
     const excluded = new Set(excludeIds ?? []);
-    const seed = hashString(`${this.userId}:${getUtcDateStr(now)}`);
+    const seedBase = `${this.userId}:${getUtcDateStr(now)}`;
+    const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);
 
     const candidates = taskTemplates.filter(
       (t) => !excluded.has(t.id) && isTemplateSkillSourceEligible(t, enabledSkillSources),
     );
     const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
-    const result: RecommendedTaskTemplate[] = seededShuffle(matched, seed)
-      .slice(0, RECOMMEND_COUNT)
-      .map((t) => toRecommendedTemplate(t, 'matched'));
+    const result: TaskTemplate[] = [];
 
-    const takeFrom = (pool: TaskTemplate[], fallbackPool: TaskTemplateFallbackPool) => {
-      if (result.length >= RECOMMEND_COUNT) return;
-      const seen = new Set(result.map((t) => t.id));
-      const remaining = pool.filter((t) => !seen.has(t.id));
-      result.push(
-        ...seededShuffle(remaining, seed)
-          .slice(0, RECOMMEND_COUNT - result.length)
-          .map((t) => toRecommendedTemplate(t, 'fallback', fallbackPool)),
+    if (matched.length >= limit) {
+      result.push(...seededShuffle(matched, seed).slice(0, limit));
+    } else {
+      // Not enough interest matches: fold the fallback pool in so refreshSeed
+      // can reorder the whole batch — otherwise a single-match interest pins
+      // that template to position 0 forever.
+      const matchedIds = new Set(matched.map((t) => t.id));
+      const fallback = candidates.filter(
+        (t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category) && !matchedIds.has(t.id),
       );
-    };
+      const pool = [...matched, ...fallback];
+      result.push(...seededShuffle(pool, seed).slice(0, limit));
+    }
 
-    takeFrom(
-      candidates.filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)),
-      'preferred_category',
-    );
-    takeFrom(candidates, 'all_candidates');
+    if (result.length < limit) {
+      const seen = new Set(result.map((t) => t.id));
+      const remaining = candidates.filter((t) => !seen.has(t.id));
+      result.push(...seededShuffle(remaining, seed).slice(0, limit - result.length));
+    }
 
     return result;
   }

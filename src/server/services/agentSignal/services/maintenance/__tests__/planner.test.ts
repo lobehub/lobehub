@@ -250,7 +250,8 @@ describe('maintenancePlannerService', () => {
             rationale: 'Repeated release-note validation failures reveal a small missing step.',
             target: { skillDocumentId: 'skill-release-notes' },
             value: {
-              patch: 'Add a checklist step to validate changelog sections before publishing.',
+              bodyMarkdown:
+                '# Release notes\n\nUse this skill to draft release notes.\n\n- Validate changelog sections before publishing.',
               skillDocumentId: 'skill-release-notes',
             },
           },
@@ -268,10 +269,157 @@ describe('maintenancePlannerService', () => {
       applyMode: MaintenanceApplyMode.AutoApply,
       operation: {
         input: {
-          patch: 'Add a checklist step to validate changelog sections before publishing.',
+          bodyMarkdown:
+            '# Release notes\n\nUse this skill to draft release notes.\n\n- Validate changelog sections before publishing.',
           skillDocumentId: 'skill-release-notes',
         },
       },
+      risk: MaintenanceRisk.Low,
+    });
+  });
+
+  /**
+   * @example
+   * Patch-only skill refinements are not treated as full replacement documents.
+   */
+  it('keeps patch-only skill refinement drafts out of automatic apply', () => {
+    const planner = createMaintenancePlannerService();
+
+    const plan = planner.plan({
+      draft: {
+        actions: [
+          {
+            actionType: 'refine_skill',
+            confidence: 0.94,
+            evidenceRefs: [
+              { id: 'tool-fail-1', type: 'tool_call' },
+              { id: 'tool-fail-2', type: 'tool_call' },
+            ],
+            policyHints: {
+              evidenceStrength: 'strong',
+              mutationScope: 'small',
+              userExplicitness: 'implicit',
+            },
+            rationale: 'The skill needs a small checklist addition.',
+            target: { skillDocumentId: 'skill-release-notes' },
+            value: {
+              patch: 'Add a checklist step to validate changelog sections before publishing.',
+              skillDocumentId: 'skill-release-notes',
+            },
+          },
+        ],
+        findings: [],
+        summary: 'Patch-only skill refinement.',
+      },
+      reviewScope: MaintenanceReviewScope.Nightly,
+      sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+      userId: 'user-1',
+    });
+
+    expect(plan.actions[0]).toMatchObject({
+      actionType: 'refine_skill',
+      applyMode: MaintenanceApplyMode.ProposalOnly,
+      operation: undefined,
+      risk: MaintenanceRisk.Medium,
+    });
+  });
+
+  /**
+   * @example
+   * Complete replacement bodies can still be auto-applied for safe skill refinements.
+   */
+  it('allows skill refinement when the draft contains a complete replacement body', () => {
+    const planner = createMaintenancePlannerService();
+
+    const plan = planner.plan({
+      draft: {
+        actions: [
+          {
+            actionType: 'refine_skill',
+            confidence: 0.94,
+            evidenceRefs: [
+              { id: 'tool-fail-1', type: 'tool_call' },
+              { id: 'tool-fail-2', type: 'tool_call' },
+            ],
+            policyHints: {
+              evidenceStrength: 'strong',
+              mutationScope: 'small',
+              userExplicitness: 'implicit',
+            },
+            rationale: 'The replacement body preserves identity and adds the missing step.',
+            target: { skillDocumentId: 'skill-release-notes' },
+            value: {
+              bodyMarkdown:
+                '# Release notes\n\nUse this skill to draft release notes.\n\n- Validate changelog sections before publishing.',
+              skillDocumentId: 'skill-release-notes',
+            },
+          },
+        ],
+        findings: [],
+        summary: 'Complete skill refinement.',
+      },
+      reviewScope: MaintenanceReviewScope.Nightly,
+      sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+      userId: 'user-1',
+    });
+
+    expect(plan.actions[0]).toMatchObject({
+      actionType: 'refine_skill',
+      applyMode: MaintenanceApplyMode.AutoApply,
+      operation: {
+        input: {
+          bodyMarkdown:
+            '# Release notes\n\nUse this skill to draft release notes.\n\n- Validate changelog sections before publishing.',
+          skillDocumentId: 'skill-release-notes',
+        },
+      },
+      risk: MaintenanceRisk.Low,
+    });
+  });
+
+  /**
+   * @example
+   * A broad rewrite that preserves the same managed skill identity remains auto-applicable.
+   */
+  it('allows broad in-document skill refinement when identity and evidence are stable', () => {
+    const planner = createMaintenancePlannerService();
+
+    const plan = planner.plan({
+      draft: {
+        actions: [
+          {
+            actionType: 'refine_skill',
+            confidence: 0.93,
+            evidenceRefs: [
+              { id: 'msg-workflow-correction', type: 'message' },
+              { id: 'tool-workflow-fail', type: 'tool_call' },
+            ],
+            policyHints: {
+              evidenceStrength: 'strong',
+              mutationScope: 'broad',
+              userExplicitness: 'explicit',
+            },
+            rationale:
+              'The existing skill should be rewritten in place while keeping its file and binding.',
+            target: { skillDocumentId: 'skill-release-notes' },
+            value: {
+              bodyMarkdown:
+                '# Release notes\n\nRewrite the checklist in place while preserving the same managed skill identity.',
+              skillDocumentId: 'skill-release-notes',
+            },
+          },
+        ],
+        findings: [],
+        summary: 'Broad in-place refinement.',
+      },
+      reviewScope: MaintenanceReviewScope.Nightly,
+      sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+      userId: 'user-1',
+    });
+
+    expect(plan.actions[0]).toMatchObject({
+      actionType: 'refine_skill',
+      applyMode: MaintenanceApplyMode.AutoApply,
       risk: MaintenanceRisk.Low,
     });
   });
@@ -311,6 +459,38 @@ describe('maintenancePlannerService', () => {
 
   /**
    * @example
+   * Noop drafts are skipped maintenance state, not proposal-only review work.
+   */
+  it('keeps noop drafts silent instead of proposal-only', () => {
+    const planner = createMaintenancePlannerService();
+
+    const plan = planner.plan({
+      draft: {
+        actions: [
+          {
+            actionType: 'noop',
+            confidence: 0.99,
+            evidenceRefs: [],
+            rationale: 'No durable maintenance is needed.',
+          },
+        ],
+        findings: [],
+        summary: 'No maintenance needed.',
+      },
+      reviewScope: MaintenanceReviewScope.Nightly,
+      sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+      userId: 'user-1',
+    });
+
+    expect(plan.actions[0]).toMatchObject({
+      actionType: 'noop',
+      applyMode: MaintenanceApplyMode.Skip,
+      risk: MaintenanceRisk.Low,
+    });
+  });
+
+  /**
+   * @example
    * Self-reflection never auto-consolidates skills.
    */
   it('forces self-reflection consolidation drafts into proposal-only', () => {
@@ -345,6 +525,68 @@ describe('maintenancePlannerService', () => {
       applyMode: MaintenanceApplyMode.ProposalOnly,
       risk: MaintenanceRisk.High,
     });
+  });
+
+  /**
+   * @example
+   * One mixed review can produce positive auto-apply, proposal, and skip counts.
+   */
+  it('separates auto-apply proposal and skip modes for planner metrics', () => {
+    const planner = createMaintenancePlannerService();
+
+    const plan = planner.plan({
+      draft: {
+        actions: [
+          {
+            actionType: 'write_memory',
+            confidence: 0.95,
+            evidenceRefs: [{ id: 'msg-memory', type: 'message' }],
+            policyHints: {
+              evidenceStrength: 'strong',
+              persistence: 'stable',
+              sensitivity: 'normal',
+              userExplicitness: 'explicit',
+            },
+            rationale: 'Durable preference.',
+            value: { content: 'User prefers concise release summaries.' },
+          },
+          {
+            actionType: 'consolidate_skill',
+            confidence: 0.96,
+            evidenceRefs: [
+              { id: 'skill-a', type: 'agent_document' },
+              { id: 'skill-b', type: 'agent_document' },
+            ],
+            rationale: 'Two managed skills overlap and require review.',
+            target: { skillDocumentId: 'skill-a' },
+            value: { sourceSkillIds: ['skill-a', 'skill-b'] },
+          },
+          {
+            actionType: 'noop',
+            confidence: 0.9,
+            evidenceRefs: [],
+            rationale: 'No extra maintenance is needed.',
+          },
+        ],
+        findings: [],
+        summary: 'Mixed maintenance plan.',
+      },
+      reviewScope: MaintenanceReviewScope.Nightly,
+      sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
+      userId: 'user-1',
+    });
+
+    const applyModeCounts = {
+      autoApply: plan.actions.filter(
+        (action) => action.applyMode === MaintenanceApplyMode.AutoApply,
+      ).length,
+      proposal: plan.actions.filter(
+        (action) => action.applyMode === MaintenanceApplyMode.ProposalOnly,
+      ).length,
+      skip: plan.actions.filter((action) => action.applyMode === MaintenanceApplyMode.Skip).length,
+    };
+
+    expect(applyModeCounts).toEqual({ autoApply: 1, proposal: 1, skip: 1 });
   });
 
   /**

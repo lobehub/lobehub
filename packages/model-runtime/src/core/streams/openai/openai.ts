@@ -629,7 +629,9 @@ export const OpenAIStream = (
     transformOpenAIStream(chunk, streamContext, payload);
 
   const readableStream =
-    stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
+    stream instanceof ReadableStream
+      ? stream
+      : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
   return (
     readableStream

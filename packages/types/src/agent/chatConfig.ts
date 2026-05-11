@@ -31,8 +31,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
-
-  deepseekV4ReasoningEffort?: 'high' | 'max';
+  deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
 
   /**
    * Disable context caching
@@ -81,6 +80,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
@@ -195,6 +195,7 @@ export const AgentChatConfigSchema = z
   .object({
     autoCreateTopicThreshold: z.number().default(2),
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -213,8 +214,8 @@ export const AgentChatConfigSchema = z
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
-    deepseekV4ReasoningEffort: z.enum(['high', 'max']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),

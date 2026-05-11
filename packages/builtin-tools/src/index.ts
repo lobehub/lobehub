@@ -6,7 +6,6 @@ import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
-import { CronManifest } from '@lobechat/builtin-tool-cron';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
@@ -26,7 +25,6 @@ import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
-import { AgentMarketplaceManifest } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
@@ -165,11 +163,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    identifier: CronManifest.identifier,
-    manifest: CronManifest,
-    type: 'builtin',
-  },
-  {
     hidden: true,
     identifier: KnowledgeBaseManifest.identifier,
     manifest: KnowledgeBaseManifest,
@@ -249,13 +242,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: UserInteractionManifest.identifier,
     manifest: UserInteractionManifest,
-    type: 'builtin',
-  },
-  {
-    discoverable: false,
-    hidden: true,
-    identifier: AgentMarketplaceManifest.identifier,
-    manifest: AgentMarketplaceManifest,
     type: 'builtin',
   },
   {

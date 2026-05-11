@@ -121,6 +121,7 @@ const createHarness = (
         return { success: true };
       },
     ),
+    findById: vi.fn(async (id: string) => messages.get(id) ?? null),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 

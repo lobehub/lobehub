@@ -7,14 +7,9 @@ import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { TopicModel } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { AiAgentService } from '@/server/services/aiAgent';
 import { TaskService } from '@/server/services/task';
-import { TaskGraphService } from '@/server/services/taskGraph';
-import { TaskLifecycleService } from '@/server/services/taskLifecycle';
-import { TaskReviewService } from '@/server/services/taskReview';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 const taskProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -22,12 +17,9 @@ const taskProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   return opts.next({
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId),
-      briefModel: new BriefModel(ctx.serverDB, ctx.userId),
-      taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId),
       taskService: new TaskService(ctx.serverDB, ctx.userId),
       taskTopicModel: new TaskTopicModel(ctx.serverDB, ctx.userId),
-      topicModel: new TopicModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -306,26 +298,7 @@ export const taskRouter = router({
     .input(z.object({ topicId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       try {
-        const target = await ctx.taskTopicModel.findByTopicId(input.topicId);
-        if (!target) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found.' });
-        }
-
-        if (target.status !== 'running') {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Topic is not running (current status: ${target.status}).`,
-          });
-        }
-
-        if (target.operationId) {
-          const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
-          await aiAgentService.interruptTask({ operationId: target.operationId });
-        }
-
-        await ctx.taskTopicModel.updateStatus(target.taskId, input.topicId, 'canceled');
-        await ctx.taskModel.updateStatus(target.taskId, 'paused');
-
+        await ctx.taskService.cancelTopic(input.topicId);
         return { message: 'Topic canceled', success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -342,19 +315,7 @@ export const taskRouter = router({
     .input(z.object({ topicId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       try {
-        const target = await ctx.taskTopicModel.findByTopicId(input.topicId);
-        if (!target) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found.' });
-        }
-
-        if (target.status === 'running' && target.operationId) {
-          const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
-          await aiAgentService.interruptTask({ operationId: target.operationId });
-        }
-
-        await ctx.taskTopicModel.remove(target.taskId, input.topicId);
-        await ctx.topicModel.delete(input.topicId);
-
+        await ctx.taskService.deleteTopic(input.topicId);
         return { message: 'Topic deleted', success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -369,17 +330,7 @@ export const taskRouter = router({
 
   create: taskProcedure.input(createSchema).mutation(async ({ input, ctx }) => {
     try {
-      const model = ctx.taskModel;
-      await assertAssigneeAgentBelongsToUser(ctx.agentModel, input.assigneeAgentId);
-
-      // Resolve parentTaskId if it's an identifier
-      const createData = { ...input };
-      if (createData.parentTaskId) {
-        const parent = await resolveOrThrow(model, createData.parentTaskId);
-        createData.parentTaskId = parent.id;
-      }
-
-      const task = await model.create(createData);
+      const task = await ctx.taskService.createTask(input);
       return { data: task, message: 'Task created', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -915,59 +866,7 @@ export const taskRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.id);
-
-        const reviewConfig = model.getReviewConfig(task);
-        if (!reviewConfig?.enabled) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Review is not enabled for this task',
-          });
-        }
-
-        // Use provided content or try to get from latest topic
-        const content = input.content;
-        if (!content) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message:
-              'Content is required for review. Pass --content or run after a topic completes.',
-          });
-        }
-
-        // Determine which topic to attach the review to
-        const topicId = input.topicId || task.currentTopicId;
-
-        // Get current iteration count for this topic
-        let iteration = 1;
-        if (topicId) {
-          const topics = await ctx.taskTopicModel.findByTaskId(task.id);
-          const target = topics.find((t) => t.topicId === topicId);
-          if (target?.reviewIteration) {
-            iteration = target.reviewIteration + 1;
-          }
-        }
-
-        const reviewService = new TaskReviewService(ctx.serverDB, ctx.userId);
-        const result = await reviewService.review({
-          content,
-          iteration,
-          judge: reviewConfig.judge,
-          rubrics: reviewConfig.rubrics,
-          taskName: task.name || task.identifier,
-        });
-
-        // Save review result to task_topics
-        if (topicId) {
-          await ctx.taskTopicModel.updateReview(task.id, topicId, {
-            iteration,
-            passed: result.passed,
-            score: result.overallScore,
-            scores: result.rubricResults,
-          });
-        }
-
+        const result = await ctx.taskService.runReview(input);
         return { data: result, success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -1029,9 +928,7 @@ export const taskRouter = router({
 
   previewSubtaskLayers: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
-      const parent = await resolveOrThrow(ctx.taskModel, input.id);
-      const graph = new TaskGraphService(ctx.serverDB, ctx.userId);
-      const { plan } = await graph.planForParent(parent.id);
+      const plan = await ctx.taskService.previewSubtaskLayers(input.id);
       return { data: plan, success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -1046,55 +943,8 @@ export const taskRouter = router({
 
   runReadySubtasks: taskProcedure.input(idInput).mutation(async ({ input, ctx }) => {
     try {
-      const parent = await resolveOrThrow(ctx.taskModel, input.id);
-      const graph = new TaskGraphService(ctx.serverDB, ctx.userId);
-      const { descendants, plan } = await graph.planForParent(parent.id);
-
-      if (plan.layers.length === 0) {
-        return {
-          data: {
-            kickedOff: [],
-            plan,
-            skipped: { reason: 'nothing-runnable' as const },
-          },
-          success: true,
-        };
-      }
-
-      // Layer 0 is the only wave we kick off here. Subsequent layers fire
-      // automatically through `TaskRunnerService.cascadeOnCompletion` as
-      // each upstream finishes.
-      const firstLayer = plan.layers[0];
-      const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
-      const runner = new TaskRunnerService(ctx.serverDB, ctx.userId);
-
-      const kickedOff: string[] = [];
-      const failed: { error: string; identifier: string }[] = [];
-
-      const settled = await Promise.allSettled(
-        firstLayer.map(async (identifier) => {
-          const id = identifierToId.get(identifier);
-          if (!id) throw new Error(`Subtask ${identifier} not found`);
-          await runner.runTask({ taskId: id });
-          return identifier;
-        }),
-      );
-
-      for (const [index, result] of settled.entries()) {
-        const identifier = firstLayer[index];
-        if (result.status === 'fulfilled') {
-          kickedOff.push(identifier);
-        } else {
-          const message =
-            result.reason instanceof Error ? result.reason.message : 'Failed to start task';
-          failed.push({ error: message, identifier });
-        }
-      }
-
-      return {
-        data: { failed, kickedOff, plan },
-        success: failed.length === 0,
-      };
+      const result = await ctx.taskService.runReadySubtasks(input.id);
+      return { data: result, success: result.failed.length === 0 };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:runReadySubtasks]', error);
@@ -1115,89 +965,18 @@ export const taskRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { id, status, error: errorMsg } = input;
       try {
-        if (errorMsg && status !== 'failed') {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Task error can only be provided when status is failed.',
-          });
-        }
-
-        const model = ctx.taskModel;
-        const resolved = await resolveOrThrow(model, id);
-
-        // Cascade: when leaving `running`, cancel all running topics
-        if (resolved.status === 'running' && status !== 'running') {
-          const topics = await ctx.taskTopicModel.findByTaskId(resolved.id);
-          const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
-
-          for (const t of topics) {
-            if (t.status !== 'running' || !t.topicId) continue;
-
-            // Interrupt the remote operation first; if it fails, skip cancellation
-            // to avoid desynchronizing DB state from a still-running operation.
-            if (t.operationId) {
-              try {
-                await aiAgentService.interruptTask({ operationId: t.operationId });
-              } catch (err) {
-                console.error('[task:updateStatus] failed to interrupt topic %s:', t.topicId, err);
-                continue;
-              }
-            }
-
-            // Conditionally cancel only if the topic is still running,
-            // avoiding overwrite of a concurrent completed/timeout transition.
-            await ctx.taskTopicModel.cancelIfRunning(resolved.id, t.topicId);
-          }
-        }
-
-        const extra: Record<string, unknown> = {};
-        if (status === 'running') extra.startedAt = new Date();
-        if (status === 'completed' || status === 'failed' || status === 'canceled')
-          extra.completedAt = new Date();
-        if (errorMsg) extra.error = errorMsg;
-
-        const task = await model.updateStatus(resolved.id, status, extra);
-        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-
-        // On completion: check dependency unlocking + parent notification + checkpoints
-        const unlocked: string[] = [];
-        const paused: string[] = [];
-        let allSubtasksDone = false;
-        let checkpointTriggered = false;
-
-        if (status === 'completed') {
-          // 1. Check afterIds checkpoint on parent
-          if (task.parentTaskId) {
-            const parentTask = await model.findById(task.parentTaskId);
-            if (parentTask && model.shouldPauseAfterComplete(parentTask, task.identifier)) {
-              // Pause the parent task for review
-              await model.updateStatus(parentTask.id, 'paused');
-              checkpointTriggered = true;
-            }
-
-            // 2. Check if all sibling subtasks are done
-            allSubtasksDone = await model.areAllSubtasksCompleted(task.parentTaskId);
-          }
-
-          // 3. Unlock tasks blocked by this one and actually kick them off.
-          // The runner creates a topic + enqueues to QStash; status transitions
-          // happen inside `runTask`, so callers don't need to flip it manually.
-          const runner = new TaskRunnerService(ctx.serverDB, ctx.userId);
-          const cascade = await runner.cascadeOnCompletion(task.id);
-          unlocked.push(...cascade.started);
-          paused.push(...cascade.paused);
-        }
-
+        const result = await ctx.taskService.updateStatus(input);
+        const { task, unlocked, paused, checkpointTriggered, allSubtasksDone, parentTaskId } =
+          result;
         return {
           data: task,
-          message: `Task ${status}`,
+          message: `Task ${input.status}`,
           success: true,
           ...(unlocked.length > 0 && { unlocked }),
           ...(paused.length > 0 && { paused }),
           ...(checkpointTriggered && { checkpointTriggered: true }),
-          ...(allSubtasksDone && { allSubtasksDone: true, parentTaskId: task.parentTaskId }),
+          ...(allSubtasksDone && { allSubtasksDone: true, parentTaskId }),
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;

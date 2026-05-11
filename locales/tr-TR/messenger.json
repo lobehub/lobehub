@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "Başka bir Telegram hesabı zaten bağlı",
   "verify.confirm.title": "Bağlantıyı onayla",
   "verify.confirm.workspace": "Çalışma alanı: {{workspace}}",
+  "verify.error.alreadyConsumed": "Bu bağlantı, bir hesabı bağlamak için zaten kullanılmış. Bağlantıyı yönetmek için o LobeHub hesabına giriş yapın veya yeni bir bağlantı oluşturmak için bota dönüp /start komutunu tekrar gönderin.",
+  "verify.error.alreadyConsumedTitle": "Bu bağlantı zaten kullanılmış",
   "verify.error.alreadyLinkedToOther": "Bu hesap zaten başka bir LobeHub hesabına bağlı. Önce o hesaba giriş yapın.",
   "verify.error.expired": "Bu bağlantı süresi doldu. Lütfen bota geri dönün ve tekrar /start gönderin.",
   "verify.error.generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",

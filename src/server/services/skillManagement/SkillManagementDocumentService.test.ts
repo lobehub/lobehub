@@ -24,9 +24,16 @@ import type { SkillAgentDocument } from './types';
 
 const now = new Date('2026-05-02T00:00:00.000Z');
 
-const createSnapshot = async (content: string): Promise<AgentDocumentEditorSnapshot> => ({
-  content,
-  editorData: { markdown: content },
+const createSnapshot = vi.fn(
+  async (content: string): Promise<AgentDocumentEditorSnapshot> => ({
+    content,
+    editorData: { markdown: content, root: { children: [{ type: 'paragraph' }], type: 'root' } },
+  }),
+);
+
+const expectedEditorData = (content: string) => ({
+  markdown: content,
+  root: { children: [{ type: 'paragraph' }], type: 'root' },
 });
 
 class InMemoryAgentDocumentModel implements SkillManagementAgentDocumentModel {
@@ -319,6 +326,18 @@ describe('SkillManagementDocumentService', () => {
         }),
       }),
     );
+    expect(agentDocumentModel.createCalls[1]).toEqual(
+      expect.objectContaining({
+        content: skillContent('release-writer', 'Writes release notes'),
+        filename: SKILL_INDEX_FILENAME,
+        params: expect.objectContaining({
+          editorData: expectedEditorData(skillContent('release-writer', 'Writes release notes')),
+          fileType: SKILL_INDEX_FILE_TYPE,
+          parentId: 'document-1',
+          policyLoad: PolicyLoad.DISABLED,
+        }),
+      }),
+    );
 
     const detail = await service.getSkill({
       agentId: 'agent-1',
@@ -361,6 +380,7 @@ describe('SkillManagementDocumentService', () => {
     expect(agentDocumentModel.documents).toHaveLength(2);
     expect(agentDocumentModel.documents.find((doc) => doc.id === source.id)).toEqual(
       expect.objectContaining({
+        editorData: expectedEditorData(skillContent('draft-skill', 'Draft helper', '# Draft')),
         fileType: SKILL_INDEX_FILE_TYPE,
         filename: SKILL_INDEX_FILENAME,
         parentId: detail.bundle.documentId,
@@ -465,6 +485,9 @@ describe('SkillManagementDocumentService', () => {
       expect.objectContaining({
         agentDocumentId: created.index.agentDocumentId,
         params: expect.objectContaining({
+          editorData: expectedEditorData(
+            skillContent('researcher', 'Researches docs better', '# Better'),
+          ),
           metadata: {
             skill: { frontmatter: { description: 'Researches docs better', name: 'researcher' } },
           },
@@ -552,6 +575,14 @@ describe('SkillManagementDocumentService', () => {
     expect(documentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
       created.index.documentId,
       'llm_call',
+    );
+    expect(agentDocumentModel.updateCalls.at(-1)).toEqual(
+      expect.objectContaining({
+        agentDocumentId: created.index.agentDocumentId,
+        params: expect.objectContaining({
+          editorData: expectedEditorData(skillContent('new-skill', 'Old description')),
+        }),
+      }),
     );
   });
 

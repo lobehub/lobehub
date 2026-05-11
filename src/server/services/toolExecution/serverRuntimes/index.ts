@@ -10,13 +10,12 @@ import type { ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentManagementRuntime } from './agentManagement';
-import { agentMarketplaceRuntime } from './agentMarketplace';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
-import { cronRuntime } from './cron';
 import { gtdRuntime } from './gtd';
+import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
@@ -69,10 +68,9 @@ registerRuntimes([
   topicReferenceRuntime,
   userInteractionRuntime,
   credsRuntime,
-  cronRuntime,
   gtdRuntime,
+  knowledgeBaseRuntime,
   webOnboardingRuntime,
-  agentMarketplaceRuntime,
   lobeAgentRuntime,
   selfIterationIntentRuntime,
 ]);

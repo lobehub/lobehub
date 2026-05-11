@@ -14,7 +14,7 @@ import { useToolStore } from '@/store/tool';
 
 // Bump this id when the banner content changes so dismissing the old
 // variant does not hide the new one.
-export const SKILL_INSTALL_BANNER_ID = 'skill-install-v1';
+export const SKILL_INSTALL_BANNER_ID = 'skill-install-v2';
 
 const ICON_SIZE = 16;
 const AVATAR_SIZE = 24;
@@ -74,9 +74,9 @@ const BANNER_SKILL_IDS = [
   { id: 'google-drive', type: 'klavis' },
   { id: 'google-calendar', type: 'klavis' },
   { id: 'slack', type: 'klavis' },
-  { id: 'notion', type: 'klavis' },
+  { id: 'notion', type: 'lobehub' },
   { id: 'twitter', type: 'lobehub' },
-  { id: 'github', type: 'klavis' },
+  { id: 'github', type: 'lobehub' },
 ] as const;
 
 const SkillInstallBanner = memo(() => {

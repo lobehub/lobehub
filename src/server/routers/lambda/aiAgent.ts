@@ -9,14 +9,17 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { MessageModel } from '@/database/models/message';
+import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { authedProcedure, heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
+import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { nanoid } from '@/utils/uuid';
 
 const log = debug('lobe-server:ai-agent-router');
@@ -142,6 +145,12 @@ const ExecAgentSchema = z
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().optional().nullable(),
         groupId: z.string().optional().nullable(),
+        initialTopicMetadata: z
+          .object({
+            repos: z.array(z.string()).optional(),
+            workingDirectory: z.string().optional(),
+          })
+          .optional(),
         scope: z.string().optional().nullable(),
         sessionId: z.string().optional(),
         taskId: z.string().optional().nullable(),
@@ -351,6 +360,8 @@ const AgentStreamEventSchema = z.object({
     'tool_end',
     'tool_execute',
     'tool_result',
+    'agent_intervention_request',
+    'agent_intervention_response',
     'step_start',
     'step_complete',
     'error',
@@ -401,6 +412,19 @@ const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
+    },
+  });
+});
+
+// Dedicated procedure for hetero-agent ingest/finish endpoints.
+// Requires a `hetero-operation` JWT (4h expiry) — normal user tokens are rejected,
+// so only the sandbox/device that received the JWT from execAgent can call these.
+const heteroAgentProcedure = heteroAuthedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+
+  return opts.next({
+    ctx: {
+      heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -1220,7 +1244,7 @@ export const aiAgentRouter = router({
    * existing stream fanout so renderer-side gateway WS subscribers see them
    * unchanged. Phase 2a: pub/sub only — no DB persistence (phase 2b adds it).
    */
-  heteroIngest: aiAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
+  heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
     const { agentType, events, operationId, topicId } = input;
 
     log(
@@ -1258,7 +1282,7 @@ export const aiAgentRouter = router({
    * `agent_runtime_end` so renderer subscribers can shut down even when the
    * CLI's own end-event was lost mid-flight.
    */
-  heteroFinish: aiAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
+  heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
     const { agentType, error, operationId, result, sessionId, topicId } = input;
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
@@ -1272,6 +1296,45 @@ export const aiAgentRouter = router({
         sessionId,
         topicId,
       });
+
+      // Trigger task lifecycle transition — mirrors the onComplete hook that the
+      // normal LLM execAgent path dispatches after AgentRuntimeService finishes.
+      // The hetero path spawns the sandbox fire-and-forget and returns early, so
+      // the hook is never registered or dispatched; we must call onTopicComplete
+      // explicitly here when the CLI signals process exit.
+      //
+      // Guard: heteroFinish can be called more than once for the same operation
+      // (signal path sends cancelled, normal exit sends the real result, and
+      // transient transport failures can replay). onTopicComplete is NOT
+      // idempotent (reason='error' creates briefs), so skip the call when the
+      // topic is already in a terminal state.
+      const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
+      try {
+        const taskTopicModel = new TaskTopicModel(ctx.serverDB, ctx.userId);
+        const taskTopic = await taskTopicModel.findByTopicId(topicId);
+        if (taskTopic && !TERMINAL_TOPIC_STATUSES.has(taskTopic.status)) {
+          const taskModel = new TaskModel(ctx.serverDB, ctx.userId);
+          const task = await taskModel.findById(taskTopic.taskId);
+          if (task) {
+            const reason =
+              result === 'success' ? 'done' : result === 'cancelled' ? 'interrupted' : 'error';
+            const taskLifecycle = new TaskLifecycleService(ctx.serverDB, ctx.userId);
+            await taskLifecycle.onTopicComplete({
+              errorMessage: error?.message,
+              operationId,
+              reason,
+              taskId: task.id,
+              taskIdentifier: task.identifier,
+              topicId,
+            });
+          }
+        }
+      } catch (lifecycleErr: any) {
+        // Non-fatal: log but do not fail the heteroFinish ack. The CLI has
+        // already finished; failing here would cause it to retry unnecessarily.
+        log('heteroFinish: task lifecycle update failed (non-fatal): %s', lifecycleErr?.message);
+      }
+
       return { ack: true as const };
     } catch (err: any) {
       log('heteroFinish failed: %s', err?.message);

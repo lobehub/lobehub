@@ -39,6 +39,7 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
 
   const isDMPortal = !!props.targetMemberId;
   const currentGroupMembers = useAgentGroupStore(agentGroupSelectors.currentGroupAgents, isEqual);
+  const isGroupConfigLoading = useAgentGroupStore(agentGroupSelectors.isGroupsInit);
 
   const [mainInputSendErrorMsg, clearSendMessageError] = useChatStore((s) => [
     aiChatSelectors.isCurrentSendMessageError(s),
@@ -108,7 +109,7 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
             />
           </Flexbox>
         )}
-        <DesktopChatInput />
+        <DesktopChatInput isConfigLoading={isGroupConfigLoading} />
       </WideScreenContainer>
       <Suspense>
         <MessageFromUrl />

@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "Một tài khoản Telegram khác đã được liên kết",
   "verify.confirm.title": "Xác nhận liên kết",
   "verify.confirm.workspace": "Không gian làm việc: {{workspace}}",
+  "verify.error.alreadyConsumed": "Liên kết này đã được sử dụng để kết nối một tài khoản. Đăng nhập vào tài khoản LobeHub đó để quản lý kết nối, hoặc quay lại bot và gửi /start một lần nữa để tạo liên kết mới.",
+  "verify.error.alreadyConsumedTitle": "Liên kết này đã được sử dụng",
   "verify.error.alreadyLinkedToOther": "Tài khoản này đã được liên kết với một tài khoản LobeHub khác. Đăng nhập vào tài khoản đó trước.",
   "verify.error.expired": "Liên kết này đã hết hạn. Vui lòng quay lại bot và gửi lại /start.",
   "verify.error.generic": "Đã xảy ra lỗi. Vui lòng thử lại.",

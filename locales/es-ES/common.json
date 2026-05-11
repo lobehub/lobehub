@@ -29,7 +29,7 @@
   "batchDelete": "Eliminar en lote",
   "blog": "Blog del producto",
   "botIntegrationBanner.dismiss": "Cerrar",
-  "botIntegrationBanner.title": "Agregar canales a LobeAI",
+  "botIntegrationBanner.title": "Habla con Lobe AI en tus apps de mensajería favoritas",
   "branching": "Crear subtema",
   "branchingDisable": "La función de \"Subtema\" no está disponible en el modo actual. Para usar esta función, cambia al modo de base de datos Postgres/PGlite o utiliza LobeHub Cloud.",
   "branchingRequiresSavedTopic": "El tema actual no está guardado, guárdalo primero para usar la función de subtema",

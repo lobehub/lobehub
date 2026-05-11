@@ -237,7 +237,9 @@ export const AnthropicStream = (
   const streamStack: StreamContext = { id: '' };
 
   const readableStream =
-    stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
+    stream instanceof ReadableStream
+      ? stream
+      : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
   const transformWithPayload: typeof transformAnthropicStream = (chunk, ctx) =>
     transformAnthropicStream(chunk, ctx, payload);

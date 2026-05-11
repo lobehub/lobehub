@@ -8,6 +8,7 @@ import {
 
 import { ClaudeCodeApiName } from '../../types';
 import { AgentInspector } from './Agent';
+import { AskUserQuestionInspector } from './AskUserQuestion';
 import { EditInspector } from './Edit';
 import { ReadInspector } from './Read';
 import { ScheduleWakeupInspector } from './ScheduleWakeup';
@@ -28,6 +29,7 @@ import { WriteInspector } from './Write';
 // state for diff stats), so they live in their own sibling files.
 export const ClaudeCodeInspectors = {
   [ClaudeCodeApiName.Agent]: AgentInspector,
+  [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestionInspector,
   [ClaudeCodeApiName.Bash]: createRunCommandInspector(ClaudeCodeApiName.Bash),
   [ClaudeCodeApiName.Edit]: EditInspector,
   [ClaudeCodeApiName.Glob]: createGlobLocalFilesInspector(ClaudeCodeApiName.Glob),

@@ -140,7 +140,7 @@ describe('<FollowUpChips />', () => {
     expect(updateInputMessageMock).toHaveBeenCalledWith('go ahead');
     expect(editorSetDocumentMock).toHaveBeenCalledWith('text', 'go ahead');
     expect(editorFocusMock).toHaveBeenCalled();
-    // consume() resets state to idle:
-    expect(useFollowUpActionStore.getState().status).toBe('idle');
+    // The chip is not consumed on click — it stays ready until the user sends.
+    expect(useFollowUpActionStore.getState().status).toBe('ready');
   });
 });

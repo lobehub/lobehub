@@ -79,13 +79,6 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/agent/cron/[cronId]'),
-                  'Desktop > Chat > Cron Detail',
-                ),
-                path: 'cron/:cronId',
-              },
-              {
-                element: dynamicElement(
                   () => import('@/routes/(main)/agent/channel'),
                   'Desktop > Chat > Channel',
                 ),
@@ -568,39 +561,37 @@ export const desktopRoutes: RouteObject[] = [
         path: 'eval',
       },
 
-      // Tasks routes (cross-agent)
+      // Task workspace routes (cross-agent)
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks'),
-            index: true,
+            children: [
+              {
+                element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Desktop > Tasks'),
+                index: true,
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/" />,
+            path: 'tasks',
           },
-        ],
-        element: dynamicLayout(
-          () => import('@/routes/(main)/tasks/_layout'),
-          'Desktop > Tasks > Layout',
-        ),
-        errorElement: <ErrorBoundary resetPath="/" />,
-        path: 'tasks',
-      },
-
-      // Task detail route (cross-agent entry — resolves by task identifier)
-      {
-        children: [
           {
-            element: dynamicElement(
-              () => import('@/routes/(main)/task/[taskId]'),
-              'Desktop > Task Detail',
-            ),
-            path: ':taskId',
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/task/[taskId]'),
+                  'Desktop > Task Detail',
+                ),
+                path: ':taskId',
+              },
+            ],
+            errorElement: <ErrorBoundary resetPath="/tasks" />,
+            path: 'task',
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/task/_layout'),
-          'Desktop > Task > Layout',
+          () => import('@/routes/(main)/(task-workspace)/_layout'),
+          'Desktop > Task Workspace > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/tasks" />,
-        path: 'task',
       },
 
       // Pages routes

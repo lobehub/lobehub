@@ -57,6 +57,13 @@ const createNightlyReviewContext = (input: {
   },
   maintenanceSignals: [],
   managedSkills: [],
+  proposalActivity: {
+    active: [],
+    dismissedCount: 0,
+    expiredCount: 0,
+    staleCount: 0,
+    supersededCount: 0,
+  },
   receiptActivity: {
     appliedCount: 0,
     duplicateGroups: [],
@@ -812,17 +819,14 @@ describe('runAgentSignalWorkflow', () => {
           userId,
         }),
       ),
-      executePlan: vi.fn(async () => ({ actions: [], status: ReviewRunStatus.Completed })),
-      planReviewOutput: vi.fn(() => ({
-        actions: [],
-        plannerVersion: 'test',
-        reviewScope: MaintenanceReviewScope.Nightly,
-        summary: 'Noop',
-      })),
       runMaintenanceReviewAgent: vi.fn(async () => ({
-        actions: [],
-        findings: [],
-        summary: 'Noop',
+        execution: { actions: [], status: ReviewRunStatus.Completed },
+        projectionPlan: {
+          actions: [],
+          plannerVersion: 'test',
+          reviewScope: MaintenanceReviewScope.Nightly,
+          summary: 'Noop',
+        },
       })),
     };
     const createNightlyReviewPolicyOptions: NonNullable<
