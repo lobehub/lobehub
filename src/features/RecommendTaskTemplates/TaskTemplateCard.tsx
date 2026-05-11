@@ -1,9 +1,9 @@
 import type { TaskTemplate } from '@lobechat/const';
 import { formatScheduleTime, parseCronPattern, WEEKDAY_I18N_KEYS } from '@lobechat/utils/cron';
-import { ActionIcon, Block, Button, Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Button, Center, Flexbox, Icon, Image, Tag, Text } from '@lobehub/ui';
 import { App, Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
-import { Clock, Link2, type LucideIcon, Sparkles, X } from 'lucide-react';
+import { Clock, Link2, type LucideIcon, X } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -16,25 +16,44 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
+import { resolveTemplateIcon, type TemplateIconSpec } from './resolveTemplateIcon';
 import { styles } from './style';
 import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
 
 const INTEREST_ICON_MAP = new Map<string, LucideIcon>(INTEREST_AREAS.map((a) => [a.key, a.icon]));
 
+const ICON_TILE_SIZE = 28;
+const ICON_GLYPH_SIZE = ICON_TILE_SIZE * 0.6;
+
 interface TemplateBriefIconProps {
-  icon: LucideIcon;
+  spec: TemplateIconSpec;
 }
 
 /** Same 28×28 tile treatment as {@link BriefIcon} (insight palette). */
-const TemplateBriefIcon = memo<TemplateBriefIconProps>(({ icon }) => (
+const TemplateBriefIcon = memo<TemplateBriefIconProps>(({ spec }) => (
   <Block
     align={'center'}
-    height={28}
+    height={ICON_TILE_SIZE}
     justify={'center'}
     style={{ background: cssVar.colorFillSecondary, flexShrink: 0 }}
-    width={28}
+    width={ICON_TILE_SIZE}
   >
-    <Icon color={cssVar.colorTextSecondary} icon={icon} size={28 * 0.6} />
+    {spec.kind === 'url' ? (
+      <Image
+        alt={''}
+        height={ICON_GLYPH_SIZE}
+        src={spec.src}
+        style={{ flex: 'none' }}
+        width={ICON_GLYPH_SIZE}
+      />
+    ) : (
+      <Icon
+        color={cssVar.colorTextSecondary}
+        fill={cssVar.colorTextSecondary}
+        icon={spec.Comp}
+        size={ICON_GLYPH_SIZE}
+      />
+    )}
   </Block>
 ));
 
@@ -64,7 +83,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       optionalSkillConnection.needsConnect &&
       !!optionalSkillConnection.nextUnconnected;
 
-    const IconComp = INTEREST_ICON_MAP.get(template.interests[0]) ?? Sparkles;
+    const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
     const title = t(`${template.id}.title`, { defaultValue: '' });
     const description = t(`${template.id}.description`, { defaultValue: '' });
 
@@ -203,7 +222,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             gap={8}
             style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
           >
-            <TemplateBriefIcon icon={IconComp} />
+            <TemplateBriefIcon spec={iconSpec} />
             <Flexbox
               horizontal
               align={'center'}
