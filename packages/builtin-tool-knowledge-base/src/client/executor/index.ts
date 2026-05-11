@@ -10,7 +10,7 @@ import { ragService } from '@/services/rag';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 
-import { KnowledgeBaseExecutionRuntime } from '../ExecutionRuntime';
+import { KnowledgeBaseExecutionRuntime } from '../../ExecutionRuntime';
 import type {
   AddFilesArgs,
   CreateDocumentArgs,
@@ -22,8 +22,8 @@ import type {
   RemoveFilesArgs,
   SearchKnowledgeBaseArgs,
   ViewKnowledgeBaseArgs,
-} from '../types';
-import { KnowledgeBaseApiName, KnowledgeBaseIdentifier } from '../types';
+} from '../../types';
+import { KnowledgeBaseApiName, KnowledgeBaseIdentifier } from '../../types';
 
 class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
   readonly identifier = KnowledgeBaseIdentifier;
