@@ -1,6 +1,7 @@
 ---
 name: react
-description: React component development guide. Use when working with React components (.tsx files), creating UI, using @lobehub/ui components, implementing routing, or building frontend features. Triggers on React component creation, modification, layout implementation, or navigation tasks.
+description: "LobeHub React/SPA component conventions: antd-style with `createStaticStyles` + `cssVar.*` (prefer zero-runtime over `createStyles` + `token`), `@lobehub/ui/base-ui` primitives before `@lobehub/ui` before antd, `Flexbox`/`Center` for layouts, react-router-dom navigation, and the `.desktop.tsx` sync rule. Use when writing or editing any `.tsx` under `src/**`, picking a styling helper, choosing a component (Select/Modal/Drawer/Button/Tooltip), wiring routes in `desktopRouter.config.tsx`/`.desktop.tsx`, or adding a `Link`/`useNavigate` call in the SPA. Triggers on `createStyles`/`createStaticStyles`, `cssVar`, `@lobehub/ui`, `antd-style`, `Flexbox`, `useNavigate`, `react-router-dom`, `Link`, 'new component', 'add a page', 'edit a layout', 'desktopRouter', 'componentMap.desktop'."
+user-invocable: false
 ---
 
 # React Component Writing Guide

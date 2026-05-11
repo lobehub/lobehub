@@ -1,11 +1,13 @@
 ---
 name: version-release
 description: "Version release workflow. Use when the user mentions 'release', 'hotfix', 'version upgrade', 'weekly release', or '发版'/'发布'/'小班车'. This skill is for release process and GitHub Release notes (not docs/changelog page writing)."
+disable-model-invocation: true
+argument-hint: '[minor|patch] [version?]'
 ---
 
 # Version Release Workflow
 
-This skill is a router. The detailed steps live in `reference/`.
+This skill is a router. The detailed steps live in `references/`.
 
 ## Scope Boundary (Important)
 
@@ -30,12 +32,12 @@ The primary development branch is **canary**. All day-to-day development happens
 
 Only two release types are used in practice (major releases are extremely rare and can be ignored):
 
-| Type  | Use Case                                       | Frequency             | Source Branch  | PR Title Format                      | Version       | Reference                              |
-| ----- | ---------------------------------------------- | --------------------- | -------------- | ------------------------------------ | ------------- | -------------------------------------- |
-| Minor | Feature iteration release                      | \~Every 4 weeks       | canary         | `🚀 release: v{x.y.0}`               | Manually set  | `reference/minor-release.md`           |
-| Patch | Weekly release / hotfix / model / DB migration | \~Weekly or as needed | canary or main | Custom (e.g. `🚀 release: 20260222`) | Auto patch +1 | `reference/patch-release-scenarios.md` |
+| Type  | Use Case                                       | Frequency             | Source Branch  | PR Title Format                      | Version       | Reference                               |
+| ----- | ---------------------------------------------- | --------------------- | -------------- | ------------------------------------ | ------------- | --------------------------------------- |
+| Minor | Feature iteration release                      | \~Every 4 weeks       | canary         | `🚀 release: v{x.y.0}`               | Manually set  | `references/minor-release.md`           |
+| Patch | Weekly release / hotfix / model / DB migration | \~Weekly or as needed | canary or main | Custom (e.g. `🚀 release: 20260222`) | Auto patch +1 | `references/patch-release-scenarios.md` |
 
-For writing the release-note body (any release type), see `reference/release-notes-style.md`.
+For writing the release-note body (any release type), see `references/release-notes-style.md`.
 
 ## Auto-Release Trigger Rules (`auto-tag-release.yml`)
 
@@ -85,9 +87,9 @@ Before creating the release branch, verify the source branch:
 
 Pick the right reference and follow it end-to-end:
 
-- **Minor release** → `reference/minor-release.md`
-- **Patch release** (weekly / hotfix / model launch / DB migration) → `reference/patch-release-scenarios.md`
-- **Writing the PR body / release notes** (any release type) → `reference/release-notes-style.md`
+- **Minor release** → `references/minor-release.md`
+- **Patch release** (weekly / hotfix / model launch / DB migration) → `references/patch-release-scenarios.md`
+- **Writing the PR body / release notes** (any release type) → `references/release-notes-style.md`
 
 ### Hard Rules (apply to every release type)
 
@@ -95,4 +97,4 @@ Pick the right reference and follow it end-to-end:
 - **Do NOT** manually create tags — CI handles them.
 - Minor PR title format is strict (`🚀 release: v{x.y.z}`).
 - Patch PRs do not need an explicit version number.
-- Keep release facts accurate; do not invent metrics or availability statements. Release-note inputs (compare base, PR refs, contributor list) **must be derived from `git`** per `reference/release-notes-style.md` § Computing Inputs — never from memory or descriptions.
+- Keep release facts accurate; do not invent metrics or availability statements. Release-note inputs (compare base, PR refs, contributor list) **must be derived from `git`** per `references/release-notes-style.md` § Computing Inputs — never from memory or descriptions.

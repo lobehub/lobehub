@@ -1,6 +1,20 @@
 # Cloud Project Workflow Configuration
 
-This document covers cloud-specific workflow configurations and patterns for the lobehub-cloud project.
+Cloud-specific workflow configurations and patterns for the lobehub-cloud project.
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Directory Structure](#directory-structure) — submodule + cloud layout
+3. [Cloud-Specific Patterns](#cloud-specific-patterns) — cloud-only workflows + re-export pattern
+4. [TypeScript Path Mappings](#typescript-path-mappings)
+5. [Workflow Class Location](#workflow-class-location) — cloud-only vs shared
+6. [Environment Variables](#environment-variables)
+7. [Best Practices](#best-practices) — decide cloud vs OSS, re-export rules, naming
+8. [Migration Guide](#migration-guide) — moving workflows from cloud to lobehub
+9. [Examples](#examples) — `welcome-placeholder`, `agent-eval-run`
+10. [Troubleshooting](#troubleshooting) — circular imports, 404s, type errors
+11. [Related Documentation](#related-documentation)
 
 ## Overview
 
@@ -15,7 +29,7 @@ The lobehub-cloud project extends the open-source lobehub codebase with cloud-sp
 
 ### Lobehub Submodule (Open-source)
 
-```
+```text
 lobehub/
 └── src/
     ├── app/(backend)/api/workflows/
@@ -28,7 +42,7 @@ lobehub/
 
 ### Lobehub-cloud (Proprietary)
 
-```
+```text
 lobehub-cloud/
 └── src/
     ├── app/(backend)/api/workflows/
@@ -60,7 +74,7 @@ lobehub-cloud/
 
 **Structure**:
 
-```
+```text
 lobehub-cloud/src/
 ├── app/(backend)/api/workflows/
 │   └── feature-name/
@@ -162,7 +176,7 @@ This allows cloud to override specific modules while using lobehub defaults.
 
 Place workflow class in cloud:
 
-```
+```text
 lobehub-cloud/src/server/workflows/featureName/index.ts
 ```
 
@@ -170,7 +184,7 @@ lobehub-cloud/src/server/workflows/featureName/index.ts
 
 Place workflow class in lobehub, re-export in cloud if needed:
 
-```
+```text
 lobehub/src/server/workflows/featureName/index.ts
 ```
 
@@ -245,7 +259,7 @@ For shared features:
 
 Follow consistent naming across lobehub and cloud:
 
-```
+```text
 # Both should use same structure
 lobehub/src/app/(backend)/api/workflows/feature-name/
 lobehub-cloud/src/app/(backend)/api/workflows/feature-name/
@@ -306,7 +320,7 @@ import { Workflow } from 'lobehub/src/server/workflows/feature';
 
 **Structure**:
 
-```
+```text
 lobehub-cloud/
 ├── src/app/(backend)/api/workflows/welcome-placeholder/
 │   ├── process-users/route.ts
