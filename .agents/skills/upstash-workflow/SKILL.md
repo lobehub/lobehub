@@ -1,6 +1,7 @@
 ---
 name: upstash-workflow
 description: 'Upstash Workflow implementation guide. Use when creating async workflows with QStash, implementing fan-out patterns, or building 3-layer workflow architecture (process → paginate → execute).'
+user-invocable: false
 ---
 
 # Upstash Workflow Implementation Guide

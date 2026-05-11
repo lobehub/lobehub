@@ -1,6 +1,7 @@
 ---
 name: typescript
 description: TypeScript code style and optimization guidelines. MUST READ before writing or modifying any TypeScript code (.ts, .tsx, .mts files). Also use when reviewing code quality or implementing type-safe patterns. Triggers on any TypeScript file edit, code style discussions, or type safety questions.
+user-invocable: false
 ---
 
 # TypeScript Code Style Guide

@@ -1,6 +1,7 @@
 ---
 name: store-data-structures
 description: Zustand store data structure patterns for LobeHub. Covers List vs Detail data structures, Map + Reducer patterns, type definitions, and when to use each pattern. Use when designing store state, choosing data structures, or implementing list/detail pages.
+user-invocable: false
 ---
 
 # LobeHub Store Data Structures

@@ -1,6 +1,7 @@
 ---
 name: i18n
 description: Internationalization guide using react-i18next. Use when adding translations, creating i18n keys, or working with localized text in React components (.tsx files). Triggers on translation tasks, locale management, or i18n implementation.
+user-invocable: false
 ---
 
 # LobeHub Internationalization Guide

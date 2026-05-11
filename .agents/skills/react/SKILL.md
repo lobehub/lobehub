@@ -1,6 +1,7 @@
 ---
 name: react
 description: React component development guide. Use when working with React components (.tsx files), creating UI, using @lobehub/ui components, implementing routing, or building frontend features. Triggers on React component creation, modification, layout implementation, or navigation tasks.
+user-invocable: false
 ---
 
 # React Component Writing Guide

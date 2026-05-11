@@ -1,6 +1,7 @@
 ---
 name: add-setting-env
 description: Guide for adding environment variables to configure user settings. Use when implementing server-side environment variables that control default values for user settings. Triggers on env var configuration or setting default value tasks.
+disable-model-invocation: true
 ---
 
 # Adding Environment Variable for User Settings

@@ -1,6 +1,7 @@
 ---
 name: hotkey
 description: Guide for adding keyboard shortcuts. Use when implementing new hotkeys, registering shortcuts, or working with keyboard interactions. Triggers on hotkey implementation or keyboard shortcut tasks.
+user-invocable: false
 ---
 
 # Adding Keyboard Shortcuts Guide

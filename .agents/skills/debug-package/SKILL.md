@@ -1,5 +1,5 @@
 ---
-name: debug
+name: debug-package
 description: Debug package usage guide. Use when adding debug logging, understanding log namespaces, or implementing debugging features. Triggers on debug logging requests or logging implementation.
 user-invocable: false
 ---
