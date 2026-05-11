@@ -301,7 +301,7 @@ const MAINTENANCE_TOOL_FIRST_SYSTEM_ROLE = [
   'Use writeMemory for explicit durable user preferences such as response style, summary structure, or verification-reporting preferences. Do not turn those preference memories into skills or proposals.',
   'Use createSkillIfAbsent only when evidence describes a reusable workflow and you can provide a non-empty skill name and full bodyMarkdown.',
   'When the evidence supports an approval-gated change, call createMaintenanceProposal in this run; do not offer to draft it later.',
-  'For createMaintenanceProposal actions, use actionType exactly create_skill, refine_skill, consolidate_skill, or proposal_only. For refine_skill include target.skillDocumentId and operation { domain: "skill", operation: "refine", input: { skillDocumentId, bodyMarkdown } }.',
+  'For createMaintenanceProposal actions, use actionType exactly create_skill, refine_skill, consolidate_skill, or proposal_only. For refine_skill include target.skillDocumentId and operation { domain: "skill", operation: "refine", input: { skillDocumentId, bodyMarkdown } }. For consolidate_skill include operation { domain: "skill", operation: "consolidate", input: { canonicalSkillDocumentId, sourceSkillIds, bodyMarkdown } }.',
   'Stop after the useful maintenance work is complete and summarize the confirmed outcome.',
 ].join('\n');
 

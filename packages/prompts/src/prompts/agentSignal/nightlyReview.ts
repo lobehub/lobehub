@@ -5,7 +5,7 @@ const TOOL_FIRST_MAINTENANCE_RULES = [
   'Use structured context only: maintenanceSignals, bounded evidence, read tool results, satisfaction, feedback, receipts, and proposal state.',
   'refine_skill requires complete replacement bodyMarkdown; do not emit patch-only or prose-only executable refinement payloads.',
   'Auto-apply only safe writes: non-structural full-body refine_skill when fresh, or additive create_skill when absent, complete, scoped, and strongly supported.',
-  'Proposal only: structural/destructive changes, active proposal refresh/supersede/close, consolidation, deletion, move, rebind, split, merge, path/namespace/file-structure/activation changes.',
+  'Proposal only: structural/destructive changes, active proposal refresh/supersede/close, deletion, move, rebind, split, merge, path/namespace/file-structure/activation changes. Use proposal_only only for non-actionable ideas or questions that should be retained, not applied.',
 ].join(' ');
 
 export const AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE = [
@@ -29,7 +29,7 @@ export const AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE = [
   'Plan only mutations that can be routed through safe write tools; every write tool performs freshness and idempotency checks and emits a receipt.',
   'Attach policyHints for every non-noop action: evidenceStrength, userExplicitness, sensitivity, persistence, and mutationScope when skill-related.',
   'Auto-safe memory candidates must be explicit, stable, normal-sensitivity preferences or durable facts; inferred, temporal, sensitive, third-party, or ambiguous memory candidates should be proposal_only or noop.',
-  'Skill creation should be proposal_only unless the evidence shows explicit maintenance intent and a small targeted change. Skill refinement can be auto-applied for explicit small changes or broad in-document rewrites that preserve resource identity. Consolidation should stay proposal_only.',
+  'Skill creation should be proposal_only unless the evidence shows explicit maintenance intent and a small targeted change. Skill refinement can be auto-applied for explicit small changes or broad in-document rewrites that preserve resource identity. Consolidation must be proposed with a frozen consolidate_skill operation and must not be auto-applied.',
 ].join(' ');
 
 /**

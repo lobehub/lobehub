@@ -24,7 +24,7 @@ describe('agent signal nightly review prompt', () => {
       'A durable_user_preference signal means',
     );
     expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
-      'Consolidation should stay proposal_only',
+      'Consolidation must be proposed with a frozen consolidate_skill operation',
     );
   });
 

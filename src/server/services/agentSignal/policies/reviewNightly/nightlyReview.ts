@@ -517,6 +517,7 @@ export const createNightlyReviewSourceHandler = (
         const brief = createBriefMaintenanceService().projectNightlyReviewBrief({
           agentId: payload.agentId,
           evidenceRefs: collectPlanEvidenceRefs(plan),
+          ideas: agentResult.ideas,
           localDate: payload.localDate,
           ...(proposalPlan ? { plan: proposalPlan } : {}),
           result: executionWithReceipts,
