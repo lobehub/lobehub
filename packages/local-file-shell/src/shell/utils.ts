@@ -27,12 +27,12 @@ export const getShellConfig = (command: string) =>
       { args: ['-NoProfile', '-NonInteractive', '-Command', command], cmd: 'powershell.exe' }
     : { args: ['-c', command], cmd: '/bin/sh' };
 
-
 /**
  * Pre-expand environment variable references in a command string using
  * Node.js process.env - shell-agnostic and cross-platform.
  *
- * Handles all three common syntaxes:
+ * Handles all three common syntaxes so commands work regardless of which
+ * shell eventually executes them:
  *   %VAR%         -> Windows cmd style
  *   $env:VAR      -> PowerShell style
  *   $VAR / ${VAR} -> Unix bash/sh style
@@ -56,22 +56,13 @@ export const expandEnvVars = (command: string): string => {
   result = result.replace(/\$env:([A-Za-z_][A-Za-z0-9_]*)/g, (match, name) => replace(name, match));
   // ${VAR} - Unix braced
   result = result.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name) => replace(name, match));
-  // $VAR - Unix unbraced (uppercase + underscore only)
+  // $VAR - Unix unbraced (uppercase + underscore only to avoid false positives)
   result = result.replace(/\$([A-Z_][A-Z0-9_]*)/g, (match, name) => replace(name, match));
   return result;
 };
 
-  // $env:VAR — PowerShell
-  result = result.replace(/\$env:([A-Za-z_][A-Za-z0-9_]*)/g, (_, name) => process.env[name] ?? `$env:${name}`);
-  // ${VAR} — Unix braced
-  result = result.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name) => process.env[name] ?? `\${${name}}`);
-  // $VAR — Unix unbraced (solo maiuscole/underscore per evitare falsi positivi)
-  result = result.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, name) => process.env[name] ?? `$${name}`);
-  return result;
-};
-
 /**
- * Returns true when running on Windows — used to gate windowsVerbatimArguments
+ * Returns true when running on Windows - used to gate windowsVerbatimArguments
  * and other platform-specific spawn options.
  */
 export const isWindows = (): boolean => process.platform === 'win32';
