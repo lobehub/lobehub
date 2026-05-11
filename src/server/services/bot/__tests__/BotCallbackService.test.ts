@@ -119,6 +119,18 @@ vi.mock('@/server/services/systemAgent', () => ({
 
 vi.mock('@/server/services/messenger/installations', () => ({
   getInstallationStore: mockMessengerGetInstallationStore,
+  messengerConnectionIdForUser: ({
+    installationKey,
+    userId,
+  }: {
+    installationKey: string;
+    userId: string;
+  }) => {
+    if (installationKey.endsWith(':singleton')) {
+      return `messenger:${installationKey.slice(0, -':singleton'.length)}:user-${userId}`;
+    }
+    return `messenger:${installationKey}:user-${userId}`;
+  },
 }));
 
 vi.mock('@/server/services/messenger/platforms', () => ({

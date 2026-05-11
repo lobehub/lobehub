@@ -49,6 +49,11 @@ export const RedisKeys = {
      * Full key: aiGeneration:agent_welcome:{agentId}
      */
     agentWelcome: (agentId: string): string => `agent_welcome:${agentId}`,
+    /**
+     * Per-user paired { welcome, hint } objects shown on the home page
+     * Full key: aiGeneration:home_brief:{userId}
+     */
+    homeBrief: (userId: string): string => `home_brief:${userId}`,
   },
   /**
    * Lobechat core scope - for application-level caching

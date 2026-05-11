@@ -23,6 +23,13 @@ export interface SpawnAgentOptions {
   /** Extra CLI arguments appended after the agent's preset flags. */
   extraArgs?: string[];
   /**
+   * (Claude Code only) Pass `--include-partial-messages` so the CLI streams
+   * delta chunks instead of only complete blocks. Off by default — terminal
+   * runs and bulk-ingest flows usually want fewer events. Turn on when a
+   * connected client renders live token streaming.
+   */
+  includePartialMessages?: boolean;
+  /**
    * Image normalization options (URL fetch + on-disk cache + path
    * materialization). Forwarded to `buildAgentInput`. When `prompt` is a
    * plain string this is unused.
@@ -82,14 +89,28 @@ export interface SpawnAgentHandle {
   stderr: NodeJS.ReadableStream;
 }
 
-const CLAUDE_CODE_BASE_ARGS = [
+/**
+ * Invariant Claude Code CLI flags shared by every spawn site (desktop driver,
+ * `lh hetero exec`). Permission mode and `--include-partial-messages` vary by
+ * caller — the desktop UI wants live deltas + user-mode bypassPermissions, the
+ * sandbox CLI may run as root and skip partials — so they're composed on top
+ * of this base.
+ *
+ * `AskUserQuestion` is disabled because CC's CLI self-injects an
+ * `is_error: "Answer questions?"` tool_result in `-p` mode before the host
+ * can surface the questions, so the model falls back to plain-text prompting
+ * anyway. Remove this once a local MCP-backed replacement is wired to
+ * LobeHub's intervention UI.
+ */
+export const CLAUDE_CODE_BASE_ARGS = [
   '-p',
   '--input-format',
   'stream-json',
   '--output-format',
   'stream-json',
   '--verbose',
-  '--include-partial-messages',
+  '--disallowedTools',
+  'AskUserQuestion',
 ] as const;
 
 // bypassPermissions is blocked when running as root (e.g. cloud sandbox).
@@ -109,42 +130,47 @@ const CLAUDE_CODE_PERMISSION_ARGS = (): string[] =>
 
 const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check', '--full-auto'] as const;
 
-const buildClaudeCodeArgs = (
-  resumeSessionId: string | undefined,
-  inputArgs: string[],
-  extraArgs: string[],
-) => [
+interface BuildSpawnArgsParams {
+  agentType: string;
+  /** Extra CLI arguments appended after the agent's preset flags. */
+  extraArgs: string[];
+  /** (Claude Code only) Stream `--include-partial-messages` deltas. */
+  includePartialMessages: boolean;
+  /** Per-agent input args produced by `buildAgentInput` (e.g. Codex `--image`). */
+  inputArgs: string[];
+  /** Native session id for resume; undefined for fresh runs. */
+  resumeSessionId: string | undefined;
+}
+
+const buildClaudeCodeArgs = ({
+  extraArgs,
+  includePartialMessages,
+  inputArgs,
+  resumeSessionId,
+}: BuildSpawnArgsParams) => [
   ...CLAUDE_CODE_BASE_ARGS,
+  ...(includePartialMessages ? ['--include-partial-messages'] : []),
   ...CLAUDE_CODE_PERMISSION_ARGS(),
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ...inputArgs,
   ...extraArgs,
 ];
 
-const buildCodexArgs = (
-  resumeSessionId: string | undefined,
-  inputArgs: string[],
-  extraArgs: string[],
-) =>
+const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) =>
   resumeSessionId
     ? ['exec', 'resume', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs, resumeSessionId, '-']
     : ['exec', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs];
 
-const buildSpawnArgs = (
-  agentType: string,
-  resumeSessionId: string | undefined,
-  inputArgs: string[],
-  extraArgs: string[],
-): string[] => {
-  switch (agentType) {
+const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
+  switch (params.agentType) {
     case 'claude-code': {
-      return buildClaudeCodeArgs(resumeSessionId, inputArgs, extraArgs);
+      return buildClaudeCodeArgs(params);
     }
     case 'codex': {
-      return buildCodexArgs(resumeSessionId, inputArgs, extraArgs);
+      return buildCodexArgs(params);
     }
     default: {
-      throw new Error(`spawnAgent: unsupported agent type "${agentType}"`);
+      throw new Error(`spawnAgent: unsupported agent type "${params.agentType}"`);
     }
   }
 };
@@ -195,12 +221,13 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   const command = options.command || defaultCommand(options.agentType);
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
-  const args = buildSpawnArgs(
-    options.agentType,
-    options.resumeSessionId,
-    inputPlan.args,
-    options.extraArgs ?? [],
-  );
+  const args = buildSpawnArgs({
+    agentType: options.agentType,
+    extraArgs: options.extraArgs ?? [],
+    includePartialMessages: options.includePartialMessages ?? false,
+    inputArgs: inputPlan.args,
+    resumeSessionId: options.resumeSessionId,
+  });
   const cwd = options.cwd || process.cwd();
 
   const proc = spawn(command, args, {

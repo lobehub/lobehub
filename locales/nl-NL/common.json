@@ -29,7 +29,7 @@
   "batchDelete": "Batch verwijderen",
   "blog": "Productblog",
   "botIntegrationBanner.dismiss": "Sluiten",
-  "botIntegrationBanner.title": "Kanalen toevoegen aan LobeAI",
+  "botIntegrationBanner.title": "Praat met Lobe AI in je favoriete berichtenapps",
   "branching": "Subonderwerp aanmaken",
   "branchingDisable": "De functie \"Subonderwerp\" is niet beschikbaar in de huidige modus. Schakel over naar Postgres/PGlite DB-modus of gebruik LobeHub Cloud om deze functie te gebruiken.",
   "branchingRequiresSavedTopic": "Huidig onderwerp is niet opgeslagen, sla het eerst op om subonderwerpen te kunnen gebruiken",

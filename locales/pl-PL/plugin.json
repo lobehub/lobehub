@@ -681,7 +681,7 @@
   "skillDetail.tools": "Narzędzia",
   "skillDetail.trustWarning": "Używaj konektorów tylko od zaufanych deweloperów. LobeHub nie kontroluje, jakie narzędzia są udostępniane przez deweloperów i nie może zagwarantować, że będą działać zgodnie z oczekiwaniami ani że nie ulegną zmianie.",
   "skillInstallBanner.dismiss": "Zamknij",
-  "skillInstallBanner.title": "Dodaj umiejętności do Lobe AI",
+  "skillInstallBanner.title": "Połącz ulubione aplikacje z Lobe AI",
   "store.actions.cancel": "Anuluj",
   "store.actions.configure": "Konfiguruj",
   "store.actions.confirmUninstall": "Odinstalowanie usunie konfigurację Umiejętności. Kontynuować?",

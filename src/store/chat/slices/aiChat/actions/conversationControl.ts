@@ -631,6 +631,179 @@ export class ConversationControlActionImpl {
     completeOperation(operationId);
   };
 
+  /**
+   * Resolve a heterogeneous-runtime intervention (CC AskUserQuestion, …).
+   *
+   * Why this action exists separately from `submitToolInteraction`:
+   * - The CC subprocess is already running and blocked on an MCP call —
+   *   we need to feed the answer back through the IPC bridge, not spawn
+   *   a fresh `executeClientAgent` turn.
+   * - Once the answer ships, CC's existing stream emits `tool_result` and
+   *   keeps going on its own; no synthetic user message, no new op.
+   *
+   * The framework's intervention surface still drives the UI: we just
+   * stamp `pluginIntervention.status` and the eventual `tool_result`
+   * content via the same optimistic primitives, so the InterventionBar /
+   * inline tool body update synchronously and the answered Render takes
+   * over once `pluginIntervention.status === 'approved' | 'rejected'`.
+   *
+   * `actionType`:
+   *   - `'submit'` → mark approved, ship `payload` as the answer
+   *   - `'skip' | 'cancel'` → mark rejected, ship `cancelled: true` so the
+   *     bridge resolves with `cancelReason` and CC sees an isError result
+   *     (it'll fall back to plain-text questioning)
+   */
+  submitHeteroIntervention = async (
+    toolMessageId: string,
+    actionType: 'submit' | 'skip' | 'cancel',
+    payload?: Record<string, unknown>,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+    if (!toolMessage) return;
+
+    const toolCallId = toolMessage.tool_call_id;
+    if (!toolCallId) {
+      console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
+      return;
+    }
+
+    // Walk up to the assistant that owns this tool — its operation is the
+    // running CC stream we need to address. Falls through to the tool
+    // message id itself if a producer ever associated it directly.
+    const { messageOperationMap } = this.#get();
+    const operationId =
+      (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
+      messageOperationMap?.[toolMessageId];
+
+    if (!operationId) {
+      console.warn('[submitHeteroIntervention] no operationId for', toolMessageId);
+      return;
+    }
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+    const optimisticContext: OptimisticUpdateContext = { operationId };
+
+    if (actionType === 'submit') {
+      await this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: { status: 'approved' } },
+        optimisticContext,
+      );
+      // Persist the structured `{ [questionText]: selectedLabel(s) }` answers
+      // to `pluginState.askUserAnswers` so the Render component can show
+      // Q&A pairs instead of parsing the bridge's prose `User answers:`
+      // dump out of `content`. Best-effort — never block the IPC submit.
+      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      // Bridge formats its own "User answers:" string for CC, so the eventual
+      // tool_result re-rewrites this content. The optimistic write is just
+      // for the brief gap between Submit and CC echoing the result back.
+      const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
+      await this.#get().optimisticUpdateMessageContent(
+        toolMessageId,
+        summary,
+        undefined,
+        optimisticContext,
+      );
+    } else {
+      const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
+      await this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: { rejectedReason: reason, status: 'rejected' } },
+        optimisticContext,
+      );
+      await this.#get().optimisticUpdateMessageContent(
+        toolMessageId,
+        `${reason} this interaction.`,
+        undefined,
+        optimisticContext,
+      );
+    }
+
+    // Forward to the producer (Electron main → bridge.resolve). Dynamic
+    // import keeps `@/services/electron/*` out of non-Electron bundles.
+    try {
+      const { heterogeneousAgentService } = await import('@/services/electron/heterogeneousAgent');
+      await heterogeneousAgentService.submitIntervention(
+        actionType === 'submit'
+          ? { operationId, result: payload ?? {}, toolCallId }
+          : {
+              cancelReason: actionType === 'skip' ? 'user_cancelled' : 'user_cancelled',
+              cancelled: true,
+              operationId,
+              toolCallId,
+            },
+      );
+    } catch (err) {
+      console.error('[submitHeteroIntervention] IPC submitIntervention failed:', err);
+    }
+
+    void effectiveContext;
+  };
+
+  /**
+   * In-memory draft store for an intervention form. Backs the renderer's
+   * "remember what I'd partially answered" behaviour without paying for a
+   * DB round-trip on every keystroke — drafts only matter while the
+   * intervention is pending (5 min cap), and the canonical pluginState
+   * mirror is enough to survive HMR / panel re-mounts.
+   *
+   * `askUserDraft` is irrelevant after submit (the form unmounts), so we
+   * don't bother clearing it — it stays buried under `askUserAnswers` in
+   * `pluginState` and never affects the completed Render.
+   */
+  setInterventionDraft = (toolMessageId: string, draft: Record<string, unknown>): void => {
+    this.#get().internal_dispatchMessage({
+      id: toolMessageId,
+      key: 'askUserDraft',
+      type: 'updatePluginState',
+      value: draft,
+    });
+  };
+
+  /**
+   * Persist the structured intervention answers (`{ questionText:
+   * selectedLabel | selectedLabel[] }`) to the tool message's
+   * `pluginState.askUserAnswers`. Drives structured Q&A rendering on the
+   * `Render` component without re-parsing the bridge's prose tool_result.
+   *
+   * Both writes are merge-style by key — the in-memory `updatePluginState`
+   * reducer (`message/reducer.ts:142`) and the DB
+   * `messageModel.updatePluginState` shallow-merge so co-existing keys
+   * (`askUserDraft` etc.) survive. DB write is best-effort: a slow lambda
+   * must not strand the IPC submit that follows.
+   */
+  setInterventionAnswers = async (
+    toolMessageId: string,
+    answers: Record<string, unknown>,
+    context?: OptimisticUpdateContext,
+  ): Promise<void> => {
+    this.#get().internal_dispatchMessage(
+      {
+        id: toolMessageId,
+        key: 'askUserAnswers',
+        type: 'updatePluginState',
+        value: answers,
+      },
+      context,
+    );
+    try {
+      const { messageService } = await import('@/services/message');
+      const ctx = this.#get().internal_getConversationContext(context);
+      await messageService.updateMessagePluginState(
+        toolMessageId,
+        { askUserAnswers: answers },
+        ctx,
+      );
+    } catch (err) {
+      console.warn('[setInterventionAnswers] persist failed:', err);
+    }
+  };
+
   rejectToolCalling = async (
     messageId: string,
     reason?: string,

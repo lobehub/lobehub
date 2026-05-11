@@ -5,7 +5,6 @@ import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
-import { MaintenanceRisk } from '@/server/services/agentSignal/services/maintenance/types';
 
 import { BriefService } from './index';
 
@@ -395,107 +394,6 @@ describe('BriefService', () => {
   });
 
   describe('resolve', () => {
-    const proposalMetadata = {
-      actionType: 'refine_skill' as const,
-      actions: [
-        {
-          actionType: 'refine_skill' as const,
-          evidenceRefs: [],
-          idempotencyKey: 'nightly:refine:adoc_1',
-          rationale: 'Refine a managed skill.',
-          risk: MaintenanceRisk.Medium,
-        },
-      ],
-      createdAt: '2026-05-09T00:00:00.000Z',
-      evidenceWindowEnd: '2026-05-09T00:00:00.000Z',
-      evidenceWindowStart: '2026-05-08T00:00:00.000Z',
-      expiresAt: '2026-05-12T00:00:00.000Z',
-      proposalKey: 'agt_1:refine_skill:agent_document:adoc_1',
-      status: 'pending' as const,
-      updatedAt: '2026-05-09T00:00:00.000Z',
-      version: 1 as const,
-    };
-
-    /**
-     * @example
-     * expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-1', { action: 'approve' });
-     */
-    it('applies a pending maintenance proposal before resolving an approved brief', async () => {
-      const maintenanceProposalResolver = vi.fn().mockResolvedValue({
-        brief: { id: 'proposal-1' },
-        shouldResolve: true,
-      });
-      const service = new BriefService(db, userId, { maintenanceProposalResolver });
-      mockBriefModel.findById.mockResolvedValue({
-        id: 'proposal-1',
-        metadata: { proposal: proposalMetadata },
-        trigger: 'agent-signal:nightly-review',
-      });
-      mockBriefModel.resolve.mockResolvedValue({ id: 'proposal-1', resolvedAction: 'approve' });
-
-      const result = await service.resolve('proposal-1', { action: 'approve' });
-
-      expect(maintenanceProposalResolver).toHaveBeenCalledWith({
-        action: 'approve',
-        brief: expect.objectContaining({ id: 'proposal-1' }),
-        proposal: proposalMetadata,
-      });
-      expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-1', { action: 'approve' });
-      expect(result).toEqual({ id: 'proposal-1', resolvedAction: 'approve' });
-    });
-
-    /**
-     * @example
-     * expect(mockBriefModel.resolve).not.toHaveBeenCalled();
-     */
-    it('keeps stale maintenance proposal briefs unresolved after approve preflight fails', async () => {
-      const unresolvedBrief = {
-        id: 'proposal-2',
-        metadata: { proposal: { ...proposalMetadata, status: 'stale' } },
-        trigger: 'agent-signal:nightly-review',
-      };
-      const maintenanceProposalResolver = vi.fn().mockResolvedValue({
-        brief: unresolvedBrief,
-        shouldResolve: false,
-      });
-      const service = new BriefService(db, userId, { maintenanceProposalResolver });
-      mockBriefModel.findById.mockResolvedValue({
-        id: 'proposal-2',
-        metadata: { proposal: proposalMetadata },
-        trigger: 'agent-signal:nightly-review',
-      });
-
-      const result = await service.resolve('proposal-2', { action: 'approve' });
-
-      expect(result).toBe(unresolvedBrief);
-      expect(mockBriefModel.resolve).not.toHaveBeenCalled();
-    });
-
-    /**
-     * @example
-     * expect(maintenanceProposalResolver).toHaveBeenCalledWith(expect.objectContaining({ action: 'dismiss' }));
-     */
-    it('dismisses pending maintenance proposals through the proposal resolver', async () => {
-      const maintenanceProposalResolver = vi.fn().mockResolvedValue({
-        brief: { id: 'proposal-3' },
-        shouldResolve: true,
-      });
-      const service = new BriefService(db, userId, { maintenanceProposalResolver });
-      mockBriefModel.findById.mockResolvedValue({
-        id: 'proposal-3',
-        metadata: { proposal: proposalMetadata },
-        trigger: 'agent-signal:nightly-review',
-      });
-      mockBriefModel.resolve.mockResolvedValue({ id: 'proposal-3', resolvedAction: 'dismiss' });
-
-      await service.resolve('proposal-3', { action: 'dismiss' });
-
-      expect(maintenanceProposalResolver).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'dismiss' }),
-      );
-      expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-3', { action: 'dismiss' });
-    });
-
     it('should complete the task when approving a result brief on a non-scheduled task', async () => {
       const service = new BriefService(db, userId);
       mockBriefModel.resolve.mockResolvedValue({
