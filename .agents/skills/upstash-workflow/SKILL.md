@@ -201,7 +201,7 @@ src/
 
 For lobehub-cloud specific configurations (re-exports, cloud-only workflows, deployment patterns), see:
 
-📄 **[Cloud Configuration Guide](./reference/cloud.md)**
+📄 **[Cloud Configuration Guide](./references/cloud.md)**
 
 ---
 
@@ -1111,7 +1111,7 @@ QSTASH_URL=https://custom-qstash.com # Custom QStash endpoint
 ### Quality & Deployment
 
 - [ ] Return consistent response shapes
-- [ ] Configure cloud deployment (see [Cloud Guide](./reference/cloud.md) if using lobehub-cloud)
+- [ ] Configure cloud deployment (see [Cloud Guide](./references/cloud.md) if using lobehub-cloud)
 - [ ] Write integration tests
 - [ ] Test with dry-run mode first
 - [ ] Test with small batch before full rollout
