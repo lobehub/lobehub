@@ -1,4 +1,6 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +25,7 @@ export const useRecommendationsVisible = (): boolean => {
 
 const Recommendations = memo(() => {
   const { t } = useTranslation('home');
+  const { t: tTaskTemplate } = useTranslation('taskTemplate');
   const taskTemplatesState = useDailyBriefRecommendationsUI();
   const { actions } = useEligibleActions();
 
@@ -31,9 +34,23 @@ const Recommendations = memo(() => {
 
   return (
     <Flexbox gap={12}>
-      <Text className={styles.subtitle} fontSize={12}>
-        {t('recommendations.subtitle')}
-      </Text>
+      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+        <Text className={styles.subtitle} fontSize={12}>
+          {t('recommendations.subtitle')}
+        </Text>
+        {taskTemplatesState.mode === 'cards' && (
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={4}
+            style={{ color: cssVar.colorTextDescription, cursor: 'pointer' }}
+            onClick={taskTemplatesState.onRefresh}
+          >
+            <Icon icon={RefreshCw} size={12} />
+            <Text fontSize={12}>{tTaskTemplate('action.refresh.button')}</Text>
+          </Flexbox>
+        )}
+      </Flexbox>
       <Flexbox gap={8}>
         {actions.map((action) => (
           <RecommendationCard
