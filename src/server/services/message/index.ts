@@ -285,20 +285,36 @@ export class MessageService {
     messagesToSummarize: UIChatMessage[];
     success: boolean;
   }> {
-    // 1. Get messages that need to be summarized (before marking them as compressed)
-    const allMessages = await this.messageModel.query(
-      { topicId, ...options },
-      this.getQueryOptions(),
-    );
+    // 1. Get messages that need to be summarized (before marking them as compressed).
+    // Query by ID directly instead of going through messageModel.query — that path applies
+    // a scope filter (agentId / groupId / threadId) and additionally drops any message
+    // whose messageGroupId is non-null. Both of those interact badly with /compact:
+    //   - Group-chat /compact called from useAgentContext sends groupId=undefined while
+    //     the actual messages have groupId='cg_...', so scope filtering returns 0 rows.
+    //   - Re-compressing a topic that already has one compression group would also lose
+    //     every messageId because of the isNull(messageGroupId) clause.
+    // Client passed an explicit messageIds list — look those up by ID, then confine the
+    // result to the active topic so a malformed/crafted request cannot drag in messages
+    // from other topics (queryByIds scopes by userId only).
+    const { postProcessUrl } = this.getQueryOptions();
+    const rawMessages = await this.messageModel.queryByIds(messageIds, { postProcessUrl });
+    const messagesToSummarize = rawMessages.filter((msg) => msg.topicId === topicId);
+    const scopedMessageIds = messagesToSummarize.map((msg) => msg.id);
 
-    const messagesToSummarize = allMessages.filter((msg) => messageIds.includes(msg.id));
+    if (scopedMessageIds.length === 0) {
+      throw new Error(
+        '[createCompressionGroup] No messages found for the provided messageIds within the ' +
+          'requested topic. The ids may have been deleted, never persisted, belong to a ' +
+          'different user, or reference another topic.',
+      );
+    }
 
     // 2. Create compression group with placeholder content
     const messageGroupId = await this.compressionRepository.createCompressionGroup({
       content: '...', // Placeholder content
-      messageIds,
+      messageIds: scopedMessageIds,
       metadata: {
-        originalMessageCount: messageIds.length,
+        originalMessageCount: scopedMessageIds.length,
       },
       topicId,
     });

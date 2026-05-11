@@ -9,11 +9,24 @@ import { type Operation } from '../slices/operation/types';
 export const isCompressionOperationType = (type?: string) =>
   type === 'contextCompression' || type === 'generateSummary';
 
-export const getCompressionCandidateMessageIds = (messages: UIChatMessage[]) =>
-  messages
-    .filter((message) => message.role !== 'compressedGroup')
+export const getCompressionCandidateMessageIds = (messages: UIChatMessage[]) => {
+  // Collect ids of messages that are already inside a compression group
+  // (surfaced via the compressedGroup node's compressedMessages array) so we
+  // don't re-submit them — server MessageModel.query filters out messages with
+  // a non-null messageGroupId, which would otherwise yield an empty summary payload.
+  const alreadyCompressed = new Set<string>();
+  for (const message of messages) {
+    if (message.role === 'compressedGroup' && message.compressedMessages) {
+      for (const inner of message.compressedMessages) {
+        if (inner.id) alreadyCompressed.add(inner.id);
+      }
+    }
+  }
+  return messages
+    .filter((message) => message.role !== 'compressedGroup' && !alreadyCompressed.has(message.id))
     .map((message) => message.id)
     .filter(Boolean);
+};
 
 export const createPendingCompressedGroup = ({
   agentId,
