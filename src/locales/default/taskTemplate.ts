@@ -10,6 +10,7 @@ export default {
   'action.dismiss.error': 'Failed to dismiss. Please try again.',
   'action.dismiss.tooltip': 'Not interested',
   'action.optionalConnect.button': 'Connect {{provider}} for richer results',
+  'action.refresh.button': 'Refresh',
 
   'schedule.daily': 'Every day at {{time}}',
   'schedule.editableAfterCreateTooltip': 'You can adjust the schedule after creating the task.',

@@ -1,4 +1,6 @@
 import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import { createNanoId } from '@lobechat/utils';
+import { useSessionStorageState } from 'ahooks';
 import { App } from 'antd';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +15,9 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 
+const REFRESH_SEED_STORAGE_KEY = 'lobehub:taskTemplate:refreshSeed';
+const nextRefreshSeed = createNanoId(8);
+
 export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
   | { mode: 'skeleton' }
@@ -20,6 +25,7 @@ export type DailyBriefRecommendationsUIState =
       mode: 'cards';
       onCreated: (templateId: string) => void;
       onDismiss: (templateId: string) => void;
+      onRefresh: () => void;
       templates: TaskTemplate[];
     };
 
@@ -35,12 +41,20 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
   const interestKeys = useResolvedInterestKeys();
   const swrKey = interestKeys ? [...interestKeys].sort().join(',') : '';
   const swrEnabled = isLogin && interestKeys !== null;
+  const [refreshSeed, setRefreshSeed] = useSessionStorageState<string>(REFRESH_SEED_STORAGE_KEY, {
+    defaultValue: '',
+  });
 
   const { data, isLoading, mutate } = useSWR(
-    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey] : null,
-    async () => taskTemplateService.listDailyRecommend(interestKeys ?? []),
+    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey, refreshSeed] : null,
+    async () =>
+      taskTemplateService.listDailyRecommend(interestKeys ?? [], refreshSeed || undefined),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshSeed(nextRefreshSeed());
+  }, [setRefreshSeed]);
 
   const removeTemplateFromList = useCallback(
     (templateId: string) => {
@@ -94,5 +108,11 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
   if (!isInit || isLoading) return { mode: 'skeleton' };
   if (templates.length === 0) return { mode: 'hidden' };
 
-  return { mode: 'cards', onCreated: handleCreated, onDismiss: handleDismiss, templates };
+  return {
+    mode: 'cards',
+    onCreated: handleCreated,
+    onDismiss: handleDismiss,
+    onRefresh: handleRefresh,
+    templates,
+  };
 }

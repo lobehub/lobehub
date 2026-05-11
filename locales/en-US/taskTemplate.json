@@ -9,6 +9,7 @@
   "action.dismiss.error": "Failed to dismiss. Please try again.",
   "action.dismiss.tooltip": "Not interested",
   "action.optionalConnect.button": "Connect {{provider}} for richer results",
+  "action.refresh.button": "Refresh",
   "ad-creative-inspiration.description": "Each morning, scan competitor / benchmark ads (Meta / Google Ad Library) — 10 we could adapt.",
   "ad-creative-inspiration.prompt": "Every morning at 10:00, scan recent ad creative from my competitors and benchmark brands across Meta and Google Ad Library. Pick 10 worth adapting and explain why.",
   "ad-creative-inspiration.title": "Ad creative inspiration",

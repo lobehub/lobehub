@@ -7,6 +7,7 @@ import { ENABLED_SKILL_SOURCES, TaskTemplateService } from '@/server/services/ta
 
 const listDailyRecommendSchema = z.object({
   interestKeys: z.array(z.string().max(64)).max(32),
+  refreshSeed: z.string().min(1).max(32).optional(),
 });
 
 const templateIdSchema = z.object({
@@ -26,6 +27,7 @@ export const taskTemplateRouter = router({
         const service = new TaskTemplateService(ctx.userId);
         const data = await service.listDailyRecommend(input.interestKeys, {
           enabledSkillSources: ENABLED_SKILL_SOURCES,
+          refreshSeed: input.refreshSeed,
         });
         return { data, success: true };
       } catch (error) {
