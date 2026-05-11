@@ -129,6 +129,9 @@ const customInteractionSubmitHandlers: Array<{
   },
 ];
 
+const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string) =>
+  customInteractionSubmitHandlers.find((entry) => entry.match(identifier, apiName))?.handler;
+
 /**
  * Identifiers whose intervention component renders inline as a form (with
  * `onInteractionAction` callbacks) rather than the default approve / reject
@@ -141,10 +144,10 @@ const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([ClaudeCodeIdentif
 export const isHeteroInteractionIdentifier = (identifier: string) =>
   HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);
 
-export const isCustomInteractionIdentifier = (identifier: string) =>
+export const isCustomInteractionIdentifier = (identifier: string, apiName?: string) =>
   identifier === UserInteractionIdentifier ||
   isHeteroInteractionIdentifier(identifier) ||
-  customInteractionSubmitHandlers.has(identifier);
+  Boolean(findCustomInteractionSubmitHandler(identifier, apiName));
 
 export const prepareCustomInteractionSubmit = async (
   identifier: string,

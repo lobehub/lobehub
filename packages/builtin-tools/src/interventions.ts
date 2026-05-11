@@ -36,7 +36,6 @@ import { type BuiltinIntervention } from '@lobechat/types';
  */
 export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInterventions,
-  [AgentMarketplaceManifest.identifier]: AgentMarketplaceInterventions,
   [ClaudeCodeIdentifier]: ClaudeCodeInterventions,
   [CloudSandboxManifest.identifier]: CloudSandboxInterventions,
   [GroupManagementManifest.identifier]: GroupManagementInterventions,
