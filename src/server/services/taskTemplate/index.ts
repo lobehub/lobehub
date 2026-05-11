@@ -9,6 +9,7 @@ import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
 
 export const RECOMMEND_COUNT = 3;
+export const RECOMMEND_COUNT_MAX = 20;
 
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();
@@ -79,13 +80,21 @@ export class TaskTemplateService {
   async listDailyRecommend(
     interestKeys: string[],
     options: {
+      count?: number;
       enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>;
       excludeIds?: string[];
       now?: Date;
       refreshSeed?: string;
     } = {},
   ): Promise<TaskTemplate[]> {
-    const { enabledSkillSources, excludeIds, now = new Date(), refreshSeed } = options;
+    const {
+      count = RECOMMEND_COUNT,
+      enabledSkillSources,
+      excludeIds,
+      now = new Date(),
+      refreshSeed,
+    } = options;
+    const limit = Math.max(1, Math.min(count, RECOMMEND_COUNT_MAX));
     const excluded = new Set(excludeIds ?? []);
     const seedBase = `${this.userId}:${getUtcDateStr(now)}`;
     const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);
@@ -96,8 +105,8 @@ export class TaskTemplateService {
     const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
     const result: TaskTemplate[] = [];
 
-    if (matched.length >= RECOMMEND_COUNT) {
-      result.push(...seededShuffle(matched, seed).slice(0, RECOMMEND_COUNT));
+    if (matched.length >= limit) {
+      result.push(...seededShuffle(matched, seed).slice(0, limit));
     } else {
       // Not enough interest matches: fold the fallback pool in so refreshSeed
       // can reorder the whole batch — otherwise a single-match interest pins
@@ -107,13 +116,13 @@ export class TaskTemplateService {
         (t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category) && !matchedIds.has(t.id),
       );
       const pool = [...matched, ...fallback];
-      result.push(...seededShuffle(pool, seed).slice(0, RECOMMEND_COUNT));
+      result.push(...seededShuffle(pool, seed).slice(0, limit));
     }
 
-    if (result.length < RECOMMEND_COUNT) {
+    if (result.length < limit) {
       const seen = new Set(result.map((t) => t.id));
       const remaining = candidates.filter((t) => !seen.has(t.id));
-      result.push(...seededShuffle(remaining, seed).slice(0, RECOMMEND_COUNT - result.length));
+      result.push(...seededShuffle(remaining, seed).slice(0, limit - result.length));
     }
 
     return result;

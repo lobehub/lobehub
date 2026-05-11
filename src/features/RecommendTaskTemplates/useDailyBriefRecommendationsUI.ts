@@ -29,7 +29,14 @@ export type DailyBriefRecommendationsUIState =
       templates: TaskTemplate[];
     };
 
-export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUIState {
+interface UseDailyBriefRecommendationsUIOptions {
+  count?: number;
+}
+
+export function useDailyBriefRecommendationsUI(
+  options: UseDailyBriefRecommendationsUIOptions = {},
+): DailyBriefRecommendationsUIState {
+  const { count } = options;
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -46,9 +53,12 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
   });
 
   const { data, isLoading, mutate } = useSWR(
-    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey, refreshSeed] : null,
+    swrEnabled ? ['taskTemplate.listDailyRecommend', swrKey, refreshSeed, count] : null,
     async () =>
-      taskTemplateService.listDailyRecommend(interestKeys ?? [], refreshSeed || undefined),
+      taskTemplateService.listDailyRecommend(interestKeys ?? [], {
+        count,
+        refreshSeed: refreshSeed || undefined,
+      }),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );
 

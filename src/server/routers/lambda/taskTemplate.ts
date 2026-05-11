@@ -3,9 +3,14 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { ENABLED_SKILL_SOURCES, TaskTemplateService } from '@/server/services/taskTemplate';
+import {
+  ENABLED_SKILL_SOURCES,
+  RECOMMEND_COUNT_MAX,
+  TaskTemplateService,
+} from '@/server/services/taskTemplate';
 
 const listDailyRecommendSchema = z.object({
+  count: z.number().int().min(1).max(RECOMMEND_COUNT_MAX).optional(),
   interestKeys: z.array(z.string().max(64)).max(32),
   refreshSeed: z.string().min(1).max(32).optional(),
 });
@@ -26,6 +31,7 @@ export const taskTemplateRouter = router({
       try {
         const service = new TaskTemplateService(ctx.userId);
         const data = await service.listDailyRecommend(input.interestKeys, {
+          count: input.count,
           enabledSkillSources: ENABLED_SKILL_SOURCES,
           refreshSeed: input.refreshSeed,
         });

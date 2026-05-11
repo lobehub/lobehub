@@ -25,10 +25,24 @@ interface CreateTaskInlineEntryProps {
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
   placeholder?: string;
+  /**
+   * `hero` adapts the entry for the empty-tasks landing: hides collapse,
+   * enlarges the editor area, and forces autoFocus.
+   */
+  variant?: 'default' | 'hero';
 }
 
 const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
-  const { agentId, autoFocus, onCollapse, onCreated, parentTaskId, placeholder } = props;
+  const {
+    agentId,
+    autoFocus,
+    onCollapse,
+    onCreated,
+    parentTaskId,
+    placeholder,
+    variant = 'default',
+  } = props;
+  const isHero = variant === 'hero';
   const { t } = useTranslation('chat');
 
   const createTask = useTaskStore((s) => s.createTask);
@@ -44,8 +58,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
   useEffect(() => {
-    if (autoFocus) editor?.focus?.();
-  }, [autoFocus, editor]);
+    if (autoFocus || isHero) editor?.focus?.();
+  }, [autoFocus, editor, isHero]);
 
   const handleCollapse = useCallback(() => {
     if (onCollapse) {
@@ -122,19 +136,30 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       variant={'outlined'}
       onKeyDown={handleKeyDown}
     >
-      <ActionIcon
-        icon={ChevronUp}
-        size={'small'}
-        style={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
-        title={t('createTask.collapse')}
-        onClick={handleCollapse}
-      />
-      <Flexbox style={{ fontSize: 14, padding: '12px 40px 0 16px' }}>
+      {!isHero && (
+        <ActionIcon
+          icon={ChevronUp}
+          size={'small'}
+          style={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
+          title={t('createTask.collapse')}
+          onClick={handleCollapse}
+        />
+      )}
+      <Flexbox
+        style={{
+          fontSize: isHero ? 16 : 14,
+          padding: isHero ? '20px 24px 4px' : '12px 40px 0 16px',
+        }}
+      >
         <EditorCanvas
           editor={editor}
           floatingToolbar={false}
           placeholder={placeholder ?? t('createTask.instructionPlaceholder')}
-          style={{ fontSize: 14, paddingBottom: 12 }}
+          style={{
+            fontSize: isHero ? 16 : 14,
+            minHeight: isHero ? 80 : undefined,
+            paddingBottom: isHero ? 16 : 12,
+          }}
           onContentChange={handleContentChange}
         />
       </Flexbox>
