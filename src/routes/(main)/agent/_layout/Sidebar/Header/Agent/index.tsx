@@ -55,10 +55,7 @@ const Agent = memo<PropsWithChildren>(() => {
         </Text>
         <ActionIcon
           icon={ChevronsUpDownIcon}
-          size={{
-            blockSize: 28,
-            size: 16,
-          }}
+          size={'small'}
           style={{
             width: 24,
           }}

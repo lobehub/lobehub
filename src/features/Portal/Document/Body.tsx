@@ -57,11 +57,6 @@ const styles = createStaticStyles(({ css }) => ({
   textArea: css`
     font-family: ${cssVar.fontFamilyCode};
   `,
-  todoContainer: css`
-    flex-shrink: 0;
-    padding-block-end: 12px;
-    padding-inline: 12px;
-  `,
 }));
 
 interface SkillFrontmatterBlockProps {
@@ -212,9 +207,7 @@ const DocumentBody = memo(() => {
         )}
         <EditorCanvas />
       </div>
-      <div className={styles.todoContainer}>
-        <TodoList />
-      </div>
+      <TodoList />
     </Flexbox>
   );
 });
