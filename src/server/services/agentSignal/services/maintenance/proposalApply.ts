@@ -155,7 +155,47 @@ const prepareToolAction = (
   input: ApplyMaintenanceProposalInput,
   adapters: MaintenanceProposalApplyAdapters,
 ): MaintenanceProposalActionApplyResult | PreparedToolAction => {
-  if (action.actionType === 'consolidate_skill') return buildUnsupportedResult(action);
+  if (action.actionType === 'consolidate_skill') {
+    if (
+      action.operation?.domain !== 'skill' ||
+      action.operation.operation !== 'consolidate' ||
+      !action.baseSnapshot
+    ) {
+      return toApplyResult(
+        action,
+        'skipped_unsupported',
+        'Proposal action is missing an executable operation.',
+      );
+    }
+
+    const operationInput = action.operation.input as unknown as Record<string, unknown>;
+    const bodyMarkdown = getRequiredString(operationInput.bodyMarkdown);
+    const canonicalSkillDocumentId = getRequiredString(operationInput.canonicalSkillDocumentId);
+    const description = getOptionalString(operationInput.description);
+
+    if (!bodyMarkdown || !canonicalSkillDocumentId) {
+      return toApplyResult(
+        action,
+        'skipped_unsupported',
+        'Proposal action is missing an executable operation.',
+      );
+    }
+
+    return {
+      action,
+      apply: () =>
+        adapters.tools.replaceSkillContentCAS({
+          baseSnapshot: action.baseSnapshot!,
+          bodyMarkdown,
+          ...(description ? { description } : {}),
+          idempotencyKey: action.idempotencyKey,
+          proposalKey: input.proposal.proposalKey,
+          skillDocumentId: canonicalSkillDocumentId,
+          summary: action.rationale,
+          userId: input.userId,
+        }),
+    };
+  }
 
   if (action.actionType === 'refine_skill') {
     if (
