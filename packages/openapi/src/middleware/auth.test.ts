@@ -4,6 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { requireAuth, userAuthMiddleware } from './auth';
 
+interface TestHonoEnv {
+  Variables: {
+    authData: unknown;
+    authorizationHeader: string | null;
+    authType: string | null;
+    userId: string | null;
+  };
+}
+
 const {
   mockAssertOIDCUserActive,
   mockAuthEnv,
@@ -51,7 +60,7 @@ vi.mock('@/utils/server/auth', () => ({
 }));
 
 const createApp = () => {
-  const app = new Hono();
+  const app = new Hono<TestHonoEnv>();
 
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();

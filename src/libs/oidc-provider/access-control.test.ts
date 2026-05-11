@@ -25,9 +25,15 @@ describe('OIDC access control', () => {
     it('deletes all token and session artifacts for a user', async () => {
       const where = vi.fn().mockResolvedValue({ rowCount: 1 });
       const delete_ = vi.fn(() => ({ where }));
-      const tx = { delete: delete_ };
+      interface TestTransaction {
+        delete: typeof delete_;
+      }
+
+      const tx: TestTransaction = { delete: delete_ };
       const db = {
-        transaction: vi.fn(async (callback: (tx: typeof tx) => Promise<void>) => callback(tx)),
+        transaction: vi.fn(async (callback: (transaction: TestTransaction) => Promise<void>) =>
+          callback(tx),
+        ),
       };
 
       await revokeOIDCArtifactsByUserId(
