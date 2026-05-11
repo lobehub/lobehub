@@ -12,7 +12,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   container: css`
-    overflow: hidden;
     margin-block-end: 12px;
   `,
   content: css`
