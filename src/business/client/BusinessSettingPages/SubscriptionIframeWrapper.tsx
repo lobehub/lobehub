@@ -146,16 +146,20 @@ export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({
   }
 
   return (
-    <webview
-      partition={PARTITION_ID}
-      ref={webviewRef}
-      src={iframeUrl}
-      style={{
-        border: 0,
-        inset: 0,
-        position: 'absolute',
-      }}
-    />
+    <div style={{ height: '100%', position: 'relative', width: '100%' }}>
+      <webview
+        partition={PARTITION_ID}
+        ref={webviewRef}
+        src={iframeUrl}
+        style={{
+          border: 0,
+          height: '100%',
+          inset: 0,
+          position: 'absolute',
+          width: '100%',
+        }}
+      />
+    </div>
   );
 });
 
