@@ -4,7 +4,7 @@ import os from 'node:os';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellProcess, ShellProcessManager } from './process-manager';
-import { getShellConfig, truncateOutput } from './utils';
+import { expandEnvVars, getShellConfig, truncateOutput } from './utils';
 
 export interface RunCommandOptions {
   logger?: {
@@ -34,7 +34,8 @@ export async function runCommand(
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
   const effectiveTimeout = Math.min(Math.max(timeout, 1000), 600_000);
-  const shellConfig = getShellConfig(command);
+  const expandedCommand = expandEnvVars(command);
+  const shellConfig = getShellConfig(expandedCommand);
   const childEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
 
   try {
