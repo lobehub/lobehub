@@ -2,6 +2,20 @@
 
 Use this guide for **GitHub Release notes** — the body of a release PR that becomes the GitHub Release after merge. Do **not** use it for `docs/changelog/*.mdx` website pages (load `../../docs-changelog/SKILL.md` instead).
 
+## Table of Contents
+
+1. [Positioning](#positioning) — what this style optimizes for
+2. [Required Inputs Before Writing](#required-inputs-before-writing)
+3. [Computing Inputs (Hard Rules — Verify, Never Guess)](#computing-inputs-hard-rules--verify-never-guess) — base ref, PR refs, metrics, authors, pre-publish verification
+4. [Canonical Structure (Long-Form: Minor / Weekly)](#canonical-structure-long-form-minor--weekly)
+5. [Variants for Shorter Releases](#variants-for-shorter-releases) — hotfix, DB migration
+6. [Writing Rules (Hard)](#writing-rules-hard)
+7. [Style Rules (Long-Form)](#style-rules-long-form)
+8. [Release Size Heuristics](#release-size-heuristics) — when to use which variant
+9. [Contributor Ordering](#contributor-ordering)
+10. [Template](#template) — copy-paste skeleton
+11. [Quick Checklist](#quick-checklist) — long-form + hotfix
+
 ## Positioning
 
 This release-note style is:
