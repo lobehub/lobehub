@@ -1,11 +1,12 @@
 'use client';
 
+import type { ActionIconProps } from '@lobehub/ui';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { type BreadcrumbProps } from 'antd';
+import type { BreadcrumbProps } from 'antd';
 import { Breadcrumb } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
-import { type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +18,7 @@ import BackButton from './components/BackButton';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
 const prefixCls = 'ant';
+const SIDEBAR_HEADER_ACTION_ICON_SIZE: ActionIconProps['size'] = 'small';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
@@ -73,15 +75,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           overflow: 'hidden',
         }}
       >
-        {showBack && (
-          <BackButton
-            to={backTo}
-            size={{
-              blockSize: 32,
-              size: 16,
-            }}
-          />
-        )}
+        {showBack && <BackButton size={SIDEBAR_HEADER_ACTION_ICON_SIZE} to={backTo} />}
         {left && typeof left === 'string' ? (
           <Text ellipsis fontSize={16} weight={500}>
             {left}
@@ -129,7 +123,9 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
       >
         {leftContent}
         <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'}>
-          {showTogglePanelButton && <ToggleLeftPanelButton />}
+          {showTogglePanelButton && (
+            <ToggleLeftPanelButton size={SIDEBAR_HEADER_ACTION_ICON_SIZE} />
+          )}
           {right}
         </Flexbox>
       </Flexbox>

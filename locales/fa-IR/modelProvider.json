@@ -227,6 +227,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "برای سری GPT-5.2 Pro؛ شدت استدلال را کنترل می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "برای سری GPT-5.2؛ شدت استدلال را کنترل می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "برای سری Grok 4.20؛ شدت استدلال را کنترل می‌کند. کم/متوسط از ۴ عامل استفاده می‌کند، زیاد/خیلی زیاد از ۱۶ عامل استفاده می‌کند.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "برای سری Grok 4.3؛ شدت استدلال را کنترل می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "برای مدل‌های Hy3؛ شدت استدلال را کنترل می‌کند. no_think (پاسخ فوق‌سریع)، low (استدلال سریع) و high (استدلال عمیق)—برای پوشش نیازهای مختلف از تعاملات با بسامد بالا تا وظایف مهندسی پیچیده.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "برای مدل‌های تولید تصویر Gemini؛ نسبت تصویر خروجی را کنترل می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "برای نانو بانانا ۲؛ نسبت ابعاد تصاویر تولید شده را کنترل می‌کند (پشتیبانی از فوق‌العاده عریض ۱:۴، ۴:۱، ۱:۸، ۸:۱).",

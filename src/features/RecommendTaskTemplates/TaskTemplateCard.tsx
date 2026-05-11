@@ -1,44 +1,22 @@
 import type { TaskTemplate } from '@lobechat/const';
-import { formatScheduleTime, parseCronPattern, WEEKDAY_I18N_KEYS } from '@lobechat/utils/cron';
-import { ActionIcon, Block, Button, Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { App, Divider } from 'antd';
+import { ActionIcon, Block, Button, Center, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
-import { Clock, Link2, type LucideIcon, Sparkles, X } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { Clock, X } from 'lucide-react';
+import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
-import { INTEREST_AREAS } from '@/routes/onboarding/config';
-import { taskTemplateService } from '@/services/taskTemplate';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useTaskStore } from '@/store/task';
 
+import { resolveTemplateIcon } from './resolveTemplateIcon';
+import { SkillAuthRow } from './SkillAuthRow';
 import { styles } from './style';
-import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
-
-const INTEREST_ICON_MAP = new Map<string, LucideIcon>(INTEREST_AREAS.map((a) => [a.key, a.icon]));
-
-interface TemplateBriefIconProps {
-  icon: LucideIcon;
-}
-
-/** Same 28×28 tile treatment as {@link BriefIcon} (insight palette). */
-const TemplateBriefIcon = memo<TemplateBriefIconProps>(({ icon }) => (
-  <Block
-    align={'center'}
-    height={28}
-    justify={'center'}
-    style={{ background: cssVar.colorFillSecondary, flexShrink: 0 }}
-    width={28}
-  >
-    <Icon color={cssVar.colorTextSecondary} icon={icon} size={28 * 0.6} />
-  </Block>
-));
-
-TemplateBriefIcon.displayName = 'TemplateBriefIcon';
+import { createTaskTemplateDetailModal } from './TaskTemplateDetailModal';
+import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
+import { useScheduleText } from './useScheduleText';
+import { useTaskTemplateCreate } from './useTaskTemplateCreate';
+import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateCardProps {
   onCreated: (templateId: string) => void;
@@ -49,143 +27,56 @@ interface TaskTemplateCardProps {
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
   ({ template, onCreated, onDismiss }) => {
     const { t } = useTranslation('taskTemplate');
-    const { t: tSetting } = useTranslation('setting');
-    const { message } = App.useApp();
-    const [loading, setLoading] = useState(false);
-    const [created, setCreated] = useState(false);
-    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-    const createTask = useTaskStore((s) => s.createTask);
-    const navigate = useNavigate();
 
-    const skillConnection = useSkillConnection(template.requiresSkills);
-    const optionalSkillConnection = useSkillConnection(template.optionalSkills);
-    const showOptionalHint =
-      !skillConnection.needsConnect &&
-      optionalSkillConnection.needsConnect &&
-      !!optionalSkillConnection.nextUnconnected;
-
-    const IconComp = INTEREST_ICON_MAP.get(template.interests[0]) ?? Sparkles;
+    const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
+    const visibleAuthSpecs = useVisibleAuthSpecs(template, { hideMainIconProvider: true });
     const title = t(`${template.id}.title`, { defaultValue: '' });
     const description = t(`${template.id}.description`, { defaultValue: '' });
 
-    const scheduleText = useMemo(() => {
-      const parsed = parseCronPattern(template.cronPattern);
-      const time = formatScheduleTime(parsed.triggerHour, parsed.triggerMinute);
-      if (parsed.scheduleType === 'weekly' && parsed.weekdays?.length === 1) {
-        const weekday = tSetting(`agentCronJobs.weekday.${WEEKDAY_I18N_KEYS[parsed.weekdays[0]]}`);
-        return t('schedule.weekly', { time, weekday });
-      }
-      return t('schedule.daily', { time });
-    }, [t, tSetting, template.cronPattern]);
+    const {
+      created,
+      disabled,
+      handleAddTask,
+      handleConnectError,
+      loading,
+      pendingCreate,
+      primaryButtonLabel,
+    } = useTaskTemplateCreate({ description, onCreated, template, title });
 
-    const handleCreate = useCallback(async () => {
-      if (!inboxAgentId) return;
-      setLoading(true);
-      try {
-        const prompt = t(`${template.id}.prompt`, { defaultValue: '' });
-        const createdTask = await createTask({
-          assigneeAgentId: inboxAgentId,
-          automationMode: 'schedule',
-          instruction: prompt,
-          name: title,
-          schedulePattern: template.cronPattern,
-          scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        });
-        await taskTemplateService.recordCreated(template.id).catch((recordError) => {
-          console.error('[taskTemplate:recordCreated]', recordError);
-        });
-        setCreated(true);
-        onCreated(template.id);
-        if (createdTask?.identifier) {
-          navigate(`/task/${createdTask.identifier}`);
-        }
-      } catch (error) {
-        console.error('[taskTemplate:create]', error);
-        message.error(t('action.create.error'));
-      } finally {
-        setLoading(false);
-      }
-    }, [
-      createTask,
-      inboxAgentId,
-      message,
-      navigate,
-      onCreated,
-      t,
-      template.cronPattern,
-      template.id,
-      title,
-    ]);
+    const scheduleText = useScheduleText(template.cronPattern);
 
-    const handleDismiss = useCallback(() => {
-      if (loading || created) return;
-      onDismiss(template.id);
-    }, [created, loading, onDismiss, template.id]);
-
-    const handleConnectError = useCallback(
-      (error: unknown) => {
-        message.error(
-          error instanceof SkillConnectionPopupBlockedError
-            ? t('action.connect.popupBlocked')
-            : t('action.connect.error'),
-        );
+    const handleDismiss = useCallback(
+      (event: MouseEvent) => {
+        event.stopPropagation();
+        if (loading || created) return;
+        onDismiss(template.id);
       },
-      [message, t],
+      [created, loading, onDismiss, template.id],
     );
 
-    const handleConnectRequired = useCallback(async () => {
-      try {
-        await skillConnection.connect();
-      } catch (error) {
-        handleConnectError(error);
-      }
-    }, [skillConnection, handleConnectError]);
+    const handleOpenDetail = useCallback(() => {
+      createTaskTemplateDetailModal({ onCreated, template });
+    }, [onCreated, template]);
 
-    const handleConnectOptional = useCallback(async () => {
-      try {
-        await optionalSkillConnection.connect();
-      } catch (error) {
-        handleConnectError(error);
-      }
-    }, [optionalSkillConnection, handleConnectError]);
+    const handlePrimaryClick = useCallback(
+      (event: MouseEvent) => {
+        event.stopPropagation();
+        handleAddTask();
+      },
+      [handleAddTask],
+    );
 
-    const primaryButton =
-      skillConnection.needsConnect && skillConnection.nextUnconnected ? (
-        <Button
-          className={briefStyles.actionBtnPrimary}
-          loading={skillConnection.isConnecting}
-          shape={'round'}
-          variant={'filled'}
-          onClick={handleConnectRequired}
-        >
-          {t('action.connect.button', { provider: skillConnection.nextUnconnected.label })}
-        </Button>
-      ) : (
-        <Button
-          shadow
-          className={briefStyles.actionBtnPrimary}
-          disabled={created || !inboxAgentId}
-          loading={loading}
-          shape={'round'}
-          onClick={handleCreate}
-        >
-          {loading ? t('action.creating') : t('action.createButton')}
-        </Button>
-      );
-
-    const hintNode = showOptionalHint && optionalSkillConnection.nextUnconnected && (
-      <button
-        className={`${styles.meta} ${styles.optionalHintBtn}`}
-        type={'button'}
-        onClick={handleConnectOptional}
+    const primaryButton = (
+      <Button
+        shadow
+        className={briefStyles.actionBtnPrimary}
+        disabled={disabled}
+        loading={loading || pendingCreate}
+        shape={'round'}
+        onClick={handlePrimaryClick}
       >
-        <Icon icon={Link2} size={12} />
-        <Text fontSize={12} style={{ color: 'inherit' }}>
-          {t('action.optionalConnect.button', {
-            provider: optionalSkillConnection.nextUnconnected.label,
-          })}
-        </Text>
-      </button>
+        {primaryButtonLabel}
+      </Button>
     );
 
     return (
@@ -193,8 +84,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         className={cx(briefStyles.card, styles.card)}
         gap={12}
         padding={12}
-        style={{ borderRadius: cssVar.borderRadiusLG }}
+        style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}
         variant={'outlined'}
+        onClick={handleOpenDetail}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
           <Flexbox
@@ -203,7 +95,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             gap={8}
             style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
           >
-            <TemplateBriefIcon icon={IconComp} />
+            <TemplateBriefIcon spec={iconSpec} />
             <Flexbox
               horizontal
               align={'center'}
@@ -239,12 +131,22 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         </Flexbox>
         <Divider dashed style={{ marginBlock: 0 }} />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
+        {visibleAuthSpecs.length > 0 && (
+          <Flexbox gap={6} onClick={(e) => e.stopPropagation()}>
+            {visibleAuthSpecs.map((spec) => (
+              <SkillAuthRow
+                key={`${spec.source}:${spec.provider}`}
+                spec={spec}
+                onError={handleConnectError}
+              />
+            ))}
+          </Flexbox>
+        )}
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Tag size={'small'} variant={'outlined'}>
               {t('card.templateTag')}
             </Tag>
-            {hintNode}
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             {primaryButton}

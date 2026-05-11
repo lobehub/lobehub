@@ -9,6 +9,7 @@ import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
 
 export const RECOMMEND_COUNT = 3;
+export const RECOMMEND_COUNT_MAX = 20;
 
 export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
   const sources = new Set<TaskTemplateSkillSource>();
@@ -79,30 +80,50 @@ export class TaskTemplateService {
   async listDailyRecommend(
     interestKeys: string[],
     options: {
+      count?: number;
       enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>;
       excludeIds?: string[];
       now?: Date;
+      refreshSeed?: string;
     } = {},
   ): Promise<TaskTemplate[]> {
-    const { enabledSkillSources, excludeIds, now = new Date() } = options;
+    const {
+      count = RECOMMEND_COUNT,
+      enabledSkillSources,
+      excludeIds,
+      now = new Date(),
+      refreshSeed,
+    } = options;
+    const limit = Math.max(1, Math.min(count, RECOMMEND_COUNT_MAX));
     const excluded = new Set(excludeIds ?? []);
-    const seed = hashString(`${this.userId}:${getUtcDateStr(now)}`);
+    const seedBase = `${this.userId}:${getUtcDateStr(now)}`;
+    const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);
 
     const candidates = taskTemplates.filter(
       (t) => !excluded.has(t.id) && isTemplateSkillSourceEligible(t, enabledSkillSources),
     );
     const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
-    const result: TaskTemplate[] = seededShuffle(matched, seed).slice(0, RECOMMEND_COUNT);
+    const result: TaskTemplate[] = [];
 
-    const takeFrom = (pool: TaskTemplate[]) => {
-      if (result.length >= RECOMMEND_COUNT) return;
+    if (matched.length >= limit) {
+      result.push(...seededShuffle(matched, seed).slice(0, limit));
+    } else {
+      // Not enough interest matches: fold the fallback pool in so refreshSeed
+      // can reorder the whole batch — otherwise a single-match interest pins
+      // that template to position 0 forever.
+      const matchedIds = new Set(matched.map((t) => t.id));
+      const fallback = candidates.filter(
+        (t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category) && !matchedIds.has(t.id),
+      );
+      const pool = [...matched, ...fallback];
+      result.push(...seededShuffle(pool, seed).slice(0, limit));
+    }
+
+    if (result.length < limit) {
       const seen = new Set(result.map((t) => t.id));
-      const remaining = pool.filter((t) => !seen.has(t.id));
-      result.push(...seededShuffle(remaining, seed).slice(0, RECOMMEND_COUNT - result.length));
-    };
-
-    takeFrom(candidates.filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)));
-    takeFrom(candidates);
+      const remaining = candidates.filter((t) => !seen.has(t.id));
+      result.push(...seededShuffle(remaining, seed).slice(0, limit - result.length));
+    }
 
     return result;
   }

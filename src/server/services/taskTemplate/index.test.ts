@@ -120,6 +120,78 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     expect(picked.map((t) => t.id).sort()).toEqual([...keepIds].sort());
   });
+
+  it('matches baseline when refreshSeed is undefined', async () => {
+    const service = new TaskTemplateService('user-1');
+    const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
+    const withUndefined = await service.listDailyRecommend(['coding'], {
+      now: UTC_DAY_1,
+      refreshSeed: undefined,
+    });
+    const withEmpty = await service.listDailyRecommend(['coding'], {
+      now: UTC_DAY_1,
+      refreshSeed: '',
+    });
+
+    expect(withUndefined.map((t) => t.id)).toEqual(baseline.map((t) => t.id));
+    expect(withEmpty.map((t) => t.id)).toEqual(baseline.map((t) => t.id));
+  });
+
+  it('is stable for the same (userId, utcDay, refreshSeed)', async () => {
+    const service = new TaskTemplateService('user-1');
+    const a = await service.listDailyRecommend(['coding'], {
+      now: UTC_DAY_1,
+      refreshSeed: 'seed-x',
+    });
+    const b = await service.listDailyRecommend(['coding'], {
+      now: new Date('2026-04-24T23:59:00Z'), // same UTC day
+      refreshSeed: 'seed-x',
+    });
+    expect(a.map((t) => t.id)).toEqual(b.map((t) => t.id));
+  });
+
+  it('differs when refreshSeed changes', async () => {
+    const service = new TaskTemplateService('user-1');
+    const seeds = ['s1', 's2', 's3', 's4', 's5'];
+    const results = await Promise.all(
+      seeds.map((s) =>
+        service
+          .listDailyRecommend([], { now: UTC_DAY_1, refreshSeed: s })
+          .then((r) => r.map((t) => t.id).join(',')),
+      ),
+    );
+    expect(new Set(results).size).toBeGreaterThan(1);
+  });
+
+  it('refreshSeed does not bypass excludeIds', async () => {
+    const service = new TaskTemplateService('user-1');
+    const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
+    const excludedId = baseline[0].id;
+
+    for (const seed of ['s1', 's2', 's3']) {
+      const picked = await service.listDailyRecommend(['coding'], {
+        excludeIds: [excludedId],
+        now: UTC_DAY_1,
+        refreshSeed: seed,
+      });
+      expect(picked.some((t) => t.id === excludedId)).toBe(false);
+    }
+  });
+
+  it('changes the first item across refreshSeeds when matched candidates are fewer than RECOMMEND_COUNT', async () => {
+    // Repro for: `health` interest matches only one template (`diet-log-companion`),
+    // so the legacy "matched-first" logic locked it to position 0 regardless of seed.
+    const service = new TaskTemplateService('user-1');
+    const firstItems = new Set<string>();
+    for (const seed of ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']) {
+      const picked = await service.listDailyRecommend(['health'], {
+        now: UTC_DAY_1,
+        refreshSeed: seed,
+      });
+      firstItems.add(picked[0]?.id ?? '');
+    }
+    expect(firstItems.size).toBeGreaterThan(1);
+  });
 });
 
 describe('isTemplateSkillSourceEligible', () => {
