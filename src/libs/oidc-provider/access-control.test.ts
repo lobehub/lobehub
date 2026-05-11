@@ -10,7 +10,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertOIDCUserActive,
+  isOIDCUserInactiveError,
   OIDC_USER_INACTIVE_ERROR_MESSAGE,
+  OIDCUserInactiveError,
   revokeOIDCArtifactsByUserId,
 } from './access-control';
 
@@ -73,10 +75,13 @@ describe('OIDC access control', () => {
 
     it('rejects a permanently banned user', async () => {
       const { db } = createDb([{ banExpires: null, banned: true, id: 'user-1' }]);
+      const promise = assertOIDCUserActive(
+        db as unknown as Parameters<typeof assertOIDCUserActive>[0],
+        'user-1',
+      );
 
-      await expect(
-        assertOIDCUserActive(db as unknown as Parameters<typeof assertOIDCUserActive>[0], 'user-1'),
-      ).rejects.toMatchObject({
+      await expect(promise).rejects.toBeInstanceOf(OIDCUserInactiveError);
+      await expect(promise).rejects.toMatchObject({
         code: 'UNAUTHORIZED',
         message: OIDC_USER_INACTIVE_ERROR_MESSAGE,
       });
@@ -117,6 +122,11 @@ describe('OIDC access control', () => {
         code: 'UNAUTHORIZED',
         message: OIDC_USER_INACTIVE_ERROR_MESSAGE,
       });
+    });
+
+    it('identifies the domain inactive-user error', () => {
+      expect(isOIDCUserInactiveError(new OIDCUserInactiveError())).toBe(true);
+      expect(isOIDCUserInactiveError(new Error(OIDC_USER_INACTIVE_ERROR_MESSAGE))).toBe(false);
     });
   });
 });

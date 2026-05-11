@@ -1,4 +1,3 @@
-import { TRPCError } from '@trpc/server';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -103,9 +102,8 @@ describe('OpenAPI auth middleware', () => {
 
   it('should reject an inactive OIDC bearer token without authenticating the request', async () => {
     const app = createApp();
-    const inactiveError = new TRPCError({
+    const inactiveError = Object.assign(new Error('OIDC user is no longer active'), {
       code: 'UNAUTHORIZED',
-      message: 'OIDC user is no longer active',
     });
     mockValidateOIDCJWT.mockResolvedValueOnce({
       tokenData: { sub: 'banned-user' },

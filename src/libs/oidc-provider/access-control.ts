@@ -8,15 +8,20 @@ import {
   oidcSessions,
   users,
 } from '@lobechat/database/schemas';
-import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 
 export const OIDC_USER_INACTIVE_ERROR_MESSAGE = 'OIDC user is no longer active';
 
-export const isOIDCUserInactiveError = (error: unknown) =>
-  error instanceof TRPCError &&
-  error.code === 'UNAUTHORIZED' &&
-  error.message === OIDC_USER_INACTIVE_ERROR_MESSAGE;
+export class OIDCUserInactiveError extends Error {
+  readonly code = 'UNAUTHORIZED';
+
+  constructor() {
+    super(OIDC_USER_INACTIVE_ERROR_MESSAGE);
+    this.name = 'OIDCUserInactiveError';
+  }
+}
+
+export const isOIDCUserInactiveError = (error: unknown) => error instanceof OIDCUserInactiveError;
 
 interface OIDCUserBanState {
   banExpires: Date | null;
@@ -67,9 +72,6 @@ export const assertOIDCUserActive = async (db: LobeChatDatabase, userId: string)
     .limit(1);
 
   if (!user || isOIDCUserBanned(user)) {
-    throw new TRPCError({
-      code: 'UNAUTHORIZED',
-      message: OIDC_USER_INACTIVE_ERROR_MESSAGE,
-    });
+    throw new OIDCUserInactiveError();
   }
 };
