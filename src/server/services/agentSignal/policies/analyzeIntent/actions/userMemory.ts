@@ -26,9 +26,9 @@ import { AgentService } from '@/server/services/agent';
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
 import {
-  createMemoryMaintenanceService,
-  MemoryMaintenanceActionError,
-} from '../../../services/maintenance/memory';
+  createMemoryService,
+  MemoryActionError,
+} from '../../../services/selfIteration/tools/shared';
 import { hasAppliedActionIdempotency, markAppliedActionIdempotency } from '../../actionIdempotency';
 import type {
   ActionUserMemoryHandle,
@@ -421,7 +421,7 @@ export const handleUserMemoryAction = async (
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
     const runner = options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options));
-    const memoryService = createMemoryMaintenanceService({
+    const memoryService = createMemoryService({
       writeMemory: async () => {
         const result = await runner(runnerInput);
 
@@ -432,7 +432,7 @@ export const handleUserMemoryAction = async (
           };
         }
 
-        throw new MemoryMaintenanceActionError(
+        throw new MemoryActionError(
           result.detail ?? 'Memory action agent did not apply a durable memory write.',
           result.status,
         );
@@ -453,7 +453,7 @@ export const handleUserMemoryAction = async (
         status: 'applied',
       }))
       .catch((error: unknown): MemoryAgentActionResult => {
-        if (error instanceof MemoryMaintenanceActionError) {
+        if (error instanceof MemoryActionError) {
           return {
             detail: error.message,
             status: error.status,

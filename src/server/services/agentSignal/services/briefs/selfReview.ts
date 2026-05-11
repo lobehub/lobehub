@@ -4,38 +4,38 @@ import type { BriefItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AGENT_SIGNAL_DEFAULTS } from '@/server/services/agentSignal/constants';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
+import { persistAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
 import {
-  createBriefMaintenanceService,
+  createBriefSelfReviewService,
   getNightlySelfReviewBriefMetadata,
   NIGHTLY_REVIEW_BRIEF_TRIGGER,
-} from '@/server/services/agentSignal/services/maintenance/brief';
-import type { MaintenanceProposalMetadata } from '@/server/services/agentSignal/services/maintenance/proposal';
-import { getMaintenanceProposalFromBriefMetadata } from '@/server/services/agentSignal/services/maintenance/proposal';
-import { createMaintenanceProposalApplyService } from '@/server/services/agentSignal/services/maintenance/proposalApply';
-import { createMaintenanceProposalPreflightService } from '@/server/services/agentSignal/services/maintenance/proposalPreflight';
+} from '@/server/services/agentSignal/services/selfIteration/review/brief';
+import type { SelfReviewProposalMetadata } from '@/server/services/agentSignal/services/selfIteration/review/proposal';
+import { getSelfReviewProposalFromBriefMetadata } from '@/server/services/agentSignal/services/selfIteration/review/proposal';
+import { createSelfReviewProposalApplyService } from '@/server/services/agentSignal/services/selfIteration/review/proposalApply';
+import { createSelfReviewProposalPreflightService } from '@/server/services/agentSignal/services/selfIteration/review/proposalPreflight';
 import {
-  createMaintenanceTools,
-  type MaintenanceToolOperationReservation,
-  type MaintenanceToolReceiptInput,
-  type MaintenanceToolWriteResult,
-} from '@/server/services/agentSignal/services/maintenance/tools';
-import { MaintenanceRisk } from '@/server/services/agentSignal/services/maintenance/types';
-import { persistAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
+  createToolSet,
+  type OperationReservation,
+  type ToolReceiptInput,
+  type ToolWriteResult,
+} from '@/server/services/agentSignal/services/selfIteration/tools/shared';
+import { Risk } from '@/server/services/agentSignal/services/selfIteration/types';
 import { redisSourceEventStore } from '@/server/services/agentSignal/store/adapters/redis/sourceEventStore';
 import type { BriefResolveOptions } from '@/server/services/brief';
 import { BriefService } from '@/server/services/brief';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement/SkillManagementDocumentService';
 
-export interface MaintenanceProposalBriefResolutionInput {
+export interface SelfReviewProposalBriefResolutionInput {
   /** User action requested by the Daily Brief card. */
   action: 'approve' | 'dismiss';
   /** Brief row that stores the pending proposal metadata. */
   brief: BriefItem;
   /** Frozen proposal metadata extracted from the brief. */
-  proposal: MaintenanceProposalMetadata;
+  proposal: SelfReviewProposalMetadata;
 }
 
-export interface MaintenanceProposalBriefResolutionResult {
+export interface SelfReviewProposalBriefResolutionResult {
   /** Latest brief row after proposal metadata updates. */
   brief: BriefItem | null;
   /** Resolution action to store when it differs from the requested action. */
@@ -46,9 +46,9 @@ export interface MaintenanceProposalBriefResolutionResult {
 
 export interface AgentSignalSelfReviewBriefServiceOptions {
   /** Optional override used by tests or alternate runtimes for Agent Signal proposal approval. */
-  maintenanceProposalResolver?: (
-    input: MaintenanceProposalBriefResolutionInput,
-  ) => Promise<MaintenanceProposalBriefResolutionResult>;
+  selfReviewProposalResolver?: (
+    input: SelfReviewProposalBriefResolutionInput,
+  ) => Promise<SelfReviewProposalBriefResolutionResult>;
 }
 
 const asMetadataRecord = (metadata: unknown): Record<string, unknown> =>
@@ -56,22 +56,22 @@ const asMetadataRecord = (metadata: unknown): Record<string, unknown> =>
     ? (metadata as Record<string, unknown>)
     : {};
 
-const MAINTENANCE_OPERATION_STATE_TTL_SECONDS = AGENT_SIGNAL_DEFAULTS.receiptTtlSeconds;
-const MAINTENANCE_PROPOSAL_APPROVED_SOURCE_TYPE = 'agent.maintenance_proposal.approved';
+const SELF_ITERATION_OPERATION_STATE_TTL_SECONDS = AGENT_SIGNAL_DEFAULTS.receiptTtlSeconds;
+const SELF_REVIEW_PROPOSAL_APPROVED_SOURCE_TYPE = 'agent.self_review_proposal.approved';
 
-const maintenanceOperationScopeKey = (idempotencyKey: string) =>
-  `maintenance-operation:${idempotencyKey}`;
+const selfIterationOperationScopeKey = (idempotencyKey: string) =>
+  `self-iteration-operation:${idempotencyKey}`;
 
-const maintenanceOperationReserveKey = (idempotencyKey: string) =>
-  `maintenance-operation-reserve:${idempotencyKey}`;
+const selfIterationOperationReserveKey = (idempotencyKey: string) =>
+  `self-iteration-operation-reserve:${idempotencyKey}`;
 
 const parseStoredOperationResult = (
   payload: Record<string, string> | undefined,
-): MaintenanceToolWriteResult | undefined => {
+): ToolWriteResult | undefined => {
   if (!payload?.result) return;
 
   try {
-    const result = JSON.parse(payload.result) as MaintenanceToolWriteResult;
+    const result = JSON.parse(payload.result) as ToolWriteResult;
 
     if (
       result.status === 'applied' ||
@@ -88,14 +88,14 @@ const parseStoredOperationResult = (
   }
 };
 
-const createSkippedOperationResult = (): MaintenanceToolWriteResult => ({
+const createSkippedOperationResult = (): ToolWriteResult => ({
   status: 'skipped_unsupported',
   summary:
-    'Maintenance operation is already reserved or Redis is unavailable; skipped to avoid duplicate mutation.',
+    'Self-iteration operation is already reserved or Redis is unavailable; skipped to avoid duplicate mutation.',
 });
 
 const getToolReceiptStatus = (
-  status: MaintenanceToolReceiptInput['status'],
+  status: ToolReceiptInput['status'],
 ): 'applied' | 'failed' | 'proposed' | 'skipped' => {
   if (status === 'applied') return 'applied';
   if (status === 'failed') return 'failed';
@@ -108,7 +108,7 @@ const getToolReceiptStatus = (
  * Resolves Agent Signal self-review Daily Brief actions.
  *
  * Use when:
- * - API boundaries resolve Daily Briefs that may contain Agent Signal maintenance proposals
+ * - API boundaries resolve Daily Briefs that may contain Agent Signal self-review proposals
  * - Approve/dismiss must run self-review proposal preflight before normal brief resolution
  *
  * Expects:
@@ -122,14 +122,14 @@ const getToolReceiptStatus = (
  *
  * briefRouter.resolve
  *   -> {@link AgentSignalSelfReviewBriefService.resolve}
- *     -> {@link AgentSignalSelfReviewBriefService.resolveMaintenanceProposalIfPending}
+ *     -> {@link AgentSignalSelfReviewBriefService.resolveSelfReviewProposalIfPending}
  *       -> {@link BriefService.resolve}
  */
 export class AgentSignalSelfReviewBriefService {
   private briefService: BriefService;
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
-  private maintenanceProposalResolver?: AgentSignalSelfReviewBriefServiceOptions['maintenanceProposalResolver'];
+  private selfReviewProposalResolver?: AgentSignalSelfReviewBriefServiceOptions['selfReviewProposalResolver'];
   private userId: string;
 
   constructor(
@@ -141,7 +141,7 @@ export class AgentSignalSelfReviewBriefService {
     this.userId = userId;
     this.briefService = new BriefService(db, userId);
     this.briefModel = new BriefModel(db, userId);
-    this.maintenanceProposalResolver = options.maintenanceProposalResolver;
+    this.selfReviewProposalResolver = options.selfReviewProposalResolver;
   }
 
   /**
@@ -159,7 +159,7 @@ export class AgentSignalSelfReviewBriefService {
    * - The resolved or still-pending brief row
    */
   async resolve(brief: BriefItem, options?: BriefResolveOptions): Promise<BriefItem | null> {
-    const proposalResult = await this.resolveMaintenanceProposalIfPending(brief, options?.action);
+    const proposalResult = await this.resolveSelfReviewProposalIfPending(brief, options?.action);
 
     if (proposalResult) {
       if (!proposalResult.shouldResolve) return proposalResult.brief;
@@ -173,27 +173,27 @@ export class AgentSignalSelfReviewBriefService {
     return this.briefService.resolve(brief.id, options);
   }
 
-  private async resolveMaintenanceProposalIfPending(
+  private async resolveSelfReviewProposalIfPending(
     brief: BriefItem,
     action?: string,
-  ): Promise<MaintenanceProposalBriefResolutionResult | undefined> {
+  ): Promise<SelfReviewProposalBriefResolutionResult | undefined> {
     if (brief.trigger !== NIGHTLY_REVIEW_BRIEF_TRIGGER) return;
-    const proposal = getMaintenanceProposalFromBriefMetadata(brief.metadata);
+    const proposal = getSelfReviewProposalFromBriefMetadata(brief.metadata);
     if (!proposal || proposal.status !== 'pending') return;
     if (action !== 'approve' && action !== 'dismiss') return;
-    const proposalAction: MaintenanceProposalBriefResolutionInput['action'] = action;
+    const proposalAction: SelfReviewProposalBriefResolutionInput['action'] = action;
 
     const input = { action: proposalAction, brief, proposal };
-    if (this.maintenanceProposalResolver) return this.maintenanceProposalResolver(input);
+    if (this.selfReviewProposalResolver) return this.selfReviewProposalResolver(input);
 
-    return this.resolveMaintenanceProposal(input);
+    return this.resolveSelfReviewProposal(input);
   }
 
-  private async resolveMaintenanceProposal({
+  private async resolveSelfReviewProposal({
     action,
     brief,
     proposal,
-  }: MaintenanceProposalBriefResolutionInput): Promise<MaintenanceProposalBriefResolutionResult> {
+  }: SelfReviewProposalBriefResolutionInput): Promise<SelfReviewProposalBriefResolutionResult> {
     if (action === 'dismiss') {
       const updatedBrief = await this.updateProposal(brief, {
         ...proposal,
@@ -210,9 +210,9 @@ export class AgentSignalSelfReviewBriefService {
     const sourceId =
       typeof metadata?.sourceId === 'string'
         ? metadata.sourceId
-        : `maintenance-proposal-approve:${brief.id}`;
+        : `self-review-proposal-approve:${brief.id}`;
     const skillDocumentService = new SkillManagementDocumentService(this.db, this.userId);
-    const preflight = createMaintenanceProposalPreflightService({
+    const preflight = createSelfReviewProposalPreflightService({
       isSkillNameAvailable: async ({ name }) => {
         const skill = await skillDocumentService.getSkill({
           agentId: brief.agentId ?? '',
@@ -227,7 +227,7 @@ export class AgentSignalSelfReviewBriefService {
           agentId: brief.agentId ?? '',
         }),
     });
-    const tools = createMaintenanceTools({
+    const tools = createToolSet({
       createSkill: async (toolInput) => {
         const result = await skillDocumentService.createSkill({
           agentId: brief.agentId ?? '',
@@ -244,7 +244,7 @@ export class AgentSignalSelfReviewBriefService {
       },
       preflight: async (toolInput) => {
         if (!('baseSnapshot' in toolInput) || !('skillDocumentId' in toolInput)) {
-          return { allowed: false, reason: 'Unsupported maintenance preflight target.' };
+          return { allowed: false, reason: 'Unsupported shared preflight target.' };
         }
 
         const result = await preflight.checkAction({
@@ -261,8 +261,8 @@ export class AgentSignalSelfReviewBriefService {
             },
             operation: 'refine',
           },
-          rationale: toolInput.summary ?? 'Apply approved maintenance proposal.',
-          risk: MaintenanceRisk.Medium,
+          rationale: toolInput.summary ?? 'Apply approved self-review proposal.',
+          risk: Risk.Medium,
           target: { skillDocumentId: toolInput.skillDocumentId },
         });
 
@@ -283,10 +283,8 @@ export class AgentSignalSelfReviewBriefService {
           summary: `Refined managed skill ${result.name}.`,
         };
       },
-      reserveOperation: async (
-        idempotencyKey: string,
-      ): Promise<MaintenanceToolOperationReservation> => {
-        const scopeKey = maintenanceOperationScopeKey(idempotencyKey);
+      reserveOperation: async (idempotencyKey: string): Promise<OperationReservation> => {
+        const scopeKey = selfIterationOperationScopeKey(idempotencyKey);
         const existing = parseStoredOperationResult(
           await redisSourceEventStore.readWindow(scopeKey),
         );
@@ -299,12 +297,12 @@ export class AgentSignalSelfReviewBriefService {
         // of applying without a durable operation record.
         // Root cause summary: approve is a user-triggered HTTP path and can be clicked twice or
         // race across workers.
-        // Source/context: mirrors `reserveMaintenanceOperation` in
-        // `src/server/services/agentSignal/services/maintenance/serverRuntime.ts`.
-        // Removal condition: replace with a database-backed maintenance operation ledger.
+        // Source/context: mirrors `reserveSelfIterationOperation` in
+        // `src/server/services/agentSignal/services/selfIteration/review/server.ts`.
+        // Removal condition: replace with a database-backed self-iteration operation ledger.
         const reserved = await redisSourceEventStore.tryDedupe(
-          maintenanceOperationReserveKey(idempotencyKey),
-          MAINTENANCE_OPERATION_STATE_TTL_SECONDS,
+          selfIterationOperationReserveKey(idempotencyKey),
+          SELF_ITERATION_OPERATION_STATE_TTL_SECONDS,
         );
 
         if (reserved) return { reserved: true };
@@ -323,18 +321,18 @@ export class AgentSignalSelfReviewBriefService {
             createdAt: Date.now(),
             detail:
               toolInput.summary ??
-              `Maintenance tool ${toolInput.toolName} finished with ${toolInput.status}.`,
+              `Self-review tool ${toolInput.toolName} finished with ${toolInput.status}.`,
             id: toolInput.idempotencyKey,
             kind:
               toolInput.toolName === 'createSkillIfAbsent' ||
               toolInput.toolName === 'replaceSkillContentCAS'
                 ? 'skill'
-                : 'maintenance',
+                : 'review',
             metadata: {
-              sourceType: MAINTENANCE_PROPOSAL_APPROVED_SOURCE_TYPE,
+              sourceType: SELF_REVIEW_PROPOSAL_APPROVED_SOURCE_TYPE,
             },
             sourceId,
-            sourceType: MAINTENANCE_PROPOSAL_APPROVED_SOURCE_TYPE,
+            sourceType: SELF_REVIEW_PROPOSAL_APPROVED_SOURCE_TYPE,
             status: getToolReceiptStatus(toolInput.status),
             ...(toolInput.resourceId &&
             (toolInput.toolName === 'createSkillIfAbsent' ||
@@ -348,7 +346,7 @@ export class AgentSignalSelfReviewBriefService {
                   },
                 }
               : {}),
-            title: toolInput.summary ?? 'Maintenance tool outcome',
+            title: toolInput.summary ?? 'Self-review tool outcome',
             topicId: sourceId,
             userId: this.userId,
           },
@@ -358,24 +356,24 @@ export class AgentSignalSelfReviewBriefService {
       },
       completeOperation: async (toolInput) => {
         await redisSourceEventStore.writeWindow(
-          maintenanceOperationScopeKey(toolInput.idempotencyKey),
+          selfIterationOperationScopeKey(toolInput.idempotencyKey),
           {
             result: JSON.stringify({
               ...(toolInput.receiptId ? { receiptId: toolInput.receiptId } : {}),
               ...(toolInput.resourceId ? { resourceId: toolInput.resourceId } : {}),
               status: toolInput.status,
               ...(toolInput.summary ? { summary: toolInput.summary } : {}),
-            } satisfies MaintenanceToolWriteResult),
+            } satisfies ToolWriteResult),
           },
-          MAINTENANCE_OPERATION_STATE_TTL_SECONDS,
+          SELF_ITERATION_OPERATION_STATE_TTL_SECONDS,
         );
       },
     });
-    const briefMaintenance = createBriefMaintenanceService();
-    const applyService = createMaintenanceProposalApplyService({
+    const briefSelfReview = createBriefSelfReviewService();
+    const applyService = createSelfReviewProposalApplyService({
       checkAction: preflight.checkAction,
       checkGates: () =>
-        briefMaintenance.canApplyMaintenanceProposal({
+        briefSelfReview.canApplySelfReviewProposal({
           checkAgentGate: () =>
             new AgentSignalReviewContextModel(this.db, this.userId).canAgentRunSelfIteration(
               brief.agentId ?? '',
@@ -392,7 +390,7 @@ export class AgentSignalSelfReviewBriefService {
       agentId: brief.agentId,
       proposal,
       sourceId,
-      sourceType: MAINTENANCE_PROPOSAL_APPROVED_SOURCE_TYPE,
+      sourceType: SELF_REVIEW_PROPOSAL_APPROVED_SOURCE_TYPE,
       userId: this.userId,
       ...(typeof metadata?.localDate === 'string' ? { localDate: metadata.localDate } : {}),
       ...(typeof metadata?.timezone === 'string' ? { timezone: metadata.timezone } : {}),
@@ -410,7 +408,7 @@ export class AgentSignalSelfReviewBriefService {
     return { brief: updatedBrief, shouldResolve: false };
   }
 
-  private updateProposal(brief: BriefItem, nextProposal: MaintenanceProposalMetadata) {
+  private updateProposal(brief: BriefItem, nextProposal: SelfReviewProposalMetadata) {
     const metadata = asMetadataRecord(brief.metadata);
     const agentSignal = asMetadataRecord(metadata.agentSignal);
     const nightlySelfReview = asMetadataRecord(agentSignal.nightlySelfReview);
@@ -421,7 +419,7 @@ export class AgentSignalSelfReviewBriefService {
         ...agentSignal,
         nightlySelfReview: {
           ...nightlySelfReview,
-          maintenanceProposal: nextProposal,
+          selfReviewProposal: nextProposal,
         },
       },
     });

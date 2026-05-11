@@ -1,12 +1,12 @@
 export {
-  injectSelfIterationIntentTool,
-  type SelfIterationIntentToolSetParts,
-  shouldExposeSelfIterationIntentTool,
+  injectSelfFeedbackIntentTool,
+  type SelfFeedbackIntentToolSetParts,
+  shouldExposeSelfFeedbackIntentTool,
 } from './inject';
-export { selfIterationIntentManifest } from './manifest';
+export { selfFeedbackIntentManifest } from './manifest';
 export {
-  SELF_ITERATION_INTENT_API_NAME,
-  SELF_ITERATION_INTENT_IDENTIFIER,
-  SELF_ITERATION_INTENT_TOOL_NAME,
-  type ShouldExposeSelfIterationIntentToolOptions,
+  SELF_FEEDBACK_INTENT_API_NAME,
+  SELF_FEEDBACK_INTENT_IDENTIFIER,
+  SELF_FEEDBACK_INTENT_TOOL_NAME,
+  type ShouldExposeSelfFeedbackIntentToolOptions,
 } from './types';
