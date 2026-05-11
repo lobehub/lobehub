@@ -29,11 +29,11 @@ import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector'
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
 
-const USER_SCROLL_INTENT_TTL_MS = 500;
-const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
+const CONVERSATION_FOOTER_ID = '__conversation_footer__';
 
 interface VirtualizedListProps {
   dataSource: string[];
+  footerSlot?: ReactNode;
   itemContent: (index: number, data: string) => ReactNode;
 }
 
@@ -42,7 +42,7 @@ interface VirtualizedListProps {
  *
  * Based on ConversationStore data flow, no dependency on global ChatStore.
  */
-const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
+const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastUserScrollIntentAtRef = useRef(0);
@@ -173,6 +173,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         getItemSize: (index) => ref.getItemSize(index),
         getScrollOffset: () => ref.scrollOffset,
         getScrollSize: () => ref.scrollSize,
+        getTotalCount: () => totalCountRef.current,
         getViewportSize: () => ref.viewportSize,
         scrollTo: (offset) => ref.scrollTo(offset),
         scrollToIndex: (index, options) => ref.scrollToIndex(index, options),
@@ -241,6 +242,17 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
   const paddingBottom = Math.max(24, overlayHeight + 12);
 
+  const dataWithFooter = useMemo(
+    () => (footerSlot ? [...listData, CONVERSATION_FOOTER_ID] : listData),
+    [listData, footerSlot],
+  );
+
+  // Mirror the latest data length into a ref so the scroll-methods registered
+  // once on mount can read the current total count (including spacer/footer)
+  // without re-registering on every render.
+  const totalCountRef = useRef(dataWithFooter.length);
+  totalCountRef.current = dataWithFooter.length;
+
   return (
     <div
       style={{ height: '100%', position: 'relative' }}
@@ -254,7 +266,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-        data={listData}
+        data={dataWithFooter}
         keepMounted={keepMountedIndices}
         ref={virtuaRef}
         style={{ height: '100%', overflowAnchor: 'none', paddingBottom }}
@@ -262,6 +274,13 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         onScrollEnd={handleScrollEnd}
       >
         {(messageId, index): ReactElement => {
+          if (messageId === CONVERSATION_FOOTER_ID) {
+            return (
+              <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+                {footerSlot}
+              </WideScreenContainer>
+            );
+          }
           if (isSpacerMessage(messageId)) {
             // Only animate the collapse-to-zero (unmount). Any non-zero height
             // change (initial mount, shrink as assistant grows) is applied
