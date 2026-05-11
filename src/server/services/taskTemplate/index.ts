@@ -1,11 +1,9 @@
-import type {
-  RecommendedTaskTemplate,
-  TaskTemplate,
-  TaskTemplateFallbackPool,
-  TaskTemplateRecommendationSource,
-  TaskTemplateSkillSource,
+import {
+  TASK_TEMPLATE_FALLBACK_CATEGORIES,
+  type TaskTemplate,
+  taskTemplates,
+  type TaskTemplateSkillSource,
 } from '@lobechat/const';
-import { TASK_TEMPLATE_FALLBACK_CATEGORIES, taskTemplates } from '@lobechat/const';
 
 import { klavisEnv } from '@/config/klavis';
 import { appEnv } from '@/envs/app';
@@ -60,16 +58,6 @@ const hasIntersection = (template: TaskTemplate, userInterests: string[]): boole
 
 const getUtcDateStr = (now: Date): string => now.toISOString().slice(0, 10);
 
-const toRecommendedTemplate = (
-  template: TaskTemplate,
-  source: TaskTemplateRecommendationSource,
-  fallbackPool?: TaskTemplateFallbackPool,
-): RecommendedTaskTemplate => ({
-  ...template,
-  ...(fallbackPool ? { fallbackPool } : {}),
-  source,
-});
-
 /**
  * A template is eligible only if every `requiresSkills[].source` is enabled
  * server-side. When a template declares no skill requirement, it is always
@@ -95,7 +83,7 @@ export class TaskTemplateService {
       excludeIds?: string[];
       now?: Date;
     } = {},
-  ): Promise<RecommendedTaskTemplate[]> {
+  ): Promise<TaskTemplate[]> {
     const { enabledSkillSources, excludeIds, now = new Date() } = options;
     const excluded = new Set(excludeIds ?? []);
     const seed = hashString(`${this.userId}:${getUtcDateStr(now)}`);
@@ -104,26 +92,17 @@ export class TaskTemplateService {
       (t) => !excluded.has(t.id) && isTemplateSkillSourceEligible(t, enabledSkillSources),
     );
     const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
-    const result: RecommendedTaskTemplate[] = seededShuffle(matched, seed)
-      .slice(0, RECOMMEND_COUNT)
-      .map((t) => toRecommendedTemplate(t, 'matched'));
+    const result: TaskTemplate[] = seededShuffle(matched, seed).slice(0, RECOMMEND_COUNT);
 
-    const takeFrom = (pool: TaskTemplate[], fallbackPool: TaskTemplateFallbackPool) => {
+    const takeFrom = (pool: TaskTemplate[]) => {
       if (result.length >= RECOMMEND_COUNT) return;
       const seen = new Set(result.map((t) => t.id));
       const remaining = pool.filter((t) => !seen.has(t.id));
-      result.push(
-        ...seededShuffle(remaining, seed)
-          .slice(0, RECOMMEND_COUNT - result.length)
-          .map((t) => toRecommendedTemplate(t, 'fallback', fallbackPool)),
-      );
+      result.push(...seededShuffle(remaining, seed).slice(0, RECOMMEND_COUNT - result.length));
     };
 
-    takeFrom(
-      candidates.filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)),
-      'preferred_category',
-    );
-    takeFrom(candidates, 'all_candidates');
+    takeFrom(candidates.filter((t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category)));
+    takeFrom(candidates);
 
     return result;
   }
