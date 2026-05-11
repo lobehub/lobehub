@@ -12,7 +12,7 @@ import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
 import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
-import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/executor';
+import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/client';
 import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/executor';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
@@ -21,7 +21,6 @@ import { taskExecutor } from '@lobechat/builtin-tool-task/executor';
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
-import { agentMarketplaceExecutor } from './lobe-agent-marketplace';
 import { messageExecutor } from './lobe-message';
 import { notebookExecutor } from './lobe-notebook';
 import { pageAgentExecutor } from './lobe-page-agent';
@@ -137,7 +136,6 @@ registerExecutors([
   agentBuilderExecutor,
   agentDocumentsExecutor,
   agentManagementExecutor,
-  agentMarketplaceExecutor,
   calculatorExecutor,
   cloudSandboxExecutor,
   credsExecutor,

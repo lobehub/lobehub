@@ -53,7 +53,7 @@ describe('OnboardingActionHintInjector', () => {
                 apiName: 'showAgentMarketplace',
                 arguments: '{}',
                 id: 'call_1',
-                identifier: 'lobe-agent-marketplace',
+                identifier: 'lobe-web-onboarding',
                 type: 'default',
               },
             ],
@@ -78,7 +78,7 @@ describe('OnboardingActionHintInjector', () => {
               {
                 function: {
                   arguments: '{}',
-                  name: 'lobe-agent-marketplace____showAgentMarketplace____builtin',
+                  name: 'lobe-web-onboarding____showAgentMarketplace____builtin',
                 },
                 id: 'call_1',
                 type: 'function',

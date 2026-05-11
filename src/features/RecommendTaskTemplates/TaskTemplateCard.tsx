@@ -1,12 +1,10 @@
-import type { RecommendedTaskTemplate } from '@lobechat/const';
+import type { TaskTemplate } from '@lobechat/const';
 import { formatScheduleTime, parseCronPattern, WEEKDAY_I18N_KEYS } from '@lobechat/utils/cron';
-import { useAnalytics } from '@lobehub/analytics/react';
 import { ActionIcon, Block, Button, Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { App, Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
-import type { LucideIcon } from 'lucide-react';
-import { Clock, Link2, Sparkles, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Clock, Link2, type LucideIcon, Sparkles, X } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,18 +15,8 @@ import { taskTemplateService } from '@/services/taskTemplate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
-import { useUserStore } from '@/store/user';
 
-import {
-  getTaskTemplateCardStateProperties,
-  getTaskTemplateCommonAnalyticsProperties,
-  getTaskTemplateImpressionStorageKey,
-  hasTrackedTaskTemplateImpression,
-  markTaskTemplateImpressionTracked,
-  resolveTaskTemplateErrorType,
-} from './analytics';
 import { styles } from './style';
-import type { SkillConnectionResult } from './useSkillConnection';
 import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
 
 const INTEREST_ICON_MAP = new Map<string, LucideIcon>(INTEREST_AREAS.map((a) => [a.key, a.icon]));
@@ -55,85 +43,22 @@ TemplateBriefIcon.displayName = 'TemplateBriefIcon';
 interface TaskTemplateCardProps {
   onCreated: (templateId: string) => void;
   onDismiss: (templateId: string) => void;
-  position: number;
-  recommendationBatchId: string;
-  template: RecommendedTaskTemplate;
-  userInterestCount: number;
+  template: TaskTemplate;
 }
 
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
-  ({ onCreated, onDismiss, position, recommendationBatchId, template, userInterestCount }) => {
+  ({ template, onCreated, onDismiss }) => {
     const { t } = useTranslation('taskTemplate');
     const { t: tSetting } = useTranslation('setting');
-    const { analytics } = useAnalytics();
     const { message } = App.useApp();
     const [loading, setLoading] = useState(false);
     const [created, setCreated] = useState(false);
     const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const createTask = useTaskStore((s) => s.createTask);
-    const userId = useUserStore((s) => s.user?.id);
     const navigate = useNavigate();
-    const cardRef = useRef<HTMLDivElement>(null);
-    const impressedAtRef = useRef<number | undefined>(undefined);
 
-    const analyticsContext = useMemo(
-      () => ({ position, recommendationBatchId, template, userInterestCount }),
-      [position, recommendationBatchId, template, userInterestCount],
-    );
-
-    const trackCardEvent = useCallback(
-      (name: string, spm: string, properties: Record<string, unknown> = {}) => {
-        void analytics?.track({
-          name,
-          properties: {
-            ...getTaskTemplateCommonAnalyticsProperties(analyticsContext, spm),
-            ...properties,
-          },
-        });
-      },
-      [analytics, analyticsContext],
-    );
-
-    const handleRequiredConnectResult = useCallback(
-      (result: SkillConnectionResult) => {
-        trackCardEvent(
-          'task_template_skill_connect_result',
-          'home.task_templates.skill_connect_result',
-          {
-            duration_ms: result.durationMs,
-            requirement_type: 'required',
-            result: result.result,
-            skill_provider: result.provider,
-            skill_source: result.source,
-          },
-        );
-      },
-      [trackCardEvent],
-    );
-
-    const handleOptionalConnectResult = useCallback(
-      (result: SkillConnectionResult) => {
-        trackCardEvent(
-          'task_template_skill_connect_result',
-          'home.task_templates.skill_connect_result',
-          {
-            duration_ms: result.durationMs,
-            requirement_type: 'optional',
-            result: result.result,
-            skill_provider: result.provider,
-            skill_source: result.source,
-          },
-        );
-      },
-      [trackCardEvent],
-    );
-
-    const skillConnection = useSkillConnection(template.requiresSkills, {
-      onConnectResult: handleRequiredConnectResult,
-    });
-    const optionalSkillConnection = useSkillConnection(template.optionalSkills, {
-      onConnectResult: handleOptionalConnectResult,
-    });
+    const skillConnection = useSkillConnection(template.requiresSkills);
+    const optionalSkillConnection = useSkillConnection(template.optionalSkills);
     const showOptionalHint =
       !skillConnection.needsConnect &&
       optionalSkillConnection.needsConnect &&
@@ -142,78 +67,6 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     const IconComp = INTEREST_ICON_MAP.get(template.interests[0]) ?? Sparkles;
     const title = t(`${template.id}.title`, { defaultValue: '' });
     const description = t(`${template.id}.description`, { defaultValue: '' });
-
-    const getCurrentCardStateProperties = useCallback(
-      () =>
-        getTaskTemplateCardStateProperties({
-          missingRequiredSkill: skillConnection.nextUnconnected,
-          showOptionalHint,
-          template,
-        }),
-      [showOptionalHint, skillConnection.nextUnconnected, template],
-    );
-
-    const trackSkillConnectClicked = useCallback(
-      (
-        requirementType: 'optional' | 'required',
-        target: Pick<SkillConnectionResult, 'provider' | 'source'> | undefined,
-      ) => {
-        if (!target) return;
-
-        trackCardEvent(
-          'task_template_skill_connect_clicked',
-          'home.task_templates.skill_connect_clicked',
-          {
-            requirement_type: requirementType,
-            skill_provider: target.provider,
-            skill_source: target.source,
-          },
-        );
-      },
-      [trackCardEvent],
-    );
-
-    useEffect(() => {
-      if (!analytics) return;
-
-      const node = cardRef.current;
-      if (!node) return;
-
-      const storageKey = getTaskTemplateImpressionStorageKey({
-        templateId: template.id,
-        userId,
-      });
-      if (hasTrackedTaskTemplateImpression(storageKey)) return;
-
-      const trackImpression = () => {
-        if (hasTrackedTaskTemplateImpression(storageKey)) return;
-        markTaskTemplateImpressionTracked(storageKey);
-        impressedAtRef.current = Date.now();
-        trackCardEvent(
-          'task_template_card_impression',
-          'home.task_templates.card_impression',
-          getCurrentCardStateProperties(),
-        );
-      };
-
-      if (typeof IntersectionObserver === 'undefined') {
-        trackImpression();
-        return;
-      }
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          if (!entries.some((entry) => entry.isIntersecting)) return;
-          trackImpression();
-          observer.disconnect();
-        },
-        { threshold: 0.5 },
-      );
-
-      observer.observe(node);
-
-      return () => observer.disconnect();
-    }, [analytics, getCurrentCardStateProperties, template.id, trackCardEvent, userId]);
 
     const scheduleText = useMemo(() => {
       const parsed = parseCronPattern(template.cronPattern);
@@ -227,8 +80,6 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     const handleCreate = useCallback(async () => {
       if (!inboxAgentId) return;
-      const startedAt = Date.now();
-      trackCardEvent('task_template_create_clicked', 'home.task_templates.create_clicked');
       setLoading(true);
       try {
         const prompt = t(`${template.id}.prompt`, { defaultValue: '' });
@@ -240,11 +91,6 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
           schedulePattern: template.cronPattern,
           scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
-        trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
-          duration_ms: Date.now() - startedAt,
-          error_type: null,
-          result: 'success',
-        });
         await taskTemplateService.recordCreated(template.id).catch((recordError) => {
           console.error('[taskTemplate:recordCreated]', recordError);
         });
@@ -254,11 +100,6 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
           navigate(`/task/${createdTask.identifier}`);
         }
       } catch (error) {
-        trackCardEvent('task_template_create_result', 'home.task_templates.create_result', {
-          duration_ms: Date.now() - startedAt,
-          error_type: resolveTaskTemplateErrorType(error),
-          result: 'fail',
-        });
         console.error('[taskTemplate:create]', error);
         message.error(t('action.create.error'));
       } finally {
@@ -274,19 +115,12 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       template.cronPattern,
       template.id,
       title,
-      trackCardEvent,
     ]);
 
     const handleDismiss = useCallback(() => {
       if (loading || created) return;
-      trackCardEvent('task_template_dismissed', 'home.task_templates.dismissed', {
-        time_since_impression_ms: impressedAtRef.current
-          ? Date.now() - impressedAtRef.current
-          : null,
-        was_impressed: !!impressedAtRef.current,
-      });
       onDismiss(template.id);
-    }, [created, loading, onDismiss, template.id, trackCardEvent]);
+    }, [created, loading, onDismiss, template.id]);
 
     const handleConnectError = useCallback(
       (error: unknown) => {
@@ -300,22 +134,20 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     );
 
     const handleConnectRequired = useCallback(async () => {
-      trackSkillConnectClicked('required', skillConnection.nextUnconnected);
       try {
         await skillConnection.connect();
       } catch (error) {
         handleConnectError(error);
       }
-    }, [handleConnectError, skillConnection, trackSkillConnectClicked]);
+    }, [skillConnection, handleConnectError]);
 
     const handleConnectOptional = useCallback(async () => {
-      trackSkillConnectClicked('optional', optionalSkillConnection.nextUnconnected);
       try {
         await optionalSkillConnection.connect();
       } catch (error) {
         handleConnectError(error);
       }
-    }, [handleConnectError, optionalSkillConnection, trackSkillConnectClicked]);
+    }, [optionalSkillConnection, handleConnectError]);
 
     const primaryButton =
       skillConnection.needsConnect && skillConnection.nextUnconnected ? (
@@ -361,7 +193,6 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         className={cx(briefStyles.card, styles.card)}
         gap={12}
         padding={12}
-        ref={cardRef}
         style={{ borderRadius: cssVar.borderRadiusLG }}
         variant={'outlined'}
       >

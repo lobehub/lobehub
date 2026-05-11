@@ -162,8 +162,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
     position: absolute;
     z-index: 10;
-    inset-block-end: 0;
-    inset-inline: 0;
+    inset-block-end: -2px;
+    inset-inline: -2px;
 
     overflow: hidden;
 

@@ -21,13 +21,11 @@ import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
-import { AgentMarketplaceManifest } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 
 export const builtinToolIdentifiers: string[] = [
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
-  AgentMarketplaceManifest.identifier,
   CalculatorManifest.identifier,
   CloudSandboxManifest.identifier,
   CredsManifest.identifier,
