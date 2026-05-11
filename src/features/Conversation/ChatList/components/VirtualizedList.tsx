@@ -148,6 +148,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, it
         getItemSize: (index) => ref.getItemSize(index),
         getScrollOffset: () => ref.scrollOffset,
         getScrollSize: () => ref.scrollSize,
+        getTotalCount: () => totalCountRef.current,
         getViewportSize: () => ref.viewportSize,
         scrollTo: (offset) => ref.scrollTo(offset),
         scrollToIndex: (index, options) => ref.scrollToIndex(index, options),
@@ -220,6 +221,12 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, footerSlot, it
     () => (footerSlot ? [...listData, CONVERSATION_FOOTER_ID] : listData),
     [listData, footerSlot],
   );
+
+  // Mirror the latest data length into a ref so the scroll-methods registered
+  // once on mount can read the current total count (including spacer/footer)
+  // without re-registering on every render.
+  const totalCountRef = useRef(dataWithFooter.length);
+  totalCountRef.current = dataWithFooter.length;
 
   return (
     <div style={{ height: '100%', position: 'relative' }}>
