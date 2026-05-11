@@ -57,22 +57,32 @@ export interface AiHubMixModelCard {
  * Both current identifiers and legacy aliases are included; the platform
  * auto-maps them server-side, but we handle both defensively on the client.
  * See https://docs.aihubmix.com/cn/api/Models-API
+ *
+ * Note: `rerank` / `reranking` are intentionally omitted — they are not part of
+ * LobeHub's AiModelType and are filtered out before model list processing to
+ * prevent rerank models from silently falling back to `chat` and failing at
+ * inference time.
  */
 const TYPE_MAP: Record<string, string> = {
   // Current type identifiers
   embedding: 'embedding',
   image_generation: 'image',
   llm: 'chat',
-  rerank: 'rerank',
   stt: 'stt',
   tts: 'tts',
   video: 'video',
   // Legacy aliases (platform docs note automatic bidirectional mapping)
-  reranking: 'rerank', // reranking ↔ rerank
-  t2i: 'image',        // t2i ↔ image_generation
-  t2t: 'chat',         // t2t ↔ llm
-  t2v: 'video',        // t2v ↔ video
+  t2i: 'image', // t2i ↔ image_generation
+  t2t: 'chat', // t2t ↔ llm
+  t2v: 'video', // t2v ↔ video
 };
+
+/**
+ * AiHubMix `types` values that have no corresponding LobeHub AiModelType.
+ * Models with these types are filtered out before processing to prevent them
+ * from incorrectly appearing as chat models in the UI.
+ */
+const UNSUPPORTED_AIHUBMIX_TYPES = new Set(['rerank', 'reranking']);
 
 /**
  * Map AiHubMix full-catalog API response fields to LobeHub model card fields.
@@ -99,13 +109,13 @@ const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
   const rawPricing = m.pricing && typeof m.pricing === 'object' ? m.pricing : null;
   const pricing = rawPricing
     ? {
-      ...(typeof rawPricing.input === 'number' && { input: rawPricing.input }),
-      ...(typeof rawPricing.output === 'number' && { output: rawPricing.output }),
-      ...(typeof rawPricing.cache_read === 'number' && { cachedInput: rawPricing.cache_read }),
-      ...(typeof rawPricing.cache_write === 'number' && {
-        writeCacheInput: rawPricing.cache_write,
-      }),
-    }
+        ...(typeof rawPricing.input === 'number' && { input: rawPricing.input }),
+        ...(typeof rawPricing.output === 'number' && { output: rawPricing.output }),
+        ...(typeof rawPricing.cache_read === 'number' && { cachedInput: rawPricing.cache_read }),
+        ...(typeof rawPricing.cache_write === 'number' && {
+          writeCacheInput: rawPricing.cache_write,
+        }),
+      }
     : null;
 
   return {
@@ -155,7 +165,7 @@ export const params: CreateRouterRuntimeOptions = {
     try {
       const response = await fetch('https://aihubmix.com/api/v1/models', {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'APP-Code': 'LobeHub',
         },
         signal: controller.signal,
@@ -167,7 +177,9 @@ export const params: CreateRouterRuntimeOptions = {
       }
 
       const json = (await response.json()) as { data?: any[] };
-      const modelList = (json.data || []).map((m: any) => mapAiHubMixModel(m));
+      const modelList = (json.data || [])
+        .filter((m: any) => !UNSUPPORTED_AIHUBMIX_TYPES.has(m.types ?? ''))
+        .map((m: any) => mapAiHubMixModel(m));
       return await processMultiProviderModelList(modelList, 'aihubmix');
     } catch (error) {
       console.warn(

@@ -64,7 +64,7 @@ describe('LobeAiHubMixAI', () => {
         'https://aihubmix.com/api/v1/models',
         expect.objectContaining({
           headers: expect.objectContaining({
-            Authorization: 'Bearer test_api_key',
+            'Authorization': 'Bearer test_api_key',
             'APP-Code': 'LobeHub',
           }),
         }),
@@ -87,9 +87,7 @@ describe('LobeAiHubMixAI', () => {
     });
 
     it('should map AiHubMix API fields to LobeHub model card fields', async () => {
-      const spy = vi
-        .spyOn(modelParse, 'processMultiProviderModelList')
-        .mockResolvedValueOnce([]);
+      const spy = vi.spyOn(modelParse, 'processMultiProviderModelList').mockResolvedValueOnce([]);
 
       mockFetch.mockResolvedValueOnce(
         new Response(
@@ -103,7 +101,7 @@ describe('LobeAiHubMixAI', () => {
                 input_modalities: 'text,image',
                 context_length: 128_000,
                 max_output: 8192,
-                pricing: { input: 1.0, output: 3.0, cache_read: 0.25, cache_write: 0.5 },
+                pricing: { input: 1, output: 3, cache_read: 0.25, cache_write: 0.5 },
               },
             ],
           }),
@@ -121,7 +119,7 @@ describe('LobeAiHubMixAI', () => {
             functionCall: true,
             id: 'test-llm',
             maxOutput: 8192,
-            pricing: { cachedInput: 0.25, input: 1.0, output: 3.0, writeCacheInput: 0.5 },
+            pricing: { cachedInput: 0.25, input: 1, output: 3, writeCacheInput: 0.5 },
             reasoning: true,
             search: true,
             type: 'chat',
@@ -132,6 +130,30 @@ describe('LobeAiHubMixAI', () => {
       );
     });
 
+    it('should filter out rerank models so they do not appear as chat models', async () => {
+      const spy = vi.spyOn(modelParse, 'processMultiProviderModelList').mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              { model_id: 'cohere-rerank-v4.0', types: 'rerank' },
+              { model_id: 'qwen3-reranker-8b', types: 'reranking' },
+              { model_id: 'gpt-4o', types: 'llm' },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await instance.models();
+
+      const passedModels = spy.mock.calls.at(-1)![0] as { id: string }[];
+      expect(passedModels.find((m) => m.id === 'cohere-rerank-v4.0')).toBeUndefined();
+      expect(passedModels.find((m) => m.id === 'qwen3-reranker-8b')).toBeUndefined();
+      expect(passedModels.find((m) => m.id === 'gpt-4o')).toBeDefined();
+    });
+
     it('should return empty array when API key is missing', async () => {
       const instanceNoKey = new LobeAiHubMixAI({ apiKey: '' });
       const list = await instanceNoKey.models();
@@ -140,9 +162,7 @@ describe('LobeAiHubMixAI', () => {
     });
 
     it('should return empty array on non-ok HTTP response', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response('Unauthorized', { status: 401 }),
-      );
+      mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
 
       const list = await instance.models();
       expect(list).toEqual([]);
