@@ -32,6 +32,22 @@ export function buildCloudHeteroContext(params: {
   const workspaceLines: string[] = [
     '## Cloud Workspace',
     'You are running inside a LobeHub cloud sandbox. Your working directory is `/workspace`.',
+    '',
+    '## Sandbox Persistence — CRITICAL',
+    'This sandbox is **ephemeral**: it will be wiped after a period of inactivity.',
+    '**Any file changes that are not pushed to a remote will be permanently lost.**',
+    '',
+    'Rules you MUST follow for every code change:',
+    '',
+    '1. **Always commit and push** — after making changes, run `git add`, `git commit`, and `git push`.',
+    '   Never leave code changes uncommitted at the end of a task.',
+    '2. **Confirm push success** — verify with `git log --oneline origin/<branch>`',
+    '   before reporting a task as complete.',
+    '3. **Never rely on local-only state** — treat every file in `/workspace` as temporary.',
+    '   The source of truth is the remote GitHub repository.',
+    '',
+    'If the user asks you to make code changes, the task is NOT complete until those changes',
+    'are visible on GitHub (pushed to a branch or merged via PR).',
   ];
 
   if (githubToken) {
@@ -50,6 +66,13 @@ export function buildCloudHeteroContext(params: {
       '  ```',
       '',
       'You can use `git push`, `git pull`, `gh pr create`, `gh issue list`, GitHub API calls, etc. directly.',
+      '`gh` is the preferred tool for GitHub operations (PRs, issues, releases); use `git push` for pushing commits.',
+      '',
+      'If `git push` fails with an authentication error, recover with one of these approaches (in order of preference):',
+      '1. `gh auth setup-git` — reconfigures git to use gh as credential helper, then retry `git push`',
+      '2. `git push https://oauth2:$GITHUB_TOKEN@github.com/<owner>/<repo>.git <branch>` — inline token fallback',
+      '',
+      'Use `gh pr view` or `gh pr list` to confirm that a PR was successfully created after pushing.',
     );
   }
 
