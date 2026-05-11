@@ -280,6 +280,71 @@ describe('ssrfSafeFetch', () => {
     });
   });
 
+  describe('maxContentLength (response body cap)', () => {
+    const buildBodyResponse = (chunks: Buffer[]) => ({
+      // arrayBuffer should NOT be called when maxContentLength is set;
+      // make it throw so the test fails loudly if the cap path falls through.
+      arrayBuffer: vi.fn().mockImplementation(async () => {
+        throw new Error('arrayBuffer should not be called when maxContentLength is set');
+      }),
+      body: (async function* () {
+        for (const chunk of chunks) yield chunk;
+      })(),
+      headers: new Map([['content-type', 'text/html']]),
+      status: 200,
+      statusText: 'OK',
+    });
+
+    it('returns the full body when it fits within the cap', async () => {
+      mockFetch.mockResolvedValue(buildBodyResponse([Buffer.from('hello '), Buffer.from('world')]));
+
+      const response = await ssrfSafeFetch('https://example.com', {}, { maxContentLength: 1024 });
+
+      expect(await response.text()).toBe('hello world');
+    });
+
+    it('truncates the body once the cap is reached and stops reading further chunks', async () => {
+      const chunks = [
+        Buffer.from('a'.repeat(60)),
+        Buffer.from('b'.repeat(60)),
+        Buffer.from('c'.repeat(60)),
+      ];
+      mockFetch.mockResolvedValue(buildBodyResponse(chunks));
+
+      const response = await ssrfSafeFetch('https://example.com', {}, { maxContentLength: 100 });
+
+      const text = await response.text();
+      expect(text).toHaveLength(100);
+      expect(text).toBe('a'.repeat(60) + 'b'.repeat(40));
+    });
+
+    it('returns an empty body when the response stream is null', async () => {
+      mockFetch.mockResolvedValue({
+        arrayBuffer: vi.fn(),
+        body: null,
+        headers: new Map(),
+        status: 200,
+        statusText: 'OK',
+      });
+
+      const response = await ssrfSafeFetch('https://example.com', {}, { maxContentLength: 1024 });
+
+      expect(await response.text()).toBe('');
+    });
+
+    it('falls back to arrayBuffer when maxContentLength is not set', async () => {
+      const mockResponse = createMockResponse({
+        arrayBuffer: new TextEncoder().encode('legacy path').buffer as ArrayBuffer,
+      });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      const response = await ssrfSafeFetch('https://example.com');
+
+      expect(mockResponse.arrayBuffer).toHaveBeenCalledTimes(1);
+      expect(await response.text()).toBe('legacy path');
+    });
+  });
+
   describe('integration scenarios', () => {
     it('should work with complex request configurations', async () => {
       process.env.SSRF_ALLOW_IP_ADDRESS_LIST = '127.0.0.1';
