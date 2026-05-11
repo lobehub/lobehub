@@ -194,6 +194,11 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
           return undefined;
         }
 
+        if (user.banned) {
+          logProvider('Account is banned for accountId: %s', accountIdToFind);
+          return undefined;
+        }
+
         return {
           accountId: user.id,
           async claims(use, scope): Promise<{ [key: string]: any; sub: string }> {

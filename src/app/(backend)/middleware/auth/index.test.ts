@@ -2,11 +2,11 @@ import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { checkAuth, type RequestHandler } from './index';
-import { checkAuthMethod } from './utils';
 
 vi.mock('@lobechat/model-runtime', () => ({
   AgentRuntimeError: {
@@ -26,10 +26,6 @@ const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefi
 
 vi.mock('@/utils/errorResponse', () => ({
   createErrorResponse: vi.fn(),
-}));
-
-vi.mock('./utils', () => ({
-  checkAuthMethod: vi.fn(),
 }));
 
 vi.mock('@/auth', () => ({
@@ -57,6 +53,10 @@ vi.mock('@/libs/oidc-provider/jwt', () => ({
   validateOIDCJWT: vi.fn(),
 }));
 
+vi.mock('@/libs/oidc-provider/access-control', () => ({
+  assertOIDCUserActive: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/envs/auth', () => ({
   LOBE_CHAT_OIDC_AUTH_HEADER: 'Oidc-Auth',
 }));
@@ -71,20 +71,61 @@ describe('checkAuth', () => {
   });
 
   afterEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     vi.unstubAllEnvs();
   });
 
-  it('should return error response on checkAuthMethod error (no session)', async () => {
-    const mockError = AgentRuntimeError.createError(ChatErrorType.Unauthorized);
-    vi.mocked(checkAuthMethod).mockImplementationOnce(() => {
-      throw mockError;
+  it('should authenticate an active OIDC JWT and run the handler', async () => {
+    const oidcRequest = new Request('https://example.com/webapi/chat/lobehub', {
+      headers: { 'Oidc-Auth': 'valid-token' },
     });
+    vi.mocked(validateOIDCJWT).mockResolvedValueOnce({
+      tokenData: { sub: 'oidc-user' },
+      userId: 'oidc-user',
+    } as Awaited<ReturnType<typeof validateOIDCJWT>>);
+    vi.mocked(assertOIDCUserActive).mockResolvedValueOnce(undefined);
+    vi.mocked(mockHandler).mockResolvedValueOnce(new Response('ok'));
 
-    await checkAuth(mockHandler)(mockRequest, mockOptions);
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(assertOIDCUserActive).toHaveBeenCalledWith(expect.any(Object), 'oidc-user');
+    expect(mockHandler).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.objectContaining({
+        jwtPayload: { userId: 'oidc-user' },
+        userId: 'oidc-user',
+      }),
+    );
+  });
+
+  it('should reject an inactive OIDC user without running the handler', async () => {
+    const oidcRequest = new Request('https://example.com/webapi/chat/lobehub', {
+      headers: { 'Oidc-Auth': 'valid-token' },
+    });
+    const inactiveError = Object.assign(new Error('OIDC user is no longer active'), {
+      code: 'UNAUTHORIZED',
+    });
+    vi.mocked(validateOIDCJWT).mockResolvedValueOnce({
+      tokenData: { sub: 'banned-user' },
+      userId: 'banned-user',
+    } as Awaited<ReturnType<typeof validateOIDCJWT>>);
+    vi.mocked(assertOIDCUserActive).mockRejectedValueOnce(inactiveError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
 
     expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
-      error: mockError,
+      error: inactiveError,
+      provider: 'mock',
+    });
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should return error response when no session is available', async () => {
+    await checkAuth(mockHandler)(mockRequest, mockOptions);
+
+    expect(AgentRuntimeError.createError).toHaveBeenCalledWith(ChatErrorType.Unauthorized);
+    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
+      error: { errorType: ChatErrorType.Unauthorized },
       provider: 'mock',
     });
     expect(mockHandler).not.toHaveBeenCalled();
