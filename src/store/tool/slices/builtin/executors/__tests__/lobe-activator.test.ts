@@ -60,7 +60,10 @@ describe('lobe-activator executor discovery allowlist', () => {
 
     const result = await activatorExecutor.invoke(
       'activateTools',
-      { identifiers: ['web-browsing', 'internal-admin'] },
+      {
+        identifiers: ['web-browsing', 'internal-admin'],
+        reason: 'Use web browsing to answer the current request.',
+      },
       { messageId: 'msg-1', operationId: 'op-1' },
     );
 
@@ -85,7 +88,10 @@ describe('lobe-activator executor discovery allowlist', () => {
 
     const result = await activatorExecutor.invoke(
       'activateTools',
-      { identifiers: ['secret-tool'] },
+      {
+        identifiers: ['secret-tool'],
+        reason: 'Use the secret tool to answer the current request.',
+      },
       { messageId: 'msg-1', operationId: 'op-1' },
     );
 
@@ -110,7 +116,10 @@ describe('lobe-activator executor discovery allowlist', () => {
 
     const result = await activatorExecutor.invoke(
       'activateTools',
-      { identifiers: ['community-plugin'] },
+      {
+        identifiers: ['community-plugin'],
+        reason: 'Use the plugin to answer the current request.',
+      },
       { messageId: 'msg-1', operationId: 'op-1' },
     );
 
