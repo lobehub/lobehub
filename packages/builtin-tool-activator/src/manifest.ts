@@ -20,8 +20,13 @@ export const LobeActivatorManifest: BuiltinToolManifest = {
             },
             type: 'array',
           },
+          reason: {
+            description:
+              'A concise explanation shown to the user for why these tools need to be activated.',
+            type: 'string',
+          },
         },
-        required: ['identifiers'],
+        required: ['identifiers', 'reason'],
         type: 'object',
       },
     },
