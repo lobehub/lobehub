@@ -86,6 +86,12 @@ export interface ChatInputProps {
    */
   extraActionItems?: ChatInputActionsProps['items'];
   /**
+   * Swap the action bar and send area for skeleton placeholders while
+   * the underlying agent/session config is still hydrating. The editor
+   * itself stays usable.
+   */
+  isConfigLoading?: boolean;
+  /**
    * Left action buttons configuration
    */
   leftActions?: ActionKeys[];
@@ -151,6 +157,7 @@ const ChatInput = memo<ChatInputProps>(
     rightActions = [],
     children,
     extraActionItems,
+    isConfigLoading = false,
     mentionItems,
     runtimeConfigSlot,
     sendMenu,
@@ -324,6 +331,7 @@ const ChatInput = memo<ChatInputProps>(
               actionBarStyle={actionBarStyle}
               borderRadius={12}
               extraActionItems={extraActionItems}
+              isConfigLoading={isConfigLoading}
               leftContent={leftContent}
               placeholderVariant={placeholderVariant}
               runtimeConfigSlot={runtimeConfigSlot}
