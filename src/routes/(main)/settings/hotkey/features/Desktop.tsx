@@ -61,7 +61,6 @@ const HotkeySetting = memo(() => {
         texts={{ clear: t('hotkey.clearBinding') }}
         value={hotkeys[item.id]}
         onChange={(value) => void updateHotkey(item.id, value)}
-        onClear={() => void updateHotkey(item.id, '')}
       />
     ),
 
