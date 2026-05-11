@@ -1,10 +1,10 @@
-import type { TaskTemplate } from '@lobechat/const';
+import type { TaskTemplate, TaskTemplateSkillRequirement } from '@lobechat/const';
 import { formatScheduleTime, parseCronPattern, WEEKDAY_I18N_KEYS } from '@lobechat/utils/cron';
 import { ActionIcon, Block, Button, Center, Flexbox, Icon, Image, Tag, Text } from '@lobehub/ui';
 import { App, Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
-import { Clock, Link2, type LucideIcon, X } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { Clock, type LucideIcon, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,9 +16,18 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
-import { resolveTemplateIcon, type TemplateIconSpec } from './resolveTemplateIcon';
+import {
+  getMainIconProvider,
+  resolveTemplateIcon,
+  type TemplateIconSpec,
+} from './resolveTemplateIcon';
+import { SkillAuthRow } from './SkillAuthRow';
 import { styles } from './style';
-import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
+import {
+  SkillConnectionPopupBlockedError,
+  useIsSkillConnected,
+  useSkillConnection,
+} from './useSkillConnection';
 
 const INTEREST_ICON_MAP = new Map<string, LucideIcon>(INTEREST_AREAS.map((a) => [a.key, a.icon]));
 
@@ -76,14 +85,28 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     const createTask = useTaskStore((s) => s.createTask);
     const navigate = useNavigate();
 
-    const skillConnection = useSkillConnection(template.requiresSkills);
-    const optionalSkillConnection = useSkillConnection(template.optionalSkills);
-    const showOptionalHint =
-      !skillConnection.needsConnect &&
-      optionalSkillConnection.needsConnect &&
-      !!optionalSkillConnection.nextUnconnected;
+    const requiredConnection = useSkillConnection(template.requiresSkills);
+    const isSkillConnected = useIsSkillConnected();
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
+    const mainIconProvider = useMemo(() => getMainIconProvider(template), [template]);
+
+    // Hide already-connected providers and the one the main card icon already
+    // represents — we never want the same logo twice on a single card.
+    const visibleAuthSpecs = useMemo<TaskTemplateSkillRequirement[]>(() => {
+      const all = [...(template.requiresSkills ?? []), ...(template.optionalSkills ?? [])];
+      return all.filter((spec) => {
+        if (isSkillConnected(spec)) return false;
+        if (
+          mainIconProvider &&
+          mainIconProvider.provider === spec.provider &&
+          mainIconProvider.source === spec.source
+        ) {
+          return false;
+        }
+        return true;
+      });
+    }, [template.requiresSkills, template.optionalSkills, isSkillConnected, mainIconProvider]);
     const title = t(`${template.id}.title`, { defaultValue: '' });
     const description = t(`${template.id}.description`, { defaultValue: '' });
 
@@ -152,59 +175,57 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       [message, t],
     );
 
-    const handleConnectRequired = useCallback(async () => {
-      try {
-        await skillConnection.connect();
-      } catch (error) {
-        handleConnectError(error);
+    // Drive the "click Add task -> chain OAuth popups -> create task" flow via a
+    // pending flag instead of awaiting connect(): useSkillConnection returns as
+    // soon as the popup opens, with real status arriving through store polling.
+    const [pendingCreate, setPendingCreate] = useState(false);
+    const requiredConnectionRef = useRef(requiredConnection);
+    requiredConnectionRef.current = requiredConnection;
+    const handleCreateRef = useRef(handleCreate);
+    handleCreateRef.current = handleCreate;
+    const handleConnectErrorRef = useRef(handleConnectError);
+    handleConnectErrorRef.current = handleConnectError;
+
+    useEffect(() => {
+      if (!pendingCreate) return;
+      if (requiredConnection.isConnecting) return;
+      if (requiredConnection.needsConnect) {
+        requiredConnectionRef.current.connect().catch((error) => {
+          setPendingCreate(false);
+          handleConnectErrorRef.current(error);
+        });
+        return;
       }
-    }, [skillConnection, handleConnectError]);
+      setPendingCreate(false);
+      void handleCreateRef.current();
+    }, [pendingCreate, requiredConnection.isConnecting, requiredConnection.needsConnect]);
 
-    const handleConnectOptional = useCallback(async () => {
-      try {
-        await optionalSkillConnection.connect();
-      } catch (error) {
-        handleConnectError(error);
+    const handleAddTask = useCallback(() => {
+      if (created || !inboxAgentId) return;
+      if (requiredConnection.needsConnect) {
+        setPendingCreate(true);
+        return;
       }
-    }, [optionalSkillConnection, handleConnectError]);
+      void handleCreate();
+    }, [created, inboxAgentId, requiredConnection.needsConnect, handleCreate]);
 
-    const primaryButton =
-      skillConnection.needsConnect && skillConnection.nextUnconnected ? (
-        <Button
-          className={briefStyles.actionBtnPrimary}
-          loading={skillConnection.isConnecting}
-          shape={'round'}
-          variant={'filled'}
-          onClick={handleConnectRequired}
-        >
-          {t('action.connect.button', { provider: skillConnection.nextUnconnected.label })}
-        </Button>
-      ) : (
-        <Button
-          shadow
-          className={briefStyles.actionBtnPrimary}
-          disabled={created || !inboxAgentId}
-          loading={loading}
-          shape={'round'}
-          onClick={handleCreate}
-        >
-          {loading ? t('action.creating') : t('action.createButton')}
-        </Button>
-      );
+    const primaryButtonLabel = loading
+      ? t('action.creating')
+      : pendingCreate
+        ? t('action.connecting')
+        : t('action.createButton');
 
-    const hintNode = showOptionalHint && optionalSkillConnection.nextUnconnected && (
-      <button
-        className={`${styles.meta} ${styles.optionalHintBtn}`}
-        type={'button'}
-        onClick={handleConnectOptional}
+    const primaryButton = (
+      <Button
+        shadow
+        className={briefStyles.actionBtnPrimary}
+        disabled={created || !inboxAgentId}
+        loading={loading || pendingCreate}
+        shape={'round'}
+        onClick={handleAddTask}
       >
-        <Icon icon={Link2} size={12} />
-        <Text fontSize={12} style={{ color: 'inherit' }}>
-          {t('action.optionalConnect.button', {
-            provider: optionalSkillConnection.nextUnconnected.label,
-          })}
-        </Text>
-      </button>
+        {primaryButtonLabel}
+      </Button>
     );
 
     return (
@@ -258,12 +279,22 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         </Flexbox>
         <Divider dashed style={{ marginBlock: 0 }} />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
+        {visibleAuthSpecs.length > 0 && (
+          <Flexbox gap={6}>
+            {visibleAuthSpecs.map((spec) => (
+              <SkillAuthRow
+                key={`${spec.source}:${spec.provider}`}
+                spec={spec}
+                onError={handleConnectError}
+              />
+            ))}
+          </Flexbox>
+        )}
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Tag size={'small'} variant={'outlined'}>
               {t('card.templateTag')}
             </Tag>
-            {hintNode}
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             {primaryButton}
