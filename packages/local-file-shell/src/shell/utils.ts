@@ -30,19 +30,37 @@ export const getShellConfig = (command: string) =>
 
 /**
  * Pre-expand environment variable references in a command string using
- * Node.js process.env — shell-agnostic and cross-platform.
+ * Node.js process.env - shell-agnostic and cross-platform.
  *
- * Handles all three common syntaxes so commands work regardless of which
- * shell eventually executes them:
- *   %VAR%          →  Windows cmd style
- *   $env:VAR       →  PowerShell style
- *   $VAR / ${VAR}  →  Unix bash/sh style
+ * Handles all three common syntaxes:
+ *   %VAR%         -> Windows cmd style
+ *   $env:VAR      -> PowerShell style
+ *   $VAR / ${VAR} -> Unix bash/sh style
  *
- * Unknown variables are left as-is (no substitution).
+ * Windows paths (containing backslashes) are wrapped in single quotes
+ * so the shell receives a safe literal string regardless of quoting.
+ * Unknown variables are left as-is.
  */
 export const expandEnvVars = (command: string): string => {
-  // %VAR% — Windows cmd
-  let result = command.replace(/%([^%]+)%/g, (_, name) => process.env[name] ?? `%${name}%`);
+  const replace = (name: string, original: string): string => {
+    const val = process.env[name];
+    if (val === undefined) return original;
+    // Wrap Windows paths in single quotes to prevent shell misinterpretation
+    // of unquoted backslash sequences after variable expansion.
+    return val.includes('\\') ? `'${val}'` : val;
+  };
+
+  // %VAR% - Windows cmd
+  let result = command.replace(/%([^%]+)%/g, (match, name) => replace(name, match));
+  // $env:VAR - PowerShell
+  result = result.replace(/\$env:([A-Za-z_][A-Za-z0-9_]*)/g, (match, name) => replace(name, match));
+  // ${VAR} - Unix braced
+  result = result.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name) => replace(name, match));
+  // $VAR - Unix unbraced (uppercase + underscore only)
+  result = result.replace(/\$([A-Z_][A-Z0-9_]*)/g, (match, name) => replace(name, match));
+  return result;
+};
+
   // $env:VAR — PowerShell
   result = result.replace(/\$env:([A-Za-z_][A-Za-z0-9_]*)/g, (_, name) => process.env[name] ?? `$env:${name}`);
   // ${VAR} — Unix braced
