@@ -4,20 +4,9 @@ import debug from 'debug';
 import type { DeviceAccessReason } from './deviceAccessPolicy';
 
 export type { DeviceAccessReason } from './deviceAccessPolicy';
+export { isDeviceToolIdentifier } from './deviceToolRegistry';
 
 const log = debug('lobe-server:agent-device-tool-audit');
-
-/**
- * Identifiers we treat as device tools — kept inline to avoid pulling the
- * whole builtin-tool packages just to read their identifier strings.
- * If either package's identifier ever changes, the static string here will
- * fall behind the import in `aiAgent/index.ts`; the test in
- * `__tests__/deviceToolAudit.test.ts` (if added) should pin both.
- */
-const DEVICE_TOOL_IDENTIFIERS = new Set(['local-system', 'remote-device']);
-
-export const isDeviceToolIdentifier = (identifier: string): boolean =>
-  DEVICE_TOOL_IDENTIFIERS.has(identifier);
 
 export interface DeviceToolAuditEntry {
   apiName: string;
