@@ -53,6 +53,18 @@ interface FileListItemResult {
   updatedAt: Date;
 }
 
+interface FileResourceResult {
+  createdAt: Date;
+  fileType: string;
+  id: string;
+  metadata?: Record<string, any> | null;
+  name: string;
+  size: number;
+  sourceType: string;
+  updatedAt: Date;
+  url: string;
+}
+
 interface DocumentResult {
   id: string;
 }
@@ -95,14 +107,14 @@ interface DocumentService {
 }
 
 interface FileService {
-  getFileItemById: (id: string) => Promise<FileListItemResult | undefined>;
+  getFileItemById: (id: string) => Promise<FileResourceResult | undefined>;
   getKnowledgeItems: (params: {
     category?: string;
     limit: number;
     offset: number;
     q?: string | null;
     showFilesInKnowledgeBase?: boolean;
-  }) => Promise<{ hasMore: boolean; items: FileListItemResult[] }>;
+  }) => Promise<{ hasMore: boolean; items: FileResourceResult[] }>;
 }
 
 export class KnowledgeBaseExecutionRuntime {
@@ -275,7 +287,13 @@ export class KnowledgeBaseExecutionRuntime {
           fileResults: [],
           totalResults: 0,
         };
-        return { content: promptNoSearchResults(query), state, success: true };
+        // Surface failure details via formatSearchResults when errors are present
+        // so they aren't silently dropped — otherwise fall back to the empty
+        // template prompt.
+        const content = errors
+          ? formatSearchResults(fileResults, query, documents, errors)
+          : promptNoSearchResults(query);
+        return { content, state, success: true };
       }
 
       const formattedContent = formatSearchResults(fileResults, query, documents, errors);
@@ -438,7 +456,17 @@ export class KnowledgeBaseExecutionRuntime {
         content: `Successfully added ${fileIds.length} file(s) to knowledge base \`${knowledgeBaseId}\`.`,
         success: true,
       };
-    } catch (e) {
+    } catch (e: any) {
+      // PG unique constraint violation propagates from both the server-side
+      // model and the lambda router (TRPC re-throws with the original cause
+      // chain intact), so checking 23505 here covers both call sites.
+      const pgErrorCode = e?.cause?.cause?.code || e?.cause?.code || e?.code;
+      if (pgErrorCode === '23505') {
+        return {
+          content: 'Error: One or more files are already in this knowledge base.',
+          success: false,
+        };
+      }
       return {
         content: `Error adding files: ${(e as Error).message}`,
         error: e,
@@ -493,13 +521,13 @@ export class KnowledgeBaseExecutionRuntime {
       });
 
       const files: FileInfo[] = result.items.map((item) => ({
-        createdAt: item.updatedAt,
+        createdAt: item.createdAt,
         fileType: item.fileType,
         id: item.id,
         name: item.name,
         size: item.size,
         sourceType: item.sourceType,
-        url: '',
+        url: item.url,
       }));
 
       if (files.length === 0) {
@@ -546,15 +574,15 @@ export class KnowledgeBaseExecutionRuntime {
       }
 
       const file: FileDetail = {
-        createdAt: item.updatedAt,
+        createdAt: item.createdAt,
         fileType: item.fileType,
         id: item.id,
-        metadata: null,
+        metadata: item.metadata ?? null,
         name: item.name,
         size: item.size,
         sourceType: item.sourceType,
         updatedAt: item.updatedAt,
-        url: '',
+        url: item.url,
       };
 
       const content = [
@@ -562,7 +590,9 @@ export class KnowledgeBaseExecutionRuntime {
         `- Type: ${file.fileType}`,
         `- Size: ${file.size} bytes`,
         `- Source: ${file.sourceType}`,
+        `- Created: ${file.createdAt}`,
         `- Updated: ${file.updatedAt}`,
+        `- URL: ${file.url}`,
       ].join('\n');
 
       const state: GetFileDetailState = { file };
