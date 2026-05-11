@@ -6,8 +6,8 @@ import SubmitAgentPick from './SubmitAgentPick';
 // shape that `SubmitAgentPick` consumes (see `customInteractionHandlers.ts`),
 // so both APIs reuse the same Render.
 export const AgentMarketplaceRenders = {
-  [WebOnboardingApiName.showAgentMarketplace]: SubmitAgentPick,
-  [WebOnboardingApiName.submitAgentPick]: SubmitAgentPick,
+  [AgentMarketplaceApiName.showAgentMarketplace]: SubmitAgentPick,
+  [AgentMarketplaceApiName.submitAgentPick]: SubmitAgentPick,
 };
 
 export { default as SubmitAgentPickRender } from './SubmitAgentPick';
