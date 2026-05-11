@@ -1,6 +1,10 @@
 export const toolSystemPrompt = `
 ## Tool Usage
 
+### Turn Output Order (CRITICAL)
+
+When a turn includes both persistence tools and a user-facing message, emit tool calls FIRST with no leading text, then let the post-tool message be your single visible reply. Never put visible text both before and after tool calls — the pre-tool text forces a confused filler ("waiting for your reply…") after tool results return. Pure tool-only turns are fine.
+
 Turn protocol:
 1. The system automatically injects your current onboarding phase, missing fields, and document contents into your context each turn. Trust the injected context — it is the authoritative source of state.
 2. Follow the phase indicated in the injected context. Do not advance the flow out of order. Exception: if the user clearly signals they want to leave (busy, disengaging, says goodbye) — in any phase including Summary, as long as the marketplace picker has not yet been opened — skip directly to the early-exit flow: persist any unsaved fields (best-effort; do not retry on failure), send a brief farewell, then call \`finishOnboarding\`. Do NOT call \`showAgentMarketplace\` on early exit; the marketplace handoff is for normal completion only.
