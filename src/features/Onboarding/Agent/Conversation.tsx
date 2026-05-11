@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  WebOnboardingApiName,
+  WebOnboardingIdentifier,
+} from '@lobechat/builtin-tool-web-onboarding';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
@@ -56,6 +60,19 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
     const pendingInterventionCount = useConversationStore(
       (s) => dataSelectors.pendingInterventions(s).length,
+    );
+    // The agent-marketplace intervention renders as an absolute overlay anchored
+    // to the chat input area, which would otherwise occlude the last message.
+    // Reserve matching scroll headroom inside ChatList so the latest message can
+    // still be scrolled into view above the marketplace panel.
+    const hasAgentMarketplaceIntervention = useConversationStore((s) =>
+      dataSelectors
+        .pendingInterventions(s)
+        .some(
+          (i) =>
+            i.identifier === WebOnboardingIdentifier &&
+            i.apiName === WebOnboardingApiName.showAgentMarketplace,
+        ),
     );
 
     // The welcome ("AI opens") is rendered client-side from i18n until the
@@ -132,6 +149,20 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       return <Welcome />;
     }, [shouldShowGreetingWelcome]);
 
+    const agentMarketplaceSpacer = useMemo(() => {
+      if (!hasAgentMarketplaceIntervention) return undefined;
+      return (
+        <div
+          aria-hidden
+          style={{
+            height: 'min(640px, 72vh)',
+            minHeight: 480,
+            pointerEvents: 'none',
+          }}
+        />
+      );
+    }, [hasAgentMarketplaceIntervention]);
+
     if (onboardingFinished)
       return (
         <CompletionPanel
@@ -161,6 +192,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       <Flexbox flex={1} height={'100%'}>
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ChatList
+            footerSlot={agentMarketplaceSpacer}
             itemContent={itemContent}
             showWelcome={shouldShowGreetingWelcome}
             welcome={listWelcome}

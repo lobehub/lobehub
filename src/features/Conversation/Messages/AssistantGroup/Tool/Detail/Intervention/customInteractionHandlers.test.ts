@@ -1,4 +1,7 @@
-import { AgentMarketplaceIdentifier } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import {
+  WebOnboardingApiName,
+  WebOnboardingIdentifier,
+} from '@lobechat/builtin-tool-web-onboarding';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -40,13 +43,14 @@ describe('customInteractionHandlers', () => {
     });
 
     const result = await prepareCustomInteractionSubmit(
-      AgentMarketplaceIdentifier,
+      WebOnboardingIdentifier,
       {
         categoryHints: ['engineering'],
         requestId: 'req-1',
         selectedTemplateIds: ['template-1', 'template-existing'],
       },
       {
+        apiName: WebOnboardingApiName.showAgentMarketplace,
         topicId: 'topic-1',
         updateTopicMetadata,
       },
@@ -75,10 +79,11 @@ describe('customInteractionHandlers', () => {
 
   it('persists skipped marketplace picks from the original tool arguments', async () => {
     await recordCustomInteractionResolution(
-      AgentMarketplaceIdentifier,
+      WebOnboardingIdentifier,
       'skipped',
       undefined,
       {
+        apiName: WebOnboardingApiName.showAgentMarketplace,
         requestArgs: {
           categoryHints: ['design-creative'],
           requestId: 'req-2',

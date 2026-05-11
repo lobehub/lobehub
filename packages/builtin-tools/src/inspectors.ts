@@ -53,10 +53,6 @@ import {
   WebBrowsingManifest,
 } from '@lobechat/builtin-tool-web-browsing/client';
 import {
-  AgentMarketplaceInspectors,
-  AgentMarketplaceManifest,
-} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/client';
-import {
   WebOnboardingInspectors,
   WebOnboardingManifest,
 } from '@lobechat/builtin-tool-web-onboarding/client';
@@ -77,10 +73,6 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
   [AgentDocumentsManifest.identifier]: AgentDocumentsInspectors as Record<string, BuiltinInspector>,
   [AgentManagementManifest.identifier]: AgentManagementInspectors as Record<
-    string,
-    BuiltinInspector
-  >,
-  [AgentMarketplaceManifest.identifier]: AgentMarketplaceInspectors as Record<
     string,
     BuiltinInspector
   >,
