@@ -1,5 +1,5 @@
-import { ScrollShadow } from '@lobehub/ui';
-import { type PropsWithChildren, type RefObject } from 'react';
+import { ScrollArea } from '@lobehub/ui';
+import type { PropsWithChildren, RefObject } from 'react';
 import { memo, useEffect } from 'react';
 
 import { useAutoScroll } from '@/hooks/useAutoScroll';
@@ -29,15 +29,26 @@ const AutoScrollShadow = memo<AutoScrollShadowProps>(({ children, content, strea
   }, [content, resetScrollLock]);
 
   return (
-    <ScrollShadow
-      hideScrollBar
-      height={'max(33vh, 480px)'}
-      ref={ref as RefObject<HTMLDivElement>}
-      size={16}
-      onScroll={handleScroll}
+    <ScrollArea
+      scrollFade
+      style={{ background: 'transparent', borderRadius: 0 }}
+      contentProps={{
+        style: {
+          color: 'inherit',
+          display: 'block',
+          fontSize: 'inherit',
+          gap: 0,
+          lineHeight: 'inherit',
+        },
+      }}
+      viewportProps={{
+        ref: ref as RefObject<HTMLDivElement>,
+        style: { height: 'max(33vh, 480px)' },
+        onScroll: handleScroll,
+      }}
     >
       {children}
-    </ScrollShadow>
+    </ScrollArea>
   );
 });
 
