@@ -9,7 +9,7 @@ export default defineFixtures({
       args: { path: '/workspace/src/spa/router/desktopRouter.config.tsx' },
       pluginState: {
         diffText:
-          "--- a/workspace/src/spa/router/desktopRouter.config.tsx\n+++ b/workspace/src/spa/router/desktopRouter.config.tsx\n@@ -1,3 +1,7 @@\n export const desktopRoutes = [\n+  {\n+    path: 'devtools',\n+  },\n ];\n",
+          "diff --git a/workspace/src/spa/router/desktopRouter.config.tsx b/workspace/src/spa/router/desktopRouter.config.tsx\n--- a/workspace/src/spa/router/desktopRouter.config.tsx\n+++ b/workspace/src/spa/router/desktopRouter.config.tsx\n@@ -1,3 +1,7 @@\n export const desktopRoutes = [\n+  {\n+    path: 'devtools',\n+  },\n ];\n",
       },
     }),
     listLocalFiles: single({
