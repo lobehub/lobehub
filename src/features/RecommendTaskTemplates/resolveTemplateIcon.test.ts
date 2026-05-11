@@ -93,7 +93,7 @@ describe('resolveTemplateIcon', () => {
 
   it('falls back to Sparkles when interest key is unknown to the map', () => {
     const spec = resolveTemplateIcon(
-      make({ interests: ['interest-not-in-map'] as TaskTemplate['interests'] }),
+      make({ interests: ['interest-not-in-map'] as unknown as TaskTemplate['interests'] }),
       interestMap,
     );
     expect(spec).toEqual({ Comp: Sparkles, kind: 'component' });
