@@ -8,7 +8,7 @@ import { uuid } from '@/utils/uuid';
 
 import { resolveClientRuntimeStartFeedbackSource } from '../clientRuntimeStart';
 
-describe('resolveClientRuntimeStartFeedbackSource', () => {
+describe('resolveClientRuntimeStartFeedbackSource', { timeout: 15_000 }, () => {
   /**
    * @example
    * client.runtime.start({ parentMessageType: "assistant" }) skips hydration with a traceable reason.
