@@ -34,6 +34,14 @@ export interface ServerAgentToolsEngineConfig {
   defaultToolIds?: string[];
   /** Custom enable checker for plugins */
   enableChecker?: PluginEnableChecker;
+  /**
+   * Identifiers to drop from `manifestSchemas` after combining plugin,
+   * builtin, and additional manifests. Filtering builtins alone is not
+   * enough: an installed plugin or a Skill/Klavis manifest can declare
+   * `identifier: 'lobe-remote-device'` and slip past `buildAllowedBuiltinTools`.
+   * This is the final post-merge wall referenced in LOBE-8768.
+   */
+  excludeIdentifiers?: ReadonlySet<string>;
 }
 
 /**
