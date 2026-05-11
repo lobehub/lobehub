@@ -16,7 +16,12 @@ import { useResolvedInterestKeys } from './useResolvedInterestKeys';
 export type DailyBriefRecommendationsUIState =
   | { mode: 'hidden' }
   | { mode: 'skeleton' }
-  | { mode: 'cards'; onDismiss: (templateId: string) => void; templates: TaskTemplate[] };
+  | {
+      mode: 'cards';
+      onCreated: (templateId: string) => void;
+      onDismiss: (templateId: string) => void;
+      templates: TaskTemplate[];
+    };
 
 export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUIState {
   const { t } = useTranslation('taskTemplate');
@@ -37,8 +42,8 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );
 
-  const handleDismiss = useCallback(
-    async (templateId: string) => {
+  const removeTemplateFromList = useCallback(
+    (templateId: string) => {
       mutate(
         (current) =>
           current
@@ -46,6 +51,20 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
             : current,
         { revalidate: false },
       );
+    },
+    [mutate],
+  );
+
+  const handleCreated = useCallback(
+    (templateId: string) => {
+      removeTemplateFromList(templateId);
+    },
+    [removeTemplateFromList],
+  );
+
+  const handleDismiss = useCallback(
+    async (templateId: string) => {
+      removeTemplateFromList(templateId);
       try {
         await taskTemplateService.dismiss(templateId);
       } catch (error) {
@@ -54,7 +73,7 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
         mutate();
       }
     },
-    [message, mutate, t],
+    [message, mutate, removeTemplateFromList, t],
   );
 
   const templates = useMemo(() => data?.data ?? [], [data]);
@@ -75,5 +94,5 @@ export function useDailyBriefRecommendationsUI(): DailyBriefRecommendationsUISta
   if (!isInit || isLoading) return { mode: 'skeleton' };
   if (templates.length === 0) return { mode: 'hidden' };
 
-  return { mode: 'cards', onDismiss: handleDismiss, templates };
+  return { mode: 'cards', onCreated: handleCreated, onDismiss: handleDismiss, templates };
 }
