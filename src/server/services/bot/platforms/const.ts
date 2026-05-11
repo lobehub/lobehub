@@ -233,7 +233,7 @@ export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
  * field's actual semantics.
  *
  * Stored as `Array<{ id, name? }>` so the operator can label each entry
- * (e.g. `name: '产品同事 Ada'`) and recognise IDs months later. The runtime
+ * (e.g. `name: 'Product colleague Ada'`) and recognise IDs months later. The runtime
  * only consults `id` — see {@link parseIdList} for the back-compat parser
  * that still accepts the legacy comma-separated string and bare string[].
  */
