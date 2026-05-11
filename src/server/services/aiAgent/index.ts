@@ -76,6 +76,7 @@ import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
+import { buildAllowedBuiltinTools } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -1083,11 +1084,16 @@ export class AiAgentService {
       // so the activator can find their manifests when dynamically enabling them
       // (e.g., lobe-creds, lobe-cron). Exclude discoverable:false tools to prevent
       // internal infrastructure tools from being surfaced to the activator.
-      for (const tool of builtinTools) {
-        if (disableLocalSystem && tool.identifier === LocalSystemManifest.identifier) {
-          continue;
-        }
-
+      //
+      // `buildAllowedBuiltinTools` is the single physical filter — without it
+      // the activator could resolve `lobe-remote-device` for an external bot
+      // sender, and `<available_tools>` would advertise it to the model
+      // (LOBE-8768 B1).
+      const allowedBuiltinTools = buildAllowedBuiltinTools({
+        canUseDevice,
+        disableLocalSystem,
+      });
+      for (const tool of allowedBuiltinTools) {
         if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
           toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
         }

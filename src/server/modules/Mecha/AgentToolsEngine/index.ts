@@ -23,6 +23,8 @@ import { ToolsEngine } from '@lobechat/context-engine';
 import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
+import { buildAllowedBuiltinTools } from '@/server/services/aiAgent/deviceToolRegistry';
+
 import {
   type ServerAgentToolsContext,
   type ServerAgentToolsEngineConfig,
@@ -51,15 +53,25 @@ export const createServerToolsEngine = (
   context: ServerAgentToolsContext,
   config: ServerAgentToolsEngineConfig = {},
 ): ToolsEngine => {
-  const { enableChecker, additionalManifests = [], defaultToolIds } = config;
+  const {
+    enableChecker,
+    additionalManifests = [],
+    builtinTools: builtinToolsOverride = builtinTools,
+    defaultToolIds,
+  } = config;
 
   // Get plugin manifests from installed plugins (from database)
   const pluginManifests = context.installedPlugins
     .map((plugin) => plugin.manifest as LobeToolManifest)
     .filter(Boolean);
 
-  // Get all builtin tool manifests
-  const builtinManifests = builtinTools.map((tool) => tool.manifest as LobeToolManifest);
+  // Get builtin tool manifests from the (possibly pre-filtered) list. The
+  // filter is the **only** hard wall keeping device tools out of an
+  // external bot sender's manifestSchemas — see `buildAllowedBuiltinTools`
+  // and LOBE-8768. The enableChecker rules below are defense-in-depth
+  // because `allowExplicitActivation` lets activator-driven activation
+  // bypass them.
+  const builtinManifests = builtinToolsOverride.map((tool) => tool.manifest as LobeToolManifest);
 
   // Combine all manifests
   const allManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
@@ -155,6 +167,11 @@ export const createServerAgentToolsEngine = (
   return createServerToolsEngine(context, {
     // Pass additional manifests (e.g., LobeHub Skills)
     additionalManifests,
+    // Physically drop device-tool manifests for turns whose access policy
+    // denies them. Without this filter, `lobe-activator`'s explicit
+    // activation could resolve the manifest and bypass the rule-layer
+    // gates below (LOBE-8768).
+    builtinTools: buildAllowedBuiltinTools({ canUseDevice, disableLocalSystem }),
     // Add default tools based on configuration
     defaultToolIds,
     enableChecker: createEnableChecker({

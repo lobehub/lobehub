@@ -1,5 +1,5 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
-import { type LobeTool, type RuntimeEnvConfig } from '@lobechat/types';
+import { type LobeBuiltinTool, type LobeTool, type RuntimeEnvConfig } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest
@@ -22,6 +22,14 @@ export interface ServerAgentToolsContext {
 export interface ServerAgentToolsEngineConfig {
   /** Additional manifests to include (e.g., Klavis tools) */
   additionalManifests?: LobeToolManifest[];
+  /**
+   * Override the list of builtin tools fed into the engine's
+   * `manifestSchemas`. Defaults to the full `builtinTools` array from
+   * `@lobechat/builtin-tools`. Callers gating device tools per-turn pass
+   * `buildAllowedBuiltinTools(...)` here so an external bot sender cannot
+   * resolve `lobe-remote-device` via the activator (LOBE-8768).
+   */
+  builtinTools?: readonly LobeBuiltinTool[];
   /** Default tool IDs that will always be added */
   defaultToolIds?: string[];
   /** Custom enable checker for plugins */
