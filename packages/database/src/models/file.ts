@@ -120,7 +120,7 @@ export class FileModel {
       const file = await this.findById(id, tx);
       if (!file) return;
 
-      const fileHash = file.fileHash!;
+      const fileHash = file.fileHash;
 
       // 1. Delete related chunks
       await this.deleteFileChunks(tx as any, [id]);
@@ -151,10 +151,12 @@ export class FileModel {
       // 4. Delete file record
       await tx.delete(files).where(and(eq(files.id, id), eq(files.userId, this.userId)));
 
+      if (!fileHash) return;
+
       const result = await tx
         .select({ count: count() })
         .from(files)
-        .where(and(eq(files.fileHash, fileHash)));
+        .where(eq(files.fileHash, fileHash));
 
       const fileCount = result[0].count;
 
@@ -225,8 +227,8 @@ export class FileModel {
       // 5. Delete file records
       await trx.delete(files).where(and(inArray(files.id, ids), eq(files.userId, this.userId)));
 
-      // If global files don't need to be deleted, return directly
-      if (!removeGlobalFile || hashList.length === 0) return fileList;
+      // If global files don't need to be deleted, no storage object should be removed.
+      if (!removeGlobalFile || hashList.length === 0) return [];
 
       // 4. Find hashes that are no longer referenced
       const remainingFiles = await trx
@@ -242,13 +244,15 @@ export class FileModel {
       // Find hashes to delete (those no longer used by any file)
       const hashesToDelete = hashList.filter((hash) => !usedHashes.has(hash));
 
-      if (hashesToDelete.length === 0) return fileList;
+      if (hashesToDelete.length === 0) return [];
 
       // 5. Delete global files that are no longer referenced
       await trx.delete(globalFiles).where(inArray(globalFiles.hashId, hashesToDelete));
 
-      // Return the list of deleted files
-      return fileList;
+      const hashesToDeleteSet = new Set(hashesToDelete);
+
+      // Return only files whose backing global object became unreferenced.
+      return fileList.filter((file) => file.fileHash && hashesToDeleteSet.has(file.fileHash));
     });
   };
 

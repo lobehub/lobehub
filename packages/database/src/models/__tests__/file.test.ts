@@ -321,7 +321,7 @@ describe('FileModel', () => {
       });
       expect(globalFilesResult).toHaveLength(2);
 
-      await fileModel.deleteMany([file1.id, file2.id]);
+      const deletedFiles = await fileModel.deleteMany([file1.id, file2.id]);
 
       const remainingFiles = await serverDB.query.files.findMany({
         where: eq(files.userId, userId),
@@ -335,6 +335,7 @@ describe('FileModel', () => {
 
       expect(remainingFiles).toHaveLength(0);
       expect(globalFilesResult2).toHaveLength(0);
+      expect(deletedFiles.map((file) => file.id).sort()).toEqual([file1.id, file2.id].sort());
     });
     it('should delete multiple files but not remove global files if DISABLE_REMOVE_GLOBAL_FILE=true', async () => {
       await fileModel.createGlobalFile({
@@ -373,7 +374,7 @@ describe('FileModel', () => {
 
       expect(globalFilesResult).toHaveLength(2);
 
-      await fileModel.deleteMany([file1.id, file2.id], false);
+      const deletedFiles = await fileModel.deleteMany([file1.id, file2.id], false);
 
       const remainingFiles = await serverDB.query.files.findMany({
         where: eq(files.userId, userId),
@@ -384,6 +385,59 @@ describe('FileModel', () => {
 
       expect(remainingFiles).toHaveLength(0);
       expect(globalFilesResult2).toHaveLength(2);
+      expect(deletedFiles).toEqual([]);
+    });
+
+    it('should return only files whose backing global file is no longer referenced', async () => {
+      await fileModel.createGlobalFile({
+        hashId: 'shared-hash',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileType: 'text/plain',
+        creator: userId,
+      });
+      await fileModel.createGlobalFile({
+        hashId: 'exclusive-hash',
+        url: 'https://example.com/exclusive.txt',
+        size: 100,
+        fileType: 'text/plain',
+        creator: userId,
+      });
+
+      const sharedFileA = await fileModel.create({
+        name: 'shared-a.txt',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileHash: 'shared-hash',
+        fileType: 'text/plain',
+      });
+      await fileModel.create({
+        name: 'shared-b.txt',
+        url: 'https://example.com/shared.txt',
+        size: 100,
+        fileHash: 'shared-hash',
+        fileType: 'text/plain',
+      });
+      const exclusiveFile = await fileModel.create({
+        name: 'exclusive.txt',
+        url: 'https://example.com/exclusive.txt',
+        size: 100,
+        fileHash: 'exclusive-hash',
+        fileType: 'text/plain',
+      });
+
+      const deletedFiles = await fileModel.deleteMany([sharedFileA.id, exclusiveFile.id]);
+
+      expect(deletedFiles.map((file) => file.id)).toEqual([exclusiveFile.id]);
+
+      const sharedGlobalFile = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'shared-hash'),
+      });
+      const exclusiveGlobalFile = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'exclusive-hash'),
+      });
+      expect(sharedGlobalFile).toBeDefined();
+      expect(exclusiveGlobalFile).toBeUndefined();
     });
 
     it('should delete mirror documents and asyncTasks for all files in batch', async () => {

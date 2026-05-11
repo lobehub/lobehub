@@ -105,6 +105,7 @@ describe('DocumentService', () => {
     };
 
     mockFileService = {
+      deleteFile: vi.fn(),
       downloadFileToLocal: vi.fn(),
     };
 
@@ -474,11 +475,27 @@ describe('DocumentService', () => {
         fileId: 'file-1',
       });
       mockDocumentModel.delete.mockResolvedValue(undefined);
-      mockFileModel.delete.mockResolvedValue(undefined);
+      mockFileModel.delete.mockResolvedValue({ url: 'files/doc-1.md' });
 
       await service.deleteDocument('doc-1');
 
       expect(mockFileModel.delete).toHaveBeenCalledWith('file-1');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/doc-1.md');
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('should not delete storage for internal document placeholder files', async () => {
+      mockDocumentModel.findById.mockResolvedValue({
+        id: 'doc-1',
+        fileType: 'custom/document',
+        fileId: 'file-1',
+      });
+      mockFileModel.delete.mockResolvedValue({ url: 'internal://document/placeholder' });
+
+      await service.deleteDocument('doc-1');
+
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-1');
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
       expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
     });
 
@@ -525,11 +542,16 @@ describe('DocumentService', () => {
         { id: 'file-in-folder-1' },
         { id: 'file-in-folder-2' },
       ]);
+      mockFileModel.delete
+        .mockResolvedValueOnce({ url: 'files/file-in-folder-1.pdf' })
+        .mockResolvedValueOnce({ url: 'files/file-in-folder-2.pdf' });
 
       await service.deleteDocument('folder-1');
 
       expect(mockFileModel.delete).toHaveBeenCalledWith('file-in-folder-1');
       expect(mockFileModel.delete).toHaveBeenCalledWith('file-in-folder-2');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/file-in-folder-1.pdf');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/file-in-folder-2.pdf');
       expect(mockDocumentModel.delete).toHaveBeenCalledWith('folder-1');
     });
   });
