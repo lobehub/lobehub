@@ -152,7 +152,6 @@ export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.AiHubMix,
   models: async ({ client }) => {
     const apiKey = (client as any).apiKey as string | undefined;
-    if (!apiKey) return [];
 
     // AiHubMix exposes two model list endpoints:
     // - https://aihubmix.com/v1/models     — returns per-user-group list only (~256 models)
