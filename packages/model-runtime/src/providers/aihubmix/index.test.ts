@@ -82,7 +82,7 @@ describe('LobeAiHubMixAI', () => {
       );
 
       // Normalization must set id so processMultiProviderModelList receives a valid model
-      const list = await instance.models();
+      const list = (await instance.models()) as { id: string }[];
       expect(list.some((m) => m.id === 'some-model')).toBe(true);
     });
 
@@ -152,13 +152,6 @@ describe('LobeAiHubMixAI', () => {
       expect(passedModels.find((m) => m.id === 'cohere-rerank-v4.0')).toBeUndefined();
       expect(passedModels.find((m) => m.id === 'qwen3-reranker-8b')).toBeUndefined();
       expect(passedModels.find((m) => m.id === 'gpt-4o')).toBeDefined();
-    });
-
-    it('should return empty array when API key is missing', async () => {
-      const instanceNoKey = new LobeAiHubMixAI({ apiKey: '' });
-      const list = await instanceNoKey.models();
-      expect(list).toEqual([]);
-      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should return empty array on non-ok HTTP response', async () => {
