@@ -12,6 +12,7 @@ import useSWRMutation from 'swr/mutation';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import { useCreateHeteroAgent } from '@/hooks/useCreateHeteroAgent';
 import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import type { CreateAgentParams } from '@/services/agent';
 import type { GroupMemberConfig } from '@/services/chatGroup';
@@ -46,6 +47,7 @@ export const useCreateMenuItems = () => {
   ]);
   const [createGroup, loadGroups] = useAgentGroupStore((s) => [s.createGroup, s.loadGroups]);
   const createNewPage = usePageStore((s) => s.createNewPage);
+  const createHeterogeneousAgent = useCreateHeteroAgent();
 
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isCreatingSessionGroup, setIsCreatingSessionGroup] = useState(false);
@@ -192,38 +194,6 @@ export const useCreateMenuItems = () => {
       await mutateGroup(options);
     },
     [mutateGroup],
-  );
-
-  /**
-   * Create a heterogeneous agent with CLI provider pre-configured.
-   *
-   * Bypasses `mutateAgent` so we skip its default /profile redirect —
-   * external CLI agents land straight on the chat page since their config is fixed.
-   */
-  const createHeterogeneousAgent = useCallback(
-    async (
-      definition: (typeof HETEROGENEOUS_AGENT_CLIENT_CONFIGS)[number],
-      options?: CreateAgentOptions,
-    ) => {
-      const result = await storeCreateAgent({
-        config: {
-          agencyConfig: {
-            heterogeneousProvider: {
-              command: definition.command,
-              type: definition.type,
-            },
-          },
-          avatar: definition.avatar,
-          systemRole: '',
-          title: definition.title,
-        },
-        groupId: options?.groupId,
-      });
-      await refreshAgentList();
-      navigate(`/agent/${result.agentId}`);
-      options?.onSuccess?.();
-    },
-    [storeCreateAgent, refreshAgentList, navigate],
   );
 
   const agentModal = useOptionalAgentModal();
