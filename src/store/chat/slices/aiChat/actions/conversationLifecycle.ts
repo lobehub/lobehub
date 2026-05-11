@@ -504,7 +504,7 @@ export class ConversationLifecycleActionImpl {
             newTopic: !operationContext.topicId
               ? {
                   metadata: workingDirectory ? { workingDirectory } : undefined,
-                  title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                  title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
                   topicMessageIds: messages.map((m) => m.id),
                 }
               : undefined,
@@ -738,7 +738,7 @@ export class ConversationLifecycleActionImpl {
           newTopic: !topicId
             ? {
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
-                title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                title: message.slice(0, 80) || t('defaultTitle', { ns: 'topic' }),
               }
             : undefined,
           agentId: operationContext.agentId,
@@ -885,7 +885,7 @@ export class ConversationLifecycleActionImpl {
       }
 
       const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-      const title = firstUserText.slice(0, 30) || 'New Topic';
+      const title = firstUserText.slice(0, 80) || 'New Topic';
       await this.#get().internal_updateTopic(topicId, { title });
       // summaryTopicTitle would normally clear loading via onLoadingChange; do it manually.
       this.#get().internal_updateTopicLoading(topicId, false);
