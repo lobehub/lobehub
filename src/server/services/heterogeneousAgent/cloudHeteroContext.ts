@@ -41,11 +41,9 @@ export function buildCloudHeteroContext(params: {
     '',
     '1. **Always commit and push** — after making changes, run `git add`, `git commit`, and `git push`.',
     '   Never leave code changes uncommitted at the end of a task.',
-    '2. **Use `gh` for GitHub operations** — creating PRs, branches, issues, and pushing changes.',
-    '   The `gh` CLI is pre-authenticated; prefer it over raw git remote commands.',
-    '3. **Confirm push success** — verify with `git log --oneline origin/<branch>` or `gh pr view`',
+    '2. **Confirm push success** — verify with `git log --oneline origin/<branch>`',
     '   before reporting a task as complete.',
-    '4. **Never rely on local-only state** — treat every file in `/workspace` as temporary.',
+    '3. **Never rely on local-only state** — treat every file in `/workspace` as temporary.',
     '   The source of truth is the remote GitHub repository.',
     '',
     'If the user asks you to make code changes, the task is NOT complete until those changes',
@@ -68,6 +66,8 @@ export function buildCloudHeteroContext(params: {
       '  ```',
       '',
       'You can use `git push`, `git pull`, `gh pr create`, `gh issue list`, GitHub API calls, etc. directly.',
+      '',
+      'Use `gh pr view` or `gh pr list` to confirm that a PR was successfully created after pushing.',
     );
   }
 
