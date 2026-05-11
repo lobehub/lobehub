@@ -147,7 +147,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-xyz',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTask({
@@ -171,7 +171,7 @@ describe('createTaskRuntime', () => {
         agentModel: deps.agentModel as any,
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -196,7 +196,7 @@ describe('createTaskRuntime', () => {
         scope: 'task',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -221,7 +221,7 @@ describe('createTaskRuntime', () => {
         scope: 'task',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -249,7 +249,7 @@ describe('createTaskRuntime', () => {
         scope: 'task',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTask({
@@ -272,7 +272,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-xyz',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       await runtime.createTask({
@@ -298,7 +298,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-xyz',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTask({
@@ -335,7 +335,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-manager',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.editTask({
@@ -357,7 +357,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-manager',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.editTask({
@@ -382,7 +382,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-manager',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.editTask({
@@ -404,7 +404,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-manager',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.editTask({
@@ -472,7 +472,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-x',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTasks({
@@ -507,7 +507,7 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-x',
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTasks({
@@ -528,7 +528,7 @@ describe('createTaskRuntime', () => {
         agentModel: deps.agentModel as any,
         taskCaller: deps.taskCaller,
         taskModel: deps.taskModel as any,
-        taskService: deps.taskService,
+        taskService: deps.taskService as any,
       });
 
       const result = await runtime.createTasks({ tasks: [] });

@@ -944,11 +944,7 @@ export const taskRouter = router({
   runReadySubtasks: taskProcedure.input(idInput).mutation(async ({ input, ctx }) => {
     try {
       const result = await ctx.taskService.runReadySubtasks(input.id);
-      const { skipped, ...rest } = result;
-      return {
-        data: skipped ? { ...rest, skipped } : rest,
-        success: result.failed.length === 0,
-      };
+      return { data: result, success: result.failed.length === 0 };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:runReadySubtasks]', error);
