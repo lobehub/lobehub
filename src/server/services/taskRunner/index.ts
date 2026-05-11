@@ -1,10 +1,12 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { TopicTrigger } from '@/const/topic';
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -67,10 +69,16 @@ export class TaskRunnerService {
 
     try {
       if (!task.assigneeAgentId) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Task has no assigned agent. Use --agent when creating or edit the task.',
-        });
+        const agentModel = new AgentModel(this.db, this.userId);
+        const inboxAgent = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+        if (!inboxAgent) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to resolve fallback inbox agent for task',
+          });
+        }
+        await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        task.assigneeAgentId = inboxAgent.id;
       }
 
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);
