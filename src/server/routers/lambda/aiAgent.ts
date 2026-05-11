@@ -1302,10 +1302,17 @@ export const aiAgentRouter = router({
       // The hetero path spawns the sandbox fire-and-forget and returns early, so
       // the hook is never registered or dispatched; we must call onTopicComplete
       // explicitly here when the CLI signals process exit.
+      //
+      // Guard: heteroFinish can be called more than once for the same operation
+      // (signal path sends cancelled, normal exit sends the real result, and
+      // transient transport failures can replay). onTopicComplete is NOT
+      // idempotent (reason='error' creates briefs), so skip the call when the
+      // topic is already in a terminal state.
+      const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
       try {
         const taskTopicModel = new TaskTopicModel(ctx.serverDB, ctx.userId);
         const taskTopic = await taskTopicModel.findByTopicId(topicId);
-        if (taskTopic) {
+        if (taskTopic && !TERMINAL_TOPIC_STATUSES.has(taskTopic.status)) {
           const taskModel = new TaskModel(ctx.serverDB, ctx.userId);
           const task = await taskModel.findById(taskTopic.taskId);
           if (task) {
