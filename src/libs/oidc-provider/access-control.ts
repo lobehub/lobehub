@@ -18,6 +18,17 @@ export const isOIDCUserInactiveError = (error: unknown) =>
   error.code === 'UNAUTHORIZED' &&
   error.message === OIDC_USER_INACTIVE_ERROR_MESSAGE;
 
+interface OIDCUserBanState {
+  banExpires: Date | null;
+  banned: boolean | null;
+}
+
+export const isOIDCUserBanned = (user: OIDCUserBanState, now = new Date()) => {
+  if (!user.banned) return false;
+
+  return !user.banExpires || user.banExpires > now;
+};
+
 const OIDC_USER_ARTIFACT_TABLES = [
   oidcAccessTokens,
   oidcAuthorizationCodes,
@@ -50,12 +61,12 @@ export const revokeOIDCArtifactsByUserId = async (db: LobeChatDatabase, userId: 
  */
 export const assertOIDCUserActive = async (db: LobeChatDatabase, userId: string) => {
   const [user] = await db
-    .select({ banned: users.banned, id: users.id })
+    .select({ banExpires: users.banExpires, banned: users.banned, id: users.id })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
 
-  if (!user || user.banned) {
+  if (!user || isOIDCUserBanned(user)) {
     throw new TRPCError({
       code: 'UNAUTHORIZED',
       message: OIDC_USER_INACTIVE_ERROR_MESSAGE,

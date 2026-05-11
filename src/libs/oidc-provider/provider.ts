@@ -10,6 +10,7 @@ import { appEnv } from '@/envs/app';
 import { getJWKS } from '@/libs/oidc-provider/jwt';
 import { normalizeLocale } from '@/locales/resources';
 
+import { isOIDCUserBanned } from './access-control';
 import { DrizzleAdapter } from './adapter';
 import { defaultClaims, defaultClients, defaultScopes } from './config';
 import { createInteractionPolicy } from './interaction-policy';
@@ -194,7 +195,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
           return undefined;
         }
 
-        if (user.banned) {
+        if (isOIDCUserBanned(user)) {
           logProvider('Account is banned for accountId: %s', accountIdToFind);
           return undefined;
         }

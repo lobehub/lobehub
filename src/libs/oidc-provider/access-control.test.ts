@@ -46,7 +46,9 @@ describe('OIDC access control', () => {
   });
 
   describe('assertOIDCUserActive', () => {
-    const createDb = (rows: Array<{ banned: boolean | null; id: string }>) => {
+    const createDb = (
+      rows: Array<{ banExpires: Date | null; banned: boolean | null; id: string }>,
+    ) => {
       const limit = vi.fn().mockResolvedValue(rows);
       const where = vi.fn(() => ({ limit }));
       const from = vi.fn(() => ({ where }));
@@ -62,15 +64,15 @@ describe('OIDC access control', () => {
     };
 
     it('passes for an existing active user', async () => {
-      const { db } = createDb([{ banned: false, id: 'user-1' }]);
+      const { db } = createDb([{ banExpires: null, banned: false, id: 'user-1' }]);
 
       await expect(
         assertOIDCUserActive(db as unknown as Parameters<typeof assertOIDCUserActive>[0], 'user-1'),
       ).resolves.toBeUndefined();
     });
 
-    it('rejects a banned user', async () => {
-      const { db } = createDb([{ banned: true, id: 'user-1' }]);
+    it('rejects a permanently banned user', async () => {
+      const { db } = createDb([{ banExpires: null, banned: true, id: 'user-1' }]);
 
       await expect(
         assertOIDCUserActive(db as unknown as Parameters<typeof assertOIDCUserActive>[0], 'user-1'),
@@ -78,6 +80,29 @@ describe('OIDC access control', () => {
         code: 'UNAUTHORIZED',
         message: OIDC_USER_INACTIVE_ERROR_MESSAGE,
       });
+    });
+
+    it('rejects a temporarily banned user before the ban expires', async () => {
+      const { db } = createDb([
+        { banExpires: new Date(Date.now() + 60_000), banned: true, id: 'user-1' },
+      ]);
+
+      await expect(
+        assertOIDCUserActive(db as unknown as Parameters<typeof assertOIDCUserActive>[0], 'user-1'),
+      ).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+        message: OIDC_USER_INACTIVE_ERROR_MESSAGE,
+      });
+    });
+
+    it('passes for a user whose temporary ban has expired', async () => {
+      const { db } = createDb([
+        { banExpires: new Date(Date.now() - 60_000), banned: true, id: 'user-1' },
+      ]);
+
+      await expect(
+        assertOIDCUserActive(db as unknown as Parameters<typeof assertOIDCUserActive>[0], 'user-1'),
+      ).resolves.toBeUndefined();
     });
 
     it('rejects a missing user', async () => {
