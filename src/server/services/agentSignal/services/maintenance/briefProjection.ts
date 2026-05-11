@@ -1,6 +1,10 @@
 import type { ChatToolPayload } from '@lobechat/types';
 
-import type { MaintenanceProposalBaseSnapshot, MaintenanceProposalPlan } from './proposal';
+import type {
+  MaintenanceProposalBaseSnapshot,
+  MaintenanceProposalPlan,
+  MaintenanceReviewIdea,
+} from './proposal';
 import type { MaintenanceToolWriteResult } from './tools';
 import type {
   MaintenanceActionPlan,
@@ -35,6 +39,8 @@ export interface ProjectMaintenanceToolOutcomesInput {
 export interface ProjectMaintenanceToolRuntimeRunInput extends ProjectMaintenanceToolOutcomesInput {
   /** Assistant summary emitted by the tool-first runtime. */
   content?: string;
+  /** Whether proposal lifecycle tool calls should project embedded resource actions. */
+  includeProposalLifecycleActions?: boolean;
   /** User-local nightly date used in the projected maintenance plan. */
   localDate?: string;
   /** Review scope attached to the projected maintenance plan. */
@@ -51,6 +57,8 @@ export interface ProjectMaintenanceToolRuntimeRunInput extends ProjectMaintenanc
 export interface ProjectedMaintenanceToolRuntimeRun {
   /** Executor-shaped result consumed by receipt and brief projection. */
   execution: MaintenanceReviewRunResult;
+  /** Non-actionable ideas extracted from proposal-only actions. */
+  ideas: MaintenanceReviewIdea[];
   /** Plan-shaped projection consumed by Daily Brief proposal metadata. */
   projectionPlan: MaintenanceProposalPlan;
 }
@@ -81,6 +89,15 @@ export interface ProjectedMaintenanceToolOutcomes {
   receiptIds: string[];
 }
 
+const PROPOSAL_LIFECYCLE_TOOL_NAMES = new Set([
+  'closeMaintenanceProposal',
+  'createMaintenanceProposal',
+  'refreshMaintenanceProposal',
+  'supersedeMaintenanceProposal',
+]);
+
+const isProposalLifecycleTool = (toolName: string) => PROPOSAL_LIFECYCLE_TOOL_NAMES.has(toolName);
+
 /**
  * Normalizes one write-tool outcome to bounded brief action metadata.
  *
@@ -107,7 +124,7 @@ const projectAction = (outcome: MaintenanceToolOutcome): MaintenanceToolOutcome 
  *
  * Expects:
  * - Outcomes are already bounded by write-tool result contracts
- * - Proposal create, refresh, and supersede tools use `proposed` status for visible decisions
+ * - Proposal lifecycle tools are silent resource-wise unless their embedded action payload is projected elsewhere
  *
  * Returns:
  * - Counts, receipt ids, bounded actions, and the selected brief kind
@@ -126,9 +143,11 @@ export const projectMaintenanceToolOutcomes = (
   for (const outcome of input.outcomes) {
     if (outcome.receiptId !== undefined) receiptIds.push(outcome.receiptId);
 
+    const isLifecycleOutcome = isProposalLifecycleTool(outcome.toolName);
+
     if (outcome.status === 'applied') actionCounts.applied += 1;
     if (outcome.status === 'failed') actionCounts.failed += 1;
-    if (outcome.status === 'proposed') actionCounts.proposed += 1;
+    if (outcome.status === 'proposed' && !isLifecycleOutcome) actionCounts.proposed += 1;
     if (
       outcome.status === 'deduped' ||
       outcome.status === 'skipped_stale' ||
@@ -138,13 +157,7 @@ export const projectMaintenanceToolOutcomes = (
     }
   }
 
-  const proposalCount = input.outcomes.filter(
-    (outcome) =>
-      outcome.status === 'proposed' &&
-      (outcome.toolName === 'createMaintenanceProposal' ||
-        outcome.toolName === 'refreshMaintenanceProposal' ||
-        outcome.toolName === 'supersedeMaintenanceProposal'),
-  ).length;
+  const proposalCount = 0;
   const hasVisibleRiskOutcome = input.outcomes.some(
     (outcome) => outcome.status === 'failed' || outcome.status === 'skipped_stale',
   );
@@ -192,6 +205,9 @@ const getString = (value: unknown) =>
 
 const getBoolean = (value: unknown) => (typeof value === 'boolean' ? value : undefined);
 
+const getStringArray = (value: unknown) =>
+  Array.isArray(value) ? value.flatMap((item) => (getString(item) ? [getString(item)!] : [])) : [];
+
 const getRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -214,6 +230,9 @@ const getBaseSnapshot = (value: unknown): MaintenanceProposalBaseSnapshot | unde
     writable: getBoolean(record.writable),
   };
 };
+
+const getBaseSnapshots = (value: unknown): MaintenanceProposalBaseSnapshot[] =>
+  Array.isArray(value) ? value.flatMap((item) => getBaseSnapshot(item) ?? []) : [];
 
 const toActionStatus = (
   status: MaintenanceToolWriteResult['status'],
@@ -413,6 +432,26 @@ const toSkillOperation = (value: unknown, userId: string): MaintenanceActionPlan
       operation: 'refine',
     };
   }
+
+  if (record.operation === 'consolidate') {
+    const canonicalSkillDocumentId = getString(input.canonicalSkillDocumentId);
+    const sourceSkillIds = getStringArray(input.sourceSkillIds);
+    if (!canonicalSkillDocumentId || sourceSkillIds.length === 0) return;
+
+    return {
+      domain: 'skill',
+      input: {
+        approval: { source: 'proposal' },
+        bodyMarkdown: getString(input.bodyMarkdown),
+        canonicalSkillDocumentId,
+        description: getString(input.description),
+        sourceSkillIds,
+        sourceSnapshots: getBaseSnapshots(input.sourceSnapshots),
+        userId: getString(input.userId) ?? userId,
+      },
+      operation: 'consolidate',
+    };
+  }
 };
 
 const getRawActionType = (value: unknown): MaintenanceActionPlan['actionType'] | undefined => {
@@ -487,7 +526,7 @@ const getProjectionActionFromRaw = ({
   const idempotencyKey =
     getString(record.idempotencyKey) ?? `${fallbackIdempotencyKey}:action:${index + 1}`;
 
-  if (!actionType) return;
+  if (!actionType || actionType === 'proposal_only') return;
 
   const operation = toSkillOperation(record.operation, userId);
   const target = toTarget(record.target);
@@ -534,32 +573,72 @@ const getProjectionActionFromRaw = ({
   };
 };
 
-const getProjectionActionsFromProposalArgs = ({
+const getIdeaFromRaw = ({
+  fallbackIdempotencyKey,
+  index,
+  rawAction,
+}: {
+  fallbackIdempotencyKey: string;
+  index: number;
+  rawAction: unknown;
+}): MaintenanceReviewIdea | undefined => {
+  const record = getRecord(rawAction);
+  if (getRawActionType(record.actionType) !== 'proposal_only') return;
+
+  const target = toTarget(record.target);
+
+  return {
+    evidenceRefs: toEvidenceRefs(record.evidenceRefs),
+    idempotencyKey:
+      getString(record.idempotencyKey) ?? `${fallbackIdempotencyKey}:idea:${index + 1}`,
+    rationale: getString(record.rationale) ?? 'Maintenance self-review idea.',
+    risk: toRisk(record.risk),
+    ...(target ? { target } : {}),
+    ...(getString(record.title) ? { title: getString(record.title) } : {}),
+  };
+};
+
+const getProjectionPayloadFromProposalArgs = ({
   args,
   idempotencyKey,
   outcome,
-  sourceId,
   userId,
 }: {
   args: Record<string, unknown>;
   idempotencyKey: string;
   outcome: MaintenanceToolOutcome;
-  sourceId: string;
   userId: string;
-}): MaintenanceProposalPlan['actions'] =>
-  Array.isArray(args.actions)
-    ? args.actions.flatMap((rawAction, index) => {
-        const action = getProjectionActionFromRaw({
-          fallbackIdempotencyKey: idempotencyKey,
-          index,
-          outcome,
-          rawAction,
-          userId,
-        });
+}): { actions: MaintenanceProposalPlan['actions']; ideas: MaintenanceReviewIdea[] } => {
+  const actions: MaintenanceProposalPlan['actions'] = [];
+  const ideas: MaintenanceReviewIdea[] = [];
 
-        return action ? [action] : [];
-      })
-    : [];
+  if (Array.isArray(args.actions)) {
+    for (const [index, rawAction] of args.actions.entries()) {
+      const idea = getIdeaFromRaw({
+        fallbackIdempotencyKey: idempotencyKey,
+        index,
+        rawAction,
+      });
+
+      if (idea) {
+        ideas.push(idea);
+        continue;
+      }
+
+      const action = getProjectionActionFromRaw({
+        fallbackIdempotencyKey: idempotencyKey,
+        index,
+        outcome,
+        rawAction,
+        userId,
+      });
+
+      if (action) actions.push(action);
+    }
+  }
+
+  return { actions, ideas };
+};
 
 const getProjectionAction = ({
   args,
@@ -653,6 +732,7 @@ export const projectMaintenanceToolRuntimeRun = (
   input: ProjectMaintenanceToolRuntimeRunInput,
 ): ProjectedMaintenanceToolRuntimeRun => {
   const writeToolCalls = getWriteToolCalls(input.toolCalls);
+  const ideas: MaintenanceReviewIdea[] = [];
   const projectionActions: MaintenanceProposalPlan['actions'] = [];
   const executionActions: MaintenanceReviewRunResult['actions'] = [];
   const toolCallCursors = new Map<string, number>();
@@ -666,28 +746,25 @@ export const projectMaintenanceToolRuntimeRun = (
       toolCall,
       toolName: outcome.toolName,
     });
-    const proposalActions =
-      outcome.toolName === 'createMaintenanceProposal' ||
-      outcome.toolName === 'refreshMaintenanceProposal' ||
-      outcome.toolName === 'supersedeMaintenanceProposal'
-        ? getProjectionActionsFromProposalArgs({
+    const proposalPayload =
+      input.includeProposalLifecycleActions && isProposalLifecycleTool(outcome.toolName)
+        ? getProjectionPayloadFromProposalArgs({
             args,
             idempotencyKey,
             outcome,
-            sourceId: input.sourceId,
             userId: input.userId,
           })
-        : [];
+        : { actions: [], ideas: [] };
 
-    if (
-      outcome.toolName === 'createMaintenanceProposal' ||
-      outcome.toolName === 'refreshMaintenanceProposal' ||
-      outcome.toolName === 'supersedeMaintenanceProposal'
-    ) {
-      if (proposalActions.length > 0) {
-        projectionActions.push(...proposalActions);
+    if (isProposalLifecycleTool(outcome.toolName)) {
+      if (proposalPayload.ideas.length > 0) {
+        ideas.push(...proposalPayload.ideas);
+      }
+
+      if (proposalPayload.actions.length > 0) {
+        projectionActions.push(...proposalPayload.actions);
         executionActions.push(
-          ...proposalActions.map((action) => ({
+          ...proposalPayload.actions.map((action) => ({
             idempotencyKey: action.idempotencyKey,
             ...(outcome.receiptId ? { receiptId: outcome.receiptId } : {}),
             ...(outcome.resourceId ? { resourceId: outcome.resourceId } : {}),
@@ -698,15 +775,15 @@ export const projectMaintenanceToolRuntimeRun = (
         continue;
       }
 
-      executionActions.push({
-        idempotencyKey,
-        ...(outcome.receiptId ? { receiptId: outcome.receiptId } : {}),
-        ...(outcome.resourceId ? { resourceId: outcome.resourceId } : {}),
-        status: MaintenanceActionStatus.Skipped,
-        summary:
-          outcome.summary ??
-          'Maintenance proposal lifecycle update did not include executable proposal actions.',
-      });
+      if (input.includeProposalLifecycleActions && proposalPayload.ideas.length > 0) {
+        executionActions.push({
+          idempotencyKey,
+          ...(outcome.receiptId ? { receiptId: outcome.receiptId } : {}),
+          ...(outcome.resourceId ? { resourceId: outcome.resourceId } : {}),
+          status: MaintenanceActionStatus.Skipped,
+          summary: outcome.summary ?? 'Maintenance proposal created self-review ideas.',
+        });
+      }
       continue;
     }
 
@@ -741,5 +818,5 @@ export const projectMaintenanceToolRuntimeRun = (
     status: getRunStatus(executionActions),
   };
 
-  return { execution, projectionPlan };
+  return { execution, ideas, projectionPlan };
 };

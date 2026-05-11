@@ -120,6 +120,22 @@ export interface MaintenanceProposalAction {
   target?: MaintenanceActionTarget;
 }
 
+/** Non-actionable self-review thought retained for future review without approve-time mutation. */
+export interface MaintenanceReviewIdea {
+  /** Bounded evidence references retained for audit and future review context. */
+  evidenceRefs: EvidenceRef[];
+  /** Stable idempotency key from the proposal-only action. */
+  idempotencyKey: string;
+  /** Reviewer rationale explaining why this is an idea instead of an executable action. */
+  rationale: string;
+  /** Risk assigned by the maintenance reviewer. */
+  risk: MaintenanceRisk;
+  /** Optional target identity the idea is about. */
+  target?: MaintenanceActionTarget;
+  /** Optional short title for UI or digest presentation. */
+  title?: string;
+}
+
 /**
  * Proposal projection action for mergeable skill mutations.
  *

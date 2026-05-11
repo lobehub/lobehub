@@ -5,7 +5,7 @@ const TOOL_FIRST_MAINTENANCE_RULES = [
   'Use structured context only: maintenanceSignals, bounded evidence, read tool results, satisfaction, feedback, receipts, and proposal state.',
   'refine_skill requires complete replacement bodyMarkdown; do not emit patch-only or prose-only executable refinement payloads.',
   'Auto-apply only safe writes: non-structural full-body refine_skill when fresh, or additive create_skill when absent, complete, scoped, and strongly supported.',
-  'Proposal only: structural/destructive changes, active proposal refresh/supersede/close, consolidation, deletion, move, rebind, split, merge, path/namespace/file-structure/activation changes.',
+  'Proposal only: structural/destructive changes, active proposal refresh/supersede/close, deletion, move, rebind, split, merge, path/namespace/file-structure/activation changes. Use proposal_only only for non-actionable ideas or questions that should be retained, not applied.',
 ].join(' ');
 
 export const AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE = [
