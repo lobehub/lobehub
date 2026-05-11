@@ -1,12 +1,16 @@
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
-import type { BriefMetadata } from '@lobechat/types';
+import type { BriefArtifactDocument, BriefMetadata } from '@lobechat/types';
 
 import { BriefModel } from '@/database/models/brief';
 import type { BriefItem, NewBrief } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import type { MaintenanceProposalMetadata, MaintenanceProposalPlan } from './proposal';
+import type {
+  MaintenanceProposalMetadata,
+  MaintenanceProposalPlan,
+  MaintenanceReviewIdea,
+} from './proposal';
 import {
   AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS,
   buildMaintenanceProposalFromPlan,
@@ -38,12 +42,14 @@ export interface MaintenanceBriefMetadata {
   actionCounts: MaintenanceBriefActionCounts;
   /** Evidence refs retained from reviewer/planner context for audit drilldown. */
   evidenceRefs: EvidenceRef[];
+  /** Non-actionable self-review ideas retained without entering approve-time apply. */
+  ideas?: MaintenanceReviewIdea[];
   /** User-local review date in YYYY-MM-DD form. */
   localDate: string;
   /** Frozen maintenance proposal state for approve/dismiss flows. */
   maintenanceProposal?: MaintenanceProposalMetadata;
   /** Coarse user-visible outcome selected by the projection service. */
-  outcome: 'applied' | 'error' | 'proposal';
+  outcome: 'applied' | 'error' | 'ideas' | 'proposal';
   /** Durable receipt ids linked to this brief. */
   receiptIds: string[];
   /** Review source id that produced this brief. */
@@ -128,6 +134,7 @@ const createNightlySelfReviewBriefMetadata = ({
     nightlySelfReview: {
       actionCounts,
       evidenceRefs,
+      ...(input.ideas?.length ? { ideas: input.ideas } : {}),
       localDate: input.localDate,
       outcome,
       ...(proposal ? { maintenanceProposal: proposal } : {}),
@@ -241,6 +248,8 @@ export interface ProjectNightlyReviewBriefInput {
   agentId: string;
   /** Evidence refs retained from the review or source handler. */
   evidenceRefs?: EvidenceRef[];
+  /** Non-actionable self-review ideas collected during the run. */
+  ideas?: MaintenanceReviewIdea[];
   /** User-local date reviewed by the nightly run. */
   localDate: string;
   /** Frozen maintenance plan used to preserve proposal actions. */
@@ -337,10 +346,12 @@ const getReceiptIds = (result: MaintenanceReviewRunResult) => [
 const getOutcome = (
   result: MaintenanceReviewRunResult,
   counts: MaintenanceBriefActionCounts,
+  ideas: MaintenanceReviewIdea[] = [],
 ): MaintenanceBriefMetadata['outcome'] | undefined => {
   if (counts.proposed > 0) return 'proposal';
   if (counts.applied > 0) return 'applied';
   if (counts.failed > 0 || result.status === ReviewRunStatus.Failed) return 'error';
+  if (ideas.length > 0) return 'ideas';
 
   return;
 };
@@ -378,6 +389,49 @@ const createDetailedSummary = (
   return details ? `${summary}\n\n${details}` : summary;
 };
 
+const collectBriefArtifactDocuments = ({
+  ideas = [],
+  proposal,
+}: {
+  ideas?: MaintenanceReviewIdea[];
+  proposal?: MaintenanceProposalMetadata;
+}): BriefArtifactDocument[] => {
+  const documents = new Map<string, BriefArtifactDocument>();
+
+  for (const action of proposal?.actions ?? []) {
+    const id = action.target?.skillDocumentId ?? action.baseSnapshot?.agentDocumentId;
+    if (!id) continue;
+
+    documents.set(id, {
+      id,
+      kind: 'skill',
+      title: action.baseSnapshot?.targetTitle ?? action.target?.skillName ?? action.rationale,
+    });
+  }
+
+  for (const idea of ideas) {
+    const id = idea.target?.skillDocumentId;
+    if (!id) continue;
+
+    documents.set(id, {
+      id,
+      kind: 'skill',
+      title: idea.title ?? idea.target?.skillName ?? idea.rationale,
+    });
+  }
+
+  return [...documents.values()];
+};
+
+const createBriefArtifacts = (input: {
+  ideas?: MaintenanceReviewIdea[];
+  proposal?: MaintenanceProposalMetadata;
+}) => {
+  const documents = collectBriefArtifactDocuments(input);
+
+  return documents.length > 0 ? { documents } : undefined;
+};
+
 const createBriefCopy = (
   outcome: MaintenanceBriefMetadata['outcome'],
   counts: MaintenanceBriefActionCounts,
@@ -409,6 +463,15 @@ const createBriefCopy = (
       summary: createDetailedSummary(summary, result, MaintenanceActionStatus.Failed, 'Failure'),
       title: 'Agent self-review needs attention',
       type: 'error' as const,
+    };
+  }
+
+  if (outcome === 'ideas') {
+    return {
+      priority: 'info' as const,
+      summary: 'Agent self-review saved maintenance ideas for future review.',
+      title: 'Agent self-review ideas',
+      type: 'insight' as const,
     };
   }
 
@@ -494,7 +557,7 @@ export const createBriefMaintenanceService = () => ({
     input: ProjectNightlyReviewBriefInput,
   ): MaintenanceBriefProjection | undefined => {
     const actionCounts = countActions(input.result, input.plan);
-    const outcome = getOutcome(input.result, actionCounts);
+    const outcome = getOutcome(input.result, actionCounts, input.ideas);
 
     if (!outcome) return;
 
@@ -510,10 +573,12 @@ export const createBriefMaintenanceService = () => ({
             results: input.result.actions,
           })
         : undefined;
+    const artifacts = createBriefArtifacts({ ideas: input.ideas, proposal });
 
     return {
       ...(proposal ? { actions: AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS } : {}),
       agentId: input.agentId,
+      ...(artifacts ? { artifacts } : {}),
       metadata: createNightlySelfReviewBriefMetadata({
         actionCounts,
         evidenceRefs: input.evidenceRefs ?? [],

@@ -2,6 +2,7 @@ import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 
 import type { NightlyReviewContext } from './nightlyCollector';
+import type { MaintenanceReviewIdea } from './proposal';
 import type { MaintenanceTools } from './tools';
 import type { MaintenancePlan, MaintenanceReviewRunResult } from './types';
 import { MaintenanceReviewScope, ReviewRunStatus } from './types';
@@ -15,6 +16,8 @@ const DEFAULT_MAX_MAINTENANCE_AGENT_STEPS = 10;
 export interface MaintenanceAgentRunResult {
   /** Executed tool or legacy executor result to persist as receipts. */
   execution: MaintenanceReviewRunResult;
+  /** Non-actionable ideas collected during the run. */
+  ideas?: MaintenanceReviewIdea[];
   /** Frozen deterministic plan used for Daily Brief proposal projection. */
   projectionPlan: MaintenancePlan;
   /** Optional number of agent/tool steps consumed by the backend runner. */

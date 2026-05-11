@@ -65,9 +65,9 @@ describe('projectMaintenanceToolOutcomes', () => {
 
   /**
    * @example
-   * Created, refreshed, or superseded proposal tool outcomes ask Daily Brief for a decision.
+   * Proposal lifecycle tool outcomes stay silent because they mutate proposal state, not resources.
    */
-  it('projects proposal lifecycle outcomes to decision metadata with proposal count', () => {
+  it('keeps proposal lifecycle outcomes out of resource decision metadata', () => {
     const projection = projectMaintenanceToolOutcomes({
       outcomes: [
         {
@@ -94,12 +94,12 @@ describe('projectMaintenanceToolOutcomes', () => {
       ],
     });
 
-    expect(projection.briefKind).toBe('decision');
-    expect(projection.proposalCount).toBe(3);
+    expect(projection.briefKind).toBe('none');
+    expect(projection.proposalCount).toBe(0);
     expect(projection.actionCounts).toEqual({
       applied: 0,
       failed: 0,
-      proposed: 3,
+      proposed: 0,
       skipped: 0,
     });
     expect(projection.receiptIds).toEqual([
@@ -180,6 +180,7 @@ describe('projectMaintenanceToolRuntimeRun', () => {
   it('preserves proposed create skill actions from proposal lifecycle tool arguments', () => {
     const projection = projectMaintenanceToolRuntimeRun({
       content: 'Created a proposal.',
+      includeProposalLifecycleActions: true,
       localDate: '2026-05-09',
       outcomes: [
         {
@@ -366,15 +367,7 @@ describe('projectMaintenanceToolRuntimeRun', () => {
     });
 
     expect(projection.projectionPlan.actions).toEqual([]);
-    expect(projection.execution.actions).toEqual([
-      {
-        idempotencyKey: 'refresh-op-1',
-        receiptId: 'receipt-refresh',
-        resourceId: 'brief-proposal-1',
-        status: MaintenanceActionStatus.Skipped,
-        summary: 'Refreshed existing proposal.',
-      },
-    ]);
+    expect(projection.execution.actions).toEqual([]);
     expect(projection.execution.status).toBe(ReviewRunStatus.Skipped);
   });
 
@@ -393,6 +386,7 @@ describe('projectMaintenanceToolRuntimeRun', () => {
           toolName: 'createMaintenanceProposal',
         },
       ],
+      includeProposalLifecycleActions: true,
       reviewScope: MaintenanceReviewScope.Nightly,
       sourceId: 'source-1',
       toolCalls: [
@@ -413,15 +407,7 @@ describe('projectMaintenanceToolRuntimeRun', () => {
     });
 
     expect(projection.projectionPlan.actions).toEqual([]);
-    expect(projection.execution.actions).toEqual([
-      {
-        idempotencyKey: 'create-proposal-op-1',
-        receiptId: 'receipt-create-proposal',
-        resourceId: 'brief-proposal-1',
-        status: MaintenanceActionStatus.Skipped,
-        summary: 'Malformed proposal.',
-      },
-    ]);
+    expect(projection.execution.actions).toEqual([]);
     expect(projection.execution.status).toBe(ReviewRunStatus.Skipped);
   });
 
@@ -440,6 +426,7 @@ describe('projectMaintenanceToolRuntimeRun', () => {
           toolName: 'createMaintenanceProposal',
         },
       ],
+      includeProposalLifecycleActions: true,
       reviewScope: MaintenanceReviewScope.Nightly,
       sourceId: 'source-1',
       toolCalls: [
@@ -501,6 +488,165 @@ describe('projectMaintenanceToolRuntimeRun', () => {
         operation: 'refine',
       },
       target: { skillDocumentId: 'skill-doc-1' },
+    });
+  });
+
+  /**
+   * @example
+   * proposal_only actions are retained as ideas, not approve-time proposal actions.
+   */
+  it('extracts proposal-only actions as self-review ideas', () => {
+    const projection = projectMaintenanceToolRuntimeRun({
+      outcomes: [
+        {
+          receiptId: 'receipt-create-proposal',
+          resourceId: 'brief-proposal-1',
+          status: 'proposed',
+          summary: 'Saved maintenance ideas.',
+          toolName: 'createMaintenanceProposal',
+        },
+      ],
+      includeProposalLifecycleActions: true,
+      reviewScope: MaintenanceReviewScope.Nightly,
+      sourceId: 'source-1',
+      toolCalls: [
+        {
+          apiName: 'createMaintenanceProposal',
+          arguments: JSON.stringify({
+            actions: [
+              {
+                actionType: 'proposal_only',
+                evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
+                idempotencyKey: 'idea-1',
+                rationale: 'The skill layout may need a future split.',
+                risk: MaintenanceRisk.Medium,
+                target: { skillDocumentId: 'skill-doc-1' },
+                title: 'Consider splitting review skill',
+              },
+            ],
+            idempotencyKey: 'proposal-op-1',
+            proposalKey: 'agent-1:proposal_only:agent_document:skill-doc-1',
+            summary: 'Saved maintenance ideas.',
+          }),
+          id: 'call-create-proposal-1',
+          identifier: 'agent-signal-maintenance',
+          type: 'builtin',
+        },
+      ],
+      userId: 'user-1',
+    });
+
+    expect(projection.projectionPlan.actions).toEqual([]);
+    expect(projection.ideas).toEqual([
+      {
+        evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
+        idempotencyKey: 'idea-1',
+        rationale: 'The skill layout may need a future split.',
+        risk: MaintenanceRisk.Medium,
+        target: { skillDocumentId: 'skill-doc-1' },
+        title: 'Consider splitting review skill',
+      },
+    ]);
+  });
+
+  /**
+   * @example
+   * consolidate_skill proposal actions keep their frozen skill operation payload.
+   */
+  it('preserves consolidate skill proposal operations for approve-time apply', () => {
+    const projection = projectMaintenanceToolRuntimeRun({
+      outcomes: [
+        {
+          receiptId: 'receipt-create-proposal',
+          resourceId: 'brief-proposal-1',
+          status: 'proposed',
+          summary: 'Review consolidated skill.',
+          toolName: 'createMaintenanceProposal',
+        },
+      ],
+      includeProposalLifecycleActions: true,
+      reviewScope: MaintenanceReviewScope.Nightly,
+      sourceId: 'source-1',
+      toolCalls: [
+        {
+          apiName: 'createMaintenanceProposal',
+          arguments: JSON.stringify({
+            actions: [
+              {
+                actionType: 'consolidate_skill',
+                applyMode: MaintenanceApplyMode.ProposalOnly,
+                baseSnapshot: {
+                  agentDocumentId: 'skill-doc-1',
+                  contentHash: 'hash-canonical',
+                  documentId: 'doc-1',
+                  managed: true,
+                  targetType: 'skill',
+                  writable: true,
+                },
+                evidenceRefs: [{ id: 'topic-1', type: 'topic' }],
+                operation: {
+                  domain: 'skill',
+                  input: {
+                    bodyMarkdown: '# Review Skill\n\nUse one consolidated checklist.',
+                    canonicalSkillDocumentId: 'skill-doc-1',
+                    sourceSkillIds: ['skill-doc-1', 'skill-doc-2'],
+                    sourceSnapshots: [
+                      {
+                        agentDocumentId: 'skill-doc-1',
+                        contentHash: 'hash-canonical',
+                        documentId: 'doc-1',
+                        managed: true,
+                        targetType: 'skill',
+                        writable: true,
+                      },
+                      {
+                        agentDocumentId: 'skill-doc-2',
+                        contentHash: 'hash-source',
+                        documentId: 'doc-2',
+                        managed: true,
+                        targetType: 'skill',
+                        writable: true,
+                      },
+                    ],
+                    userId: 'user-1',
+                  },
+                  operation: 'consolidate',
+                },
+                rationale: 'Two review skills overlap.',
+                risk: MaintenanceRisk.Medium,
+                target: { skillDocumentId: 'skill-doc-1' },
+              },
+            ],
+            idempotencyKey: 'proposal-op-1',
+            proposalKey: 'agent-1:consolidate_skill:agent_document:skill-doc-1',
+            summary: 'Review consolidated skill.',
+          }),
+          id: 'call-create-proposal-1',
+          identifier: 'agent-signal-maintenance',
+          type: 'builtin',
+        },
+      ],
+      userId: 'user-1',
+    });
+
+    expect(projection.projectionPlan.actions[0]).toMatchObject({
+      actionType: 'consolidate_skill',
+      baseSnapshot: {
+        agentDocumentId: 'skill-doc-1',
+        contentHash: 'hash-canonical',
+      },
+      operation: {
+        domain: 'skill',
+        input: {
+          bodyMarkdown: '# Review Skill\n\nUse one consolidated checklist.',
+          canonicalSkillDocumentId: 'skill-doc-1',
+          sourceSkillIds: ['skill-doc-1', 'skill-doc-2'],
+        },
+        operation: 'consolidate',
+      },
+    });
+    expect(projection.execution.actions[0]).toMatchObject({
+      status: MaintenanceActionStatus.Proposed,
     });
   });
 });

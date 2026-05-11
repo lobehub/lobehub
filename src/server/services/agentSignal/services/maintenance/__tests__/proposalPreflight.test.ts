@@ -52,6 +52,73 @@ const createCreateAction = () => ({
   target: { skillName: 'code-review' },
 });
 
+const createConsolidateAction = () => ({
+  actionType: 'consolidate_skill' as const,
+  baseSnapshot: {
+    agentDocumentId: 'adoc_1',
+    contentHash: 'sha256:base',
+    documentId: 'doc_1',
+    managed: true,
+    targetTitle: 'Review Skill',
+    targetType: 'skill' as const,
+    writable: true,
+  },
+  evidenceRefs: [],
+  idempotencyKey: 'key-consolidate',
+  operation: {
+    domain: 'skill' as const,
+    input: {
+      bodyMarkdown: '# Review Skill\n\nUse one consolidated checklist.',
+      canonicalSkillDocumentId: 'adoc_1',
+      sourceSkillIds: ['adoc_1', 'adoc_2'],
+      sourceSnapshots: [
+        {
+          agentDocumentId: 'adoc_1',
+          contentHash: 'sha256:base',
+          documentId: 'doc_1',
+          managed: true,
+          targetType: 'skill' as const,
+          writable: true,
+        },
+        {
+          agentDocumentId: 'adoc_2',
+          contentHash: 'sha256:source',
+          documentId: 'doc_2',
+          managed: true,
+          targetType: 'skill' as const,
+          writable: true,
+        },
+      ],
+      userId: 'user_1',
+    },
+    operation: 'consolidate' as const,
+  },
+  rationale: 'Merge overlapping review skills.',
+  risk: MaintenanceRisk.Medium,
+  target: { skillDocumentId: 'adoc_1' },
+});
+
+const createSnapshotReader = () =>
+  vi.fn(async (skillDocumentId: string) =>
+    skillDocumentId === 'adoc_2'
+      ? {
+          agentDocumentId: 'adoc_2',
+          contentHash: 'sha256:source',
+          documentId: 'doc_2',
+          managed: true,
+          targetTitle: 'Review Checklist',
+          writable: true,
+        }
+      : {
+          agentDocumentId: 'adoc_1',
+          contentHash: 'sha256:base',
+          documentId: 'doc_1',
+          managed: true,
+          targetTitle: 'Review Skill',
+          writable: true,
+        },
+  );
+
 const createAdapters = (
   overrides: Partial<MaintenanceProposalPreflightAdapters> = {},
 ): MaintenanceProposalPreflightAdapters => ({
@@ -316,15 +383,62 @@ describe('maintenance proposal preflight', () => {
 
   /**
    * @example
+   * expect(result.allowed).toBe(true);
+   */
+  it('allows consolidate_skill proposals when canonical and source snapshots are fresh', async () => {
+    const readSkillTargetSnapshot = createSnapshotReader();
+    const service = createMaintenanceProposalPreflightService(
+      createAdapters({ readSkillTargetSnapshot }),
+    );
+
+    await expect(service.checkAction(createConsolidateAction())).resolves.toEqual({
+      allowed: true,
+    });
+    expect(readSkillTargetSnapshot).toHaveBeenCalledWith('adoc_1');
+    expect(readSkillTargetSnapshot).toHaveBeenCalledWith('adoc_2');
+  });
+
+  /**
+   * @example
+   * expect(result.reason).toBe('content_changed');
+   */
+  it('rejects consolidate_skill proposals when a source snapshot changed', async () => {
+    const service = createMaintenanceProposalPreflightService(
+      createAdapters({
+        readSkillTargetSnapshot: async (skillDocumentId) =>
+          skillDocumentId === 'adoc_2'
+            ? {
+                agentDocumentId: 'adoc_2',
+                contentHash: 'sha256:changed',
+                documentId: 'doc_2',
+                managed: true,
+                writable: true,
+              }
+            : {
+                agentDocumentId: 'adoc_1',
+                contentHash: 'sha256:base',
+                documentId: 'doc_1',
+                managed: true,
+                writable: true,
+              },
+      }),
+    );
+
+    await expect(service.checkAction(createConsolidateAction())).resolves.toEqual({
+      allowed: false,
+      reason: 'content_changed',
+    });
+  });
+
+  /**
+   * @example
    * expect(result.reason).toBe('unsupported');
    */
   it('keeps unsupported actions unsupported', async () => {
     const service = createMaintenanceProposalPreflightService(createAdapters());
     const action = createRefineAction();
 
-    await expect(
-      service.checkAction({ ...action, actionType: 'consolidate_skill' }),
-    ).resolves.toEqual({
+    await expect(service.checkAction({ ...action, actionType: 'proposal_only' })).resolves.toEqual({
       allowed: false,
       reason: 'unsupported',
     });
