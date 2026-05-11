@@ -32,6 +32,24 @@ export function buildCloudHeteroContext(params: {
   const workspaceLines: string[] = [
     '## Cloud Workspace',
     'You are running inside a LobeHub cloud sandbox. Your working directory is `/workspace`.',
+    '',
+    '## Sandbox Persistence — CRITICAL',
+    'This sandbox is **ephemeral**: it will be wiped after a period of inactivity.',
+    '**Any file changes that are not pushed to a remote will be permanently lost.**',
+    '',
+    'Rules you MUST follow for every code change:',
+    '',
+    '1. **Always commit and push** — after making changes, run `git add`, `git commit`, and `git push`.',
+    '   Never leave code changes uncommitted at the end of a task.',
+    '2. **Use `gh` for GitHub operations** — creating PRs, branches, issues, and pushing changes.',
+    '   The `gh` CLI is pre-authenticated; prefer it over raw git remote commands.',
+    '3. **Confirm push success** — verify with `git log --oneline origin/<branch>` or `gh pr view`',
+    '   before reporting a task as complete.',
+    '4. **Never rely on local-only state** — treat every file in `/workspace` as temporary.',
+    '   The source of truth is the remote GitHub repository.',
+    '',
+    'If the user asks you to make code changes, the task is NOT complete until those changes',
+    'are visible on GitHub (pushed to a branch or merged via PR).',
   ];
 
   if (githubToken) {
