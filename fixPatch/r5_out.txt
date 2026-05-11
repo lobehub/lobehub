@@ -1,0 +1,52 @@
+C:\Users\emanuele.gallo\Projects\Mio\lobehub\fixPatch\r5.py:27: SyntaxWarning: "\|" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\|"? A raw string is also an option.
+  ['git', 'grep', '-rn', 'editFile\|lobe-local-system\|PatchDiff\|patch.*string', '--', 'src/'],
+@lobehub/ui NOT found
+
+=== editFile references in src ===
+src/features/ChatInput/InputEditor/useLocalFileMention.desktop.ts:17:const LOCAL_SYSTEM_IDENTIFIER = 'lobe-local-system';
+src/features/Conversation/Messages/AssistantGroup/constants.ts:140:  editFile: 'workflow.toolDisplayName.editLocalFile',
+src/features/DevPanel/RenderGallery/fixtures/index.ts:20:import lobeLocalSystem from './lobe-local-system';
+src/features/DevPanel/RenderGallery/fixtures/lobe-agent-management.ts:18:        plugins: ['lobe-web-browsing', 'lobe-local-system'],
+src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts:6:  identifier: 'lobe-local-system',
+src/locales/default/plugin.ts:62:  'builtins.lobe-cloud-sandbox.apiName.editFile': 'Edit file',
+src/locales/default/plugin.ts:148:  'builtins.lobe-local-system.apiName.editFile': 'Edit file',
+src/locales/default/plugin.ts:149:  'builtins.lobe-local-system.apiName.getCommandOutput': 'Get command output',
+src/locales/default/plugin.ts:150:  'builtins.lobe-local-system.apiName.globFiles': 'Glob search files',
+src/locales/default/plugin.ts:151:  'builtins.lobe-local-system.apiName.grepContent': 'Search content',
+src/locales/default/plugin.ts:152:  'builtins.lobe-local-system.apiName.killCommand': 'Terminate command',
+src/locales/default/plugin.ts:153:  'builtins.lobe-local-system.apiName.listFiles': 'List files',
+src/locales/default/plugin.ts:154:  'builtins.lobe-local-system.apiName.moveFiles': 'Move files',
+src/locales/default/plugin.ts:155:  'builtins.lobe-local-system.apiName.readFile': 'Read file content',
+src/locales/default/plugin.ts:156:  'builtins.lobe-local-system.apiName.runCommand': 'Run command',
+src/locales/default/plugin.ts:157:  'builtins.lobe-local-system.apiName.searchFiles': 'Search files',
+src/locales/default/plugin.ts:158:  'builtins.lobe-local-system.apiName.writeFile': 'Write file',
+src/locales/default/plugin.ts:160:  'builtins.lobe-local-system.apiName.editLocalFile': 'Edit file',
+src/locales/default/plugin.ts:161:  'builtins.lobe-local-system.apiName.globLocalFiles': 'Glob search files',
+src/locales/default/plugin.ts:162:  'builtins.lobe-local-system.apiName.listLocalFiles': 'List files',
+src/locales/default/plugin.ts:163:  'builtins.lobe-local-system.apiName.moveLocalFiles': 'Move files',
+src/locales/default/plugin.ts:164:  'builtins.lobe-local-system.apiName.readLocalFile': 'Read file content',
+src/locales/default/plugin.ts:165:  'builtins.lobe-local-system.apiName.renameLocalFile': 'Rename',
+src/locales/default/plugin.ts:166:  'builtins.lobe-local-system.apiName.searchLocalFiles': 'Search files',
+src/locales/default/plugin.ts:167:  'builtins.lobe-local-system.apiName.writeLocalFile': 'Write file',
+src/locales/default/plugin.ts:168:  'builtins.lobe-local-system.inspector.noResults': 'No results',
+src/locales/default/plugin.ts:169:  'builtins.lobe-local-system.inspector.rename.result':
+src/locales/default/plugin.ts:171:  'builtins.lobe-local-system.title': 'Local System',
+src/locales/default/setting.ts:1055:  'tools.builtins.lobe-local-system.description':
+src/locales/default/setting.ts:1057:  'tools.builtins.lobe-local-system.readme':
+src/locales/default/setting.ts:1059:  'tools.builtins.lobe-local-system.title': 'Local System',
+src/locales/default/tool.ts:109:  'localFiles.editFile.newString': 'Replace with',
+src/locales/default/tool.ts:110:  'localFiles.editFile.oldString': 'Find',
+src/locales/default/tool.ts:111:  'localFiles.editFile.replaceAll': 'Replace all occurrences',
+src/locales/default/tool.ts:112:  'localFiles.editFile.replaceFirst': 'Replace first occurrence only',
+src/routes/(main)/agent/features/Conversation/WorkingSidebar/Review/FileItem.tsx:4:import { ActionIcon, copyToClipboard, PatchDiff } from '@lobehub/ui';
+src/routes/(main)/agent/features/Conversation/WorkingSidebar/Review/FileItem.tsx:147:  /** Whether the Collapse panel is expanded ? gates the heavy PatchDiff render. */
+src/routes/(main)/agent/features/Conversation/WorkingSidebar/Review/FileItem.tsx:173:      <PatchDiff
+src/routes/(main)/agent/features/Conversation/WorkingSidebar/Review/index.tsx:235:  // Every PatchDiff mounts a Shiki tokenizer synchronously, so expanding too
+src/server/services/aiAgent/__tests__/execAgent.resumeApproval.test.ts:159:    identifier: 'lobe-local-system',
+src/server/services/aiAgent/__tests__/execAgent.resumeApproval.test.ts:217:                identifier: 'lobe-local-system',
+src/store/chat/slices/aiChat/actions/__tests__/conversationLifecycle.test.ts:922:            identifier: 'lobe-local-system',
+src/store/chat/slices/aiChat/actions/__tests__/conversationLifecycle.test.ts:932:            plugins: ['lobe-local-system'],
+src/store/chat/slices/aiChat/actions/__tests__/conversationLifecycle.test.ts:997:            identifier: 'lobe-local-system',
+src/store/chat/slices/aiChat/actions/__tests__/streamingExecutor.test.ts:2296:          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+src/store/chat/slices/aiChat/actions/__tests__/streamingExecutor.test.ts:2339:          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+src/store/chat/slices/aiChat/actions/conversationLifecycle.ts:301:      (!!heterogeneousProvider || !!agentConfig?.plugins?.includes('lobe-local-system'));

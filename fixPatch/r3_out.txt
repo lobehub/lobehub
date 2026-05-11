@@ -1,0 +1,71 @@
+FileItem2.txt: 5715 bytes
+useReviewPatches.txt: 2621 bytes
+
+=== FileItem.tsx lines 92-end ===
+  filePath: string;
+  // Status reserved for future use (e.g. dim deleted entries) — keep on the
+  // shape so the parent doesn't need to re-derive it later.
+  status: GitFileDiffStatus;
+}
+
+export const FileItemHeader = memo<FileItemHeaderProps>(({ filePath, additions, deletions }) => {
+  const { t } = useTranslation('chat');
+
+  const lastSlash = filePath.lastIndexOf('/');
+  const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash + 1) : '';
+  const fileName = lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath;
+
+  const handleCopy = useCallback(
+    async (event: MouseEvent<HTMLDivElement>) => {
+      // Stop propagation so the row doesn't toggle expand on copy click.
+      event.stopPropagation();
+      await copyToClipboard(filePath);
+      message.success(t('workingPanel.review.copied'));
+    },
+    [filePath, t],
+  );
+
+  return (
+    <span className={styles.header}>
+      <span className={styles.pathWrapper} title={filePath}>
+        {dir && (
+          // bdi keeps the dir's visual order LTR while the span is
+          // direction: rtl for head-side truncation of leading segments.
+          <span className={styles.dir}>
+            <bdi dir={'ltr'}>{dir}</bdi>
+          </span>
+        )}
+        <span className={styles.fileName}>{fileName}</span>
+      </span>
+      <span className={styles.stats}>
+        {additions > 0 && <span className={styles.additions}>+{additions}</span>}
+        {additions > 0 && deletions > 0 && ' '}
+        {deletions > 0 && <span className={styles.deletions}>-{deletions}</span>}
+      </span>
+      <ActionIcon
+        className={styles.copy}
+        icon={CopyIcon}
+        size={'small'}
+        title={t('workingPanel.review.copyPath')}
+        onClick={handleCopy}
+      />
+    </span>
+  );
+});
+
+FileItemHeader.displayName = 'ReviewFileItemHeader';
+
+interface FileItemBodyProps {
+  /** Whether the Collapse panel is expanded — gates the heavy PatchDiff render. */
+  expanded: boolean;
+  filePath: string;
+  isBinary: boolean;
+  patch: string;
+Traceback (most recent call last):
+  File "C:\Users\emanuele.gallo\Projects\Mio\lobehub\fixPatch\r3.py", line 29, in <module>
+    print(ln)
+    ~~~~~^^^^
+  File "C:\Python314\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 47: character maps to <undefined>

@@ -1,0 +1,56 @@
+SUCCESS: fixture updated
+
+Git status:
+ M packages/local-file-shell/src/file/edit.ts
+ M src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts
+?? fixPatch/FileItem2.txt
+?? fixPatch/FileItem_content.txt
+?? fixPatch/ReviewIndex.txt
+?? fixPatch/apply_patch10.py
+?? fixPatch/apply_patch10b.py
+?? fixPatch/apply_patch10c.py
+?? fixPatch/r.py
+?? fixPatch/r10.py
+?? fixPatch/r10_log.txt
+?? fixPatch/r10_out.txt
+?? fixPatch/r11.py
+?? fixPatch/r11_log.txt
+?? fixPatch/r11_out.txt
+?? fixPatch/r2.py
+?? fixPatch/r3.py
+?? fixPatch/r3_out.txt
+?? fixPatch/r4.py
+?? fixPatch/r4_out.txt
+?? fixPatch/r5.py
+?? fixPatch/r5_out.txt
+?? fixPatch/r6.py
+?? fixPatch/r6_out.txt
+?? fixPatch/r7.py
+?? fixPatch/r7_log.txt
+?? fixPatch/r7_out.txt
+?? fixPatch/r8.py
+?? fixPatch/r8_log.txt
+?? fixPatch/r8_out.txt
+?? fixPatch/r8b.py
+?? fixPatch/r8b_log.txt
+?? fixPatch/r9.py
+?? fixPatch/r9_log.txt
+?? fixPatch/r9_out.txt
+?? fixPatch/read_review.py
+?? fixPatch/run.cmd
+?? fixPatch/run10.cmd
+?? fixPatch/run10b.cmd
+?? fixPatch/run10b_log.txt
+?? fixPatch/run10c.cmd
+?? fixPatch/run10c_log.txt
+?? fixPatch/run10d.cmd
+?? fixPatch/run10d_log.txt
+?? fixPatch/run11.cmd
+?? fixPatch/run4.cmd
+?? fixPatch/run5.cmd
+?? fixPatch/run6.cmd
+?? fixPatch/run7.cmd
+?? fixPatch/run8.cmd
+?? fixPatch/run8b.cmd
+?? fixPatch/run9.cmd
+?? fixPatch/useReviewPatches.txt

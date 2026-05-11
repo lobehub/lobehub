@@ -1,0 +1,37 @@
+$ git add packages/local-file-shell/src/file/edit.ts src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts
+STDERR: warning: in the working copy of 'packages/local-file-shell/src/file/edit.ts', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts', CRLF will be replaced by LF the next time Git touches it
+
+$ git branch --show-current
+emaxlele-dev
+Current branch: emaxlele-dev
+$ git commit -m fix(local-system): strip createPatch preamble to prevent PatchDiff crash
+
+`createPatch()` from the `diff` library emits an "Index: ?\n===?\n"
+preamble before the unified diff hunks. The renderer was then prepending
+a "diff --git a/? b/?" header on top, giving PatchDiff two distinct
+block headers. `getSingularPatch` inside @lobehub/ui correctly enforces
+"exactly 1 patch / 1 diff" and throws:
+
+  Error: PatchDiff: Provided patch must include only 1 patch, with 1 diff
+
+The edit *succeeded* on disk (the file was written correctly) but the
+UI crashed while trying to render the diff viewer.
+
+Fix: after calling `createPatch`, slice everything before the first
+`--- ` line so PatchDiff receives a single clean unified-diff block.
+The `diff --git a/? b/?` header is kept (as a leading hint to the
+syntax highlighter) because the trimmed body starts right at `--- `.
+
+Also update the DevPanel fixture for `editLocalFile` so it matches the
+newly-emitted format (with the `diff --git` prefix).
+
+Fixes: PatchDiff crash on every successful `editFile` call.
+
+[emaxlele-dev bef2216bc2] fix(local-system): strip createPatch preamble to prevent PatchDiff crash
+ 2 files changed, 12 insertions(+), 4 deletions(-)
+$ git push origin emaxlele-dev
+STDERR: To https://github.com/emaxlele/lobehub.git
+   1a86608248..bef2216bc2  emaxlele-dev -> emaxlele-dev
+
+Pushed to emaxlele-dev

@@ -1,0 +1,178 @@
+
+============================================================
+=== packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx ===
+============================================================
+'use client';
+
+import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
+import type { BuiltinRenderProps } from '@lobechat/types';
+import { ActionIcon, Block, Flexbox, Highlighter, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { memo, useState } from 'react';
+
+import type { EditLocalFileState } from '../../../types';
+
+const styles = createStaticStyles(({ css }) => ({
+  container: css`
+    overflow: hidden;
+    padding-inline: 8px 0;
+  `,
+  header: css`
+    .action-icon {
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    &:hover {
+      .action-icon {
+        opacity: 1;
+      }
+    }
+  `,
+  statusIcon: css`
+    font-size: 12px;
+  `,
+}));
+
+interface EditLocalFileParams {
+  all?: boolean;
+  path: string;
+  replace: string;
+  search: string;
+}
+
+const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFileState>>(
+  ({ args, pluginState }) => {
+    const [expanded, setExpanded] = useState(false);
+    const isSuccess = pluginState && pluginState.replacements > 0;
+
+    const statsText =
+      pluginState?.linesAdded || pluginState?.linesDeleted
+        ? `+${pluginState.linesAdded || 0} -${pluginState.linesDeleted || 0}`
+        : '';
+
+    return (
+      <Flexbox className={styles.container} gap={8}>
+        {/* Header */}
+        <Flexbox horizontal align={'center'} className={styles.header} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} gap={8}>
+            {pluginState === undefined ? null : isSuccess ? (
+              <CheckCircleFilled
+                className={styles.statusIcon}
+                style={{ color: cssVar.colorSuccess }}
+              />
+            ) : (
+              <CloseCircleFilled
+                className={styles.statusIcon}
+                style={{ color: cssVar.colorError }}
+              />
+            )}
+            <Text code as={'span'} fontSize={12}>
+              {pluginState?.replacements || 0} replacement(s) in {args.path}
+            </Text>
+            {statsText && (
+              <Text code as={'span'} fontSize={11} type={'secondary'}>
+                ({statsText})
+              </Text>
+            )}
+          </Flexbox>
+          {pluginState?.diffText && (
+            <ActionIcon
+              className={`action-icon`}
+              icon={expanded ? ChevronUp : ChevronDown}
+              size={'small'}
+              style={{ opacity: expanded ? 1 : undefined }}
+              title={expanded ? 'Hide diff' : 'Show diff'}
+              onClick={() => setExpanded(!expanded)}
+            />
+          )}
+        </Flexbox>
+
+        {/* Diff view */}
+        {expanded && pluginState?.diffText && (
+          <Block padding={0} variant={'outlined'}>
+            <Highlighter
+              wrap
+              language={'diff'}
+              showLanguage={false}
+              style={{ maxHeight: 300, overflow: 'auto' }}
+              variant={'borderless'}
+            >
+              {pluginState.diffText}
+            </Highlighter>
+          </Block>
+        )}
+      </Flexbox>
+    );
+  },
+);
+
+EditLocalFile.displayName = 'EditLocalFile';
+
+export default EditLocalFile;
+
+============================================================
+=== packages/local-file-shell/src/file/edit.ts ===
+============================================================
+import { readFile, writeFile } from 'node:fs/promises';
+
+import { createPatch } from 'diff';
+
+import type { EditFileParams, EditFileResult } from '../types';
+import { expandTilde } from './expandTilde';
+
+export async function editLocalFile({
+  file_path: rawPath,
+  old_string,
+  new_string,
+  replace_all = false,
+}: EditFileParams): Promise<EditFileResult> {
+  const filePath = expandTilde(rawPath) ?? rawPath;
+  try {
+    const content = await readFile(filePath, 'utf8');
+
+    if (!content.includes(old_string)) {
+      return {
+        error: 'The specified old_string was not found in the file',
+        replacements: 0,
+        success: false,
+      };
+    }
+
+    let newContent: string;
+    let replacements: number;
+
+    if (replace_all) {
+      const regex = new RegExp(old_string.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&'), 'g');
+      const matches = content.match(regex);
+      replacements = matches ? matches.length : 0;
+      newContent = content.replaceAll(old_string, new_string);
+    } else {
+      const index = content.indexOf(old_string);
+      if (index === -1) {
+        return { error: 'Old string not found', replacements: 0, success: false };
+      }
+      newContent = content.slice(0, index) + new_string + content.slice(index + old_string.length);
+      replacements = 1;
+    }
+
+    await writeFile(filePath, newContent, 'utf8');
+
+    const patch = createPatch(filePath, content, newContent, '', '');
+    const diffText = `diff --git a${filePath} b${filePath}\n${patch}`;
+
+    const patchLines = patch.split('\n');
+    let linesAdded = 0;
+    let linesDeleted = 0;
+
+    for (const line of patchLines) {
+      if (line.startsWith('+') && !line.startsWith('+++')) linesAdded++;
+      else if (line.startsWith('-') && !line.startsWith('---')) linesDeleted++;
+    }
+
+    return { diffText, linesAdded, linesDeleted, replacements, success: true };
+  } catch (error) {
+    return { error: (error as Error).message, replacements: 0, success: false };
+  }
+}

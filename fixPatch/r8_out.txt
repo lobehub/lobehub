@@ -1,0 +1,208 @@
+=== diffText grep ===
+apps/desktop/src/main/controllers/GitCtr.ts:50:const splitBulkDiff = (diffText: string): DiffBlock[] => {
+apps/desktop/src/main/controllers/GitCtr.ts:51:  if (!diffText) return [];
+apps/desktop/src/main/controllers/GitCtr.ts:56:  while ((m = headerRe.exec(diffText)) !== null) starts.push(m.index);
+apps/desktop/src/main/controllers/GitCtr.ts:59:    const end = i + 1 < starts.length ? starts[i + 1] : diffText.length;
+apps/desktop/src/main/controllers/GitCtr.ts:60:    const block = diffText.slice(start, end);
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:630:      expect(result.diffText).toContain('diff --git a/test/file.txt b/test/file.txt');
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:740:      expect(result.diffText).toContain('diff --git a/test/file.txt b/test/file.txt');
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:741:      expect(result.diffText).toContain('-line 2');
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:742:      expect(result.diffText).toContain('+modified line 2');
+packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx:76:          {pluginState?.diffText && (
+packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx:89:        {expanded && pluginState?.diffText && (
+packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx:98:              {pluginState.diffText}
+packages/builtin-tool-local-system/src/ExecutionRuntime/index.ts:265:            diffText: raw.diffText,
+packages/builtin-tool-local-system/src/client/Render/EditLocalFile/index.tsx:22:        ) : pluginState?.diffText ? (
+packages/builtin-tool-local-system/src/client/Render/EditLocalFile/index.tsx:25:            patch={pluginState.diffText}
+packages/electron-client-ipc/src/types/localSystem.ts:300:  diffText?: string;
+packages/local-file-shell/src/file/__tests__/file.test.ts:232:      expect(result.diffText).toBeDefined();
+packages/local-file-shell/src/file/edit.ts:46:    const diffText = `diff --git a${filePath} b${filePath}\n${patch}`;
+packages/local-file-shell/src/file/edit.ts:57:    return { diffText, linesAdded, linesDeleted, replacements, success: true };
+packages/local-file-shell/src/types.ts:88:  diffText?: string;
+packages/tool-runtime/src/ComputerRuntime.ts:172:        diffText: result.result?.diffText,
+packages/tool-runtime/src/types.ts:136:  diffText?: string;
+src/features/DevPanel/RenderGallery/fixtures/lobe-cloud-sandbox.ts:11:        diffText:
+src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts:11:        diffText:
+
+=== Messages files ===
+src/features/Conversation/Messages/AgentCouncil/components/AutoScrollShadow.tsx
+src/features/Conversation/Messages/AgentCouncil/components/CouncilList.tsx
+src/features/Conversation/Messages/AgentCouncil/components/CouncilMember.tsx
+src/features/Conversation/Messages/AgentCouncil/components/ScrollShadowWithButton.tsx
+src/features/Conversation/Messages/AgentCouncil/index.tsx
+src/features/Conversation/Messages/Assistant/Actions/index.tsx
+src/features/Conversation/Messages/Assistant/Extra/index.tsx
+src/features/Conversation/Messages/Assistant/components/InterruptedHint.tsx
+src/features/Conversation/Messages/Assistant/components/MessageContent.tsx
+src/features/Conversation/Messages/Assistant/index.tsx
+src/features/Conversation/Messages/Assistant/useMarkdown.tsx
+src/features/Conversation/Messages/AssistantGroup/Actions/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Actions/Settings.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Actions/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Debug/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/AbortResponse.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Arguments/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/ErrorResponse.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/ApprovalActions.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/Fallback.test.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/Fallback.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/KeyValueEditor.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/SecurityBlacklistWarning.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/customInteractionHandlers.test.ts
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/customInteractionHandlers.ts
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/installMarketplaceAgents.test.ts
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/installMarketplaceAgents.ts
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/webOnboarding.test.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/LoadingPlaceholder/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/PluginSettings.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/RejectedResponse.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Render/CustomRender.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Render/FallbacktArgumentRender.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Render/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/ExecutionTime.test.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/ExecutionTime.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/StatusIndicator.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/ToolTitle.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tools.tsx
+src/features/Conversation/Messages/AssistantGroup/components/CollapsedMessage.tsx
+src/features/Conversation/Messages/AssistantGroup/components/ContentBlock.tsx
+src/features/Conversation/Messages/AssistantGroup/components/ContentBlocksScroll.test.tsx
+src/features/Conversation/Messages/AssistantGroup/components/ContentBlocksScroll.tsx
+src/features/Conversation/Messages/AssistantGroup/components/EditState.tsx
+src/features/Conversation/Messages/AssistantGroup/components/Group.test.tsx
+src/features/Conversation/Messages/AssistantGroup/components/Group.tsx
+src/features/Conversation/Messages/AssistantGroup/components/GroupItem.tsx
+src/features/Conversation/Messages/AssistantGroup/components/MessageContent.test.tsx
+src/features/Conversation/Messages/AssistantGroup/components/MessageContent.tsx
+src/features/Conversation/Messages/AssistantGroup/components/WorkflowCollapse.test.tsx
+src/features/Conversation/Messages/AssistantGroup/components/WorkflowCollapse.tsx
+src/features/Conversation/Messages/AssistantGroup/components/WorkflowExpandedList.tsx
+src/features/Conversation/Messages/AssistantGroup/components/WorkflowToolDetail.tsx
+src/features/Conversation/Messages/AssistantGroup/components/types.ts
+src/features/Conversation/Messages/AssistantGroup/constants.ts
+src/features/Conversation/Messages/AssistantGroup/index.tsx
+src/features/Conversation/Messages/AssistantGroup/toolDisplayNames.test.ts
+src/features/Conversation/Messages/AssistantGroup/toolDisplayNames.ts
+src/features/Conversation/Messages/AssistantGroup/toolRenderRules.test.ts
+src/features/Conversation/Messages/AssistantGroup/toolRenderRules.ts
+src/features/Conversation/Messages/AssistantGroup/useMarkdown.tsx
+src/features/Conversation/Messages/AssistantGroup/utils/resolveAssistantGroupFromMessages.ts
+src/features/Conversation/Messages/CompressedGroup/CompressedMessageItem.tsx
+src/features/Conversation/Messages/CompressedGroup/index.tsx
+src/features/Conversation/Messages/CompressedGroup/logic.test.ts
+src/features/Conversation/Messages/CompressedGroup/logic.ts
+src/features/Conversation/Messages/Contexts/MessageActionProvider.tsx
+src/features/Conversation/Messages/Contexts/MessageAggregationContext.ts
+src/features/Conversation/Messages/Contexts/message-action-context.ts
+src/features/Conversation/Messages/GroupTasks/TaskItem/ClientTaskItem.tsx
+src/features/Conversation/Messages/GroupTasks/TaskItem/ServerTaskItem.tsx
+src/features/Conversation/Messages/GroupTasks/TaskItem/TaskTitle.tsx
+src/features/Conversation/Messages/GroupTasks/TaskItem/index.tsx
+src/features/Conversation/Messages/GroupTasks/TaskItem/useClientTaskStats.ts
+src/features/Conversation/Messages/GroupTasks/index.tsx
+src/features/Conversation/Messages/Supervisor/components/CollapsedMessage.tsx
+src/features/Conversation/Messages/Supervisor/components/ContentBlock.tsx
+src/features/Conversation/Messages/Supervisor/components/Group.tsx
+src/features/Conversation/Messages/Supervisor/index.tsx
+src/features/Conversation/Messages/Task/Actions/index.tsx
+src/features/Conversation/Messages/Task/ClientTaskDetail/InitializingState.tsx
+src/features/Conversation/Messages/Task/ClientTaskDetail/index.tsx
+src/features/Conversation/Messages/Task/TaskDetailPanel/StatusContent.tsx
+src/features/Conversation/Messages/Task/TaskDetailPanel/index.tsx
+src/features/Conversation/Messages/Task/components/MessageContent.tsx
+src/features/Conversation/Messages/Task/index.tsx
+src/features/Conversation/Messages/Tasks/TaskItem/ClientTaskItem.tsx
+src/features/Conversation/Messages/Tasks/TaskItem/ServerTaskItem.tsx
+src/features/Conversation/Messages/Tasks/TaskItem/TaskTitle.tsx
+src/features/Conversation/Messages/Tasks/TaskItem/index.tsx
+src/features/Conversation/Messages/Tasks/TaskItem/useClientTaskStats.ts
+src/features/Conversation/Messages/Tasks/index.tsx
+src/features/Conversation/Messages/Tasks/shared/CompletedState.tsx
+src/features/Conversation/Messages/Tasks/shared/ErrorState.tsx
+src/features/Conversation/Messages/Tasks/shared/InitializingState.tsx
+src/features/Conversation/Messages/Tasks/shared/ProcessingState.tsx
+src/features/Conversation/Messages/Tasks/shared/TaskAvatar.tsx
+src/features/Conversation/Messages/Tasks/shared/TaskContent.tsx
+src/features/Conversation/Messages/Tasks/shared/TaskMessages.tsx
+src/features/Conversation/Messages/Tasks/shared/constants.ts
+src/features/Conversation/Messages/Tasks/shared/index.ts
+src/features/Conversation/Messages/Tasks/shared/useTaskPolling.ts
+src/features/Conversation/Messages/Tasks/shared/utils.ts
+src/features/Conversation/Messages/Tool/ErrorBoundary/ErrorResult.tsx
+src/features/Conversation/Messages/Tool/ErrorBoundary/index.tsx
+src/features/Conversation/Messages/Tool/Tool/index.tsx
+src/features/Conversation/Messages/Tool/index.tsx
+src/features/Conversation/Messages/Tool/preload.ts
+src/features/Conversation/Messages/User/Actions/index.tsx
+src/features/Conversation/Messages/User/Extra.tsx
+src/features/Conversation/Messages/User/components/CollapsibleContent.tsx
+src/features/Conversation/Messages/User/components/ContentPreview.tsx
+src/features/Conversation/Messages/User/components/FileListViewer/Item.tsx
+src/features/Conversation/Messages/User/components/FileListViewer/index.tsx
+src/features/Conversation/Messages/User/components/ImageFileListViewer.tsx
+src/features/Conversation/Messages/User/components/MessageContent.test.tsx
+src/features/Conversation/Messages/User/components/MessageContent.tsx
+src/features/Conversation/Messages/User/components/PageSelections.tsx
+src/features/Conversation/Messages/User/components/RichTextMessage.test.tsx
+src/features/Conversation/Messages/User/components/RichTextMessage.tsx
+src/features/Conversation/Messages/User/components/VideoFileListViewer.tsx
+src/features/Conversation/Messages/User/index.tsx
+src/features/Conversation/Messages/User/useMarkdown.tsx
+src/features/Conversation/Messages/components/ContentLoading.tsx
+src/features/Conversation/Messages/components/DisplayContent.tsx
+src/features/Conversation/Messages/components/Extras/ExtraContainer.tsx
+src/features/Conversation/Messages/components/Extras/TTS/FilePlayer.tsx
+src/features/Conversation/Messages/components/Extras/TTS/InitPlayer.tsx
+src/features/Conversation/Messages/components/Extras/TTS/Player.tsx
+src/features/Conversation/Messages/components/Extras/TTS/index.tsx
+src/features/Conversation/Messages/components/Extras/Translate.tsx
+src/features/Conversation/Messages/components/Extras/Usage/UsageDetail/AnimatedNumber.tsx
+src/features/Conversation/Messages/components/Extras/Usage/UsageDetail/ModelCard.tsx
+src/features/Conversation/Messages/components/Extras/Usage/UsageDetail/TokenProgress.tsx
+src/features/Conversation/Messages/components/Extras/Usage/UsageDetail/index.tsx
+src/features/Conversation/Messages/components/Extras/Usage/UsageDetail/pricing.ts
+src/features/Conversation/Messages/components/Extras/Usage/UsageDetail/tokens.ts
+src/features/Conversation/Messages/components/Extras/Usage/index.tsx
+src/features/Conversation/Messages/components/FileChunks/ChunkItem.tsx
+src/features/Conversation/Messages/components/FileChunks/index.tsx
+src/features/Conversation/Messages/components/FileChunks/style.ts
+src/features/Conversation/Messages/components/ImageFileListViewer.tsx
+src/features/Conversation/Messages/components/IntentUnderstanding.tsx
+src/features/Conversation/Messages/components/MessageActionBar/actions/branching.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/collapse.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/continueGeneration.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/copy.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/del.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/delAndRegenerate.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/edit.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/regenerate.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/share.tsx
+src/features/Conversation/Messages/components/MessageActionBar/actions/translate.ts
+src/features/Conversation/Messages/components/MessageActionBar/actions/tts.ts
+src/features/Conversation/Messages/components/MessageActionBar/defineAction.ts
+src/features/Conversation/Messages/components/MessageActionBar/index.tsx
+src/features/Conversation/Messages/components/MessageActionBar/types.ts
+src/features/Conversation/Messages/components/MessageActionBar/useBuildActions.ts
+src/features/Conversation/Messages/components/MessageBranch.tsx
+src/features/Conversation/Messages/components/Reasoning.tsx
+src/features/Conversation/Messages/components/RichContentRenderer.tsx
+src/features/Conversation/Messages/components/SearchGrounding.tsx
+src/features/Conversation/Messages/index.tsx
+
+=== pluginState in Conversation features ===
+src/features/Conversation/Messages/AssistantGroup/Tool/Debug/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Intervention/customInteractionHandlers.ts
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Render/CustomRender.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/Render/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Detail/index.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/index.tsx
+src/features/Conversation/Messages/AssistantGroup/toolDisplayNames.ts
+src/features/Conversation/Messages/Tool/Tool/index.tsx
+src/features/Conversation/store/slices/data/reducer.test.ts
+src/features/Conversation/store/slices/data/reducer.ts
+src/features/Conversation/store/slices/tool/action.ts
+

@@ -1,0 +1,61 @@
+C:\Users\emanuele.gallo\Projects\Mio\lobehub\fixPatch\r8.py:13: SyntaxWarning: "\|" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\|"? A raw string is also an option.
+  ['git', 'grep', '-rln', 'editLocalFile.*Inspector\|Inspector.*editLocalFile\|editFile.*Inspector\|diffText'],
+=== diffText grep ===
+apps/desktop/src/main/controllers/GitCtr.ts:50:const splitBulkDiff = (diffText: string): DiffBlock[] => {
+apps/desktop/src/main/controllers/GitCtr.ts:51:  if (!diffText) return [];
+apps/desktop/src/main/controllers/GitCtr.ts:56:  while ((m = headerRe.exec(diffText)) !== null) starts.push(m.index);
+apps/desktop/src/main/controllers/GitCtr.ts:59:    const end = i + 1 < starts.length ? starts[i + 1] : diffText.length;
+apps/desktop/src/main/controllers/GitCtr.ts:60:    const block = diffText.slice(start, end);
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:630:      expect(result.diffText).toContain('diff --git a/test/file.txt b/test/file.txt');
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:740:      expect(result.diffText).toContain('diff --git a/test/file.txt b/test/file.txt');
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:741:      expect(result.diffText).toContain('-line 2');
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts:742:      expect(result.diffText).toContain('+modified line 2');
+packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx:76:          {pluginState?.diffText && (
+packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx:89:        {expanded && pluginState?.diffText && (
+packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx:98:              {pluginState.diffText}
+packages/builtin-tool-local-system/src/ExecutionRuntime/index.ts:265:            diffText: raw.diffText,
+packages/builtin-tool-local-system/src/client/Render/EditLocalFile/index.tsx:22:        ) : pluginState?.diffText ? (
+packages/builtin-tool-local-system/src/client/Render/EditLocalFile/index.tsx:25:            patch={pluginState.diffText}
+packages/electron-client-ipc/src/types/localSystem.ts:300:  diffText?: string;
+packages/local-file-shell/src/file/__tests__/file.test.ts:232:      expect(result.diffText).toBeDefined();
+packages/local-file-shell/src/file/edit.ts:46:    const diffText = `diff --git a${filePath} b${filePath}\n${patch}`;
+packages/local-file-shell/src/file/edit.ts:57:    return { diffText, linesAdded, linesDeleted, replacements, success: true };
+packages/local-file-shell/src/types.ts:88:  diffText?: string;
+packages/tool-runtime/src/ComputerRuntime.ts:172:        diffText: result.result?.diffText,
+packages/tool-runtime/src/types.ts:136:  diffText?: string;
+src/features/DevPanel/RenderGallery/fixtures/lobe-cloud-sandbox.ts:11:        diffText:
+src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts:11:        diffText:
+
+
+=== Files with diffText or editLocalFile Inspector ===
+apps/desktop/src/main/controllers/GitCtr.ts
+apps/desktop/src/main/controllers/__tests__/LocalFileCtr.test.ts
+packages/builtin-tool-cloud-sandbox/src/client/Inspector/index.ts
+packages/builtin-tool-cloud-sandbox/src/client/Render/EditLocalFile/index.tsx
+packages/builtin-tool-local-system/src/ExecutionRuntime/index.ts
+packages/builtin-tool-local-system/src/client/Inspector/index.ts
+packages/builtin-tool-local-system/src/client/Render/EditLocalFile/index.tsx
+packages/electron-client-ipc/src/types/localSystem.ts
+packages/local-file-shell/src/file/__tests__/file.test.ts
+packages/local-file-shell/src/file/edit.ts
+packages/local-file-shell/src/types.ts
+packages/tool-runtime/src/ComputerRuntime.ts
+packages/tool-runtime/src/types.ts
+src/features/DevPanel/RenderGallery/fixtures/lobe-cloud-sandbox.ts
+src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts
+
+
+=== Inspector-related files ===
+src/features/Conversation/ChatList/components/AutoScroll/DebugInspector.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/ExecutionTime.test.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/ExecutionTime.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/StatusIndicator.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/ToolTitle.tsx
+src/features/Conversation/Messages/AssistantGroup/Tool/Inspector/index.tsx
+src/features/DevPanel/SystemInspector/AiProviderRuntimeConfig.tsx
+src/features/DevPanel/SystemInspector/JsonViewer.tsx
+src/features/DevPanel/SystemInspector/ServerConfig.tsx
+src/features/DevPanel/SystemInspector/index.tsx
+src/server/services/agentSignal/procedure/__tests__/inspector.test.ts
+src/server/services/agentSignal/procedure/inspector.ts
+Written 4475 bytes

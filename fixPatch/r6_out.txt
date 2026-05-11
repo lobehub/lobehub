@@ -1,0 +1,28 @@
+C:\Users\emanuele.gallo\Projects\Mio\lobehub\fixPatch\r6.py:7: SyntaxWarning: "\|" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\|"? A raw string is also an option.
+  ['git', 'grep', '-rln', 'editFile\|EditFile\|edit_file\|PatchDiff\|getSingularPatch', '--', 'src/'],
+C:\Users\emanuele.gallo\Projects\Mio\lobehub\fixPatch\r6.py:17: SyntaxWarning: "\|" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\|"? A raw string is also an option.
+  ['git', 'grep', '-rln', 'editFile\|localFiles\.editFile', '--', 'src/features/', 'src/routes/'],
+C:\Users\emanuele.gallo\Projects\Mio\lobehub\fixPatch\r6.py:27: SyntaxWarning: "\|" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\|"? A raw string is also an option.
+  ['git', 'grep', '-rn', 'editLocalFile\|EditLocalFile\|editFile.*patch\|patch.*editFile', '--', 'src/'],
+Files mentioning editFile/PatchDiff:
+  src/features/Conversation/Messages/AssistantGroup/constants.ts
+  src/locales/default/plugin.ts
+  src/locales/default/tool.ts
+  src/routes/(main)/agent/features/Conversation/WorkingSidebar/Review/FileItem.tsx
+  src/routes/(main)/agent/features/Conversation/WorkingSidebar/Review/index.tsx
+  src/services/electron/localFileService.ts
+
+Feature/route files for editFile:
+  src/features/Conversation/Messages/AssistantGroup/constants.ts
+
+Specific editFile patch references:
+src/features/Conversation/Messages/AssistantGroup/constants.ts:140:  editFile: 'workflow.toolDisplayName.editLocalFile',
+src/features/Conversation/Messages/AssistantGroup/constants.ts:154:  editLocalFile: 'workflow.toolDisplayName.editLocalFile',
+src/features/DevPanel/RenderGallery/fixtures/lobe-cloud-sandbox.ts:8:    editLocalFile: single({
+src/features/DevPanel/RenderGallery/fixtures/lobe-local-system.ts:8:    editLocalFile: single({
+src/locales/default/chat.ts:840:  'workflow.toolDisplayName.editLocalFile': 'Edited a file',
+src/locales/default/plugin.ts:76:  'builtins.lobe-cloud-sandbox.apiName.editLocalFile': 'Edit file',
+src/locales/default/plugin.ts:160:  'builtins.lobe-local-system.apiName.editLocalFile': 'Edit file',
+src/services/electron/localFileService.ts:4:  type EditLocalFileParams,
+src/services/electron/localFileService.ts:5:  type EditLocalFileResult,
+src/services/electron/localFileService.ts:99:  async editLocalFile(params: EditLocalFileParams): Promise<EditLocalFileResult> {

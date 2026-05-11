@@ -1,0 +1,386 @@
+
+============================================================
+=== packages/builtin-tool-local-system/src/client/Render/EditLocalFile/index.tsx ===
+============================================================
+import type { EditLocalFileState } from '@lobechat/builtin-tool-local-system';
+import type { BuiltinRenderProps } from '@lobechat/types';
+import { Alert, Flexbox, PatchDiff, Skeleton } from '@lobehub/ui';
+import React, { memo } from 'react';
+
+const EditLocalFile = memo<BuiltinRenderProps<any, EditLocalFileState>>(
+  ({ args, pluginState, pluginError }) => {
+    if (!args) return <Skeleton active />;
+
+    // Support both IPC format (file_path) and ComputerRuntime format (path)
+    const filePath = args.file_path || args.path || '';
+
+    return (
+      <Flexbox gap={12}>
+        {pluginError ? (
+          <Alert
+            showIcon
+            description={pluginError.message || 'Unknown error occurred'}
+            title="Edit Failed"
+            type="error"
+          />
+        ) : pluginState?.diffText ? (
+          <PatchDiff
+            fileName={filePath}
+            patch={pluginState.diffText}
+            showHeader={false}
+            variant="borderless"
+            viewMode="unified"
+          />
+        ) : null}
+      </Flexbox>
+    );
+  },
+);
+
+EditLocalFile.displayName = 'EditLocalFile';
+
+export default EditLocalFile;
+
+============================================================
+=== packages/local-file-shell/src/file/edit.ts ===
+============================================================
+import { readFile, writeFile } from 'node:fs/promises';
+
+import { createPatch } from 'diff';
+
+import type { EditFileParams, EditFileResult } from '../types';
+import { expandTilde } from './expandTilde';
+
+export async function editLocalFile({
+  file_path: rawPath,
+  old_string,
+  new_string,
+  replace_all = false,
+}: EditFileParams): Promise<EditFileResult> {
+  const filePath = expandTilde(rawPath) ?? rawPath;
+  try {
+    const content = await readFile(filePath, 'utf8');
+
+    if (!content.includes(old_string)) {
+      return {
+        error: 'The specified old_string was not found in the file',
+        replacements: 0,
+        success: false,
+      };
+    }
+
+    let newContent: string;
+    let replacements: number;
+
+    if (replace_all) {
+      const regex = new RegExp(old_string.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&'), 'g');
+      const matches = content.match(regex);
+      replacements = matches ? matches.length : 0;
+      newContent = content.replaceAll(old_string, new_string);
+    } else {
+      const index = content.indexOf(old_string);
+      if (index === -1) {
+        return { error: 'Old string not found', replacements: 0, success: false };
+      }
+      newContent = content.slice(0, index) + new_string + content.slice(index + old_string.length);
+      replacements = 1;
+    }
+
+    await writeFile(filePath, newContent, 'utf8');
+
+    const patch = createPatch(filePath, content, newContent, '', '');
+    const diffText = `diff --git a${filePath} b${filePath}\n${patch}`;
+
+    const patchLines = patch.split('\n');
+    let linesAdded = 0;
+    let linesDeleted = 0;
+
+    for (const line of patchLines) {
+      if (line.startsWith('+') && !line.startsWith('+++')) linesAdded++;
+      else if (line.startsWith('-') && !line.startsWith('---')) linesDeleted++;
+    }
+
+    return { diffText, linesAdded, linesDeleted, replacements, success: true };
+  } catch (error) {
+    return { error: (error as Error).message, replacements: 0, success: false };
+  }
+}
+
+============================================================
+=== packages/electron-client-ipc/src/types/localSystem.ts ===
+============================================================
+// Define types for local file operations
+export interface LocalFileItem {
+  contentType?: string;
+  createdTime: Date;
+  /** Search engine used to find this file (e.g., 'mdfind', 'fd', 'find', 'fast-glob') */
+  engine?: string;
+  isDirectory: boolean;
+  lastAccessTime: Date;
+  // Spotlight specific metadata
+  metadata?: {
+    [key: string]: any;
+  };
+  modifiedTime: Date;
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
+export type ListLocalFileSortBy = 'name' | 'modifiedTime' | 'createdTime' | 'size';
+export type ListLocalFileSortOrder = 'asc' | 'desc';
+
+export interface ListLocalFileParams {
+  /**
+   * Maximum number of files to return
+   * @default 100
+   */
+  limit?: number;
+  /**
+   * Directory path to list
+   */
+  path: string;
+  /**
+   * Field to sort by
+   * @default 'modifiedTime'
+   */
+  sortBy?: ListLocalFileSortBy;
+  /**
+   * Sort order
+   * @default 'desc'
+   */
+  sortOrder?: ListLocalFileSortOrder;
+}
+
+export interface ListLocalFilesResult {
+  /**
+   * List of files (truncated to limit)
+   */
+  files: LocalFileItem[];
+  /**
+   * Total count of files before truncation
+   */
+  totalCount: number;
+}
+
+export interface MoveLocalFileParams {
+  newPath: string;
+  oldPath: string;
+}
+
+export interface MoveLocalFilesParams {
+  items: MoveLocalFileParams[];
+}
+
+export interface LocalMoveFilesResultItem {
+  error?: string; // Error message if this specific item failed
+  newPath?: string; // The final path after moving/renaming, if successful
+  sourcePath: string; // The original path of the item being moved/renamed
+  success: boolean; // Whether the operation for this specific item was successful
+}
+
+export interface RenameLocalFileParams {
+  newName: string;
+  path: string;
+}
+
+export interface RenameLocalFileResult {
+  error?: any;
+  newPath: string;
+  success: boolean;
+}
+
+export interface LocalReadFileParams {
+  fullContent?: boolean;
+  loc?: [number, number];
+  path: string;
+}
+
+export interface LocalReadFilesParams {
+  paths: string[];
+}
+
+export interface WriteLocalFileParams {
+  /**
+   * Content to write
+   */
+  content: string;
+
+  /**
+   * File path to write to
+   */
+  path: string;
+}
+
+export interface AuditSafePathsParams {
+  paths: string[];
+  resolveAgainstScope: string;
+}
+
+export interface AuditSafePathsResult {
+  allSafe: boolean;
+}
+
+export interface LocalReadFileResult {
+  /**
+   * Character count of the content within the specified `loc` range.
+   */
+  charCount: number;
+  /**
+   * Content of the file within the specified `loc` range.
+   */
+  content: string;
+  createdTime: Date;
+  filename: string;
+  fileType: string;
+  /**
+   * Line count of the content within the specified `loc` range.
+   */
+  lineCount: number;
+  loc: [number, number];
+  modifiedTime: Date;
+  /**
+   * Total character count of the entire file.
+   */
+  totalCharCount: number;
+  /**
+   * Total line count of the entire file.
+   */
+  totalLineCount: number;
+}
+
+export interface LocalSearchFilesParams {
+  // Content options
+  contentContains?: string; // Search for files containing specific text
+
+  // Time options (ISO 8601 date strings)
+  createdAfter?: string;
+  createdBefore?: string;
+
+  // Result options
+  detailed?: boolean;
+
+  // Path options
+  directory?: string; // Limit search to specific directory
+
+  exclude?: string[]; // Paths to exclude from search
+  // File type options
+  fileTypes?: string[]; // File extensions to filter (e.g., ['pdf', 'docx'])
+  // Basic search
+  keywords: string;
+  limit?: number;
+
+  liveUpdate?: boolean;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
+
+  /** Working directory scope. When `directory` is not specified, used as the default search location. */
+  scope?: string;
+  sortBy?: 'name' | 'date' | 'size';
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface ProjectFileIndexEntry {
+  isDirectory: boolean;
+  name: string;
+  path: string;
+  relativePath: string;
+}
+
+export interface ProjectFileIndexParams {
+  /** Working directory used to resolve the project root. Defaults to Electron process cwd. */
+  scope?: string;
+}
+
+export interface ProjectFileIndexResult {
+  entries: ProjectFileIndexEntry[];
+  indexedAt: string;
+  root: string;
+  source: 'git' | 'glob';
+  totalCount: number;
+}
+
+export interface OpenLocalFileParams {
+  path: string;
+}
+
+export interface OpenLocalFolderParams {
+  isDirectory?: boolean;
+  path: string;
+}
+
+// Shell command types
+export interface RunCommandParams {
+  command: string;
+  cwd?: string;
+  description?: string;
+  /** Merged into the child process environment (after `process.env`). */
+  env?: Record<string, string>;
+  run_in_background?: boolean;
+  timeout?: number;
+}
+
+export interface RunCommandResult {
+  error?: string;
+  exit_code?: number;
+  output?: string;
+  shell_id?: string;
+  stderr?: string;
+  stdout?: string;
+  success: boolean;
+}
+
+export interface GetCommandOutputParams {
+  filter?: string;
+  shell_id: string;
+}
+
+export interface GetCommandOutputResult {
+  error?: string;
+  output: string;
+  running: boolean;
+  stderr: string;
+  stdout: string;
+  success: boolean;
+}
+
+export interface KillCommandParams {
+  shell_id: string;
+}
+
+export interface KillCommandResult {
+  error?: string;
+  success: boolean;
+}
+
+// Grep types
+export interface GrepContentParams {
+  '-A'?: number;
+  '-B'?: number;
+  '-C'?: number;
+  '-i'?: boolean;
+  '-n'?: boolean;
+  'glob'?: string;
+  'head_limit'?: number;
+  'multiline'?: boolean;
+  'output_mode'?: 'content' | 'files_with_matches' | 'count';
+  'path'?: string;
+  'pattern': string;
+  /** Working directory scope. When `path` is not specified, used as the default search location. */
+  'scope'?: string;
+  /** Preferred search tool: 'rg' | 'ag' | 'grep' */
+  'tool'?: 'rg' | 'ag' | 'grep';
+  'type'?: string;
+}
+
+export interface GrepContentResult {
+  /** Search engine used: 'rg' | 'ag' | 'grep' | 'nodejs' */
+  engine?: string;
+  error?: string;
+  matches: string[];
+  success: boolean;
+  total_matches: number;
+}
+
+// Gl
