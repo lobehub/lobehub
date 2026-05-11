@@ -24,6 +24,11 @@ import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
 import {
+  buildAllowedBuiltinTools,
+  DEVICE_TOOL_IDENTIFIERS,
+} from '@/server/services/aiAgent/deviceToolRegistry';
+
+import {
   type ServerAgentToolsContext,
   type ServerAgentToolsEngineConfig,
   type ServerCreateAgentToolsEngineParams,
@@ -51,24 +56,44 @@ export const createServerToolsEngine = (
   context: ServerAgentToolsContext,
   config: ServerAgentToolsEngineConfig = {},
 ): ToolsEngine => {
-  const { enableChecker, additionalManifests = [], defaultToolIds } = config;
+  const {
+    enableChecker,
+    additionalManifests = [],
+    builtinTools: builtinToolsOverride = builtinTools,
+    defaultToolIds,
+    excludeIdentifiers,
+  } = config;
 
   // Get plugin manifests from installed plugins (from database)
   const pluginManifests = context.installedPlugins
     .map((plugin) => plugin.manifest as LobeToolManifest)
     .filter(Boolean);
 
-  // Get all builtin tool manifests
-  const builtinManifests = builtinTools.map((tool) => tool.manifest as LobeToolManifest);
+  // Get builtin tool manifests from the (possibly pre-filtered) list. The
+  // filter is one half of the hard wall keeping device tools out of an
+  // external bot sender's manifestSchemas — see `buildAllowedBuiltinTools`
+  // and LOBE-8768. The enableChecker rules below are defense-in-depth
+  // because `allowExplicitActivation` lets activator-driven activation
+  // bypass them.
+  const builtinManifests = builtinToolsOverride.map((tool) => tool.manifest as LobeToolManifest);
 
-  // Combine all manifests
-  const allManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
+  // Combine all manifests, then drop anything whose identifier the caller
+  // has explicitly forbidden for this turn. The post-merge filter closes
+  // the second half of the LOBE-8768 wall: an installed plugin or a
+  // Skill/Klavis manifest claiming `lobe-remote-device` would otherwise
+  // slip through `buildAllowedBuiltinTools` (which only touches the
+  // builtin source).
+  const combinedManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
+  const allManifests = excludeIdentifiers
+    ? combinedManifests.filter((m) => !excludeIdentifiers.has(m.identifier))
+    : combinedManifests;
 
   log(
-    'Creating ToolsEngine with %d plugin manifests, %d builtin manifests, %d additional manifests',
+    'Creating ToolsEngine with %d plugin manifests, %d builtin manifests, %d additional manifests, %d excluded',
     pluginManifests.length,
     builtinManifests.length,
     additionalManifests.length,
+    combinedManifests.length - allManifests.length,
   );
 
   return new ToolsEngine({
@@ -155,8 +180,19 @@ export const createServerAgentToolsEngine = (
   return createServerToolsEngine(context, {
     // Pass additional manifests (e.g., LobeHub Skills)
     additionalManifests,
+    // Physically drop device-tool manifests for turns whose access policy
+    // denies them. Without this filter, `lobe-activator`'s explicit
+    // activation could resolve the manifest and bypass the rule-layer
+    // gates below (LOBE-8768).
+    builtinTools: buildAllowedBuiltinTools({ canUseDevice, disableLocalSystem }),
     // Add default tools based on configuration
     defaultToolIds,
+    // Post-merge wall: a plugin or Skill/Klavis manifest claiming a
+    // device identifier survives `buildAllowedBuiltinTools` (which only
+    // filters the builtin source). Excluding the identifiers here drops
+    // them from the combined `manifestSchemas` so the activator cannot
+    // resolve them regardless of which manifest source declared them.
+    excludeIdentifiers: canUseDevice ? undefined : DEVICE_TOOL_IDENTIFIERS,
     enableChecker: createEnableChecker({
       // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron)
       allowExplicitActivation: true,

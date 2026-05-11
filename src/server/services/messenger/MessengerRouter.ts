@@ -19,6 +19,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
+import { buildBotContext } from '@/server/services/bot/buildBotContext';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 import { renderInlineError } from '@/server/services/bot/replyTemplate';
 
@@ -954,20 +955,22 @@ export class MessengerRouter {
     // Messenger account-link routing already binds platform sender →
     // LobeHub user; the dispatch only fires for the linked sender. So
     // `isOwner` is true iff the inbound message's `author.userId` matches
-    // the linked `platformUserId`. Falls back to false when either is
-    // missing (fail-closed — never default device access to "trusted").
-    const senderExternalUserId = message.author?.userId ?? '';
-    const isOwner = !!link.platformUserId && senderExternalUserId === link.platformUserId;
-
+    // the linked `platformUserId`. `buildBotContext` enforces the
+    // fail-closed default (never trust when either side is missing).
     await bridge.handleMention(thread, message, {
       agentId,
       botContext: {
-        // Per-install applicationId so the agent runtime can distinguish
-        // workspaces in its own bookkeeping (logs, traces, dedupe).
-        applicationId: link.tenantId
-          ? `messenger-${platform}-${link.tenantId}`
-          : `messenger-${platform}`,
-        isOwner,
+        ...buildBotContext({
+          // Per-install applicationId so the agent runtime can distinguish
+          // workspaces in its own bookkeeping (logs, traces, dedupe).
+          applicationId: link.tenantId
+            ? `messenger-${platform}-${link.tenantId}`
+            : `messenger-${platform}`,
+          authorUserId: message.author?.userId,
+          operatorUserId: link.platformUserId,
+          platform,
+          platformThreadId: thread.id,
+        }),
         // Explicit, deterministic marker that this run originated from the
         // shared Messenger bot. `BotCallbackService` uses the presence of this
         // field to resolve credentials via the messenger install store instead
@@ -976,9 +979,6 @@ export class MessengerRouter {
         messengerInstallationKey: link.tenantId
           ? `${platform}:${link.tenantId}`
           : `${platform}:singleton`,
-        platform,
-        platformThreadId: thread.id,
-        senderExternalUserId,
       },
       client,
     });
