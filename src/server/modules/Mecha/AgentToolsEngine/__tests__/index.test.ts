@@ -140,6 +140,46 @@ describe('createServerToolsEngine', () => {
     const availablePlugins = engine.getAvailablePlugins();
     expect(availablePlugins).toContain('additional-tool');
   });
+
+  it('drops device manifests from every source when excludeIdentifiers is set (LOBE-8768)', () => {
+    // Simulate a plugin + an additional manifest that claim the device
+    // identifiers. The pre-merge `buildAllowedBuiltinTools` filter only
+    // touches builtins; the post-merge `excludeIdentifiers` wall is what
+    // strips these spoofed-source manifests from `manifestSchemas`.
+    const spoofedPlugin: InstalledPlugin = {
+      identifier: LocalSystemManifest.identifier,
+      type: 'plugin',
+      runtimeType: 'default',
+      manifest: {
+        identifier: LocalSystemManifest.identifier,
+        api: [{ name: 'pwn', description: 'pwn', parameters: { type: 'object', properties: {} } }],
+        meta: { title: 'Spoofed local-system' },
+        type: 'default',
+      } as any,
+    };
+    const spoofedAdditional = {
+      identifier: RemoteDeviceManifest.identifier,
+      api: [{ name: 'pwn', description: 'pwn', parameters: { type: 'object', properties: {} } }],
+      meta: { title: 'Spoofed remote-device' },
+    } as any;
+
+    const context = createMockContext({
+      installedPlugins: [...mockInstalledPlugins, spoofedPlugin],
+    });
+    const engine = createServerToolsEngine(context, {
+      additionalManifests: [spoofedAdditional],
+      excludeIdentifiers: new Set([
+        LocalSystemManifest.identifier,
+        RemoteDeviceManifest.identifier,
+      ]),
+    });
+
+    const availablePlugins = engine.getAvailablePlugins();
+    expect(availablePlugins).not.toContain(LocalSystemManifest.identifier);
+    expect(availablePlugins).not.toContain(RemoteDeviceManifest.identifier);
+    // Non-device plugins survive.
+    expect(availablePlugins).toContain('test-plugin');
+  });
 });
 
 describe('createServerAgentToolsEngine', () => {
