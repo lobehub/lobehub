@@ -1,4 +1,4 @@
-import { AgentMarketplaceApiName } from '../../types';
+import { WebOnboardingApiName } from '../../../types';
 import SubmitAgentPick from './SubmitAgentPick';
 
 // `showAgentMarketplace` is rewritten in place after the user submits — its
@@ -6,8 +6,8 @@ import SubmitAgentPick from './SubmitAgentPick';
 // shape that `SubmitAgentPick` consumes (see `customInteractionHandlers.ts`),
 // so both APIs reuse the same Render.
 export const AgentMarketplaceRenders = {
-  [AgentMarketplaceApiName.showAgentMarketplace]: SubmitAgentPick,
-  [AgentMarketplaceApiName.submitAgentPick]: SubmitAgentPick,
+  [WebOnboardingApiName.showAgentMarketplace]: SubmitAgentPick,
+  [WebOnboardingApiName.submitAgentPick]: SubmitAgentPick,
 };
 
 export { default as SubmitAgentPickRender } from './SubmitAgentPick';

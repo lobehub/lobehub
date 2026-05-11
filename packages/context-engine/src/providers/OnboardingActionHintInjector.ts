@@ -45,10 +45,7 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       if (msg?.role !== 'assistant') return false;
       if (
         Array.isArray(msg.tools) &&
-        msg.tools.some(
-          (t: any) =>
-            t?.apiName === 'showAgentMarketplace' || t?.identifier === 'lobe-agent-marketplace',
-        )
+        msg.tools.some((t: any) => t?.apiName === 'showAgentMarketplace')
       ) {
         return true;
       }

@@ -10,7 +10,6 @@ import type { ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentManagementRuntime } from './agentManagement';
-import { agentMarketplaceRuntime } from './agentMarketplace';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
@@ -72,7 +71,6 @@ registerRuntimes([
   gtdRuntime,
   knowledgeBaseRuntime,
   webOnboardingRuntime,
-  agentMarketplaceRuntime,
   lobeAgentRuntime,
   selfIterationIntentRuntime,
 ]);
