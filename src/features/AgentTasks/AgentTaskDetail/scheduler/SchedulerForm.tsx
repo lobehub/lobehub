@@ -114,6 +114,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   );
   const [tz, setTz] = useState<string>(timezone || DEFAULT_TIMEZONE);
   const [maxExec, setMaxExec] = useState<number | null>(maxExecutions ?? null);
+  const [continuous, setContinuous] = useState<boolean>(
+    maxExecutions === null || maxExecutions === undefined,
+  );
 
   useEffect(() => {
     setScheduleType(initial.scheduleType);
@@ -128,6 +131,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
 
   useEffect(() => {
     setMaxExec(maxExecutions ?? null);
+    setContinuous(maxExecutions === null || maxExecutions === undefined);
   }, [maxExecutions]);
 
   const emit = useCallback(
@@ -141,9 +145,14 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         weekdays: number[];
       }>,
     ) => {
+      // When the user is mid-editing maxExec (cleared the input but hasn't
+      // typed yet), local maxExec is null but `continuous` is still false.
+      // Falling back to the persisted prop here avoids emitting null for an
+      // unrelated field change — which would otherwise flip Continuous on.
+      const fallbackMaxExec = continuous ? null : (maxExec ?? maxExecutions ?? null);
       const next = {
         hourlyInterval: overrides.hourlyInterval ?? hourlyInterval,
-        maxExec: overrides.maxExec === undefined ? maxExec : overrides.maxExec,
+        maxExec: overrides.maxExec === undefined ? fallbackMaxExec : overrides.maxExec,
         scheduleType: overrides.scheduleType ?? scheduleType,
         triggerTime: overrides.triggerTime ?? triggerTime,
         tz: overrides.tz ?? tz,
@@ -157,7 +166,17 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
       );
       onChange({ maxExecutions: next.maxExec, pattern: nextPattern, timezone: next.tz });
     },
-    [hourlyInterval, maxExec, onChange, scheduleType, triggerTime, tz, weekdays],
+    [
+      continuous,
+      hourlyInterval,
+      maxExec,
+      maxExecutions,
+      onChange,
+      scheduleType,
+      triggerTime,
+      tz,
+      weekdays,
+    ],
   );
 
   const handleScheduleTypeChange = (value: ScheduleType) => {
@@ -199,18 +218,26 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   };
 
   const handleMaxExecChange = (value: number | string | null) => {
-    const next = typeof value === 'number' && value > 0 ? value : null;
-    setMaxExec(next);
-    emit({ maxExec: next });
+    if (typeof value === 'number' && value > 0) {
+      setMaxExec(value);
+      emit({ maxExec: value });
+      return;
+    }
+    // Mid-edit clear (e.g. user is replacing 100 with 5): keep the field
+    // empty locally but don't toggle Continuous or emit a null upstream.
+    setMaxExec(null);
   };
 
   const handleContinuousChange = (checked: boolean) => {
-    const next = checked ? null : 100;
-    setMaxExec(next);
-    emit({ maxExec: next });
+    setContinuous(checked);
+    if (checked) {
+      emit({ maxExec: null });
+    } else {
+      const next = maxExec ?? 100;
+      setMaxExec(next);
+      emit({ maxExec: next });
+    }
   };
-
-  const isUnlimited = maxExec === null || maxExec === undefined;
 
   const showTimeRow = scheduleType !== 'hourly';
 
@@ -331,7 +358,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               </Flexbox>
               <Flexbox horizontal align="center" gap={12}>
                 <InputNumber
-                  disabled={isUnlimited}
+                  disabled={continuous}
                   min={1}
                   placeholder={t('taskSchedule.maxExecutionsPlaceholder')}
                   style={{ flex: 1 }}
@@ -339,7 +366,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                   variant="filled"
                   onChange={handleMaxExecChange}
                 />
-                <Checkbox checked={isUnlimited} onChange={handleContinuousChange}>
+                <Checkbox checked={continuous} onChange={handleContinuousChange}>
                   {t('taskSchedule.continuous')}
                 </Checkbox>
               </Flexbox>
