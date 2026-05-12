@@ -208,14 +208,20 @@ export class TaskConfigSliceActionImpl {
     };
 
     // Optimistic dispatch so TaskTriggerTag / summary text reflect the change
-    // immediately, without waiting for the server roundtrip.
+    // immediately, without waiting for the server roundtrip. `taskService.update`
+    // wants the flat DB shape (`schedulePattern` / `scheduleTimezone` columns +
+    // `config.schedule.maxExecutions` JSONB), but the store reads from the
+    // normalized nested `schedule` object — populate both for the in-memory copy.
     this.#get().internal_dispatchTaskDetail({
       id,
       type: 'updateTaskDetail',
       value: {
         config: nextConfig,
-        schedulePattern: schedule.pattern,
-        scheduleTimezone: schedule.timezone,
+        schedule: {
+          maxExecutions: schedule.maxExecutions,
+          pattern: schedule.pattern,
+          timezone: schedule.timezone,
+        },
       },
     });
 
