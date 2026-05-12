@@ -1,6 +1,5 @@
 import type { IconType } from '@lobehub/icons';
-import { Icon, Tooltip } from '@lobehub/ui';
-import { Dropdown, type MenuProps } from 'antd';
+import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -111,7 +110,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
       return () => document.removeEventListener('keydown', onKeyDown, true);
     }, [open]);
 
-    const menuItems = useMemo<MenuProps['items']>(
+    const menuItems = useMemo<DropdownItem[]>(
       () =>
         Object.entries(PRIORITY_META).map(([key, value], index) => {
           const level = Number(key);
@@ -128,7 +127,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
             ),
             key,
             label: t(`taskDetail.${value.labelKey}` as never, { defaultValue: value.label }),
-            onClick: ({ domEvent }) => {
+            onClick: ({ domEvent }: MenuInfo) => {
               domEvent.stopPropagation();
               void handlePriorityChange(level);
             },
@@ -158,17 +157,9 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     if (disableDropdown) return <>{triggerNode}</>;
 
     return (
-      <Dropdown
-        open={open}
-        trigger={['click']}
-        menu={{
-          items: menuItems,
-          selectedKeys: [String(currentLevel)],
-        }}
-        onOpenChange={setOpen}
-      >
+      <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
         {triggerNode}
-      </Dropdown>
+      </DropdownMenu>
     );
   },
 );

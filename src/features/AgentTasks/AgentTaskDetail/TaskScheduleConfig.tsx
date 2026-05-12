@@ -8,9 +8,9 @@ import {
   InputNumber,
   Popover,
   Segmented,
-  Select,
   Text,
 } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';

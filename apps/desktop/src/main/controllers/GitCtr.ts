@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -11,6 +11,7 @@ import type {
   GitBranchListItem,
   GitCheckoutResult,
   GitFileDiffStatus,
+  GitFileRevertResult,
   GitLinkedPullRequestResult,
   GitPullResult,
   GitPushResult,
@@ -1104,6 +1105,72 @@ export default class GitController extends ControllerModule {
       const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
       logger.debug('[pushGitBranch] failed', { stderr });
       return { error: stderr || 'git push failed', success: false };
+    }
+  }
+
+  /**
+   * Revert a single working-tree change. Mirrors what "Discard changes" does
+   * in GitHub Desktop / VSCode SCM: restore the file to its HEAD state,
+   * dropping any unstaged / staged edits — and physically delete the file
+   * when it doesn't exist at HEAD (untracked or staged-add).
+   *
+   * Branch logic by HEAD presence:
+   *  - present at HEAD  → `git checkout HEAD -- <file>` (covers modified,
+   *    deleted, staged-D — restores both index + worktree from HEAD)
+   *  - absent at HEAD   → `git rm --cached` (unstage if staged-A; silent
+   *    no-op for untracked) + `fs.rm` to delete the file from disk
+   *
+   * filePath is the repo-relative path from `git status` output, the same
+   * shape we hand to the renderer in `GitWorkingTreePatch.filePath`. We
+   * reject absolute paths and `..` traversal so the renderer can't poke
+   * outside the repo even if its payload were tampered with.
+   */
+  @IpcMethod()
+  async revertGitFile(payload: { filePath: string; path: string }): Promise<GitFileRevertResult> {
+    const { path: dirPath, filePath } = payload;
+    if (!filePath?.trim()) return { error: 'File path is required', success: false };
+    if (path.isAbsolute(filePath) || filePath.split(/[/\\]/).includes('..')) {
+      return { error: `Invalid file path: ${filePath}`, success: false };
+    }
+
+    const execFileAsync = promisify(execFile);
+
+    // Probe HEAD via cat-file -e — exit 0 means the blob exists at HEAD.
+    let existsAtHead: boolean;
+    try {
+      await execFileAsync('git', ['cat-file', '-e', `HEAD:${filePath}`], {
+        cwd: dirPath,
+        timeout: 5000,
+      });
+      existsAtHead = true;
+    } catch {
+      existsAtHead = false;
+    }
+
+    try {
+      if (existsAtHead) {
+        await execFileAsync('git', ['checkout', 'HEAD', '--', filePath], {
+          cwd: dirPath,
+          timeout: 15_000,
+        });
+      } else {
+        // Unstage if the file is in the index (staged-add). `git rm --cached`
+        // exits non-zero on untracked paths, which is fine — swallow it.
+        try {
+          await execFileAsync('git', ['rm', '--cached', '--quiet', '--', filePath], {
+            cwd: dirPath,
+            timeout: 5000,
+          });
+        } catch {
+          // not staged — fall through to the disk-delete
+        }
+        await rm(path.resolve(dirPath, filePath), { force: true, recursive: false });
+      }
+      return { success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[revertGitFile] failed', { filePath, stderr });
+      return { error: stderr || 'git revert failed', success: false };
     }
   }
 }

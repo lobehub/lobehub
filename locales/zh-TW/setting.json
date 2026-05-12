@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "外掛設定",
   "plugin.store": "外掛商店",
   "publishToCommunity": "發佈至社群",
+  "serviceModel.modelAssignments.title": "模型指派",
+  "serviceModel.optionalFeatures.title": "選用功能",
   "settingAgent.avatar.sizeExceeded": "圖片大小超過 1MB 限制，請選擇較小的圖片",
   "settingAgent.avatar.title": "頭像",
   "settingAgent.backgroundColor.title": "背景色",

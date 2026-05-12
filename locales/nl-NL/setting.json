@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "Vaardigheidsconfiguratie",
   "plugin.store": "Vaardighedenwinkel",
   "publishToCommunity": "Publiceren naar de community",
+  "serviceModel.modelAssignments.title": "Modeltoewijzingen",
+  "serviceModel.optionalFeatures.title": "Optionele functies",
   "settingAgent.avatar.sizeExceeded": "Afbeeldingsgrootte overschrijdt de limiet van 1 MB, kies een kleinere afbeelding",
   "settingAgent.avatar.title": "Avatar",
   "settingAgent.backgroundColor.title": "Achtergrondkleur",

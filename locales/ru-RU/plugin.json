@@ -265,6 +265,7 @@
   "builtins.lobe-task.apiName.listTasks": "Список задач",
   "builtins.lobe-task.apiName.runTask": "Запустить задачу",
   "builtins.lobe-task.apiName.runTasks": "Запустить задачи",
+  "builtins.lobe-task.apiName.setTaskSchedule": "Задать расписание",
   "builtins.lobe-task.apiName.updateTaskComment": "Обновить комментарий",
   "builtins.lobe-task.apiName.updateTaskStatus": "Обновить статус",
   "builtins.lobe-task.apiName.viewTask": "Просмотреть задачу",

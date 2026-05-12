@@ -265,6 +265,7 @@
   "builtins.lobe-task.apiName.listTasks": "Lister les tâches",
   "builtins.lobe-task.apiName.runTask": "Exécuter une tâche",
   "builtins.lobe-task.apiName.runTasks": "Exécuter des tâches",
+  "builtins.lobe-task.apiName.setTaskSchedule": "Définir la planification",
   "builtins.lobe-task.apiName.updateTaskComment": "Mettre à jour le commentaire",
   "builtins.lobe-task.apiName.updateTaskStatus": "Mettre à jour le statut",
   "builtins.lobe-task.apiName.viewTask": "Voir une tâche",

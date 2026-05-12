@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "スキル設定",
   "plugin.store": "スキルストア",
   "publishToCommunity": "コミュニティに公開",
+  "serviceModel.modelAssignments.title": "モデル割り当て",
+  "serviceModel.optionalFeatures.title": "オプション機能",
   "settingAgent.avatar.sizeExceeded": "画像のサイズが1MBの制限を超えています。より小さい画像を選択してください。",
   "settingAgent.avatar.title": "アバター",
   "settingAgent.backgroundColor.title": "背景色",

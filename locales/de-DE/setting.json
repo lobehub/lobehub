@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "Fähigkeitenkonfiguration",
   "plugin.store": "Fähigkeiten-Store",
   "publishToCommunity": "In der Community veröffentlichen",
+  "serviceModel.modelAssignments.title": "Modellzuweisungen",
+  "serviceModel.optionalFeatures.title": "Optionale Funktionen",
   "settingAgent.avatar.sizeExceeded": "Bildgröße überschreitet das Limit von 1 MB, bitte wählen Sie ein kleineres Bild",
   "settingAgent.avatar.title": "Avatar",
   "settingAgent.backgroundColor.title": "Hintergrundfarbe",

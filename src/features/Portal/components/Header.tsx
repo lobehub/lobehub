@@ -1,6 +1,6 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@lobechat/const';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ArrowLeft, X } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -33,7 +33,7 @@ const Header = memo<{ title: ReactNode }>(({ title }) => {
       left={
         <Flexbox horizontal align="center" gap={4}>
           {canGoBack && (
-            <ActionIcon icon={ArrowLeft} size={DESKTOP_HEADER_ICON_SIZE} onClick={goBack} />
+            <ActionIcon icon={ArrowLeft} size={DESKTOP_HEADER_ICON_SMALL_SIZE} onClick={goBack} />
           )}
           {title}
         </Flexbox>
@@ -41,7 +41,7 @@ const Header = memo<{ title: ReactNode }>(({ title }) => {
       right={
         <ActionIcon
           icon={X}
-          size={DESKTOP_HEADER_ICON_SIZE}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
           onClick={() => {
             if (params.aid && params.topicId && isTopicPageRoute) {
               navigate(SESSION_CHAT_TOPIC_URL(params.aid, params.topicId));

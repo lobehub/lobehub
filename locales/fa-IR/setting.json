@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "پیکربندی مهارت",
   "plugin.store": "فروشگاه مهارت",
   "publishToCommunity": "انتشار در جامعه",
+  "serviceModel.modelAssignments.title": "تخصیص مدل‌ها",
+  "serviceModel.optionalFeatures.title": "ویژگی‌های اختیاری",
   "settingAgent.avatar.sizeExceeded": "حجم تصویر بیش از ۱ مگابایت است، لطفاً تصویر کوچکتری انتخاب کنید",
   "settingAgent.avatar.title": "آواتار",
   "settingAgent.backgroundColor.title": "رنگ پس‌زمینه",

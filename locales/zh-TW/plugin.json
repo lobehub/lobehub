@@ -265,6 +265,7 @@
   "builtins.lobe-task.apiName.listTasks": "列出任務",
   "builtins.lobe-task.apiName.runTask": "執行任務",
   "builtins.lobe-task.apiName.runTasks": "執行多個任務",
+  "builtins.lobe-task.apiName.setTaskSchedule": "設定排程",
   "builtins.lobe-task.apiName.updateTaskComment": "更新評論",
   "builtins.lobe-task.apiName.updateTaskStatus": "更新狀態",
   "builtins.lobe-task.apiName.viewTask": "查看任務",

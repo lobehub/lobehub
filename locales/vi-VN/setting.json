@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "Cấu hình kỹ năng",
   "plugin.store": "Cửa hàng Kỹ năng",
   "publishToCommunity": "Đăng tải lên Cộng đồng",
+  "serviceModel.modelAssignments.title": "Phân công mô hình",
+  "serviceModel.optionalFeatures.title": "Tính năng tùy chọn",
   "settingAgent.avatar.sizeExceeded": "Kích thước ảnh vượt quá giới hạn 1MB, vui lòng chọn ảnh nhỏ hơn",
   "settingAgent.avatar.title": "Ảnh đại diện",
   "settingAgent.backgroundColor.title": "Màu nền",
