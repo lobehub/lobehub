@@ -268,6 +268,28 @@ describe('Sitemap', () => {
       expect(pageCount).toBe(3); // 250 items / 100 per page = ceil(2.5) = 3 pages
     });
 
+    it('should fall back to empty identifiers when sitemap identifier fetch times out', async () => {
+      vi.useFakeTimers();
+
+      try {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.spyOn(sitemap['discoverService'], 'getAssistantIdentifiers').mockReturnValue(
+          new Promise<never>(() => {}),
+        );
+
+        const pageCountPromise = sitemap.getAssistantPageCount();
+
+        await vi.advanceTimersByTimeAsync(15_000);
+
+        await expect(pageCountPromise).resolves.toBe(0);
+        expect(consoleError).toHaveBeenCalledWith(
+          '[SitemapIdentifierFetchError] failed to fetch assistant sitemap identifiers',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should reuse assistant identifiers for count and page generation', async () => {
       const identifiers = Array.from({ length: 150 }, (_, i) => ({
         identifier: `assistant-${i}`,

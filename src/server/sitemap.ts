@@ -43,6 +43,7 @@ const discoverService = new DiscoverService();
 const sitemapIdentifiersCache: Partial<
   Record<SitemapIdentifiersKey, Promise<IdentifiersResponse>>
 > = {};
+const SITEMAP_IDENTIFIER_TIMEOUT_MS = 15_000;
 
 function clearCachedIdentifiers() {
   delete sitemapIdentifiersCache.assistant;
@@ -58,13 +59,37 @@ function getCachedIdentifiers(
   const cached = sitemapIdentifiersCache[key];
   if (cached) return cached;
 
-  const promise = loader().catch((error) => {
+  const promise = withSitemapIdentifierTimeout(key, loader()).catch((error) => {
     delete sitemapIdentifiersCache[key];
-    throw error;
+    console.error(`[SitemapIdentifierFetchError] failed to fetch ${key} sitemap identifiers`);
+    console.error(error);
+    return [];
   });
 
   sitemapIdentifiersCache[key] = promise;
   return promise;
+}
+
+async function withSitemapIdentifierTimeout(
+  key: SitemapIdentifiersKey,
+  promise: Promise<IdentifiersResponse>,
+): Promise<IdentifiersResponse> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(
+        new Error(
+          `Timed out fetching ${key} sitemap identifiers after ${SITEMAP_IDENTIFIER_TIMEOUT_MS}ms`,
+        ),
+      );
+    }, SITEMAP_IDENTIFIER_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 export class Sitemap {
