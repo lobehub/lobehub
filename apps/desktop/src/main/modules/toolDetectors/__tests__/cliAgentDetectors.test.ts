@@ -107,6 +107,61 @@ describe('cliAgentDetectors', () => {
 
       expect(status.available).toBe(false);
     });
+
+    it('prefers a .cmd shim when `where` returns multiple PATHEXT matches (codex case)', async () => {
+      // npm drops a Unix shell-script wrapper (extensionless) alongside the
+      // Windows `.cmd` / `.ps1` shims. `where` lists every PATHEXT match;
+      // taking the first line would land us on the unrunnable wrapper.
+      callExecFile(
+        [
+          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex',
+          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd',
+          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.ps1',
+        ].join('\r\n'),
+      );
+      callExec('codex 0.130.0');
+
+      const { codexDetector } = await import('../cliAgentDetectors');
+      const status = await codexDetector.detect();
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd');
+      expect(execMock.mock.calls[0]![0]).toBe(
+        '"C:\\Users\\Hanam\\AppData\\Roaming\\npm\\codex.cmd" --version',
+      );
+    });
+
+    it('prefers .exe over .cmd when both are present', async () => {
+      callExecFile(['C:\\tools\\foo.exe', 'C:\\tools\\foo.cmd'].join('\r\n'));
+      callExecFile('claude code 1.0.0');
+
+      const { claudeCodeDetector } = await import('../cliAgentDetectors');
+      const status = await claudeCodeDetector.detect();
+
+      expect(status.available).toBe(true);
+      expect(status.path).toBe('C:\\tools\\foo.exe');
+      // .exe runs directly via execFile — no shell.
+      expect(execMock).not.toHaveBeenCalled();
+      expect(execFileMock).toHaveBeenCalledTimes(2);
+      expect(execFileMock.mock.calls[1]![0]).toBe('C:\\tools\\foo.exe');
+    });
+
+    it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {
+      callExecFile(
+        [
+          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude',
+          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.ps1',
+        ].join('\r\n'),
+      );
+
+      const { claudeCodeDetector } = await import('../cliAgentDetectors');
+      const status = await claudeCodeDetector.detect();
+
+      expect(status.available).toBe(false);
+      // Must not attempt to invoke the unrunnable matches.
+      expect(execMock).not.toHaveBeenCalled();
+      expect(execFileMock).toHaveBeenCalledTimes(1); // just `where`
+    });
   });
 
   describe('on macOS / Linux with a Unix-style claude binary', () => {

@@ -26,6 +26,20 @@ const isWindows = () => platform() === 'win32';
 // User-supplied custom commands flow through here via `detectHeterogeneousCliCommand`.
 const WINDOWS_SHELL_METAS = /[&|;<>^`!"]/;
 
+// Extensions we can actually execute on Windows, in preference order:
+// `.exe` runs directly via `execFile`, `.cmd` / `.bat` runs via `cmd.exe`.
+// `.ps1` and extensionless wrappers (npm sometimes drops a Unix shell script
+// next to the `.cmd` shim) are deliberately excluded — we can't run them.
+const WINDOWS_RUNNABLE_EXTS = ['.exe', '.cmd', '.bat'] as const;
+
+const pickWindowsRunnable = (lines: string[]): string | undefined => {
+  for (const ext of WINDOWS_RUNNABLE_EXTS) {
+    const match = lines.find((line) => line.toLowerCase().endsWith(ext));
+    if (match) return match;
+  }
+  return undefined;
+};
+
 const resolveCommandPath = async (command: string): Promise<string | undefined> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return;
@@ -38,8 +52,19 @@ const resolveCommandPath = async (command: string): Promise<string | undefined> 
 
   try {
     const { stdout } = await execFilePromise(whichCommand, [trimmedCommand], { timeout: 3000 });
-    const first = stdout.trim().split(/\r?\n/)[0];
-    return first || undefined;
+    const lines = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return undefined;
+
+    // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships
+    // a Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Picking
+    // the first line can land us on something we can't execute, so prefer a
+    // runnable extension and bail otherwise.
+    if (isWindows()) return pickWindowsRunnable(lines);
+
+    return lines[0];
   } catch {
     return undefined;
   }
