@@ -643,6 +643,8 @@
   "taskSchedule.tag.schedule": "计划 · {{schedule}}{{timezone}}",
   "taskSchedule.time": "时间",
   "taskSchedule.timezone": "时区",
+  "taskSchedule.timezoneSearchEmpty": "无匹配时区",
+  "taskSchedule.timezoneSearchPlaceholder": "搜索时区",
   "taskSchedule.title": "计划",
   "taskSchedule.unit.hour_one": "{{count}} 小时",
   "taskSchedule.unit.hour_other": "{{count}} 小时",

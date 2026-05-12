@@ -550,6 +550,8 @@ export default {
   'taskSchedule.tag.schedule': 'Schedule · {{schedule}}{{timezone}}',
   'taskSchedule.time': 'Time',
   'taskSchedule.timezone': 'Timezone',
+  'taskSchedule.timezoneSearchEmpty': 'No matching timezone',
+  'taskSchedule.timezoneSearchPlaceholder': 'Search timezone',
   'taskSchedule.title': 'Schedule',
   'taskSchedule.unit.hour_one': '{{count}} hr',
   'taskSchedule.unit.hour_other': '{{count}} hrs',

@@ -5,13 +5,14 @@ import {
   Flexbox,
   Icon,
   InputNumber,
+  SearchBar,
   Select,
   Text,
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -28,6 +29,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
+  timezoneEmpty: css`
+    padding-block: 12px;
+    padding-inline: 12px;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextDescription};
+    text-align: center;
+  `,
   timezoneOffset: css`
     flex-shrink: 0;
     margin-inline-start: 12px;
@@ -41,6 +50,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     justify-content: space-between;
 
     min-width: 0;
+  `,
+  timezoneSearch: css`
+    padding-block: 8px 4px;
+    padding-inline: 8px;
+    border-block-end: 1px solid ${cssVar.colorSplit};
   `,
   weekdayButton: css`
     cursor: pointer;
@@ -136,6 +150,18 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   const [continuous, setContinuous] = useState<boolean>(
     maxExecutions === null || maxExecutions === undefined,
   );
+  const [tzSearch, setTzSearch] = useState('');
+
+  const filteredTimezoneOptions = useMemo(() => {
+    const q = tzSearch.trim().toLowerCase();
+    if (!q) return TIMEZONE_OPTIONS;
+    return TIMEZONE_OPTIONS.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        opt.value.toLowerCase().includes(q) ||
+        opt.offset.toLowerCase().includes(q),
+    );
+  }, [tzSearch]);
 
   const emit = useCallback(
     (
@@ -344,13 +370,36 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                 <Text className={styles.fieldLabel}>{t('taskSchedule.timezone')}</Text>
               </Flexbox>
               <Select
-                showSearch
                 getPopupContainer={getPopupContainer}
-                optionFilterProp="label"
-                options={TIMEZONE_OPTIONS}
+                options={filteredTimezoneOptions}
                 popupMatchSelectWidth={false}
                 value={tz}
                 variant="filled"
+                dropdownRender={(originNode) => (
+                  <Flexbox>
+                    <div className={styles.timezoneSearch}>
+                      <SearchBar
+                        allowClear
+                        autoFocus
+                        placeholder={t('taskSchedule.timezoneSearchPlaceholder')}
+                        size="small"
+                        value={tzSearch}
+                        variant="filled"
+                        onChange={(e) => setTzSearch(e.target.value)}
+                        // Keep arrow keys / typing local to the search input;
+                        // antd Select otherwise tries to consume them for option nav.
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    {filteredTimezoneOptions.length === 0 ? (
+                      <div className={styles.timezoneEmpty}>
+                        {t('taskSchedule.timezoneSearchEmpty')}
+                      </div>
+                    ) : (
+                      originNode
+                    )}
+                  </Flexbox>
+                )}
                 optionRender={({ data }) => (
                   <div className={styles.timezoneOption}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -360,6 +409,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                   </div>
                 )}
                 onChange={handleTimezoneChange}
+                onDropdownVisibleChange={(open) => {
+                  if (!open) setTzSearch('');
+                }}
               />
             </Flexbox>
 
