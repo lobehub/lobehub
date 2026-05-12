@@ -1,13 +1,5 @@
-import { KeyEnum } from '@lobechat/const/hotkeys';
 import type { TaskStatus } from '@lobechat/types';
-import {
-  closeContextMenu,
-  combineKeys,
-  copyToClipboard,
-  type GenericItemType,
-  Hotkey,
-  Icon,
-} from '@lobehub/ui';
+import { closeContextMenu, copyToClipboard, type GenericItemType, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { BarChart3Icon, CircleDashedIcon, CopyIcon, LinkIcon, Trash2Icon } from 'lucide-react';
@@ -22,6 +14,7 @@ import { PRIORITY_META } from './TaskPriorityTag';
 import { STATUS_META, USER_SELECTABLE_STATUSES } from './TaskStatusTag';
 
 const PRIORITY_LEVELS = [0, 1, 2, 3, 4];
+const SUBMENU_MARKER = 'data-task-submenu';
 
 interface TaskItemContextMenu {
   items: GenericItemType[];
@@ -50,7 +43,6 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
   const deleteTask = useTaskStore((s) => s.deleteTask);
 
   const cleanupRef = useRef<(() => void) | null>(null);
-  const activeSubmenuRef = useRef<'status' | 'priority'>('status');
 
   useEffect(() => () => cleanupRef.current?.(), []);
 
@@ -115,21 +107,15 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
       return [
         {
           children: statusChildren,
-          icon: <Icon icon={CircleDashedIcon} />,
+          icon: <Icon {...{ [SUBMENU_MARKER]: 'status' }} icon={CircleDashedIcon} />,
           key: 'status',
           label: t('taskList.contextMenu.status'),
-          onTitleMouseEnter: () => {
-            activeSubmenuRef.current = 'status';
-          },
         },
         {
           children: priorityChildren,
-          icon: <Icon icon={BarChart3Icon} />,
+          icon: <Icon {...{ [SUBMENU_MARKER]: 'priority' }} icon={BarChart3Icon} />,
           key: 'priority',
           label: t('taskList.contextMenu.priority'),
-          onTitleMouseEnter: () => {
-            activeSubmenuRef.current = 'priority';
-          },
         },
         { type: 'divider' },
         {
@@ -155,9 +141,6 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         { type: 'divider' },
         {
           danger: true,
-          extra: (
-            <Hotkey keys={combineKeys([KeyEnum.Mod, KeyEnum.Backspace])} variant={'borderless'} />
-          ),
           icon: <Icon icon={Trash2Icon} />,
           key: 'delete',
           label: t('delete', { ns: 'common' }),
@@ -171,7 +154,6 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
     const installKeyboardHandlers = (task: TaskContextMenuTarget) => {
       cleanupRef.current?.();
-      activeSubmenuRef.current = 'status';
 
       const currentStatus = task.status as TaskStatus;
       const currentPriority = task.priority ?? 0;
@@ -189,21 +171,21 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           return;
         }
 
-        if ((event.metaKey || event.ctrlKey) && event.key === 'Backspace') {
-          event.preventDefault();
-          event.stopPropagation();
-          closeContextMenu();
-          cleanup();
-          triggerDelete(task.identifier);
-          return;
-        }
-
         const num = Number.parseInt(event.key, 10);
         if (Number.isNaN(num)) return;
         const idx = num - 1;
 
-        // Route 1–N to whichever submenu is currently focused (hover defaults to status).
-        if (activeSubmenuRef.current === 'priority') {
+        // Route 1–N to whichever submenu is currently open. The base-ui
+        // SubmenuTrigger sets `data-popup-open` on the trigger button while its
+        // submenu is open, and we tag each submenu's icon with `data-task-submenu`
+        // so we can identify which one was opened.
+        const openMarker = document.querySelector<HTMLElement>(
+          `[data-popup-open] [${SUBMENU_MARKER}]`,
+        );
+        const openSubmenu = openMarker?.getAttribute(SUBMENU_MARKER);
+        if (!openSubmenu) return;
+
+        if (openSubmenu === 'priority') {
           if (idx < 0 || idx >= PRIORITY_LEVELS.length) return;
           event.preventDefault();
           event.stopPropagation();
@@ -219,15 +201,17 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           return;
         }
 
-        if (idx < 0 || idx >= USER_SELECTABLE_STATUSES.length) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const nextStatus = USER_SELECTABLE_STATUSES[idx];
-        if (nextStatus !== currentStatus) {
-          void updateTaskStatus(task.identifier, nextStatus);
+        if (openSubmenu === 'status') {
+          if (idx < 0 || idx >= USER_SELECTABLE_STATUSES.length) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const nextStatus = USER_SELECTABLE_STATUSES[idx];
+          if (nextStatus !== currentStatus) {
+            void updateTaskStatus(task.identifier, nextStatus);
+          }
+          closeContextMenu();
+          cleanup();
         }
-        closeContextMenu();
-        cleanup();
       };
 
       const pointerHandler = () => {
