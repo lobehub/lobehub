@@ -196,7 +196,7 @@ const Body = memo(() => {
   }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange]);
 
   return (
-    <Flexbox flex={1} gap={4} paddingInline={4}>
+    <Flexbox flex={1} gap={1} paddingInline={4}>
       {content}
       <CustomizeSidebarModal />
     </Flexbox>
