@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type {
   AgentInterventionRequestData,
+  AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
 
@@ -86,8 +87,15 @@ interface BridgeOptions {
  *    producer to forward.
  * 4. Producer eventually calls `resolve(toolCallId, payload)` (from the
  *    consumer's `agent_intervention_response`) — Promise resolves.
- * 5. Or: deadline / `cancelAll()` rejects the pending Promise with a
+ * 5. Or: deadline / `cancelAll()` resolves the pending Promise with a
  *    `{ cancelled: true, cancelReason }` answer (no exception thrown).
+ *
+ * Every terminal path (resolve / cancel / timeout / cancelAll) ALSO emits
+ * an `agent_intervention_response` AgentStreamEvent on `events()`, so the
+ * wire stream alone is enough for a consumer to reconstruct each
+ * intervention's terminal state — critical for the renderer, whose
+ * intervention UI would otherwise stay "pending" after a producer-side
+ * timeout silently unblocks CC.
  *
  * Errors only surface from `pending()` if the bridge itself is misused
  * (e.g. emitting after `cancelAll`). Cancellation/timeout is normal flow,
@@ -139,6 +147,12 @@ export class AskUserBridge {
       const timeoutTimer = setTimeout(() => {
         this.pending_.delete(toolCallId);
         clearInterval(progressTimer);
+        // Mirror the terminal state onto the outbound stream so the consumer
+        // can flip the UI's intervention to `rejected` before the owning op
+        // finishes and gets garbage-collected. Without this, the renderer
+        // would still show the form as pending after the bridge has already
+        // given up.
+        this.emitResponse(toolCallId, { cancelReason: 'timeout', cancelled: true });
         resolve({ cancelled: true, cancelReason: 'timeout' });
       }, timeoutMs);
 
@@ -196,6 +210,15 @@ export class AskUserBridge {
     if (!entry) return;
     this.pending_.delete(toolCallId);
     entry.cleanup();
+    // Echo the resolution on the outbound stream. For user-driven submits
+    // the consumer has already optimistically updated, but emitting keeps
+    // the wire contract symmetric (request → response) and lets late
+    // subscribers reconstruct the terminal state purely from events.
+    this.emitResponse(toolCallId, {
+      cancelReason: payload.cancelled ? (payload.cancelReason ?? 'user_cancelled') : undefined,
+      cancelled: payload.cancelled,
+      result: payload.cancelled ? undefined : payload.result,
+    });
     entry.resolve(
       payload.cancelled
         ? { cancelReason: payload.cancelReason ?? 'user_cancelled', cancelled: true }
@@ -219,12 +242,17 @@ export class AskUserBridge {
    */
   cancelAll(reason: InterventionAnswer['cancelReason'] = 'session_ended'): void {
     if (this.closed) return;
-    this.closed = true;
-    for (const entry of this.pending_.values()) {
+    // Emit + resolve every pending entry BEFORE flipping `closed`, so the
+    // outbound response events land via the normal path (queue or live
+    // waiter) and aren't swallowed by the iterator-end drain that runs
+    // immediately after.
+    for (const [toolCallId, entry] of this.pending_) {
       entry.cleanup();
+      this.emitResponse(toolCallId, { cancelReason: reason, cancelled: true });
       entry.resolve({ cancelReason: reason, cancelled: true });
     }
     this.pending_.clear();
+    this.closed = true;
     // Drain any waiters with a "done" so consumers can break their loop.
     while (this.outboundWaiters.length > 0) {
       const waiter = this.outboundWaiters.shift()!;
@@ -268,5 +296,28 @@ export class AskUserBridge {
     } else {
       this.outboundQueue.push(event);
     }
+  }
+
+  private emitResponse(
+    toolCallId: string,
+    payload: {
+      cancelReason?: InterventionAnswer['cancelReason'];
+      cancelled?: boolean;
+      result?: unknown;
+    },
+  ): void {
+    const data: AgentInterventionResponseData = {
+      cancelled: payload.cancelled,
+      cancelReason: payload.cancelReason,
+      result: payload.result,
+      toolCallId,
+    };
+    this.emit({
+      data,
+      operationId: this.operationId,
+      stepIndex: this.getStepIndex(),
+      timestamp: Date.now(),
+      type: 'agent_intervention_response',
+    });
   }
 }
