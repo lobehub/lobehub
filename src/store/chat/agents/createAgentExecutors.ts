@@ -144,7 +144,7 @@ const localizeError = (error: ChatMessageError): ChatMessageError => {
  * @param context.skipCreateFirstMessage - Skip first message creation
  */
 export const createAgentExecutors = (context: {
-  /** Pre-resolved agent config with isSubTask filtering applied */
+  /** Pre-resolved agent config with isSubAgent filtering applied */
   agentConfig: ResolvedAgentConfig;
   get: () => ChatStore;
   messageKey: string;
@@ -2240,7 +2240,7 @@ export const createAgentExecutors = (context: {
           parentMessageType: 'user',
           operationId: taskOperationId,
           parentOperationId: state.operationId,
-          isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
+          isSubAgent: true, // Disable lobe-agent tool to prevent nested sub-agents
         });
 
         log('[%s][exec_client_task] Client-side AgentRuntime execution completed', taskLogId);
@@ -2565,7 +2565,7 @@ export const createAgentExecutors = (context: {
               parentMessageType: 'user',
               operationId: taskOperationId,
               parentOperationId: state.operationId,
-              isSubTask: true, // Disable lobe-agent tool to prevent nested sub-agents
+              isSubAgent: true, // Disable lobe-agent tool to prevent nested sub-agents
             });
 
             log('[%s] Client-side AgentRuntime execution completed', taskLogId);

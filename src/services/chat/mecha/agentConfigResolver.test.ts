@@ -1042,12 +1042,12 @@ describe('resolveAgentConfig', () => {
     });
   });
 
-  describe('sub-task filtering (isSubTask)', () => {
+  describe('sub-agent filtering (isSubAgent)', () => {
     beforeEach(() => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
     });
 
-    it('should filter out lobe-agent when isSubTask is true for regular agent', () => {
+    it('should filter out lobe-agent when isSubAgent is true for regular agent', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1058,14 +1058,14 @@ describe('resolveAgentConfig', () => {
 
       const result = resolveAgentConfig({
         agentId: 'test-agent',
-        isSubTask: true,
+        isSubAgent: true,
       });
 
       expect(result.plugins).not.toContain('lobe-agent');
       expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
     });
 
-    it('should keep lobe-agent when isSubTask is false', () => {
+    it('should keep lobe-agent when isSubAgent is false', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1076,14 +1076,14 @@ describe('resolveAgentConfig', () => {
 
       const result = resolveAgentConfig({
         agentId: 'test-agent',
-        isSubTask: false,
+        isSubAgent: false,
       });
 
       expect(result.plugins).toContain('lobe-agent');
       expect(result.plugins).toEqual(['lobe-agent', 'plugin-a', 'plugin-b']);
     });
 
-    it('should keep lobe-agent when isSubTask is undefined', () => {
+    it('should keep lobe-agent when isSubAgent is undefined', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1097,7 +1097,7 @@ describe('resolveAgentConfig', () => {
       expect(result.plugins).toContain('lobe-agent');
     });
 
-    it('should filter lobe-agent in page scope when isSubTask is true', () => {
+    it('should filter lobe-agent in page scope when isSubAgent is true', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1112,14 +1112,14 @@ describe('resolveAgentConfig', () => {
       const result = resolveAgentConfig({
         agentId: 'test-agent',
         scope: 'page',
-        isSubTask: true,
+        isSubAgent: true,
       });
 
       expect(result.plugins).not.toContain('lobe-agent');
       expect(result.plugins).toContain(PageAgentIdentifier);
     });
 
-    it('should filter lobe-agent for builtin agent when isSubTask is true', () => {
+    it('should filter lobe-agent for builtin agent when isSubAgent is true', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
         () => 'agent-builder',
       );
@@ -1130,14 +1130,14 @@ describe('resolveAgentConfig', () => {
 
       const result = resolveAgentConfig({
         agentId: 'builtin-agent',
-        isSubTask: true,
+        isSubAgent: true,
       });
 
       expect(result.plugins).not.toContain('lobe-agent');
       expect(result.plugins).toContain('runtime-plugin');
     });
 
-    it('should keep lobe-agent for builtin agent when isSubTask is false', () => {
+    it('should keep lobe-agent for builtin agent when isSubAgent is false', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
         () => 'agent-builder',
       );
@@ -1148,7 +1148,7 @@ describe('resolveAgentConfig', () => {
 
       const result = resolveAgentConfig({
         agentId: 'builtin-agent',
-        isSubTask: false,
+        isSubAgent: false,
       });
 
       expect(result.plugins).toContain('lobe-agent');
@@ -1226,7 +1226,7 @@ describe('resolveAgentConfig', () => {
       expect(result.plugins).toEqual([]);
     });
 
-    it('should take precedence over isSubTask filtering', () => {
+    it('should take precedence over isSubAgent filtering', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1238,10 +1238,10 @@ describe('resolveAgentConfig', () => {
       const result = resolveAgentConfig({
         agentId: 'test-agent',
         disableTools: true,
-        isSubTask: true,
+        isSubAgent: true,
       });
 
-      // disableTools should result in empty plugins regardless of isSubTask
+      // disableTools should result in empty plugins regardless of isSubAgent
       expect(result.plugins).toEqual([]);
     });
 
