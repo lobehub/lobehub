@@ -3,8 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CompletionLifecycle } from '../CompletionLifecycle';
 
-const buildLifecycle = () =>
-  new CompletionLifecycle({} as any, 'user-1', { update: async () => undefined } as any);
+const buildLifecycle = () => new CompletionLifecycle({} as any, 'user-1');
 
 describe('CompletionLifecycle.extractErrorMessage', () => {
   it('extracts message from ChatCompletionErrorPayload (InsufficientBudgetForModel)', () => {
