@@ -28,6 +28,9 @@ export const TaskApiName = {
   /** Trigger async runs for multiple tasks in one call */
   runTasks: 'runTasks',
 
+  /** Configure (or clear) the recurring schedule of a task */
+  setTaskSchedule: 'setTaskSchedule',
+
   /** Update a task comment */
   updateTaskComment: 'updateTaskComment',
 
@@ -44,18 +47,10 @@ export type TaskApiNameType = (typeof TaskApiName)[keyof typeof TaskApiName];
 
 export interface CreateTaskParams {
   assigneeAgentId?: string;
-  /** Enables periodic execution. `heartbeat` ticks every `heartbeatInterval` seconds; `schedule` fires on a cron pattern. */
-  automationMode?: TaskAutomationMode;
-  /** Periodic execution interval in seconds. Required when automationMode === 'heartbeat'. */
-  heartbeatInterval?: number;
   instruction: string;
   name: string;
   parentIdentifier?: string;
   priority?: number;
-  /** Cron expression for scheduled execution. Required when automationMode === 'schedule'. */
-  schedulePattern?: string;
-  /** IANA timezone for the cron expression (e.g. 'Asia/Shanghai'). Defaults to UTC. */
-  scheduleTimezone?: string;
   sortOrder?: number;
 }
 
@@ -151,23 +146,13 @@ export interface DeleteTaskCommentState {
 export interface EditTaskParams {
   addDependencies?: string[];
   assigneeAgentId?: string | null;
-  /** Switch automation mode. Pass null to disable automation entirely. */
-  automationMode?: TaskAutomationMode | null;
   description?: string;
-  /** Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear. */
-  heartbeatInterval?: number;
   identifier: string;
   instruction?: string;
-  /** Cap on the number of scheduled executions; null = unlimited. */
-  maxExecutions?: number | null;
   name?: string;
   parentIdentifier?: string | null;
   priority?: number;
   removeDependencies?: string[];
-  /** Cron expression for scheduled mode. Pass null to clear. */
-  schedulePattern?: string | null;
-  /** IANA timezone for the cron expression. Pass null to clear. */
-  scheduleTimezone?: string | null;
 }
 
 export interface EditTaskState {
@@ -209,6 +194,28 @@ export interface RunTasksState {
   failed: number;
   results: RunTasksItemResult[];
   succeeded: number;
+}
+
+// ==================== setTaskSchedule ====================
+
+export interface SetTaskScheduleParams {
+  /** Switch automation mode. Pass null to disable automation entirely. */
+  automationMode?: TaskAutomationMode | null;
+  /** Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear. */
+  heartbeatInterval?: number;
+  identifier: string;
+  /** Cap on the number of scheduled executions; null = unlimited. */
+  maxExecutions?: number | null;
+  /** Cron expression for scheduled mode. Pass null to clear. */
+  schedulePattern?: string | null;
+  /** IANA timezone for the cron expression. Pass null to clear. */
+  scheduleTimezone?: string | null;
+}
+
+export interface SetTaskScheduleState {
+  automationMode?: TaskAutomationMode | null;
+  identifier: string;
+  success: boolean;
 }
 
 // ==================== updateTaskStatus ====================

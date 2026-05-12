@@ -78,13 +78,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       instruction: string;
       assigneeAgentId?: string;
-      automationMode?: TaskAutomationMode;
-      heartbeatInterval?: number;
       name: string;
       parentIdentifier?: string;
       priority?: number;
-      schedulePattern?: string;
-      scheduleTimezone?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -92,30 +88,16 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     try {
       log('[TaskExecutor] createTask - params:', params);
       const parentIdentifier = params.parentIdentifier?.trim() || undefined;
-      const store = getTaskStoreState();
 
-      const task = await store.createTask({
+      const task = await getTaskStoreState().createTask({
         assigneeAgentId:
           params.assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
-        automationMode: params.automationMode,
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
         parentTaskId: parentIdentifier,
         priority: params.priority,
-        schedulePattern: params.schedulePattern,
-        scheduleTimezone: params.scheduleTimezone,
       });
-
-      // Heartbeat interval isn't part of the create schema (DB column defaults to
-      // null); apply it via a follow-up update so an LLM can set everything in
-      // one createTask call.
-      if (task?.identifier && params.heartbeatInterval !== undefined) {
-        await taskService.update(task.identifier, {
-          heartbeatInterval: params.heartbeatInterval,
-        });
-        await store.internal_refreshTaskDetail(task.identifier);
-      }
 
       if (!task) {
         return {
@@ -258,18 +240,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       addDependencies?: string[];
       assigneeAgentId?: string | null;
-      automationMode?: TaskAutomationMode | null;
       description?: string;
-      heartbeatInterval?: number;
       identifier: string;
       instruction?: string;
-      maxExecutions?: number | null;
       name?: string;
       parentIdentifier?: string | null;
       priority?: number;
       removeDependencies?: string[];
-      schedulePattern?: string | null;
-      scheduleTimezone?: string | null;
     },
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -323,8 +300,59 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         ops.push(store.updateTask(identifier, updateData));
       }
 
-      // Schedule columns (top-level) — bypass store.updateTask so the optimistic
-      // path doesn't have to map flat columns onto the detail's nested shape.
+      if (addDependencies?.length) {
+        addDependencies.forEach((dep) => {
+          ops.push(store.addDependency(identifier, dep));
+          changes.push(formatDependencyAdded(identifier, dep));
+        });
+      }
+      if (removeDependencies?.length) {
+        removeDependencies.forEach((dep) => {
+          ops.push(store.removeDependency(identifier, dep));
+          changes.push(formatDependencyRemoved(identifier, dep));
+        });
+      }
+
+      await Promise.all(ops);
+
+      return {
+        content: formatTaskEdited(identifier, changes),
+        state: { identifier, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] editTask - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to edit task';
+      return {
+        content: `Failed to edit task: ${message}`,
+        error: { message, type: 'EditTaskFailed' },
+        success: false,
+      };
+    }
+  };
+
+  setTaskSchedule = async (
+    params: {
+      automationMode?: TaskAutomationMode | null;
+      heartbeatInterval?: number;
+      identifier: string;
+      maxExecutions?: number | null;
+      schedulePattern?: string | null;
+      scheduleTimezone?: string | null;
+    },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] setTaskSchedule - params:', params);
+
+      const { identifier } = params;
+      const store = getTaskStoreState();
+      const changes: string[] = [];
+      const ops: Promise<unknown>[] = [];
+
+      // Top-level schedule columns — direct service.update bypasses the
+      // store.updateTask optimistic path, which would otherwise need to map
+      // flat columns onto the detail's nested `schedule.*` shape.
       const scheduleUpdate: {
         automationMode?: TaskAutomationMode | null;
         heartbeatInterval?: number;
@@ -363,13 +391,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
             : 'schedule timezone cleared',
         );
       }
-      const scheduleTouched = Object.keys(scheduleUpdate).length > 0;
-      if (scheduleTouched) {
+      if (Object.keys(scheduleUpdate).length > 0) {
         ops.push(taskService.update(identifier, scheduleUpdate));
       }
 
       // maxExecutions lives in `tasks.config.schedule.maxExecutions` (JSONB);
-      // route through updateConfig so the server-side merge preserves siblings.
+      // route through updateConfig so the server-side merge preserves siblings
+      // (checkpoint, review, model snapshot, etc).
       if (params.maxExecutions !== undefined) {
         ops.push(
           taskService.updateConfig(identifier, {
@@ -383,38 +411,28 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         );
       }
 
-      if (addDependencies?.length) {
-        addDependencies.forEach((dep) => {
-          ops.push(store.addDependency(identifier, dep));
-          changes.push(formatDependencyAdded(identifier, dep));
-        });
-      }
-      if (removeDependencies?.length) {
-        removeDependencies.forEach((dep) => {
-          ops.push(store.removeDependency(identifier, dep));
-          changes.push(formatDependencyRemoved(identifier, dep));
-        });
+      if (ops.length === 0) {
+        return {
+          content: 'No schedule fields provided; nothing to update.',
+          error: { message: 'No schedule fields provided.', type: 'NoFields' },
+          success: false,
+        };
       }
 
       await Promise.all(ops);
-
-      // Schedule / config edits bypass store.updateTask's optimistic path; pull
-      // the fresh detail so the UI reflects the new automation/cron state.
-      if (scheduleTouched || params.maxExecutions !== undefined) {
-        await store.internal_refreshTaskDetail(identifier);
-      }
+      await store.internal_refreshTaskDetail(identifier);
 
       return {
         content: formatTaskEdited(identifier, changes),
-        state: { identifier, success: true },
+        state: { automationMode: params.automationMode, identifier, success: true },
         success: true,
       };
     } catch (error) {
-      log('[TaskExecutor] editTask - error:', error);
-      const message = error instanceof Error ? error.message : 'Failed to edit task';
+      log('[TaskExecutor] setTaskSchedule - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set task schedule';
       return {
-        content: `Failed to edit task: ${message}`,
-        error: { message, type: 'EditTaskFailed' },
+        content: `Failed to set task schedule: ${message}`,
+        error: { message, type: 'SetTaskScheduleFailed' },
         success: false,
       };
     }
