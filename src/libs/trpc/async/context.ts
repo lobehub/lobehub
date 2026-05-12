@@ -1,6 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
 
 import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -27,7 +26,7 @@ export const createAsyncContextInner = async (params?: {
 
 export type AsyncContext = Awaited<ReturnType<typeof createAsyncContextInner>>;
 
-export const createAsyncRouteContext = async (request: NextRequest): Promise<AsyncContext> => {
+export const createAsyncRouteContext = async (request: Request): Promise<AsyncContext> => {
   // for API-response caching see https://trpc.io/docs/v11/caching
 
   log('Creating async route context');

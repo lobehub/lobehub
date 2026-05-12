@@ -2,7 +2,6 @@ import { type Context as OtContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload } from '@lobechat/types';
 import { parse } from 'cookie';
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -17,7 +16,7 @@ import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 const log = debug('lobe-trpc:lambda:context');
 const LOBE_CHAT_API_KEY_HEADER = 'X-API-Key';
 
-const extractClientIp = (request: NextRequest): string | undefined => {
+const extractClientIp = (request: Request): string | undefined => {
   const forwardedFor = request.headers.get('x-forwarded-for');
   if (forwardedFor) {
     const ip = forwardedFor.split(',')[0]?.trim();
@@ -108,7 +107,7 @@ export type LambdaContext = Awaited<ReturnType<typeof createContextInner>>;
  * Creates context for an incoming request
  * @link https://trpc.io/docs/v11/context
  */
-export const createLambdaContext = async (request: NextRequest): Promise<LambdaContext> => {
+export const createLambdaContext = async (request: Request): Promise<LambdaContext> => {
   // we have a special header to debug the api endpoint in development mode
   // IT WON'T GO INTO PRODUCTION ANYMORE
   const isDebugApi = request.headers.get('lobe-auth-dev-backend-api') === '1';
