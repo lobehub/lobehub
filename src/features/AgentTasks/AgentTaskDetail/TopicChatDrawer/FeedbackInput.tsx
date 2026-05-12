@@ -74,14 +74,9 @@ const FeedbackInput = memo<FeedbackInputProps>(({ taskId, topicId }) => {
           }}
         />
       </div>
-      <div
-        style={{
-          flexShrink: 0,
-          opacity: hasContent || submitting ? 1 : 0,
-          pointerEvents: hasContent || submitting ? 'auto' : 'none',
-        }}
-      >
+      <div style={{ flexShrink: 0 }}>
         <SendButton
+          disabled={!hasContent && !submitting}
           loading={submitting}
           shape={'round'}
           title={t('taskDetail.commentSubmitAndRun')}

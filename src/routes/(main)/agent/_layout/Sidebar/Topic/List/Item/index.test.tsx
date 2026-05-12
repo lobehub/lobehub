@@ -77,8 +77,11 @@ vi.mock('@/routes/(main)/agent/channel/const', () => ({
   getPlatformIcon: () => null,
 }));
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: { activeAgentId: string }) => unknown) =>
-    selector({ activeAgentId: 'agt_test' }),
+  // `agentMap` is read by `agentSelectors.isCurrentAgentHeterogeneous` →
+  // `currentAgentConfig`, which would otherwise throw on `undefined.agentMap`.
+  useAgentStore: (
+    selector: (state: { activeAgentId: string; agentMap: Record<string, unknown> }) => unknown,
+  ) => selector({ activeAgentId: 'agt_test', agentMap: {} }),
 }));
 vi.mock('@/store/chat', () => ({
   useChatStore: (

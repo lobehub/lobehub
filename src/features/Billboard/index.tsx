@@ -1,5 +1,6 @@
 'use client';
 
+import { useAnalytics } from '@lobehub/analytics/react';
 import { memo, useCallback, useState } from 'react';
 
 import { useGlobalStore } from '@/store/global';
@@ -15,6 +16,7 @@ const Billboard = memo(() => {
   const billboard = useServerConfigStore((s) => s.billboard);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const dismissedSlugs = useGlobalStore((s) => s.status.readNotificationSlugs ?? []);
+  const { analytics } = useAnalytics();
   const [closing, setClosing] = useState(false);
   const [exitTarget, setExitTarget] = useState<{ x: number; y: number }>({ x: 0, y: 40 });
 
@@ -42,8 +44,18 @@ const Billboard = memo(() => {
         y: anchorRect.top + anchorRect.height / 2 - (cardRect.top + cardRect.height / 2),
       });
     }
+    if (billboard) {
+      analytics?.track({
+        name: 'billboard_dismissed',
+        properties: {
+          billboard_slug: billboard.slug,
+          item_count: billboard.items.length,
+          spm: 'billboard.dismiss.clicked',
+        },
+      });
+    }
     setClosing(true);
-  }, []);
+  }, [analytics, billboard]);
 
   const handleAnimationFinish = useCallback(() => {
     if (!billboard) return;

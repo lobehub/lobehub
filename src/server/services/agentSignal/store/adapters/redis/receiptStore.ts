@@ -67,12 +67,7 @@ const fromReceiptHash = (payload: Record<string, string>): AgentSignalReceipt | 
   const createdAt = Number(payload.createdAt);
 
   if (!payload.id || !payload.userId || !payload.agentId || !payload.topicId) return;
-  if (
-    payload.kind !== 'maintenance' &&
-    payload.kind !== 'memory' &&
-    payload.kind !== 'review' &&
-    payload.kind !== 'skill'
-  ) {
+  if (payload.kind !== 'memory' && payload.kind !== 'review' && payload.kind !== 'skill') {
     return;
   }
   if (

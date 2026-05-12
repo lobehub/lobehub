@@ -78,7 +78,7 @@ describe('builtinToolSelectors', () => {
   });
 
   describe('metaListIncludingHidden', () => {
-    it('should keep task tools hidden from manual tool selection', () => {
+    it('should surface hidden tools so users can toggle them', () => {
       const state = {
         ...initialState,
         builtinTools: [
@@ -106,12 +106,12 @@ describe('builtinToolSelectors', () => {
       const result = builtinToolSelectors.metaListIncludingHidden(state);
 
       expect(result.map((item) => item.identifier)).toContain('tool-1');
-      expect(result.map((item) => item.identifier)).not.toContain('lobe-task');
+      expect(result.map((item) => item.identifier)).toContain('lobe-task');
     });
   });
 
   describe('installedAllMetaList', () => {
-    it('should keep task tools out of agent profile configuration', () => {
+    it('should include all non-uninstalled tools in agent profile configuration', () => {
       const state = {
         ...initialState,
         builtinTools: [
@@ -138,7 +138,7 @@ describe('builtinToolSelectors', () => {
 
       const result = builtinToolSelectors.installedAllMetaList(state);
 
-      expect(result.map((item) => item.identifier)).toEqual(['tool-1']);
+      expect(result.map((item) => item.identifier)).toEqual(['lobe-task', 'tool-1']);
     });
   });
 });

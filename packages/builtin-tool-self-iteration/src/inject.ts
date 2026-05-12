@@ -1,11 +1,11 @@
 import type { LobeToolManifest, OperationToolSet, ToolSource } from '@lobechat/context-engine';
 
-import { selfIterationIntentManifest } from './manifest';
-import type { ShouldExposeSelfIterationIntentToolOptions } from './types';
-import { SELF_ITERATION_INTENT_IDENTIFIER, SELF_ITERATION_INTENT_TOOL_NAME } from './types';
+import { selfFeedbackIntentManifest } from './manifest';
+import type { ShouldExposeSelfFeedbackIntentToolOptions } from './types';
+import { SELF_FEEDBACK_INTENT_IDENTIFIER, SELF_FEEDBACK_INTENT_TOOL_NAME } from './types';
 
 /** Mutable operation tool-set parts that can receive the injected builtin tool. */
-export interface SelfIterationIntentToolSetParts {
+export interface SelfFeedbackIntentToolSetParts {
   /** Enabled tool identifiers persisted with the operation. */
   enabledToolIds: string[];
   /** Manifest map persisted with the operation. */
@@ -16,18 +16,18 @@ export interface SelfIterationIntentToolSetParts {
   tools: OperationToolSet['tools'];
 }
 
-const createSelfIterationIntentTool = () =>
-  selfIterationIntentManifest.api.map((api) => ({
+const createSelfFeedbackIntentTool = () =>
+  selfFeedbackIntentManifest.api.map((api) => ({
     function: {
       description: api.description,
-      name: SELF_ITERATION_INTENT_TOOL_NAME,
+      name: SELF_FEEDBACK_INTENT_TOOL_NAME,
       parameters: api.parameters,
     },
     type: 'function' as const,
   }));
 
 /**
- * Decides whether the self-iteration intent declaration tool should be visible.
+ * Decides whether the self-feedback intent declaration tool should be visible.
  *
  * Use when:
  * - Tests need a pure visibility predicate
@@ -39,11 +39,11 @@ const createSelfIterationIntentTool = () =>
  * Returns:
  * - `true` only for ordinary running agents with all gates enabled
  */
-export const shouldExposeSelfIterationIntentTool = (
-  options: ShouldExposeSelfIterationIntentToolOptions,
+export const shouldExposeSelfFeedbackIntentTool = (
+  options: ShouldExposeSelfFeedbackIntentToolOptions,
 ) => {
   if (!options.featureUserEnabled || !options.agentSelfIterationEnabled) return false;
-  if (options.disabled || options.disableSelfIterationIntentTool || options.reviewerRole) {
+  if (options.disabled || options.disableSelfFeedbackIntentTool || options.reviewerRole) {
     return false;
   }
 
@@ -51,11 +51,11 @@ export const shouldExposeSelfIterationIntentTool = (
 };
 
 /**
- * Injects the self-iteration intent manifest and LLM tool into a tool set.
+ * Injects the self-feedback intent manifest and LLM tool into a tool set.
  *
  * Use when:
  * - `execAgent` has already built the normal model/tool path
- * - The operation should expose advisory self-iteration intent as a builtin server tool
+ * - The operation should expose advisory self-feedback intent as a builtin server tool
  *
  * Expects:
  * - Caller has already checked visibility gates
@@ -63,21 +63,21 @@ export const shouldExposeSelfIterationIntentTool = (
  * Returns:
  * - `true` when this call added the tool, otherwise `false` when it was already present
  */
-export const injectSelfIterationIntentTool = (toolSetParts: SelfIterationIntentToolSetParts) => {
-  const wasAlreadyEnabled = toolSetParts.enabledToolIds.includes(SELF_ITERATION_INTENT_IDENTIFIER);
+export const injectSelfFeedbackIntentTool = (toolSetParts: SelfFeedbackIntentToolSetParts) => {
+  const wasAlreadyEnabled = toolSetParts.enabledToolIds.includes(SELF_FEEDBACK_INTENT_IDENTIFIER);
   const wasAlreadyVisible = toolSetParts.tools.some(
-    (tool) => tool.function.name === SELF_ITERATION_INTENT_TOOL_NAME,
+    (tool) => tool.function.name === SELF_FEEDBACK_INTENT_TOOL_NAME,
   );
 
-  toolSetParts.manifestMap[SELF_ITERATION_INTENT_IDENTIFIER] = selfIterationIntentManifest;
-  toolSetParts.sourceMap[SELF_ITERATION_INTENT_IDENTIFIER] = 'builtin';
+  toolSetParts.manifestMap[SELF_FEEDBACK_INTENT_IDENTIFIER] = selfFeedbackIntentManifest;
+  toolSetParts.sourceMap[SELF_FEEDBACK_INTENT_IDENTIFIER] = 'builtin';
 
   if (!wasAlreadyEnabled) {
-    toolSetParts.enabledToolIds.push(SELF_ITERATION_INTENT_IDENTIFIER);
+    toolSetParts.enabledToolIds.push(SELF_FEEDBACK_INTENT_IDENTIFIER);
   }
 
   if (!wasAlreadyVisible) {
-    toolSetParts.tools.push(...createSelfIterationIntentTool());
+    toolSetParts.tools.push(...createSelfFeedbackIntentTool());
   }
 
   return !wasAlreadyEnabled || !wasAlreadyVisible;

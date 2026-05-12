@@ -1,4 +1,4 @@
-import type { TaskStatus } from '@lobechat/types';
+import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 
 export const TaskApiName = {
   /** Add a comment to a task */
@@ -27,6 +27,9 @@ export const TaskApiName = {
 
   /** Trigger async runs for multiple tasks in one call */
   runTasks: 'runTasks',
+
+  /** Configure (or clear) the recurring schedule of a task */
+  setTaskSchedule: 'setTaskSchedule',
 
   /** Update a task comment */
   updateTaskComment: 'updateTaskComment',
@@ -191,6 +194,28 @@ export interface RunTasksState {
   failed: number;
   results: RunTasksItemResult[];
   succeeded: number;
+}
+
+// ==================== setTaskSchedule ====================
+
+export interface SetTaskScheduleParams {
+  /** Switch automation mode. Pass null to disable automation entirely. */
+  automationMode?: TaskAutomationMode | null;
+  /** Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear. */
+  heartbeatInterval?: number;
+  identifier: string;
+  /** Cap on the number of scheduled executions; null = unlimited. */
+  maxExecutions?: number | null;
+  /** Cron expression for scheduled mode. Pass null to clear. */
+  schedulePattern?: string | null;
+  /** IANA timezone for the cron expression. Pass null to clear. */
+  scheduleTimezone?: string | null;
+}
+
+export interface SetTaskScheduleState {
+  automationMode?: TaskAutomationMode | null;
+  identifier: string;
+  success: boolean;
 }
 
 // ==================== updateTaskStatus ====================

@@ -209,10 +209,8 @@ export const useCreateMenuItems = () => {
       label: t('newAgent'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
-        if (options?.groupId) {
-          await createAgent(options);
-        } else if (openCreateModal) {
-          openCreateModal('agent');
+        if (openCreateModal) {
+          openCreateModal('agent', options?.groupId ? { groupId: options.groupId } : undefined);
         } else {
           await createAgent(options);
         }
@@ -256,10 +254,8 @@ export const useCreateMenuItems = () => {
       label: t('newGroupChat'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
-        if (options?.groupId) {
-          await createEmptyGroup(options);
-        } else if (openCreateModal) {
-          openCreateModal('group');
+        if (openCreateModal) {
+          openCreateModal('group', options?.groupId ? { groupId: options.groupId } : undefined);
         } else {
           await createEmptyGroup(options);
         }

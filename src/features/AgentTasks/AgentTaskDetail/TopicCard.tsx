@@ -79,11 +79,11 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         defaultValue:
           'The current run will be canceled. Generated messages are kept and you can re-run the task later.',
       }),
-      okText: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop run' }),
+      okText: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop Run' }),
       onOk: async () => {
         await cancelTopic(topicId);
       },
-      title: t('taskDetail.topicMenu.stopConfirm.title', { defaultValue: 'Stop run?' }),
+      title: t('taskDetail.topicMenu.stopConfirm.title', { defaultValue: 'Stop Run?' }),
     });
   }, [activity.id, cancelTopic, t]);
 
@@ -101,7 +101,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
             danger: true,
             icon: CircleStop,
             key: 'stop',
-            label: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop run' }),
+            label: t('taskDetail.topicMenu.stop', { defaultValue: 'Stop Run' }),
             onClick: handleStop,
           },
           { type: 'divider' as const },
@@ -110,21 +110,21 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
     {
       icon: ExternalLink,
       key: 'open',
-      label: t('taskDetail.topicMenu.open', { defaultValue: 'Open run' }),
+      label: t('taskDetail.topicMenu.open', { defaultValue: 'Open Run' }),
       onClick: handleOpen,
     },
     {
       disabled: !activity.id,
       icon: Copy,
       key: 'copy',
-      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy topic ID' }),
+      label: t('taskDetail.topicMenu.copyId', { defaultValue: 'Copy Topic ID' }),
       onClick: handleCopyId,
     },
     {
       disabled: !activity.operationId,
       icon: Copy,
       key: 'copyOperationId',
-      label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy operation ID' }),
+      label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
       onClick: handleCopyOperationId,
     },
   ];
