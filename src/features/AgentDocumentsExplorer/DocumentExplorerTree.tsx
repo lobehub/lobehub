@@ -111,13 +111,21 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     [documents],
   );
 
+  const focusNewRowForRename = useCallback((pendingId: string) => {
+    // Defer past the current task so React commits the inserted row and the
+    // tree adapter rebuilds its id→path map before we trigger rename.
+    setTimeout(() => treeRef.current?.startRenaming(pendingId), 0);
+  }, []);
+
   const handleCreateFolder = useCallback(
-    (parentId: string | null) => ops.createFolder(parentId),
-    [ops],
+    (parentId: string | null) =>
+      ops.createFolder(parentId, { onPendingInserted: focusNewRowForRename }),
+    [focusNewRowForRename, ops],
   );
   const handleCreateDocument = useCallback(
-    (parentId: string | null) => ops.createDocument(parentId),
-    [ops],
+    (parentId: string | null) =>
+      ops.createDocument(parentId, { onPendingInserted: focusNewRowForRename }),
+    [focusNewRowForRename, ops],
   );
 
   const handleNodeClick = useCallback(

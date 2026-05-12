@@ -123,6 +123,11 @@ export interface GitCheckoutResult {
   success: boolean;
 }
 
+export interface GitFileRevertResult {
+  error?: string;
+  success: boolean;
+}
+
 export interface GitPullResult {
   error?: string;
   /** True when `git pull` reported the branch was already up-to-date */
