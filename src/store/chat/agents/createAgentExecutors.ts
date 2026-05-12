@@ -1423,7 +1423,7 @@ export const createAgentExecutors = (context: {
         // This ensures the task executes with the correct agent's config
         log('[%s] Using server-side execution with agentId: %s', taskLogId, executionAgentId);
         const createResult = await aiAgentService.execSubAgentTask({
-          agentId: executionAgentId, // Use targetAgentId for callAgent, or current agentId for GTD
+          agentId: executionAgentId, // Use targetAgentId for callAgent, or current agentId for sub-agent dispatch
           instruction: task.instruction,
           parentMessageId: taskMessageId,
           title: task.description,

@@ -175,7 +175,7 @@ export interface RuntimeStepContext {
   stepPageEditor?: StepPageEditorContext;
   /**
    * Current todo list state
-   * Computed from the latest GTD tool message in the conversation
+   * Computed from the latest lobe-agent tool message in the conversation
    */
   todos?: StepContextTodos;
 }

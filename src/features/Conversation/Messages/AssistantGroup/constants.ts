@@ -163,14 +163,14 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   // Cloud sandbox
   executeCode: 'workflow.toolDisplayName.executeCode',
 
-  // GTD
+  // Lobe Agent — Plan & Todos
   createPlan: 'workflow.toolDisplayName.createPlan',
   createTodos: 'workflow.toolDisplayName.createTodos',
   updatePlan: 'workflow.toolDisplayName.updatePlan',
   updateTodos: 'workflow.toolDisplayName.updateTodos',
   clearTodos: 'workflow.toolDisplayName.clearTodos',
 
-  // Lobe Agent
+  // Lobe Agent — Sub-Agents
   callSubAgent: 'workflow.toolDisplayName.callSubAgent',
   callSubAgents: 'workflow.toolDisplayName.callSubAgents',
 

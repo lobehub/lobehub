@@ -115,7 +115,7 @@ export const todoWriteStress = defineCase({
   id: 'todo-write-stress',
   name: 'TodoWrite × 200 (complex)',
   description:
-    '~200 GTD tool calls across 8 realistic phases: discovery, schema audit, store migration, ' +
+    '~200 lobe-agent tool calls across 8 realistic phases: discovery, schema audit, store migration, ' +
     'TRPC refactor, i18n extraction, component rewrites, testing, and final verification.',
   tags: ['stress', 'todo', 'builtin'],
 
@@ -810,7 +810,7 @@ export const todoWriteStress = defineCase({
     // Done
     // =====================================================================
     llmStep({
-      text: '全部 8 个阶段完成。共执行约 200 个 GTD 工具调用，涵盖计划创建、待办管理、任务执行和错误恢复。迁移已通过 type-check、单测、E2E 和安全审计。',
+      text: '全部 8 个阶段完成。共执行约 200 个 lobe-agent 工具调用，涵盖计划创建、待办管理、任务执行和错误恢复。迁移已通过 type-check、单测、E2E 和安全审计。',
       reasoning: '确认所有 todo 已标记完成，所有 plan 已标记 completed，汇总执行统计。',
       durationMs: 600,
     }),

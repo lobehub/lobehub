@@ -53,7 +53,7 @@ export interface AgentRuntimeContext {
 
   /**
    * Step context computed at the beginning of each step
-   * Contains dynamic state like GTD todos that changes between steps
+   * Contains dynamic state like lobe-agent todos that changes between steps
    * Computed by AgentRuntime and passed to Context Engine and Tool Executors
    */
   stepContext?: RuntimeStepContext;

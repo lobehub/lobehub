@@ -5,54 +5,54 @@ import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
-    gtdTodoCompletedCount?: number;
-    gtdTodoCount?: number;
-    gtdTodoInjected?: boolean;
-    gtdTodoProcessingCount?: number;
+    todoCompletedCount?: number;
+    todoCount?: number;
+    todoInjected?: boolean;
+    todoProcessingCount?: number;
   }
 }
 
-const log = debug('context-engine:provider:GTDTodoInjector');
+const log = debug('context-engine:provider:TodoInjector');
 
 /** Status of a todo item */
-export type GTDTodoStatus = 'todo' | 'processing' | 'completed';
+export type TodoStatus = 'todo' | 'processing' | 'completed';
 
 /**
- * GTD Todo item structure
+ * Todo item structure
  */
-export interface GTDTodoItem {
+export interface TodoItem {
   /** Status of the todo item */
-  status: GTDTodoStatus;
+  status: TodoStatus;
   /** The todo item text */
   text: string;
 }
 
 /**
- * GTD Todo list structure
+ * Todo list structure
  */
-export interface GTDTodoList {
-  items: GTDTodoItem[];
+export interface TodoList {
+  items: TodoItem[];
   updatedAt: string;
 }
 
-export interface GTDTodoInjectorConfig {
-  /** Whether GTD Todo injection is enabled */
+export interface TodoInjectorConfig {
+  /** Whether Todo injection is enabled */
   enabled?: boolean;
   /** The current todo list to inject */
-  todos?: GTDTodoList;
+  todos?: TodoList;
 }
 
 /**
- * Format GTD Todo list content for injection
+ * Format Todo list content for injection
  */
-function formatGTDTodos(todos: GTDTodoList): string | null {
+function formatTodos(todos: TodoList): string | null {
   const { items } = todos;
 
   if (!items || items.length === 0) {
     return null;
   }
 
-  const lines: string[] = ['<gtd_todos>'];
+  const lines: string[] = ['<todos>'];
 
   items.forEach((item, index) => {
     lines.push(`<todo index="${index}" status="${item.status}">${item.text}</todo>`);
@@ -65,21 +65,21 @@ function formatGTDTodos(todos: GTDTodoList): string | null {
     `<progress completed="${completedCount}" processing="${processingCount}" total="${totalCount}" />`,
   );
 
-  lines.push('</gtd_todos>');
+  lines.push('</todos>');
 
   return lines.join('\n');
 }
 
 /**
- * GTD Todo Injector
+ * Todo Injector
  * Responsible for injecting the current todo list at the end of the last user message
  * This provides the AI with real-time awareness of task progress
  */
-export class GTDTodoInjector extends BaseLastUserContentProvider {
-  readonly name = 'GTDTodoInjector';
+export class TodoInjector extends BaseLastUserContentProvider {
+  readonly name = 'TodoInjector';
 
   constructor(
-    private config: GTDTodoInjectorConfig,
+    private config: TodoInjectorConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
@@ -91,16 +91,13 @@ export class GTDTodoInjector extends BaseLastUserContentProvider {
 
     const clonedContext = this.cloneContext(context);
 
-    // Skip if GTD Todo is not enabled or no todos
     if (!this.config.enabled || !this.config.todos) {
-      log('GTD Todo not enabled or no todos, skipping injection');
+      log('Todo not enabled or no todos, skipping injection');
       return this.markAsExecuted(clonedContext);
     }
 
-    // Format todo list content
-    const formattedContent = formatGTDTodos(this.config.todos);
+    const formattedContent = formatTodos(this.config.todos);
 
-    // Skip if no content to inject (empty todo list)
     if (!formattedContent) {
       log('No todos to inject (empty list)');
       return this.markAsExecuted(clonedContext);
@@ -108,7 +105,6 @@ export class GTDTodoInjector extends BaseLastUserContentProvider {
 
     log('Formatted content length:', formattedContent.length);
 
-    // Find the last user message index
     const lastUserIndex = this.findLastUserMessageIndex(clonedContext.messages);
 
     log('Last user message index:', lastUserIndex);
@@ -118,26 +114,23 @@ export class GTDTodoInjector extends BaseLastUserContentProvider {
       return this.markAsExecuted(clonedContext);
     }
 
-    // Check if system context wrapper already exists
-    // If yes, only insert context block; if no, use full wrapper
     const hasExistingWrapper = this.hasExistingSystemContext(clonedContext);
     const contentToAppend = hasExistingWrapper
-      ? this.createContextBlock(formattedContent, 'gtd_todo_context')
-      : this.wrapWithSystemContext(formattedContent, 'gtd_todo_context');
+      ? this.createContextBlock(formattedContent, 'todo_context')
+      : this.wrapWithSystemContext(formattedContent, 'todo_context');
 
     this.appendToLastUserMessage(clonedContext, contentToAppend);
 
-    // Update metadata
-    clonedContext.metadata.gtdTodoInjected = true;
-    clonedContext.metadata.gtdTodoCount = this.config.todos.items.length;
-    clonedContext.metadata.gtdTodoCompletedCount = this.config.todos.items.filter(
+    clonedContext.metadata.todoInjected = true;
+    clonedContext.metadata.todoCount = this.config.todos.items.length;
+    clonedContext.metadata.todoCompletedCount = this.config.todos.items.filter(
       (item) => item.status === 'completed',
     ).length;
-    clonedContext.metadata.gtdTodoProcessingCount = this.config.todos.items.filter(
+    clonedContext.metadata.todoProcessingCount = this.config.todos.items.filter(
       (item) => item.status === 'processing',
     ).length;
 
-    log('GTD Todo context appended to last user message');
+    log('Todo context appended to last user message');
 
     return this.markAsExecuted(clonedContext);
   }

@@ -462,7 +462,7 @@ describe('resolveAgentConfig', () => {
         vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => 'inbox');
       });
 
-      it('should include GTD and Notebook tools in plugins', () => {
+      it('should include lobe-agent and Notebook tools in plugins', () => {
         vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
           plugins: [LobeAgentIdentifier, NotebookIdentifier],
           systemRole: 'Inbox system role',
@@ -476,7 +476,7 @@ describe('resolveAgentConfig', () => {
         expect(result.slug).toBe('inbox');
       });
 
-      it('should preserve user plugins while including GTD and Notebook', () => {
+      it('should preserve user plugins while including lobe-agent and Notebook', () => {
         vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
           plugins: [LobeAgentIdentifier, NotebookIdentifier, 'user-plugin'],
           systemRole: 'Inbox system role',

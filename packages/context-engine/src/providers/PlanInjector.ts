@@ -5,18 +5,18 @@ import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
-    gtdPlanId?: string;
-    gtdPlanInjected?: boolean;
+    planId?: string;
+    planInjected?: boolean;
   }
 }
 
-const log = debug('context-engine:provider:GTDPlanInjector');
+const log = debug('context-engine:provider:PlanInjector');
 
 /**
- * GTD Plan data structure
+ * Plan data structure
  * Represents a high-level plan document
  */
-export interface GTDPlan {
+export interface Plan {
   /** Whether the plan is completed */
   completed: boolean;
   /** Detailed context, background, constraints */
@@ -33,18 +33,18 @@ export interface GTDPlan {
   updatedAt: string;
 }
 
-export interface GTDPlanInjectorConfig {
-  /** Whether GTD Plan injection is enabled */
+export interface PlanInjectorConfig {
+  /** Whether Plan injection is enabled */
   enabled?: boolean;
   /** The current plan to inject */
-  plan?: GTDPlan;
+  plan?: Plan;
 }
 
 /**
- * Format GTD Plan content for injection
+ * Format Plan content for injection
  */
-function formatGTDPlan(plan: GTDPlan): string {
-  const lines: string[] = ['<gtd_plan>', `<goal>${plan.goal}</goal>`];
+function formatPlan(plan: Plan): string {
+  const lines: string[] = ['<plan>', `<goal>${plan.goal}</goal>`];
 
   if (plan.description) {
     lines.push(`<description>${plan.description}</description>`);
@@ -55,21 +55,21 @@ function formatGTDPlan(plan: GTDPlan): string {
   }
 
   lines.push(`<status>${plan.completed ? 'completed' : 'in_progress'}</status>`);
-  lines.push('</gtd_plan>');
+  lines.push('</plan>');
 
   return lines.join('\n');
 }
 
 /**
- * GTD Plan Injector
+ * Plan Injector
  * Responsible for injecting the current plan into context before the first user message
  * This provides the AI with awareness of the user's current goal and plan context
  */
-export class GTDPlanInjector extends BaseFirstUserContentProvider {
-  readonly name = 'GTDPlanInjector';
+export class PlanInjector extends BaseFirstUserContentProvider {
+  readonly name = 'PlanInjector';
 
   constructor(
-    private config: GTDPlanInjectorConfig,
+    private config: PlanInjectorConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
@@ -79,19 +79,18 @@ export class GTDPlanInjector extends BaseFirstUserContentProvider {
     const { enabled, plan } = this.config;
 
     if (!enabled || !plan) {
-      log('GTD Plan not enabled or no plan provided');
+      log('Plan not enabled or no plan provided');
       return null;
     }
 
-    // Skip if plan is completed
     if (plan.completed) {
       log('Plan is completed, skipping injection');
       return null;
     }
 
-    const formattedContent = formatGTDPlan(plan);
+    const formattedContent = formatPlan(plan);
 
-    log(`GTD Plan prepared: goal="${plan.goal}"`);
+    log(`Plan prepared: goal="${plan.goal}"`);
 
     return formattedContent;
   }
@@ -99,10 +98,9 @@ export class GTDPlanInjector extends BaseFirstUserContentProvider {
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     const result = await super.doProcess(context);
 
-    // Update metadata
     if (this.config.enabled && this.config.plan && !this.config.plan.completed) {
-      result.metadata.gtdPlanInjected = true;
-      result.metadata.gtdPlanId = this.config.plan.id;
+      result.metadata.planInjected = true;
+      result.metadata.planId = this.config.plan.id;
     }
 
     return result;
