@@ -4,37 +4,55 @@ import { AGENT_SIGNAL_DEFAULTS } from '../constants';
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../policies/types';
 import { redisReceiptStore } from '../store/adapters/redis/receiptStore';
 import type {
+  ActionPlan,
+  ActionResult,
+  ActionType,
   EvidenceRef,
-  MaintenanceActionPlan,
-  MaintenanceActionResult,
-  MaintenanceActionType,
-  MaintenancePlan,
-  MaintenanceReviewRunResult,
-} from './maintenance/types';
-import {
-  MaintenanceActionStatus,
-  MaintenanceReviewScope,
-  ReviewRunStatus,
-} from './maintenance/types';
+  Idea,
+  IterationMode,
+  Plan,
+  RunResult,
+  SelfFeedbackIntent,
+} from './selfIteration/types';
+import { ActionStatus, ReviewRunStatus, Scope } from './selfIteration/types';
 
-/** Metadata envelope used by maintenance receipts. */
+/** Metadata envelope used by self-iteration receipts. */
 export interface AgentSignalReceiptMetadata {
   /** Number of action results summarized by a review receipt. */
   actionCount?: number;
-  /** Maintenance action status for action receipts. */
-  actionStatus?: MaintenanceActionStatus;
-  /** Maintenance action type for action receipts. */
-  actionType?: MaintenanceActionType;
+  /** Agent Signal action status for action receipts. */
+  actionStatus?: ActionStatus;
+  /** Agent Signal action type for action receipts. */
+  actionType?: ActionType;
   /** Evidence refs used by the reviewer/planner. */
   evidenceRefs?: EvidenceRef[];
   /** User-local date for nightly receipts. */
   localDate?: string;
-  /** Maintenance review scope that produced the receipt. */
-  reviewScope?: MaintenanceReviewScope;
+  /** SelfIteration review scope that produced the receipt. */
+  reviewScope?: Scope;
   /** Scoped self-reflection id for non-nightly review receipts. */
   scopeId?: string;
   /** Scoped self-reflection namespace for non-nightly review receipts. */
   scopeType?: string;
+  /** Self-iteration output metadata persisted for reflection and declared-intent review receipts. */
+  selfIteration?: {
+    /** Non-actionable ideas captured by the shared self-iteration runtime. */
+    ideas?: Idea[];
+    /** Immediate intents captured by reflection or declared-intent runs. */
+    intents?: SelfFeedbackIntent[];
+    /** Runtime mode that produced the metadata. */
+    mode: IterationMode;
+    /** Reflection trigger reason when available. */
+    reason?: string;
+    /** Scope that bounded the runtime source. */
+    scope?: { id: string; type: string };
+    /** Source id that produced this metadata. */
+    sourceId: string;
+    /** Tool call that declared the intent when available. */
+    toolCallId?: string;
+    /** Evidence window used by the run when available. */
+    window?: { end: string; start: string };
+  };
   /** Source type that produced the receipt. */
   sourceType?: string;
   /** IANA timezone used for nightly receipt projection. */
@@ -56,7 +74,7 @@ export interface AgentSignalReceipt {
   /** Stable receipt id used as Redis member and payload key suffix. */
   id: string;
   /** User-facing durable outcome domain. */
-  kind: 'maintenance' | 'memory' | 'review' | 'skill';
+  kind: 'memory' | 'review' | 'skill';
   /** Structured metadata for audit, brief linking, and eval assertions. */
   metadata?: AgentSignalReceiptMetadata;
   /** Agent runtime operation that produced the receipt, when known. */
@@ -131,7 +149,7 @@ interface PersistAgentSignalReceiptsOptions {
   store?: AgentSignalReceiptStore;
 }
 
-/** Input used to create one maintenance review summary receipt. */
+/** Input used to create one self-iteration review summary receipt. */
 export interface CreateReviewSummaryReceiptInput {
   /** Agent that owns the reviewed scope. */
   agentId: string;
@@ -139,14 +157,16 @@ export interface CreateReviewSummaryReceiptInput {
   createdAt?: number;
   /** User-local date for nightly reviews. */
   localDate?: string;
-  /** Normalized maintenance plan that was executed. */
-  plan: MaintenancePlan;
+  /** Normalized self-iteration plan that was executed. */
+  plan: Plan;
   /** Aggregated executor result for the review. */
-  result: MaintenanceReviewRunResult;
+  result: RunResult;
   /** Scoped review id for self-reflection and intent runs. */
   scopeId?: string;
   /** Scoped review namespace for self-reflection and intent runs. */
   scopeType?: string;
+  /** Optional self-iteration metadata persisted only on the source-level summary receipt. */
+  selfIteration?: AgentSignalReceiptMetadata['selfIteration'];
   /** Source id that triggered the review. */
   sourceId: string;
   /** Source type that triggered the review. */
@@ -159,10 +179,10 @@ export interface CreateReviewSummaryReceiptInput {
   userId: string;
 }
 
-/** Input used to create one maintenance action receipt. */
-export interface CreateMaintenanceActionReceiptInput {
+/** Input used to create one self-review action receipt. */
+export interface CreateSelfReviewActionReceiptInput {
   /** Planner-normalized action. */
-  action: MaintenanceActionPlan;
+  action: ActionPlan;
   /** Agent that owns the reviewed scope. */
   agentId: string;
   /** Millisecond timestamp for receipt ordering. */
@@ -170,9 +190,9 @@ export interface CreateMaintenanceActionReceiptInput {
   /** User-local date for nightly reviews. */
   localDate?: string;
   /** Executor result for the action. */
-  result: MaintenanceActionResult;
+  result: ActionResult;
   /** Review scope that produced this action. */
-  reviewScope: MaintenanceReviewScope;
+  reviewScope: Scope;
   /** Scoped review id for self-reflection and intent runs. */
   scopeId?: string;
   /** Scoped review namespace for self-reflection and intent runs. */
@@ -189,13 +209,22 @@ export interface CreateMaintenanceActionReceiptInput {
   userId: string;
 }
 
-/** Input used to create all receipts for one maintenance review run. */
-export interface CreateMaintenanceReviewReceiptsInput extends Omit<
+/** Input used to create all receipts for one self-review run. */
+export interface CreateSelfReviewReceiptsInput extends Omit<
   CreateReviewSummaryReceiptInput,
   'plan'
 > {
-  /** Normalized maintenance plan that was executed. */
-  plan: MaintenancePlan;
+  /** Normalized self-iteration plan that was executed. */
+  plan: Plan;
+}
+
+/** Input used to create all receipts for one self-feedback or self-reflection run. */
+export interface CreateSelfFeedbackReceiptsInput extends Omit<
+  CreateReviewSummaryReceiptInput,
+  'plan'
+> {
+  /** Normalized self-iteration plan that was executed. */
+  plan: Plan;
 }
 
 const getPayloadString = (payload: Record<string, unknown>, key: string) => {
@@ -277,36 +306,34 @@ const toReceiptKind = (
   return;
 };
 
-const getMaintenanceTopicId = (input: { sourceId: string; topicId?: string }) =>
+const getReceiptTopicId = (input: { sourceId: string; topicId?: string }) =>
   input.topicId ?? input.sourceId;
 
-const getActionReceiptKind = (action: MaintenanceActionPlan): AgentSignalReceipt['kind'] =>
-  action.operation?.domain ?? 'maintenance';
+const getActionReceiptKind = (action: ActionPlan): AgentSignalReceipt['kind'] =>
+  action.operation?.domain ?? 'review';
 
-const getActionReceiptStatus = (
-  status: MaintenanceActionStatus,
-): AgentSignalReceipt['status'] | undefined => {
-  if (status === MaintenanceActionStatus.Applied) return 'applied';
-  if (status === MaintenanceActionStatus.Proposed) return 'proposed';
+const getActionReceiptStatus = (status: ActionStatus): AgentSignalReceipt['status'] | undefined => {
+  if (status === ActionStatus.Applied) return 'applied';
+  if (status === ActionStatus.Proposed) return 'proposed';
 
   return;
 };
 
-const getActionReceiptTitle = (action: MaintenanceActionPlan, result: MaintenanceActionResult) => {
+const getActionReceiptTitle = (action: ActionPlan, result: ActionResult) => {
   if (result.summary) return getClampedString(result.summary);
-  if (action.actionType === 'write_memory') return 'Memory maintenance action';
+  if (action.actionType === 'write_memory') return 'Memory self-review action';
   if (action.actionType === 'create_skill') return 'Skill creation proposal';
   if (action.actionType === 'refine_skill') return 'Skill refinement proposal';
   if (action.actionType === 'consolidate_skill') return 'Skill consolidation proposal';
 
-  return 'Maintenance action';
+  return 'Agent Signal review action';
 };
 
 /**
- * Creates one source-level receipt summarizing a maintenance review run.
+ * Creates one source-level receipt summarizing a self-iteration review run.
  *
  * Use when:
- * - Nightly or scoped self-reflection handlers finish a maintenance review
+ * - Nightly or scoped self-reflection handlers finish a self-iteration review
  * - Receipts need one audit anchor before action-level receipts are linked to briefs
  *
  * Expects:
@@ -329,6 +356,7 @@ export const createReviewSummaryReceipt = (
     evidenceRefs: input.plan.actions.flatMap((action) => action.evidenceRefs),
     ...(input.localDate ? { localDate: input.localDate } : {}),
     reviewScope: input.plan.reviewScope,
+    ...(input.selfIteration ? { selfIteration: input.selfIteration } : {}),
     ...(input.scopeId ? { scopeId: input.scopeId } : {}),
     ...(input.scopeType ? { scopeType: input.scopeType } : {}),
     sourceType: input.sourceType,
@@ -338,18 +366,18 @@ export const createReviewSummaryReceipt = (
   sourceType: input.sourceType,
   status: input.result.status === ReviewRunStatus.Failed ? 'failed' : 'completed',
   title:
-    input.plan.reviewScope === MaintenanceReviewScope.Nightly
+    input.plan.reviewScope === Scope.Nightly
       ? 'Nightly self-review completed'
       : 'Self-review completed',
-  topicId: getMaintenanceTopicId(input),
+  topicId: getReceiptTopicId(input),
   userId: input.userId,
 });
 
 /**
- * Creates one action-level maintenance receipt for applied or proposed actions.
+ * Creates one action-level self-iteration receipt for applied or proposed actions.
  *
  * Use when:
- * - A maintenance action mutated a resource or produced a user-visible proposal
+ * - A self-review action mutated a resource or produced a user-visible proposal
  * - Brief metadata needs durable receipt ids linked to individual outcomes
  *
  * Expects:
@@ -359,8 +387,8 @@ export const createReviewSummaryReceipt = (
  * Returns:
  * - A stable action receipt, or `undefined` when no user-visible action receipt is needed
  */
-export const createMaintenanceActionReceipt = (
-  input: CreateMaintenanceActionReceiptInput,
+export const createSelfReviewActionReceipt = (
+  input: CreateSelfReviewActionReceiptInput,
 ): AgentSignalReceipt | undefined => {
   if (input.action.actionType === 'noop') return;
 
@@ -397,7 +425,7 @@ export const createMaintenanceActionReceipt = (
       type: kind === 'skill' ? 'skill' : 'memory',
     },
     title,
-    topicId: getMaintenanceTopicId(input),
+    topicId: getReceiptTopicId(input),
     userId: input.userId,
   };
 };
@@ -415,15 +443,13 @@ export const createMaintenanceActionReceipt = (
  * Returns:
  * - Receipts ordered as summary first, then action results in executor order
  */
-export const createMaintenanceReviewReceipts = (
-  input: CreateMaintenanceReviewReceiptsInput,
-): AgentSignalReceipt[] => {
+const createReceipts = (input: CreateReviewSummaryReceiptInput): AgentSignalReceipt[] => {
   const actionByKey = new Map(input.plan.actions.map((action) => [action.idempotencyKey, action]));
   const actionReceipts = input.result.actions.flatMap((result) => {
     const action = actionByKey.get(result.idempotencyKey);
     if (!action) return [];
 
-    const receipt = createMaintenanceActionReceipt({
+    const receipt = createSelfReviewActionReceipt({
       action,
       agentId: input.agentId,
       createdAt: input.createdAt,
@@ -444,6 +470,40 @@ export const createMaintenanceReviewReceipts = (
 
   return [createReviewSummaryReceipt(input), ...actionReceipts];
 };
+
+/**
+ * Projects one nightly self-review summary receipt plus applied/proposed action receipts.
+ *
+ * Use when:
+ * - Nightly self-review handlers need receipts before Daily Brief creation
+ * - Review action receipts should stay named as self-review output
+ *
+ * Expects:
+ * - `plan.actions` and `result.actions` share action idempotency keys
+ *
+ * Returns:
+ * - Receipts ordered as summary first, then action results in executor order
+ */
+export const createSelfReviewReceipts = (
+  input: CreateSelfReviewReceiptsInput,
+): AgentSignalReceipt[] => createReceipts(input);
+
+/**
+ * Projects one self-feedback summary receipt plus applied/proposed action receipts.
+ *
+ * Use when:
+ * - Immediate self-feedback or self-reflection handlers finish a scoped run
+ * - Receipt metadata carries self-feedback ideas or intents
+ *
+ * Expects:
+ * - `plan.actions` and `result.actions` share action idempotency keys
+ *
+ * Returns:
+ * - Receipts ordered as summary first, then action results in executor order
+ */
+export const createSelfFeedbackReceipts = (
+  input: CreateSelfFeedbackReceiptsInput,
+): AgentSignalReceipt[] => createReceipts(input);
 
 /**
  * Projects terminal Agent Signal runtime results into user-visible receipts.

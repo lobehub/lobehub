@@ -2,6 +2,10 @@ import {
   AgentBuilderInterventions,
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
+import {
+  ClaudeCodeIdentifier,
+  ClaudeCodeInterventions,
+} from '@lobechat/builtin-tool-claude-code/client';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CloudSandboxInterventions } from '@lobechat/builtin-tool-cloud-sandbox/client';
 import {
@@ -20,10 +24,6 @@ import {
   UserInteractionInterventions,
 } from '@lobechat/builtin-tool-user-interaction/client';
 import {
-  AgentMarketplaceInterventions,
-  AgentMarketplaceManifest,
-} from '@lobechat/builtin-tool-web-onboarding/agentMarketplace/client';
-import {
   WebOnboardingInterventions,
   WebOnboardingManifest,
 } from '@lobechat/builtin-tool-web-onboarding/client';
@@ -36,7 +36,7 @@ import { type BuiltinIntervention } from '@lobechat/types';
  */
 export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInterventions,
-  [AgentMarketplaceManifest.identifier]: AgentMarketplaceInterventions,
+  [ClaudeCodeIdentifier]: ClaudeCodeInterventions,
   [CloudSandboxManifest.identifier]: CloudSandboxInterventions,
   [GroupManagementManifest.identifier]: GroupManagementInterventions,
   [GTDManifest.identifier]: GTDInterventions,

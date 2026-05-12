@@ -19,7 +19,9 @@ export const SaveUserQuestionInspector = memo<
   const agentName = data.agentName?.trim();
   const agentEmoji = data.agentEmoji?.trim();
   const fullName = data.fullName?.trim();
-  const interestsCount = Array.isArray(data.interests) ? data.interests.length : 0;
+  const interestsCount =
+    (Array.isArray(data.interests) ? data.interests.length : 0) +
+    (Array.isArray(data.customInterests) ? data.customInterests.length : 0);
   const hasAnyField = Boolean(agentName || agentEmoji || fullName || interestsCount > 0);
 
   if (isArgumentsStreaming && !hasAnyField) {

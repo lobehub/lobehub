@@ -1,9 +1,11 @@
+import type { InterestAreaKey } from './interests';
+
 /**
  * Task Template catalog used by home "Try following tasks" recommendation.
  * I18n keys: `taskTemplate:${id}.title|description|prompt`.
  *
- * `interests` values must be keys from `INTEREST_AREAS` in
- * `src/routes/onboarding/config.ts` — that's what `users.interests` stores.
+ * `interests` values must be canonical interest area keys — that's what
+ * predefined `users.interests` entries store.
  */
 
 /**
@@ -21,20 +23,11 @@ export interface TaskTemplate {
   /** Optional icon identifier; consumers resolve it to a component. */
   icon?: TaskTemplateIcon;
   id: string;
-  interests: string[];
+  interests: InterestAreaKey[];
   /** Skills that enrich the brief but are not required to run it. */
   optionalSkills?: TaskTemplateSkillRequirement[];
   /** Skill dependencies. The `source` field routes the connection flow. */
   requiresSkills?: TaskTemplateSkillRequirement[];
-}
-
-export type TaskTemplateRecommendationSource = 'matched' | 'fallback';
-
-export type TaskTemplateFallbackPool = 'preferred_category' | 'all_candidates';
-
-export interface RecommendedTaskTemplate extends TaskTemplate {
-  fallbackPool?: TaskTemplateFallbackPool;
-  source: TaskTemplateRecommendationSource;
 }
 
 export interface TaskTemplateSkillRequirement {
@@ -121,7 +114,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'content-creation',
     cronPattern: '0 20 * * 0',
     interests: ['writing', 'creator'],
-    optionalSkills: [{ provider: 'notion', source: 'klavis' }],
+    optionalSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
 
   // engineering
@@ -363,7 +356,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'product',
     cronPattern: '0 15 * * 5',
     interests: ['product'],
-    requiresSkills: [{ provider: 'notion', source: 'klavis' }],
+    requiresSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
 
   // sales-customer
@@ -445,7 +438,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'hr',
     cronPattern: '0 9 * * 1',
     interests: ['hr'],
-    requiresSkills: [{ provider: 'notion', source: 'klavis' }],
+    requiresSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
   {
     id: 'team-status-weekly',
@@ -480,7 +473,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'finance-legal',
     cronPattern: '0 9 * * 1',
     interests: ['finance-legal'],
-    requiresSkills: [{ provider: 'notion', source: 'klavis' }],
+    requiresSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
   {
     id: 'regulation-watch-weekly',
@@ -645,7 +638,7 @@ export const taskTemplates: TaskTemplate[] = [
     category: 'personal-life',
     cronPattern: '0 22 * * *',
     interests: ['personal'],
-    optionalSkills: [{ provider: 'notion', source: 'klavis' }],
+    optionalSkills: [{ provider: 'notion', source: 'lobehub' }],
   },
 ];
 

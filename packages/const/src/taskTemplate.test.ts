@@ -1,30 +1,11 @@
 import { parseCronPattern } from '@lobechat/utils/cron';
 import { describe, expect, it } from 'vitest';
 
+import { INTEREST_AREA_KEYS } from './interests';
 import { TASK_TEMPLATE_FALLBACK_CATEGORIES, taskTemplates } from './taskTemplate';
 
 const CRON_FIELDS = 5;
-// Keep in sync with INTEREST_AREAS in lobehub/src/routes/onboarding/config.ts —
-// those are the only values `users.interests` can hold.
-const VALID_INTEREST_KEYS = new Set([
-  'writing',
-  'coding',
-  'design',
-  'education',
-  'business',
-  'marketing',
-  'product',
-  'sales',
-  'operations',
-  'hr',
-  'finance-legal',
-  'creator',
-  'investing',
-  'parenting',
-  'health',
-  'hobbies',
-  'personal',
-]);
+const VALID_INTEREST_KEYS = new Set(INTEREST_AREA_KEYS);
 
 describe('taskTemplates', () => {
   it('has the expected number of templates', () => {

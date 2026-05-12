@@ -4,21 +4,61 @@ import type {
   TaskDetailData,
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
+  TaskItem,
+  TaskStatus,
   TaskTopicHandoff,
   WorkspaceData,
 } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { AiAgentService } from '../aiAgent';
 import { BriefService } from '../brief';
+import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
+import { type ReviewResult, TaskReviewService } from '../taskReview';
+import { TaskRunnerService } from '../taskRunner';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
+
+export interface CreateTaskInput {
+  assigneeAgentId?: string;
+  assigneeUserId?: string;
+  automationMode?: 'heartbeat' | 'schedule';
+  createdByAgentId?: string;
+  description?: string;
+  identifierPrefix?: string;
+  instruction: string;
+  name?: string;
+  parentTaskId?: string;
+  priority?: number;
+  schedulePattern?: string;
+  scheduleTimezone?: string;
+  sortOrder?: number;
+}
+
+export interface UpdateStatusResult {
+  allSubtasksDone?: boolean;
+  checkpointTriggered?: boolean;
+  parentTaskId?: string | null;
+  paused: string[];
+  task: TaskItem;
+  unlocked: string[];
+}
+
+export interface RunReadySubtasksResult {
+  failed: { error: string; identifier: string }[];
+  kickedOff: string[];
+  plan: SubtaskGraphPlan;
+  skipped?: { reason: 'nothing-runnable' };
+}
 
 export class TaskService {
   private agentModel: AgentModel;
@@ -27,14 +67,302 @@ export class TaskService {
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
+  private topicModel: TopicModel;
+  private userId: string;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
+    this.userId = userId;
     this.agentModel = new AgentModel(db, userId);
     this.taskModel = new TaskModel(db, userId);
     this.taskTopicModel = new TaskTopicModel(db, userId);
+    this.topicModel = new TopicModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
     this.briefService = new BriefService(db, userId);
+  }
+
+  /**
+   * Create a task. Validates the assignee belongs to the user, resolves
+   * `parentTaskId` if it's an identifier, and snapshots the assignee agent's
+   * current model/provider into `task.config` so later changes to the agent's
+   * default model don't silently affect this task.
+   */
+  async createTask(input: CreateTaskInput): Promise<TaskItem> {
+    await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
+
+    const createData: CreateTaskInput & { config?: Record<string, unknown> } = { ...input };
+
+    if (createData.parentTaskId) {
+      const parent = await this.resolveOrThrow(createData.parentTaskId);
+      createData.parentTaskId = parent.id;
+    }
+
+    if (input.assigneeAgentId) {
+      const snapshot = await this.agentModel.getAgentModelConfig(input.assigneeAgentId);
+      if (snapshot) createData.config = snapshot;
+    }
+
+    return this.taskModel.create(createData);
+  }
+
+  /**
+   * Cancel a running topic: interrupt the remote operation (if any), then
+   * mark the topic as `canceled` and pause its parent task.
+   */
+  async cancelTopic(topicId: string): Promise<void> {
+    const target = await this.taskTopicModel.findByTopicId(topicId);
+    if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found.' });
+
+    if (target.status !== 'running') {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Topic is not running (current status: ${target.status}).`,
+      });
+    }
+
+    if (target.operationId) {
+      const aiAgentService = new AiAgentService(this.db, this.userId);
+      await aiAgentService.interruptTask({ operationId: target.operationId });
+    }
+
+    await this.taskTopicModel.updateStatus(target.taskId, topicId, 'canceled');
+    await this.taskModel.updateStatus(target.taskId, 'paused');
+  }
+
+  /**
+   * Delete a topic: interrupt if still running, then remove the task-topic
+   * link and delete the underlying topic.
+   */
+  async deleteTopic(topicId: string): Promise<void> {
+    const target = await this.taskTopicModel.findByTopicId(topicId);
+    if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found.' });
+
+    if (target.status === 'running' && target.operationId) {
+      const aiAgentService = new AiAgentService(this.db, this.userId);
+      await aiAgentService.interruptTask({ operationId: target.operationId });
+    }
+
+    await this.taskTopicModel.remove(target.taskId, topicId);
+    await this.topicModel.delete(topicId);
+  }
+
+  /**
+   * Run the configured review on `content`, persist the result onto the
+   * target topic, and return the review outcome.
+   */
+  async runReview(input: {
+    content?: string;
+    id: string;
+    topicId?: string;
+  }): Promise<ReviewResult> {
+    const task = await this.resolveOrThrow(input.id);
+
+    const reviewConfig = this.taskModel.getReviewConfig(task);
+    if (!reviewConfig?.enabled) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Review is not enabled for this task',
+      });
+    }
+
+    const content = input.content;
+    if (!content) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Content is required for review. Pass --content or run after a topic completes.',
+      });
+    }
+
+    const topicId = input.topicId || task.currentTopicId;
+
+    let iteration = 1;
+    if (topicId) {
+      const topics = await this.taskTopicModel.findByTaskId(task.id);
+      const target = topics.find((t) => t.topicId === topicId);
+      if (target?.reviewIteration) iteration = target.reviewIteration + 1;
+    }
+
+    const reviewService = new TaskReviewService(this.db, this.userId);
+    const result = await reviewService.review({
+      content,
+      iteration,
+      judge: reviewConfig.judge,
+      rubrics: reviewConfig.rubrics,
+      taskName: task.name || task.identifier,
+    });
+
+    if (topicId) {
+      await this.taskTopicModel.updateReview(task.id, topicId, {
+        iteration,
+        passed: result.passed,
+        score: result.overallScore,
+        scores: result.rubricResults,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Transition a task to a new status, cascading the side effects:
+   *   - leaving `running`: interrupt + cancel still-running topics
+   *   - entering `completed`: check parent checkpoint, count sibling
+   *     completions, kick off any newly-unlocked downstream tasks.
+   */
+  async updateStatus(input: {
+    error?: string;
+    id: string;
+    status: TaskStatus;
+  }): Promise<UpdateStatusResult> {
+    const { id, status, error: errorMsg } = input;
+
+    if (errorMsg && status !== 'failed') {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Task error can only be provided when status is failed.',
+      });
+    }
+
+    const resolved = await this.resolveOrThrow(id);
+
+    if (resolved.status === 'running' && status !== 'running') {
+      const topics = await this.taskTopicModel.findByTaskId(resolved.id);
+      const aiAgentService = new AiAgentService(this.db, this.userId);
+
+      for (const t of topics) {
+        if (t.status !== 'running' || !t.topicId) continue;
+
+        // Interrupt the remote operation first; if it fails, skip cancellation
+        // to avoid desynchronizing DB state from a still-running operation.
+        if (t.operationId) {
+          try {
+            await aiAgentService.interruptTask({ operationId: t.operationId });
+          } catch (err) {
+            console.error(
+              '[TaskService.updateStatus] failed to interrupt topic %s:',
+              t.topicId,
+              err,
+            );
+            continue;
+          }
+        }
+
+        await this.taskTopicModel.cancelIfRunning(resolved.id, t.topicId);
+      }
+    }
+
+    const extra: Record<string, unknown> = {};
+    if (status === 'running') extra.startedAt = new Date();
+    if (status === 'completed' || status === 'failed' || status === 'canceled')
+      extra.completedAt = new Date();
+    if (errorMsg) extra.error = errorMsg;
+
+    const task = await this.taskModel.updateStatus(resolved.id, status, extra);
+    if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+
+    const unlocked: string[] = [];
+    const paused: string[] = [];
+    let allSubtasksDone = false;
+    let checkpointTriggered = false;
+
+    if (status === 'completed') {
+      if (task.parentTaskId) {
+        const parentTask = await this.taskModel.findById(task.parentTaskId);
+        if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
+          await this.taskModel.updateStatus(parentTask.id, 'paused');
+          checkpointTriggered = true;
+        }
+        allSubtasksDone = await this.taskModel.areAllSubtasksCompleted(task.parentTaskId);
+      }
+
+      // Unlock blocked tasks and actually kick them off via the runner.
+      const runner = new TaskRunnerService(this.db, this.userId);
+      const cascade = await runner.cascadeOnCompletion(task.id);
+      unlocked.push(...cascade.started);
+      paused.push(...cascade.paused);
+    }
+
+    return {
+      paused,
+      task,
+      unlocked,
+      ...(checkpointTriggered && { checkpointTriggered: true }),
+      ...(allSubtasksDone && { allSubtasksDone: true, parentTaskId: task.parentTaskId }),
+    };
+  }
+
+  /**
+   * Compute the subtask execution plan for `idOrIdentifier` without
+   * actually kicking anything off.
+   */
+  async previewSubtaskLayers(idOrIdentifier: string): Promise<SubtaskGraphPlan> {
+    const parent = await this.resolveOrThrow(idOrIdentifier);
+    const graph = new TaskGraphService(this.db, this.userId);
+    const { plan } = await graph.planForParent(parent.id);
+    return plan;
+  }
+
+  /**
+   * Kick off the first runnable layer of subtasks under `idOrIdentifier`.
+   * Subsequent layers fire automatically through
+   * `TaskRunnerService.cascadeOnCompletion` as each upstream finishes.
+   */
+  async runReadySubtasks(idOrIdentifier: string): Promise<RunReadySubtasksResult> {
+    const parent = await this.resolveOrThrow(idOrIdentifier);
+    const graph = new TaskGraphService(this.db, this.userId);
+    const { descendants, plan } = await graph.planForParent(parent.id);
+
+    if (plan.layers.length === 0) {
+      return {
+        failed: [],
+        kickedOff: [],
+        plan,
+        skipped: { reason: 'nothing-runnable' as const },
+      };
+    }
+
+    const firstLayer = plan.layers[0];
+    const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
+    const runner = new TaskRunnerService(this.db, this.userId);
+
+    const kickedOff: string[] = [];
+    const failed: { error: string; identifier: string }[] = [];
+
+    const settled = await Promise.allSettled(
+      firstLayer.map(async (identifier) => {
+        const id = identifierToId.get(identifier);
+        if (!id) throw new Error(`Subtask ${identifier} not found`);
+        await runner.runTask({ taskId: id });
+        return identifier;
+      }),
+    );
+
+    for (const [index, result] of settled.entries()) {
+      const identifier = firstLayer[index];
+      if (result.status === 'fulfilled') {
+        kickedOff.push(identifier);
+      } else {
+        const message =
+          result.reason instanceof Error ? result.reason.message : 'Failed to start task';
+        failed.push({ error: message, identifier });
+      }
+    }
+
+    return { failed, kickedOff, plan };
+  }
+
+  private async assertAssigneeAgentBelongsToUser(assigneeAgentId?: string | null): Promise<void> {
+    if (!assigneeAgentId) return;
+    const exists = await this.agentModel.existsById(assigneeAgentId);
+    if (!exists) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Assignee agent not found' });
+    }
+  }
+
+  private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
+    const task = await this.taskModel.resolve(idOrIdentifier);
+    if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+    return task;
   }
 
   async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {

@@ -24,13 +24,10 @@ export const DailyBriefRecommendationsView = memo<DailyBriefRecommendationsViewP
 
     return (
       <Flexbox gap={8}>
-        {state.templates.map((tmpl, index) => (
+        {state.templates.map((tmpl) => (
           <TaskTemplateCard
             key={tmpl.id}
-            position={index}
-            recommendationBatchId={state.recommendationBatchId}
             template={tmpl}
-            userInterestCount={state.userInterestCount}
             onCreated={state.onCreated}
             onDismiss={state.onDismiss}
           />

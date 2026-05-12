@@ -802,4 +802,131 @@ describe('HeterogeneousAgentCtr', () => {
       expect(toolEnds.length).toBeGreaterThan(0);
     });
   });
+
+  describe('app-quit cleanup of AskUserQuestion temp configs (LOBE-8725)', () => {
+    // The async exit-handler cleanup races Electron's main-process teardown
+    // and used to leak `lobe-cc-mcp-<opId>.json` files in `os.tmpdir()` on
+    // every quit. The controller now unlinks pending intervention temp
+    // configs *synchronously* from `before-quit` AND from process signal
+    // handlers (SIGTERM / SIGINT — `before-quit` doesn't fire on external
+    // kills). These tests exercise both paths against real files.
+
+    /**
+     * Drop a temp `lobe-cc-mcp-<id>.json` and stash it on the controller's
+     * `opIdToIntervention` map under the same key, so the quit hook treats
+     * it like a real pending intervention and tries to unlink it.
+     */
+    const seedPendingIntervention = async (ctr: HeterogeneousAgentCtr, opId: string) => {
+      const tmpConfigPath = path.join(tmpdir(), `lobe-cc-mcp-test-${opId}.json`);
+      await writeFile(tmpConfigPath, '{"mcpServers":{}}');
+      const slot = {
+        bridge: {} as any,
+        pumpDone: Promise.resolve(),
+        tmpConfigPath,
+      };
+      (ctr as any).opIdToIntervention.set(opId, slot);
+      return tmpConfigPath;
+    };
+
+    const captureRegisteredHandler = (
+      registerSpy: ReturnType<typeof vi.fn> | ReturnType<typeof vi.spyOn>,
+      eventName: string,
+    ): (() => void) => {
+      const calls = (registerSpy as any).mock.calls as Array<[string, () => void]>;
+      const match = calls.findLast(([evt]) => evt === eventName);
+      if (!match) throw new Error(`no handler registered for "${eventName}"`);
+      return match[1];
+    };
+
+    it('before-quit synchronously unlinks every pending intervention temp config', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const fileA = await seedPendingIntervention(ctr, 'opA');
+      const fileB = await seedPendingIntervention(ctr, 'opB');
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      beforeQuit();
+
+      await expect(access(fileA)).rejects.toThrow();
+      await expect(access(fileB)).rejects.toThrow();
+    });
+
+    it('SIGTERM handler unlinks pending intervention temp configs (external-kill path)', async () => {
+      // External kills (test harness, OS shutdown) skip Electron's lifecycle
+      // events entirely — `before-quit` never fires, so the controller has to
+      // hook the raw process signal too. Stub `process.on` so the handler is
+      // *recorded* but never actually attached to the test runner's process
+      // (otherwise the test leaks a SIGTERM listener that survives the test).
+      // Same for `process.exit` — the controller's fail-safe shouldn't get a
+      // chance to actually exit the worker if its `setTimeout(...).unref()`
+      // ever fires before mockRestore.
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
+      const processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const file = await seedPendingIntervention(ctr, 'opSigterm');
+
+      ctr.afterAppReady();
+      const sigterm = captureRegisteredHandler(processOnSpy, 'SIGTERM');
+      sigterm();
+
+      await expect(access(file)).rejects.toThrow();
+
+      processOnSpy.mockRestore();
+      processExitSpy.mockRestore();
+    });
+
+    it('SIGINT handler unlinks pending intervention temp configs (Ctrl-C path)', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
+      const processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const file = await seedPendingIntervention(ctr, 'opSigint');
+
+      ctr.afterAppReady();
+      const sigint = captureRegisteredHandler(processOnSpy, 'SIGINT');
+      sigint();
+
+      await expect(access(file)).rejects.toThrow();
+
+      processOnSpy.mockRestore();
+      processExitSpy.mockRestore();
+    });
+
+    it('cleanup is idempotent — already-deleted files do not throw', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const file = await seedPendingIntervention(ctr, 'opIdempotent');
+
+      // Pre-delete the file out from under the controller — simulates a
+      // partial cleanup race where the async exit handler beat us to it.
+      await unlink(file);
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      expect(() => beforeQuit()).not.toThrow();
+    });
+  });
 });

@@ -29,7 +29,7 @@
   "batchDelete": "Excluir em Lote",
   "blog": "Blog do Produto",
   "botIntegrationBanner.dismiss": "Fechar",
-  "botIntegrationBanner.title": "Adicionar Canais ao LobeAI",
+  "botIntegrationBanner.title": "Converse com o Lobe AI nos seus apps de mensagens favoritos",
   "branching": "Criar Subtópico",
   "branchingDisable": "O recurso \"Subtópico\" não está disponível no modo atual. Para usá-lo, alterne para o modo de banco de dados Postgres/PGlite ou utilize o LobeHub Cloud.",
   "branchingRequiresSavedTopic": "O tópico atual não está salvo, salve-o primeiro para usar o recurso de subtópico",

@@ -158,6 +158,53 @@ describe('ClaudeCodeAdapter', () => {
       const toolStart = events.find((e) => e.type === 'tool_start');
       expect(toolStart).toBeDefined();
     });
+
+    it('rewrites mcp__lobe_cc__ask_user_question to apiName=askUserQuestion', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      const askInput = {
+        questions: [
+          {
+            header: 'Color',
+            options: [
+              { description: 'Red', label: 'Red' },
+              { description: 'Blue', label: 'Blue' },
+            ],
+            question: 'Pick a color?',
+          },
+        ],
+      };
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 'tu_aq_1',
+              input: askInput,
+              name: 'mcp__lobe_cc__ask_user_question',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk!.data.toolsCalling).toEqual([
+        {
+          // Wire-prefixed name is rewritten to the stable domain key.
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify(askInput),
+          id: 'tu_aq_1',
+          identifier: 'claude-code',
+          type: 'default',
+        },
+      ]);
+    });
   });
 
   describe('tool_result in user events', () => {

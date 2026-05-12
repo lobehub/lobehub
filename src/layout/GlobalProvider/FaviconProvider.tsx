@@ -87,11 +87,9 @@ const updateFaviconDOM = (state: FaviconState, isDev: boolean) => {
   });
 };
 
-const defaultIsDev = process.env.NODE_ENV === 'development';
-
 export const FaviconProvider = memo<{ children: ReactNode }>(({ children }) => {
   const [currentState, setCurrentState] = useState<FaviconState>('default');
-  const [isDevMode, setIsDevModeState] = useState<boolean>(defaultIsDev);
+  const [isDevMode, setIsDevModeState] = useState<boolean>(__DEV__);
 
   const setFavicon = useCallback((state: FaviconState) => {
     setCurrentState(state);

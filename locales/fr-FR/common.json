@@ -29,7 +29,7 @@
   "batchDelete": "Suppression en lot",
   "blog": "Blog produit",
   "botIntegrationBanner.dismiss": "Ignorer",
-  "botIntegrationBanner.title": "Ajouter des canaux à LobeAI",
+  "botIntegrationBanner.title": "Discutez avec Lobe AI dans vos applications de messagerie favorites",
   "branching": "Créer un sous-sujet",
   "branchingDisable": "La fonctionnalité \"Sous-sujet\" n'est pas disponible dans le mode actuel. Pour l'utiliser, passez en mode base de données Postgres/PGlite ou utilisez LobeHub Cloud.",
   "branchingRequiresSavedTopic": "Le sujet actuel n'est pas enregistré, veuillez l'enregistrer d'abord pour utiliser la fonction de sous-sujet",

@@ -6,7 +6,6 @@ import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
-import { CronManifest } from '@lobechat/builtin-tool-cron';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
@@ -17,7 +16,7 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import { selfIterationIntentManifest } from '@lobechat/builtin-tool-self-iteration';
+import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
@@ -26,7 +25,6 @@ import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
-import { AgentMarketplaceManifest } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
@@ -125,8 +123,8 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     discoverable: false,
     hidden: true,
-    identifier: selfIterationIntentManifest.identifier,
-    manifest: selfIterationIntentManifest,
+    identifier: selfFeedbackIntentManifest.identifier,
+    manifest: selfFeedbackIntentManifest,
     type: 'builtin',
   },
   {
@@ -162,11 +160,6 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     identifier: CredsManifest.identifier,
     manifest: CredsManifest,
-    type: 'builtin',
-  },
-  {
-    identifier: CronManifest.identifier,
-    manifest: CronManifest,
     type: 'builtin',
   },
   {
@@ -252,15 +245,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
-    hidden: true,
-    identifier: AgentMarketplaceManifest.identifier,
-    manifest: AgentMarketplaceManifest,
-    type: 'builtin',
-  },
-  {
-    discoverable: false,
-    hidden: true,
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
     type: 'builtin',

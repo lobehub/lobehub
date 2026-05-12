@@ -207,7 +207,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority), parent, or dependencies (batched). Status changes go through updateTaskStatus.",
+        "Edit a task's fields (name, description, instruction, priority), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
@@ -296,6 +296,47 @@ export const TaskManifest: BuiltinToolManifest = {
           },
         },
         required: ['identifiers'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch between cron (`schedule`) and fixed-interval (`heartbeat`) automation, or disable automation entirely. Pass automationMode=null to stop the task from auto-running. For schedule mode, supply schedulePattern (cron) and scheduleTimezone (IANA). For heartbeat mode, supply heartbeatInterval (seconds). maxExecutions caps how many scheduled runs may fire (null = unlimited). Status changes still go through updateTaskStatus; this tool only touches schedule configuration.',
+      name: TaskApiName.setTaskSchedule,
+      parameters: {
+        properties: {
+          automationMode: {
+            description:
+              'Enables periodic execution. "schedule" fires on the cron `schedulePattern`; "heartbeat" ticks every `heartbeatInterval` seconds. Pass null to disable automation entirely.',
+            enum: ['heartbeat', 'schedule', null],
+            type: ['string', 'null'],
+          },
+          heartbeatInterval: {
+            description:
+              'Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear the interval. Recommend ≥600s.',
+            type: 'number',
+          },
+          identifier: {
+            description: 'The identifier of the task to configure (e.g. "TASK-1").',
+            type: 'string',
+          },
+          maxExecutions: {
+            description:
+              'Cap on the number of scheduled executions for this task. Pass null to remove the cap (run indefinitely).',
+            type: ['number', 'null'],
+          },
+          schedulePattern: {
+            description:
+              'Cron expression for scheduled mode, e.g. "0 9 * * *" (every day at 09:00). Pass null to clear the pattern.',
+            type: ['string', 'null'],
+          },
+          scheduleTimezone: {
+            description:
+              'IANA timezone for the cron expression, e.g. "Asia/Shanghai" or "America/New_York". Pass null to clear; defaults to UTC when unset.',
+            type: ['string', 'null'],
+          },
+        },
+        required: ['identifier'],
         type: 'object',
       },
     },

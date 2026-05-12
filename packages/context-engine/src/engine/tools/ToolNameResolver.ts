@@ -79,19 +79,57 @@ export class ToolNameResolver {
    * Resolve tool calls from AI response back to original tool information
    * @param toolCalls - Tool calls from AI model response
    * @param manifests - Available tool manifests mapped by identifier
+   * @param offeredToolNames - Tool names actually sent to the LLM in this turn
+   *   (e.g. `lobe-activator____activateTools`). When provided, the
+   *   missing-prefix fallback only considers tools in this list, so a model
+   *   can't trigger tools that weren't enabled for the current call and
+   *   disabled duplicates can't shadow enabled ones.
    * @returns Resolved tool payloads
    */
   resolve(
     toolCalls: MessageToolCall[],
     manifests: Record<string, LobeToolManifest>,
+    offeredToolNames?: string[],
   ): ChatToolPayload[] {
+    const offeredSet = offeredToolNames ? new Set(offeredToolNames) : null;
+
     return toolCalls
       .map((toolCall): ChatToolPayload | null => {
-        const [initialIdentifier, apiName, type] =
+        const [initialIdentifier, initialApiName, type] =
           toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
         let identifier = initialIdentifier;
+        let apiName = initialApiName;
 
-        if (!apiName) return null;
+        // Fallback for malformed tool names without the `____` separator
+        // (e.g. model returns "activateTools" instead of
+        // "lobe-activator____activateTools"). When the bare name uniquely
+        // matches an API across the manifests we're allowed to consider,
+        // recover the identifier so we don't silently drop the tool call.
+        // The manifest's `type` is picked up by the existing `type ??
+        // manifests[identifier]?.type` fallback when building the payload.
+        if (!apiName) {
+          const bareName = initialIdentifier;
+          const matches: string[] = [];
+          for (const [id, manifest] of Object.entries(manifests)) {
+            const matchedApi = manifest?.api?.find(
+              (api: LobeChatPluginApi) => api.name === bareName,
+            );
+            if (!matchedApi) continue;
+            // Restrict to tools actually offered to the LLM this turn so a
+            // model can't reach tools that weren't enabled, and so disabled
+            // duplicates don't make an enabled call look ambiguous.
+            if (offeredSet && !offeredSet.has(this.generate(id, matchedApi.name, manifest.type))) {
+              continue;
+            }
+            matches.push(id);
+          }
+          if (matches.length === 1) {
+            identifier = matches[0];
+            apiName = bareName;
+          } else {
+            return null;
+          }
+        }
 
         // Step 1: Resolve hashed identifier if needed
         if (identifier.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX)) {

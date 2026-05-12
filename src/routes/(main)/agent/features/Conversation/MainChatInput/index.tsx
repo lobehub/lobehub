@@ -30,6 +30,7 @@ const MainChatInput = memo(() => {
 
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
+  const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const supportsImageOutput = useModelSupportImageOutput(model, provider);
   const rightActions = supportsImageOutput ? promptTransformRightActions : emptyRightActions;
 
@@ -50,6 +51,7 @@ const MainChatInput = memo(() => {
   return (
     <ChatInput
       skipScrollMarginWithList
+      isConfigLoading={isAgentConfigLoading}
       leftActions={leftActions}
       rightActions={rightActions}
       {...(isDevMode

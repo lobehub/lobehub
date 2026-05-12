@@ -8,7 +8,12 @@ import {
   formatTaskList,
   priorityLabel,
 } from '@lobechat/prompts';
-import type { BuiltinToolContext, BuiltinToolResult, TaskStatus } from '@lobechat/types';
+import type {
+  BuiltinToolContext,
+  BuiltinToolResult,
+  TaskAutomationMode,
+  TaskStatus,
+} from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
@@ -321,6 +326,113 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       return {
         content: `Failed to edit task: ${message}`,
         error: { message, type: 'EditTaskFailed' },
+        success: false,
+      };
+    }
+  };
+
+  setTaskSchedule = async (
+    params: {
+      automationMode?: TaskAutomationMode | null;
+      heartbeatInterval?: number;
+      identifier: string;
+      maxExecutions?: number | null;
+      schedulePattern?: string | null;
+      scheduleTimezone?: string | null;
+    },
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      log('[TaskExecutor] setTaskSchedule - params:', params);
+
+      const { identifier } = params;
+      const store = getTaskStoreState();
+      const changes: string[] = [];
+      const ops: Promise<unknown>[] = [];
+
+      // Top-level schedule columns — direct service.update bypasses the
+      // store.updateTask optimistic path, which would otherwise need to map
+      // flat columns onto the detail's nested `schedule.*` shape.
+      const scheduleUpdate: {
+        automationMode?: TaskAutomationMode | null;
+        heartbeatInterval?: number;
+        schedulePattern?: string | null;
+        scheduleTimezone?: string | null;
+      } = {};
+      if (params.automationMode !== undefined) {
+        scheduleUpdate.automationMode = params.automationMode;
+        changes.push(
+          params.automationMode
+            ? `automation mode → ${params.automationMode}`
+            : 'automation disabled',
+        );
+      }
+      if (params.heartbeatInterval !== undefined) {
+        scheduleUpdate.heartbeatInterval = params.heartbeatInterval;
+        changes.push(
+          params.heartbeatInterval > 0
+            ? `heartbeat interval → ${params.heartbeatInterval}s`
+            : 'heartbeat interval cleared',
+        );
+      }
+      if (params.schedulePattern !== undefined) {
+        scheduleUpdate.schedulePattern = params.schedulePattern;
+        changes.push(
+          params.schedulePattern
+            ? `schedule pattern → "${params.schedulePattern}"`
+            : 'schedule pattern cleared',
+        );
+      }
+      if (params.scheduleTimezone !== undefined) {
+        scheduleUpdate.scheduleTimezone = params.scheduleTimezone;
+        changes.push(
+          params.scheduleTimezone
+            ? `schedule timezone → ${params.scheduleTimezone}`
+            : 'schedule timezone cleared',
+        );
+      }
+      if (Object.keys(scheduleUpdate).length > 0) {
+        ops.push(taskService.update(identifier, scheduleUpdate));
+      }
+
+      // maxExecutions lives in `tasks.config.schedule.maxExecutions` (JSONB);
+      // route through updateConfig so the server-side merge preserves siblings
+      // (checkpoint, review, model snapshot, etc).
+      if (params.maxExecutions !== undefined) {
+        ops.push(
+          taskService.updateConfig(identifier, {
+            schedule: { maxExecutions: params.maxExecutions },
+          }),
+        );
+        changes.push(
+          params.maxExecutions === null
+            ? 'max executions cleared (unlimited)'
+            : `max executions → ${params.maxExecutions}`,
+        );
+      }
+
+      if (ops.length === 0) {
+        return {
+          content: 'No schedule fields provided; nothing to update.',
+          error: { message: 'No schedule fields provided.', type: 'NoFields' },
+          success: false,
+        };
+      }
+
+      await Promise.all(ops);
+      await store.internal_refreshTaskDetail(identifier);
+
+      return {
+        content: formatTaskEdited(identifier, changes),
+        state: { automationMode: params.automationMode, identifier, success: true },
+        success: true,
+      };
+    } catch (error) {
+      log('[TaskExecutor] setTaskSchedule - error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to set task schedule';
+      return {
+        content: `Failed to set task schedule: ${message}`,
+        error: { message, type: 'SetTaskScheduleFailed' },
         success: false,
       };
     }

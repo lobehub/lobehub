@@ -16,6 +16,7 @@ import {
   isNotNull,
   lte,
   ne,
+  or,
   sql,
 } from 'drizzle-orm';
 
@@ -35,13 +36,38 @@ import {
   userMemoriesPreferences,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from '../../utils/bm25';
+import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
 
 const DEFAULT_HYBRID_SEARCH_LIMIT = 5;
 const HYBRID_SEARCH_OVERFETCH_MULTIPLIER = 3;
 const DEFAULT_TAXONOMY_LIMIT = 20;
 const DEFAULT_TEMPORAL_WINDOW_MS = 1000 * 60 * 60 * 24 * 7;
 const SHORT_TERM_ASSOCIATION_WINDOW_MS = 1000 * 60 * 60 * 24 * 3;
+
+export interface Bm25MatchFieldGroup {
+  fields: string[];
+  keyColumn: AnyColumn;
+}
+
+export const buildBm25MatchCondition = (
+  query: string,
+  groups: Bm25MatchFieldGroup[],
+): SQL | undefined => {
+  const matchQuery = normalizeBm25MatchQuery(query, SAFE_BM25_QUERY_OPTIONS);
+  const conditions = groups
+    .map(({ fields, keyColumn }) => {
+      if (fields.length === 0) return undefined;
+
+      const matchQueries = fields.map(
+        (field) => sql`paradedb.match(${field}, ${matchQuery}, conjunction_mode => true)`,
+      );
+
+      return sql<boolean>`${keyColumn} @@@ paradedb.boolean(should => ARRAY[${sql.join(matchQueries, sql`, `)}])`;
+    })
+    .filter((condition): condition is SQL<boolean> => Boolean(condition));
+
+  return conditions.length > 0 ? or(...conditions) : undefined;
+};
 
 export type SearchLayerKey =
   | 'activities'
@@ -2059,9 +2085,6 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
-    const bm25Query = normalizedQuery
-      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
-      : '';
     const conditions = [
       eq(userMemoriesActivities.userId, this.userId),
       eq(userMemories.userId, this.userId),
@@ -2081,7 +2104,13 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesActivities.narrative} @@@ ${bm25Query} OR ${userMemoriesActivities.notes} @@@ ${bm25Query} OR ${userMemoriesActivities.feedback} @@@ ${bm25Query})`
+        ? buildBm25MatchCondition(normalizedQuery, [
+            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+            {
+              fields: ['narrative', 'notes', 'feedback'],
+              keyColumn: userMemoriesActivities.id,
+            },
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesActivities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2124,9 +2153,6 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
-    const bm25Query = normalizedQuery
-      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
-      : '';
     const conditions = [
       eq(userMemoriesContexts.userId, this.userId),
       eq(userMemories.userId, this.userId),
@@ -2143,7 +2169,13 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesContexts.title} @@@ ${bm25Query} OR ${userMemoriesContexts.description} @@@ ${bm25Query} OR ${userMemoriesContexts.currentStatus} @@@ ${bm25Query})`
+        ? buildBm25MatchCondition(normalizedQuery, [
+            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+            {
+              fields: ['title', 'description', 'current_status'],
+              keyColumn: userMemoriesContexts.id,
+            },
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesContexts.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2225,9 +2257,6 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
-    const bm25Query = normalizedQuery
-      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
-      : '';
     const conditions = [
       eq(userMemoriesExperiences.userId, this.userId),
       eq(userMemories.userId, this.userId),
@@ -2244,7 +2273,13 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesExperiences.situation} @@@ ${bm25Query} OR ${userMemoriesExperiences.keyLearning} @@@ ${bm25Query} OR ${userMemoriesExperiences.action} @@@ ${bm25Query} OR ${userMemoriesExperiences.reasoning} @@@ ${bm25Query} OR ${userMemoriesExperiences.possibleOutcome} @@@ ${bm25Query})`
+        ? buildBm25MatchCondition(normalizedQuery, [
+            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+            {
+              fields: ['situation', 'key_learning', 'action', 'reasoning', 'possible_outcome'],
+              keyColumn: userMemoriesExperiences.id,
+            },
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesExperiences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2283,9 +2318,6 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
-    const bm25Query = normalizedQuery
-      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
-      : '';
     const conditions = [
       eq(userMemoriesPreferences.userId, this.userId),
       eq(userMemories.userId, this.userId),
@@ -2302,7 +2334,13 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesPreferences.conclusionDirectives} @@@ ${bm25Query} OR ${userMemoriesPreferences.suggestions} @@@ ${bm25Query})`
+        ? buildBm25MatchCondition(normalizedQuery, [
+            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+            {
+              fields: ['conclusion_directives', 'suggestions'],
+              keyColumn: userMemoriesPreferences.id,
+            },
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesPreferences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2338,9 +2376,6 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
-    const bm25Query = normalizedQuery
-      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
-      : '';
     const conditions = [
       eq(userMemoriesIdentities.userId, this.userId),
       eq(userMemories.userId, this.userId),
@@ -2361,7 +2396,10 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemories.summary} @@@ ${bm25Query} OR ${userMemories.details} @@@ ${bm25Query} OR ${userMemoriesIdentities.description} @@@ ${bm25Query} OR ${userMemoriesIdentities.role} @@@ ${bm25Query})`
+        ? buildBm25MatchCondition(normalizedQuery, [
+            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+            { fields: ['description', 'role'], keyColumn: userMemoriesIdentities.id },
+          ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesIdentities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));

@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "已链接到其他 {{platform}} 账户",
   "verify.confirm.title": "确认绑定",
   "verify.confirm.workspace": "工作区：{{workspace}}",
+  "verify.error.alreadyConsumed": "此链接已用于绑定账号。请登录绑定时使用的 LobeHub 账号管理连接，或返回机器人重新发送 /start 以获取新链接。",
+  "verify.error.alreadyConsumedTitle": "此链接已被使用",
   "verify.error.alreadyLinkedToOther": "该账号已绑定到另一个 LobeHub 账号。请先登录到那个账号。",
   "verify.error.expired": "此链接已过期。请返回机器人并重新发送 /start。",
   "verify.error.generic": "出错了。请重试。",

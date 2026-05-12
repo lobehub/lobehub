@@ -227,6 +227,7 @@
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint": "Dla serii GPT-5.2 Pro; kontroluje intensywność rozumowania.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint": "Dla serii GPT-5.2; kontroluje intensywność rozumowania.",
   "providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint": "Dla serii Grok 4.20; kontroluje intensywność rozumowania. Niska/Średnia używa 4 agentów, Wysoka/Bardzo Wysoka używa 16 agentów.",
+  "providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint": "Dla serii Grok 4.3; kontroluje intensywność rozumowania.",
   "providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint": "Dla modeli Hy3; kontroluje intensywność rozumowania. no_think (ultraszybka odpowiedź), low (szybkie rozumowanie) oraz high (głębokie rozumowanie) — aby dostosować się do różnych wymagań dotyczących opóźnień i głębokości, od interakcji o wysokiej częstotliwości po złożone zadania inżynierskie.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint": "Dla modeli generujących obrazy Gemini; kontroluje proporcje generowanych obrazów.",
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Dla Nano Banana 2; kontroluje proporcje generowanych obrazów (obsługuje bardzo szerokie 1:4, 4:1, 1:8, 8:1).",

@@ -89,6 +89,8 @@
   "verify.confirm.relink.title": "Another {{platform}} account is already linked",
   "verify.confirm.title": "Confirm linking",
   "verify.confirm.workspace": "Workspace: {{workspace}}",
+  "verify.error.alreadyConsumed": "This link has already been used to connect an account. Sign in to that LobeHub account to manage the connection, or return to the bot and send /start again to issue a new link.",
+  "verify.error.alreadyConsumedTitle": "This link is already used",
   "verify.error.alreadyLinkedToOther": "This account is already linked to a different LobeHub account. Sign in to that account first.",
   "verify.error.expired": "This link has expired. Please return to the bot and send /start again.",
   "verify.error.generic": "Something went wrong. Please try again.",

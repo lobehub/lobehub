@@ -29,7 +29,7 @@
   "batchDelete": "حذف گروهی",
   "blog": "وبلاگ محصول",
   "botIntegrationBanner.dismiss": "بستن",
-  "botIntegrationBanner.title": "افزودن کانال‌ها به LobeAI",
+  "botIntegrationBanner.title": "با Lobe AI در پیام‌رسان‌های مورد علاقه‌تان گفتگو کنید",
   "branching": "ایجاد زیرموضوع",
   "branchingDisable": "ویژگی «زیرموضوع» در حالت فعلی در دسترس نیست. برای استفاده از این ویژگی، لطفاً به حالت پایگاه داده Postgres/Pglite یا LobeHub Cloud تغییر دهید.",
   "branchingRequiresSavedTopic": "موضوع فعلی ذخیره نشده است، لطفاً ابتدا آن را ذخیره کنید تا بتوانید از ویژگی زیرموضوع استفاده کنید",

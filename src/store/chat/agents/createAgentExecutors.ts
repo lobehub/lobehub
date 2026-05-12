@@ -317,6 +317,58 @@ export const createAgentExecutors = (context: {
       let finalUsage: ModelUsage | undefined;
       let finalToolCalls: MessageToolCall[] | undefined;
 
+      // Expand dynamically activated tools (from lobe-activator activateTools API)
+      // and merge them into the agent config for this LLM call.
+      // Built before the StreamingHandler so we can bind the offered tool
+      // names into the transformToolCalls callback (LOBE-8696).
+      const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
+      let resolvedAgentConfig = context.agentConfig;
+
+      if (activatedToolIds?.length && context.toolsEngine) {
+        const additional = context.toolsEngine.generateToolsDetailed({
+          context: { isExplicitActivation: true },
+          model: agentConfigData.model,
+          provider: agentConfigData.provider!,
+          skipDefaultTools: true,
+          toolIds: activatedToolIds,
+        });
+
+        if (additional.tools?.length) {
+          const mergedEnabledManifests = dedupeBy(
+            [...(context.agentConfig.enabledManifests || []), ...additional.enabledManifests],
+            (manifest) => manifest.identifier,
+          );
+          const mergedEnabledToolIds = [
+            ...new Set([
+              ...(context.agentConfig.enabledToolIds || []),
+              ...additional.enabledToolIds,
+            ]),
+          ];
+          const mergedTools = dedupeBy(
+            [...(context.agentConfig.tools || []), ...additional.tools],
+            (tool) => tool.function.name,
+          );
+
+          resolvedAgentConfig = {
+            ...context.agentConfig,
+            enabledManifests: mergedEnabledManifests,
+            enabledToolIds: mergedEnabledToolIds,
+            tools: mergedTools,
+          };
+
+          log(
+            `${stagePrefix} Injected %d activated tools: %o`,
+            activatedToolIds.length,
+            activatedToolIds,
+          );
+        }
+      }
+
+      // Names of tools actually sent to the LLM this turn. Passed to the
+      // resolver's missing-prefix fallback so a model can't reach tools that
+      // weren't enabled, and disabled duplicates can't shadow enabled calls.
+      const offeredToolNames = (resolvedAgentConfig.tools ?? []).map((tool) => tool.function.name);
+
       // Create streaming handler with callbacks
       const handler = new StreamingHandler(
         {
@@ -404,57 +456,13 @@ export const createAgentExecutors = (context: {
                 url: file?.url,
                 alt: file?.filename || file?.id,
               })),
-          transformToolCalls: context.get().internal_transformToolCalls,
+          transformToolCalls: (calls) =>
+            context.get().internal_transformToolCalls(calls, offeredToolNames),
           toggleToolCallingStreaming: internal_toggleToolCallingStreaming,
         },
       );
 
       const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
-
-      // Expand dynamically activated tools (from lobe-activator activateTools API)
-      // and merge them into the agent config for this LLM call
-      const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
-      let resolvedAgentConfig = context.agentConfig;
-
-      if (activatedToolIds?.length && context.toolsEngine) {
-        const additional = context.toolsEngine.generateToolsDetailed({
-          context: { isExplicitActivation: true },
-          model: agentConfigData.model,
-          provider: agentConfigData.provider!,
-          skipDefaultTools: true,
-          toolIds: activatedToolIds,
-        });
-
-        if (additional.tools?.length) {
-          const mergedEnabledManifests = dedupeBy(
-            [...(context.agentConfig.enabledManifests || []), ...additional.enabledManifests],
-            (manifest) => manifest.identifier,
-          );
-          const mergedEnabledToolIds = [
-            ...new Set([
-              ...(context.agentConfig.enabledToolIds || []),
-              ...additional.enabledToolIds,
-            ]),
-          ];
-          const mergedTools = dedupeBy(
-            [...(context.agentConfig.tools || []), ...additional.tools],
-            (tool) => tool.function.name,
-          );
-
-          resolvedAgentConfig = {
-            ...context.agentConfig,
-            enabledManifests: mergedEnabledManifests,
-            enabledToolIds: mergedEnabledToolIds,
-            tools: mergedTools,
-          };
-
-          log(
-            `${stagePrefix} Injected %d activated tools: %o`,
-            activatedToolIds.length,
-            activatedToolIds,
-          );
-        }
-      }
 
       await chatService.createAssistantMessageStream({
         abortController,

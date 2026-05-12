@@ -1,6 +1,7 @@
 ---
 name: zustand
-description: Zustand state management guide. Use when working with store code (src/store/**), implementing actions, managing state, or creating slices. Triggers on Zustand store development, state management questions, or action implementation.
+description: "LobeHub Zustand store conventions: public/internal/dispatch action layers, optimistic update pattern, slice composition via `flattenActions`, and class-based action migration. Use whenever working under `src/store/**`, adding a `createXxxSlice`, writing `internal_*` or `internal_dispatch*` actions, designing `messagesMap`/`topicsMap` reducers, refactoring a `StateCreator` object slice into a `XxxActionImpl` class, or debugging stale store reads. Triggers on `useChatStore`/`useUserStore`/`useGlobalStore`, `createStore`, `flattenActions`, `StoreSetter`, `internal_dispatch`, 'add an action', 'zustand selector', 'store slice', 'class action', 'optimistic update'."
+user-invocable: false
 ---
 
 # LobeHub Zustand State Management

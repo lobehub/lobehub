@@ -22,8 +22,8 @@ import { createDefaultAgentSignalPolicies } from './policies';
 import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
-import { createServerMaintenanceBriefWriter } from './services/maintenance/brief';
 import { persistAgentSignalReceipts, projectAgentSignalReceipts } from './services/receiptService';
+import { createServerSelfReviewBriefWriter } from './services/selfIteration/review/brief';
 import { emitSourceEvent } from './sources';
 import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
 import type { AgentSignalReceiptStore, AgentSignalSourceEventStore } from './store/types';
@@ -92,7 +92,7 @@ const buildRuntimeOrchestrationResult = (
 };
 
 /**
- * Adds server defaults to optional Agent Signal maintenance policy options.
+ * Adds server defaults to optional Agent Signal self-iteration policy options.
  *
  * Use when:
  * - A caller already installed nightly review options but omitted the brief writer
@@ -112,7 +112,7 @@ export const withServerAgentSignalPolicyDefaults = (
     return policyOptions;
   }
 
-  const briefWriter = createServerMaintenanceBriefWriter(context.db, context.userId);
+  const briefWriter = createServerSelfReviewBriefWriter(context.db, context.userId);
 
   return {
     ...policyOptions,
@@ -144,7 +144,7 @@ const createPolicyOptions = (
     classifierDiagnostics: policyOptions?.classifierDiagnostics,
     nightlyReview: policyOptions?.nightlyReview,
     procedure: procedurePolicyOptions,
-    selfIterationIntent: policyOptions?.selfIterationIntent,
+    selfFeedbackIntent: policyOptions?.selfFeedbackIntent,
     selfReflection: policyOptions?.selfReflection,
     userMemory: {
       db: context.db,

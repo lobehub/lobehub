@@ -14,20 +14,18 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
-import { selfIterationIntentManifest } from '@lobechat/builtin-tool-self-iteration';
+import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
-import { AgentMarketplaceManifest } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 
 export const builtinToolIdentifiers: string[] = [
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
-  AgentMarketplaceManifest.identifier,
   CalculatorManifest.identifier,
   CloudSandboxManifest.identifier,
   CredsManifest.identifier,
@@ -39,7 +37,7 @@ export const builtinToolIdentifiers: string[] = [
   MemoryManifest.identifier,
   NotebookManifest.identifier,
   PageAgentManifest.identifier,
-  selfIterationIntentManifest.identifier,
+  selfFeedbackIntentManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
   TopicReferenceManifest.identifier,

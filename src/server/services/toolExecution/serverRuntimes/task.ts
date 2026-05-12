@@ -59,9 +59,11 @@ export const createTaskRuntime = ({
   const createTaskImpl = async (
     args: CreateTaskArgs,
   ): Promise<{ content: string; identifier?: string; success: boolean }> => {
-    let parentTaskId: string | undefined;
     let parentLabel: string | undefined;
 
+    // Pre-resolve parent identifier so we can surface a tool-friendly error
+    // and label, and pass the resolved id straight through to the service.
+    let parentTaskId: string | undefined;
     if (args.parentIdentifier) {
       const parent = await taskModel.resolve(args.parentIdentifier);
       if (!parent)
@@ -73,7 +75,7 @@ export const createTaskRuntime = ({
     const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
 
-    const task = await taskModel.create({
+    const task = await taskService.createTask({
       assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
       createdByAgentId: agentId,
       instruction: args.instruction,

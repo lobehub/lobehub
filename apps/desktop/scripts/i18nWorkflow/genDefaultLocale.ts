@@ -7,18 +7,18 @@ import { entryLocaleJsonFilepath, i18nConfig, localeDir, srcDefaultLocales } fro
 import { tagWhite, writeJSON } from './utils';
 
 export const genDefaultLocale = () => {
-  consola.info(`默认语言为 ${i18nConfig.entryLocale}...`);
+  consola.info(`Default locale: ${i18nConfig.entryLocale}...`);
 
   // Ensure entry locale directory exists
   const entryLocaleDir = localeDir(i18nConfig.entryLocale);
   if (!existsSync(entryLocaleDir)) {
     mkdirSync(entryLocaleDir, { recursive: true });
-    consola.info(`创建目录：${entryLocaleDir}`);
+    consola.info(`Creating directory: ${entryLocaleDir}`);
   }
 
   const resources = require(srcDefaultLocales);
   const data = Object.entries(resources.default);
-  consola.start(`生成默认语言 JSON 文件，发现 ${data.length} 个命名空间...`);
+  consola.start(`Generating default locale JSON files, found ${data.length} namespaces...`);
 
   for (const [ns, value] of data) {
     const filepath = entryLocaleJsonFilepath(`${ns}.json`);

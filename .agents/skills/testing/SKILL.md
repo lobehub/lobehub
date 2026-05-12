@@ -1,6 +1,7 @@
 ---
 name: testing
 description: Testing guide using Vitest. Use when writing tests (.test.ts, .test.tsx), fixing failing tests, improving test coverage, or debugging test issues. Triggers on test creation, test debugging, mock setup, or test-related questions.
+user-invocable: false
 ---
 
 # LobeHub Testing Guide

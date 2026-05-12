@@ -29,7 +29,7 @@
   "batchDelete": "Xóa hàng loạt",
   "blog": "Blog sản phẩm",
   "botIntegrationBanner.dismiss": "Đóng",
-  "botIntegrationBanner.title": "Thêm Kênh vào LobeAI",
+  "botIntegrationBanner.title": "Trò chuyện với Lobe AI trong các ứng dụng nhắn tin yêu thích của bạn",
   "branching": "Tạo chủ đề phụ",
   "branchingDisable": "Tính năng \"Chủ đề phụ\" không khả dụng trong chế độ hiện tại. Vui lòng chuyển sang chế độ cơ sở dữ liệu Postgres/Pglite hoặc sử dụng LobeHub Cloud để sử dụng tính năng này.",
   "branchingRequiresSavedTopic": "Chủ đề hiện tại chưa được lưu, vui lòng lưu trước khi sử dụng tính năng chủ đề phụ",

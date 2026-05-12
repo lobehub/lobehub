@@ -21,6 +21,27 @@ import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNo
 const fetchAndReplaceMessages = async (get: () => ChatStore, context: ConversationContext) => {
   const messages = await messageService.getMessages(context);
   get().replaceMessages(messages, { context });
+  return messages;
+};
+
+type GatewayMessageLike = { id: string; role?: string };
+type HeteroStreamStartData = StreamStartData & { newStep?: boolean };
+
+const findNextAssistantMessageId = (
+  messages: GatewayMessageLike[] | undefined,
+  currentAssistantMessageId: string,
+) => {
+  if (!messages?.length) return;
+
+  const currentIndex = messages.findIndex((message) => message.id === currentAssistantMessageId);
+  if (currentIndex === -1) return;
+
+  for (let index = currentIndex + 1; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (message.role === 'assistant') {
+      return message.id;
+    }
+  }
 };
 
 const toChatMessageError = (data: unknown): ChatMessageError => {
@@ -104,7 +125,7 @@ export const createGatewayEventHandler = (
     switch (event.type) {
       case 'stream_start': {
         enqueue(async () => {
-          const data = event.data as StreamStartData | undefined;
+          const data = event.data as HeteroStreamStartData | undefined;
 
           const newAssistantMessageId = data?.assistantMessage?.id;
 
@@ -119,11 +140,33 @@ export const createGatewayEventHandler = (
           accumulatedContent = '';
           accumulatedReasoning = '';
 
-          // Fetch from DB so the new message exists in dbMessagesMap before chunks arrive
+          // Heterogeneous CLI adapters emit `stream_start { newStep: true }`
+          // without a server-side assistant id. Pull the freshly created step
+          // assistant from DB so subsequent live chunks update the RIGHT row
+          // instead of appending onto the previous step's assistant.
+          const messages = await fetchAndReplaceMessages(get, context).catch((error) => {
+            console.error(error);
+            return undefined;
+          });
+
+          if (!newAssistantMessageId && data?.newStep) {
+            const resolvedAssistantMessageId = findNextAssistantMessageId(
+              messages as GatewayMessageLike[] | undefined,
+              currentAssistantMessageId,
+            );
+
+            if (resolvedAssistantMessageId) {
+              currentAssistantMessageId = resolvedAssistantMessageId;
+              get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+            }
+          }
+
           void emitClientAgentSignalSourceEvent({
             payload: {
               agentId: context.agentId,
-              ...(newAssistantMessageId ? { assistantMessageId: newAssistantMessageId } : {}),
+              ...(currentAssistantMessageId
+                ? { assistantMessageId: currentAssistantMessageId }
+                : {}),
               operationId,
               stepIndex: event.stepIndex,
               topicId: context.topicId ?? undefined,
@@ -131,7 +174,6 @@ export const createGatewayEventHandler = (
             sourceId: `${operationId}:gateway:start:${event.stepIndex}`,
             sourceType: 'client.gateway.stream_start',
           });
-          await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
       }
