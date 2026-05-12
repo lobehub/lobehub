@@ -47,10 +47,18 @@ export const formatScheduleDescription = (pattern: string, t: TFunction<'chat'>)
   switch (parsed.scheduleType) {
     case 'hourly': {
       const interval = parsed.hourlyInterval ?? 1;
-      const minute = `:${padTime(parsed.triggerMinute)}`;
-      return interval === 1
-        ? t('taskSchedule.summary.hourly', { minute })
-        : t('taskSchedule.summary.everyNHours', { count: interval, minute });
+      // Cron storage rounds minutes to 0 or 30 (see buildCronPattern). Reading
+      // ':30' literally felt awkward in the summary, so call it out as
+      // "half past" only when it's actually non-zero and stay implicit on :00.
+      const isHalfPast = parsed.triggerMinute === 30;
+      if (interval === 1) {
+        return isHalfPast
+          ? t('taskSchedule.summary.hourlyHalfPast')
+          : t('taskSchedule.summary.hourly');
+      }
+      return isHalfPast
+        ? t('taskSchedule.summary.everyNHoursHalfPast', { count: interval })
+        : t('taskSchedule.summary.everyNHours', { count: interval });
     }
     case 'daily': {
       return t('taskSchedule.summary.daily', {
