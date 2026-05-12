@@ -15,7 +15,6 @@ import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserSystemAgentConfigKey } from '@/types/user/settings';
 
 interface SystemAgentModelItem {
-  allowDisable?: boolean;
   key: UserSystemAgentConfigKey;
 }
 
@@ -27,8 +26,11 @@ const SYSTEM_AGENT_MODEL_ITEMS: SystemAgentModelItem[] = [
   { key: 'translation' },
   { key: 'historyCompress' },
   { key: 'agentMeta' },
-  { allowDisable: true, key: 'inputCompletion' },
-  { allowDisable: true, key: 'promptRewrite' },
+];
+
+const OPTIONAL_FEATURE_ITEMS: SystemAgentModelItem[] = [
+  { key: 'inputCompletion' },
+  { key: 'promptRewrite' },
 ];
 
 const ModelAssignmentsForm = memo(() => {
@@ -93,59 +95,97 @@ const ModelAssignmentsForm = memo(() => {
     minWidth: undefined,
   };
 
-  const systemModelItems: FormItemProps[] = SYSTEM_AGENT_MODEL_ITEMS.map(
-    ({ allowDisable, key }) => {
-      const value = systemAgentSettings[key];
-      const disabled = allowDisable && value.enabled === false;
+  const systemModelItems: FormItemProps[] = SYSTEM_AGENT_MODEL_ITEMS.map(({ key }) => {
+    const value = systemAgentSettings[key];
 
-      return {
-        children: (
-          <Flexbox
-            align="center"
-            direction="horizontal"
-            gap={12}
-            style={{ width: 'min(100%, 448px)' }}
-          >
-            <ModelSelect
-              showAbility={false}
-              style={{ minWidth: 0, width: '100%' }}
-              value={value}
-              onChange={(props) => updateSystemAgentModel(key, props)}
+    return {
+      children: (
+        <Flexbox
+          align="center"
+          direction="horizontal"
+          gap={12}
+          style={{ width: 'min(100%, 448px)' }}
+        >
+          <ModelSelect
+            showAbility={false}
+            style={{ minWidth: 0, width: '100%' }}
+            value={value}
+            onChange={(props) => updateSystemAgentModel(key, props)}
+          />
+        </Flexbox>
+      ),
+      desc: t(`systemAgent.${key}.modelDesc`),
+      label: t(`systemAgent.${key}.title`),
+      minWidth: undefined,
+    } satisfies FormItemProps;
+  });
+
+  const optionalFeatureItems: FormItemProps[] = OPTIONAL_FEATURE_ITEMS.map(({ key }) => {
+    const value = systemAgentSettings[key];
+    const disabled = value.enabled === false;
+
+    return {
+      children: (
+        <Flexbox
+          align="center"
+          direction="horizontal"
+          gap={12}
+          style={{ width: 'min(100%, 448px)' }}
+        >
+          <ModelSelect
+            showAbility={false}
+            style={{ minWidth: 0, width: '100%' }}
+            value={value}
+            onChange={(props) => updateSystemAgentModel(key, props)}
+          />
+          <Flexbox align="center" direction="horizontal" gap={8}>
+            <Switch
+              aria-label={t(`systemAgent.${key}.title`)}
+              checked={value.enabled}
+              loading={loadingKey === key}
+              onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
             />
-            {allowDisable && (
-              <Switch
-                checked={value.enabled}
-                loading={loadingKey === key}
-                onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
-              />
-            )}
           </Flexbox>
-        ),
-        desc: t(`systemAgent.${key}.modelDesc`),
-        label: (
-          <span
-            style={{
-              opacity: disabled ? 0.45 : 1,
-            }}
-          >
-            {t(`systemAgent.${key}.title`)}
-          </span>
-        ),
-        minWidth: undefined,
-      } satisfies FormItemProps;
-    },
-  );
+        </Flexbox>
+      ),
+      desc: t(`systemAgent.${key}.modelDesc`),
+      label: (
+        <span
+          style={{
+            opacity: disabled ? 0.45 : 1,
+          }}
+        >
+          {t(`systemAgent.${key}.title`)}
+        </span>
+      ),
+      minWidth: undefined,
+    } satisfies FormItemProps;
+  });
+
+  const isOptionalFeatureLoading =
+    loadingKey === 'inputCompletion' || loadingKey === 'promptRewrite';
+  const isModelAssignmentLoading = loadingKey && !isOptionalFeatureLoading;
 
   const modelAssignments: FormGroupItemType = {
     children: [defaultAgentItem, ...systemModelItems],
-    extra: loadingKey && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: isModelAssignmentLoading && (
+      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
+    ),
     title: t('serviceModel.modelAssignments.title'),
+  };
+
+  const optionalFeatures: FormGroupItemType = {
+    children: optionalFeatureItems,
+    extra: isOptionalFeatureLoading && (
+      <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
+    ),
+    title: t('serviceModel.optionalFeatures.title'),
   };
 
   return (
     <Form
       collapsible={false}
-      items={[modelAssignments]}
+      items={[modelAssignments, optionalFeatures]}
       itemsType={'group'}
       variant={'filled'}
       {...FORM_STYLE}
