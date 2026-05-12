@@ -700,6 +700,7 @@ export default {
   'taskList.contextMenu.copyLink': 'Copy Link',
   'taskList.contextMenu.copyLinkSuccess': 'Link copied',
   'taskList.contextMenu.priority': 'Priority',
+  'taskList.contextMenu.runNow': 'Run now',
   'taskList.contextMenu.status': 'Status',
   'taskList.kanban.addTask': 'Create task',
   'taskList.kanban.backlog': 'Backlog',

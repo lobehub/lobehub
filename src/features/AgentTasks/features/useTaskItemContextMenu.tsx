@@ -8,11 +8,20 @@ import {
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import { BarChart3Icon, CircleDashedIcon, CopyIcon, LinkIcon, Trash2Icon } from 'lucide-react';
+import {
+  BarChart3Icon,
+  CircleDashedIcon,
+  CopyIcon,
+  LinkIcon,
+  PlayIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 import { renderMenuExtra } from './menuExtra';
@@ -29,10 +38,13 @@ interface TaskItemContextMenu {
 }
 
 export interface TaskContextMenuTarget {
+  assigneeAgentId?: string | null;
   identifier: string;
   priority?: number | null;
   status: string;
 }
+
+const RUN_NOW_STATUSES = new Set<TaskStatus>(['backlog', 'completed']);
 
 export interface TaskContextMenuActions {
   buildItems: (task: TaskContextMenuTarget) => ContextMenuItem[];
@@ -48,6 +60,8 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
   const updateTask = useTaskStore((s) => s.updateTask);
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
   const deleteTask = useTaskStore((s) => s.deleteTask);
+  const runTask = useTaskStore((s) => s.runTask);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   const cleanupRef = useRef<(() => void) | null>(null);
   const activeSubmenuRef = useRef<ActiveSubmenu>(null);
@@ -111,8 +125,26 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
       });
 
       const taskUrl = `${appOrigin}/task/${task.identifier}`;
+      const canRunNow = RUN_NOW_STATUSES.has(currentStatus);
 
       return [
+        ...(canRunNow
+          ? ([
+              {
+                icon: <Icon icon={PlayIcon} />,
+                key: 'runNow',
+                label: t('taskList.contextMenu.runNow'),
+                onClick: async ({ domEvent }) => {
+                  domEvent.stopPropagation();
+                  if (!task.assigneeAgentId && inboxAgentId) {
+                    await updateTask(task.identifier, { assigneeAgentId: inboxAgentId });
+                  }
+                  await runTask(task.identifier);
+                },
+              },
+              { type: 'divider' },
+            ] satisfies GenericItemType[])
+          : []),
         {
           children: statusChildren,
           icon: <Icon icon={CircleDashedIcon} />,
@@ -239,14 +271,25 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
     };
 
     return { buildItems, installKeyboardHandlers };
-  }, [modal, message, t, appOrigin, updateTaskStatus, updateTask, refreshTaskList, deleteTask]);
+  }, [
+    modal,
+    message,
+    t,
+    appOrigin,
+    updateTaskStatus,
+    updateTask,
+    refreshTaskList,
+    deleteTask,
+    runTask,
+    inboxAgentId,
+  ]);
 };
 
 export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
   const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions();
   const items = useMemo(
     () => buildItems(task),
-    [buildItems, task.identifier, task.status, task.priority],
+    [buildItems, task.identifier, task.status, task.priority, task.assigneeAgentId],
   );
   const onContextMenu = useCallback(
     () => installKeyboardHandlers(task),
