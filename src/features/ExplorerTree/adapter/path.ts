@@ -5,6 +5,9 @@ export const buildSegment = (name: string, isFolder: boolean): string => {
   return isFolder ? `${segment}/` : segment;
 };
 
+export const toCanonicalTreePath = (path: string, isFolder: boolean): string =>
+  isFolder && !path.endsWith('/') ? `${path}/` : path;
+
 export const extractName = (path: string): string => {
   const trimmed = path.endsWith('/') ? path.slice(0, -1) : path;
   const lastSep = trimmed.lastIndexOf('/');
