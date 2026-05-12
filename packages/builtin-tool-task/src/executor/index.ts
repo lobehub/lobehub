@@ -8,7 +8,12 @@ import {
   formatTaskList,
   priorityLabel,
 } from '@lobechat/prompts';
-import type { BuiltinToolContext, BuiltinToolResult, TaskStatus } from '@lobechat/types';
+import type {
+  BuiltinToolContext,
+  BuiltinToolResult,
+  TaskAutomationMode,
+  TaskStatus,
+} from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
@@ -73,9 +78,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       instruction: string;
       assigneeAgentId?: string;
+      automationMode?: TaskAutomationMode;
+      heartbeatInterval?: number;
       name: string;
       parentIdentifier?: string;
       priority?: number;
+      schedulePattern?: string;
+      scheduleTimezone?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -83,16 +92,30 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     try {
       log('[TaskExecutor] createTask - params:', params);
       const parentIdentifier = params.parentIdentifier?.trim() || undefined;
+      const store = getTaskStoreState();
 
-      const task = await getTaskStoreState().createTask({
+      const task = await store.createTask({
         assigneeAgentId:
           params.assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
+        automationMode: params.automationMode,
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
         parentTaskId: parentIdentifier,
         priority: params.priority,
+        schedulePattern: params.schedulePattern,
+        scheduleTimezone: params.scheduleTimezone,
       });
+
+      // Heartbeat interval isn't part of the create schema (DB column defaults to
+      // null); apply it via a follow-up update so an LLM can set everything in
+      // one createTask call.
+      if (task?.identifier && params.heartbeatInterval !== undefined) {
+        await taskService.update(task.identifier, {
+          heartbeatInterval: params.heartbeatInterval,
+        });
+        await store.internal_refreshTaskDetail(task.identifier);
+      }
 
       if (!task) {
         return {
@@ -235,13 +258,18 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       addDependencies?: string[];
       assigneeAgentId?: string | null;
+      automationMode?: TaskAutomationMode | null;
       description?: string;
+      heartbeatInterval?: number;
       identifier: string;
       instruction?: string;
+      maxExecutions?: number | null;
       name?: string;
       parentIdentifier?: string | null;
       priority?: number;
       removeDependencies?: string[];
+      schedulePattern?: string | null;
+      scheduleTimezone?: string | null;
     },
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -295,6 +323,66 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         ops.push(store.updateTask(identifier, updateData));
       }
 
+      // Schedule columns (top-level) — bypass store.updateTask so the optimistic
+      // path doesn't have to map flat columns onto the detail's nested shape.
+      const scheduleUpdate: {
+        automationMode?: TaskAutomationMode | null;
+        heartbeatInterval?: number;
+        schedulePattern?: string | null;
+        scheduleTimezone?: string | null;
+      } = {};
+      if (params.automationMode !== undefined) {
+        scheduleUpdate.automationMode = params.automationMode;
+        changes.push(
+          params.automationMode
+            ? `automation mode → ${params.automationMode}`
+            : 'automation disabled',
+        );
+      }
+      if (params.heartbeatInterval !== undefined) {
+        scheduleUpdate.heartbeatInterval = params.heartbeatInterval;
+        changes.push(
+          params.heartbeatInterval > 0
+            ? `heartbeat interval → ${params.heartbeatInterval}s`
+            : 'heartbeat interval cleared',
+        );
+      }
+      if (params.schedulePattern !== undefined) {
+        scheduleUpdate.schedulePattern = params.schedulePattern;
+        changes.push(
+          params.schedulePattern
+            ? `schedule pattern → "${params.schedulePattern}"`
+            : 'schedule pattern cleared',
+        );
+      }
+      if (params.scheduleTimezone !== undefined) {
+        scheduleUpdate.scheduleTimezone = params.scheduleTimezone;
+        changes.push(
+          params.scheduleTimezone
+            ? `schedule timezone → ${params.scheduleTimezone}`
+            : 'schedule timezone cleared',
+        );
+      }
+      const scheduleTouched = Object.keys(scheduleUpdate).length > 0;
+      if (scheduleTouched) {
+        ops.push(taskService.update(identifier, scheduleUpdate));
+      }
+
+      // maxExecutions lives in `tasks.config.schedule.maxExecutions` (JSONB);
+      // route through updateConfig so the server-side merge preserves siblings.
+      if (params.maxExecutions !== undefined) {
+        ops.push(
+          taskService.updateConfig(identifier, {
+            schedule: { maxExecutions: params.maxExecutions },
+          }),
+        );
+        changes.push(
+          params.maxExecutions === null
+            ? 'max executions cleared (unlimited)'
+            : `max executions → ${params.maxExecutions}`,
+        );
+      }
+
       if (addDependencies?.length) {
         addDependencies.forEach((dep) => {
           ops.push(store.addDependency(identifier, dep));
@@ -309,6 +397,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       }
 
       await Promise.all(ops);
+
+      // Schedule / config edits bypass store.updateTask's optimistic path; pull
+      // the fresh detail so the UI reflects the new automation/cron state.
+      if (scheduleTouched || params.maxExecutions !== undefined) {
+        await store.internal_refreshTaskDetail(identifier);
+      }
 
       return {
         content: formatTaskEdited(identifier, changes),

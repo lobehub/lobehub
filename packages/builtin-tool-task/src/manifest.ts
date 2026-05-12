@@ -12,7 +12,7 @@ export const TaskManifest: BuiltinToolManifest = {
     // ==================== Task CRUD ====================
     {
       description:
-        'Create a new task. Optionally attach it as a subtask by specifying parentIdentifier.',
+        'Create a new task. Optionally attach it as a subtask by specifying parentIdentifier. To create a periodically running task in one shot, also set `automationMode` plus the corresponding `schedulePattern + scheduleTimezone` (cron mode) or `heartbeatInterval` (heartbeat mode).',
       name: TaskApiName.createTask,
       parameters: {
         properties: {
@@ -24,6 +24,17 @@ export const TaskManifest: BuiltinToolManifest = {
             description:
               'Optional agent ID to assign the task to. In task management context, omit it to create an unassigned task.',
             type: 'string',
+          },
+          automationMode: {
+            description:
+              'Enables periodic execution. `heartbeat` ticks every `heartbeatInterval` seconds; `schedule` fires when the cron `schedulePattern` matches. Omit for a one-shot manually-run task.',
+            enum: ['heartbeat', 'schedule'],
+            type: 'string',
+          },
+          heartbeatInterval: {
+            description:
+              'Periodic execution interval in seconds. Required when automationMode === "heartbeat" (minimum 600 = 10 minutes recommended).',
+            type: 'number',
           },
           name: {
             description: 'A short, descriptive name for the task.',
@@ -38,6 +49,16 @@ export const TaskManifest: BuiltinToolManifest = {
             description: 'Priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low. Default is 0.',
             type: 'number',
           },
+          schedulePattern: {
+            description:
+              'Cron expression for scheduled execution, e.g. "0 9 * * *" (every day at 09:00). Required when automationMode === "schedule".',
+            type: 'string',
+          },
+          scheduleTimezone: {
+            description:
+              'IANA timezone for the cron expression, e.g. "Asia/Shanghai" or "America/New_York". Defaults to UTC when omitted.',
+            type: 'string',
+          },
           sortOrder: {
             description:
               'Sort order within parent task. Lower values appear first. Use to control display order (e.g. chapter 1=0, chapter 2=1, etc.).',
@@ -50,7 +71,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Create multiple tasks in a single call. Prefer this over multiple createTask calls when planning a batch of related tasks (e.g. all subtasks under one parent, or all chapters of an outline). Each item supports the same fields as createTask. Items are created sequentially in array order; failures on individual items do not abort the batch.',
+        'Create multiple tasks in a single call. Prefer this over multiple createTask calls when planning a batch of related tasks (e.g. all subtasks under one parent, or all chapters of an outline). Each item supports the same fields as createTask (including schedule fields). Items are created sequentially in array order; failures on individual items do not abort the batch.',
       name: TaskApiName.createTasks,
       parameters: {
         properties: {
@@ -68,6 +89,17 @@ export const TaskManifest: BuiltinToolManifest = {
                     'Optional agent ID to assign the task to. In task management context, omit it to create an unassigned task.',
                   type: 'string',
                 },
+                automationMode: {
+                  description:
+                    'Enables periodic execution. `heartbeat` uses heartbeatInterval; `schedule` uses schedulePattern + scheduleTimezone.',
+                  enum: ['heartbeat', 'schedule'],
+                  type: 'string',
+                },
+                heartbeatInterval: {
+                  description:
+                    'Periodic execution interval in seconds. Required when automationMode === "heartbeat".',
+                  type: 'number',
+                },
                 name: {
                   description: 'A short, descriptive name for the task.',
                   type: 'string',
@@ -81,6 +113,16 @@ export const TaskManifest: BuiltinToolManifest = {
                   description:
                     'Priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low. Default is 0.',
                   type: 'number',
+                },
+                schedulePattern: {
+                  description:
+                    'Cron expression for scheduled execution. Required when automationMode === "schedule".',
+                  type: 'string',
+                },
+                scheduleTimezone: {
+                  description:
+                    'IANA timezone for the cron expression. Defaults to UTC when omitted.',
+                  type: 'string',
                 },
                 sortOrder: {
                   description:
@@ -207,7 +249,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority), parent, or dependencies (batched). Status changes go through updateTaskStatus.",
+        "Edit a task's fields (name, description, instruction, priority), parent, dependencies (batched), or schedule (automationMode + schedulePattern/scheduleTimezone/heartbeatInterval/maxExecutions). Status changes go through updateTaskStatus.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
@@ -221,10 +263,21 @@ export const TaskManifest: BuiltinToolManifest = {
             description: 'Assign the task to this agent ID. Pass null to clear the assignee.',
             type: ['string', 'null'],
           },
+          automationMode: {
+            description:
+              'Switch automation mode. "heartbeat" ticks every `heartbeatInterval` seconds; "schedule" fires on the cron `schedulePattern`. Pass null to disable automation entirely.',
+            enum: ['heartbeat', 'schedule', null],
+            type: ['string', 'null'],
+          },
           description: {
             description:
               'Human-readable description (displayed in UI). Separate from instruction, which guides the agent.',
             type: 'string',
+          },
+          heartbeatInterval: {
+            description:
+              'Periodic execution interval in seconds (heartbeat mode). Pass 0 to clear the interval.',
+            type: 'number',
           },
           identifier: {
             description: 'The identifier of the task to edit.',
@@ -233,6 +286,11 @@ export const TaskManifest: BuiltinToolManifest = {
           instruction: {
             description: 'Updated instruction for the task.',
             type: 'string',
+          },
+          maxExecutions: {
+            description:
+              'Cap on the number of scheduled executions for this task. Pass null to remove the cap (run indefinitely).',
+            type: ['number', 'null'],
           },
           name: {
             description: 'Updated name for the task.',
@@ -251,6 +309,16 @@ export const TaskManifest: BuiltinToolManifest = {
             description: 'Identifiers of existing dependencies to remove.',
             items: { type: 'string' },
             type: 'array',
+          },
+          schedulePattern: {
+            description:
+              'Cron expression for scheduled mode, e.g. "0 9 * * *". Pass null to clear the pattern.',
+            type: ['string', 'null'],
+          },
+          scheduleTimezone: {
+            description:
+              'IANA timezone for the cron expression, e.g. "Asia/Shanghai". Pass null to clear.',
+            type: ['string', 'null'],
           },
         },
         required: ['identifier'],
