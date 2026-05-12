@@ -693,7 +693,7 @@ export default {
   'taskList.assigneeSearch.placeholder': 'Search agent...',
   'taskList.contextMenu.copyId': 'Copy ID',
   'taskList.contextMenu.copyIdSuccess': 'ID copied',
-  'taskList.contextMenu.copyLink': 'Copy link',
+  'taskList.contextMenu.copyLink': 'Copy Link',
   'taskList.contextMenu.copyLinkSuccess': 'Link copied',
   'taskList.contextMenu.priority': 'Priority',
   'taskList.contextMenu.status': 'Status',
