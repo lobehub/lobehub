@@ -28,7 +28,7 @@ const Nav = memo(() => {
   );
 
   return (
-    <Flexbox gap={4} paddingInline={4}>
+    <Flexbox gap={1} paddingInline={4}>
       {items
         .filter((item) => HEADER_KEYS.has(item.key) && !item.hidden)
         .map((item) => {
