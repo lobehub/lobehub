@@ -2,7 +2,7 @@
 
 import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { ClockIcon, CoinsIcon, DollarSignIcon } from 'lucide-react';
+import { CircleDollarSignIcon, HashIcon, TimerIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';
@@ -13,8 +13,8 @@ import { contextSelectors, dataSelectors, useConversationStore } from '../store'
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding-block: 6px;
-    padding-inline: 12px;
+    padding-block: 8px;
+    padding-inline: 14px;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-start-start-radius: 12px;
@@ -29,6 +29,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-start-start-radius: 0;
     border-start-end-radius: 0;
   `,
+  divider: css`
+    width: 1px;
+    height: 12px;
+    background: ${cssVar.colorBorderSecondary};
+  `,
   metric: css`
     display: inline-flex;
     gap: 4px;
@@ -37,8 +42,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   metricGroup: css`
     display: inline-flex;
-    gap: 12px;
+    gap: 10px;
     align-items: center;
+  `,
+  pulse: css`
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorSuccess};
+
+    animation: op-status-tray-pulse 1.4s ease-in-out infinite;
+
+    @keyframes op-status-tray-pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.35;
+      }
+    }
   `,
   value: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -80,9 +105,8 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
   const context = useConversationStore(contextSelectors.context);
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
 
-  // Pick the earliest-started running AI-runtime op as the "current op".
-  // Sub-operations (callLLM, toolCalling, ...) are excluded by filtering on
-  // AI_RUNTIME_OPERATION_TYPES, which only lists user-facing top-level types.
+  // Detect any running AI-runtime op (excludes sub-ops like callLLM/toolCalling)
+  // and capture the earliest start time as the op's anchor.
   const startTime = useChatStore((s) => {
     const ops = operationSelectors.getOperationsByContext(context)(s);
     let earliest: number | undefined;
@@ -109,24 +133,24 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     return () => clearInterval(id);
   }, [startTime]);
 
-  // Aggregate token + cost across assistant messages produced since this op
-  // started. Allow a small tolerance for clock skew between op startTime
-  // (Date.now()) and message.createdAt (DB timestamp).
+  // Sum token + cost across every assistant message in the current conversation.
+  // `usage` lives on the top-level message field for the standard agent-runtime
+  // path; the heterogeneous executor only writes `metadata.usage`. Read both.
+  // Time-based filtering proved unreliable (the assistant message can be
+  // created before the AI_RUNTIME op's startTime), so we just total the whole
+  // session — within a fresh topic this matches "current op" anyway.
   const { totalTokens, totalCost } = useMemo(() => {
-    if (!startTime) return { totalCost: 0, totalTokens: 0 };
-    const TOLERANCE_MS = 2000;
     let tokens = 0;
     let cost = 0;
     for (const m of dbMessages) {
       if (m.role !== 'assistant') continue;
-      if (!m.createdAt || m.createdAt < startTime - TOLERANCE_MS) continue;
-      const usage = m.metadata?.usage;
+      const usage = m.usage ?? m.metadata?.usage;
       if (!usage) continue;
       tokens += usage.totalTokens ?? 0;
       cost += usage.cost ?? 0;
     }
     return { totalCost: cost, totalTokens: tokens };
-  }, [dbMessages, startTime]);
+  }, [dbMessages]);
 
   if (!startTime) return null;
 
@@ -140,17 +164,20 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       justify="space-between"
     >
       <span className={styles.metric}>
-        <Icon icon={ClockIcon} size={12} />
+        <span className={styles.pulse} />
+        <Icon icon={TimerIcon} size={13} />
         <span className={styles.value}>{formatDuration(elapsed)}</span>
       </span>
 
       <span className={styles.metricGroup}>
         <span className={styles.metric}>
-          <Icon icon={CoinsIcon} size={12} />
+          <Icon icon={HashIcon} size={13} />
           <span className={styles.value}>{formatTokens(totalTokens)}</span>
+          <span>tokens</span>
         </span>
+        <span className={styles.divider} />
         <span className={styles.metric}>
-          <Icon icon={DollarSignIcon} size={12} />
+          <Icon icon={CircleDollarSignIcon} size={13} />
           <span className={styles.value}>{formatCost(totalCost)}</span>
         </span>
       </span>
