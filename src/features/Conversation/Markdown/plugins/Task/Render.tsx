@@ -1,25 +1,11 @@
-import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ClipboardList } from 'lucide-react';
 import { memo, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-
-import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 
 import { type MarkdownElementProps } from '../type';
 import { useTaskCardScope } from './context';
 import { type ParsedTaskContent, parseTaskContent } from './parseTaskContent';
-
-const KNOWN_STATUSES: TaskStatus[] = [
-  'backlog',
-  'canceled',
-  'completed',
-  'failed',
-  'paused',
-  'running',
-  'scheduled',
-];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   divider: css`
@@ -77,21 +63,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
-  statusBadge: css`
-    display: inline-flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
   instruction: css`
     font-size: 13px;
     line-height: 1.7;
@@ -128,9 +99,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const isKnownStatus = (status?: string): status is TaskStatus =>
-  !!status && (KNOWN_STATUSES as string[]).includes(status);
-
 const FieldRow = memo<{ label: string; value?: string }>(({ label, value }) => {
   if (!value) return null;
   return (
@@ -163,7 +131,6 @@ interface TaskRenderProps extends MarkdownElementProps {
 
 const Render = memo<TaskRenderProps>(({ children }) => {
   const enabled = useTaskCardScope();
-  const { t } = useTranslation('chat');
   const text = typeof children === 'string' ? children : String(children ?? '');
   const parsed = useMemo<ParsedTaskContent>(() => parseTaskContent(text), [text]);
 
@@ -172,10 +139,6 @@ const Render = memo<TaskRenderProps>(({ children }) => {
   }
 
   const titleText = parsed.name || parsed.identifier || '';
-  const showStatusBadge = parsed.status && isKnownStatus(parsed.status);
-  const statusLabel = showStatusBadge
-    ? t(`taskDetail.status.${parsed.status as TaskStatus}`)
-    : parsed.status;
 
   return (
     <Flexbox gap={12}>
@@ -189,12 +152,6 @@ const Render = memo<TaskRenderProps>(({ children }) => {
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
               {titleText}
             </Text>
-            {showStatusBadge && (
-              <span className={styles.statusBadge}>
-                <TaskStatusIcon size={12} status={parsed.status as TaskStatus} />
-                {statusLabel}
-              </span>
-            )}
           </Flexbox>
         </Flexbox>
       </Flexbox>
