@@ -188,7 +188,7 @@ export class AgentRuntimeService {
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
-    this.completionLifecycle = new CompletionLifecycle(db, userId, this.messageModel);
+    this.completionLifecycle = new CompletionLifecycle(db, userId);
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 
     // Initialize ToolExecutionService with dependencies
@@ -277,10 +277,37 @@ export class AgentRuntimeService {
       userMemory,
       deviceSystemInfo,
       operationSkillSet,
+      parentOperationId,
       signal,
       userTimezone,
       initialStepCount = 0,
     } = params;
+
+    // Persist initial agent_operations row. CompletionLifecycle owns both
+    // ends of the persistence lifecycle (start row here, terminal update
+    // in dispatchHooks) and swallows DB errors so runtime startup is never
+    // blocked.
+    await this.completionLifecycle.recordStart({
+      agentId: appContext?.agentId ?? null,
+      appContext: {
+        defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
+        documentId: appContext?.documentId,
+        groupId: appContext?.groupId,
+        scope: appContext?.scope,
+        sourceMessageId: appContext?.sourceMessageId,
+      },
+      chatGroupId: appContext?.groupId ?? null,
+      maxSteps,
+      model: modelRuntimeConfig?.model,
+      modelRuntimeConfig,
+      operationId,
+      parentOperationId: parentOperationId ?? null,
+      provider: modelRuntimeConfig?.provider,
+      taskId: appContext?.taskId ?? null,
+      threadId: appContext?.threadId ?? null,
+      topicId: appContext?.topicId ?? null,
+      trigger: appContext?.trigger,
+    });
 
     const operationToolSet = toolSet;
     let operationCreated = false;

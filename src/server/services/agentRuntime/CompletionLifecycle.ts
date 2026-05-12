@@ -1,6 +1,10 @@
 import debug from 'debug';
 
-import type { MessageModel } from '@/database/models/message';
+import {
+  AgentOperationModel,
+  type RecordOperationStartParams,
+} from '@/database/models/agentOperation';
+import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
@@ -34,11 +38,103 @@ const toAgentSignalSnapshotEvents = (
  * always runs.
  */
 export class CompletionLifecycle {
+  private readonly messageModel: MessageModel;
+  private readonly agentOperationModel: AgentOperationModel;
+
   constructor(
     private readonly serverDB: LobeChatDatabase,
     private readonly userId: string,
-    private readonly messageModel: MessageModel,
-  ) {}
+  ) {
+    this.messageModel = new MessageModel(serverDB, userId);
+    this.agentOperationModel = new AgentOperationModel(serverDB, userId);
+  }
+
+  /**
+   * Persist the initial `agent_operations` row when an operation is created.
+   * Fire-and-forget: a DB outage here must never block the runtime startup
+   * path — `dispatchHooks` will still finalize the row if one was written.
+   */
+  async recordStart(params: RecordOperationStartParams): Promise<void> {
+    try {
+      await this.agentOperationModel.recordStart(params);
+    } catch (error) {
+      log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
+    }
+  }
+
+  /**
+   * Map a completion reason to the terminal `agent_operations.status` value.
+   * `waiting_for_human` keeps `status='waiting_for_human'` so analytics can
+   * distinguish paused ops from terminal ones.
+   */
+  private statusForReason(reason: string): 'done' | 'error' | 'interrupted' | 'waiting_for_human' {
+    switch (reason) {
+      case 'error': {
+        return 'error';
+      }
+      case 'interrupted': {
+        return 'interrupted';
+      }
+      case 'waiting_for_human': {
+        return 'waiting_for_human';
+      }
+      default: {
+        return 'done';
+      }
+    }
+  }
+
+  /**
+   * Persist terminal state to `agent_operations`. Fire-and-forget: a DB
+   * outage must never block hook dispatch or the executor's terminal
+   * cleanup path.
+   */
+  private async persistCompletion(operationId: string, state: any, reason: string): Promise<void> {
+    const completionReason: any =
+      reason === 'max_steps' || reason === 'cost_limit' || reason === 'waiting_for_human'
+        ? reason
+        : this.statusForReason(reason);
+
+    const metadata = state?.metadata ?? {};
+    const agentId = metadata?.agentId;
+    const topicId = metadata?.topicId;
+    const traceS3Key =
+      agentId && topicId ? `agent-traces/${agentId}/${topicId}/${operationId}.json` : null;
+
+    const processingTimeMs = state?.createdAt
+      ? Date.now() - new Date(state.createdAt).getTime()
+      : null;
+
+    const status = this.statusForReason(reason);
+    // `waiting_for_human` is a pause, not a true terminal state — leave
+    // completedAt null so analytics doesn't read a paused op as completed.
+    // The next dispatchHooks call (when the human resumes and the op truly
+    // ends) will overwrite both fields.
+    const completedAt = status === 'waiting_for_human' ? undefined : new Date();
+
+    try {
+      await this.agentOperationModel.recordCompletion(operationId, {
+        completedAt,
+        completionReason,
+        cost: state?.cost ?? null,
+        error: state?.error ?? null,
+        interruption: state?.interruption ?? null,
+        llmCalls: state?.usage?.llm?.apiCalls ?? null,
+        processingTimeMs,
+        status,
+        stepCount: state?.stepCount ?? null,
+        toolCalls: state?.usage?.tools?.totalCalls ?? null,
+        totalCost: state?.cost?.total ?? null,
+        totalInputTokens: state?.usage?.llm?.tokens?.input ?? null,
+        totalOutputTokens: state?.usage?.llm?.tokens?.output ?? null,
+        totalTokens: state?.usage?.llm?.tokens?.total ?? null,
+        traceS3Key,
+        usage: state?.usage ?? null,
+      });
+    } catch (error) {
+      log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
+    }
+  }
 
   /**
    * Extract a human-readable error message from the agent state error object.
@@ -139,6 +235,10 @@ export class CompletionLifecycle {
   async dispatchHooks(operationId: string, state: any, reason: string): Promise<void> {
     try {
       const { event, metadata } = this.buildLifecycleEvent(operationId, state, reason);
+
+      // Finalize the agent_operations row before user hooks fire so
+      // downstream consumers see the row in its terminal shape.
+      await this.persistCompletion(operationId, state, reason);
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
 

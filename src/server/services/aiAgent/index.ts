@@ -322,6 +322,7 @@ export class AiAgentService {
       queueRetries,
       queueRetryDelay,
       parentMessageId,
+      parentOperationId,
       resume,
       resumeApproval,
     } = params;
@@ -1919,6 +1920,7 @@ export class AiAgentService {
         modelRuntimeConfig: { model, provider },
         hooks,
         operationId,
+        parentOperationId,
         signal,
         queueRetries,
         queueRetryDelay,
@@ -2154,6 +2156,7 @@ export class AiAgentService {
       appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
       hooks: threadHooks,
+      parentOperationId,
       prompt: instruction,
       userInterventionConfig: { approvalMode: 'headless' },
     });
