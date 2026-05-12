@@ -9,9 +9,11 @@ import type { AgentDocumentItem } from '../types';
 import {
   FOLDER_FILE_TYPE,
   isManagedSkillItem,
+  isPendingId,
   isProtectedManagedSkillItem,
   isSkillBundleItem,
 } from '../types';
+import { makePendingDocument } from '../utils/pendingDocument';
 
 interface UseDocumentTreeOpsArgs {
   agentId: string;
@@ -25,9 +27,29 @@ const ROOT_PATH = './';
 const joinPath = (parentPath: string, segment: string) =>
   parentPath === ROOT_PATH ? `${ROOT_PATH}${segment}` : `${parentPath}/${segment}`;
 
+// Service mutations return AgentDocumentStats-shaped payloads where the
+// agentDocumentItems row id is exposed as `id` (and mirrored on
+// `agentDocumentId`). Extract defensively since tRPC narrows the type
+// per-route.
+const extractRowId = (result: unknown): string | null => {
+  if (!result || typeof result !== 'object') return null;
+  const obj = result as Record<string, unknown>;
+  const id = obj.id ?? obj.agentDocumentId;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+};
+
+export interface CreateOptions {
+  /**
+   * Fires synchronously right after the optimistic pending row is inserted,
+   * passing the pending row's id. Used by the tree to immediately enter the
+   * rename input on the new row, before the server response lands.
+   */
+  onPendingInserted?: (pendingId: string) => void;
+}
+
 export interface DocumentTreeOps {
-  createDocument: (parentId: string | null) => Promise<void>;
-  createFolder: (parentId: string | null) => Promise<void>;
+  createDocument: (parentId: string | null, opts?: CreateOptions) => Promise<void>;
+  createFolder: (parentId: string | null, opts?: CreateOptions) => Promise<void>;
   deleteDocument: (id: string) => void;
   moveDocument: (params: {
     sourceIds: string[];
@@ -47,6 +69,10 @@ export const useDocumentTreeOps = ({
   const { message, modal } = App.useApp();
   const dataRef = useRef(data);
   dataRef.current = data;
+
+  // Tracks in-flight creates so a rename committed before the server response
+  // lands can be deferred to the real row id once the create resolves.
+  const pendingCreatesRef = useRef(new Map<string, Promise<string | null>>());
 
   const byRowId = useMemo(() => {
     const map = new Map<string, AgentDocumentItem>();
@@ -107,7 +133,7 @@ export const useDocumentTreeOps = ({
   );
 
   const createFolder = useCallback(
-    async (parentId: string | null) => {
+    async (parentId: string | null, opts?: CreateOptions) => {
       const parentPath = buildParentPathFromRowId(parentId);
       if (parentPath === null) {
         message.error(t('workingPanel.resources.tree.parentMissing'));
@@ -119,22 +145,43 @@ export const useDocumentTreeOps = ({
       const filename = pickUniqueFilename(parentDocumentId, baseName);
       const targetPath = joinPath(parentPath, filename);
 
-      try {
-        await agentDocumentService.createFolder({ agentId, path: targetPath });
-        await mutate();
-      } catch (error) {
-        message.error(
-          error instanceof Error
-            ? `${t('workingPanel.resources.tree.createError')}: ${error.message}`
-            : t('workingPanel.resources.tree.createError'),
-        );
-      }
+      const pending = makePendingDocument({
+        agentId,
+        isFolder: true,
+        parentId: parentDocumentId,
+        title: filename,
+      });
+      mutate((prev) => [...(prev ?? []), pending], { revalidate: false });
+      opts?.onPendingInserted?.(pending.id);
+
+      const createPromise = (async (): Promise<string | null> => {
+        try {
+          const result = await agentDocumentService.createFolder({ agentId, path: targetPath });
+          await mutate();
+          return extractRowId(result);
+        } catch (error) {
+          mutate((prev) => (prev ?? []).filter((doc) => doc.id !== pending.id), {
+            revalidate: false,
+          });
+          message.error(
+            error instanceof Error
+              ? `${t('workingPanel.resources.tree.createError')}: ${error.message}`
+              : t('workingPanel.resources.tree.createError'),
+          );
+          return null;
+        } finally {
+          pendingCreatesRef.current.delete(pending.id);
+        }
+      })();
+
+      pendingCreatesRef.current.set(pending.id, createPromise);
+      await createPromise;
     },
     [agentId, buildParentPathFromRowId, byRowId, message, mutate, pickUniqueFilename, t],
   );
 
   const createDocument = useCallback(
-    async (parentId: string | null) => {
+    async (parentId: string | null, opts?: CreateOptions) => {
       const parentPath = buildParentPathFromRowId(parentId);
       if (parentPath === null) {
         message.error(t('workingPanel.resources.tree.parentMissing'));
@@ -142,33 +189,53 @@ export const useDocumentTreeOps = ({
       }
 
       const baseName = t('workingPanel.resources.tree.untitledDocument');
+      const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
+      const pendingFilename = pickUniqueFilename(parentDocumentId, baseName);
 
-      try {
-        if (parentPath === ROOT_PATH) {
-          // Server's createDocument auto-deduplicates filenames at the root.
-          await agentDocumentService.createDocument({
-            agentId,
-            content: '',
-            title: baseName,
+      const pending = makePendingDocument({
+        agentId,
+        isFolder: false,
+        parentId: parentDocumentId,
+        title: pendingFilename,
+      });
+      mutate((prev) => [...(prev ?? []), pending], { revalidate: false });
+      opts?.onPendingInserted?.(pending.id);
+
+      const createPromise = (async (): Promise<string | null> => {
+        try {
+          const result =
+            parentPath === ROOT_PATH
+              ? // Server's createDocument auto-deduplicates filenames at the root.
+                await agentDocumentService.createDocument({
+                  agentId,
+                  content: '',
+                  title: baseName,
+                })
+              : await agentDocumentService.writeByPath({
+                  agentId,
+                  content: '',
+                  createMode: 'always-new',
+                  path: joinPath(parentPath, pendingFilename),
+                });
+          await mutate();
+          return extractRowId(result);
+        } catch (error) {
+          mutate((prev) => (prev ?? []).filter((doc) => doc.id !== pending.id), {
+            revalidate: false,
           });
-        } else {
-          const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
-          const filename = pickUniqueFilename(parentDocumentId, baseName);
-          await agentDocumentService.writeByPath({
-            agentId,
-            content: '',
-            createMode: 'always-new',
-            path: joinPath(parentPath, filename),
-          });
+          message.error(
+            error instanceof Error
+              ? `${t('workingPanel.resources.tree.createError')}: ${error.message}`
+              : t('workingPanel.resources.tree.createError'),
+          );
+          return null;
+        } finally {
+          pendingCreatesRef.current.delete(pending.id);
         }
-        await mutate();
-      } catch (error) {
-        message.error(
-          error instanceof Error
-            ? `${t('workingPanel.resources.tree.createError')}: ${error.message}`
-            : t('workingPanel.resources.tree.createError'),
-        );
-      }
+      })();
+
+      pendingCreatesRef.current.set(pending.id, createPromise);
+      await createPromise;
     },
     [agentId, buildParentPathFromRowId, byRowId, message, mutate, pickUniqueFilename, t],
   );
@@ -185,6 +252,23 @@ export const useDocumentTreeOps = ({
         return;
       }
       if (trimmed === target.title) return;
+
+      // If the row is a pending optimistic insert, wait for the create to
+      // resolve so we can rename against the real server-side id. Once the
+      // pending row is replaced by the real row (same path) the tree's
+      // path-based rename state survives the hydration, so the user's input
+      // stays intact.
+      if (isPendingId(id)) {
+        const pendingPromise = pendingCreatesRef.current.get(id);
+        if (!pendingPromise) return;
+        const realId = await pendingPromise;
+        if (!realId) return;
+        // Bail out if the real row already carries the desired name (e.g.
+        // server returned with the trimmed name applied).
+        const real = dataRef.current.find((doc) => doc.id === realId);
+        if (real && real.title === trimmed) return;
+        return renameDocument(realId, trimmed);
+      }
 
       mutate(
         (prev) =>
@@ -288,34 +372,64 @@ export const useDocumentTreeOps = ({
         content: t('workingPanel.resources.deleteConfirm'),
         okButtonProps: { danger: true, type: 'primary' },
         okText: t('delete', { ns: 'common' }),
-        onOk: async () => {
-          try {
-            const isFolder = target.fileType === FOLDER_FILE_TYPE;
-            if (isFolder) {
-              const path = buildItemPath(target);
-              if (path === null) {
-                throw new Error(t('workingPanel.resources.tree.parentMissing'));
-              }
-              await agentDocumentService.deleteByPath({
-                agentId,
-                path,
-                recursive: true,
-              });
-            } else {
-              await agentDocumentService.removeDocument({
-                agentId,
-                documentId: target.documentId,
-                id: target.id,
-                topicId,
-              });
-            }
-            await mutate();
-            message.success(t('workingPanel.resources.deleteSuccess'));
-          } catch (error) {
-            message.error(
-              error instanceof Error ? error.message : t('workingPanel.resources.deleteError'),
-            );
+        onOk: () => {
+          const isFolder = target.fileType === FOLDER_FILE_TYPE;
+          const folderPath = isFolder ? buildItemPath(target) : null;
+          if (isFolder && folderPath === null) {
+            message.error(t('workingPanel.resources.tree.parentMissing'));
+            return;
           }
+
+          // Collect target + all descendants (parentId chain via documentId) for
+          // optimistic recursive removal. Server is the source of truth and a
+          // final `mutate()` reconciles either way.
+          const removedIds = new Set<string>([target.id]);
+          if (isFolder) {
+            const queue: string[] = [target.documentId];
+            while (queue.length > 0) {
+              const parentDocId = queue.shift()!;
+              for (const doc of dataRef.current) {
+                if (doc.parentId === parentDocId && !removedIds.has(doc.id)) {
+                  removedIds.add(doc.id);
+                  queue.push(doc.documentId);
+                }
+              }
+            }
+          }
+
+          const snapshot = dataRef.current;
+          mutate((prev) => (prev ?? []).filter((doc) => !removedIds.has(doc.id)), {
+            revalidate: false,
+          });
+
+          // Returning synchronously closes the modal immediately; the server
+          // call runs in the background and toasts on success/rollback.
+          void (async () => {
+            try {
+              if (isFolder) {
+                await agentDocumentService.deleteByPath({
+                  agentId,
+                  path: folderPath!,
+                  recursive: true,
+                });
+              } else {
+                await agentDocumentService.removeDocument({
+                  agentId,
+                  documentId: target.documentId,
+                  id: target.id,
+                  topicId,
+                });
+              }
+              await mutate();
+            } catch (error) {
+              mutate(snapshot, { revalidate: false });
+              message.error(
+                error instanceof Error
+                  ? `${t('workingPanel.resources.deleteError')}: ${error.message}`
+                  : t('workingPanel.resources.deleteError'),
+              );
+            }
+          })();
         },
         title: t('workingPanel.resources.deleteTitle'),
       });

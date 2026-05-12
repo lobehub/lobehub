@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -282,15 +282,21 @@ describe('DocumentExplorerTree', () => {
 
     const [firstConfirmCall] = modalConfirm.mock.calls;
     const [{ onOk }] = firstConfirmCall;
-    await onOk();
+    // onOk now returns synchronously so the modal closes immediately; the
+    // server call runs in the background.
+    onOk();
 
-    expect(removeDocumentMock).toHaveBeenCalledWith({
-      agentId: 'agent-1',
-      documentId: 'skill-bundle-doc',
-      id: 'skill-bundle-row',
-      topicId: undefined,
-    });
+    // Optimistic removal happens before the server call.
     expect(mutate).toHaveBeenCalled();
-    expect(messageSuccess).toHaveBeenCalledWith('workingPanel.resources.deleteSuccess');
+
+    await waitFor(() => {
+      expect(removeDocumentMock).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        documentId: 'skill-bundle-doc',
+        id: 'skill-bundle-row',
+        topicId: undefined,
+      });
+    });
+    expect(messageSuccess).not.toHaveBeenCalled();
   });
 });
