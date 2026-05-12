@@ -43,6 +43,12 @@ export const createActions = (
       await internals.onSave(todoItems);
       console.info('[performSave] onSave completed');
       set({ isDirty: false, saveStatus: 'saved' });
+
+      // Match saveNow: ease the indicator back to `idle` so the UI doesn't
+      // get stuck showing "saved" after the auto-save settles.
+      setTimeout(() => {
+        set((state) => (state.saveStatus === 'saved' ? { saveStatus: 'idle' } : {}));
+      }, 1500);
     } catch {
       set({ saveStatus: 'error' });
     }
