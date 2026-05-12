@@ -28,6 +28,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
+  timezoneOffset: css`
+    flex-shrink: 0;
+    margin-inline-start: 12px;
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
+  timezoneOption: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    min-width: 0;
+  `,
   weekdayButton: css`
     cursor: pointer;
 
@@ -332,10 +346,19 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               <Select
                 showSearch
                 getPopupContainer={getPopupContainer}
+                optionFilterProp="label"
                 options={TIMEZONE_OPTIONS}
                 popupMatchSelectWidth={false}
                 value={tz}
                 variant="filled"
+                optionRender={({ data }) => (
+                  <div className={styles.timezoneOption}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {data.label}
+                    </span>
+                    <span className={styles.timezoneOffset}>{data.offset}</span>
+                  </div>
+                )}
                 onChange={handleTimezoneChange}
               />
             </Flexbox>

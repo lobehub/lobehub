@@ -8,53 +8,62 @@ export const SCHEDULE_TYPE_OPTIONS = [
   { label: 'taskSchedule.scheduleType.weekly', value: 'weekly' },
 ] as const;
 
-export const TIMEZONE_OPTIONS = [
-  { label: 'UTC', value: 'UTC' },
+export interface TimezoneOption {
+  label: string;
+  offset: string;
+  value: string;
+}
+
+// IANA timezone identifiers are stored in `value` (Drizzle/cron expect the
+// underscored form). `label` is the human-readable display (underscores → spaces),
+// `offset` renders subtly on the right of each dropdown row à la Notion.
+export const TIMEZONE_OPTIONS: TimezoneOption[] = [
+  { label: 'UTC', offset: 'UTC+0', value: 'UTC' },
 
   // Americas
-  { label: 'America/New_York (EST/EDT, UTC-5/-4)', value: 'America/New_York' },
-  { label: 'America/Chicago (CST/CDT, UTC-6/-5)', value: 'America/Chicago' },
-  { label: 'America/Denver (MST/MDT, UTC-7/-6)', value: 'America/Denver' },
-  { label: 'America/Los_Angeles (PST/PDT, UTC-8/-7)', value: 'America/Los_Angeles' },
-  { label: 'America/Toronto (EST/EDT, UTC-5/-4)', value: 'America/Toronto' },
-  { label: 'America/Vancouver (PST/PDT, UTC-8/-7)', value: 'America/Vancouver' },
-  { label: 'America/Mexico_City (CST, UTC-6)', value: 'America/Mexico_City' },
-  { label: 'America/Sao_Paulo (BRT, UTC-3)', value: 'America/Sao_Paulo' },
-  { label: 'America/Buenos_Aires (ART, UTC-3)', value: 'America/Buenos_Aires' },
+  { label: 'America/New York', offset: 'UTC−5/−4', value: 'America/New_York' },
+  { label: 'America/Chicago', offset: 'UTC−6/−5', value: 'America/Chicago' },
+  { label: 'America/Denver', offset: 'UTC−7/−6', value: 'America/Denver' },
+  { label: 'America/Los Angeles', offset: 'UTC−8/−7', value: 'America/Los_Angeles' },
+  { label: 'America/Toronto', offset: 'UTC−5/−4', value: 'America/Toronto' },
+  { label: 'America/Vancouver', offset: 'UTC−8/−7', value: 'America/Vancouver' },
+  { label: 'America/Mexico City', offset: 'UTC−6', value: 'America/Mexico_City' },
+  { label: 'America/Sao Paulo', offset: 'UTC−3', value: 'America/Sao_Paulo' },
+  { label: 'America/Buenos Aires', offset: 'UTC−3', value: 'America/Buenos_Aires' },
 
   // Europe
-  { label: 'Europe/London (GMT/BST, UTC+0/+1)', value: 'Europe/London' },
-  { label: 'Europe/Paris (CET/CEST, UTC+1/+2)', value: 'Europe/Paris' },
-  { label: 'Europe/Berlin (CET/CEST, UTC+1/+2)', value: 'Europe/Berlin' },
-  { label: 'Europe/Madrid (CET/CEST, UTC+1/+2)', value: 'Europe/Madrid' },
-  { label: 'Europe/Rome (CET/CEST, UTC+1/+2)', value: 'Europe/Rome' },
-  { label: 'Europe/Amsterdam (CET/CEST, UTC+1/+2)', value: 'Europe/Amsterdam' },
-  { label: 'Europe/Brussels (CET/CEST, UTC+1/+2)', value: 'Europe/Brussels' },
-  { label: 'Europe/Moscow (MSK, UTC+3)', value: 'Europe/Moscow' },
-  { label: 'Europe/Istanbul (TRT, UTC+3)', value: 'Europe/Istanbul' },
+  { label: 'Europe/London', offset: 'UTC+0/+1', value: 'Europe/London' },
+  { label: 'Europe/Paris', offset: 'UTC+1/+2', value: 'Europe/Paris' },
+  { label: 'Europe/Berlin', offset: 'UTC+1/+2', value: 'Europe/Berlin' },
+  { label: 'Europe/Madrid', offset: 'UTC+1/+2', value: 'Europe/Madrid' },
+  { label: 'Europe/Rome', offset: 'UTC+1/+2', value: 'Europe/Rome' },
+  { label: 'Europe/Amsterdam', offset: 'UTC+1/+2', value: 'Europe/Amsterdam' },
+  { label: 'Europe/Brussels', offset: 'UTC+1/+2', value: 'Europe/Brussels' },
+  { label: 'Europe/Moscow', offset: 'UTC+3', value: 'Europe/Moscow' },
+  { label: 'Europe/Istanbul', offset: 'UTC+3', value: 'Europe/Istanbul' },
 
   // Asia
-  { label: 'Asia/Dubai (GST, UTC+4)', value: 'Asia/Dubai' },
-  { label: 'Asia/Kolkata (IST, UTC+5:30)', value: 'Asia/Kolkata' },
-  { label: 'Asia/Shanghai (CST, UTC+8)', value: 'Asia/Shanghai' },
-  { label: 'Asia/Hong_Kong (HKT, UTC+8)', value: 'Asia/Hong_Kong' },
-  { label: 'Asia/Taipei (CST, UTC+8)', value: 'Asia/Taipei' },
-  { label: 'Asia/Singapore (SGT, UTC+8)', value: 'Asia/Singapore' },
-  { label: 'Asia/Tokyo (JST, UTC+9)', value: 'Asia/Tokyo' },
-  { label: 'Asia/Seoul (KST, UTC+9)', value: 'Asia/Seoul' },
-  { label: 'Asia/Bangkok (ICT, UTC+7)', value: 'Asia/Bangkok' },
-  { label: 'Asia/Jakarta (WIB, UTC+7)', value: 'Asia/Jakarta' },
+  { label: 'Asia/Dubai', offset: 'UTC+4', value: 'Asia/Dubai' },
+  { label: 'Asia/Kolkata', offset: 'UTC+5:30', value: 'Asia/Kolkata' },
+  { label: 'Asia/Shanghai', offset: 'UTC+8', value: 'Asia/Shanghai' },
+  { label: 'Asia/Hong Kong', offset: 'UTC+8', value: 'Asia/Hong_Kong' },
+  { label: 'Asia/Taipei', offset: 'UTC+8', value: 'Asia/Taipei' },
+  { label: 'Asia/Singapore', offset: 'UTC+8', value: 'Asia/Singapore' },
+  { label: 'Asia/Tokyo', offset: 'UTC+9', value: 'Asia/Tokyo' },
+  { label: 'Asia/Seoul', offset: 'UTC+9', value: 'Asia/Seoul' },
+  { label: 'Asia/Bangkok', offset: 'UTC+7', value: 'Asia/Bangkok' },
+  { label: 'Asia/Jakarta', offset: 'UTC+7', value: 'Asia/Jakarta' },
 
   // Oceania
-  { label: 'Australia/Sydney (AEDT/AEST, UTC+11/+10)', value: 'Australia/Sydney' },
-  { label: 'Australia/Melbourne (AEDT/AEST, UTC+11/+10)', value: 'Australia/Melbourne' },
-  { label: 'Australia/Brisbane (AEST, UTC+10)', value: 'Australia/Brisbane' },
-  { label: 'Australia/Perth (AWST, UTC+8)', value: 'Australia/Perth' },
-  { label: 'Pacific/Auckland (NZDT/NZST, UTC+13/+12)', value: 'Pacific/Auckland' },
+  { label: 'Australia/Sydney', offset: 'UTC+11/+10', value: 'Australia/Sydney' },
+  { label: 'Australia/Melbourne', offset: 'UTC+11/+10', value: 'Australia/Melbourne' },
+  { label: 'Australia/Brisbane', offset: 'UTC+10', value: 'Australia/Brisbane' },
+  { label: 'Australia/Perth', offset: 'UTC+8', value: 'Australia/Perth' },
+  { label: 'Pacific/Auckland', offset: 'UTC+13/+12', value: 'Pacific/Auckland' },
 
   // Africa & Middle East
-  { label: 'Africa/Cairo (EET, UTC+2)', value: 'Africa/Cairo' },
-  { label: 'Africa/Johannesburg (SAST, UTC+2)', value: 'Africa/Johannesburg' },
+  { label: 'Africa/Cairo', offset: 'UTC+2', value: 'Africa/Cairo' },
+  { label: 'Africa/Johannesburg', offset: 'UTC+2', value: 'Africa/Johannesburg' },
 ];
 
 export const WEEKDAYS = [
