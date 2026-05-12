@@ -26,20 +26,24 @@ const DISCORD_API_BASE = 'https://discord.com/api/v10';
 const DISCORD_BOT_SCOPES = ['bot', 'applications.commands', 'identify'];
 
 /**
- * Bitfield permissions requested at install. Matches Slack v1's DM-only
- * footprint where possible:
+ * Bitfield permissions requested at install. Mirrors the per-agent Discord
+ * bot-channels permission set so SystemBot ≥ bot-channels in capability, plus
+ * the two slash/thread bits SystemBot uses that bot-channels does not:
  *
+ *   - ADD_REACTIONS         (1 << 6)    — 👀/✅ acks, mirrors Slack
  *   - VIEW_CHANNEL          (1 << 10)   — see channels the bot is added to
  *   - SEND_MESSAGES         (1 << 11)   — outbound replies
- *   - SEND_MESSAGES_IN_THREADS (1 << 38)
- *   - CREATE_PUBLIC_THREADS (1 << 34)   — start a thread on @mention
+ *   - EMBED_LINKS           (1 << 14)   — rich replies / URL previews
+ *   - ATTACH_FILES          (1 << 15)   — outbound file / image attachments
  *   - READ_MESSAGE_HISTORY  (1 << 16)   — fetch context for replies
- *   - ADD_REACTIONS         (1 << 6)    — 👀/✅ acks, mirrors Slack
- *   - USE_APPLICATION_COMMANDS (1 << 31)
+ *   - USE_APPLICATION_COMMANDS (1 << 31) — register /start /agents /new /stop
+ *   - MANAGE_THREADS        (1 << 34)   — rename auto-thread to conversation topic
+ *   - CREATE_PUBLIC_THREADS (1 << 35)   — start a thread on channel @mention
+ *   - SEND_MESSAGES_IN_THREADS (1 << 38)
  *
  * Discord exposes these as decimal in the authorize URL.
  */
-const DISCORD_BOT_PERMISSIONS = [6, 10, 11, 16, 31, 34, 38]
+const DISCORD_BOT_PERMISSIONS = [6, 10, 11, 14, 15, 16, 31, 34, 35, 38]
   .reduce((acc, bit) => acc | (BigInt(1) << BigInt(bit)), BigInt(0))
   .toString();
 
