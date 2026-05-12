@@ -3,6 +3,7 @@ import {
   closeContextMenu,
   type ContextMenuItem,
   copyToClipboard,
+  type GenericItemType,
   Icon,
   type MenuInfo,
 } from '@lobehub/ui';
@@ -134,7 +135,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
                 icon: <Icon icon={PlayIcon} />,
                 key: 'runNow',
                 label: t('taskList.contextMenu.runNow'),
-                onClick: async ({ domEvent }) => {
+                onClick: async ({ domEvent }: MenuInfo) => {
                   domEvent.stopPropagation();
                   if (!task.assigneeAgentId && inboxAgentId) {
                     await updateTask(task.identifier, { assigneeAgentId: inboxAgentId });
