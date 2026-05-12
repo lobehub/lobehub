@@ -42,8 +42,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   root: css`
-    padding-block-end: 12px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
+    /* Override @lobehub/ui Markdown's default <details> card chrome (bg + padding + box-shadow).
+       Need !important because the lib targets via .parent details (higher specificity). */
+    margin-block: 0 !important;
+    padding-block: 0 12px !important;
+    padding-inline: 0 !important;
+    border-block-end: 1px solid ${cssVar.colorSplit} !important;
+    border-radius: 0 !important;
+
+    background: transparent !important;
+    box-shadow: none !important;
   `,
   summary: css`
     cursor: pointer;
