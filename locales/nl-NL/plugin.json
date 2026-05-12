@@ -265,6 +265,7 @@
   "builtins.lobe-task.apiName.listTasks": "Taken weergeven",
   "builtins.lobe-task.apiName.runTask": "Taak uitvoeren",
   "builtins.lobe-task.apiName.runTasks": "Taken uitvoeren",
+  "builtins.lobe-task.apiName.setTaskSchedule": "Schema instellen",
   "builtins.lobe-task.apiName.updateTaskComment": "Opmerking bijwerken",
   "builtins.lobe-task.apiName.updateTaskStatus": "Status bijwerken",
   "builtins.lobe-task.apiName.viewTask": "Taak bekijken",

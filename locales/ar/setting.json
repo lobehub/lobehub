@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "إعدادات المهارة",
   "plugin.store": "متجر المهارات",
   "publishToCommunity": "النشر في المجتمع",
+  "serviceModel.modelAssignments.title": "تعيينات النموذج",
+  "serviceModel.optionalFeatures.title": "الميزات الاختيارية",
   "settingAgent.avatar.sizeExceeded": "يتجاوز حجم الصورة 1 ميجابايت، يرجى اختيار صورة أصغر",
   "settingAgent.avatar.title": "الصورة الرمزية",
   "settingAgent.backgroundColor.title": "لون الخلفية",

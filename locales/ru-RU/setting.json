@@ -492,6 +492,8 @@
   "plugin.settings.tooltip": "Настройка навыка",
   "plugin.store": "Магазин навыков",
   "publishToCommunity": "Опубликовать в сообществе",
+  "serviceModel.modelAssignments.title": "Назначения моделей",
+  "serviceModel.optionalFeatures.title": "Дополнительные функции",
   "settingAgent.avatar.sizeExceeded": "Размер изображения превышает лимит 1 МБ, выберите изображение меньшего размера",
   "settingAgent.avatar.title": "Аватар",
   "settingAgent.backgroundColor.title": "Цвет фона",
