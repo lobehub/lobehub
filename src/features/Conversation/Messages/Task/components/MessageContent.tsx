@@ -44,10 +44,10 @@ const MessageContent = memo<UIChatMessage>(
         {drawer}
         {showSearch && (
           <SearchGrounding
-            citations={search/>citations}
-            imageResults={search/>imageResults}
-            imageSearchQueries={search/>imageSearchQueries}
-            searchQueries={search/>searchQueries}
+            citations={search.citations}
+            imageResults={search.imageResults}
+            imageSearchQueries={search.imageSearchQueries}
+            searchQueries={search.searchQueries}
           />
         )}
         {showFileChunks && <FileChunks data={chunksList} />}
