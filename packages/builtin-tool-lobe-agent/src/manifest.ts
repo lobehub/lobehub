@@ -40,6 +40,149 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
 
+    // ==================== Planning ====================
+    {
+      description:
+        'Create a high-level plan document. Plans define the strategic direction (the "what" and "why"), while todos handle the actionable steps.',
+      name: LobeAgentApiName.createPlan,
+      humanIntervention: 'required',
+      renderDisplayControl: 'expand',
+      parameters: {
+        properties: {
+          goal: {
+            description: 'The main goal or objective to achieve (used as document title).',
+            type: 'string',
+          },
+          description: {
+            description: 'A brief summary of the plan (1-2 sentences).',
+            type: 'string',
+          },
+          context: {
+            description:
+              'Detailed context, constraints, background information, or strategic considerations relevant to the goal.',
+            type: 'string',
+          },
+        },
+        required: ['goal', 'description', 'context'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Update an existing plan document. Only use this when the goal fundamentally changes. Plans should remain stable once created - do not update plans just because details change.',
+      name: LobeAgentApiName.updatePlan,
+      parameters: {
+        properties: {
+          planId: {
+            description:
+              'The document ID of the plan to update (e.g., "docs_xxx"). This ID is returned in the createPlan response. Do NOT use the goal text as planId.',
+            type: 'string',
+          },
+          goal: {
+            description: 'Updated goal (document title).',
+            type: 'string',
+          },
+          description: {
+            description: 'Updated brief summary.',
+            type: 'string',
+          },
+          context: {
+            description: 'Updated detailed context.',
+            type: 'string',
+          },
+        },
+        required: ['planId'],
+        type: 'object',
+      },
+    },
+
+    // ==================== Quick Todo ====================
+    {
+      description: 'Create new todo items. Pass an array of text strings.',
+      name: LobeAgentApiName.createTodos,
+      humanIntervention: 'required',
+      parameters: {
+        properties: {
+          adds: {
+            description: 'Array of todo item texts to create.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+        },
+        required: ['adds'],
+        type: 'object',
+      },
+    },
+    {
+      description: `Update todo items with batch operations. Each operation type requires specific fields:
+- "add": requires "text" (the todo text to add)
+- "update": requires "index", optional "newText" and/or "status"
+- "remove": requires "index" only
+- "complete": requires "index" only (marks item as completed)
+- "processing": requires "index" only (marks item as in progress)`,
+      name: LobeAgentApiName.updateTodos,
+      renderDisplayControl: 'expand',
+      parameters: {
+        properties: {
+          operations: {
+            description:
+              'Array of update operations. IMPORTANT: For "complete", "processing" and "remove" operations, only pass "type" and "index" - no other fields needed.',
+            items: {
+              properties: {
+                type: {
+                  description:
+                    'Operation type. "add" needs text, "update" needs index + optional newText/status, "remove", "complete" and "processing" need index only.',
+                  enum: ['add', 'update', 'remove', 'complete', 'processing'],
+                  type: 'string',
+                },
+                text: {
+                  description: 'Required for "add" only: the text to add.',
+                  type: 'string',
+                },
+                index: {
+                  description:
+                    'Required for "update", "remove", "complete", "processing": the item index (0-based).',
+                  type: 'number',
+                },
+                newText: {
+                  description: 'Optional for "update" only: the new text.',
+                  type: 'string',
+                },
+                status: {
+                  description:
+                    'Optional for "update" only: set status (todo, processing, completed).',
+                  enum: ['todo', 'processing', 'completed'],
+                  type: 'string',
+                },
+              },
+              required: ['type'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+        },
+        required: ['operations'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Clear todo items. Can clear only completed items or all items.',
+      name: LobeAgentApiName.clearTodos,
+      humanIntervention: 'always',
+      renderDisplayControl: 'expand',
+      parameters: {
+        properties: {
+          mode: {
+            description: '"completed" clears only done items, "all" clears the entire list.',
+            enum: ['completed', 'all'],
+            type: 'string',
+          },
+        },
+        required: ['mode'],
+        type: 'object',
+      },
+    },
+
     // ==================== Sub-Agent ====================
     {
       description:
@@ -125,7 +268,8 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   identifier: LobeAgentIdentifier,
   meta: {
     avatar: '🤖',
-    description: 'Run built-in Lobe Agent capabilities, including dispatching sub-agents.',
+    description:
+      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and visual media analysis.',
     readme: 'Lobe Agent provides built-in assistant capabilities that can be expanded over time.',
     title: 'Lobe Agent',
   },

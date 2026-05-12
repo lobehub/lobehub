@@ -12,7 +12,10 @@ import {
   GroupManagementInterventions,
   GroupManagementManifest,
 } from '@lobechat/builtin-tool-group-management/client';
-import { GTDInterventions, GTDManifest } from '@lobechat/builtin-tool-gtd/client';
+import {
+  LobeAgentInterventions,
+  LobeAgentManifest,
+} from '@lobechat/builtin-tool-lobe-agent/client';
 import {
   LocalSystemIdentifier,
   LocalSystemInterventions,
@@ -39,7 +42,7 @@ export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [ClaudeCodeIdentifier]: ClaudeCodeInterventions,
   [CloudSandboxManifest.identifier]: CloudSandboxInterventions,
   [GroupManagementManifest.identifier]: GroupManagementInterventions,
-  [GTDManifest.identifier]: GTDInterventions,
+  [LobeAgentManifest.identifier]: LobeAgentInterventions,
   [LocalSystemIdentifier]: LocalSystemInterventions,
   [MemoryManifest.identifier]: MemoryInterventions,
   [MessageManifest.identifier]: MessageInterventions,

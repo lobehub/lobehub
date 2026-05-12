@@ -15,7 +15,7 @@ export type StepContextTodoStatus = 'todo' | 'processing' | 'completed';
 
 /**
  * Todo item structure
- * Duplicated here to avoid circular dependency with builtin-tool-gtd
+ * Duplicated here to avoid circular dependency with builtin-tool-lobe-agent
  */
 export interface StepContextTodoItem {
   status: StepContextTodoStatus;

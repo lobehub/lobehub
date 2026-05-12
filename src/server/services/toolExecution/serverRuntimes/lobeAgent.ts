@@ -7,6 +7,7 @@ import {
   hasUserVisualFiles,
   LobeAgentIdentifier,
   normalizeAnalyzeVisualMediaInput,
+  PlanExecutionRuntime,
   selectVisualFileItems,
   validateVisualMediaUrls,
 } from '@lobechat/builtin-tool-lobe-agent';
@@ -22,6 +23,7 @@ import { toolsEnv } from '@/envs/tools';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 
+import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
 
 interface AnalyzeVisualMediaParams {
@@ -69,6 +71,7 @@ class LobeAgentExecutionRuntime {
   private messageId: string;
   private threadId?: string | null;
   private topicId?: string;
+  private planRuntime: PlanExecutionRuntime;
 
   constructor(context: LobeAgentRuntimeContext) {
     this.agentId = context.agentId;
@@ -78,7 +81,27 @@ class LobeAgentExecutionRuntime {
     this.threadId = context.threadId;
     this.topicId = context.topicId;
     this.userId = context.userId;
+    this.planRuntime = new PlanExecutionRuntime(
+      createServerPlanRuntimeService(context.serverDB, context.userId),
+    );
   }
+
+  // ==================== Plan / Todo (delegated to PlanExecutionRuntime) ====================
+
+  createPlan = (params: any) =>
+    this.planRuntime.createPlan(params, { messageId: this.messageId, topicId: this.topicId });
+
+  updatePlan = (params: any) =>
+    this.planRuntime.updatePlan(params, { messageId: this.messageId, topicId: this.topicId });
+
+  createTodos = (params: any) =>
+    this.planRuntime.createTodos(params, { messageId: this.messageId, topicId: this.topicId });
+
+  updateTodos = (params: any) =>
+    this.planRuntime.updateTodos(params, { messageId: this.messageId, topicId: this.topicId });
+
+  clearTodos = (params: any) =>
+    this.planRuntime.clearTodos(params, { messageId: this.messageId, topicId: this.topicId });
 
   private queryScopeMessages = (
     messageModel: MessageModel,

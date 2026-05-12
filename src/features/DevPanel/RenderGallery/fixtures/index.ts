@@ -16,7 +16,6 @@ import lobeAgentManagement from './lobe-agent-management';
 import lobeCloudSandbox from './lobe-cloud-sandbox';
 import lobeGroupAgentBuilder from './lobe-group-agent-builder';
 import lobeGroupManagement from './lobe-group-management';
-import lobeGtd from './lobe-gtd';
 import lobeKnowledgeBase from './lobe-knowledge-base';
 import lobeLocalSystem from './lobe-local-system';
 import lobeNotebook from './lobe-notebook';
@@ -75,7 +74,6 @@ const toolsetModules: ToolsetFixtureModule[] = [
   lobeCloudSandbox,
   lobeGroupAgentBuilder,
   lobeGroupManagement,
-  lobeGtd,
   lobeKnowledgeBase,
   lobeLocalSystem,
   lobeNotebook,

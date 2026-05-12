@@ -1,13 +1,13 @@
 import { defineCase, errorStep, llmStep, toolStep } from '../../builders/defineCase';
 
 // ---------------------------------------------------------------------------
-// Helpers — all mapped to lobe-gtd
+// Helpers — all mapped to lobe-agent
 // ---------------------------------------------------------------------------
 
-/** lobe-gtd / createTodos */
+/** lobe-agent / createTodos */
 const createTodos = (items: string[], durationMs = 60) =>
   toolStep({
-    identifier: 'lobe-gtd',
+    identifier: 'lobe-agent',
     apiName: 'createTodos',
     arguments: JSON.stringify({ adds: items }),
     result: {
@@ -20,14 +20,14 @@ const createTodos = (items: string[], durationMs = 60) =>
     durationMs,
   });
 
-/** lobe-gtd / updateTodos — batch operations */
+/** lobe-agent / updateTodos — batch operations */
 const updateTodos = (
   operations: Array<{ type: string; index?: number; newText?: string; status?: string }>,
   currentItems: Array<{ text: string; status: string }>,
   durationMs = 60,
 ) =>
   toolStep({
-    identifier: 'lobe-gtd',
+    identifier: 'lobe-agent',
     apiName: 'updateTodos',
     arguments: JSON.stringify({ operations }),
     result: {
@@ -40,7 +40,7 @@ const updateTodos = (
     durationMs,
   });
 
-/** lobe-gtd / createPlan */
+/** lobe-agent / createPlan */
 const createPlan = (
   goal: string,
   description: string,
@@ -49,7 +49,7 @@ const createPlan = (
   durationMs = 80,
 ) =>
   toolStep({
-    identifier: 'lobe-gtd',
+    identifier: 'lobe-agent',
     apiName: 'createPlan',
     arguments: JSON.stringify({ goal, description, context }),
     result: {
@@ -66,14 +66,14 @@ const createPlan = (
     durationMs,
   });
 
-/** lobe-gtd / updatePlan */
+/** lobe-agent / updatePlan */
 const updatePlan = (
   planId: string,
   set: { goal?: string; description?: string; context?: string; completed?: boolean },
   durationMs = 60,
 ) =>
   toolStep({
-    identifier: 'lobe-gtd',
+    identifier: 'lobe-agent',
     apiName: 'updatePlan',
     arguments: JSON.stringify({ planId, ...set }),
     result: {
@@ -108,7 +108,7 @@ const callSubAgent = (description: string, instruction: string, durationMs = 200
 const breathe = (text: string, durationMs = 250) => llmStep({ text, durationMs });
 
 // ---------------------------------------------------------------------------
-// The main case — ~200 lobe-gtd tool calls across 8 phases
+// The main case — ~200 lobe-agent tool calls across 8 phases
 // ---------------------------------------------------------------------------
 
 export const todoWriteStress = defineCase({
@@ -137,8 +137,8 @@ export const todoWriteStress = defineCase({
       text: '第一阶段：全面盘点现有代码结构。创建总体计划，再拆解为 15 个待办事项。',
       reasoning: '先创建一个顶层计划文档，再将盘点工作拆解为具体的 todo 项。',
       toolsCalling: [
-        { id: 'tc-plan-1', identifier: 'lobe-gtd', apiName: 'createPlan', arguments: '{}' },
-        { id: 'tc-todos-1', identifier: 'lobe-gtd', apiName: 'createTodos', arguments: '{}' },
+        { id: 'tc-plan-1', identifier: 'lobe-agent', apiName: 'createPlan', arguments: '{}' },
+        { id: 'tc-todos-1', identifier: 'lobe-agent', apiName: 'createTodos', arguments: '{}' },
       ],
       durationMs: 600,
     }),

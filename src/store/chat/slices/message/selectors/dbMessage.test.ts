@@ -13,7 +13,7 @@ describe('selectTodosFromMessages', () => {
       role: 'tool',
       content: 'Todos updated',
       plugin: {
-        identifier: 'lobe-gtd',
+        identifier: 'lobe-agent',
         apiName: 'createTodos',
         arguments: '{}',
       },
@@ -127,7 +127,7 @@ describe('selectTodosFromMessages', () => {
         role: 'tool',
         content: 'Something',
         plugin: {
-          identifier: 'lobe-gtd',
+          identifier: 'lobe-agent',
           apiName: 'someOtherApi',
           arguments: '{}',
         },
@@ -149,7 +149,7 @@ describe('selectTodosFromMessages', () => {
         role: 'tool',
         content: 'Todos',
         plugin: {
-          identifier: 'lobe-gtd',
+          identifier: 'lobe-agent',
           apiName: 'createTodos',
           arguments: '{}',
         },
@@ -242,7 +242,7 @@ describe('selectTodosFromMessages', () => {
         role: 'tool',
         content: 'Todos',
         plugin: {
-          identifier: 'lobe-gtd',
+          identifier: 'lobe-agent',
           apiName: 'createTodos',
           arguments: '{}',
         },
@@ -271,7 +271,7 @@ describe('selectCurrentTurnTodosFromMessages', () => {
       id: `tool-${text}`,
       role: 'tool',
       content: 'Todos updated',
-      plugin: { identifier: 'lobe-gtd', apiName: 'createTodos', arguments: '{}' },
+      plugin: { identifier: 'lobe-agent', apiName: 'createTodos', arguments: '{}' },
       pluginState: {
         todos: { items: [{ text, status }], updatedAt: '2026-04-20T00:00:00.000Z' },
       },

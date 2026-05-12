@@ -1049,10 +1049,6 @@ When I am ___, I need ___
   'tools.builtins.lobe-cloud-sandbox.readme':
     'Execute Python, JavaScript, and TypeScript code in an isolated cloud environment. Run shell commands, manage files, search content with regex, and export results securely.',
   'tools.builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
-  'tools.builtins.lobe-gtd.description': 'Plan goals and track progress with GTD methodology',
-  'tools.builtins.lobe-gtd.readme':
-    'Plan goals and track progress using GTD methodology. Create strategic plans, manage todo lists with status tracking, and execute long-running async tasks.',
-  'tools.builtins.lobe-gtd.title': 'GTD Tools',
   'tools.builtins.lobe-local-system.description':
     'Access and manage local files, run shell commands on your desktop',
   'tools.builtins.lobe-local-system.readme':

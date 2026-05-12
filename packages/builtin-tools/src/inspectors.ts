@@ -30,7 +30,6 @@ import {
   GroupManagementInspectors,
   GroupManagementManifest,
 } from '@lobechat/builtin-tool-group-management/client';
-import { GTDInspectors, GTDManifest } from '@lobechat/builtin-tool-gtd/client';
 import {
   KnowledgeBaseInspectors,
   KnowledgeBaseManifest,
@@ -87,7 +86,6 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     string,
     BuiltinInspector
   >,
-  [GTDManifest.identifier]: GTDInspectors as Record<string, BuiltinInspector>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
   [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
