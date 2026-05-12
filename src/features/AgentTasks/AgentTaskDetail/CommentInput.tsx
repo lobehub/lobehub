@@ -52,14 +52,14 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
           }}
         />
       </div>
-      <div
-        style={{
-          flexShrink: 0,
-          opacity: hasContent || submitting ? 1 : 0,
-          pointerEvents: hasContent || submitting ? 'auto' : 'none',
-        }}
-      >
-        <SendButton loading={submitting} shape={'round'} type={'text'} onClick={handleSubmit} />
+      <div style={{ flexShrink: 0 }}>
+        <SendButton
+          disabled={!hasContent && !submitting}
+          loading={submitting}
+          shape={'round'}
+          type={'text'}
+          onClick={handleSubmit}
+        />
       </div>
     </Flexbox>
   );

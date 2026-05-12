@@ -82,8 +82,6 @@ import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
 
-const isDev = process.env.NODE_ENV === 'development';
-
 // Desktop router configuration — all sync imports for Electron local build
 export const desktopRoutes: RouteObject[] = [
   {
@@ -527,7 +525,7 @@ export const desktopRoutes: RouteObject[] = [
   },
 
   // Devtools route (outside main layout, dev-only)
-  ...(isDev
+  ...(__DEV__
     ? [
         {
           children: [

@@ -26,11 +26,34 @@ export const createTaskConfigSlice = (set: Setter, get: () => TaskStore, _api?: 
 export class TaskConfigSliceActionImpl {
   readonly #get: () => TaskStore;
   readonly #set: Setter;
+  // Counts in-flight writes per task so we can coalesce the post-write
+  // `internal_refreshTaskDetail` into a single fetch after the last response.
+  // Without this, rapid edits trigger overlapping refreshes that surface stale
+  // intermediate server state to readers like TaskTriggerTag / summary text.
+  readonly #pendingWrites = new Map<string, number>();
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+  }
+
+  // Run a write; refresh task detail only after the LAST concurrent write for
+  // this task settles. Optimistic dispatches by the caller should already have
+  // updated the store before invoking this, so the UI stays steady.
+  async #withCoalescedRefresh(id: string, write: () => Promise<void>): Promise<void> {
+    this.#pendingWrites.set(id, (this.#pendingWrites.get(id) ?? 0) + 1);
+    try {
+      await write();
+    } finally {
+      const remaining = (this.#pendingWrites.get(id) ?? 1) - 1;
+      if (remaining <= 0) {
+        this.#pendingWrites.delete(id);
+        await this.#get().internal_refreshTaskDetail(id);
+      } else {
+        this.#pendingWrites.set(id, remaining);
+      }
+    }
   }
 
   markBriefRead = async (briefId: string): Promise<void> => {
@@ -159,13 +182,13 @@ export class TaskConfigSliceActionImpl {
       value: { automationMode: mode },
     });
 
-    try {
-      await taskService.update(id, update);
-      await this.#get().internal_refreshTaskDetail(id);
-    } catch (error) {
-      console.error('[TaskStore] Failed to update automation mode:', error);
-      await this.#get().internal_refreshTaskDetail(id);
-    }
+    await this.#withCoalescedRefresh(id, async () => {
+      try {
+        await taskService.update(id, update);
+      } catch (error) {
+        console.error('[TaskStore] Failed to update automation mode:', error);
+      }
+    });
   };
 
   // Configure schedule mode: cron pattern + IANA timezone are columns; maxExecutions
@@ -179,21 +202,40 @@ export class TaskConfigSliceActionImpl {
       (this.#get().taskDetailMap[id]?.config as Record<string, unknown> | undefined) ?? {};
     const existingScheduleConfig =
       (existingConfig.schedule as Record<string, unknown> | undefined) ?? {};
+    const nextConfig = {
+      ...existingConfig,
+      schedule: { ...existingScheduleConfig, maxExecutions: schedule.maxExecutions },
+    };
 
-    try {
-      await taskService.update(id, {
-        config: {
-          ...existingConfig,
-          schedule: { ...existingScheduleConfig, maxExecutions: schedule.maxExecutions },
+    // Optimistic dispatch so TaskTriggerTag / summary text reflect the change
+    // immediately, without waiting for the server roundtrip. `taskService.update`
+    // wants the flat DB shape (`schedulePattern` / `scheduleTimezone` columns +
+    // `config.schedule.maxExecutions` JSONB), but the store reads from the
+    // normalized nested `schedule` object — populate both for the in-memory copy.
+    this.#get().internal_dispatchTaskDetail({
+      id,
+      type: 'updateTaskDetail',
+      value: {
+        config: nextConfig,
+        schedule: {
+          maxExecutions: schedule.maxExecutions,
+          pattern: schedule.pattern,
+          timezone: schedule.timezone,
         },
-        schedulePattern: schedule.pattern,
-        scheduleTimezone: schedule.timezone,
-      });
-      await this.#get().internal_refreshTaskDetail(id);
-    } catch (error) {
-      console.error('[TaskStore] Failed to update schedule:', error);
-      await this.#get().internal_refreshTaskDetail(id);
-    }
+      },
+    });
+
+    await this.#withCoalescedRefresh(id, async () => {
+      try {
+        await taskService.update(id, {
+          config: nextConfig,
+          schedulePattern: schedule.pattern,
+          scheduleTimezone: schedule.timezone,
+        });
+      } catch (error) {
+        console.error('[TaskStore] Failed to update schedule:', error);
+      }
+    });
   };
 }
 

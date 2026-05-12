@@ -14,7 +14,7 @@ import {
   Loader2Icon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
@@ -105,6 +105,7 @@ interface TaskStatusTagProps {
 const TaskStatusTag = memo<TaskStatusTagProps>(
   ({ children, disableDropdown, onChange, size = 16, status, taskIdentifier }) => {
     const [loading, setLoading] = useState(false);
+    const [open, setOpen] = useState(false);
     const { t } = useTranslation('chat');
     const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
@@ -129,6 +130,25 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
       },
       [displayStatus, onChange, taskIdentifier, updateTaskStatus],
     );
+
+    const handleStatusChangeRef = useRef(handleStatusChange);
+    handleStatusChangeRef.current = handleStatusChange;
+
+    useEffect(() => {
+      if (!open) return;
+      const onKeyDown = (event: KeyboardEvent) => {
+        const num = Number.parseInt(event.key, 10);
+        if (Number.isNaN(num)) return;
+        const idx = num - 1;
+        if (idx < 0 || idx >= USER_SELECTABLE_STATUSES.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void handleStatusChangeRef.current(USER_SELECTABLE_STATUSES[idx]);
+        setOpen(false);
+      };
+      document.addEventListener('keydown', onKeyDown, true);
+      return () => document.removeEventListener('keydown', onKeyDown, true);
+    }, [open]);
 
     const menuItems = useMemo<MenuProps['items']>(
       () =>
@@ -165,11 +185,13 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
 
     return (
       <Dropdown
+        open={open}
         trigger={['click']}
         menu={{
           items: menuItems,
           selectedKeys: [displayStatus],
         }}
+        onOpenChange={setOpen}
       >
         {triggerNode}
       </Dropdown>

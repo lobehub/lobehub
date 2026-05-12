@@ -1,13 +1,4 @@
-import { KeyEnum } from '@lobechat/const/hotkeys';
-import {
-  ActionIcon,
-  combineKeys,
-  copyToClipboard,
-  type DropdownItem,
-  DropdownMenu,
-  Hotkey,
-  Icon,
-} from '@lobehub/ui';
+import { ActionIcon, copyToClipboard, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { CopyIcon, LinkIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -69,9 +60,6 @@ const TaskDetailHeaderActions = memo(() => {
       { type: 'divider' },
       {
         danger: true,
-        extra: (
-          <Hotkey keys={combineKeys([KeyEnum.Mod, KeyEnum.Backspace])} variant={'borderless'} />
-        ),
         icon: <Icon icon={Trash} />,
         key: 'delete',
         label: t('delete', { ns: 'common' }),

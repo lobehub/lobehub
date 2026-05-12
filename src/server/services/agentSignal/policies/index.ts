@@ -25,7 +25,7 @@ export interface CreateDefaultAgentSignalPoliciesOptions extends CreateFeedbackD
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
   nightlyReview?: CreateReviewNightlyPolicyOptions['nightlyReview'];
   procedure?: CreateAnalyzeIntentPolicyOptions['procedure'];
-  selfIterationIntent?: CreateReviewNightlyPolicyOptions['selfIterationIntent'];
+  selfFeedbackIntent?: CreateReviewNightlyPolicyOptions['selfFeedbackIntent'];
   selfReflection?: CreateReviewNightlyPolicyOptions['selfReflection'];
   skillIntentClassifier?: CreateAnalyzeIntentPolicyOptions['skillIntentClassifier'];
   skillManagement?: SkillManagementActionHandlerOptions;
@@ -41,21 +41,21 @@ const DEFAULT_AGENT_SIGNAL_POLICY_FACTORIES: DefaultAgentSignalPolicyFactory[] =
   (options) =>
     createReviewNightlyPolicy({
       nightlyReview: options.nightlyReview,
-      selfIterationIntent: options.selfIterationIntent,
+      selfFeedbackIntent: options.selfFeedbackIntent,
       selfReflection: options.selfReflection,
     }),
 ];
 
 /**
- * Creates the default Agent Signal policy stack with optional maintenance source handlers.
+ * Creates the default Agent Signal policy stack with optional self-iteration source handlers.
  *
  * Use when:
  * - Runtime creation needs the standard analyze-intent policies
- * - Callers want to opt into nightly, self-reflection, or self-iteration maintenance handlers
+ * - Callers want to opt into nightly self-review, self-reflection, or self-feedback handlers
  *   with explicit handler options
  *
  * Expects:
- * - Optional maintenance options are complete bundles for their source handlers
+ * - Optional self-iteration options are complete bundles for their source handlers
  * - Missing optional options mean the corresponding source handler is not installed
  *
  * Returns:

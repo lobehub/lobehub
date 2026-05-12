@@ -1,0 +1,43 @@
+---
+title: Agent Tasks GA & Cloud Heterogeneous Agent
+description: >-
+  Agent Tasks reaches GA with templates, cron, and batch runs; heterogeneous
+  agents now run in the cloud; bot platforms expand to Messenger, Line, and
+  Telegram.
+tags:
+  - Agent Tasks
+  - Heterogeneous Agent
+  - Bots
+  - Models
+---
+
+# Agent Tasks GA & Cloud Heterogeneous Agent
+
+## Tasks
+
+Think of Agent Tasks like Linear, but with agents as your teammates. Create tasks the same way you'd file an issue — title, description, optional template — and assign them to an agent instead of a person. The agent picks up the task, executes the work, posts updates in comments, and moves the status forward (todo → in progress → done) as it makes progress.
+
+Tasks can have subtasks with explicit dependencies, so a parent task can fan out work and the agent will run subtasks in dependency order. Recurring tasks can be wired to a cron schedule, parent assignments can be reshuffled at any time, and every task has its own thread of comments where you and the agent can coordinate.
+
+Learn more in the [Task guide](/docs/usage/getting-started/task).
+
+## Features
+
+- Agent Tasks goes GA: the full task platform with templates, scheduled cron, comment tools, parent reassignment, and dependency-ordered batch subtask runs
+- Nightly self-review: Agent Signal pipeline runs automatic self-review with skill-aware policies and pushes activity into briefs
+- Cloud heterogeneous agents: Claude Code and Codex now execute server-side with persistent sessions that survive Vercel replica restarts
+- `lh hetero exec` CLI: run a standalone heterogeneous agent from the terminal, with multimodal input support across desktop / CLI
+- Claude Code can now pause and ask you a question mid-execution
+- Inline agents in chat: `lobeAgents` markdown tag renders agent profile cards, and a newly created agent shows up as a clickable card
+- Bot platforms expand: Messenger, Line, and Telegram integrations with DM pair policy and per-sender device tool gating
+- New models: Gemini 3.1 Flash-Lite, SiliconCloud model sync, and DeepSeek V4 Pro as the new OSS default
+
+## Improvements and fixes
+
+- Inline document grounding in the KB tool via BM25 search and `docs_*` reads.
+- Daily Brief redesigned with linkable welcome card and a paired input hint; resolved briefs now show a mute icon.
+- Long tool-call parameters now wrap instead of truncating; tool execution time formatted as `Xmin Ys`.
+- Visible divider between queued messages so it's clear which sends are pending.
+- Copy session ID added to the topic dropdown menu.
+- Home sidebar collapse state persists across reloads.
+- Desktop app tray visibility is now a setting.

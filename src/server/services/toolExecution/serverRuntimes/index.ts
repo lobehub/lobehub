@@ -22,7 +22,7 @@ import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { remoteDeviceRuntime } from './remoteDevice';
-import { selfIterationIntentRuntime } from './selfIterationIntent';
+import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
@@ -72,7 +72,7 @@ registerRuntimes([
   knowledgeBaseRuntime,
   webOnboardingRuntime,
   lobeAgentRuntime,
-  selfIterationIntentRuntime,
+  selfFeedbackIntentRuntime,
 ]);
 
 // ==================== Registry API ====================

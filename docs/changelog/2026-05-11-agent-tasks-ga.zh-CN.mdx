@@ -1,0 +1,42 @@
+---
+title: Agent 任务系统 GA 与云端异构 Agent
+description: >-
+  Agent 任务系统正式发布，支持模板、Cron 与批量子任务；异构 Agent 进入云端；Bot 平台新增 Messenger、Line 与
+  Telegram。
+tags:
+  - Agent 任务
+  - 异构 Agent
+  - Bot
+  - 模型
+---
+
+# Agent 任务系统 GA 与云端异构 Agent
+
+## Agent 任务系统
+
+Agent 任务系统的体感类似 Linear，但「队友」是 Agent。你像建 Issue 一样创建任务 —— 标题、描述、可选模板 —— 把它分配给 Agent 而不是某个人。Agent 接到任务后会执行工作、在评论中同步进展，并随着推进更新状态（待办 → 进行中 → 已完成）。
+
+任务支持带显式依赖的子任务，父任务可以拆分工作，Agent 会按依赖顺序运行子任务。周期性任务可以挂接 Cron 计划；父任务的指派可以随时重新调整；每个任务都有自己的评论线，方便你和 Agent 协作沟通。
+
+详见 [任务使用指南](/docs/usage/getting-started/task)。
+
+## 新功能
+
+- Agent 任务系统 GA：完整的任务平台，支持模板、Cron 定时、评论工具、父任务重指派，以及按依赖顺序的批量子任务运行
+- 夜间自审：Agent Signal 流水线自动运行自审，结合技能感知策略并将活动推送到简报
+- 云端异构 Agent：Claude Code 与 Codex 在服务端运行，会话持久化可跨 Vercel 副本恢复
+- `lh hetero exec` CLI：在终端独立运行异构 Agent，桌面端 / CLI 支持多模态输入
+- AskUserQuestion 工具：Claude Code 可在执行过程中暂停并向你提问
+- 聊天内联 Agent：`lobeAgents` Markdown 标签渲染 Agent 卡片，新建的 Agent 会以可点击卡片形式出现
+- Bot 平台扩展：新增 Messenger、Line、Telegram 接入，支持 DM 配对策略与按发送者识别的设备工具网关
+- 新模型：Gemini 3.1 Flash-Lite、SiliconCloud 模型同步，DeepSeek V4 Pro 成为开源版默认模型
+
+## 体验优化与修复
+
+- 知识库工具支持通过 BM25 搜索与 `docs_*` 读取实现内联文档落地。
+- 每日简报改版：欢迎卡片可链接、输入提示成对出现；已处理的简报展示静音图标。
+- 工具调用参数过长时自动换行，不再截断；工具执行时间格式化为 `Xmin Ys`。
+- 排队消息之间新增可见分隔线，方便辨认待发送的内容。
+- 话题下拉菜单新增「复制会话 ID」操作。
+- 首页侧边栏的折叠状态在刷新后会保留。
+- 桌面应用托盘可见性现已纳入设置。

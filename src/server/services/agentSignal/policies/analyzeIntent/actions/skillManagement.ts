@@ -55,7 +55,7 @@ import type {
 
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
-import { createSkillManagementService } from '../../../services/maintenance/skill';
+import { createSkillManagementService } from '../../../services/selfIteration/tools/shared';
 import type { ProcedureStateService } from '../../../services/types';
 import { hasAppliedActionIdempotency, markAppliedActionIdempotency } from '../../actionIdempotency';
 import type { ActionSkillManagementHandle, AgentSignalFeedbackEvidence } from '../../types';
@@ -1504,7 +1504,7 @@ const runMaintainerWorkflow = async (
   let updatedSkill: SkillDetail | SkillSummary = canonical;
 
   try {
-    const skillMaintenanceService = createSkillManagementService({
+    const selfIterationSkillService = createSkillManagementService({
       consolidateSkill: async () => {
         if (workflowResult.rename?.newName || workflowResult.rename?.newTitle) {
           updatedSkill =
@@ -1560,7 +1560,7 @@ const runMaintainerWorkflow = async (
     });
 
     if (decision.action === 'consolidate') {
-      await skillMaintenanceService.consolidateSkill({
+      await selfIterationSkillService.consolidateSkill({
         evidenceRefs: [],
         idempotencyKey: `same-turn-skill:${canonical.bundle.agentDocumentId}`,
         input: {
@@ -1571,7 +1571,7 @@ const runMaintainerWorkflow = async (
         },
       });
     } else {
-      await skillMaintenanceService.refineSkill({
+      await selfIterationSkillService.refineSkill({
         evidenceRefs: [],
         idempotencyKey: `same-turn-skill:${canonical.bundle.agentDocumentId}`,
         input: {
@@ -1658,7 +1658,7 @@ const runCreateWorkflow = async (
 
   try {
     let createdSkill: SkillDetail | undefined;
-    const skillMaintenanceService = createSkillManagementService({
+    const selfIterationSkillService = createSkillManagementService({
       createSkill: async () => {
         const skill = await service.createSkill({
           agentId,
@@ -1676,7 +1676,7 @@ const runCreateWorkflow = async (
         };
       },
     });
-    await skillMaintenanceService.createSkill({
+    await selfIterationSkillService.createSkill({
       evidenceRefs: [],
       idempotencyKey: `same-turn-skill:create:${authored.name}`,
       input: {

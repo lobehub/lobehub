@@ -91,7 +91,7 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
             value={currentConfig.applicationId}
           />
         )}
-        {process.env.NODE_ENV === 'development' && (
+        {__DEV__ && (
           <>
             <ReadOnlyField
               description={t('channel.wechatBotIdHint')}

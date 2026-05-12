@@ -283,6 +283,10 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
           additions={entry.additions}
           deletions={entry.deletions}
           filePath={entry.filePath}
+          onReverted={() => void mutate()}
+          // Revert is only meaningful for working-tree changes; in branch-diff
+          // mode there's nothing to "discard" on the file system.
+          revertContext={mode === 'unstaged' ? { workingDirectory } : undefined}
           status={entry.status}
         />
       ),

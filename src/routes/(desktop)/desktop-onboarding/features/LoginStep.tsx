@@ -223,6 +223,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     const message = remoteServerSyncError?.message;
     if (!message) return;
     setRemoteError(message);
+    setPendingLoginMethod(null);
     if (cloudLoginStatus === 'loading') setCloudLoginStatus('error');
     if (selfhostLoginStatus === 'loading') setSelfhostLoginStatus('error');
   }, [remoteServerSyncError?.message, cloudLoginStatus, selfhostLoginStatus]);
@@ -247,6 +248,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   useWatchBroadcast('authorizationFailed', ({ error }) => {
     setRemoteError(error);
     setAuthProgress(null);
+    setPendingLoginMethod(null);
     if (cloudLoginStatus === 'loading') setCloudLoginStatus('error');
     if (selfhostLoginStatus === 'loading') setSelfhostLoginStatus('error');
   });
@@ -256,6 +258,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     if (progress.phase === 'cancelled') {
       setCloudLoginStatus('idle');
       setSelfhostLoginStatus('idle');
+      setPendingLoginMethod(null);
       setAuthProgress(null);
     }
   });
