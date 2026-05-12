@@ -8,9 +8,9 @@ import {
 describe('agent signal nightly review prompt', () => {
   /**
    * @example
-   * The prompt keeps automatic mutations constrained to explicit low-risk maintenance.
+   * The prompt keeps automatic mutations constrained to explicit low-risk self-review.
    */
-  it('documents the auto-apply boundary for nightly maintenance', () => {
+  it('documents the auto-apply boundary for nightly self-review', () => {
     expect(AGENT_SIGNAL_NIGHTLY_REVIEW_SYSTEM_ROLE).toContain(
       'Use noop for ordinary successful days',
     );
@@ -30,12 +30,12 @@ describe('agent signal nightly review prompt', () => {
 
   /**
    * @example
-   * The prompt starts from maintenance signals and forbids model-side reclassification.
+   * The prompt starts from structured self-review signals and forbids model-side reclassification.
    */
-  it('documents the structured maintenance signal boundary', () => {
-    const [system] = createAgentSignalNightlyReviewMessages({ maintenanceSignals: [] });
+  it('documents the structured self-review signal boundary', () => {
+    const [system] = createAgentSignalNightlyReviewMessages({ selfReviewSignals: [] });
 
-    expect(system.content).toContain('Start from maintenanceSignals');
+    expect(system.content).toContain('Start from selfReviewSignals');
     expect(system.content).toContain('proposalActivity');
     expect(system.content).toContain('Do not re-judge satisfaction');
     expect(system.content).toContain('Tool activity alone must not trigger skill consolidation');
@@ -48,14 +48,14 @@ describe('agent signal nightly review prompt', () => {
    * @example
    * expect(prompt).toContain('write tools')
    */
-  it('instructs nightly maintenance to use tools as the only mutation boundary', () => {
-    const prompt = createAgentSignalNightlyReviewMessages({ maintenanceSignals: [] })
+  it('instructs nightly self-review to use tools as the only mutation boundary', () => {
+    const prompt = createAgentSignalNightlyReviewMessages({ selfReviewSignals: [] })
       .map((message) => message.content)
       .join('\n');
 
     expect(prompt).toContain('Mutations only count through write tools');
     expect(prompt).toContain(
-      'this structured review may only emit candidate write actions for the server maintenance runtime',
+      'this structured review may only emit candidate write actions for the server self-review executor',
     );
     expect(prompt).toContain(
       'Never infer intent with regexp, keyword lists, or hard-coded content heuristics',
@@ -70,12 +70,12 @@ describe('agent signal nightly review prompt', () => {
    */
   it('documents proposal lifecycle and mutation safety boundaries', () => {
     const [system] = createAgentSignalNightlyReviewMessages({
-      maintenanceSignals: [],
+      selfReviewSignals: [],
       proposalActivity: { active: [] },
     });
 
     expect(system.content).toContain(
-      'Existing maintenance proposals are state, not fresh evidence',
+      'Existing self-review proposals are state, not fresh evidence',
     );
     expect(system.content).toContain(
       'Refresh a compatible pending proposal instead of creating a duplicate',
@@ -90,7 +90,7 @@ describe('agent signal nightly review prompt', () => {
     expect(system.content).toContain(
       'value.bodyMarkdown must contain the complete replacement Markdown body',
     );
-    expect(system.content).toContain('Proposal only: structural/destructive changes');
+    expect(system.content).toContain('Self-review proposal only: structural/destructive changes');
     expect(system.content).toContain(
       'Plan only mutations that can be routed through safe write tools',
     );

@@ -6,7 +6,7 @@ export const AGENT_SIGNAL_SOURCE_TYPES = {
   agentExecutionCompleted: 'agent.execution.completed',
   agentExecutionFailed: 'agent.execution.failed',
   agentNightlyReviewRequested: 'agent.nightly_review.requested',
-  agentSelfIterationIntentDeclared: 'agent.self_iteration_intent.declared',
+  agentSelfFeedbackIntentDeclared: 'agent.self_feedback_intent.declared',
   agentSelfReflectionRequested: 'agent.self_reflection.requested',
   agentUserMessage: 'agent.user.message',
   botMessageMerged: 'bot.message.merged',
@@ -55,7 +55,7 @@ export interface AgentSignalSourcePayloadMap {
     timezone: string;
     userId: string;
   };
-  [AGENT_SIGNAL_SOURCE_TYPES.agentSelfIterationIntentDeclared]: {
+  [AGENT_SIGNAL_SOURCE_TYPES.agentSelfFeedbackIntentDeclared]: {
     action: 'write' | 'create' | 'refine' | 'consolidate' | 'proposal';
     agentId: string;
     confidence: number;
@@ -235,9 +235,9 @@ export type SourceAgentNightlyReviewRequested =
 export type SourceAgentSelfReflectionRequested =
   AgentSignalSourceVariant<'agent.self_reflection.requested'>;
 
-/** Agent-declared self-iteration intent source variant. */
-export type SourceAgentSelfIterationIntentDeclared =
-  AgentSignalSourceVariant<'agent.self_iteration_intent.declared'>;
+/** Agent-declared self-feedback intent source variant. */
+export type SourceAgentSelfFeedbackIntentDeclared =
+  AgentSignalSourceVariant<'agent.self_feedback_intent.declared'>;
 
 /** Runtime before-step source variant. */
 export type SourceRuntimeBeforeStep = AgentSignalSourceVariant<'runtime.before_step'>;
@@ -288,9 +288,9 @@ export type SourceEventAgentNightlyReviewRequested =
 export type SourceEventAgentSelfReflectionRequested =
   AgentSignalSourceEvent<'agent.self_reflection.requested'>;
 
-/** Normalized agent-declared self-iteration intent source event. */
-export type SourceEventAgentSelfIterationIntentDeclared =
-  AgentSignalSourceEvent<'agent.self_iteration_intent.declared'>;
+/** Normalized agent-declared self-feedback intent source event. */
+export type SourceEventAgentSelfFeedbackIntentDeclared =
+  AgentSignalSourceEvent<'agent.self_feedback_intent.declared'>;
 
 /** Normalized tool outcome source event. */
 export type SourceEventToolOutcome =
@@ -415,21 +415,21 @@ export const isSelfReflectionSource = (
 };
 
 /**
- * Narrows a source event to `agent.self_iteration_intent.declared`.
+ * Narrows a source event to `agent.self_feedback_intent.declared`.
  *
  * Use when:
- * - Workflow policy composition needs self-iteration intent dependencies only for declared intents
+ * - Workflow policy composition needs self-feedback intent dependencies only for declared intents
  *
  * Expects:
  * - `source.sourceType` follows the AgentSignal source catalog
  *
  * Returns:
- * - Whether the source is an agent-declared self-iteration intent source
+ * - Whether the source is an agent-declared self-feedback intent source
  */
-export const isSelfIterationIntentSource = (
+export const isSelfFeedbackIntentSource = (
   source: AgentSignalSourceEvent,
-): source is SourceEventAgentSelfIterationIntentDeclared => {
-  return source.sourceType === AGENT_SIGNAL_SOURCE_TYPES.agentSelfIterationIntentDeclared;
+): source is SourceEventAgentSelfFeedbackIntentDeclared => {
+  return source.sourceType === AGENT_SIGNAL_SOURCE_TYPES.agentSelfFeedbackIntentDeclared;
 };
 
 /**

@@ -166,6 +166,7 @@ const SchedulerTab = memo<SchedulerTabProps>(({ taskId }) => {
 
   return (
     <SchedulerForm
+      key={taskId}
       maxExecutions={maxExecutions}
       pattern={pattern}
       timezone={timezone}

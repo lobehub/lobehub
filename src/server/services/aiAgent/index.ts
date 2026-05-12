@@ -8,8 +8,8 @@ import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import {
-  injectSelfIterationIntentTool,
-  shouldExposeSelfIterationIntentTool,
+  injectSelfFeedbackIntentTool,
+  shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
@@ -150,7 +150,7 @@ interface InternalExecAgentParams extends ExecAgentParams {
   /** Disable only local-system while preserving other tools. Useful for signal-only evals. */
   disableLocalSystem?: boolean;
   /** Disable the self-iteration declaration tool for reviewer/runtime paths. */
-  disableSelfIterationIntentTool?: boolean;
+  disableSelfFeedbackIntentTool?: boolean;
   /** Disable all tools (no plugins, no system manifests). Useful for eval/benchmark scenarios. */
   disableTools?: boolean;
   /** Discord context for injecting channel/guild info into agent system message */
@@ -1173,23 +1173,23 @@ export class AiAgentService {
 
       const agentSelfIterationEnabled = agentConfig.chatConfig?.selfIteration?.enabled === true;
       const shouldCheckUserSelfIterationGate =
-        agentSelfIterationEnabled && !params.disableSelfIterationIntentTool;
+        agentSelfIterationEnabled && !params.disableSelfFeedbackIntentTool;
       if (
         shouldCheckUserSelfIterationGate &&
-        shouldExposeSelfIterationIntentTool({
+        shouldExposeSelfFeedbackIntentTool({
           agentSelfIterationEnabled,
-          disableSelfIterationIntentTool: params.disableSelfIterationIntentTool,
+          disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
           featureUserEnabled: await isAgentSignalEnabledForUser(this.db, this.userId),
         })
       ) {
         tools = tools ?? [];
-        injectSelfIterationIntentTool({
+        injectSelfFeedbackIntentTool({
           enabledToolIds: toolsResult.enabledToolIds,
           manifestMap: toolManifestMap,
           sourceMap: toolSourceMap,
           tools,
         });
-        log('execAgent: injected self-iteration intent declaration tool');
+        log('execAgent: injected self-feedback intent declaration tool');
       }
     }
 

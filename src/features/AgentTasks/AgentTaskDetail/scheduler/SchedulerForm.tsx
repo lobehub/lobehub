@@ -5,13 +5,14 @@ import {
   Flexbox,
   Icon,
   InputNumber,
+  SearchBar,
   Select,
   Text,
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -28,6 +29,33 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
+  timezoneEmpty: css`
+    padding-block: 12px;
+    padding-inline: 12px;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextDescription};
+    text-align: center;
+  `,
+  timezoneOffset: css`
+    flex-shrink: 0;
+    margin-inline-start: 12px;
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
+  timezoneOption: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+
+    min-width: 0;
+  `,
+  timezoneSearch: css`
+    padding-block: 8px 4px;
+    padding-inline: 8px;
+    border-block-end: 1px solid ${cssVar.colorSplit};
+  `,
   weekdayButton: css`
     cursor: pointer;
 
@@ -43,13 +71,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorFillTertiary};
+    background: transparent;
 
     transition: all 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   weekdayButtonActive: css`
@@ -98,13 +126,18 @@ interface SchedulerFormProps {
 const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, pattern, timezone }) => {
   const { t } = useTranslation('chat');
 
-  const initial = useMemo(() => {
+  // Optimistic local state: seed once from props at mount, then own the values
+  // locally. Don't re-sync from props on every change — otherwise the async
+  // server roundtrip (updateSchedule → refreshTaskDetail) bounces stale prop
+  // values back into the form during rapid edits and clobbers the user input.
+  // Parent should `key={taskId}` this component to remount cleanly across tasks.
+  const [initial] = useState(() => {
     const parsed = parseCronPattern(pattern || DEFAULT_PATTERN);
     return {
       ...parsed,
       triggerTime: dayjs().hour(parsed.triggerHour).minute(parsed.triggerMinute),
     };
-  }, [pattern]);
+  });
 
   const [scheduleType, setScheduleType] = useState<ScheduleType>(initial.scheduleType);
   const [triggerTime, setTriggerTime] = useState<Dayjs>(initial.triggerTime);
@@ -114,21 +147,21 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   );
   const [tz, setTz] = useState<string>(timezone || DEFAULT_TIMEZONE);
   const [maxExec, setMaxExec] = useState<number | null>(maxExecutions ?? null);
+  const [continuous, setContinuous] = useState<boolean>(
+    maxExecutions === null || maxExecutions === undefined,
+  );
+  const [tzSearch, setTzSearch] = useState('');
 
-  useEffect(() => {
-    setScheduleType(initial.scheduleType);
-    setTriggerTime(initial.triggerTime);
-    setHourlyInterval(initial.hourlyInterval ?? 1);
-    setWeekdays(initial.weekdays ?? (initial.scheduleType === 'weekly' ? [1, 2, 3, 4, 5] : []));
-  }, [initial]);
-
-  useEffect(() => {
-    setTz(timezone || DEFAULT_TIMEZONE);
-  }, [timezone]);
-
-  useEffect(() => {
-    setMaxExec(maxExecutions ?? null);
-  }, [maxExecutions]);
+  const filteredTimezoneOptions = useMemo(() => {
+    const q = tzSearch.trim().toLowerCase();
+    if (!q) return TIMEZONE_OPTIONS;
+    return TIMEZONE_OPTIONS.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        opt.value.toLowerCase().includes(q) ||
+        opt.offset.toLowerCase().includes(q),
+    );
+  }, [tzSearch]);
 
   const emit = useCallback(
     (
@@ -141,9 +174,14 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         weekdays: number[];
       }>,
     ) => {
+      // When the user is mid-editing maxExec (cleared the input but hasn't
+      // typed yet), local maxExec is null but `continuous` is still false.
+      // Falling back to the persisted prop here avoids emitting null for an
+      // unrelated field change — which would otherwise flip Continuous on.
+      const fallbackMaxExec = continuous ? null : (maxExec ?? maxExecutions ?? null);
       const next = {
         hourlyInterval: overrides.hourlyInterval ?? hourlyInterval,
-        maxExec: overrides.maxExec === undefined ? maxExec : overrides.maxExec,
+        maxExec: overrides.maxExec === undefined ? fallbackMaxExec : overrides.maxExec,
         scheduleType: overrides.scheduleType ?? scheduleType,
         triggerTime: overrides.triggerTime ?? triggerTime,
         tz: overrides.tz ?? tz,
@@ -157,7 +195,17 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
       );
       onChange({ maxExecutions: next.maxExec, pattern: nextPattern, timezone: next.tz });
     },
-    [hourlyInterval, maxExec, onChange, scheduleType, triggerTime, tz, weekdays],
+    [
+      continuous,
+      hourlyInterval,
+      maxExec,
+      maxExecutions,
+      onChange,
+      scheduleType,
+      triggerTime,
+      tz,
+      weekdays,
+    ],
   );
 
   const handleScheduleTypeChange = (value: ScheduleType) => {
@@ -199,18 +247,26 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   };
 
   const handleMaxExecChange = (value: number | string | null) => {
-    const next = typeof value === 'number' && value > 0 ? value : null;
-    setMaxExec(next);
-    emit({ maxExec: next });
+    if (typeof value === 'number' && value > 0) {
+      setMaxExec(value);
+      emit({ maxExec: value });
+      return;
+    }
+    // Mid-edit clear (e.g. user is replacing 100 with 5): keep the field
+    // empty locally but don't toggle Continuous or emit a null upstream.
+    setMaxExec(null);
   };
 
   const handleContinuousChange = (checked: boolean) => {
-    const next = checked ? null : 100;
-    setMaxExec(next);
-    emit({ maxExec: next });
+    setContinuous(checked);
+    if (checked) {
+      emit({ maxExec: null });
+    } else {
+      const next = maxExec ?? 100;
+      setMaxExec(next);
+      emit({ maxExec: next });
+    }
   };
-
-  const isUnlimited = maxExec === null || maxExec === undefined;
 
   const showTimeRow = scheduleType !== 'hourly';
 
@@ -293,7 +349,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         </Flexbox>
       )}
 
-      <Accordion gap={0}>
+      <Accordion defaultExpandedKeys={[]} gap={0}>
         <AccordionItem
           itemKey="advanced"
           paddingBlock={6}
@@ -314,13 +370,48 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                 <Text className={styles.fieldLabel}>{t('taskSchedule.timezone')}</Text>
               </Flexbox>
               <Select
-                showSearch
                 getPopupContainer={getPopupContainer}
-                options={TIMEZONE_OPTIONS}
+                options={filteredTimezoneOptions}
                 popupMatchSelectWidth={false}
                 value={tz}
                 variant="filled"
+                dropdownRender={(originNode) => (
+                  <Flexbox>
+                    <div className={styles.timezoneSearch}>
+                      <SearchBar
+                        allowClear
+                        autoFocus
+                        placeholder={t('taskSchedule.timezoneSearchPlaceholder')}
+                        size="small"
+                        value={tzSearch}
+                        variant="filled"
+                        onChange={(e) => setTzSearch(e.target.value)}
+                        // Keep arrow keys / typing local to the search input;
+                        // antd Select otherwise tries to consume them for option nav.
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    {filteredTimezoneOptions.length === 0 ? (
+                      <div className={styles.timezoneEmpty}>
+                        {t('taskSchedule.timezoneSearchEmpty')}
+                      </div>
+                    ) : (
+                      originNode
+                    )}
+                  </Flexbox>
+                )}
+                optionRender={({ data }) => (
+                  <div className={styles.timezoneOption}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {data.label}
+                    </span>
+                    <span className={styles.timezoneOffset}>{data.offset}</span>
+                  </div>
+                )}
                 onChange={handleTimezoneChange}
+                onDropdownVisibleChange={(open) => {
+                  if (!open) setTzSearch('');
+                }}
               />
             </Flexbox>
 
@@ -331,7 +422,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
               </Flexbox>
               <Flexbox horizontal align="center" gap={12}>
                 <InputNumber
-                  disabled={isUnlimited}
+                  disabled={continuous}
                   min={1}
                   placeholder={t('taskSchedule.maxExecutionsPlaceholder')}
                   style={{ flex: 1 }}
@@ -339,7 +430,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                   variant="filled"
                   onChange={handleMaxExecChange}
                 />
-                <Checkbox checked={isUnlimited} onChange={handleContinuousChange}>
+                <Checkbox checked={continuous} onChange={handleContinuousChange}>
                   {t('taskSchedule.continuous')}
                 </Checkbox>
               </Flexbox>

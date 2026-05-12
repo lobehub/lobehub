@@ -23,6 +23,7 @@ interface TodoState {
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   collapsed: css`
+    overflow-y: hidden;
     max-height: 0;
     padding-block: 0 !important;
     opacity: 0;
@@ -50,6 +51,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   expanded: css`
+    overflow-y: auto;
     max-height: 300px;
     opacity: 1;
   `,
@@ -73,7 +75,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   listContainer: css`
-    overflow: hidden;
+    overflow-x: hidden;
 
     margin-block-start: 8px;
     padding-block: 4px;

@@ -5,7 +5,6 @@ import { type CSSProperties } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -13,8 +12,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { SessionDefaultGroup } from '@/types/session';
 
-import { useCreateMenuItems } from '../../../hooks';
-import NewAgentButton from '../../NewAgentButton';
+import CreateAgentButton from '../CreateAgentButton';
 import GroupItem from './AgentGroupItem';
 import AgentItem from './AgentItem';
 
@@ -29,7 +27,6 @@ interface SessionListProps {
 const List = memo<SessionListProps>(
   ({ onMoreClick, dataSource, groupId, itemStyle, itemClassName }) => {
     const { t } = useTranslation('chat');
-    const { createAgent } = useCreateMenuItems();
 
     // Early return for empty state
     const isEmpty = useMemo(() => dataSource.length === 0, [dataSource.length]);
@@ -42,14 +39,15 @@ const List = memo<SessionListProps>(
 
     const hasMore = isDefaultList && ungroupedAgentsCount > agentPageSize;
 
+    // Empty custom/default groups always show the Create button so the user can populate them.
+    // Non-empty lists only show it at the bottom of the default group; custom groups rely on
+    // the group header dropdown for further additions.
+    const showCreateButton = isEmpty ? groupId !== undefined : isDefaultList;
+
     if (isEmpty) {
-      return (
-        <EmptyNavItem
-          className={itemClassName}
-          title={t('emptyAgentAction')}
-          onClick={() => createAgent({ groupId })}
-        />
-      );
+      return showCreateButton ? (
+        <CreateAgentButton className={itemClassName} groupId={groupId} />
+      ) : null;
     }
 
     return (
@@ -61,16 +59,14 @@ const List = memo<SessionListProps>(
             <AgentItem className={itemClassName} item={item} key={item.id} style={itemStyle} />
           ),
         )}
-        {isDefaultList &&
-          (hasMore ? (
-            <NavItem
-              icon={MoreHorizontal}
-              title={t('input.more')}
-              onClick={onMoreClick || openAllAgentsDrawer}
-            />
-          ) : (
-            <NewAgentButton />
-          ))}
+        {hasMore && (
+          <NavItem
+            icon={MoreHorizontal}
+            title={t('input.more')}
+            onClick={onMoreClick || openAllAgentsDrawer}
+          />
+        )}
+        {showCreateButton && <CreateAgentButton className={itemClassName} groupId={groupId} />}
       </Flexbox>
     );
   },
