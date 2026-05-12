@@ -328,9 +328,36 @@ export default class LocalFileCtr extends ControllerModule {
     zipHash,
   }: PrepareSkillDirectoryParams): Promise<PrepareSkillDirectoryResult> {
     const cacheRoot = path.join(this.app.appStoragePath, 'file-storage', 'skills');
-    const extractedDir = path.join(cacheRoot, 'extracted', zipHash);
+
+    // zipHash is used as an on-disk identifier for the cache directory and
+    // archive file. Reject any value that is not a plain hex digest so that
+    // callers cannot smuggle path separators or '..' segments to escape the
+    // cache root and cause arbitrary file deletion / writes via rm() and
+    // writeFile() below. See CWE-22.
+    if (typeof zipHash !== 'string' || !/^[a-f0-9]{8,128}$/i.test(zipHash)) {
+      const error = `Invalid skill zipHash: must be a hex digest`;
+      const extractedDir = path.join(cacheRoot, 'extracted');
+      const zipPath = path.join(cacheRoot, 'archives');
+      return { error, extractedDir, success: false, zipPath };
+    }
+
+    const extractedRoot = path.resolve(cacheRoot, 'extracted');
+    const archivesRoot = path.resolve(cacheRoot, 'archives');
+    const extractedDir = path.resolve(extractedRoot, zipHash);
+    const zipPath = path.resolve(archivesRoot, `${zipHash}.zip`);
+    const extractedRootPrefix = `${extractedRoot}${path.sep}`;
+    const archivesRootPrefix = `${archivesRoot}${path.sep}`;
+
+    if (!extractedDir.startsWith(extractedRootPrefix) || !zipPath.startsWith(archivesRootPrefix)) {
+      return {
+        error: `Invalid skill zipHash: resolved path escapes cache root`,
+        extractedDir,
+        success: false,
+        zipPath,
+      };
+    }
+
     const markerPath = path.join(extractedDir, '.prepared');
-    const zipPath = path.join(cacheRoot, 'archives', `${zipHash}.zip`);
 
     try {
       if (!forceRefresh) {

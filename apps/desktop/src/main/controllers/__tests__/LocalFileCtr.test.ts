@@ -367,27 +367,51 @@ describe('LocalFileCtr', () => {
 
       const result = await (localFileCtr as any).handlePrepareSkillDirectory({
         url: 'https://example.com/demo-skill.zip',
-        zipHash: 'zip-hash-123',
+        zipHash: 'a'.repeat(64),
       });
 
       expect(result).toEqual({
-        extractedDir: '/mock/app/storage/file-storage/skills/extracted/zip-hash-123',
+        extractedDir: `/mock/app/storage/file-storage/skills/extracted/${'a'.repeat(64)}`,
         success: true,
-        zipPath: '/mock/app/storage/file-storage/skills/archives/zip-hash-123.zip',
+        zipPath: `/mock/app/storage/file-storage/skills/archives/${'a'.repeat(64)}.zip`,
       });
       expect(fetchMock).toHaveBeenCalledWith('https://example.com/demo-skill.zip');
       expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/mock/app/storage/file-storage/skills/archives/zip-hash-123.zip',
+        `/mock/app/storage/file-storage/skills/archives/${'a'.repeat(64)}.zip`,
         expect.any(Buffer),
       );
       expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/SKILL.md',
+        `/mock/app/storage/file-storage/skills/extracted/${'a'.repeat(64)}/SKILL.md`,
         expect.any(Buffer),
       );
       expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/docs/reference.txt',
+        `/mock/app/storage/file-storage/skills/extracted/${'a'.repeat(64)}/docs/reference.txt`,
         expect.any(Buffer),
       );
+    });
+
+    it('should reject zipHash with path traversal segments', async () => {
+      const result = await (localFileCtr as any).handlePrepareSkillDirectory({
+        url: 'https://example.com/demo-skill.zip',
+        zipHash: '../../etc/passwd',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Invalid skill zipHash/);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(mockFsPromises.rm).not.toHaveBeenCalled();
+      expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('should reject zipHash containing path separators', async () => {
+      const result = await (localFileCtr as any).handlePrepareSkillDirectory({
+        url: 'https://example.com/demo-skill.zip',
+        zipHash: 'abcd/../../evil',
+      });
+
+      expect(result.success).toBe(false);
+      expect(mockFsPromises.rm).not.toHaveBeenCalled();
+      expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
     });
 
     it('should reuse the cached extracted directory when it is already prepared', async () => {
@@ -395,13 +419,13 @@ describe('LocalFileCtr', () => {
 
       const result = await (localFileCtr as any).handlePrepareSkillDirectory({
         url: 'https://example.com/demo-skill.zip',
-        zipHash: 'zip-hash-123',
+        zipHash: 'a'.repeat(64),
       });
 
       expect(result).toEqual({
-        extractedDir: '/mock/app/storage/file-storage/skills/extracted/zip-hash-123',
+        extractedDir: `/mock/app/storage/file-storage/skills/extracted/${'a'.repeat(64)}`,
         success: true,
-        zipPath: '/mock/app/storage/file-storage/skills/archives/zip-hash-123.zip',
+        zipPath: `/mock/app/storage/file-storage/skills/archives/${'a'.repeat(64)}.zip`,
       });
       expect(fetchMock).not.toHaveBeenCalled();
       expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
@@ -415,11 +439,11 @@ describe('LocalFileCtr', () => {
       const result = await (localFileCtr as any).handleResolveSkillResourcePath({
         path: 'docs/reference.txt',
         url: 'https://example.com/demo-skill.zip',
-        zipHash: 'zip-hash-123',
+        zipHash: 'a'.repeat(64),
       });
 
       expect(result).toEqual({
-        fullPath: '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/docs/reference.txt',
+        fullPath: `/mock/app/storage/file-storage/skills/extracted/${'a'.repeat(64)}/docs/reference.txt`,
         success: true,
       });
       expect(fetchMock).not.toHaveBeenCalled();
@@ -431,7 +455,7 @@ describe('LocalFileCtr', () => {
       const result = await (localFileCtr as any).handleResolveSkillResourcePath({
         path: '../secrets.txt',
         url: 'https://example.com/demo-skill.zip',
-        zipHash: 'zip-hash-123',
+        zipHash: 'a'.repeat(64),
       });
 
       expect(result).toEqual({
