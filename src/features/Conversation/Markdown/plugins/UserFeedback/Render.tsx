@@ -7,10 +7,9 @@ import { type MarkdownElementProps } from '../type';
 import { type ParsedUserFeedbackComment, parseUserFeedback } from './parseUserFeedback';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding-block: 2px;
-    padding-inline-start: 12px;
-    border-inline-start: 2px solid ${cssVar.colorBorderSecondary};
+  body: css`
+    padding-block-start: 12px;
+    padding-inline-start: 44px;
   `,
   comment: css`
     font-size: 13px;
@@ -19,12 +18,42 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     word-break: break-word;
     white-space: pre-wrap;
   `,
-  header: css`
+  countBadge: css`
+    flex: none;
+
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  headerIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    inline-size: 32px;
+    block-size: 32px;
+
+    color: ${cssVar.colorTextSecondary};
+  `,
+  root: css`
+    padding-block-end: 12px;
+    border-block-end: 1px solid ${cssVar.colorSplit};
+  `,
+  summary: css`
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
   `,
   time: css`
-    flex: none;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
@@ -45,21 +74,29 @@ const Render = memo<MarkdownElementProps>(({ children }) => {
 
   if (comments.length === 0) return null;
 
-  return (
-    <Flexbox className={styles.card} gap={8}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
-        <MessageSquareText size={12} />
-        <Text fontSize={12} type={'secondary'}>
-          User feedback · {comments.length === 1 ? '1 comment' : `${comments.length} comments`}
-        </Text>
-      </Flexbox>
+  const countLabel = comments.length === 1 ? '1 comment' : `${comments.length} comments`;
 
-      <Flexbox gap={8}>
+  return (
+    <details className={styles.root}>
+      <summary className={styles.summary}>
+        <Flexbox horizontal align={'center'} gap={12}>
+          <span className={styles.headerIcon}>
+            <MessageSquareText size={16} />
+          </span>
+          <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
+            <Text ellipsis weight={500}>
+              User feedback
+            </Text>
+            <span className={styles.countBadge}>{countLabel}</span>
+          </Flexbox>
+        </Flexbox>
+      </summary>
+      <Flexbox className={styles.body} gap={12}>
         {comments.map((comment, idx) => (
           <Comment comment={comment} key={comment.id ?? idx} />
         ))}
       </Flexbox>
-    </Flexbox>
+    </details>
   );
 });
 
