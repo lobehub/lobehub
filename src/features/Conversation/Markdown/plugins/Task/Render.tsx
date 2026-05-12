@@ -1,8 +1,9 @@
 import type { TaskStatus } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ClipboardList } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 
@@ -71,6 +72,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 4px;
 
     font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  statusBadge: css`
+    display: inline-flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
 
@@ -147,6 +163,7 @@ interface TaskRenderProps extends MarkdownElementProps {
 
 const Render = memo<TaskRenderProps>(({ children }) => {
   const enabled = useTaskCardScope();
+  const { t } = useTranslation('chat');
   const text = typeof children === 'string' ? children : String(children ?? '');
   const parsed = useMemo<ParsedTaskContent>(() => parseTaskContent(text), [text]);
 
@@ -155,6 +172,10 @@ const Render = memo<TaskRenderProps>(({ children }) => {
   }
 
   const titleText = parsed.name || parsed.identifier || '';
+  const showStatusBadge = parsed.status && isKnownStatus(parsed.status);
+  const statusLabel = showStatusBadge
+    ? t(`taskDetail.status.${parsed.status as TaskStatus}`)
+    : parsed.status;
 
   return (
     <Flexbox gap={12}>
@@ -165,33 +186,16 @@ const Render = memo<TaskRenderProps>(({ children }) => {
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             {parsed.identifier && <span className={styles.identifier}>{parsed.identifier}</span>}
-            <Text ellipsis weight={500}>
+            <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
               {titleText}
             </Text>
+            {showStatusBadge && (
+              <span className={styles.statusBadge}>
+                <TaskStatusIcon size={12} status={parsed.status as TaskStatus} />
+                {statusLabel}
+              </span>
+            )}
           </Flexbox>
-          {(parsed.status || parsed.priority) && (
-            <Flexbox horizontal align={'center'} gap={8}>
-              {parsed.status && (
-                <Flexbox horizontal align={'center'} gap={4}>
-                  {isKnownStatus(parsed.status) ? (
-                    <TaskStatusIcon size={14} status={parsed.status} />
-                  ) : (
-                    <span style={{ color: cssVar.colorTextTertiary, fontSize: 12 }}>
-                      {parsed.statusIcon}
-                    </span>
-                  )}
-                  <Text fontSize={12} type={'secondary'}>
-                    {parsed.status}
-                  </Text>
-                </Flexbox>
-              )}
-              {parsed.priority && (
-                <Text fontSize={12} type={'secondary'}>
-                  · Priority: {parsed.priority}
-                </Text>
-              )}
-            </Flexbox>
-          )}
         </Flexbox>
       </Flexbox>
 
@@ -207,17 +211,9 @@ const Render = memo<TaskRenderProps>(({ children }) => {
         </>
       )}
 
-      {(parsed.description ||
-        parsed.agent ||
-        parsed.parent ||
-        parsed.topics ||
-        parsed.dependencies ||
-        parsed.review) && (
+      {(parsed.description || parsed.dependencies || parsed.review) && (
         <Flexbox gap={4}>
           <FieldRow label="Description" value={parsed.description} />
-          <FieldRow label="Agent" value={parsed.agent} />
-          <FieldRow label="Parent" value={parsed.parent} />
-          <FieldRow label="Topics" value={parsed.topics} />
           <FieldRow label="Dependencies" value={parsed.dependencies} />
           <FieldRow label="Review" value={parsed.review} />
         </Flexbox>
