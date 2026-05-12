@@ -284,6 +284,7 @@ describe('listServerProposalActivity', () => {
           baseBrief({ id: 'active', metadata: proposalMetadata() }),
         ],
       },
+      now: '2026-05-09T01:00:00.000Z',
       userId: 'user-1',
     });
 
@@ -447,6 +448,7 @@ describe('listServerProposalActivity', () => {
           }),
         ],
       },
+      now: '2026-05-09T01:00:00.000Z',
       userId: 'user-1',
     });
 
