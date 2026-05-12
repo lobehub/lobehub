@@ -284,6 +284,68 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 };
 
 /**
+ * Recursively sanitize a JSON Schema to comply with Gemini proto constraints:
+ * - `enum` is only allowed on STRING type fields
+ * - `required` is only allowed on OBJECT type fields
+ *
+ * This handles the OpenAI→Gemini schema bridge where the upstream
+ * schema may place `enum` on non-STRING types (e.g. number, boolean)
+ * or `required` on non-OBJECT types.
+ *
+ * @see https://linear.app/lobehub/issue/LOBE-8661
+ */
+export const sanitizeGeminiSchema = (schema: any): any => {
+  if (!schema || typeof schema !== 'object') return schema;
+
+  const sanitized = { ...schema };
+
+  // Strip enum from non-STRING types and empty enums
+  // Gemini proto: "enum: only allowed for STRING type"
+  if (sanitized.enum !== undefined) {
+    if (sanitized.type !== 'string' || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0) {
+      console.warn(
+        '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
+        { type: sanitized.type, enumLength: sanitized.enum?.length },
+      );
+      delete sanitized.enum;
+    }
+  }
+
+  // Strip required from non-OBJECT types and empty required arrays
+  // Gemini proto: "required: only allowed for OBJECT type"
+  if (sanitized.required !== undefined) {
+    if (sanitized.type !== 'object' || !Array.isArray(sanitized.required) || sanitized.required.length === 0) {
+      console.warn(
+        '[google] sanitizeGeminiSchema stripped required — not allowed for non-OBJECT type or empty',
+        { type: sanitized.type, requiredLength: sanitized.required?.length },
+      );
+      delete sanitized.required;
+    }
+  }
+
+  // Recursively sanitize properties
+  if (sanitized.properties && typeof sanitized.properties === 'object') {
+    for (const key of Object.keys(sanitized.properties)) {
+      sanitized.properties[key] = sanitizeGeminiSchema(sanitized.properties[key]);
+    }
+  }
+
+  // Recursively sanitize items (for array types)
+  if (sanitized.items) {
+    sanitized.items = sanitizeGeminiSchema(sanitized.items);
+  }
+
+  // Recursively sanitize anyOf/oneOf/allOf combinators
+  for (const key of ['anyOf', 'oneOf', 'allOf']) {
+    if (Array.isArray(sanitized[key])) {
+      sanitized[key] = sanitized[key].map(sanitizeGeminiSchema);
+    }
+  }
+
+  return sanitized;
+};
+
+/**
  * Convert ChatCompletionTool to Google FunctionDeclaration.
  * Uses `parametersJsonSchema` to pass standard JSON Schema directly,
  * avoiding Google's restrictive Schema subset (no $ref, nullable, const, etc.).
@@ -296,7 +358,7 @@ export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration =
   const hasProperties = parameters?.properties && Object.keys(parameters.properties).length > 0;
 
   const jsonSchema = hasProperties
-    ? parameters
+    ? sanitizeGeminiSchema(parameters)
     : { type: 'object', properties: { dummy: { type: 'string' } } };
 
   return {

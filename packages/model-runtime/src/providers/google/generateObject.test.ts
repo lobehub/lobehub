@@ -7,6 +7,7 @@ import {
   createGoogleGenerateObject,
   createGoogleGenerateObjectWithTools,
 } from './generateObject';
+import { sanitizeGeminiSchema, buildGoogleTool } from '../../core/contextBuilders/google';
 
 describe('Google generateObject', () => {
   describe('convertOpenAISchemaToGoogleSchema', () => {
@@ -177,6 +178,211 @@ describe('Google generateObject', () => {
       expect(result).toEqual({
         type: SchemaType.STRING,
       });
+    });
+
+    // LOBE-8661: enum should only be copied for STRING type properties
+    it('should strip enum from non-STRING types', () => {
+      const openAISchema = {
+        name: 'test',
+        schema: {
+          properties: {
+            priority: { enum: ['low', 'medium', 'high'], type: 'number' },
+            status: { enum: ['active', 'inactive'], type: 'string' },
+            visible: { enum: ['true'], type: 'boolean' },
+          },
+          type: 'object' as const,
+        },
+      };
+
+      const result = convertOpenAISchemaToGoogleSchema(openAISchema);
+
+      // enum should be stripped from number and boolean types
+      expect(result).toEqual({
+        properties: {
+          priority: { type: SchemaType.NUMBER },
+          status: { enum: ['active', 'inactive'], type: SchemaType.STRING },
+          visible: { type: SchemaType.BOOLEAN },
+        },
+        type: SchemaType.OBJECT,
+      });
+    });
+
+    // LOBE-8661: enum with empty array should be stripped even for STRING type
+    it('should strip empty enum arrays', () => {
+      const openAISchema = {
+        name: 'test',
+        schema: {
+          properties: {
+            status: { enum: [], type: 'string' },
+          },
+          type: 'object' as const,
+        },
+      };
+
+      const result = convertOpenAISchemaToGoogleSchema(openAISchema);
+
+      expect(result).toEqual({
+        properties: {
+          status: { type: SchemaType.STRING },
+        },
+        type: SchemaType.OBJECT,
+      });
+    });
+
+    // LOBE-8661: required should only be copied for OBJECT types
+    it('should strip required from non-OBJECT types', () => {
+      const openAISchema = {
+        name: 'test',
+        schema: {
+          properties: {
+            nested: {
+              properties: { name: { type: 'string' } },
+              required: ['name'],
+              type: 'object',
+            },
+          },
+          required: ['nested'],
+          type: 'object' as const,
+        },
+      } as any;
+
+      const result = convertOpenAISchemaToGoogleSchema(openAISchema);
+
+      // required should be preserved for OBJECT types (both root and nested)
+      expect(result).toEqual({
+        properties: {
+          nested: {
+            properties: {
+              name: { type: SchemaType.STRING },
+            },
+            required: ['name'],
+            type: SchemaType.OBJECT,
+          },
+        },
+        required: ['nested'],
+        type: SchemaType.OBJECT,
+      });
+    });
+  });
+
+  describe('sanitizeGeminiSchema', () => {
+    it('should strip enum from non-STRING types', () => {
+      const schema = {
+        priority: { enum: [1, 2, 3], type: 'integer' },
+        status: { enum: ['active'], type: 'string' },
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        priority: { type: 'integer' },
+        status: { enum: ['active'], type: 'string' },
+      });
+    });
+
+    it('should strip required from non-OBJECT types', () => {
+      const schema = {
+        name: { required: ['firstName'], type: 'string' },
+        user: {
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+          type: 'object',
+        },
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        name: { type: 'string' },
+        user: {
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+          type: 'object',
+        },
+      });
+    });
+
+    it('should recursively sanitize nested properties', () => {
+      const schema = {
+        properties: {
+          dashboard: {
+            properties: {
+              widgets: {
+                items: {
+                  properties: {
+                    color: { enum: ['red'], type: 'string' },
+                    priority: { enum: [1, 2], type: 'number' },
+                    visible: { enum: ['true'], type: 'boolean' },
+                  },
+                  type: 'object',
+                },
+                type: 'array',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'object',
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        properties: {
+          dashboard: {
+            properties: {
+              widgets: {
+                items: {
+                  properties: {
+                    color: { enum: ['red'], type: 'string' },
+                    priority: { type: 'number' },
+                    visible: { type: 'boolean' },
+                  },
+                  type: 'object',
+                },
+                type: 'array',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    it('should handle empty enum arrays', () => {
+      const schema = {
+        status: { enum: [], type: 'string' },
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        status: { type: 'string' },
+      });
+    });
+
+    it('should handle anyOf/oneOf/allOf combinators', () => {
+      const schema = {
+        anyOf: [
+          { enum: [1, 2], type: 'number' },
+          { enum: ['low'], type: 'string' },
+        ],
+      };
+
+      const result = sanitizeGeminiSchema(schema);
+
+      expect(result).toEqual({
+        anyOf: [
+          { type: 'number' },
+          { enum: ['low'], type: 'string' },
+        ],
+      });
+    });
+
+    it('should handle null/undefined gracefully', () => {
+      expect(sanitizeGeminiSchema(null)).toBeNull();
+      expect(sanitizeGeminiSchema(undefined)).toBeUndefined();
     });
   });
 
@@ -962,6 +1168,87 @@ describe('Google generateObject', () => {
       });
 
       expect(result).toEqual([{ arguments: {}, name: 'simple_function' }]);
+    });
+
+    // LOBE-8661: buildGoogleTool should sanitize schema to strip enum from non-STRING types
+    it('should sanitize enum from non-STRING types in tool parameters', () => {
+      const tool: any = {
+        function: {
+          description: 'Update status',
+          name: 'update_status',
+          parameters: {
+            properties: {
+              priority: { enum: [1, 2, 3], type: 'integer' },
+              status: { enum: ['active', 'inactive'], type: 'string' },
+            },
+            required: ['status'],
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      // Suppress console.warn from sanitizer
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = buildGoogleTool(tool);
+
+      expect(result.parametersJsonSchema).toEqual({
+        properties: {
+          priority: { type: 'integer' },
+          status: { enum: ['active', 'inactive'], type: 'string' },
+        },
+        required: ['status'],
+        type: 'object',
+      });
+
+      warnSpy.mockRestore();
+    });
+
+    // LOBE-8661: buildGoogleTool should sanitize nested tool parameters
+    it('should sanitize nested enum/required in tool parameters', () => {
+      const tool: any = {
+        function: {
+          description: 'Complex operation',
+          name: 'complex_op',
+          parameters: {
+            properties: {
+              config: {
+                properties: {
+                  color: { enum: ['red'], type: 'string' },
+                  level: { enum: [1, 2, 3], type: 'number' },
+                },
+                required: ['color'],
+                type: 'object',
+              },
+              role: { required: ['admin'], type: 'string' },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = buildGoogleTool(tool);
+
+      expect(result.parametersJsonSchema).toEqual({
+        properties: {
+          config: {
+            properties: {
+              color: { enum: ['red'], type: 'string' },
+              level: { type: 'number' },
+            },
+            required: ['color'],
+            type: 'object',
+          },
+          role: { type: 'string' },
+        },
+        type: 'object',
+      });
+
+      warnSpy.mockRestore();
     });
   });
 });
