@@ -1172,6 +1172,7 @@ export class AgentBridgeService {
                   try {
                     const errorBody = renderAgentError(
                       event.errorType,
+                      errorMsg,
                       event.operationId,
                       replyLocale,
                     );
