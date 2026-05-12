@@ -9,7 +9,9 @@ const log = debug('lobe-server:file-ingestion');
 // --------------- Constants ---------------
 
 const MAX_IMAGE_SIZE = 1920;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+// Anthropic enforces a 5MB cap on the base64-encoded image payload. Base64
+// inflates binary by ~4/3, so the underlying file must stay ≤ 3.75MB to be safe.
+const MAX_IMAGE_BYTES = Math.floor((5 * 1024 * 1024 * 3) / 4); // 3.75MB binary → ≤5MB base64
 const COMPRESSIBLE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 // --------------- Types ---------------
