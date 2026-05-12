@@ -71,13 +71,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorFillTertiary};
+    background: transparent;
 
     transition: all 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   weekdayButtonActive: css`
