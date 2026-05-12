@@ -2,6 +2,7 @@
 
 import { useTranslation } from 'react-i18next';
 
+import { DefaultAgentModelForm } from '@/features/ServiceModel';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -16,6 +17,7 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.serviceModel')} />
+      <DefaultAgentModelForm />
       <SystemAgentForm systemAgentKey="topic" />
       <SystemAgentForm systemAgentKey="generationTopic" />
       <SystemAgentForm systemAgentKey="translation" />
