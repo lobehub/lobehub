@@ -5,7 +5,7 @@ import { Block } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { ExecTaskParams, ExecTaskState } from '../../../types';
+import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   instruction: css`
@@ -41,7 +41,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const ExecTaskRender = memo<BuiltinRenderProps<ExecTaskParams, ExecTaskState>>(
+export const CallSubAgentRender = memo<BuiltinRenderProps<CallSubAgentParams, CallSubAgentState>>(
   ({ pluginState }) => {
     const { task } = pluginState || {};
 
@@ -60,6 +60,6 @@ export const ExecTaskRender = memo<BuiltinRenderProps<ExecTaskParams, ExecTaskSt
   },
 );
 
-ExecTaskRender.displayName = 'ExecTaskRender';
+CallSubAgentRender.displayName = 'CallSubAgentRender';
 
-export default ExecTaskRender;
+export default CallSubAgentRender;

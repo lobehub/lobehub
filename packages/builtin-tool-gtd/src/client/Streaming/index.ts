@@ -2,8 +2,6 @@ import type { BuiltinStreaming } from '@lobechat/types';
 
 import { GTDApiName } from '../../types';
 import { CreatePlanStreaming } from './CreatePlan';
-import { ExecTaskStreaming } from './ExecTask';
-import { ExecTasksStreaming } from './ExecTasks';
 
 /**
  * GTD Streaming Components Registry
@@ -13,12 +11,6 @@ import { ExecTasksStreaming } from './ExecTasks';
  */
 export const GTDStreamings: Record<string, BuiltinStreaming> = {
   [GTDApiName.createPlan]: CreatePlanStreaming as BuiltinStreaming,
-  [GTDApiName.execTask]: ExecTaskStreaming as BuiltinStreaming,
-  [GTDApiName.execTasks]: ExecTasksStreaming as BuiltinStreaming,
 };
 
-
-
-export {CreatePlanStreaming} from './CreatePlan';
-export {ExecTaskStreaming} from './ExecTask';
-export {ExecTasksStreaming} from './ExecTasks';
+export { CreatePlanStreaming } from './CreatePlan';

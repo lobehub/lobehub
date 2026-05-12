@@ -743,7 +743,7 @@ export const createGroupOrchestrationExecutors = (
           parentMessageType: 'user',
           operationId: taskOperationId,
           parentOperationId: orchestrationOperationId,
-          isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
+          isSubTask: true, // Disable lobe-agent tool to prevent nested sub-agents
         });
 
         log(`[${sessionLogId}] Client-side AgentRuntime execution completed`);

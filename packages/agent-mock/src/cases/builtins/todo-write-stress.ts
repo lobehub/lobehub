@@ -90,11 +90,11 @@ const updatePlan = (
     durationMs,
   });
 
-/** lobe-gtd / execTask */
+/** lobe-agent / callSubAgent */
 const execTask = (description: string, instruction: string, durationMs = 200) =>
   toolStep({
-    identifier: 'lobe-gtd',
-    apiName: 'execTask',
+    identifier: 'lobe-agent',
+    apiName: 'callSubAgent',
     arguments: JSON.stringify({ description, instruction }),
     result: {
       parentMessageId: `mock-msg-task-${Date.now()}`,

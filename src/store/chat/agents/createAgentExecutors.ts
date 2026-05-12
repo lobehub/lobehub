@@ -2565,7 +2565,7 @@ export const createAgentExecutors = (context: {
               parentMessageType: 'user',
               operationId: taskOperationId,
               parentOperationId: state.operationId,
-              isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
+              isSubTask: true, // Disable lobe-agent tool to prevent nested sub-agents
             });
 
             log('[%s] Client-side AgentRuntime execution completed', taskLogId);

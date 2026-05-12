@@ -544,11 +544,13 @@ export class GeneralChatAgent implements Agent {
         const { data, parentMessageId, stop } =
           context.payload as GeneralAgentCallToolResultPayload;
 
-        // Check if this is a GTD async task request (only execTask/execTasks are passed here with stop=true)
+        // Check if this is a sub-agent dispatch request (lobe-agent.callSubAgent /
+        // callSubAgents and similarly-shaped tools emit state.type=execTask*
+        // with stop=true so the runtime forks a sub-agent here).
         if (stop && data?.state) {
           const stateType = data.state.type;
 
-          // GTD async task (single)
+          // Server-side sub-agent (single)
           if (stateType === 'execTask') {
             const { parentMessageId: execParentId, task } = data.state as {
               parentMessageId: string;
@@ -560,7 +562,7 @@ export class GeneralChatAgent implements Agent {
             };
           }
 
-          // GTD async tasks (multiple)
+          // Server-side sub-agents (multiple)
           if (stateType === 'execTasks') {
             const { parentMessageId: execParentId, tasks } = data.state as {
               parentMessageId: string;
@@ -572,7 +574,7 @@ export class GeneralChatAgent implements Agent {
             };
           }
 
-          // GTD client-side async task (single, desktop only)
+          // Client-side sub-agent (single, desktop only)
           if (stateType === 'execClientTask') {
             const { parentMessageId: execParentId, task } = data.state as {
               parentMessageId: string;
@@ -584,7 +586,7 @@ export class GeneralChatAgent implements Agent {
             };
           }
 
-          // GTD client-side async tasks (multiple, desktop only)
+          // Client-side sub-agents (multiple, desktop only)
           if (stateType === 'execClientTasks') {
             const { parentMessageId: execParentId, tasks } = data.state as {
               parentMessageId: string;

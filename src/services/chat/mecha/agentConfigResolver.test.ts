@@ -1047,12 +1047,12 @@ describe('resolveAgentConfig', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
     });
 
-    it('should filter out lobe-gtd when isSubTask is true for regular agent', () => {
+    it('should filter out lobe-agent when isSubTask is true for regular agent', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
             ...mockAgentConfig,
-            plugins: ['lobe-gtd', 'plugin-a', 'plugin-b'],
+            plugins: ['lobe-agent', 'plugin-a', 'plugin-b'],
           }) as any,
       );
 
@@ -1061,16 +1061,16 @@ describe('resolveAgentConfig', () => {
         isSubTask: true,
       });
 
-      expect(result.plugins).not.toContain('lobe-gtd');
+      expect(result.plugins).not.toContain('lobe-agent');
       expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
     });
 
-    it('should keep lobe-gtd when isSubTask is false', () => {
+    it('should keep lobe-agent when isSubTask is false', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
             ...mockAgentConfig,
-            plugins: ['lobe-gtd', 'plugin-a', 'plugin-b'],
+            plugins: ['lobe-agent', 'plugin-a', 'plugin-b'],
           }) as any,
       );
 
@@ -1079,30 +1079,30 @@ describe('resolveAgentConfig', () => {
         isSubTask: false,
       });
 
-      expect(result.plugins).toContain('lobe-gtd');
-      expect(result.plugins).toEqual(['lobe-gtd', 'plugin-a', 'plugin-b']);
+      expect(result.plugins).toContain('lobe-agent');
+      expect(result.plugins).toEqual(['lobe-agent', 'plugin-a', 'plugin-b']);
     });
 
-    it('should keep lobe-gtd when isSubTask is undefined', () => {
+    it('should keep lobe-agent when isSubTask is undefined', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
             ...mockAgentConfig,
-            plugins: ['lobe-gtd', 'plugin-a'],
+            plugins: ['lobe-agent', 'plugin-a'],
           }) as any,
       );
 
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
-      expect(result.plugins).toContain('lobe-gtd');
+      expect(result.plugins).toContain('lobe-agent');
     });
 
-    it('should filter lobe-gtd in page scope when isSubTask is true', () => {
+    it('should filter lobe-agent in page scope when isSubTask is true', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
             ...mockAgentConfig,
-            plugins: ['lobe-gtd', 'plugin-a'],
+            plugins: ['lobe-agent', 'plugin-a'],
           }) as any,
       );
       vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
@@ -1115,16 +1115,16 @@ describe('resolveAgentConfig', () => {
         isSubTask: true,
       });
 
-      expect(result.plugins).not.toContain('lobe-gtd');
+      expect(result.plugins).not.toContain('lobe-agent');
       expect(result.plugins).toContain(PageAgentIdentifier);
     });
 
-    it('should filter lobe-gtd for builtin agent when isSubTask is true', () => {
+    it('should filter lobe-agent for builtin agent when isSubTask is true', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
         () => 'agent-builder',
       );
       vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
-        plugins: ['lobe-gtd', 'runtime-plugin'],
+        plugins: ['lobe-agent', 'runtime-plugin'],
         systemRole: 'Runtime system role',
       });
 
@@ -1133,16 +1133,16 @@ describe('resolveAgentConfig', () => {
         isSubTask: true,
       });
 
-      expect(result.plugins).not.toContain('lobe-gtd');
+      expect(result.plugins).not.toContain('lobe-agent');
       expect(result.plugins).toContain('runtime-plugin');
     });
 
-    it('should keep lobe-gtd for builtin agent when isSubTask is false', () => {
+    it('should keep lobe-agent for builtin agent when isSubTask is false', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
         () => 'agent-builder',
       );
       vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
-        plugins: ['lobe-gtd', 'runtime-plugin'],
+        plugins: ['lobe-agent', 'runtime-plugin'],
         systemRole: 'Runtime system role',
       });
 
@@ -1151,7 +1151,7 @@ describe('resolveAgentConfig', () => {
         isSubTask: false,
       });
 
-      expect(result.plugins).toContain('lobe-gtd');
+      expect(result.plugins).toContain('lobe-agent');
     });
   });
 
@@ -1165,7 +1165,7 @@ describe('resolveAgentConfig', () => {
         () =>
           ({
             ...mockAgentConfig,
-            plugins: ['plugin-a', 'plugin-b', 'lobe-gtd'],
+            plugins: ['plugin-a', 'plugin-b', 'lobe-agent'],
           }) as any,
       );
 
@@ -1231,7 +1231,7 @@ describe('resolveAgentConfig', () => {
         () =>
           ({
             ...mockAgentConfig,
-            plugins: ['lobe-gtd', 'plugin-a'],
+            plugins: ['lobe-agent', 'plugin-a'],
           }) as any,
       );
 

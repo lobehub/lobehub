@@ -169,8 +169,10 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   updatePlan: 'workflow.toolDisplayName.updatePlan',
   updateTodos: 'workflow.toolDisplayName.updateTodos',
   clearTodos: 'workflow.toolDisplayName.clearTodos',
-  execTask: 'workflow.toolDisplayName.execTask',
-  execTasks: 'workflow.toolDisplayName.execTasks',
+
+  // Lobe Agent
+  callSubAgent: 'workflow.toolDisplayName.callSubAgent',
+  callSubAgents: 'workflow.toolDisplayName.callSubAgents',
 
   // Memory
   addActivityMemory: 'workflow.toolDisplayName.addActivityMemory',

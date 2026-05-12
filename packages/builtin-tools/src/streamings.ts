@@ -27,6 +27,7 @@ import {
   GroupManagementStreamings,
 } from '@lobechat/builtin-tool-group-management/client';
 import { GTDManifest, GTDStreamings } from '@lobechat/builtin-tool-gtd/client';
+import { LobeAgentManifest, LobeAgentStreamings } from '@lobechat/builtin-tool-lobe-agent/client';
 import {
   LocalSystemManifest,
   LocalSystemStreamings,
@@ -61,6 +62,7 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
     BuiltinStreaming
   >,
   [GTDManifest.identifier]: GTDStreamings as Record<string, BuiltinStreaming>,
+  [LobeAgentManifest.identifier]: LobeAgentStreamings as Record<string, BuiltinStreaming>,
   [LocalSystemManifest.identifier]: LocalSystemStreamings as Record<string, BuiltinStreaming>,
   [MemoryManifest.identifier]: MemoryStreamings as Record<string, BuiltinStreaming>,
   [MessageManifest.identifier]: MessageStreamings as Record<string, BuiltinStreaming>,

@@ -402,8 +402,6 @@ describe('GTDExecutor', () => {
       expect(gtdExecutor.hasApi('clearTodos')).toBe(true);
       expect(gtdExecutor.hasApi('createPlan')).toBe(true);
       expect(gtdExecutor.hasApi('updatePlan')).toBe(true);
-      expect(gtdExecutor.hasApi('execTask')).toBe(true);
-      expect(gtdExecutor.hasApi('execTasks')).toBe(true);
     });
 
     it('should return correct API names', () => {
@@ -413,9 +411,7 @@ describe('GTDExecutor', () => {
       expect(apiNames).toContain('clearTodos');
       expect(apiNames).toContain('createPlan');
       expect(apiNames).toContain('updatePlan');
-      expect(apiNames).toContain('execTask');
-      expect(apiNames).toContain('execTasks');
-      expect(apiNames).toHaveLength(7);
+      expect(apiNames).toHaveLength(5);
     });
   });
 });

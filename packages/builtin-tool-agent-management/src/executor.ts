@@ -142,7 +142,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
       }
 
       // Return special state that will be recognized by AgentRuntime's exec_task executor
-      // Following GTD execTask pattern: stop: true + state.type = 'execTask'
+      // Follows the lobe-agent callSubAgent pattern: stop: true + state.type = 'execTask'
       return {
         content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
         state: {
@@ -153,7 +153,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
             targetAgentId: agentId, // Special field for callAgent - indicates target agent
             timeout: timeout || 1_800_000,
           },
-          type: 'execTask', // Use same type as GTD to reuse existing executor
+          type: 'execTask', // Same wire-level type as lobe-agent so the runtime reuses its executor
         },
         stop: true,
         success: true,

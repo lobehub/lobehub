@@ -1,7 +1,5 @@
 import { GTDApiName } from '../../types';
 import CreatePlan from './CreatePlan';
-import ExecTaskRender from './ExecTask';
-import ExecTasksRender from './ExecTasks';
 import TodoListRender from './TodoList';
 
 /**
@@ -20,14 +18,8 @@ export const GTDRenders = {
   // Plan operations render the PlanCard UI
   [GTDApiName.createPlan]: CreatePlan,
   [GTDApiName.updatePlan]: CreatePlan,
-
-  // Async task operations
-  [GTDApiName.execTask]: ExecTaskRender,
-  [GTDApiName.execTasks]: ExecTasksRender,
 };
 
 export { default as CreatePlan, PlanCard } from './CreatePlan';
-export { default as ExecTaskRender } from './ExecTask';
-export { default as ExecTasksRender } from './ExecTasks';
 export type { TodoListRenderState } from './TodoList';
 export { default as TodoListRender, TodoListUI } from './TodoList';

@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./executor": "./src/executor/index.ts"
+    "./executor": "./src/executor/index.ts",
+    "./client": "./src/client/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {
@@ -12,7 +13,16 @@
     "test:coverage": "vitest --coverage --silent='passed-only'",
     "test:update": "vitest -u"
   },
+  "dependencies": {
+    "@lobechat/const": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^5",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "react": "*"
   }
 }

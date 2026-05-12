@@ -88,7 +88,8 @@ export interface AgentConfigResolverContext {
 
   /**
    * Whether this is a sub-task execution.
-   * When true, filters out lobe-gtd tools to prevent nested sub-task creation.
+   * When true, filters out the lobe-agent tool (which owns the sub-agent
+   * dispatch APIs) to prevent nested sub-agent creation.
    */
   isSubTask?: boolean;
 
@@ -156,7 +157,8 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
   // Helper to apply plugin filters:
   // 1. If disableTools is true, return empty array (for broadcast scenarios)
-  // 2. If isSubTask is true, filter out lobe-gtd to prevent nested sub-task creation
+  // 2. If isSubTask is true, filter out lobe-agent (which now owns the
+  //    sub-agent dispatch APIs) to prevent nested sub-agent creation.
   const applyPluginFilters = (pluginIds: string[]) => {
     if (disableTools) {
       log('disableTools is true, returning empty plugins');
@@ -169,7 +171,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       nextPluginIds = nextPluginIds.filter((id) => id !== PageAgentIdentifier);
     }
 
-    return isSubTask ? nextPluginIds.filter((id) => id !== 'lobe-gtd') : nextPluginIds;
+    return isSubTask ? nextPluginIds.filter((id) => id !== 'lobe-agent') : nextPluginIds;
   };
 
   const agentStoreState = getAgentStoreState();

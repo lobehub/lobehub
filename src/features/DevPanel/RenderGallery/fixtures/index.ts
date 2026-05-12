@@ -9,6 +9,7 @@ import claudeCode from './claude-code';
 import codex from './codex';
 import github from './github';
 import lobeActivator from './lobe-activator';
+import lobeAgent from './lobe-agent';
 import lobeAgentBuilder from './lobe-agent-builder';
 import lobeAgentDocuments from './lobe-agent-documents';
 import lobeAgentManagement from './lobe-agent-management';
@@ -67,6 +68,7 @@ const toolsetModules: ToolsetFixtureModule[] = [
   codex,
   github,
   lobeActivator,
+  lobeAgent,
   lobeAgentBuilder,
   lobeAgentDocuments,
   lobeAgentManagement,

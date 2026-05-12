@@ -451,7 +451,7 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('tool_result phase', () => {
-    describe('GTD async tasks', () => {
+    describe('Lobe Agent sub-agents (execTask state)', () => {
       it('should return exec_task for single async task (execTask)', async () => {
         const agent = new GeneralChatAgent({
           agentConfig: { maxSteps: 100 },

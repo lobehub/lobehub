@@ -15,8 +15,6 @@ import type {
   ClearTodosParams,
   CreatePlanParams,
   CreateTodosParams,
-  ExecTaskParams,
-  ExecTasksParams,
   UpdatePlanParams,
   UpdateTodosParams,
 } from '../types';
@@ -92,8 +90,6 @@ const GTDApiNameEnum = {
   clearTodos: GTDApiName.clearTodos,
   createPlan: GTDApiName.createPlan,
   createTodos: GTDApiName.createTodos,
-  execTask: GTDApiName.execTask,
-  execTasks: GTDApiName.execTasks,
   updatePlan: GTDApiName.updatePlan,
   updateTodos: GTDApiName.updateTodos,
 } as const;
@@ -125,12 +121,6 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
 
   updatePlan = (params: UpdatePlanParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> =>
     this.runtime.updatePlan(params, toRuntimeContext(ctx));
-
-  execTask = (params: ExecTaskParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> =>
-    this.runtime.execTask(params, toRuntimeContext(ctx));
-
-  execTasks = (params: ExecTasksParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> =>
-    this.runtime.execTasks(params, toRuntimeContext(ctx));
 }
 
 export const gtdExecutor = new GTDExecutor();

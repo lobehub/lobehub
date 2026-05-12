@@ -2282,18 +2282,18 @@ describe('StreamingExecutor actions', () => {
   });
 
   describe('isSubTask filtering', () => {
-    it('should filter out lobe-gtd tools when isSubTask is true', async () => {
+    it('should filter out lobe-agent tool when isSubTask is true', async () => {
       const { result } = renderHook(() => useChatStore());
       const messages = [createMockMessage({ role: 'user' })];
 
-      // Mock resolveAgentConfig to return plugins including lobe-gtd
+      // Mock resolveAgentConfig to return plugins including lobe-agent
       const resolveAgentConfigSpy = vi
         .spyOn(agentConfigResolver, 'resolveAgentConfig')
         .mockReturnValue({
           agentConfig: createMockAgentConfig(),
           chatConfig: createMockChatConfig(),
           isBuiltinAgent: false,
-          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+          plugins: ['lobe-agent', 'lobe-local-system', 'other-plugin'],
         });
 
       // Create operation
@@ -2325,18 +2325,18 @@ describe('StreamingExecutor actions', () => {
       resolveAgentConfigSpy.mockRestore();
     });
 
-    it('should NOT filter out lobe-gtd tools when isSubTask is false or undefined', async () => {
+    it('should NOT filter out lobe-agent tool when isSubTask is false or undefined', async () => {
       const { result } = renderHook(() => useChatStore());
       const messages = [createMockMessage({ role: 'user' })];
 
-      // Mock resolveAgentConfig to return plugins including lobe-gtd
+      // Mock resolveAgentConfig to return plugins including lobe-agent
       const resolveAgentConfigSpy = vi
         .spyOn(agentConfigResolver, 'resolveAgentConfig')
         .mockReturnValue({
           agentConfig: createMockAgentConfig(),
           chatConfig: createMockChatConfig(),
           isBuiltinAgent: false,
-          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+          plugins: ['lobe-agent', 'lobe-local-system', 'other-plugin'],
         });
 
       // Create operation without isSubTask (normal conversation)

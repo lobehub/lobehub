@@ -6,12 +6,7 @@ export type { TodoListRenderState } from './Render';
 export { GTDRenders, TodoListRender, TodoListUI } from './Render';
 
 // Streaming components (real-time tool execution feedback)
-export {
-  CreatePlanStreaming,
-  ExecTasksStreaming,
-  ExecTaskStreaming,
-  GTDStreamings,
-} from './Streaming';
+export { CreatePlanStreaming, GTDStreamings } from './Streaming';
 
 // Intervention components (interactive editing)
 export { AddTodoIntervention, ClearTodosIntervention, GTDInterventions } from './Intervention';

@@ -5,7 +5,7 @@ import { Markdown } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { ExecTaskParams } from '../../../types';
+import type { CallSubAgentParams } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -24,7 +24,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const ExecTaskStreaming = memo<BuiltinStreamingProps<ExecTaskParams>>(({ args }) => {
+export const CallSubAgentStreaming = memo<BuiltinStreamingProps<CallSubAgentParams>>(({ args }) => {
   const { instruction } = args || {};
 
   if (!instruction) return null;
@@ -42,6 +42,6 @@ export const ExecTaskStreaming = memo<BuiltinStreamingProps<ExecTaskParams>>(({ 
   );
 });
 
-ExecTaskStreaming.displayName = 'ExecTaskStreaming';
+CallSubAgentStreaming.displayName = 'CallSubAgentStreaming';
 
-export default ExecTaskStreaming;
+export default CallSubAgentStreaming;

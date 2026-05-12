@@ -5,8 +5,6 @@ import type {
   ClearTodosParams,
   CreatePlanParams,
   CreateTodosParams,
-  ExecTaskParams,
-  ExecTasksParams,
   Plan,
   TodoItem,
   TodoState,
@@ -56,7 +54,7 @@ export interface GTDRuntimeContext {
    * When undefined, the runtime resolves todos from the plan document's metadata.
    */
   currentTodos?: TodoItem[];
-  /** Tool call message ID — used as `parentMessageId` for execTask/execTasks. */
+  /** Tool call message ID. */
   messageId?: string;
   signal?: AbortSignal;
   taskId?: string;
@@ -346,52 +344,5 @@ export class GTDExecutionRuntime {
         success: false,
       };
     }
-  };
-
-  // ==================== Async Tasks API ====================
-
-  execTask = async (
-    params: ExecTaskParams,
-    context: GTDRuntimeContext,
-  ): Promise<BuiltinToolResult> => {
-    const { description, instruction, inheritMessages, timeout, runInClient } = params;
-
-    if (!description || !instruction) {
-      return { content: 'Task description and instruction are required.', success: false };
-    }
-
-    const task = { description, inheritMessages, instruction, runInClient, timeout };
-    const stateType = runInClient ? 'execClientTask' : 'execTask';
-
-    return {
-      content: `🚀 Triggered async task for ${runInClient ? 'client-side' : ''} execution:\n- ${description}`,
-      state: { parentMessageId: context.messageId ?? '', task, type: stateType },
-      stop: true,
-      success: true,
-    };
-  };
-
-  execTasks = async (
-    params: ExecTasksParams,
-    context: GTDRuntimeContext,
-  ): Promise<BuiltinToolResult> => {
-    const { tasks } = params;
-
-    if (!tasks || tasks.length === 0) {
-      return { content: 'No tasks provided to execute.', success: false };
-    }
-
-    const taskCount = tasks.length;
-    const taskList = tasks.map((t, i) => `${i + 1}. ${t.description}`).join('\n');
-    const hasClientTasks = tasks.some((t) => t.runInClient);
-    const stateType = hasClientTasks ? 'execClientTasks' : 'execTasks';
-    const executionMode = hasClientTasks ? 'client-side' : '';
-
-    return {
-      content: `🚀 Triggered ${taskCount} async task${taskCount > 1 ? 's' : ''} for ${executionMode} execution:\n${taskList}`,
-      state: { parentMessageId: context.messageId ?? '', tasks, type: stateType },
-      stop: true,
-      success: true,
-    };
   };
 }

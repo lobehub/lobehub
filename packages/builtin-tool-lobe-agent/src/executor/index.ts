@@ -2,7 +2,7 @@ import type { BuiltinToolContext, BuiltinToolResult, ChatStreamPayload } from '@
 import { BaseExecutor, RequestTrigger } from '@lobechat/types';
 
 import { LobeAgentManifest } from '../manifest';
-import type { AnalyzeVisualMediaParams } from '../types';
+import type { AnalyzeVisualMediaParams, CallSubAgentParams, CallSubAgentsParams } from '../types';
 import { LobeAgentApiName } from '../types';
 import type { VisualFileItem } from '../visualMedia';
 import {
@@ -238,6 +238,58 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
         trigger: RequestTrigger.VisualAnalysis,
         usage,
       },
+      success: true,
+    };
+  };
+
+  // ==================== Sub-Agent ====================
+  //
+  // The executor only constructs the state payload that bridges the tool call
+  // to the agent-runtime instruction layer. The actual sub-agent dispatch is
+  // handled by `createAgentExecutors.ts` which reads `state.type` to emit the
+  // matching `exec_task` / `exec_client_task(s)` instruction.
+
+  callSubAgent = async (
+    params: CallSubAgentParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const { description, instruction, inheritMessages, timeout, runInClient } = params;
+
+    if (!description || !instruction) {
+      return { content: 'Sub-agent description and instruction are required.', success: false };
+    }
+
+    const task = { description, inheritMessages, instruction, runInClient, timeout };
+    const stateType = runInClient ? 'execClientTask' : 'execTask';
+
+    return {
+      content: `🚀 Dispatched sub-agent for ${runInClient ? 'client-side' : ''} execution:\n- ${description}`,
+      state: { parentMessageId: ctx.messageId ?? '', task, type: stateType },
+      stop: true,
+      success: true,
+    };
+  };
+
+  callSubAgents = async (
+    params: CallSubAgentsParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const { tasks } = params;
+
+    if (!tasks || tasks.length === 0) {
+      return { content: 'No sub-agents provided to dispatch.', success: false };
+    }
+
+    const taskCount = tasks.length;
+    const taskList = tasks.map((t, i) => `${i + 1}. ${t.description}`).join('\n');
+    const hasClientTasks = tasks.some((t) => t.runInClient);
+    const stateType = hasClientTasks ? 'execClientTasks' : 'execTasks';
+    const executionMode = hasClientTasks ? 'client-side' : '';
+
+    return {
+      content: `🚀 Dispatched ${taskCount} sub-agent${taskCount > 1 ? 's' : ''} for ${executionMode} execution:\n${taskList}`,
+      state: { parentMessageId: ctx.messageId ?? '', tasks, type: stateType },
+      stop: true,
       success: true,
     };
   };

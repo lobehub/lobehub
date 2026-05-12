@@ -211,13 +211,13 @@ export class StreamingExecutorActionImpl {
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
-    // - isSubTask: filters out lobe-gtd tools to prevent nested sub-task creation
+    // - isSubTask: filters out lobe-agent tool to prevent nested sub-agent creation
     // - disableTools: clears all plugins for broadcast scenarios
     const agentConfig = resolveAgentConfig({
       agentId: effectiveAgentId || '',
       disableTools, // Clear plugins for broadcast scenarios
       groupId, // Pass groupId for supervisor detection
-      isSubTask, // Filter out lobe-gtd in sub-task context
+      isSubTask, // Filter out lobe-agent in sub-task context
       scope, // Pass scope from operation context
     });
 
@@ -571,7 +571,7 @@ export class StreamingExecutorActionImpl {
       initialContext: params.initialContext,
       operationId,
       subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
-      isSubTask, // Pass isSubTask to filter out lobe-gtd tools in sub-task context
+      isSubTask, // Pass isSubTask to filter out lobe-agent tool in sub-task context
     });
 
     // Use model/provider from resolved agentConfig

@@ -1,6 +1,5 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
-import { isDesktop } from './const';
 import { systemPrompt } from './systemRole';
 import { GTDApiName } from './types';
 
@@ -150,94 +149,12 @@ export const GTDManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
-
-    // ==================== Async Tasks ====================
-    {
-      description:
-        'Execute a single long-running async task. The task runs in an isolated context and can take significant time to complete. Use this for a single complex operation that requires extended processing.',
-      name: GTDApiName.execTask,
-      parameters: {
-        properties: {
-          description: {
-            description: 'Brief description of what this task does (shown in UI).',
-            type: 'string',
-          },
-          instruction: {
-            description: 'Detailed instruction/prompt for the task execution.',
-            type: 'string',
-          },
-          inheritMessages: {
-            description:
-              'Whether to inherit context messages from the parent conversation. Default is false.',
-            type: 'boolean',
-          },
-          ...(isDesktop && {
-            runInClient: {
-              description:
-                'Whether to run on the desktop client (for local file/shell access). MUST be true when task requires local-system tools. Default is false (server execution).',
-              type: 'boolean',
-            },
-          }),
-          timeout: {
-            description: 'Optional timeout in milliseconds. Default is 30 minutes.',
-            type: 'number',
-          },
-        },
-        required: ['description', 'instruction'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Execute one or more long-running async tasks. Each task runs in an isolated context and can take significant time to complete. Use this for complex operations that require extended processing.',
-      name: GTDApiName.execTasks,
-      parameters: {
-        properties: {
-          tasks: {
-            description: 'Array of tasks to execute asynchronously.',
-            items: {
-              properties: {
-                description: {
-                  description: 'Brief description of what this task does (shown in UI).',
-                  type: 'string',
-                },
-                instruction: {
-                  description: 'Detailed instruction/prompt for the task execution.',
-                  type: 'string',
-                },
-                inheritMessages: {
-                  description:
-                    'Whether to inherit context messages from the parent conversation. Default is false.',
-                  type: 'boolean',
-                },
-                ...(isDesktop && {
-                  runInClient: {
-                    description:
-                      'Whether to run on the desktop client (for local file/shell access). MUST be true when task requires local-system tools. Default is false (server execution).',
-                    type: 'boolean',
-                  },
-                }),
-                timeout: {
-                  description: 'Optional timeout in milliseconds. Default is 30 minutes.',
-                  type: 'number',
-                },
-              },
-              required: ['description', 'instruction'],
-              type: 'object',
-            },
-            type: 'array',
-          },
-        },
-        required: ['tasks'],
-        type: 'object',
-      },
-    },
   ],
   identifier: GTDIdentifier,
   meta: {
     avatar: '✅',
     description:
-      'Plan and track one-time goals, manage todo checklists, and run background tasks. For tasks that need to be done once or tracked manually — NOT for tasks that should repeat automatically on a schedule (use lobe-cron for daily/weekly/recurring automation).',
+      'Plan and track one-time goals and manage todo checklists. For goals that need to be done once or tracked manually — NOT for tasks that should repeat automatically on a schedule (use lobe-cron for daily/weekly/recurring automation). To dispatch long-running sub-agent investigations, use the lobe-agent tool.',
     title: 'GTD Tools',
   },
   systemRole: systemPrompt,

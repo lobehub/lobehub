@@ -35,6 +35,7 @@ import {
   KnowledgeBaseInspectors,
   KnowledgeBaseManifest,
 } from '@lobechat/builtin-tool-knowledge-base/client';
+import { LobeAgentInspectors, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent/client';
 import {
   LocalSystemInspectors,
   LocalSystemManifest,
@@ -88,6 +89,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   >,
   [GTDManifest.identifier]: GTDInspectors as Record<string, BuiltinInspector>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
+  [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
   [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
   [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
