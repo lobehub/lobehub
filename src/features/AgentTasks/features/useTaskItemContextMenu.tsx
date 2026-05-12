@@ -112,25 +112,24 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
       const taskUrl = `${appOrigin}/task/${task.identifier}`;
 
-      const trackOpen = (name: Exclude<ActiveSubmenu, null>) => (open: boolean) => {
-        if (open) activeSubmenuRef.current = name;
-        else if (activeSubmenuRef.current === name) activeSubmenuRef.current = null;
-      };
-
       return [
         {
           children: statusChildren,
           icon: <Icon icon={CircleDashedIcon} />,
           key: 'status',
           label: t('taskList.contextMenu.status'),
-          onOpenChange: trackOpen('status'),
+          onTitleMouseEnter: () => {
+            activeSubmenuRef.current = 'status';
+          },
         },
         {
           children: priorityChildren,
           icon: <Icon icon={BarChart3Icon} />,
           key: 'priority',
           label: t('taskList.contextMenu.priority'),
-          onOpenChange: trackOpen('priority'),
+          onTitleMouseEnter: () => {
+            activeSubmenuRef.current = 'priority';
+          },
         },
         { type: 'divider' },
         {
