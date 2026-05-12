@@ -216,11 +216,44 @@ export class App {
 
   bootstrap = async () => {
     logger.info('Bootstrapping application');
-    // make single instance
-    const isSingle = app.requestSingleInstanceLock();
-    if (!isSingle) {
-      logger.info('Another instance is already running, exiting');
-      app.exit(0);
+
+    // Multi-instance support: --instance-id=<name> flag or LOBEHUB_INSTANCE_ID env var
+    // allows running multiple isolated LobeHub instances side by side.
+    const instanceIdArg = process.argv.find((a) => a.startsWith('--instance-id='));
+    const instanceId = instanceIdArg
+      ? instanceIdArg.slice('--instance-id='.length).replace(/[^a-zA-Z0-9_-]/g, '_')
+      : (process.env.LOBEHUB_INSTANCE_ID ?? '');
+
+    if (instanceId) {
+      // Each instance gets its own isolated userData directory so stores / DBs don't conflict.
+      const baseUserData = app.getPath('userData');
+      const instanceUserData = `${baseUserData}-${instanceId}`;
+      app.setPath('userData', instanceUserData);
+      logger.info(`Multi-instance mode: id="${instanceId}", userData="${instanceUserData}"`);
+    }
+
+    // Single-instance lock is per-userData, so different instances get independent locks.
+    const allowMultiple =
+      !!instanceId || process.argv.includes('--allow-multiple-instances') ||
+      !!process.env.LOBEHUB_ALLOW_MULTIPLE_INSTANCES;
+
+    if (!allowMultiple) {
+      const isSingle = app.requestSingleInstanceLock();
+      if (!isSingle) {
+        logger.info('Another instance is already running, exiting');
+        app.exit(0);
+      }
+
+      app.on('second-instance', (_event, _commandLine) => {
+        // Focus the existing window if a second launch is attempted
+        const mainBrowser = this.browserManager?.getBrowser('app');
+        if (mainBrowser?.window) {
+          if (mainBrowser.window.isMinimized()) mainBrowser.window.restore();
+          mainBrowser.window.focus();
+        }
+      });
+    } else {
+      logger.info('Multi-instance / allow-multiple-instances mode: skipping single-instance lock');
     }
 
     this.initDevBranding();
