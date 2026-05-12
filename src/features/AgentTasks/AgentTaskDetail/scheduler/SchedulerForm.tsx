@@ -11,7 +11,7 @@ import {
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -98,13 +98,18 @@ interface SchedulerFormProps {
 const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, pattern, timezone }) => {
   const { t } = useTranslation('chat');
 
-  const initial = useMemo(() => {
+  // Optimistic local state: seed once from props at mount, then own the values
+  // locally. Don't re-sync from props on every change — otherwise the async
+  // server roundtrip (updateSchedule → refreshTaskDetail) bounces stale prop
+  // values back into the form during rapid edits and clobbers the user input.
+  // Parent should `key={taskId}` this component to remount cleanly across tasks.
+  const [initial] = useState(() => {
     const parsed = parseCronPattern(pattern || DEFAULT_PATTERN);
     return {
       ...parsed,
       triggerTime: dayjs().hour(parsed.triggerHour).minute(parsed.triggerMinute),
     };
-  }, [pattern]);
+  });
 
   const [scheduleType, setScheduleType] = useState<ScheduleType>(initial.scheduleType);
   const [triggerTime, setTriggerTime] = useState<Dayjs>(initial.triggerTime);
@@ -117,22 +122,6 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
   const [continuous, setContinuous] = useState<boolean>(
     maxExecutions === null || maxExecutions === undefined,
   );
-
-  useEffect(() => {
-    setScheduleType(initial.scheduleType);
-    setTriggerTime(initial.triggerTime);
-    setHourlyInterval(initial.hourlyInterval ?? 1);
-    setWeekdays(initial.weekdays ?? (initial.scheduleType === 'weekly' ? [1, 2, 3, 4, 5] : []));
-  }, [initial]);
-
-  useEffect(() => {
-    setTz(timezone || DEFAULT_TIMEZONE);
-  }, [timezone]);
-
-  useEffect(() => {
-    setMaxExec(maxExecutions ?? null);
-    setContinuous(maxExecutions === null || maxExecutions === undefined);
-  }, [maxExecutions]);
 
   const emit = useCallback(
     (
