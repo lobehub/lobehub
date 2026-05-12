@@ -43,8 +43,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   root: css`
     /* Override @lobehub/ui Markdown's default <details> card chrome (bg + padding + box-shadow).
-       Need !important because the lib targets via .parent details (higher specificity). */
-    margin-block: 0 !important;
+       Need !important because the lib targets via .parent details (higher specificity).
+       padding-bottom puts a 12px gap above the divider; margin-bottom puts a 12px gap below it,
+       matching the symmetric 12px the task card uses around its own internal divider. */
+    margin-block: 0 12px !important;
     padding-block: 0 12px !important;
     padding-inline: 0 !important;
     border-block-end: 1px solid ${cssVar.colorSplit} !important;
