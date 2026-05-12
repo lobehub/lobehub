@@ -1,13 +1,5 @@
-import { KeyEnum } from '@lobechat/const/hotkeys';
 import type { TaskStatus } from '@lobechat/types';
-import {
-  closeContextMenu,
-  combineKeys,
-  copyToClipboard,
-  type GenericItemType,
-  Hotkey,
-  Icon,
-} from '@lobehub/ui';
+import { closeContextMenu, copyToClipboard, type GenericItemType, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { BarChart3Icon, CircleDashedIcon, CopyIcon, LinkIcon, Trash2Icon } from 'lucide-react';
@@ -149,9 +141,6 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         { type: 'divider' },
         {
           danger: true,
-          extra: (
-            <Hotkey keys={combineKeys([KeyEnum.Mod, KeyEnum.Backspace])} variant={'borderless'} />
-          ),
           icon: <Icon icon={Trash2Icon} />,
           key: 'delete',
           label: t('delete', { ns: 'common' }),
@@ -179,15 +168,6 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
       const keyHandler = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
           cleanup();
-          return;
-        }
-
-        if ((event.metaKey || event.ctrlKey) && event.key === 'Backspace') {
-          event.preventDefault();
-          event.stopPropagation();
-          closeContextMenu();
-          cleanup();
-          triggerDelete(task.identifier);
           return;
         }
 
