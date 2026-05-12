@@ -567,6 +567,7 @@
   "taskList.contextMenu.copyLink": "复制链接",
   "taskList.contextMenu.copyLinkSuccess": "链接已复制",
   "taskList.contextMenu.priority": "优先级",
+  "taskList.contextMenu.runNow": "立即运行",
   "taskList.contextMenu.status": "状态",
   "taskList.empty": "暂无任务",
   "taskList.emptyHero.greeting": "今天想搞定点什么？",
