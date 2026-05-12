@@ -8,6 +8,7 @@ import {
   getInstallationStore,
   messengerConnectionIdForUser,
 } from '@/server/services/messenger/installations';
+import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 
 import {
   type BotRuntimeStatus,
@@ -456,7 +457,24 @@ export class GatewayService {
     if (!this.useMessageGateway) return null;
 
     const { installationKey, platform, userId } = params;
-    const connectionId = messengerConnectionIdForUser({ installationKey, userId });
+
+    // Websocket-mode singleton platforms (Discord SystemBot today): the WS
+    // is registered by dc-center at `messenger:<platform>:singleton` and
+    // there is no per-user DO to register here. Route typing to the
+    // singleton connectionId directly — opening a per-user webhook DO would
+    // (a) be rejected by the gateway and (b) not be where `triggerTyping`
+    // can actually fire, since only the singleton WS holds the live socket.
+    //
+    // SystemBot's transport is fixed per platform (e.g. Slack SystemBot is
+    // webhook even though a per-agent bot-channel Slack provider may run
+    // Socket Mode/websocket), so it lives on the messenger definition, not
+    // the bot-channel one.
+    const connectionMode = messengerPlatformRegistry.getPlatform(platform)?.connectionMode;
+    if (connectionMode === 'websocket') {
+      return messengerConnectionIdForUser({ connectionMode, installationKey, userId });
+    }
+
+    const connectionId = messengerConnectionIdForUser({ connectionMode, installationKey, userId });
 
     const now = Date.now();
     const expireAt = userMessengerConnections.get(connectionId);

@@ -268,7 +268,18 @@ export class BotCallbackService {
 
     const messenger = client.getMessenger(platformThreadId);
 
-    const connectionId = userId ? messengerConnectionIdForUser({ installationKey, userId }) : '';
+    // Pull the SystemBot's connectionMode from the messenger definition (NOT
+    // `bot/platforms`) — SystemBot's transport is fixed per platform and may
+    // diverge from a per-agent bot-channel provider's mode (e.g. Slack
+    // SystemBot is always webhook even when a bot-channel Slack provider runs
+    // Socket Mode). Websocket-singleton platforms (Discord) must target the
+    // singleton DO that `AgentBridgeService` started typing on — otherwise
+    // stopTyping fires at a non-existent per-user DO and never reaches the
+    // live WS.
+    const connectionMode = messengerPlatformRegistry.getPlatform(platform)?.connectionMode;
+    const connectionId = userId
+      ? messengerConnectionIdForUser({ connectionMode, installationKey, userId })
+      : '';
 
     return { charLimit: undefined, client, connectionId, messenger, settings: {} };
   }

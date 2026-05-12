@@ -136,6 +136,11 @@ vi.mock('@/server/services/messenger/installations', () => ({
 vi.mock('@/server/services/messenger/platforms', () => ({
   messengerPlatformRegistry: {
     createBinder: mockMessengerCreateBinder,
+    getPlatform: vi.fn().mockImplementation((platform: string) => ({
+      connectionMode: platform === 'discord' ? 'websocket' : 'webhook',
+      id: platform,
+      name: platform,
+    })),
   },
 }));
 

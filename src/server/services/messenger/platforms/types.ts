@@ -1,7 +1,17 @@
 import type { MessengerPlatform } from '@/config/messenger';
 
+import type { ConnectionMode } from '../../bot/platforms';
 import type { InstallationCredentials } from '../installations/types';
 import type { MessengerPlatformBinder } from '../types';
+
+/**
+ * Gateway connection mode for a SystemBot install. **Distinct from the per-agent
+ * bot channel mode** (`bot/platforms/<x>/definition.ts`): SystemBot's transport
+ * is fixed by the platform integration (e.g. Slack SystemBot is always webhook
+ * even though a bot-channel Slack provider can opt into Socket Mode/websocket),
+ * so this lives on the messenger definition, not the bot-channel definition.
+ */
+export type MessengerConnectionMode = Extract<ConnectionMode, 'webhook' | 'websocket'>;
 
 /** Cross-cutting services the router exposes to platform webhook gates. */
 export interface MessengerWebhookContext {
@@ -110,6 +120,17 @@ export interface MessengerPlatformOAuthAdapter {
  * a one-file change rather than a router-wide refactor.
  */
 export interface MessengerPlatformDefinition {
+  /**
+   * Gateway transport this SystemBot uses. Fixed per platform — independent
+   * of the per-agent bot-channel `connectionMode` because SystemBot's wiring
+   * is owned by dc-center (e.g. Slack SystemBot is webhook even though a
+   * bot-channel Slack provider may run Socket Mode/websocket).
+   *
+   * Used by `GatewayService.ensureUserMessengerConnected` and
+   * `BotCallbackService.createMessengerClient` to decide whether typing
+   * routes to the singleton WS connectionId or a per-user webhook DO.
+   */
+  connectionMode: MessengerConnectionMode;
   /**
    * Build the per-platform binder used for outbound replies and link
    * notifications. Per-tenant platforms (Slack today) accept the resolved
