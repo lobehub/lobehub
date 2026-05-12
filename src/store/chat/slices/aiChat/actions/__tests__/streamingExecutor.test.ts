@@ -2300,7 +2300,7 @@ describe('StreamingExecutor actions', () => {
       let operationId: string;
       act(() => {
         const res = result.current.startOperation({
-          type: 'execClientTask',
+          type: 'execClientSubAgent',
           context: {
             agentId: TEST_IDS.SESSION_ID,
             topicId: TEST_IDS.TOPIC_ID,

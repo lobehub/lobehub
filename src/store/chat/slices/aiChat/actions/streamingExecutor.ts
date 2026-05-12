@@ -742,7 +742,7 @@ export class StreamingExecutorActionImpl {
       // REMEMBER: There is no test for it (too hard to add), if you want to change it , ask @arvinxx first
       if (
         result.nextContext?.phase &&
-        ['tasks_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
+        ['sub_agents_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
       ) {
         log(
           `[executeClientAgent] ${result.nextContext?.phase} completed, refreshing messages to sync state`,

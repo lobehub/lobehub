@@ -314,7 +314,7 @@
   "openInNewWindow": "在新窗口打开",
   "operation.contextCompression": "上下文过长，正在压缩历史记录……",
   "operation.execAgentRuntime": "准备响应中",
-  "operation.execClientTask": "执行任务中",
+  "operation.execClientSubAgent": "运行子代理中",
   "operation.execHeterogeneousAgent": "{{name}} 正在运行",
   "operation.execServerAgentRuntime": "任务正在服务器运行，您可以放心离开此页面",
   "operation.heterogeneousAgentFallback": "外部智能体",

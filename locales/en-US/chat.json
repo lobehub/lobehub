@@ -314,7 +314,7 @@
   "openInNewWindow": "Open in New Window",
   "operation.contextCompression": "Context too long, compressing history...",
   "operation.execAgentRuntime": "Preparing response",
-  "operation.execClientTask": "Executing task",
+  "operation.execClientSubAgent": "Running sub-agent",
   "operation.execHeterogeneousAgent": "{{name}} is running",
   "operation.execServerAgentRuntime": "Task is running in the server. You are safe to leave this page",
   "operation.heterogeneousAgentFallback": "External agent",

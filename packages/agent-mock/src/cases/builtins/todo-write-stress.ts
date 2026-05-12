@@ -91,7 +91,7 @@ const updatePlan = (
   });
 
 /** lobe-agent / callSubAgent */
-const execTask = (description: string, instruction: string, durationMs = 200) =>
+const callSubAgent = (description: string, instruction: string, durationMs = 200) =>
   toolStep({
     identifier: 'lobe-agent',
     apiName: 'callSubAgent',
@@ -99,7 +99,7 @@ const execTask = (description: string, instruction: string, durationMs = 200) =>
     result: {
       parentMessageId: `mock-msg-task-${Date.now()}`,
       task: { description, instruction },
-      type: 'execTask' as const,
+      type: 'execSubAgent' as const,
     },
     durationMs,
   });
@@ -242,7 +242,7 @@ export const todoWriteStress = defineCase({
           status: k === i ? 'processing' : k < i ? 'completed' : 'todo',
         })),
       ),
-      execTask(
+      callSubAgent(
         `为 ${table} 表添加索引`,
         `检查 src/database/schemas/${table}.ts 的表结构，添加 createdAt 性能索引，生成迁移 SQL`,
       ),
@@ -275,7 +275,7 @@ export const todoWriteStress = defineCase({
           status: k === i ? 'processing' : k < i ? 'completed' : 'todo',
         })),
       ),
-      execTask(
+      callSubAgent(
         `为 ${table} 表添加索引`,
         `检查 src/database/schemas/${table}.ts 的表结构，添加 createdAt 性能索引，生成迁移 SQL`,
       ),
@@ -343,7 +343,7 @@ export const todoWriteStress = defineCase({
         [{ type: 'processing', index: 0 }],
         [{ text: `迁移 ${slice} store slice 到 SWR 模式`, status: 'processing' }],
       ),
-      execTask(
+      callSubAgent(
         `迁移 ${slice} store slice`,
         `重构 src/store/chat/slices/${slice}/index.ts，将数据获取逻辑迁移到 SWR + Zustand 模式`,
       ),
@@ -482,7 +482,7 @@ export const todoWriteStress = defineCase({
         { text: '修复 type-check 发现的类型问题', status: 'processing' },
       ],
     ),
-    execTask('修复 TRPC 类型问题', '运行 bun run type-check，逐一修复类型错误直到通过'),
+    callSubAgent('修复 TRPC 类型问题', '运行 bun run type-check，逐一修复类型错误直到通过'),
     updateTodos(
       [{ type: 'complete', index: 1 }],
       [
@@ -523,7 +523,7 @@ export const todoWriteStress = defineCase({
           [{ type: 'processing', index: 0 }],
           [{ text: `提取 ${ns} 命名空间的硬编码字符串`, status: 'processing' }],
         ),
-        execTask(
+        callSubAgent(
           `提取 ${ns} i18n keys`,
           `扫描 src/locales/default/${ns}.ts，将硬编码字符串替换为 i18n key`,
         ),
@@ -540,7 +540,7 @@ export const todoWriteStress = defineCase({
         [{ type: 'processing', index: 0 }],
         [{ text: `提取 ${ns} 命名空间的硬编码字符串`, status: 'processing' }],
       ),
-      execTask(
+      callSubAgent(
         `提取 ${ns} i18n keys`,
         `扫描 src/locales/default/${ns}.ts，将硬编码字符串替换为 i18n key`,
       ),
@@ -560,7 +560,7 @@ export const todoWriteStress = defineCase({
       [{ type: 'processing', index: 0 }],
       [{ text: '修复 i18n sync 重复 key 问题', status: 'processing' }],
     ),
-    execTask(
+    callSubAgent(
       '修复 i18n 重复 key',
       '检查 src/locales/zh-CN/agent.ts，合并重复的 confirmDelete key，重新运行 pnpm i18n',
     ),
@@ -627,7 +627,7 @@ export const todoWriteStress = defineCase({
             status: k === localIdx ? 'processing' : k < localIdx ? 'completed' : 'todo',
           })),
         ),
-        execTask(
+        callSubAgent(
           `迁移 ${comp} 样式`,
           `将 src/features/${comp}/index.tsx 中的 createStyles 替换为 createStaticStyles，使用 cssVar`,
         ),
@@ -660,7 +660,7 @@ export const todoWriteStress = defineCase({
       [{ type: 'processing', index: 0 }],
       [{ text: '验证迁移后的组件编译通过', status: 'processing' }],
     ),
-    execTask('编译验证', '运行 bun run type-check 确认迁移后的组件没有类型错误'),
+    callSubAgent('编译验证', '运行 bun run type-check 确认迁移后的组件没有类型错误'),
     updateTodos(
       [{ type: 'complete', index: 0 }],
       [{ text: '验证迁移后的组件编译通过', status: 'completed' }],
@@ -693,7 +693,7 @@ export const todoWriteStress = defineCase({
           status: k === i ? 'processing' : k < i ? 'completed' : 'todo',
         })),
       ),
-      execTask(`编写 ${target} 测试`, `为 ${target} 编写 vitest 测试用例，覆盖核心功能路径`),
+      callSubAgent(`编写 ${target} 测试`, `为 ${target} 编写 vitest 测试用例，覆盖核心功能路径`),
       updateTodos(
         [{ type: 'complete', index: i }],
         Array.from({ length: 4 }, (_, k) => ({
@@ -728,7 +728,7 @@ export const todoWriteStress = defineCase({
           status: k === i ? 'processing' : k < i ? 'completed' : 'todo',
         })),
       ),
-      execTask(`${target}`, `执行 ${target} 相关的测试修复与验证工作`),
+      callSubAgent(`${target}`, `执行 ${target} 相关的测试修复与验证工作`),
       updateTodos(
         [{ type: 'complete', index: i }],
         Array.from({ length: 4 }, (_, k) => ({
@@ -768,7 +768,7 @@ export const todoWriteStress = defineCase({
             status: k === i ? 'processing' : k < i ? 'completed' : 'todo',
           })),
         ),
-        execTask(`执行 ${task}`, `运行 ${task} 确认迁移无回归`),
+        callSubAgent(`执行 ${task}`, `运行 ${task} 确认迁移无回归`),
         updateTodos(
           [{ type: 'complete', index: i }],
           Array.from({ length: 5 }, (_, k) => ({
@@ -791,8 +791,8 @@ export const todoWriteStress = defineCase({
         { text: '写迁移指南文档', status: 'processing' },
       ],
     ),
-    execTask('更新 CI 配置', '修改 .github/workflows/ci.yml 添加并行 vitest shards'),
-    execTask('写迁移指南', '创建 docs/MIGRATION.md 记录所有迁移变更和操作步骤'),
+    callSubAgent('更新 CI 配置', '修改 .github/workflows/ci.yml 添加并行 vitest shards'),
+    callSubAgent('写迁移指南', '创建 docs/MIGRATION.md 记录所有迁移变更和操作步骤'),
     updateTodos(
       [
         { type: 'complete', index: 0 },

@@ -65,35 +65,33 @@ export interface CallSubAgentsParams {
 /**
  * State returned after dispatching a server-side sub-agent.
  *
- * NOTE: `type` intentionally matches the `state.type` values the
- * `agent-runtime` layer (`GeneralChatAgent.tool_result` handler) expects in
- * order to emit the right `exec_task` / `exec_client_task` instruction.
- * Renaming these would cascade into the runtime, downstream tests and
- * heterogeneous executors, so we keep the wire-level identifiers stable.
+ * The `type` value is the wire-level discriminator the `agent-runtime`
+ * layer (`GeneralChatAgent.tool_result`) inspects to emit the matching
+ * `exec_sub_agent` / `exec_client_sub_agent` instruction.
  */
 export interface CallSubAgentState {
   parentMessageId: string;
   task: SubAgentTask;
-  type: 'execTask';
+  type: 'execSubAgent';
 }
 
 /** State returned after dispatching multiple server-side sub-agents. */
 export interface CallSubAgentsState {
   parentMessageId: string;
   tasks: SubAgentTask[];
-  type: 'execTasks';
+  type: 'execSubAgents';
 }
 
 /** State returned after dispatching a desktop-only client-side sub-agent. */
 export interface CallClientSubAgentState {
   parentMessageId: string;
   task: SubAgentTask;
-  type: 'execClientTask';
+  type: 'execClientSubAgent';
 }
 
 /** State returned after dispatching multiple desktop-only client-side sub-agents. */
 export interface CallClientSubAgentsState {
   parentMessageId: string;
   tasks: SubAgentTask[];
-  type: 'execClientTasks';
+  type: 'execClientSubAgents';
 }

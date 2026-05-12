@@ -247,7 +247,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
   // The executor only constructs the state payload that bridges the tool call
   // to the agent-runtime instruction layer. The actual sub-agent dispatch is
   // handled by `createAgentExecutors.ts` which reads `state.type` to emit the
-  // matching `exec_task` / `exec_client_task(s)` instruction.
+  // matching `exec_sub_agent` / `exec_client_sub_agent(s)` instruction.
 
   callSubAgent = async (
     params: CallSubAgentParams,
@@ -260,7 +260,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     }
 
     const task = { description, inheritMessages, instruction, runInClient, timeout };
-    const stateType = runInClient ? 'execClientTask' : 'execTask';
+    const stateType = runInClient ? 'execClientSubAgent' : 'execSubAgent';
 
     return {
       content: `🚀 Dispatched sub-agent for ${runInClient ? 'client-side' : ''} execution:\n- ${description}`,
@@ -283,7 +283,7 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     const taskCount = tasks.length;
     const taskList = tasks.map((t, i) => `${i + 1}. ${t.description}`).join('\n');
     const hasClientTasks = tasks.some((t) => t.runInClient);
-    const stateType = hasClientTasks ? 'execClientTasks' : 'execTasks';
+    const stateType = hasClientTasks ? 'execClientSubAgents' : 'execSubAgents';
     const executionMode = hasClientTasks ? 'client-side' : '';
 
     return {

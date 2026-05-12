@@ -701,7 +701,7 @@ export const createGroupOrchestrationExecutors = (
 
         // 4. Create a child operation for task execution (now with threadId)
         const { operationId: taskOperationId } = get().startOperation({
-          type: 'execClientTask',
+          type: 'execClientSubAgent',
           context: subContext,
           parentOperationId: orchestrationOperationId,
           metadata: {

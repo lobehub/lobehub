@@ -337,7 +337,7 @@ export default {
   'openInNewWindow': 'Open in New Window',
   'operation.contextCompression': 'Context too long, compressing history...',
   'operation.execAgentRuntime': 'Preparing response',
-  'operation.execClientTask': 'Executing task',
+  'operation.execClientSubAgent': 'Running sub-agent',
   'operation.execHeterogeneousAgent': '{{name}} is running',
   'operation.heterogeneousAgentFallback': 'External agent',
   'operation.execServerAgentRuntime':
