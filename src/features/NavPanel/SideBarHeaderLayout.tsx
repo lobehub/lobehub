@@ -11,6 +11,7 @@ import { memo } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -75,7 +76,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           overflow: 'hidden',
         }}
       >
-        {showBack && <BackButton size={SIDEBAR_HEADER_ACTION_ICON_SIZE} to={backTo} />}
+        {showBack && <BackButton size={DESKTOP_HEADER_ICON_SMALL_SIZE} to={backTo} />}
         {left && typeof left === 'string' ? (
           <Text ellipsis fontSize={16} weight={500}>
             {left}
@@ -123,9 +124,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
       >
         {leftContent}
         <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'}>
-          {showTogglePanelButton && (
-            <ToggleLeftPanelButton size={SIDEBAR_HEADER_ACTION_ICON_SIZE} />
-          )}
+          {showTogglePanelButton && <ToggleLeftPanelButton />}
           {right}
         </Flexbox>
       </Flexbox>
