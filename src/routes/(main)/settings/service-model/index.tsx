@@ -2,11 +2,10 @@
 
 import { useTranslation } from 'react-i18next';
 
-import { DefaultAgentModelForm } from '@/features/ServiceModel';
+import { ModelAssignmentsForm } from '@/features/ServiceModel';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import SystemAgentForm from '../agent/features/SystemAgentForm';
 import Image from '../image/features/Image';
 import OpenAI from '../tts/features/OpenAI';
 import STT from '../tts/features/STT';
@@ -17,14 +16,7 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.serviceModel')} />
-      <DefaultAgentModelForm />
-      <SystemAgentForm systemAgentKey="topic" />
-      <SystemAgentForm systemAgentKey="generationTopic" />
-      <SystemAgentForm systemAgentKey="translation" />
-      <SystemAgentForm systemAgentKey="historyCompress" />
-      <SystemAgentForm systemAgentKey="agentMeta" />
-      <SystemAgentForm allowDisable systemAgentKey="inputCompletion" />
-      <SystemAgentForm allowDisable systemAgentKey="promptRewrite" />
+      <ModelAssignmentsForm />
       {enableSTT && (
         <>
           <STT />

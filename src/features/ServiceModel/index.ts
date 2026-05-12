@@ -1,1 +1,1 @@
-export { default as DefaultAgentModelForm } from './DefaultAgentModelForm';
+export { default as ModelAssignmentsForm } from './ModelAssignmentsForm';
