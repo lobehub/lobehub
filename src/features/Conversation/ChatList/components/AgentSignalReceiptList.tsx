@@ -2,7 +2,7 @@
 
 import { createStaticStyles } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { Brain, ClipboardCheck, FileText, Wrench } from 'lucide-react';
+import { Brain, ClipboardCheck, FileText } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +26,6 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const RECEIPT_ICON_BY_KIND = {
-  maintenance: Wrench,
   memory: Brain,
   review: ClipboardCheck,
   skill: FileText,

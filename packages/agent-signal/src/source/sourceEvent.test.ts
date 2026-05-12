@@ -7,7 +7,7 @@ import {
   isAgentUserMessageSource,
   isClientRuntimeStartSource,
   isNightlyReviewSource,
-  isSelfIterationIntentSource,
+  isSelfFeedbackIntentSource,
   isSelfReflectionSource,
   isToolOutcomeSource,
 } from './index';
@@ -126,10 +126,10 @@ describe('AgentSignal source events', () => {
 
   /**
    * @example
-   * createSourceEvent({ sourceType: 'agent.self_iteration_intent.declared', sourceId, payload })
+   * createSourceEvent({ sourceType: 'agent.self_feedback_intent.declared', sourceId, payload })
    * returns a topic scoped tool-declared source event.
    */
-  it('creates a self-iteration intent event in the current topic scope', () => {
+  it('creates a self-feedback intent event in the current topic scope', () => {
     const event = createSourceEvent({
       payload: {
         action: 'refine',
@@ -142,13 +142,13 @@ describe('AgentSignal source events', () => {
         topicId: 'topic-1',
         userId: 'user-1',
       },
-      sourceId: 'self-iteration-intent:user-1:agent-1:topic:topic-1:tool-call-1',
-      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfIterationIntentDeclared,
+      sourceId: 'self-feedback-intent:user-1:agent-1:topic:topic-1:tool-call-1',
+      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfFeedbackIntentDeclared,
       timestamp: 789,
     });
 
     expect(event.scopeKey).toBe('topic:topic-1');
-    expect(event.sourceType).toBe('agent.self_iteration_intent.declared');
+    expect(event.sourceType).toBe('agent.self_feedback_intent.declared');
   });
 
   /**
@@ -203,7 +203,7 @@ describe('AgentSignal source events', () => {
       sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfReflectionRequested,
       timestamp: 123,
     });
-    const selfIterationIntent = createSourceEvent({
+    const selfFeedbackIntent = createSourceEvent({
       payload: {
         action: 'refine',
         agentId: 'agent-1',
@@ -213,8 +213,8 @@ describe('AgentSignal source events', () => {
         summary: 'Refine skill.',
         userId: 'user-1',
       },
-      sourceId: 'self-iteration-intent:user-1:agent-1:topic:topic-1:tool-call-1',
-      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfIterationIntentDeclared,
+      sourceId: 'self-feedback-intent:user-1:agent-1:topic:topic-1:tool-call-1',
+      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfFeedbackIntentDeclared,
       timestamp: 123,
     });
     const failedToolOutcome = createSourceEvent({
@@ -231,7 +231,7 @@ describe('AgentSignal source events', () => {
     expect(isAgentUserMessageSource(agentUserMessage)).toBe(true);
     expect(isNightlyReviewSource(nightlyReview)).toBe(true);
     expect(isSelfReflectionSource(selfReflection)).toBe(true);
-    expect(isSelfIterationIntentSource(selfIterationIntent)).toBe(true);
+    expect(isSelfFeedbackIntentSource(selfFeedbackIntent)).toBe(true);
     expect(isToolOutcomeSource(failedToolOutcome)).toBe(true);
     expect(isToolOutcomeSource(agentUserMessage)).toBe(false);
   });

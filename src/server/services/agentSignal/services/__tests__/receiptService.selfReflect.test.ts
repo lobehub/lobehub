@@ -2,21 +2,15 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import { describe, expect, it } from 'vitest';
 
-import type { MaintenanceActionResult, MaintenancePlan } from '../maintenance/types';
-import {
-  MaintenanceActionStatus,
-  MaintenanceApplyMode,
-  MaintenanceReviewScope,
-  MaintenanceRisk,
-  ReviewRunStatus,
-} from '../maintenance/types';
-import { createMaintenanceActionReceipt, createReviewSummaryReceipt } from '../receiptService';
+import { createReviewSummaryReceipt, createSelfReviewActionReceipt } from '../receiptService';
+import type { ActionResult, Plan } from '../selfIteration/types';
+import { ActionStatus, ApplyMode, ReviewRunStatus, Risk, Scope } from '../selfIteration/types';
 
 const nightlyPlan = {
   actions: [
     {
       actionType: 'write_memory',
-      applyMode: MaintenanceApplyMode.AutoApply,
+      applyMode: ApplyMode.AutoApply,
       confidence: 0.93,
       dedupeKey: 'memory:concise',
       evidenceRefs: [{ id: 'topic-1', summary: 'User prefers concise summaries.', type: 'topic' }],
@@ -27,23 +21,23 @@ const nightlyPlan = {
         operation: 'write',
       },
       rationale: 'Stable preference found in the review window.',
-      risk: MaintenanceRisk.Low,
+      risk: Risk.Low,
       target: { topicIds: ['topic-1'] },
     },
   ],
   localDate: '2026-05-04',
   plannerVersion: 'test-planner',
-  reviewScope: MaintenanceReviewScope.Nightly,
+  reviewScope: Scope.Nightly,
   summary: 'Saved one stable preference.',
-} satisfies MaintenancePlan;
+} satisfies Plan;
 
 const actionResult = {
   idempotencyKey: 'nightly-review:user-1:agent-1:2026-05-04:write_memory:memory:concise',
   receiptId: 'receipt-action-1',
   resourceId: 'memory-1',
-  status: MaintenanceActionStatus.Applied,
+  status: ActionStatus.Applied,
   summary: 'Memory written.',
-} satisfies MaintenanceActionResult;
+} satisfies ActionResult;
 
 describe('createReviewSummaryReceipt', () => {
   /**
@@ -78,7 +72,7 @@ describe('createReviewSummaryReceipt', () => {
     expect(receipt.metadata).toMatchObject({
       actionCount: 1,
       localDate: '2026-05-04',
-      reviewScope: MaintenanceReviewScope.Nightly,
+      reviewScope: Scope.Nightly,
       sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
       timezone: 'Asia/Shanghai',
     });
@@ -92,7 +86,7 @@ describe('createReviewSummaryReceipt', () => {
     const receipt = createReviewSummaryReceipt({
       agentId: 'agent-1',
       createdAt: 1_700_000,
-      plan: { ...nightlyPlan, reviewScope: MaintenanceReviewScope.SelfReflection },
+      plan: { ...nightlyPlan, reviewScope: Scope.SelfReflection },
       result: { actions: [actionResult], status: ReviewRunStatus.Completed },
       scopeId: 'topic-1',
       scopeType: 'topic',
@@ -104,26 +98,26 @@ describe('createReviewSummaryReceipt', () => {
 
     expect(receipt.topicId).toBe('topic-1');
     expect(receipt.metadata).toMatchObject({
-      reviewScope: MaintenanceReviewScope.SelfReflection,
+      reviewScope: Scope.SelfReflection,
       scopeId: 'topic-1',
       scopeType: 'topic',
     });
   });
 });
 
-describe('createMaintenanceActionReceipt', () => {
+describe('createSelfReviewActionReceipt', () => {
   /**
    * @example
-   * Applied and proposed maintenance actions become durable action receipts.
+   * Applied and proposed self-review actions become durable action receipts.
    */
-  it('projects applied maintenance actions with action metadata and target resource', () => {
-    const receipt = createMaintenanceActionReceipt({
+  it('projects applied self-review actions with action metadata and target resource', () => {
+    const receipt = createSelfReviewActionReceipt({
       action: nightlyPlan.actions[0],
       agentId: 'agent-1',
       createdAt: 1_700_001,
       localDate: '2026-05-04',
       result: actionResult,
-      reviewScope: MaintenanceReviewScope.Nightly,
+      reviewScope: Scope.Nightly,
       sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
       sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
       timezone: 'Asia/Shanghai',
@@ -142,27 +136,27 @@ describe('createMaintenanceActionReceipt', () => {
       },
     });
     expect(receipt?.metadata).toMatchObject({
-      actionStatus: MaintenanceActionStatus.Applied,
+      actionStatus: ActionStatus.Applied,
       actionType: 'write_memory',
       localDate: '2026-05-04',
-      reviewScope: MaintenanceReviewScope.Nightly,
+      reviewScope: Scope.Nightly,
     });
   });
 
   /**
    * @example
-   * Skipped maintenance actions do not create action receipts.
+   * Skipped self-review actions do not create action receipts.
    */
   it('does not project skipped action receipts', () => {
     expect(
-      createMaintenanceActionReceipt({
+      createSelfReviewActionReceipt({
         action: nightlyPlan.actions[0],
         agentId: 'agent-1',
         result: {
           idempotencyKey: actionResult.idempotencyKey,
-          status: MaintenanceActionStatus.Skipped,
+          status: ActionStatus.Skipped,
         },
-        reviewScope: MaintenanceReviewScope.Nightly,
+        reviewScope: Scope.Nightly,
         sourceId: 'nightly-review:user-1:agent-1:2026-05-04',
         sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
         userId: 'user-1',

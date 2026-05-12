@@ -2,12 +2,12 @@ import type { LobeToolManifest, OperationToolSet, ToolSource } from '@lobechat/c
 import { describe, expect, it } from 'vitest';
 
 import {
-  injectSelfIterationIntentTool,
-  SELF_ITERATION_INTENT_API_NAME,
-  SELF_ITERATION_INTENT_IDENTIFIER,
-  SELF_ITERATION_INTENT_TOOL_NAME,
-  selfIterationIntentManifest,
-  shouldExposeSelfIterationIntentTool,
+  injectSelfFeedbackIntentTool,
+  SELF_FEEDBACK_INTENT_API_NAME,
+  SELF_FEEDBACK_INTENT_IDENTIFIER,
+  SELF_FEEDBACK_INTENT_TOOL_NAME,
+  selfFeedbackIntentManifest,
+  shouldExposeSelfFeedbackIntentTool,
 } from './index';
 
 interface ToolSetParts {
@@ -24,28 +24,28 @@ const createToolSetParts = (): ToolSetParts => ({
   tools: [],
 });
 
-describe('selfIterationIntentTool', () => {
-  describe('shouldExposeSelfIterationIntentTool', () => {
+describe('selfFeedbackIntentTool', () => {
+  describe('shouldExposeSelfFeedbackIntentTool', () => {
     /**
      * @example
      * Runtime injection is visible only when the feature/user and agent-level gates pass.
      */
     it('is visible only when all gates pass', () => {
       expect(
-        shouldExposeSelfIterationIntentTool({
+        shouldExposeSelfFeedbackIntentTool({
           agentSelfIterationEnabled: true,
           featureUserEnabled: true,
         }),
       ).toBe(true);
 
       expect(
-        shouldExposeSelfIterationIntentTool({
+        shouldExposeSelfFeedbackIntentTool({
           agentSelfIterationEnabled: false,
           featureUserEnabled: true,
         }),
       ).toBe(false);
       expect(
-        shouldExposeSelfIterationIntentTool({
+        shouldExposeSelfFeedbackIntentTool({
           agentSelfIterationEnabled: true,
           featureUserEnabled: false,
         }),
@@ -58,21 +58,21 @@ describe('selfIterationIntentTool', () => {
      */
     it('is hidden when disabled or reviewer role is set', () => {
       expect(
-        shouldExposeSelfIterationIntentTool({
+        shouldExposeSelfFeedbackIntentTool({
           agentSelfIterationEnabled: true,
           disabled: true,
           featureUserEnabled: true,
         }),
       ).toBe(false);
       expect(
-        shouldExposeSelfIterationIntentTool({
+        shouldExposeSelfFeedbackIntentTool({
           agentSelfIterationEnabled: true,
-          disableSelfIterationIntentTool: true,
+          disableSelfFeedbackIntentTool: true,
           featureUserEnabled: true,
         }),
       ).toBe(false);
       expect(
-        shouldExposeSelfIterationIntentTool({
+        shouldExposeSelfFeedbackIntentTool({
           agentSelfIterationEnabled: true,
           featureUserEnabled: true,
           reviewerRole: true,
@@ -81,17 +81,17 @@ describe('selfIterationIntentTool', () => {
     });
   });
 
-  describe('selfIterationIntentManifest', () => {
+  describe('selfFeedbackIntentManifest', () => {
     /**
      * @example
-     * The declaration schema exposes every field accepted by DeclareSelfIterationIntentPayload.
+     * The declaration schema exposes every field accepted by DeclareSelfFeedbackIntentPayload.
      */
     it('declares the expected input schema fields', () => {
-      const api = selfIterationIntentManifest.api[0];
+      const api = selfFeedbackIntentManifest.api[0];
       const properties = api.parameters.properties;
 
-      expect(selfIterationIntentManifest.identifier).toBe(SELF_ITERATION_INTENT_IDENTIFIER);
-      expect(api.name).toBe(SELF_ITERATION_INTENT_API_NAME);
+      expect(selfFeedbackIntentManifest.identifier).toBe(SELF_FEEDBACK_INTENT_IDENTIFIER);
+      expect(api.name).toBe(SELF_FEEDBACK_INTENT_API_NAME);
       expect(Object.keys(properties)).toEqual([
         'action',
         'kind',
@@ -113,7 +113,7 @@ describe('selfIterationIntentTool', () => {
     });
   });
 
-  describe('injectSelfIterationIntentTool', () => {
+  describe('injectSelfFeedbackIntentTool', () => {
     /**
      * @example
      * The helper injects a builtin manifest, generated LLM tool, and enabled id.
@@ -121,17 +121,17 @@ describe('selfIterationIntentTool', () => {
     it('injects the builtin tool parts with the generated tool name', () => {
       const toolSetParts = createToolSetParts();
 
-      const injected = injectSelfIterationIntentTool(toolSetParts);
+      const injected = injectSelfFeedbackIntentTool(toolSetParts);
 
       expect(injected).toBe(true);
-      expect(toolSetParts.enabledToolIds).toContain(SELF_ITERATION_INTENT_IDENTIFIER);
-      expect(toolSetParts.sourceMap[SELF_ITERATION_INTENT_IDENTIFIER]).toBe('builtin');
-      expect(toolSetParts.manifestMap[SELF_ITERATION_INTENT_IDENTIFIER]).toBe(
-        selfIterationIntentManifest,
+      expect(toolSetParts.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
+      expect(toolSetParts.sourceMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBe('builtin');
+      expect(toolSetParts.manifestMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBe(
+        selfFeedbackIntentManifest,
       );
       expect(toolSetParts.tools).toContainEqual(
         expect.objectContaining({
-          function: expect.objectContaining({ name: SELF_ITERATION_INTENT_TOOL_NAME }),
+          function: expect.objectContaining({ name: SELF_FEEDBACK_INTENT_TOOL_NAME }),
           type: 'function',
         }),
       );
@@ -144,14 +144,14 @@ describe('selfIterationIntentTool', () => {
     it('does not duplicate tool parts when called twice', () => {
       const toolSetParts = createToolSetParts();
 
-      expect(injectSelfIterationIntentTool(toolSetParts)).toBe(true);
-      expect(injectSelfIterationIntentTool(toolSetParts)).toBe(false);
+      expect(injectSelfFeedbackIntentTool(toolSetParts)).toBe(true);
+      expect(injectSelfFeedbackIntentTool(toolSetParts)).toBe(false);
 
       expect(
-        toolSetParts.enabledToolIds.filter((id) => id === SELF_ITERATION_INTENT_IDENTIFIER),
+        toolSetParts.enabledToolIds.filter((id) => id === SELF_FEEDBACK_INTENT_IDENTIFIER),
       ).toHaveLength(1);
       expect(
-        toolSetParts.tools.filter((tool) => tool.function.name === SELF_ITERATION_INTENT_TOOL_NAME),
+        toolSetParts.tools.filter((tool) => tool.function.name === SELF_FEEDBACK_INTENT_TOOL_NAME),
       ).toHaveLength(1);
     });
   });

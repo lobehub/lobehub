@@ -8,8 +8,8 @@ import {
   AgentSignalSelfReviewBriefService,
   type AgentSignalSelfReviewBriefServiceOptions,
 } from '@/server/services/agentSignal/services/briefs/selfReview';
-import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/services/maintenance/brief';
-import { MaintenanceRisk } from '@/server/services/agentSignal/services/maintenance/types';
+import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/services/selfIteration/review/brief';
+import { Risk } from '@/server/services/agentSignal/services/selfIteration/types';
 
 const mockCanAgentRunSelfIteration = vi.hoisted(() => vi.fn());
 const mockIsAgentSignalEnabledForUser = vi.hoisted(() => vi.fn());
@@ -53,7 +53,7 @@ vi.mock('@/server/services/agentSignal/featureGate', () => ({
 }));
 
 vi.mock('@/server/services/agentSignal/services/receiptService', () => ({
-  createMaintenanceReviewReceipts: vi.fn(() => []),
+  createSelfReviewReceipts: vi.fn(() => []),
   persistAgentSignalReceipts: mockPersistAgentSignalReceipts,
 }));
 
@@ -86,7 +86,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
         evidenceRefs: [],
         idempotencyKey: 'nightly:refine:adoc_1',
         rationale: 'Refine a managed skill.',
-        risk: MaintenanceRisk.Medium,
+        risk: Risk.Medium,
       },
     ],
     createdAt: '2026-05-09T00:00:00.000Z',
@@ -98,6 +98,13 @@ describe('AgentSignalSelfReviewBriefService', () => {
     updatedAt: '2026-05-09T00:00:00.000Z',
     version: 1 as const,
   };
+  const proposalBriefMetadata = (proposal: unknown = proposalMetadata) => ({
+    agentSignal: {
+      nightlySelfReview: {
+        selfReviewProposal: proposal,
+      },
+    },
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -119,16 +126,16 @@ describe('AgentSignalSelfReviewBriefService', () => {
     mockWriteWindow.mockResolvedValue(undefined);
   });
 
-  const resolveWithMaintenanceProposal = async (
+  const resolveWithSelfReviewProposal = async (
     id: string,
     options?: { action?: string; comment?: string },
-    maintenanceProposalResolver?: AgentSignalSelfReviewBriefServiceOptions['maintenanceProposalResolver'],
+    selfReviewProposalResolver?: AgentSignalSelfReviewBriefServiceOptions['selfReviewProposalResolver'],
   ) => {
     const brief = (await mockBriefModel.findById(id)) as BriefItem | null;
     if (!brief) return null;
 
     return new AgentSignalSelfReviewBriefService(db, userId, {
-      maintenanceProposalResolver,
+      selfReviewProposalResolver,
     }).resolve(brief, options);
   };
 
@@ -136,25 +143,25 @@ describe('AgentSignalSelfReviewBriefService', () => {
    * @example
    * expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-1', { action: 'approve' });
    */
-  it('applies a pending maintenance proposal before resolving an approved brief', async () => {
-    const maintenanceProposalResolver = vi.fn().mockResolvedValue({
+  it('applies a pending self-review proposal before resolving an approved brief', async () => {
+    const selfReviewProposalResolver = vi.fn().mockResolvedValue({
       brief: { id: 'proposal-1' },
       shouldResolve: true,
     });
     mockBriefModel.findById.mockResolvedValue({
       id: 'proposal-1',
-      metadata: { proposal: proposalMetadata },
+      metadata: proposalBriefMetadata(),
       trigger: NIGHTLY_REVIEW_BRIEF_TRIGGER,
     });
     mockBriefModel.resolve.mockResolvedValue({ id: 'proposal-1', resolvedAction: 'approve' });
 
-    const result = await resolveWithMaintenanceProposal(
+    const result = await resolveWithSelfReviewProposal(
       'proposal-1',
       { action: 'approve' },
-      maintenanceProposalResolver,
+      selfReviewProposalResolver,
     );
 
-    expect(maintenanceProposalResolver).toHaveBeenCalledWith({
+    expect(selfReviewProposalResolver).toHaveBeenCalledWith({
       action: 'approve',
       brief: expect.objectContaining({ id: 'proposal-1' }),
       proposal: proposalMetadata,
@@ -167,26 +174,26 @@ describe('AgentSignalSelfReviewBriefService', () => {
    * @example
    * expect(mockBriefModel.resolve).not.toHaveBeenCalled();
    */
-  it('keeps stale maintenance proposal briefs unresolved after approve preflight fails', async () => {
+  it('keeps stale self-review proposal briefs unresolved after approve preflight fails', async () => {
     const unresolvedBrief = {
       id: 'proposal-2',
-      metadata: { proposal: { ...proposalMetadata, status: 'stale' } },
+      metadata: proposalBriefMetadata({ ...proposalMetadata, status: 'stale' }),
       trigger: NIGHTLY_REVIEW_BRIEF_TRIGGER,
     };
-    const maintenanceProposalResolver = vi.fn().mockResolvedValue({
+    const selfReviewProposalResolver = vi.fn().mockResolvedValue({
       brief: unresolvedBrief,
       shouldResolve: false,
     });
     mockBriefModel.findById.mockResolvedValue({
       id: 'proposal-2',
-      metadata: { proposal: proposalMetadata },
+      metadata: proposalBriefMetadata(),
       trigger: NIGHTLY_REVIEW_BRIEF_TRIGGER,
     });
 
-    const result = await resolveWithMaintenanceProposal(
+    const result = await resolveWithSelfReviewProposal(
       'proposal-2',
       { action: 'approve' },
-      maintenanceProposalResolver,
+      selfReviewProposalResolver,
     );
 
     expect(result).toBe(unresolvedBrief);
@@ -195,27 +202,27 @@ describe('AgentSignalSelfReviewBriefService', () => {
 
   /**
    * @example
-   * expect(maintenanceProposalResolver).toHaveBeenCalledWith(expect.objectContaining({ action: 'dismiss' }));
+   * expect(selfReviewProposalResolver).toHaveBeenCalledWith(expect.objectContaining({ action: 'dismiss' }));
    */
-  it('dismisses pending maintenance proposals through the proposal resolver', async () => {
-    const maintenanceProposalResolver = vi.fn().mockResolvedValue({
+  it('dismisses pending self-review proposals through the proposal resolver', async () => {
+    const selfReviewProposalResolver = vi.fn().mockResolvedValue({
       brief: { id: 'proposal-3' },
       shouldResolve: true,
     });
     mockBriefModel.findById.mockResolvedValue({
       id: 'proposal-3',
-      metadata: { proposal: proposalMetadata },
+      metadata: proposalBriefMetadata(),
       trigger: NIGHTLY_REVIEW_BRIEF_TRIGGER,
     });
     mockBriefModel.resolve.mockResolvedValue({ id: 'proposal-3', resolvedAction: 'dismiss' });
 
-    await resolveWithMaintenanceProposal(
+    await resolveWithSelfReviewProposal(
       'proposal-3',
       { action: 'dismiss' },
-      maintenanceProposalResolver,
+      selfReviewProposalResolver,
     );
 
-    expect(maintenanceProposalResolver).toHaveBeenCalledWith(
+    expect(selfReviewProposalResolver).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'dismiss' }),
     );
     expect(mockBriefModel.resolve).toHaveBeenCalledWith('proposal-3', { action: 'dismiss' });
@@ -225,7 +232,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
    * @example
    * expect(mockSkillDocumentService.createSkill).toHaveBeenCalledWith(expect.objectContaining({ name: 'code-review' }));
    */
-  it('applies fresh create_skill maintenance proposals through the default approve resolver', async () => {
+  it('applies fresh create_skill self-review proposals through the default approve resolver', async () => {
     const createProposalMetadata = {
       ...proposalMetadata,
       actionType: 'create_skill' as const,
@@ -251,7 +258,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
             operation: 'create' as const,
           },
           rationale: 'Create a managed skill.',
-          risk: MaintenanceRisk.Medium,
+          risk: Risk.Medium,
           target: { skillName: 'code-review' },
         },
       ],
@@ -264,7 +271,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
         agentSignal: {
           nightlySelfReview: {
             localDate: '2026-05-09',
-            maintenanceProposal: createProposalMetadata,
+            selfReviewProposal: createProposalMetadata,
             sourceId: 'source-create',
             timezone: 'Asia/Shanghai',
           },
@@ -278,7 +285,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
       metadata: {
         agentSignal: {
           nightlySelfReview: {
-            maintenanceProposal: { status: 'applied' },
+            selfReviewProposal: { status: 'applied' },
           },
         },
       },
@@ -289,7 +296,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
       resolvedAction: 'approve',
     });
 
-    const result = await resolveWithMaintenanceProposal('proposal-create', { action: 'approve' });
+    const result = await resolveWithSelfReviewProposal('proposal-create', { action: 'approve' });
 
     expect(mockSkillDocumentService.getSkill).toHaveBeenCalledWith({
       agentId: 'agt_1',
@@ -302,9 +309,11 @@ describe('AgentSignalSelfReviewBriefService', () => {
       name: 'code-review',
       title: 'Code Review',
     });
-    expect(mockReadWindow).toHaveBeenCalledWith('maintenance-operation:nightly:create:code-review');
+    expect(mockReadWindow).toHaveBeenCalledWith(
+      'self-iteration-operation:nightly:create:code-review',
+    );
     expect(mockTryDedupe).toHaveBeenCalledWith(
-      'maintenance-operation-reserve:nightly:create:code-review',
+      'self-iteration-operation-reserve:nightly:create:code-review',
       expect.any(Number),
     );
     expect(mockPersistAgentSignalReceipts).toHaveBeenCalledWith([
@@ -313,14 +322,14 @@ describe('AgentSignalSelfReviewBriefService', () => {
         id: 'nightly:create:code-review',
         kind: 'skill',
         sourceId: 'source-create',
-        sourceType: 'agent.maintenance_proposal.approved',
+        sourceType: 'agent.self_review_proposal.approved',
         status: 'applied',
         topicId: 'source-create',
         userId,
       }),
     ]);
     expect(mockWriteWindow).toHaveBeenCalledWith(
-      'maintenance-operation:nightly:create:code-review',
+      'self-iteration-operation:nightly:create:code-review',
       {
         result: JSON.stringify({
           receiptId: 'nightly:create:code-review',
@@ -341,7 +350,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
    * @example
    * expect(mockSkillDocumentService.createSkill).not.toHaveBeenCalled();
    */
-  it('dedupes repeated create_skill approvals through the maintenance operation reservation', async () => {
+  it('dedupes repeated create_skill approvals through the self-iteration operation reservation', async () => {
     const createProposalMetadata = {
       ...proposalMetadata,
       actionType: 'create_skill' as const,
@@ -367,7 +376,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
             operation: 'create' as const,
           },
           rationale: 'Create a managed skill.',
-          risk: MaintenanceRisk.Medium,
+          risk: Risk.Medium,
           target: { skillName: 'code-review' },
         },
       ],
@@ -377,8 +386,12 @@ describe('AgentSignalSelfReviewBriefService', () => {
       agentId: 'agt_1',
       id: 'proposal-create',
       metadata: {
-        proposal: createProposalMetadata,
-        sourceId: 'source-create',
+        agentSignal: {
+          nightlySelfReview: {
+            selfReviewProposal: createProposalMetadata,
+            sourceId: 'source-create',
+          },
+        },
       },
       trigger: NIGHTLY_REVIEW_BRIEF_TRIGGER,
     };
@@ -390,16 +403,17 @@ describe('AgentSignalSelfReviewBriefService', () => {
         summary: 'Already created.',
       }),
     });
-    mockBriefModel.findById
-      .mockResolvedValueOnce(pendingBrief)
-      .mockResolvedValueOnce({ ...pendingBrief, metadata: { proposal: { status: 'applied' } } });
+    mockBriefModel.findById.mockResolvedValueOnce(pendingBrief).mockResolvedValueOnce({
+      ...pendingBrief,
+      metadata: proposalBriefMetadata({ status: 'applied' }),
+    });
     mockBriefModel.updateMetadata.mockResolvedValue(pendingBrief);
     mockBriefModel.resolve.mockResolvedValue({
       id: 'proposal-create',
       resolvedAction: 'approve',
     });
 
-    const result = await resolveWithMaintenanceProposal('proposal-create', { action: 'approve' });
+    const result = await resolveWithSelfReviewProposal('proposal-create', { action: 'approve' });
 
     expect(mockSkillDocumentService.createSkill).not.toHaveBeenCalled();
     expect(mockTryDedupe).not.toHaveBeenCalled();
@@ -407,7 +421,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
       expect.objectContaining({
         id: 'nightly:create:code-review',
         kind: 'skill',
-        sourceType: 'agent.maintenance_proposal.approved',
+        sourceType: 'agent.self_review_proposal.approved',
         status: 'skipped',
       }),
     ]);
