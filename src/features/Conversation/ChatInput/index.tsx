@@ -23,6 +23,7 @@ import {
 } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
@@ -30,6 +31,7 @@ import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
 import TodoProgress from '../TodoProgress';
+import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
 import { getConversationChatInputUiState } from './utils';
 
@@ -276,6 +278,10 @@ const ChatInput = memo<ChatInputProps>(
       (s) => operationSelectors.queuedMessageCount(context)(s) > 0,
     );
 
+    // Detect whether TodoProgress will render (mirrors its own gating) so we
+    // can square the top corners of OpStatusTray when it sits flush below.
+    const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
+
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
     const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
@@ -375,6 +381,7 @@ const ChatInput = memo<ChatInputProps>(
           >
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
+            <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
           </Flexbox>
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
