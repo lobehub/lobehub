@@ -265,6 +265,7 @@ export default {
   'builtins.lobe-task.apiName.listTasks': 'List tasks',
   'builtins.lobe-task.apiName.runTask': 'Run task',
   'builtins.lobe-task.apiName.runTasks': 'Run tasks',
+  'builtins.lobe-task.apiName.setTaskSchedule': 'Set schedule',
   'builtins.lobe-task.apiName.updateTaskComment': 'Update comment',
   'builtins.lobe-task.apiName.updateTaskStatus': 'Update status',
   'builtins.lobe-task.apiName.viewTask': 'View task',

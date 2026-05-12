@@ -245,8 +245,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
-    hidden: true,
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
     type: 'builtin',
