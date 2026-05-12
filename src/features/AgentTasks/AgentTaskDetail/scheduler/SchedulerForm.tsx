@@ -323,7 +323,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         </Flexbox>
       )}
 
-      <Accordion gap={0}>
+      <Accordion defaultExpandedKeys={[]} gap={0}>
         <AccordionItem
           itemKey="advanced"
           paddingBlock={6}
