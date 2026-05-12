@@ -63,7 +63,9 @@ const providersWithDeploymentName = new Set<string>([
   ModelProvider.AzureAI,
   ModelProvider.KimiCodingPlan,
   ModelProvider.Qwen,
+  ModelProvider.Spark,
   ModelProvider.Volcengine,
+  ModelProvider.VolcengineCodingPlan,
 ]);
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
@@ -71,7 +73,7 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
   messages: UIChatMessage[];
   /**
    * Pre-resolved agent config from AgentRuntime layer.
-   * Required to ensure config consistency and proper isSubTask filtering.
+   * Required to ensure config consistency and proper isSubAgent filtering.
    */
   resolvedAgentConfig: ResolvedAgentConfig;
   topicId?: string;
@@ -141,7 +143,7 @@ class ChatService {
 
     // =================== 1. use pre-resolved agent config =================== //
     // Config is resolved in AgentRuntime layer (internal_createAgentState)
-    // which handles isSubTask filtering, disableTools, and tools generation
+    // which handles isSubAgent filtering, disableTools, and tools generation
 
     const targetAgentId = getTargetAgentId(agentId);
 
@@ -360,7 +362,8 @@ class ChatService {
       ? findDeploymentName(model, provider)
       : undefined;
     const shouldUseDeploymentField =
-      provider === ModelProvider.Azure && responsesAPIModels.has(model);
+      (provider === ModelProvider.Azure && responsesAPIModels.has(model)) ||
+      provider === ModelProvider.Spark;
 
     if (!shouldUseDeploymentField && deploymentName) {
       model = deploymentName;

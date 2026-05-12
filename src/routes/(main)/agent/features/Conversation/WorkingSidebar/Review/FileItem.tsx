@@ -40,6 +40,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorError};
     }
   `,
+  // Pushes the revert trigger to the right edge of the header so it sits
+  // next to the Collapse chevron, visually separating the destructive action
+  // from the path-related copy icon.
+  revertWrapper: css`
+    margin-inline-start: auto;
+  `,
   deletions: css`
     color: ${cssVar.colorError};
   `,
@@ -178,6 +184,13 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
           {additions > 0 && deletions > 0 && ' '}
           {deletions > 0 && <span className={styles.deletions}>-{deletions}</span>}
         </span>
+        <ActionIcon
+          className={styles.rowAction}
+          icon={CopyIcon}
+          size={'small'}
+          title={t('workingPanel.review.copyPath')}
+          onClick={handleCopy}
+        />
         {revertContext && (
           <Popconfirm
             arrow={false}
@@ -195,7 +208,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
             onConfirm={handleConfirmRevert}
             onOpenChange={setConfirmOpen}
           >
-            <span onClick={(event) => event.stopPropagation()}>
+            <span className={styles.revertWrapper} onClick={(event) => event.stopPropagation()}>
               <ActionIcon
                 className={`${styles.rowAction} ${styles.revertDanger}`}
                 data-force-visible={confirmOpen}
@@ -206,13 +219,6 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
             </span>
           </Popconfirm>
         )}
-        <ActionIcon
-          className={styles.rowAction}
-          icon={CopyIcon}
-          size={'small'}
-          title={t('workingPanel.review.copyPath')}
-          onClick={handleCopy}
-        />
       </span>
     );
   },

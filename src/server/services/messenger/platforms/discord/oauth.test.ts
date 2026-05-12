@@ -61,10 +61,14 @@ describe('discordOAuthAdapter.buildAuthorizeUrl', () => {
       expect.arrayContaining(['bot', 'applications.commands', 'identify']),
     );
     expect(url.searchParams.get('state')).toBe('nonce-1');
-    // Permissions bitfield must include the documented bits — check two
-    // bookend bits (ADD_REACTIONS=64 and SEND_MESSAGES_IN_THREADS=2^38).
+    // Permissions bitfield must include the documented bits — check the
+    // bookend bits (ADD_REACTIONS=64 and SEND_MESSAGES_IN_THREADS=2^38) plus
+    // CREATE_PUBLIC_THREADS=2^35 since that's the bit chat-adapter-discord
+    // needs to auto-open a sub-thread on channel @mentions; a regression
+    // there silently falls back to in-channel replies (LOBE-8842 follow-up).
     const perms = BigInt(url.searchParams.get('permissions') ?? '0');
     expect(perms & (1n << 6n)).toBe(1n << 6n); // ADD_REACTIONS
+    expect(perms & (1n << 35n)).toBe(1n << 35n); // CREATE_PUBLIC_THREADS
     expect(perms & (1n << 38n)).toBe(1n << 38n); // SEND_MESSAGES_IN_THREADS
   });
 });

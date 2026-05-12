@@ -25,9 +25,9 @@ export interface MessageVisitorOptions {
  *   if (id) return { activeDeviceId: id };
  * }, { role: 'tool' });
  *
- * // Find latest GTD todos
+ * // Find latest lobe-agent todos
  * const todos = findInMessages(messages, (msg) => {
- *   if (msg.plugin?.identifier === GTDIdentifier) return msg.pluginState?.todos;
+ *   if (msg.plugin?.identifier === LobeAgentIdentifier) return msg.pluginState?.todos;
  * }, { role: 'tool' });
  * ```
  */

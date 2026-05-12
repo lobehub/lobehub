@@ -102,7 +102,7 @@ describe('FallbackIntervention', () => {
   });
 
   it('shows the activation reason for activateTools interventions', () => {
-    const reason = 'I need GTD tools to create and manage the requested task list.';
+    const reason = 'I need lobe-agent tools to create and manage the requested task list.';
 
     render(
       <FallbackIntervention

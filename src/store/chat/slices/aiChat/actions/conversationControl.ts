@@ -686,7 +686,21 @@ export class ConversationControlActionImpl {
       topicId: this.#get().activeTopicId,
       threadId: this.#get().activeThreadId,
     };
-    const optimisticContext: OptimisticUpdateContext = { operationId };
+    // If the operation has already been garbage-collected (e.g. the bridge
+    // timed out earlier and `runtime_end` rolled the op into `completed`
+    // 30s+ ago), don't pass the stale opId into the optimistic chain — the
+    // `internal_getConversationContext` fallback uses global state, which
+    // matches the active conversation the user just clicked in. The IPC
+    // submit below stays unchanged: `bridge.resolve()` no-ops on unknown
+    // toolCallIds, so it's safe to fire even when the bridge is gone.
+    const operationAlive = !!this.#get().operations[operationId];
+    if (!operationAlive) {
+      console.warn(
+        '[submitHeteroIntervention] operation already gone, using global-state fallback for optimistic write:',
+        operationId,
+      );
+    }
+    const optimisticContext: OptimisticUpdateContext = operationAlive ? { operationId } : {};
 
     if (actionType === 'submit') {
       await this.#get().optimisticUpdateMessagePlugin(

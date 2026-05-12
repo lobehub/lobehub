@@ -158,10 +158,21 @@ export interface MessengerPlatformBinder {
    * visible only to that user — used when `/agents` is invoked from a
    * public channel so the personal agent list isn't broadcast. Platforms
    * without an ephemeral primitive ignore the field and post normally.
+   *
+   * `interaction` (Discord-only today) carries the slash command's
+   * application id + interaction token. When set, the binder must complete
+   * the deferred interaction via the webhook follow-up endpoint — otherwise
+   * Discord keeps showing "Thinking..." and eventually flips to "The
+   * application did not respond". Other platforms ignore the field.
    */
   sendAgentPicker?: (
     chatId: string,
-    params: { entries: AgentPickerEntry[]; ephemeralTo?: string; text: string },
+    params: {
+      entries: AgentPickerEntry[];
+      ephemeralTo?: string;
+      interaction?: { applicationId: string; token: string };
+      text: string;
+    },
   ) => Promise<void>;
 
   /** Plain DM reply (used by /agents and various command help texts). */

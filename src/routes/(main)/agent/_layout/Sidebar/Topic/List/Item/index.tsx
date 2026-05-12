@@ -259,9 +259,18 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
               return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
             }
           }
-          if (isHeterogeneousAgent) return null;
           return (
-            <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+            <Icon
+              icon={HashIcon}
+              size={'small'}
+              style={{
+                color: cssVar.colorTextDescription,
+                // Heterogeneous agents (Claude Code, Codex, …) have no chat-style
+                // topic semantics, so suppress the `#` glyph while keeping its
+                // box so the title stays aligned with sibling rows.
+                visibility: isHeterogeneousAgent ? 'hidden' : undefined,
+              }}
+            />
           );
         })()}
         onClick={handleClick}

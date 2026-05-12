@@ -15,11 +15,11 @@ import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-bu
 import { GroupAgentBuilderRenders } from '@lobechat/builtin-tool-group-agent-builder/client';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GroupManagementRenders } from '@lobechat/builtin-tool-group-management/client';
-import { GTDManifest, GTDRenders } from '@lobechat/builtin-tool-gtd/client';
 import {
   KnowledgeBaseManifest,
   KnowledgeBaseRenders,
 } from '@lobechat/builtin-tool-knowledge-base/client';
+import { LobeAgentManifest, LobeAgentRenders } from '@lobechat/builtin-tool-lobe-agent/client';
 import {
   LocalSystemManifest,
   LocalSystemRenders,
@@ -63,8 +63,8 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [CloudSandboxManifest.identifier]: CloudSandboxRenders as Record<string, BuiltinRender>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderRenders as Record<string, BuiltinRender>,
   [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
-  [GTDManifest.identifier]: GTDRenders as Record<string, BuiltinRender>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
+  [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
   [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
   [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
   [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,

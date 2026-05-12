@@ -182,6 +182,104 @@ describe('AskUserBridge', () => {
     });
   });
 
+  describe('response event mirror', () => {
+    it('emits agent_intervention_response on user resolve() with the result echoed', async () => {
+      const bridge = new AskUserBridge('op-1');
+      const drain = drainEvents(bridge);
+      const pending = bridge.pending({ arguments: {}, toolCallId: 'tc-1' });
+
+      const req = await drain.firstEvent;
+      expect(req.type).toBe('agent_intervention_request');
+
+      bridge.resolve('tc-1', { result: { picked: 'red' } });
+      await pending;
+
+      const resp = (await drain.events.next()).value as any;
+      expect(resp.type).toBe('agent_intervention_response');
+      expect(resp.operationId).toBe('op-1');
+      expect(resp.data).toEqual({
+        cancelReason: undefined,
+        cancelled: undefined,
+        result: { picked: 'red' },
+        toolCallId: 'tc-1',
+      });
+      drain.stop();
+    });
+
+    it('emits agent_intervention_response on cancel() with user_cancelled', async () => {
+      const bridge = new AskUserBridge('op-1');
+      const drain = drainEvents(bridge);
+      const pending = bridge.pending({ arguments: {}, toolCallId: 'tc-1' });
+      await drain.firstEvent;
+
+      bridge.cancel('tc-1');
+      await pending;
+
+      const resp = (await drain.events.next()).value as any;
+      expect(resp.type).toBe('agent_intervention_response');
+      expect(resp.data).toEqual({
+        cancelReason: 'user_cancelled',
+        cancelled: true,
+        result: undefined,
+        toolCallId: 'tc-1',
+      });
+      drain.stop();
+    });
+
+    it('emits agent_intervention_response on timeout with cancelReason: timeout', async () => {
+      const bridge = new AskUserBridge('op-1');
+      const drain = drainEvents(bridge);
+      const pending = bridge.pending({ arguments: {}, toolCallId: 'tc-1' }, { timeoutMs: 100 });
+      await drain.firstEvent;
+
+      vi.advanceTimersByTime(101);
+      await pending;
+
+      const resp = (await drain.events.next()).value as any;
+      expect(resp.type).toBe('agent_intervention_response');
+      expect(resp.data).toEqual({
+        cancelReason: 'timeout',
+        cancelled: true,
+        result: undefined,
+        toolCallId: 'tc-1',
+      });
+      drain.stop();
+    });
+
+    it('emits agent_intervention_response for every pending entry on cancelAll()', async () => {
+      const bridge = new AskUserBridge('op-1');
+      const drain = drainEvents(bridge);
+      bridge.pending({ arguments: {}, toolCallId: 'tc-1' });
+      bridge.pending({ arguments: {}, toolCallId: 'tc-2' });
+
+      // Drain the two request events first.
+      await drain.firstEvent;
+      await drain.events.next();
+
+      bridge.cancelAll('session_ended');
+
+      // Two response events, one per pending toolCallId. Order matches the
+      // pending Map insertion order (tc-1 then tc-2).
+      const resp1 = (await drain.events.next()).value as any;
+      const resp2 = (await drain.events.next()).value as any;
+      expect([resp1, resp2].map((e) => e.type)).toEqual([
+        'agent_intervention_response',
+        'agent_intervention_response',
+      ]);
+      const ids = [resp1.data.toolCallId, resp2.data.toolCallId].sort();
+      expect(ids).toEqual(['tc-1', 'tc-2']);
+      for (const r of [resp1, resp2]) {
+        expect(r.data.cancelled).toBe(true);
+        expect(r.data.cancelReason).toBe('session_ended');
+      }
+
+      // Iterator ends right after the drain — `cancelAll` flips `closed` only
+      // AFTER emitting, so the response events land before the stream closes.
+      const end = await drain.events.next();
+      expect(end.done).toBe(true);
+    });
+  });
+
   describe('event stream', () => {
     it('emits one request event per pending() call', async () => {
       const bridge = new AskUserBridge('op-1');

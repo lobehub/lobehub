@@ -18,10 +18,10 @@ import type { DiscordContext } from '../../providers/DiscordContextProvider';
 import type { EvalContext } from '../../providers/EvalContextSystemInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
-import type { GTDPlan } from '../../providers/GTDPlanInjector';
-import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { OnboardingContext } from '../../providers/OnboardingContextInjector';
+import type { Plan } from '../../providers/PlanInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
+import type { TodoList } from '../../providers/TodoInjector';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
 import type { PipelineContextMetadata } from '../../types';
@@ -192,16 +192,16 @@ export interface AgentGroupConfig {
 }
 
 /**
- * GTD (Getting Things Done) configuration
+ * Plan + Todo configuration
  * Used to inject plan and todo context for task management
  */
-export interface GTDConfig {
-  /** Whether GTD context injection is enabled */
+export interface PlanTodoConfig {
+  /** Whether plan/todo context injection is enabled */
   enabled?: boolean;
   /** The current plan to inject (injected before first user message) */
-  plan?: GTDPlan;
+  plan?: Plan;
   /** The current todo list to inject (injected at end of last user message) */
-  todos?: GTDTodoList;
+  todos?: TodoList;
 }
 
 /**
@@ -287,8 +287,8 @@ export interface MessagesEngineParams {
   agentGroup?: AgentGroupConfig;
   /** Group Agent Builder context */
   groupAgentBuilderContext?: GroupAgentBuilderContext;
-  /** GTD (Getting Things Done) configuration */
-  gtd?: GTDConfig;
+  /** Plan + Todo configuration */
+  planTodo?: PlanTodoConfig;
   /** Reaction feedback configuration */
   reactionFeedback?: {
     enabled?: boolean;
@@ -346,9 +346,9 @@ export { type BotPlatformContext } from '../../providers/BotPlatformContextInjec
 export { type DiscordContext } from '../../providers/DiscordContextProvider';
 export { type EvalContext } from '../../providers/EvalContextSystemInjector';
 export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
-export { type GTDPlan } from '../../providers/GTDPlanInjector';
-export { type GTDTodoItem, type GTDTodoList } from '../../providers/GTDTodoInjector';
+export { type Plan } from '../../providers/PlanInjector';
 export { type SkillMeta } from '../../providers/SkillContextProvider';
+export { type TodoItem, type TodoList } from '../../providers/TodoInjector';
 export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 export { type TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';

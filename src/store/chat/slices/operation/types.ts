@@ -57,9 +57,9 @@ export type OperationType =
   | 'groupAgentGenerate' // Group agent generate (deprecated, use groupAgentStream)
   | 'groupAgentStream' // Group agent SSE stream (sub-operation of execServerAgentRuntime)
 
-  // === Async Task (Desktop only) ===
-  | 'execClientTask' // Execute single async sub-agent task on desktop client
-  | 'execClientTasks' // Execute multiple async sub-agent tasks on desktop client
+  // === Sub-Agent (Desktop only) ===
+  | 'execClientSubAgent' // Dispatch single sub-agent on the desktop client
+  | 'execClientSubAgents' // Dispatch multiple sub-agents on the desktop client
 
   // === Context Compression ===
   // Context compression (compress old messages into summary)

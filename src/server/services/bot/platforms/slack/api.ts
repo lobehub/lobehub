@@ -75,7 +75,7 @@ export class SlackApi {
 
   /**
    * Post a message that combines a Block Kit URL button AND the same URL
-   * rendered as a plain inline link below it (邮件式 fallback). Mirrors how
+   * rendered as a plain inline link below it (email-style fallback). Mirrors how
    * email templates render "Click [Verify] / Or copy this link: …" so users
    * have a path through every Slack client (mobile, screen reader, copy-to-
    * other-device, future Block Kit regressions).
@@ -389,7 +389,7 @@ export class SlackApi {
     const data = await this.call('conversations.list', {
       exclude_archived: true,
       limit: 200,
-      types: 'public_channel,private_channel',
+      types: 'public_channel,private_channel,mpim',
       ...options,
     });
     return {

@@ -1,5 +1,6 @@
 import type { MessengerPlatform } from '@/config/messenger';
 
+import type { ConnectionMode } from '../../bot/platforms';
 import { DiscordInstallationStore } from './discord';
 import { SlackInstallationStore } from './slack';
 import { TelegramInstallationStore } from './telegram';
@@ -40,32 +41,53 @@ export const getInstallationStore = (
   return stores[platform] ?? null;
 };
 
+const SINGLETON_SUFFIX = ':singleton';
+
 /**
- * Build the per-user gateway connection id for a messenger run.
+ * Singleton gateway connectionId for a platform-level install.
  *
- * Sharding the gateway DO by `(platform, lobeUserId)` instead of by install
- * gives each user their own DO — required so concurrent typing across
- * multiple chats from the same install no longer overwrite a shared
- * `TypingState` and so 200K-MAU load doesn't pile onto one DO.
+ * Mirrors what dc-center registers when it brings a SystemBot online —
+ * websocket platforms (Discord today) keep exactly one persistent WS at
+ * `messenger:<platform>:singleton`, and typing must route to that same DO
+ * because there's no per-user WS to fall back on.
+ */
+export const messengerConnectionId = (platform: string): string =>
+  `messenger:${platform}:singleton`;
+
+/**
+ * Build the gateway connection id used for a messenger run's typing DO.
  *
- * - Telegram / Discord: `messenger:<platform>:user-<userId>` (no tenant —
- *   global bot token shared by every user DO).
- * - Slack: `messenger:slack:<tenantId>:user-<userId>` — tenant retained
- *   because the same `lobeUserId` may link multiple workspaces, each with
- *   its own rotating OAuth token.
+ * Two regimes:
+ *
+ * 1. **Websocket + singleton install** (Discord SystemBot today) — the WS
+ *    is platform-wide and registered by dc-center at
+ *    `messenger:<platform>:singleton`. Per-user sharding does not exist on
+ *    the gateway, so we must return that exact connectionId; otherwise
+ *    `startTyping` targets a non-existent DO and typing is invisible.
+ *
+ * 2. **Everything else** — per-user shard `(platform, lobeUserId)` so each
+ *    user gets their own webhook-mode DO. Solves the cross-conversation
+ *    `TypingState` overwrite bug from a shared DO and avoids piling 200K-MAU
+ *    load onto a single hot DO.
+ *      - Telegram / single-token platforms: `messenger:<platform>:user-<userId>`
+ *      - Slack: `messenger:slack:<tenantId>:user-<userId>` — tenant retained
+ *        because the same `lobeUserId` may link multiple workspaces, each
+ *        with its own rotating OAuth token.
  *
  * Single source of truth: derives directly from the `installationKey`
- * shape (`<platform>:<tenantId>` or `<platform>:singleton`) so callers
- * never branch on platform name themselves.
+ * shape (`<platform>:<tenantId>` or `<platform>:singleton`) and the
+ * effective `connectionMode` so callers never branch on platform name.
  */
 export const messengerConnectionIdForUser = (params: {
+  connectionMode?: ConnectionMode;
   installationKey: string;
   userId: string;
 }): string => {
-  const { installationKey, userId } = params;
-  const SINGLETON_SUFFIX = ':singleton';
+  const { connectionMode, installationKey, userId } = params;
+
   if (installationKey.endsWith(SINGLETON_SUFFIX)) {
     const platform = installationKey.slice(0, -SINGLETON_SUFFIX.length);
+    if (connectionMode === 'websocket') return messengerConnectionId(platform);
     return `messenger:${platform}:user-${userId}`;
   }
   return `messenger:${installationKey}:user-${userId}`;

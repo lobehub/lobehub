@@ -53,7 +53,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
               targetAgentId: agentId,
               timeout: timeout || 1_800_000,
             },
-            type: 'execTask',
+            type: 'execSubAgent',
           },
           success: true,
         };
